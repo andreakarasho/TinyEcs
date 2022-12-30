@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -7,18 +6,17 @@ namespace TinyEcs;
 
 sealed class World
 {
-    private static readonly EcsTypeComparer _comparer = new EcsTypeComparer();
-
     // this is not threadsafe
     private int _nextEntityID = 1;
-    private readonly Dictionary<int, int> _componentIndex = new Dictionary<int, int>();
-    private readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
-    private readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>(_comparer);
+    internal readonly Dictionary<int, int> _componentIndex = new Dictionary<int, int>();
+    internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
+    internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
+    internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
     private readonly Archetype _archRoot;
 
     public World()
     {
-        _archRoot = new Archetype(new EcsType(0), _componentIndex, _typeIndex);
+        _archRoot = new Archetype(this, new EcsType(0));
     }
 
     public int CreateEntity()
@@ -31,7 +29,6 @@ sealed class World
 
         return _nextEntityID++;
     }
-
 
     public void Attach<T>(int entity) where T : struct
     {
@@ -47,33 +44,75 @@ sealed class World
         var componentID = RegisterComponent<T>();
         finiType.Add(componentID);
 
-        // use finiType actually
-        var found = _typeIndex.TryGetValue(finiType, out var maybeFiniArch);
-
-        Archetype finiArch;
-
-        if (!found)
+        if (!_typeIndex.TryGetValue(finiType, out var arch))
         {
-            finiArch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
-        }
-        else
-        {
-            //finiType = null;
-            finiArch = maybeFiniArch;
+            arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
         }
 
-        var newRow = record.Archetype.MoveEntityRight(finiArch, record.Row);
+        var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
 
         ref var newRecord = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, entity, out var _);
         newRecord.Row = newRow;
-        newRecord.Archetype = finiArch;
+        newRecord.Archetype = arch;
+    }
+
+    public unsafe void Step()
+    {
+        foreach ((int id, ref EcsSystem system) in _systemIndex)
+        {
+            system.Archetype?.StepHelp(system.Components, system.Func);
+        }
+    }
+
+    public unsafe int RegisterSystem<T0>(delegate* managed<in EcsView, int, void> system)
+        where T0 : struct
+        => RegisterSystem(system, stackalloc int[1] { Component<T0>.ID });
+
+    public unsafe int RegisterSystem<T0, T1>(delegate* managed<in EcsView, int, void> system)
+        where T0 : struct
+        where T1 : struct
+        => RegisterSystem(system, stackalloc int[2] { Component<T0>.ID, Component<T1>.ID });
+
+    public unsafe int RegisterSystem<T0, T1, T2>(delegate* managed<in EcsView, int, void> system)
+        where T0 : struct
+        where T1 : struct
+        where T2 : struct
+        => RegisterSystem(system, stackalloc int[3] { Component<T0>.ID, Component<T1>.ID, Component<T2>.ID });
+
+    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<int> components)
+    {
+        var type = GetSystemType(components);
+        if (!_typeIndex.TryGetValue(type, out var arch))
+        {
+            arch = _archRoot.TraverseAndCreate(type);
+        }
+
+        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, _nextEntityID, out var _);
+        sys.Archetype = arch;
+        sys.Components = components.ToArray();
+        sys.Func = system;
+
+        return _nextEntityID++;
+    }
+
+    private EcsType GetSystemType(ReadOnlySpan<int> components)
+    {
+        var ecsType = new EcsType(components.Length);
+
+        for (int i = 0; i < components.Length; i++)
+        {
+            ecsType.Add(components[i]);
+        }
+
+        return ecsType;
     }
 
     private unsafe int RegisterComponent<T>() where T : struct
     {
         ref var id = ref Component<T>.ID;
-        if (id <= 0) id = _nextEntityID++;
+        if (id > 0) return id;
 
+        id = _nextEntityID++;
         ref var size = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentIndex, id, out var _);
         size = Component<T>.Size;
 
@@ -85,20 +124,19 @@ sealed unsafe class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
+    private readonly World _world;
+
     private int _capacity, _count;
     private int[] _entityIDs;
     private nuint[] _components;
     private readonly EcsType _type;
     private List<EcsEdge> _edgesLeft, _edgesRight;
-    private readonly Dictionary<int, int> _componentIndex;
-    private readonly Dictionary<EcsType, Archetype> _typeIndex;
 
     public EcsType EcsType => _type;
 
-    public Archetype(EcsType type, Dictionary<int, int> componentIndex, Dictionary<EcsType, Archetype> typeIndex)
+    public Archetype(World world, EcsType type)
     {
-        _componentIndex = componentIndex;
-        _typeIndex = typeIndex;
+        _world = world;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
         _type = type;
@@ -109,7 +147,7 @@ sealed unsafe class Archetype
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
 
-        _typeIndex[type] = this;
+        world._typeIndex[type] = this;
     }
 
     public int Add(int entityID)
@@ -131,10 +169,10 @@ sealed unsafe class Archetype
 
     public Archetype InsertVertex(Archetype left, EcsType newType, int componentID)
     {
-        var arch = new Archetype(newType, _componentIndex, _typeIndex);
-        left.MakeEdges(arch, componentID);
-        InsertVertex(arch);
-        return arch;
+        var vertex = new Archetype(_world, newType);
+        MakeEdges(left, vertex, componentID);
+        InsertVertex(vertex);
+        return vertex;
     }
 
     public int MoveEntityRight(Archetype right, int leftRow)
@@ -151,7 +189,7 @@ sealed unsafe class Archetype
                 j++;
             }
 
-            var componentSize = _componentIndex[_type.Components[i]];
+            var componentSize = _world._componentIndex[_type.Components[i]];
             var leftArray = _components[i];
             var rightArray = right._components[j];
 
@@ -159,8 +197,8 @@ sealed unsafe class Archetype
             var removeComponent = (byte*)leftArray + (componentSize * leftRow);
             var swapComponent = (byte*)leftArray + (componentSize * (_count - 1));
 
-            Unsafe.CopyBlock(insertComponent, removeComponent, (uint)componentSize);
-            Unsafe.CopyBlock(removeComponent, swapComponent, (uint)componentSize);
+            Unsafe.CopyBlockUnaligned(insertComponent, removeComponent, (uint)componentSize);
+            Unsafe.CopyBlockUnaligned(removeComponent, swapComponent, (uint)componentSize);
         }
 
         --_count;
@@ -168,22 +206,118 @@ sealed unsafe class Archetype
         return rightRow;
     }
 
-    private void MakeEdges(Archetype right, int componentID)
+    public Archetype TraverseAndCreate(EcsType type)
     {
-        _edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
-        right._edgesLeft.Add(new EcsEdge() { Archetype = this, ComponentID = componentID });
+        var len = type.Count;
+        Span<int> acc = stackalloc int[len];
+
+        return TraverseAndCreateHelp(type, len, acc, 0, this);
+    }
+
+    public void StepHelp(ReadOnlySpan<int> components, delegate* managed<in EcsView, int, void> run)
+    {
+        Span<int> signatureToIndex = stackalloc int[components.Length];
+        Span<int> componentSizes = stackalloc int[components.Length];
+
+        for (int slow = 0; slow < components.Length; ++slow)
+        {
+            var typeLen = _type.Count;
+            for (int fast = 0; fast < typeLen; ++fast)
+            {
+                var component = _type.Components[fast];
+
+                if (component == components[slow])
+                {
+                    ref var size = ref CollectionsMarshal.GetValueRefOrNullRef(_world._componentIndex, component);
+                    if (Unsafe.IsNullRef(ref size))
+                    {
+                        continue;
+                    }
+
+                    componentSizes[slow] = size;
+                    signatureToIndex[slow] = fast;
+
+                    break;
+                }
+            }
+        }
+
+        var view = new EcsView()
+        {
+            ComponentArrays = _components,
+            SignatureToIndex = signatureToIndex,
+            ComponentSizes = componentSizes,
+        };
+
+        for (int i = 0; i < _count; ++i)
+        {
+            run(in view, i);
+        }
+
+        foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
+        {
+            edge.Archetype.StepHelp(components, run);
+        }
+    }
+
+    private Archetype TraverseAndCreateHelp(EcsType type, int stack, Span<int> acc, int accTop, Archetype root)
+    {
+        if (stack == 0)
+        {
+            return this;
+        }
+
+        foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
+        {
+            if (type.Components.IndexOf(edge.ComponentID) != -1)
+            {
+                acc[accTop] = edge.ComponentID;
+
+                return edge.Archetype.TraverseAndCreateHelp(type, stack - 1, acc, accTop + 1, root);
+            }
+        }
+
+        int i;
+        var newType = new EcsType(accTop);
+        for (i = 0; i < accTop; ++i)
+        {
+            newType.Add(acc[i]);
+        }
+
+        var newComponent = 0;
+        for (i = 0; i < type.Count; ++i)
+        {
+            if (type.Components[i] != newType.Components[i])
+            {
+                newComponent = type.Components[i];
+                newType.Add(newComponent);
+                acc[accTop] = newComponent;
+                break;
+            }
+        }
+
+        var newVertex = root.InsertVertex(this, newType, newComponent);
+
+        return newVertex.TraverseAndCreateHelp(type, stack - 1, acc, accTop + 1, root);
+    }
+
+    private static void MakeEdges(Archetype left, Archetype right, int componentID)
+    {
+        left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
+        right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = componentID });
     }
 
     private void InsertVertex(Archetype newNode)
     {
-        var newNodeTypeLen = newNode._type.Count;
+        var nodeTypeLen = _type.Count;
+        var newTypeLen = newNode._type.Count;
 
-        if (_type.Count > newNodeTypeLen - 1)
+        if (nodeTypeLen > newTypeLen - 1)
         {
             return;
         }
 
-        if (_type.Count < newNodeTypeLen - 1)
+        if (nodeTypeLen < newTypeLen - 1)
         {
             foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
             {
@@ -199,9 +333,10 @@ sealed unsafe class Archetype
         }
 
         var i = 0;
-        for (; i < newNodeTypeLen && _type.Components[i] == newNode._type.Components[i]; ++i) { }
+        var newNodeTypeLen = newNode._type.Count;
+        for (; i < newNodeTypeLen && _type.Components[i] == newNode._type.Components[i]; ++i) ;
 
-        newNode.MakeEdges(this, _type.Components[i]);
+        MakeEdges(newNode, this, _type.Components[i]);
     }
 
     private unsafe void ResizeComponentArray(int capacity)
@@ -209,7 +344,7 @@ sealed unsafe class Archetype
         int i = 0;
         foreach (var ecsType in _type.Components)
         {
-            var componentSize = _componentIndex[ecsType];
+            var componentSize = _world._componentIndex[ecsType];
             _components[i] = (nuint)NativeMemory.Realloc((void*)_components[i], (nuint)(_type.Count * componentSize * capacity));
 
             ++i;
@@ -223,23 +358,6 @@ struct EcsRecord
 {
     public Archetype Archetype;
     public int Row;
-}
-
-sealed class EcsTypeComparer : IEqualityComparer<EcsType>
-{
-    public bool Equals(EcsType x, EcsType y) => x.Equals(y);
-
-    public int GetHashCode([DisallowNull] EcsType obj)
-    {
-        var hash = 5381;
-
-        foreach (ref var id in CollectionsMarshal.AsSpan(obj.Components))
-        {
-            hash = ((hash << 5) + hash) + id;
-        }
-
-        return hash;
-    }
 }
 
 struct EcsType : IEquatable<EcsType>
@@ -302,6 +420,18 @@ struct EcsType : IEquatable<EcsType>
 
         return true;
     }
+
+    public override int GetHashCode()
+    {
+        var hash = 5381;
+
+        foreach (ref var id in CollectionsMarshal.AsSpan(Components))
+        {
+            hash = ((hash << 5) + hash) + id;
+        }
+
+        return hash;
+    }
 }
 
 struct EcsEdge
@@ -310,8 +440,23 @@ struct EcsEdge
     public Archetype Archetype;
 }
 
+unsafe struct EcsSystem
+{
+    public Archetype Archetype;
+    public int[] Components;
+    public delegate* managed<in EcsView, int, void> Func;
+}
+
+ref struct EcsView
+{
+    public nuint[] ComponentArrays;
+    public Span<int> SignatureToIndex;
+    public Span<int> ComponentSizes;
+}
+
 static class Component<T> where T : struct
 {
     public static readonly int Size = Unsafe.SizeOf<T>();
-    public static int ID;
+
+    [ThreadStatic] public static int ID = -1;
 }
