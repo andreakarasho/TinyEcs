@@ -196,11 +196,6 @@ sealed unsafe class Archetype
 
     public Archetype InsertVertex(Archetype left, EcsType newType, int componentID)
     {
-        if (_world._typeIndex.ContainsKey(newType))
-        {
-
-        }
-
         var vertex = new Archetype(_world, newType);
         MakeEdges(left, vertex, componentID);
         InsertVertex(vertex);
@@ -293,7 +288,7 @@ sealed unsafe class Archetype
 
         foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
         {
-            if (_type.Components.IndexOf(edge.ComponentID) != -1)
+            if (components.IndexOf(edge.ComponentID) != -1)
                 edge.Archetype.StepHelp(components, run);
         }
     }
@@ -323,20 +318,31 @@ sealed unsafe class Archetype
         }
 
         // NOTE: do not register any system there
-        if (type.Count > newType.Count)
+        //if (type.Count > newType.Count)
+        if (newType.Count == 0)
         {
             return new Archetype(vertex._world, type);
         }
 
+
         var newComponent = 0;
-        for (i = 0; i < type.Count; ++i)
+        if (type.Count > newType.Count)
         {
-            if (type.Components[i] != newType.Components[i])
+            newComponent = type.Components[^1];
+            newType.Add(newComponent);
+            acc[accTop] = newComponent;
+        }
+        else
+        {
+            for (i = 0; i < type.Count; ++i)
             {
-                newComponent = type.Components[i];
-                newType.Add(newComponent);
-                acc[accTop] = newComponent;
-                break;
+                if (type.Components[i] != newType.Components[i])
+                {
+                    newComponent = type.Components[i];
+                    newType.Add(newComponent);
+                    acc[accTop] = newComponent;
+                    break;
+                }
             }
         }
 
@@ -518,9 +524,40 @@ public ref struct EcsView
     internal Span<int> ComponentSizes;
 }
 
-//static class Component<T> where T : struct
-//{
-//    public static readonly int Size = Unsafe.SizeOf<T>();
 
-//    [ThreadStatic] public static int ID = -1;
-//}
+readonly struct ComponentMetadata
+{
+    public readonly int ID;
+    public readonly int Size;
+
+    public ComponentMetadata(int id, int size) 
+        => (ID, Size) = (id, size);
+}
+
+static class Component<T> where T : struct
+{
+    public static readonly ComponentMetadata Metadata = ComponentStorage.Create<T>();
+}
+
+static class ComponentStorage
+{
+    private static readonly Dictionary<int, ComponentMetadata> _components = new Dictionary<int, ComponentMetadata>();
+    private static readonly Dictionary<Type, ComponentMetadata> _componentsByType = new Dictionary<Type, ComponentMetadata>();
+
+    public static ComponentMetadata Create<T>()
+    {
+        if (!_componentsByType.TryGetValue(typeof(T), out var meta))
+        {
+            meta = new ComponentMetadata(ComponentIDGen.Next(), Unsafe.SizeOf<T>());
+            _components.Add(meta.ID, meta);
+        }
+
+        return meta;
+    }
+}
+
+static class ComponentIDGen
+{
+    private static int _next = 1;
+    public static int Next() => _next++;
+}

@@ -6,26 +6,35 @@ namespace TinyEcs;
 
 sealed partial class World
 {
-    public void Attach<T>(int entity) where T : struct
-    {
-        var componentID = RegisterComponent<T>();
-        Attach(entity, componentID);
-    }
+    public void Attach<T>(int entity) where T : struct => 
+        Attach(entity, RegisterComponent<T>());
+
 
     public unsafe int RegisterSystem<T0>(delegate* managed<in EcsView, int, void> system)
         where T0 : struct
-        => RegisterSystem(system, stackalloc int[]
-        {
-        _componentTypeIndex[typeof(T0)]
+    => RegisterSystem(system, stackalloc int[]
+    {
+        RegisterComponent<T0>()
     });
 
     public unsafe int RegisterSystem<T0, T1>(delegate* managed<in EcsView, int, void> system)
         where T0 : struct
         where T1 : struct
-        => RegisterSystem(system, stackalloc int[]
-        {
-        _componentTypeIndex[typeof(T0)],
-        _componentTypeIndex[typeof(T1)]
+    => RegisterSystem(system, stackalloc int[]
+    {
+        RegisterComponent<T0>(),
+        RegisterComponent<T1>()
+    });
+
+    public unsafe int RegisterSystem<T0, T1, T2>(delegate* managed<in EcsView, int, void> system)
+        where T0 : struct
+        where T1 : struct
+        where T2 : struct
+    => RegisterSystem(system, stackalloc int[]
+    {
+        RegisterComponent<T0>(),
+        RegisterComponent<T1>(),
+        RegisterComponent<T2>()
     });
 }
 
@@ -37,5 +46,10 @@ public static class EcsViewExt
         var span = view.ComponentArrays[view.SignatureToIndex[column]]
                        .AsSpan(view.ComponentSizes[column] * row, view.ComponentSizes[column]);
         return ref MemoryMarshal.AsRef<TComponent>(span);
+    }
+
+    public static void Set<TComponent>()
+    {
+
     }
 }

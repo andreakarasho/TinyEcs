@@ -10,8 +10,11 @@ const int ENTITIES_COUNT = 1_000_000;
 var world = new World();
 
 
-var positionID = world.RegisterComponent<Position>();
-var velocityID = world.RegisterComponent<Velocity>();
+world.RegisterComponent<Position>();
+world.RegisterComponent<Velocity>();
+world.RegisterComponent<PlayerTag>();
+world.RegisterComponent<ATestComp>();
+world.RegisterComponent<ASecondTestComp>();
 
 var bothCount = 0;
 var velocicyCount = 0;
@@ -25,7 +28,8 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 
     world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
-    world.Attach<PlayerTag>(entity);
+    //world.Attach<PlayerTag>(entity);
+
     bothCount++;
 }
 
@@ -51,11 +55,11 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 //    world.Set(entity3, velocityID, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref vel), Unsafe.SizeOf<Velocity>()));
 //}
 
-for (var i = 0; i < 100; ++i)
-{
-    world.Attach(world.CreateEntity(), velocityID);
-    velocicyCount++;
-}
+//for (var i = 0; i < 100; ++i)
+//{
+//    world.Attach(world.CreateEntity(), velocityID);
+//    velocicyCount++;
+//}
 
 
 
@@ -64,6 +68,8 @@ unsafe
     world.RegisterSystem<Position, Velocity>(&TwoComponentsSystem);
     world.RegisterSystem<Position>(&PositionOnlySystem);
     world.RegisterSystem<Velocity>(&VelocityOnlySystem);
+    world.RegisterSystem<Position, Velocity, PlayerTag>(&ThreeComponentsSystem);
+    world.RegisterSystem<ATestComp, ASecondTestComp>(&PosAndTagComponentsSystem);
 }
 
 var sw = Stopwatch.StartNew();
@@ -83,11 +89,16 @@ while (true)
     //Debug.Assert(DEBUG.VelocityCount == velocicyCount);
     //Debug.Assert(DEBUG.PositionCount == positionCount);
 
-    //var e = world.CreateEntity();
-    //world.Attach(e, velocityID);
-    //world.Attach(e, positionID);
+    var e = world.CreateEntity();
+    world.Attach<Position>(e);
+    //world.Attach<Velocity>(e);
+    world.Attach<PlayerTag>(e);
 
-    //positionCount++;
+    var ee = world.CreateEntity();
+    world.Attach<ATestComp>(ee);
+    world.Attach<ASecondTestComp>(ee);
+
+    positionCount++;
 }
 
 Console.WriteLine("done");
@@ -121,9 +132,31 @@ static void TwoComponentsSystem(in EcsView view, int row)
     DEBUG.Both++;
 }
 
+static void ThreeComponentsSystem(in EcsView view, int row)
+{
+    ref var c0 = ref view.Get<Position>(0, row);
+    c0.X++;
+
+    ref var c1 = ref view.Get<Velocity>(1, row);
+    c1.X++;
+
+    ref var c2 = ref view.Get<PlayerTag>(2, row);
+
+
+    DEBUG.Both++;
+}
+
+static void PosAndTagComponentsSystem(in EcsView view, int row)
+{
+
+}
+
 record struct Position(float X, float Y);
 record struct Velocity(float X, float Y);
 record struct PlayerTag();
+
+record struct ATestComp(bool X, float Y, float Z);
+record struct ASecondTestComp(IntPtr x);
 
 static class DEBUG
 {
