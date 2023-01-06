@@ -16,7 +16,7 @@ sealed partial class World
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
-    
+
     public World()
     {
         _archRoot = new Archetype(this, new EcsType(0));
@@ -196,6 +196,11 @@ sealed unsafe class Archetype
 
     public Archetype InsertVertex(Archetype left, EcsType newType, int componentID)
     {
+        if (_world._typeIndex.ContainsKey(newType))
+        {
+
+        }
+
         var vertex = new Archetype(_world, newType);
         MakeEdges(left, vertex, componentID);
         InsertVertex(vertex);
@@ -212,7 +217,7 @@ sealed unsafe class Archetype
         for (int i = 0, j = 0; i < _type.Count; ++i)
         {
             Debug.Assert(_type.Components[i] >= right._type.Components[j], "elements in types mismatched");
-          
+
             while (_type.Components[i] != right._type.Components[j])
             {
                 j++;
@@ -245,6 +250,9 @@ sealed unsafe class Archetype
 
     public void StepHelp(ReadOnlySpan<int> components, delegate* managed<in EcsView, int, void> run)
     {
+        if (_count == 0)
+            return;
+
         Span<int> signatureToIndex = stackalloc int[components.Length];
         Span<int> componentSizes = stackalloc int[components.Length];
 
@@ -285,7 +293,8 @@ sealed unsafe class Archetype
 
         foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
         {
-            edge.Archetype.StepHelp(components, run);
+            if (_type.Components.IndexOf(edge.ComponentID) != -1)
+                edge.Archetype.StepHelp(components, run);
         }
     }
 
@@ -316,7 +325,7 @@ sealed unsafe class Archetype
         // NOTE: do not register any system there
         if (type.Count > newType.Count)
         {
-            return null;
+            return new Archetype(vertex._world, type);
         }
 
         var newComponent = 0;
@@ -338,8 +347,8 @@ sealed unsafe class Archetype
 
     private static void MakeEdges(Archetype left, Archetype right, int componentID)
     {
-        left!._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
-        right!._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = componentID });
+        left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
+        right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = componentID });
     }
 
     private void InsertVertex(Archetype newNode)
@@ -416,18 +425,43 @@ struct EcsType : IEquatable<EcsType>
 
     public bool IsSuperset(EcsType other)
     {
-        int i = 0, j = 0;
-        while (i < Components.Count && j < other.Components.Count)
-        {
-            if (Components[i] == other.Components[j])
-            {
-                j++;
-            }
+        var left = 0;
+        var right = 0;
+        var superLen = Count;
+        var subLen = other.Count;
 
-            i++;
+        if (superLen < subLen)
+            return false;
+
+        while (left < superLen && right < subLen)
+        {
+            if (Components[left] < other.Components[right])
+                left++;
+            else if (Components[left] == other.Components[right])
+            {
+                left++;
+                right++;
+            }
+            else
+            {
+                return false;
+            }
         }
 
-        return j == other.Components.Count;
+        return right == subLen;
+
+        //int i = 0, j = 0;
+        //while (i < Components.Count && j < other.Components.Count)
+        //{
+        //    if (Components[i] == other.Components[j])
+        //    {
+        //        j++;
+        //    }
+
+        //    i++;
+        //}
+
+        //return j == other.Components.Count;
     }
 
     public bool Equals(EcsType other)
