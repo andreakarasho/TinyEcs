@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -33,7 +34,7 @@ sealed partial class World
         return _nextEntityID++;
     }
 
-    public void Attach(int entity, int componentID)
+    private void Attach(int entity, int componentID)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -59,23 +60,52 @@ sealed partial class World
         //newRecord.Archetype = arch;
     }
 
-    public void Set(int entity, int componentID, ReadOnlySpan<byte> data)
+    private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
     {
-        var size = _componentIndex[componentID];
+        Debug.Assert(metadata.ID > 0);
+        Debug.Assert(metadata.Size > 0);
+
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
             return;
         }
 
-        var column = record.Archetype.EcsType.Components.IndexOf(componentID);
+        var column = record.Archetype.EcsType.Components.IndexOf(metadata.ID);
         if (column == -1)
         {
             return;
         }
 
-        var componentData = record.Archetype._components[column].AsSpan(size * record.Row, size);
+        var componentData = record.Archetype._components[column]
+            .AsSpan(metadata.Size * record.Row, metadata.Size);
         data.CopyTo(componentData);
+    }
+
+    private bool Has(int entity, in ComponentMetadata metadata)
+    {
+        return !Get(entity, in metadata).IsEmpty;
+    }
+
+    private Span<byte> Get(int entity, in ComponentMetadata metadata)
+    {
+        Debug.Assert(metadata.ID > 0);
+        Debug.Assert(metadata.Size > 0);
+
+        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+        if (Unsafe.IsNullRef(ref record))
+        {
+            return Span<byte>.Empty;
+        }
+
+        var column = record.Archetype.EcsType.Components.IndexOf(metadata.ID);
+        if (column == -1)
+        {
+            return Span<byte>.Empty;
+        }
+
+        return record.Archetype._components[column]
+            .AsSpan(metadata.Size * record.Row, metadata.Size);
     }
 
     public unsafe void Step()
@@ -532,6 +562,8 @@ readonly struct ComponentMetadata
 
     public ComponentMetadata(int id, int size) 
         => (ID, Size) = (id, size);
+
+    public static readonly ComponentMetadata Invalid = new ComponentMetadata(-1, -1);
 }
 
 static class Component<T> where T : struct
@@ -550,6 +582,16 @@ static class ComponentStorage
         {
             meta = new ComponentMetadata(ComponentIDGen.Next(), Unsafe.SizeOf<T>());
             _components.Add(meta.ID, meta);
+        }
+
+        return meta;
+    }
+
+    public static ComponentMetadata Get(int id)
+    {
+        if (!_components.TryGetValue(id, out var meta))
+        {
+            meta = ComponentMetadata.Invalid;
         }
 
         return meta;

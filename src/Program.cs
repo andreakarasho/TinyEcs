@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 1_000_000;
+const int ENTITIES_COUNT = 1_000_000 * 1;
 
 var world = new World();
 
@@ -29,6 +29,9 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
     //world.Attach<PlayerTag>(entity);
+
+    world.Set(entity, new Position() { X = 200f });
+    ref var p = ref world.Get<Position>(entity);
 
     bothCount++;
 }
@@ -89,14 +92,14 @@ while (true)
     //Debug.Assert(DEBUG.VelocityCount == velocicyCount);
     //Debug.Assert(DEBUG.PositionCount == positionCount);
 
-    var e = world.CreateEntity();
-    world.Attach<Position>(e);
-    //world.Attach<Velocity>(e);
-    world.Attach<PlayerTag>(e);
+    //var e = world.CreateEntity();
+    //world.Attach<Position>(e);
+    ////world.Attach<Velocity>(e);
+    //world.Attach<PlayerTag>(e);
 
-    var ee = world.CreateEntity();
-    world.Attach<ATestComp>(ee);
-    world.Attach<ASecondTestComp>(ee);
+    //var ee = world.CreateEntity();
+    //world.Attach<ATestComp>(ee);
+    //world.Attach<ASecondTestComp>(ee);
 
     positionCount++;
 }
