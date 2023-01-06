@@ -8,9 +8,11 @@ namespace TinyEcs;
 sealed partial class World
 {
     private int _nextEntityID = 1;
+    private int _entityCount = 0;
     private readonly Archetype _archRoot;
 
     private readonly ConcurrentStack<int> _recycleIds = new ConcurrentStack<int>();
+    
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -20,6 +22,10 @@ sealed partial class World
     {
         _archRoot = new Archetype(this, new EcsType(0));
     }
+
+
+    public int EntityCount => _entityCount;
+
 
     public int CreateEntity()
     {
@@ -33,6 +39,7 @@ sealed partial class World
         ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var _);
         record.Archetype = _archRoot;
         record.Row = row;
+        ++_entityCount;
 
         return id;
     }
@@ -51,6 +58,41 @@ sealed partial class World
 
         _recycleIds.Push(removedId);
         _entityIndex.Remove(removedId);
+        --_entityCount;
+    }
+
+    public unsafe void Step()
+    {
+        foreach ((int id, EcsSystem system) in _systemIndex)
+        {
+            if (system.Archetype == null)
+            {
+                UpdateSystem(system);
+            }
+
+            system.Archetype?.StepHelp(system.Components, system.Func);
+        }
+    }
+
+    public int RegisterComponent<T>() where T : struct
+    {
+        return Component<T>.Metadata.ID;
+    }
+
+    public void Query(ReadOnlySpan<int> components)
+    {
+        var type = GetSystemType(components);
+        var list = new List<Archetype>();
+
+
+        // this check if all components are contained into the archetypes
+        foreach ((var t, var arch) in _typeIndex)
+        {
+            if (t.IsSuperset(type))
+            {
+                list.Add(arch);
+            }
+        }
     }
 
     private void Attach(int entity, int componentID)
@@ -121,24 +163,6 @@ sealed partial class World
 
         return record.Archetype._components[column]
             .AsSpan(metadata.Size * record.Row, metadata.Size);
-    }
-
-    public unsafe void Step()
-    {
-        foreach ((int id, EcsSystem system) in _systemIndex)
-        {
-            if (system.Archetype == null)
-            {
-                UpdateSystem(system);
-            }
-
-            system.Archetype?.StepHelp(system.Components, system.Func);
-        }
-    }
-
-    public int RegisterComponent<T>() where T: struct
-    {
-        return Component<T>.Metadata.ID;
     }
 
     private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<int> components)
@@ -453,6 +477,42 @@ sealed unsafe class Archetype
             _capacity = capacity;
         }
     }
+}
+
+struct Query : IQueryComposition, IQuery
+{
+    public Query()
+    {
+
+    }
+
+
+    public IQueryComposition With<T>()
+    {
+        throw new NotImplementedException();
+    }
+
+    public IQueryComposition Without<T>()
+    {
+        throw new NotImplementedException();
+    }
+
+    public IQuery End()
+    {
+        throw new NotImplementedException();
+    }
+}
+
+interface IQuery
+{
+
+}
+
+interface IQueryComposition
+{
+    IQueryComposition With<T>();
+    IQueryComposition Without<T>();
+    IQuery End();
 }
 
 

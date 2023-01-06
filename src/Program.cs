@@ -10,9 +10,9 @@ const int ENTITIES_COUNT = 1_000_000 * 1;
 var world = new World();
 
 
-world.RegisterComponent<Position>();
-world.RegisterComponent<Velocity>();
-world.RegisterComponent<PlayerTag>();
+var posID = world.RegisterComponent<Position>();
+var velID = world.RegisterComponent<Velocity>();
+var playerTagID = world.RegisterComponent<PlayerTag>();
 world.RegisterComponent<ATestComp>();
 world.RegisterComponent<ASecondTestComp>();
 
@@ -83,6 +83,17 @@ unsafe
 }
 
 var sw = Stopwatch.StartNew();
+ReadOnlySpan<int> query = stackalloc int[]
+{
+    playerTagID
+};
+
+var q = new Query()
+    .With<Position>()
+    .With<Velocity>()
+    .Without<PlayerTag>()
+    .End();
+
 while (true)
 {
     DEBUG.VelocityCount = 0;
@@ -90,6 +101,8 @@ while (true)
     DEBUG.Both = 0;
 
     sw.Restart();
+
+    world.Query(query);
 
     world.Step();
 
