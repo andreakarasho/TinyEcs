@@ -1,6 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -8,15 +7,14 @@ namespace TinyEcs;
 
 sealed partial class World
 {
-    // this is not threadsafe
     private int _nextEntityID = 1;
     private readonly Archetype _archRoot;
 
-    internal readonly Dictionary<int, int> _componentIndex = new Dictionary<int, int>();
-    internal readonly Dictionary<Type, int> _componentTypeIndex = new Dictionary<Type, int>();
+    private readonly ConcurrentStack<int> _recycleIds = new ConcurrentStack<int>();
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
+
 
     public World()
     {
@@ -25,13 +23,34 @@ sealed partial class World
 
     public int CreateEntity()
     {
-        var row = _archRoot.Add(_nextEntityID);
+        if (!_recycleIds.TryPop(out var id))
+        {
+            id = _nextEntityID;
+            Interlocked.Increment(ref _nextEntityID);
+        }
 
-        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, _nextEntityID, out var _);
+        var row = _archRoot.Add(id);
+        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var _);
         record.Archetype = _archRoot;
         record.Row = row;
 
-        return _nextEntityID++;
+        return id;
+    }
+
+    public void Destroy(int entity)
+    {
+        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+        if (Unsafe.IsNullRef(ref record))
+        {
+            return;
+        }
+
+        var removedId = record.Archetype.Remove(record.Row);
+
+        Debug.Assert(removedId == entity);
+
+        _recycleIds.Push(removedId);
+        _entityIndex.Remove(removedId);
     }
 
     private void Attach(int entity, int componentID)
@@ -54,10 +73,6 @@ sealed partial class World
         var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
         record.Row = newRow;
         record.Archetype = arch;
-
-        //ref var newRecord = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, entity, out var _);
-        //newRecord.Row = newRow;
-        //newRecord.Archetype = arch;
     }
 
     private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
@@ -121,9 +136,9 @@ sealed partial class World
         }
     }
 
-    public unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, params int[] components)
+    public int RegisterComponent<T>() where T: struct
     {
-        return RegisterSystem(system, components.AsSpan());
+        return Component<T>.Metadata.ID;
     }
 
     private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<int> components)
@@ -134,7 +149,13 @@ sealed partial class World
             arch = _archRoot.TraverseAndCreate(type);
         }
 
-        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, _nextEntityID, out var exists);
+        if (!_recycleIds.TryPop(out var id))
+        {
+            id = _nextEntityID;
+            Interlocked.Increment(ref _nextEntityID);
+        }
+
+        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
         if (!exists)
             sys = new EcsSystem();
 
@@ -142,7 +163,7 @@ sealed partial class World
         sys.Components = components.ToArray();
         sys.Func = system;
 
-        return _nextEntityID++;
+        return id;
     }
 
     private unsafe void UpdateSystem(EcsSystem sys)
@@ -166,18 +187,6 @@ sealed partial class World
         }
 
         return ecsType;
-    }
-
-    public unsafe int RegisterComponent<T>() where T : struct
-    {
-        ref var id = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentTypeIndex, typeof(T), out var exists);
-        if (exists) return id;
-
-        id = _nextEntityID++;
-        ref var size = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentIndex, id, out var _);
-        size = Unsafe.SizeOf<T>();
-
-        return id;
     }
 }
 
@@ -224,6 +233,27 @@ sealed unsafe class Archetype
         return _count++;
     }
 
+    public int Remove(int row)
+    {
+        var removed = _entityIDs[row];
+        _entityIDs[row] = _entityIDs[_count - 1];
+
+        for (int i = 0; i < _type.Count; ++i)
+        {
+            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            var leftArray = _components[i].AsSpan();
+
+            var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
+            var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
+
+            swapComponent.CopyTo(removeComponent);
+        }
+
+        --_count;
+
+        return removed;
+    }
+
     public Archetype InsertVertex(Archetype left, EcsType newType, int componentID)
     {
         var vertex = new Archetype(_world, newType);
@@ -248,13 +278,13 @@ sealed unsafe class Archetype
                 j++;
             }
 
-            var componentSize = _world._componentIndex[_type.Components[i]];
+            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
             var leftArray = _components[i].AsSpan();
             var rightArray = right._components[j].AsSpan();
 
-            var insertComponent = rightArray.Slice(componentSize * rightRow, componentSize);
-            var removeComponent = leftArray.Slice(componentSize * leftRow, componentSize);
-            var swapComponent = leftArray.Slice(componentSize * (_count - 1), componentSize);
+            var insertComponent = rightArray.Slice(meta.Size * rightRow, meta.Size);
+            var removeComponent = leftArray.Slice(meta.Size * leftRow, meta.Size);
+            var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
 
             removeComponent.CopyTo(insertComponent);
             swapComponent.CopyTo(removeComponent);
@@ -290,13 +320,8 @@ sealed unsafe class Archetype
 
                 if (component == components[slow])
                 {
-                    ref var size = ref CollectionsMarshal.GetValueRefOrNullRef(_world._componentIndex, component);
-                    if (Unsafe.IsNullRef(ref size))
-                    {
-                        continue;
-                    }
-
-                    componentSizes[slow] = size;
+                    ref readonly var meta = ref ComponentStorage.Get(component);
+                    componentSizes[slow] = meta.Size;
                     signatureToIndex[slow] = fast;
 
                     break;
@@ -419,12 +444,12 @@ sealed unsafe class Archetype
         MakeEdges(newNode, this, _type.Components[i]);
     }
 
-    private unsafe void ResizeComponentArray(int capacity)
+    private void ResizeComponentArray(int capacity)
     {
         for (int i = 0; i < _type.Count; ++i)
         {
-            var componentSize = _world._componentIndex[_type.Components[i]];
-            Array.Resize(ref _components[i], componentSize * capacity);
+            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            Array.Resize(ref _components[i], meta.Size * capacity);
             _capacity = capacity;
         }
     }
@@ -587,14 +612,19 @@ static class ComponentStorage
         return meta;
     }
 
-    public static ComponentMetadata Get(int id)
+    public static ref readonly ComponentMetadata Get(int id)
     {
-        if (!_components.TryGetValue(id, out var meta))
-        {
-            meta = ComponentMetadata.Invalid;
-        }
+        ref var meta = ref CollectionsMarshal.GetValueRefOrNullRef(_components, id);
 
-        return meta;
+        if (Unsafe.IsNullRef(ref meta))
+        {
+            Debug.Fail("invalid component");
+        }
+       
+        Debug.Assert(meta.ID > 0);
+        Debug.Assert(meta.Size > 0);
+
+        return ref meta;
     }
 }
 

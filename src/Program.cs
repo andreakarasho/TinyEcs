@@ -20,6 +20,8 @@ var bothCount = 0;
 var velocicyCount = 0;
 var positionCount = 0;
 
+var rnd = new Random();
+
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var entity = world.CreateEntity();
@@ -32,6 +34,11 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 
     world.Set(entity, new Position() { X = 200f });
     ref var p = ref world.Get<Position>(entity);
+
+    if (rnd.Next() % 3 == 0)
+    {
+        world.Destroy(entity);
+    }
 
     bothCount++;
 }
