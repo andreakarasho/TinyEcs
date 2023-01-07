@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -79,20 +80,10 @@ sealed partial class World
         return Component<T>.Metadata.ID;
     }
 
-    public void Query(ReadOnlySpan<int> components)
+    public IQueryComposition Query()
     {
-        var type = GetSystemType(components);
-        var list = new List<Archetype>();
-
-
-        // this check if all components are contained into the archetypes
-        foreach ((var t, var arch) in _typeIndex)
-        {
-            if (t.IsSuperset(type))
-            {
-                list.Add(arch);
-            }
-        }
+        var query = new Query(this);
+        return query;
     }
 
     private void Attach(int entity, int componentID)
@@ -183,7 +174,7 @@ sealed partial class World
         if (!exists)
             sys = new EcsSystem();
 
-        sys.Archetype = arch;
+        sys!.Archetype = arch;
         sys.Components = components.ToArray();
         sys.Func = system;
 
@@ -201,7 +192,7 @@ sealed partial class World
         sys.Archetype = arch;
     }
 
-    private EcsType GetSystemType(ReadOnlySpan<int> components)
+    internal EcsType GetSystemType(ReadOnlySpan<int> components)
     {
         var ecsType = new EcsType(components.Length);
 
@@ -227,6 +218,7 @@ sealed unsafe class Archetype
     private List<EcsEdge> _edgesLeft, _edgesRight;
 
     public EcsType EcsType => _type;
+    public int Count => _count;
 
     public Archetype(World world, EcsType type)
     {
@@ -456,7 +448,7 @@ sealed unsafe class Archetype
             return;
         }
 
-        if (!_type.IsSuperset(newNode._type))
+        if (!_type.IsSuperset(in newNode._type))
         {
             return;
         }
@@ -481,40 +473,95 @@ sealed unsafe class Archetype
 
 struct Query : IQueryComposition, IQuery
 {
-    public Query()
-    {
+    private readonly World _world;
+    private EcsType _add, _remove;
+    private readonly List<Archetype> _archetypes;
 
+    public Query(World world)
+    {
+        _world = world;
+        _archetypes = new List<Archetype>();
+        _add = new EcsType(16);
+        _remove = new EcsType(16);
     }
 
 
-    public IQueryComposition With<T>()
+    public IQueryComposition With<T>() where T : struct
     {
-        throw new NotImplementedException();
+        _add.Add(Component<T>.Metadata.ID);
+
+        return this;
     }
 
-    public IQueryComposition Without<T>()
+    public IQueryComposition Without<T>() where T : struct
     {
-        throw new NotImplementedException();
+        _remove.Add(Component<T>.Metadata.ID);
+
+        return this;
     }
 
     public IQuery End()
     {
-        throw new NotImplementedException();
+        _archetypes.Clear();
+
+        // this check if all components are contained into the archetypes
+        foreach ((var t, var arch) in _world._typeIndex)
+        {
+            if (arch.Count > 0 && t.IsSuperset(in _add))
+            {
+                var ok = true;
+                foreach (var component in _remove.Components)
+                {
+                    if (t.Components.Contains(component))
+                    {
+                        ok = false;
+                        break;
+                    }    
+                }
+
+                if (ok)
+                    _archetypes.Add(arch);
+            }
+        }
+
+        return this;
+    }
+
+    public QueryIterator GetEnumerator()
+    {
+        return new QueryIterator(_archetypes);
     }
 }
 
 interface IQuery
 {
-
+    QueryIterator GetEnumerator();
 }
 
 interface IQueryComposition
 {
-    IQueryComposition With<T>();
-    IQueryComposition Without<T>();
+    IQueryComposition With<T>() where T : struct;
+    IQueryComposition Without<T>() where T : struct;
     IQuery End();
 }
 
+ref struct QueryIterator
+{
+    private readonly Span<Archetype> _archetypes;
+    private int _index;
+
+    public QueryIterator(List<Archetype> archetypes)
+    {
+        _archetypes = CollectionsMarshal.AsSpan(archetypes);
+        _index = -1;
+    }
+
+    public Archetype Current => _archetypes[_index];
+
+    public bool MoveNext() => ++_index < _archetypes.Length;
+
+    public void Reset() => _index = -1;
+}
 
 struct EcsRecord
 {
@@ -544,45 +591,45 @@ struct EcsType : IEquatable<EcsType>
         Components.Sort();
     }
 
-    public bool IsSuperset(EcsType other)
+    public bool IsSuperset(in EcsType other)
     {
-        var left = 0;
-        var right = 0;
-        var superLen = Count;
-        var subLen = other.Count;
+        //var left = 0;
+        //var right = 0;
+        //var superLen = Count;
+        //var subLen = other.Count;
 
-        if (superLen < subLen)
-            return false;
+        //if (superLen < subLen)
+        //    return false;
 
-        while (left < superLen && right < subLen)
-        {
-            if (Components[left] < other.Components[right])
-                left++;
-            else if (Components[left] == other.Components[right])
-            {
-                left++;
-                right++;
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        return right == subLen;
-
-        //int i = 0, j = 0;
-        //while (i < Components.Count && j < other.Components.Count)
+        //while (left < superLen && right < subLen)
         //{
-        //    if (Components[i] == other.Components[j])
+        //    if (Components[left] < other.Components[right])
+        //        left++;
+        //    else if (Components[left] == other.Components[right])
         //    {
-        //        j++;
+        //        left++;
+        //        right++;
         //    }
-
-        //    i++;
+        //    else
+        //    {
+        //        return false;
+        //    }
         //}
 
-        //return j == other.Components.Count;
+        //return right == subLen;
+
+        int i = 0, j = 0;
+        while (i < Components.Count && j < other.Components.Count)
+        {
+            if (Components[i] == other.Components[j])
+            {
+                j++;
+            }
+
+            i++;
+        }
+
+        return j == other.Components.Count;
     }
 
     public bool Equals(EcsType other)

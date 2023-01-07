@@ -83,16 +83,17 @@ unsafe
 }
 
 var sw = Stopwatch.StartNew();
-ReadOnlySpan<int> query = stackalloc int[]
-{
-    playerTagID
-};
 
-var q = new Query()
+var query = world.Query()
     .With<Position>()
     .With<Velocity>()
     .Without<PlayerTag>()
     .End();
+
+foreach (var arch in query)
+{
+    
+}
 
 while (true)
 {
@@ -101,8 +102,6 @@ while (true)
     DEBUG.Both = 0;
 
     sw.Restart();
-
-    world.Query(query);
 
     world.Step();
 
