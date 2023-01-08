@@ -219,6 +219,7 @@ sealed unsafe class Archetype
 
     public EcsType EcsType => _type;
     public int Count => _count;
+    public int[] Entities => _entityIDs;
 
     public Archetype(World world, EcsType type)
     {
@@ -474,8 +475,8 @@ sealed unsafe class Archetype
 struct Query : IQueryComposition, IQuery
 {
     private readonly World _world;
-    private EcsType _add, _remove;
-    private readonly List<Archetype> _archetypes;
+    internal EcsType _add, _remove;
+    internal readonly List<Archetype> _archetypes;
 
     public Query(World world)
     {
@@ -529,7 +530,7 @@ struct Query : IQueryComposition, IQuery
 
     public QueryIterator GetEnumerator()
     {
-        return new QueryIterator(_archetypes);
+        return new QueryIterator(_archetypes, _add);
     }
 }
 
@@ -547,20 +548,92 @@ interface IQueryComposition
 
 ref struct QueryIterator
 {
-    private readonly Span<Archetype> _archetypes;
     private int _index;
+    private readonly IEnumerator<Archetype> _archetypes;
+    private EcsType _add;
+    private ref int _firstEntity;
+    private byte[][] _components;
+    private Span<int> _columns;
 
-    public QueryIterator(List<Archetype> archetypes)
+    internal QueryIterator(List<Archetype> archetypes, EcsType add)
     {
-        _archetypes = CollectionsMarshal.AsSpan(archetypes);
-        _index = -1;
+        _index = 0;
+        _archetypes = archetypes.GetEnumerator();
+        _add = add;
     }
 
-    public Archetype Current => _archetypes[_index];
+    public readonly EcsQueryView Current
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => new EcsQueryView
+        (
+            ref Unsafe.Subtract(ref _firstEntity, _index),
+            _index,
+            _components,
+            _columns
+        );
+    }
 
-    public bool MoveNext() => ++_index < _archetypes.Length;
+    public bool MoveNext()
+    {
+        --_index;
 
-    public void Reset() => _index = -1;
+        if (_index >= 0) return true;
+
+        Archetype archetype;
+        do
+        {
+            if (!_archetypes.MoveNext()) return false;
+
+            archetype = _archetypes.Current;
+            _index = archetype.Count - 1;
+
+        } while (_index <= 0);
+            
+        _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
+        _columns = CollectionsMarshal.AsSpan(archetype.EcsType.Components);
+        _components = archetype._components;
+
+        return true;
+    }
+
+    public void Reset()
+    {
+        _index = -1;
+        _archetypes.Reset();
+    }
+}
+
+public readonly ref struct EcsQueryView
+{
+    public readonly ref int Entity;
+
+    private readonly int _row;
+    private readonly byte[][] _componentArrays;
+    private readonly Span<int> _columns;
+
+    internal EcsQueryView(ref int entity, int row, byte[][] _components, Span<int> columns)
+    {
+        Entity = ref entity;
+        _row = row;
+        _componentArrays = _components;
+        _columns = columns;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref T Get<T>() where T : struct
+    {
+        var meta = Component<T>.Metadata;
+
+        // this is very expensive
+        var column = _columns.IndexOf(meta.ID);
+        var size = meta.Size;
+
+        var span = _componentArrays[column]
+            .AsSpan(size * _row, size);
+
+        return ref MemoryMarshal.AsRef<T>(span);
+    }
 }
 
 struct EcsRecord

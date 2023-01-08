@@ -12,9 +12,9 @@ var world = new World();
 
 var posID = world.RegisterComponent<Position>();
 var velID = world.RegisterComponent<Velocity>();
-var playerTagID = world.RegisterComponent<PlayerTag>();
 world.RegisterComponent<ATestComp>();
 world.RegisterComponent<ASecondTestComp>();
+var playerTagID = world.RegisterComponent<PlayerTag>();
 
 var bothCount = 0;
 var velocicyCount = 0;
@@ -33,15 +33,24 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //world.Attach<PlayerTag>(entity);
 
     world.Set(entity, new Position() { X = 200f });
+    world.Set(entity, new Velocity() { X = 100f });
     ref var p = ref world.Get<Position>(entity);
 
     if (rnd.Next() % 3 == 0)
     {
-        world.Destroy(entity);
+        //world.Destroy(entity);
     }
 
     bothCount++;
 }
+
+//for (int i = 0; i < 1000; ++i)
+//{
+//    var entity = world.CreateEntity();
+//    world.Attach<Position>(entity);
+//    world.Attach<Velocity>(entity);
+//    world.Attach<PlayerTag>(entity);
+//}
 
 //var pos = new Position() { X = 1, Y = 2 };
 //var vel = new Velocity() { X = 3, Y = 4 };
@@ -90,10 +99,7 @@ var query = world.Query()
     .Without<PlayerTag>()
     .End();
 
-foreach (var arch in query)
-{
-    
-}
+
 
 while (true)
 {
@@ -103,7 +109,19 @@ while (true)
 
     sw.Restart();
 
-    world.Step();
+    // world.Step();
+
+    foreach (var view in query)
+    {
+        ref readonly var entity = ref view.Entity;
+        ref var vel = ref view.Get<Velocity>();
+        ref var pos = ref view.Get<Position>();
+
+        pos.X++;
+        vel.Y++;
+
+        //world.Destroy(entity);
+    }
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 
