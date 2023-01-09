@@ -114,14 +114,14 @@ while (true)
         ref var pos = ref view.Get<Position>();
         ref var vel = ref view.Get<Velocity>();
 
-        if (view.Has<Name>())
-        {
-            ref var name = ref view.Get<Name>();
-        }
-        else
-        {
+        //if (view.Has<Name>())
+        //{
+        //    ref var name = ref view.Get<Name>();
+        //}
+        //else
+        //{
 
-        }
+        //}
 
         pos.X++;
         vel.Y++;

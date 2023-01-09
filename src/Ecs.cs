@@ -75,16 +75,7 @@ sealed partial class World
         }
     }
 
-    //internal int RegisterComponent<T>() where T : struct
-    //{
-    //    return Component<T>.Metadata.ID;
-    //}
-
-    public IQueryComposition Query()
-    {
-        var query = new Query(this);
-        return query;
-    }
+    public IQueryComposition Query() => new Query(this);
 
     private void Attach(int entity, in ComponentMetadata componentID)
     {
@@ -95,12 +86,24 @@ sealed partial class World
         }
 
         var initType = record.Archetype.EcsType;
+
+        //Span<ComponentMetadata> newMeta = stackalloc ComponentMetadata[initType.Components.Count + 1];
+        ////newMeta[0..^1];
+        //newMeta[^1] = componentID;
+        //newMeta.Sort();
+
+        //var hash = ComponentHasher.Calculate(newMeta);
+
         var finiType = new EcsType(initType);
-        finiType.Add(componentID);
+        finiType.Add(in componentID);
 
         if (!_typeIndex.TryGetValue(finiType, out var arch))
         {
             arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
+        }
+        else
+        {
+            //finiType.Dispose();
         }
 
         var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
@@ -110,16 +113,13 @@ sealed partial class World
 
     private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
     {
-        Debug.Assert(metadata.ID > 0);
-        Debug.Assert(metadata.Size > 0);
-
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
             return;
         }
 
-        var column = record.Archetype.EcsType.Components.IndexOf(metadata);
+        var column = record.Archetype.Lookup[metadata.ID];
         if (column == -1)
         {
             return;
@@ -130,10 +130,7 @@ sealed partial class World
         data.CopyTo(componentData);
     }
 
-    private bool Has(int entity, in ComponentMetadata metadata)
-    {
-        return !Get(entity, in metadata).IsEmpty;
-    }
+    private bool Has(int entity, in ComponentMetadata metadata) => !Get(entity, in metadata).IsEmpty;
 
     private Span<byte> Get(int entity, in ComponentMetadata metadata)
     {
@@ -146,7 +143,7 @@ sealed partial class World
             return Span<byte>.Empty;
         }
 
-        var column = record.Archetype.EcsType.Components.IndexOf(metadata);
+        var column = record.Archetype.Lookup[metadata.ID];
         if (column == -1)
         {
             return Span<byte>.Empty;
@@ -237,9 +234,9 @@ sealed unsafe class Archetype
         var maxID = 0;
         for (int i = 0; i < type.Count; ++i)
         {
-            if (maxID < type.Components[i].ID)
+            if (maxID < type[i].ID)
             {
-                maxID = type.Components[i].ID;
+                maxID = type[i].ID;
             }
         }
 
@@ -247,7 +244,7 @@ sealed unsafe class Archetype
         _lookup.AsSpan().Fill(-1);
         for (int i = 0; i < type.Count; ++i)
         {
-            _lookup[type.Components[i].ID] = i;
+            _lookup[type[i].ID] = i;
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -276,7 +273,7 @@ sealed unsafe class Archetype
         for (int i = 0; i < _type.Count; ++i)
         {
             //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type.Components[i];
+            var meta = _type[i];
             var leftArray = _components[i].AsSpan();
 
             var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -307,15 +304,15 @@ sealed unsafe class Archetype
 
         for (int i = 0, j = 0; i < _type.Count; ++i)
         {
-            Debug.Assert(_type.Components[i].ID >= right._type.Components[j].ID, "elements in types mismatched");
+            Debug.Assert(_type[i].ID >= right._type[j].ID, "elements in types mismatched");
 
-            while (_type.Components[i] != right._type.Components[j])
+            while (_type[i] != right._type[j])
             {
                 j++;
             }
 
             //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type.Components[i];
+            var meta = _type[i];
             var leftArray = _components[i].AsSpan();
             var rightArray = right._components[j].AsSpan();
 
@@ -353,7 +350,7 @@ sealed unsafe class Archetype
             var typeLen = _type.Count;
             for (int fast = 0; fast < typeLen; ++fast)
             {
-                var component = _type.Components[fast];
+                var component = _type[fast];
 
                 if (component == components[slow])
                 {
@@ -394,7 +391,7 @@ sealed unsafe class Archetype
 
         foreach (ref var edge in CollectionsMarshal.AsSpan(vertex._edgesRight))
         {
-            if (type.Components.IndexOf(edge.ComponentID) != -1)
+            if (type.IndexOf(edge.ComponentID) != -1)
             {
                 acc[accTop] = edge.ComponentID;
 
@@ -403,7 +400,7 @@ sealed unsafe class Archetype
         }
 
         int i;
-        var newType = new EcsType(accTop);
+        using var newType = new EcsType(accTop);
         for (i = 0; i < accTop; ++i)
         {
             newType.Add(acc[i]);
@@ -420,7 +417,7 @@ sealed unsafe class Archetype
         var newComponent = ComponentMetadata.Invalid;
         if (type.Count > newType.Count)
         {
-            newComponent = type.Components[^1];
+            newComponent = type[^1];
             newType.Add(newComponent);
             acc[accTop] = newComponent;
         }
@@ -428,9 +425,9 @@ sealed unsafe class Archetype
         {
             for (i = 0; i < type.Count; ++i)
             {
-                if (type.Components[i] != newType.Components[i])
+                if (type[i] != newType[i])
                 {
-                    newComponent = type.Components[i];
+                    newComponent = type[i];
                     newType.Add(newComponent);
                     acc[accTop] = newComponent;
                     break;
@@ -476,9 +473,9 @@ sealed unsafe class Archetype
 
         var i = 0;
         var newNodeTypeLen = newNode._type.Count;
-        for (; i < newNodeTypeLen && _type.Components[i] == newNode._type.Components[i]; ++i) { }
+        for (; i < newNodeTypeLen && _type[i] == newNode._type[i]; ++i) { }
 
-        MakeEdges(newNode, this, _type.Components[i]);
+        MakeEdges(newNode, this, _type[i]);
     }
 
     private void ResizeComponentArray(int capacity)
@@ -486,7 +483,7 @@ sealed unsafe class Archetype
         for (int i = 0; i < _type.Count; ++i)
         {
             //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type.Components[i];
+            var meta = _type[i];
             Array.Resize(ref _components[i], meta.Size * capacity);
             _capacity = capacity;
         }
@@ -532,9 +529,9 @@ struct Query : IQueryComposition, IQuery
             if (arch.Count > 0 && t.IsSuperset(in _add))
             {
                 var ok = true;
-                foreach (var component in _remove.Components)
+                foreach (var component in _remove)
                 {
-                    if (t.Components.Contains(component))
+                    if (t.IndexOf(component) >= 0)
                     {
                         ok = false;
                         break;
@@ -664,37 +661,41 @@ public readonly ref struct EcsQueryView
 
 record struct EcsRecord(Archetype Archetype, int Row);
 
-struct EcsType : IEquatable<EcsType>
+struct EcsType : IEquatable<EcsType>, IDisposable
 {
-    public List<ComponentMetadata> Components { get; }
-    public int Count => Components.Count;
-
+    private List<ComponentMetadata> _components;
 
     public EcsType(int capacity)
     {
-        Components = new List<ComponentMetadata>(capacity);
+        _components = new (capacity);
     }
 
     public EcsType(in EcsType other)
     {
-        Components = new List<ComponentMetadata>(other.Components);
+        _components = new (other._components.Count);
+        foreach (var component in other._components) 
+            _components.Add(component);
     }
 
-    public void Add(in ComponentMetadata id)
+    public int Count => _components.Count;
+
+
+    public readonly ComponentMetadata this[int index] => _components[index];
+
+    public readonly void Add(in ComponentMetadata id)
     {
-        Components.Add(id);
-        Components.Sort();
+        _components.Add(id);
+        _components.Sort();
     }
+
+    public readonly int IndexOf(in ComponentMetadata id) => _components.IndexOf(id);
 
     public readonly bool IsSuperset(in EcsType other)
     {
-        var span = CollectionsMarshal.AsSpan(Components);
-        var otherSpan = CollectionsMarshal.AsSpan(other.Components);
-
         int i = 0, j = 0;
-        while (i < span.Length && j < otherSpan.Length)
+        while (i < _components.Count && j < other._components.Count)
         {
-            if (span[i] == otherSpan[j])
+            if (_components[i] == other._components[j])
             {
                 j++;
             }
@@ -702,22 +703,19 @@ struct EcsType : IEquatable<EcsType>
             i++;
         }
 
-        return j == otherSpan.Length;
+        return j == other._components.Count;
     }
 
     public readonly bool Equals(EcsType other)
     {
-        if (Components.Count != other.Components.Count)
+        if (_components.Count != other._components.Count)
         {
             return false;
         }
 
-        var span = CollectionsMarshal.AsSpan(Components);
-        var otherSpan = CollectionsMarshal.AsSpan(other.Components);
-
-        for (int i = 0; i < span.Length; i++)
+        for (int i = 0; i < _components.Count; i++)
         {
-            if (span[i] != otherSpan[i])
+            if (_components[i] != other._components[i])
             {
                 return false;
             }
@@ -726,19 +724,26 @@ struct EcsType : IEquatable<EcsType>
         return true;
     }
 
-    public override int GetHashCode()
+    public readonly override int GetHashCode()
     {
         unchecked
         {
             var hash = 5381;
 
-            foreach (ref readonly var id in CollectionsMarshal.AsSpan(Components))
+            foreach (var id in _components)
             {
                 hash = ((hash << 5) + hash) + id.ID;
             }
 
             return hash;
         }
+    }
+
+    public IEnumerator<ComponentMetadata> GetEnumerator() => _components.GetEnumerator();
+
+    public void Dispose()
+    {
+        //Components.Dispose();
     }
 }
 
@@ -822,4 +827,23 @@ static class ComponentIDGen
 {
     private static int _next = 1;
     public static int Next() => _next++;
+}
+
+static class ComponentHasher
+{
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Calculate(Span<ComponentMetadata> components)
+    {
+        unchecked
+        {
+            var hash = 5381;
+
+            foreach (ref var id in components)
+            {
+                hash = ((hash << 5) + hash) + id.ID;
+            }
+
+            return hash;
+        }
+    }
 }
