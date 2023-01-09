@@ -16,6 +16,7 @@ var velocicyCount = 0;
 var positionCount = 0;
 
 var rnd = new Random();
+var sw = Stopwatch.StartNew();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
@@ -26,7 +27,7 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     world.Attach<Position>(entity);
     //world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
-    world.Attach<Name>(entity);
+    //world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);
 
     world.Set(entity, new Position() { X = 200f });
@@ -40,6 +41,8 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 
     bothCount++;
 }
+
+Console.WriteLine("spawned {0} entities in {1} ms", ENTITIES_COUNT, sw.ElapsedMilliseconds);
 
 for (int i = 0; i < 1000; ++i)
 {
@@ -87,8 +90,6 @@ unsafe
     world.RegisterSystem<Position, Velocity, PlayerTag>(&ThreeComponentsSystem);
     world.RegisterSystem<ATestComp, ASecondTestComp>(&PosAndTagComponentsSystem);
 }
-
-var sw = Stopwatch.StartNew();
 
 var query = world.Query()
     .With<Position>()

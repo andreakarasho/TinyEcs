@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -103,7 +104,7 @@ sealed partial class World
         }
         else
         {
-            //finiType.Dispose();
+            finiType.Dispose();
         }
 
         var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
@@ -160,6 +161,10 @@ sealed partial class World
         {
             arch = _archRoot.TraverseAndCreate(type);
         }
+        else
+        {
+            type.Dispose();
+        }
 
         if (!_recycleIds.TryPop(out var id))
         {
@@ -184,6 +189,10 @@ sealed partial class World
         if (!_typeIndex.TryGetValue(type, out var arch))
         {
             arch = _archRoot.TraverseAndCreate(type);
+        }
+        else
+        {
+            type.Dispose();
         }
 
         sys.Archetype = arch;
@@ -334,7 +343,7 @@ sealed unsafe class Archetype
         var len = type.Count;
         Span<ComponentMetadata> acc = stackalloc ComponentMetadata[len];
 
-        return TraverseAndCreateHelp(this, type, len, acc, 0, this);
+        return TraverseAndCreateHelp(this, in type, len, acc, 0, this);
     }
 
     public void StepHelp(ReadOnlySpan<ComponentMetadata> components, delegate* managed<in EcsView, int, void> run)
@@ -382,7 +391,7 @@ sealed unsafe class Archetype
         }
     }
 
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, EcsType type, int stack, Span<ComponentMetadata> acc, int accTop, Archetype root)
+    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsType type, int stack, Span<ComponentMetadata> acc, int accTop, Archetype root)
     {
         if (stack == 0)
         {
@@ -395,12 +404,12 @@ sealed unsafe class Archetype
             {
                 acc[accTop] = edge.ComponentID;
 
-                return TraverseAndCreateHelp(edge.Archetype, type, stack - 1, acc, accTop + 1, root);
+                return TraverseAndCreateHelp(edge.Archetype, in type, stack - 1, acc, accTop + 1, root);
             }
         }
 
         int i;
-        using var newType = new EcsType(accTop);
+        var newType = new EcsType(accTop);
         for (i = 0; i < accTop; ++i)
         {
             newType.Add(acc[i]);
@@ -410,6 +419,8 @@ sealed unsafe class Archetype
         //if (type.Count > newType.Count)
         if (newType.Count == 0)
         {
+            newType.Dispose();
+
             return new Archetype(vertex._world, type);
         }
 
@@ -437,7 +448,7 @@ sealed unsafe class Archetype
 
         var newVertex = root.InsertVertex(vertex, newType, newComponent);
 
-        return TraverseAndCreateHelp(newVertex, type, stack - 1, acc, accTop + 1, root);
+        return TraverseAndCreateHelp(newVertex, in type, stack - 1, acc, accTop + 1, root);
     }
 
     private static void MakeEdges(Archetype left, Archetype right, in ComponentMetadata componentID)
@@ -663,37 +674,45 @@ record struct EcsRecord(Archetype Archetype, int Row);
 
 struct EcsType : IEquatable<EcsType>, IDisposable
 {
-    private List<ComponentMetadata> _components;
+    private ComponentMetadata[] _components;
+    private int _count, _capacity;
 
     public EcsType(int capacity)
     {
-        _components = new (capacity);
+        _capacity = capacity;
+        _components = ArrayPool<ComponentMetadata>.Shared.Rent(capacity);
     }
 
     public EcsType(in EcsType other)
     {
-        _components = new (other._components.Count);
-        foreach (var component in other._components) 
-            _components.Add(component);
+        _capacity = other._capacity;
+        _count = other._count;
+        _components = ArrayPool<ComponentMetadata>.Shared.Rent(other._capacity);
+        other._components.CopyTo(_components, 0);
     }
 
-    public int Count => _components.Count;
 
+
+    public readonly int Count => _count;
 
     public readonly ComponentMetadata this[int index] => _components[index];
 
-    public readonly void Add(in ComponentMetadata id)
+
+
+    public void Add(in ComponentMetadata id)
     {
-        _components.Add(id);
-        _components.Sort();
+        GrowIfNeeded();
+
+        _components[_count++] = id;
+        Array.Sort(_components, 0, _count);
     }
 
-    public readonly int IndexOf(in ComponentMetadata id) => _components.IndexOf(id);
+    public readonly int IndexOf(in ComponentMetadata id) => Array.IndexOf(_components, id);
 
     public readonly bool IsSuperset(in EcsType other)
     {
         int i = 0, j = 0;
-        while (i < _components.Count && j < other._components.Count)
+        while (i < Count && j < other.Count)
         {
             if (_components[i] == other._components[j])
             {
@@ -703,17 +722,17 @@ struct EcsType : IEquatable<EcsType>, IDisposable
             i++;
         }
 
-        return j == other._components.Count;
+        return j == other.Count;
     }
 
     public readonly bool Equals(EcsType other)
     {
-        if (_components.Count != other._components.Count)
+        if (Count != other.Count)
         {
             return false;
         }
 
-        for (int i = 0; i < _components.Count; i++)
+        for (int i = 0; i < Count; i++)
         {
             if (_components[i] != other._components[i])
             {
@@ -739,11 +758,28 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         }
     }
 
-    public IEnumerator<ComponentMetadata> GetEnumerator() => _components.GetEnumerator();
+    private void GrowIfNeeded()
+    {
+        if (_count == _capacity)
+        {
+            if (_capacity == 0) _capacity = 1;
+
+            _capacity *= 2;
+
+            ArrayPool<ComponentMetadata>.Shared.Return(_components);
+            var arr = ArrayPool<ComponentMetadata>.Shared.Rent(_capacity);
+            _components.CopyTo(arr, 0);
+            _components = arr;
+        }
+    }
+
+    public Span<ComponentMetadata>.Enumerator GetEnumerator() => _components.AsSpan(0, _count).GetEnumerator();
 
     public void Dispose()
     {
-        //Components.Dispose();
+        ArrayPool<ComponentMetadata>.Shared.Return(_components);
+        _count = 0;
+        _components = null;
     }
 }
 
