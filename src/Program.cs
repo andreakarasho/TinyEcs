@@ -10,11 +10,6 @@ const int ENTITIES_COUNT = 1_000_000 * 1;
 var world = new World();
 
 
-var posID = world.RegisterComponent<Position>();
-var velID = world.RegisterComponent<Velocity>();
-world.RegisterComponent<ATestComp>();
-world.RegisterComponent<ASecondTestComp>();
-var playerTagID = world.RegisterComponent<PlayerTag>();
 
 var bothCount = 0;
 var velocicyCount = 0;
@@ -29,7 +24,9 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //world.Attach(entity, velocityID);
 
     world.Attach<Position>(entity);
+    //world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
+    world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);
 
     world.Set(entity, new Position() { X = 200f });
@@ -44,13 +41,13 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     bothCount++;
 }
 
-//for (int i = 0; i < 1000; ++i)
-//{
-//    var entity = world.CreateEntity();
-//    world.Attach<Position>(entity);
-//    world.Attach<Velocity>(entity);
-//    world.Attach<PlayerTag>(entity);
-//}
+for (int i = 0; i < 1000; ++i)
+{
+    var entity = world.CreateEntity();
+    world.Attach<Position>(entity);
+    world.Attach<Velocity>(entity);
+    world.Attach<PlayerTag>(entity);
+}
 
 //var pos = new Position() { X = 1, Y = 2 };
 //var vel = new Velocity() { X = 3, Y = 4 };
@@ -96,7 +93,7 @@ var sw = Stopwatch.StartNew();
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
-    .Without<PlayerTag>()
+    //.Without<PlayerTag>()
     .End();
 
 
@@ -109,19 +106,32 @@ while (true)
 
     sw.Restart();
 
-    // world.Step();
-
+    //world.Step();
+    var done = 0;
     foreach (var view in query)
     {
         ref readonly var entity = ref view.Entity;
-        ref var vel = ref view.Get<Velocity>();
         ref var pos = ref view.Get<Position>();
+        ref var vel = ref view.Get<Velocity>();
+
+        if (view.Has<Name>())
+        {
+            ref var name = ref view.Get<Name>();
+        }
+        else
+        {
+
+        }
 
         pos.X++;
         vel.Y++;
 
         //world.Destroy(entity);
+
+        ++done;
     }
+
+    Debug.Assert(done == ENTITIES_COUNT + 1000);
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 
@@ -191,9 +201,12 @@ static void PosAndTagComponentsSystem(in EcsView view, int row)
 
 }
 
-record struct Position(float X, float Y);
-record struct Velocity(float X, float Y);
+
+struct Position { public float X, Y; }
+struct Velocity { public float X, Y; }
 record struct PlayerTag();
+
+unsafe struct Name { public fixed char Value[64]; public Velocity Vel; }
 
 record struct ATestComp(bool X, float Y, float Z);
 record struct ASecondTestComp(IntPtr x);

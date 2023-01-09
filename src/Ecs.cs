@@ -71,14 +71,14 @@ sealed partial class World
                 UpdateSystem(system);
             }
 
-            system.Archetype?.StepHelp(system.Components, system.Func);
+            system.Archetype?.StepHelp(system.Components.AsSpan(), system.Func);
         }
     }
 
-    public int RegisterComponent<T>() where T : struct
-    {
-        return Component<T>.Metadata.ID;
-    }
+    //internal int RegisterComponent<T>() where T : struct
+    //{
+    //    return Component<T>.Metadata.ID;
+    //}
 
     public IQueryComposition Query()
     {
@@ -86,7 +86,7 @@ sealed partial class World
         return query;
     }
 
-    private void Attach(int entity, int componentID)
+    private void Attach(int entity, in ComponentMetadata componentID)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -119,7 +119,7 @@ sealed partial class World
             return;
         }
 
-        var column = record.Archetype.EcsType.Components.IndexOf(metadata.ID);
+        var column = record.Archetype.EcsType.Components.IndexOf(metadata);
         if (column == -1)
         {
             return;
@@ -146,7 +146,7 @@ sealed partial class World
             return Span<byte>.Empty;
         }
 
-        var column = record.Archetype.EcsType.Components.IndexOf(metadata.ID);
+        var column = record.Archetype.EcsType.Components.IndexOf(metadata);
         if (column == -1)
         {
             return Span<byte>.Empty;
@@ -156,7 +156,7 @@ sealed partial class World
             .AsSpan(metadata.Size * record.Row, metadata.Size);
     }
 
-    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<int> components)
+    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<ComponentMetadata> components)
     {
         var type = GetSystemType(components);
         if (!_typeIndex.TryGetValue(type, out var arch))
@@ -192,7 +192,7 @@ sealed partial class World
         sys.Archetype = arch;
     }
 
-    internal EcsType GetSystemType(ReadOnlySpan<int> components)
+    internal EcsType GetSystemType(ReadOnlySpan<ComponentMetadata> components)
     {
         var ecsType = new EcsType(components.Length);
 
@@ -216,10 +216,12 @@ sealed unsafe class Archetype
     internal byte[][] _components;
     private readonly EcsType _type;
     private List<EcsEdge> _edgesLeft, _edgesRight;
+    private readonly int[] _lookup;
 
     public EcsType EcsType => _type;
     public int Count => _count;
     public int[] Entities => _entityIDs;
+    public int[] Lookup => _lookup;
 
     public Archetype(World world, EcsType type)
     {
@@ -231,6 +233,22 @@ sealed unsafe class Archetype
         _components = new byte[type.Count][];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
+
+        var maxID = 0;
+        for (int i = 0; i < type.Count; ++i)
+        {
+            if (maxID < type.Components[i].ID)
+            {
+                maxID = type.Components[i].ID;
+            }
+        }
+
+        _lookup = new int[maxID + 1];
+        _lookup.AsSpan().Fill(-1);
+        for (int i = 0; i < type.Count; ++i)
+        {
+            _lookup[type.Components[i].ID] = i;
+        }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
 
@@ -257,7 +275,8 @@ sealed unsafe class Archetype
 
         for (int i = 0; i < _type.Count; ++i)
         {
-            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            var meta = _type.Components[i];
             var leftArray = _components[i].AsSpan();
 
             var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -271,7 +290,7 @@ sealed unsafe class Archetype
         return removed;
     }
 
-    public Archetype InsertVertex(Archetype left, EcsType newType, int componentID)
+    public Archetype InsertVertex(Archetype left, EcsType newType, in ComponentMetadata componentID)
     {
         var vertex = new Archetype(_world, newType);
         MakeEdges(left, vertex, componentID);
@@ -288,14 +307,15 @@ sealed unsafe class Archetype
 
         for (int i = 0, j = 0; i < _type.Count; ++i)
         {
-            Debug.Assert(_type.Components[i] >= right._type.Components[j], "elements in types mismatched");
+            Debug.Assert(_type.Components[i].ID >= right._type.Components[j].ID, "elements in types mismatched");
 
             while (_type.Components[i] != right._type.Components[j])
             {
                 j++;
             }
 
-            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            var meta = _type.Components[i];
             var leftArray = _components[i].AsSpan();
             var rightArray = right._components[j].AsSpan();
 
@@ -315,12 +335,12 @@ sealed unsafe class Archetype
     public Archetype TraverseAndCreate(EcsType type)
     {
         var len = type.Count;
-        Span<int> acc = stackalloc int[len];
+        Span<ComponentMetadata> acc = stackalloc ComponentMetadata[len];
 
         return TraverseAndCreateHelp(this, type, len, acc, 0, this);
     }
 
-    public void StepHelp(ReadOnlySpan<int> components, delegate* managed<in EcsView, int, void> run)
+    public void StepHelp(ReadOnlySpan<ComponentMetadata> components, delegate* managed<in EcsView, int, void> run)
     {
         if (_count == 0)
             return;
@@ -337,8 +357,8 @@ sealed unsafe class Archetype
 
                 if (component == components[slow])
                 {
-                    ref readonly var meta = ref ComponentStorage.Get(component);
-                    componentSizes[slow] = meta.Size;
+                    //ref readonly var meta = ref ComponentStorage.Get(component);
+                    componentSizes[slow] = component.Size;
                     signatureToIndex[slow] = fast;
 
                     break;
@@ -365,7 +385,7 @@ sealed unsafe class Archetype
         }
     }
 
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, EcsType type, int stack, Span<int> acc, int accTop, Archetype root)
+    private static Archetype TraverseAndCreateHelp(Archetype vertex, EcsType type, int stack, Span<ComponentMetadata> acc, int accTop, Archetype root)
     {
         if (stack == 0)
         {
@@ -397,7 +417,7 @@ sealed unsafe class Archetype
         }
 
 
-        var newComponent = 0;
+        var newComponent = ComponentMetadata.Invalid;
         if (type.Count > newType.Count)
         {
             newComponent = type.Components[^1];
@@ -423,7 +443,7 @@ sealed unsafe class Archetype
         return TraverseAndCreateHelp(newVertex, type, stack - 1, acc, accTop + 1, root);
     }
 
-    private static void MakeEdges(Archetype left, Archetype right, int componentID)
+    private static void MakeEdges(Archetype left, Archetype right, in ComponentMetadata componentID)
     {
         left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
         right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = componentID });
@@ -465,7 +485,8 @@ sealed unsafe class Archetype
     {
         for (int i = 0; i < _type.Count; ++i)
         {
-            ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
+            var meta = _type.Components[i];
             Array.Resize(ref _components[i], meta.Size * capacity);
             _capacity = capacity;
         }
@@ -489,14 +510,14 @@ struct Query : IQueryComposition, IQuery
 
     public IQueryComposition With<T>() where T : struct
     {
-        _add.Add(Component<T>.Metadata.ID);
+        _add.Add(Component<T>.Metadata);
 
         return this;
     }
 
     public IQueryComposition Without<T>() where T : struct
     {
-        _remove.Add(Component<T>.Metadata.ID);
+        _remove.Add(Component<T>.Metadata);
 
         return this;
     }
@@ -553,7 +574,7 @@ ref struct QueryIterator
     private EcsType _add;
     private ref int _firstEntity;
     private byte[][] _components;
-    private Span<int> _columns;
+    private int[] _columns;
 
     internal QueryIterator(List<Archetype> archetypes, EcsType add)
     {
@@ -591,7 +612,7 @@ ref struct QueryIterator
         } while (_index <= 0);
             
         _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
-        _columns = CollectionsMarshal.AsSpan(archetype.EcsType.Components);
+        _columns = archetype.Lookup;
         _components = archetype._components;
 
         return true;
@@ -606,13 +627,13 @@ ref struct QueryIterator
 
 public readonly ref struct EcsQueryView
 {
-    public readonly ref int Entity;
+    public readonly ref readonly int Entity;
 
     private readonly int _row;
     private readonly byte[][] _componentArrays;
-    private readonly Span<int> _columns;
+    private readonly int[] _columns;
 
-    internal EcsQueryView(ref int entity, int row, byte[][] _components, Span<int> columns)
+    internal EcsQueryView(ref int entity, int row, byte[][] _components, int[] columns)
     {
         Entity = ref entity;
         _row = row;
@@ -621,80 +642,59 @@ public readonly ref struct EcsQueryView
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Has<T>() where T: struct
+    {
+        ref readonly var meta = ref Component<T>.Metadata;
+
+        return meta.ID < _columns.Length && _columns[meta.ID] >= 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct
     {
-        var meta = Component<T>.Metadata;
+        ref readonly var meta = ref Component<T>.Metadata;
 
-        // this is very expensive
-        var column = _columns.IndexOf(meta.ID);
-        var size = meta.Size;
-
-        var span = _componentArrays[column]
-            .AsSpan(size * _row, size);
+        var span = _componentArrays[_columns[meta.ID]]
+            .AsSpan(meta.Size * _row, meta.Size);
 
         return ref MemoryMarshal.AsRef<T>(span);
     }
 }
 
-struct EcsRecord
-{
-    public Archetype Archetype;
-    public int Row;
-}
+
+record struct EcsRecord(Archetype Archetype, int Row);
 
 struct EcsType : IEquatable<EcsType>
 {
-    public List<int> Components { get; }
+    public List<ComponentMetadata> Components { get; }
     public int Count => Components.Count;
 
 
     public EcsType(int capacity)
     {
-        Components = new List<int>(capacity);
+        Components = new List<ComponentMetadata>(capacity);
     }
 
     public EcsType(in EcsType other)
     {
-        Components = new List<int>(other.Components);
+        Components = new List<ComponentMetadata>(other.Components);
     }
 
-    public void Add(int id)
+    public void Add(in ComponentMetadata id)
     {
         Components.Add(id);
         Components.Sort();
     }
 
-    public bool IsSuperset(in EcsType other)
+    public readonly bool IsSuperset(in EcsType other)
     {
-        //var left = 0;
-        //var right = 0;
-        //var superLen = Count;
-        //var subLen = other.Count;
-
-        //if (superLen < subLen)
-        //    return false;
-
-        //while (left < superLen && right < subLen)
-        //{
-        //    if (Components[left] < other.Components[right])
-        //        left++;
-        //    else if (Components[left] == other.Components[right])
-        //    {
-        //        left++;
-        //        right++;
-        //    }
-        //    else
-        //    {
-        //        return false;
-        //    }
-        //}
-
-        //return right == subLen;
+        var span = CollectionsMarshal.AsSpan(Components);
+        var otherSpan = CollectionsMarshal.AsSpan(other.Components);
 
         int i = 0, j = 0;
-        while (i < Components.Count && j < other.Components.Count)
+        while (i < span.Length && j < otherSpan.Length)
         {
-            if (Components[i] == other.Components[j])
+            if (span[i] == otherSpan[j])
             {
                 j++;
             }
@@ -702,19 +702,22 @@ struct EcsType : IEquatable<EcsType>
             i++;
         }
 
-        return j == other.Components.Count;
+        return j == otherSpan.Length;
     }
 
-    public bool Equals(EcsType other)
+    public readonly bool Equals(EcsType other)
     {
-        if (/*other == null ||*/ Components.Count != other.Components.Count)
+        if (Components.Count != other.Components.Count)
         {
             return false;
         }
 
-        for (int i = 0; i < Components.Count; i++)
+        var span = CollectionsMarshal.AsSpan(Components);
+        var otherSpan = CollectionsMarshal.AsSpan(other.Components);
+
+        for (int i = 0; i < span.Length; i++)
         {
-            if (Components[i] != other.Components[i])
+            if (span[i] != otherSpan[i])
             {
                 return false;
             }
@@ -729,9 +732,9 @@ struct EcsType : IEquatable<EcsType>
         {
             var hash = 5381;
 
-            foreach (ref var id in CollectionsMarshal.AsSpan(Components))
+            foreach (ref readonly var id in CollectionsMarshal.AsSpan(Components))
             {
-                hash = ((hash << 5) + hash) + id;
+                hash = ((hash << 5) + hash) + id.ID;
             }
 
             return hash;
@@ -739,16 +742,12 @@ struct EcsType : IEquatable<EcsType>
     }
 }
 
-struct EcsEdge
-{
-    public int ComponentID;
-    public Archetype Archetype;
-}
+readonly record struct EcsEdge(in ComponentMetadata ComponentID, Archetype Archetype);
 
 unsafe class EcsSystem
 {
-    public Archetype Archetype;
-    public int[] Components;
+    public Archetype? Archetype;
+    public ComponentMetadata[]? Components;
     public delegate* managed<in EcsView, int, void> Func;
 }
 
@@ -760,20 +759,29 @@ public ref struct EcsView
 }
 
 
-readonly struct ComponentMetadata
+[SkipLocalsInit]
+[StructLayout(LayoutKind.Sequential)]
+readonly record struct ComponentMetadata(int ID, int Size) :
+    IComparable<ComponentMetadata>,
+    IEquatable<ComponentMetadata>
 {
-    public readonly int ID;
-    public readonly int Size;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly int CompareTo(ComponentMetadata other) => ID.CompareTo(other.ID);
 
-    public ComponentMetadata(int id, int size) 
-        => (ID, Size) = (id, size);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Equals(ComponentMetadata other) => ID == other.ID;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly override int GetHashCode() => ID.GetHashCode();
+
 
     public static readonly ComponentMetadata Invalid = new ComponentMetadata(-1, -1);
 }
 
 static class Component<T> where T : struct
 {
-    public static readonly ComponentMetadata Metadata = ComponentStorage.Create<T>();
+    private static ComponentMetadata _meta = ComponentStorage.Create<T>();
+    public static ref readonly ComponentMetadata Metadata => ref _meta;
 }
 
 static class ComponentStorage
@@ -781,15 +789,17 @@ static class ComponentStorage
     private static readonly Dictionary<int, ComponentMetadata> _components = new Dictionary<int, ComponentMetadata>();
     private static readonly Dictionary<Type, ComponentMetadata> _componentsByType = new Dictionary<Type, ComponentMetadata>();
 
-    public static ComponentMetadata Create<T>()
+    public static ref readonly ComponentMetadata Create<T>()
     {
-        if (!_componentsByType.TryGetValue(typeof(T), out var meta))
+        ref var meta = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentsByType, typeof(T), out var exists);
+        if (!exists)
         {
             meta = new ComponentMetadata(ComponentIDGen.Next(), Unsafe.SizeOf<T>());
             _components.Add(meta.ID, meta);
         }
 
-        return meta;
+
+        return ref meta;
     }
 
     public static ref readonly ComponentMetadata Get(int id)
