@@ -1,12 +1,11 @@
-﻿using System;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace TinyEcs;
 
 sealed partial class World
 {
-    public void Attach<T>(int entity) where T : struct 
+    public void Attach<T>(int entity) where T : struct
         => Attach(entity, in Component<T>.Metadata);
 
     public unsafe void Set<T>(int entity, T component) where T : struct

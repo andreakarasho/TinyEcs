@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -14,7 +13,7 @@ sealed partial class World
     private readonly Archetype _archRoot;
 
     private readonly ConcurrentStack<int> _recycleIds = new ConcurrentStack<int>();
-    
+
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -546,7 +545,7 @@ struct Query : IQueryComposition, IQuery
                     {
                         ok = false;
                         break;
-                    }    
+                    }
                 }
 
                 if (ok)
@@ -618,7 +617,7 @@ ref struct QueryIterator
             _index = archetype.Count - 1;
 
         } while (_index <= 0);
-            
+
         _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
         _columns = archetype.Lookup;
         _components = archetype._components;
@@ -650,7 +649,7 @@ public readonly ref struct EcsQueryView
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has<T>() where T: struct
+    public bool Has<T>() where T : struct
     {
         ref readonly var meta = ref Component<T>.Metadata;
 
@@ -695,7 +694,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
 
     public readonly int Count => _count;
 
-    public readonly ComponentMetadata this[int index] => _components[index];
+    public readonly ref readonly ComponentMetadata this[int index] => ref _components[index];
 
 
 
@@ -732,7 +731,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
             return false;
         }
 
-        for (int i = 0; i < Count; i++)
+        for (int i = 0, count = Count; i < count; ++i)
         {
             if (_components[i] != other._components[i])
             {
@@ -749,8 +748,11 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         {
             var hash = 5381;
 
-            foreach (var id in _components)
+            ref var f0 = ref MemoryMarshal.GetReference<ComponentMetadata>(_components);
+
+            for (int i = 0; i < Count; ++i)
             {
+                ref readonly var id = ref Unsafe.Add(ref f0, i);
                 hash = ((hash << 5) + hash) + id.ID;
             }
 
@@ -851,7 +853,7 @@ static class ComponentStorage
         {
             Debug.Fail("invalid component");
         }
-       
+
         Debug.Assert(meta.ID > 0);
         Debug.Assert(meta.Size > 0);
 
