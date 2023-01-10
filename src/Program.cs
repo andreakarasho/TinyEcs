@@ -29,6 +29,8 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     world.Attach<Velocity>(entity);
     world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);
+    world.Attach<Relation<Likes, Dogs>>(entity);
+    world.Attach<Relation<Likes, Cats>>(entity);
 
     world.Set(entity, new Position() { X = 200f });
     world.Set(entity, new Velocity() { X = 100f });
@@ -48,7 +50,7 @@ for (int i = 0; i < 1000; ++i)
 {
     var entity = world.CreateEntity();
     world.Attach<Position>(entity);
-    //world.Attach<Velocity>(entity);
+    world.Attach<Velocity>(entity);
     world.Attach<PlayerTag>(entity);
 }
 
@@ -98,6 +100,14 @@ var query = world.Query()
     .End();
 
 
+foreach (var view in world.Query()
+    .With<Relation<Likes, Dogs>>()
+    .With<Relation<Likes, Cats>>()
+    .End())
+{
+
+}
+
 
 while (true)
 {
@@ -107,30 +117,30 @@ while (true)
 
     sw.Restart();
 
-    //world.Step();
-    var done = 0;
-    foreach (var view in query)
-    {
-        ref readonly var entity = ref view.Entity;
-        ref var pos = ref view.Get<Position>();
-        ref var vel = ref view.Get<Velocity>();
+    world.Step();
+    //var done = 0;
+    //foreach (var view in query)
+    //{
+    //    ref readonly var entity = ref view.Entity;
+    //    ref var pos = ref view.Get<Position>();
+    //    ref var vel = ref view.Get<Velocity>();
 
-        //if (view.Has<Name>())
-        //{
-        //    ref var name = ref view.Get<Name>();
-        //}
-        //else
-        //{
+    //    //if (view.Has<Name>())
+    //    //{
+    //    //    ref var name = ref view.Get<Name>();
+    //    //}
+    //    //else
+    //    //{
 
-        //}
+    //    //}
 
-        pos.X++;
-        vel.Y++;
+    //    pos.X++;
+    //    vel.Y++;
 
-        //world.Destroy(entity);
+    //    //world.Destroy(entity);
 
-        ++done;
-    }
+    //    ++done;
+    //}
 
     //Debug.Assert(done == ENTITIES_COUNT + 1000);
 
@@ -203,9 +213,19 @@ static void PosAndTagComponentsSystem(in EcsView view, int row)
 }
 
 
+struct Likes { }
+struct Dogs { }
+struct Cats { }
+
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 record struct PlayerTag();
+
+struct Relation<TAction, TTarget> 
+    where TAction : struct 
+    where TTarget : struct
+{ }
+
 
 unsafe struct Name { public fixed char Value[64]; public Velocity Vel; }
 

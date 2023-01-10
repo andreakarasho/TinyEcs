@@ -119,7 +119,7 @@ sealed partial class World
             return;
         }
 
-        var column = record.Archetype.Lookup[metadata.ID];
+        var column = metadata.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata.ID];
         if (column == -1)
         {
             return;
@@ -143,7 +143,7 @@ sealed partial class World
             return Span<byte>.Empty;
         }
 
-        var column = record.Archetype.Lookup[metadata.ID];
+        var column = metadata.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata.ID];
         if (column == -1)
         {
             return Span<byte>.Empty;
@@ -197,13 +197,13 @@ sealed partial class World
         sys.Archetype = arch;
     }
 
-    internal EcsType GetSystemType(ReadOnlySpan<ComponentMetadata> components)
+    private EcsType GetSystemType(ReadOnlySpan<ComponentMetadata> components)
     {
         var ecsType = new EcsType(components.Length);
 
         for (int i = 0; i < components.Length; i++)
         {
-            ecsType.Add(components[i]);
+            ecsType.Add(in components[i]);
         }
 
         return ecsType;
@@ -242,10 +242,7 @@ sealed unsafe class Archetype
         var maxID = 0;
         for (int i = 0; i < type.Count; ++i)
         {
-            if (maxID < type[i].ID)
-            {
-                maxID = type[i].ID;
-            }
+            maxID = Math.Max(maxID, type[i].ID);
         }
 
         _lookup = new int[maxID + 1];
@@ -280,8 +277,7 @@ sealed unsafe class Archetype
 
         for (int i = 0; i < _type.Count; ++i)
         {
-            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type[i];
+            ref readonly var meta = ref _type[i];
             var leftArray = _components[i].AsSpan();
 
             var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -319,8 +315,7 @@ sealed unsafe class Archetype
                 j++;
             }
 
-            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type[i];
+            ref readonly var meta = ref _type[i];
             var leftArray = _components[i].AsSpan();
             var rightArray = right._components[j].AsSpan();
 
@@ -341,8 +336,9 @@ sealed unsafe class Archetype
     {
         var len = type.Count;
         Span<ComponentMetadata> acc = stackalloc ComponentMetadata[len];
+        type.Components.CopyTo(acc);
 
-        return TraverseAndCreateHelp(this, in type, len, acc, 0, this);
+        return TraverseAndCreateHelp(this, in type, len, acc, this);
     }
 
     public void StepHelp(ReadOnlySpan<ComponentMetadata> components, delegate* managed<in EcsView, int, void> run)
@@ -358,11 +354,10 @@ sealed unsafe class Archetype
             var typeLen = _type.Count;
             for (int fast = 0; fast < typeLen; ++fast)
             {
-                var component = _type[fast];
+                ref readonly var component = ref _type[fast];
 
                 if (component == components[slow])
                 {
-                    //ref readonly var meta = ref ComponentStorage.Get(component);
                     componentSizes[slow] = component.Size;
                     signatureToIndex[slow] = fast;
 
@@ -390,64 +385,58 @@ sealed unsafe class Archetype
         }
     }
 
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsType type, int stack, Span<ComponentMetadata> acc, int accTop, Archetype root)
+    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsType type, int stack, Span<ComponentMetadata> acc, Archetype root)
     {
         if (stack == 0)
         {
             return vertex;
         }
 
-        foreach (ref var edge in CollectionsMarshal.AsSpan(vertex._edgesRight))
+        if (vertex._edgesRight == null || vertex._edgesRight.Count == 0)
         {
+            var nt = new EcsType(type.Count);
+            for (int i = 0; i < acc.Length; ++i)
+            {
+                nt.Add(acc[i]);
+            }
+            return new Archetype(vertex._world, nt);
+        }
+
+        for (int i = 0; i < vertex._edgesRight.Count; i++)
+        {
+            var edge = vertex._edgesRight[i];
             if (type.IndexOf(edge.ComponentID) != -1)
             {
-                acc[accTop] = edge.ComponentID;
-
-                return TraverseAndCreateHelp(edge.Archetype, in type, stack - 1, acc, accTop + 1, root);
+                acc[stack - 1] = edge.ComponentID;
+                return TraverseAndCreateHelp(edge.Archetype, in type, stack - 1, acc, root);
             }
         }
 
-        int i;
-        var newType = new EcsType(accTop);
-        for (i = 0; i < accTop; ++i)
+        var newType = new EcsType(acc.Length);
+        for (int i = 0; i < acc.Length; ++i)
         {
             newType.Add(acc[i]);
         }
-
-        // NOTE: do not register any system there
-        //if (type.Count > newType.Count)
+        var newComponent = ComponentMetadata.Invalid;
+        for (int i = 0; i < type.Count; ++i)
+        {
+            if (type[i] != newType[i])
+            {
+                newComponent = type[i];
+                newType.Add(newComponent);
+                acc[stack - 1] = newComponent;
+                break;
+            }
+        }
         if (newType.Count == 0)
         {
             newType.Dispose();
-
             return new Archetype(vertex._world, type);
-        }
-
-
-        var newComponent = ComponentMetadata.Invalid;
-        if (type.Count > newType.Count)
-        {
-            newComponent = type[^1];
-            newType.Add(newComponent);
-            acc[accTop] = newComponent;
-        }
-        else
-        {
-            for (i = 0; i < type.Count; ++i)
-            {
-                if (type[i] != newType[i])
-                {
-                    newComponent = type[i];
-                    newType.Add(newComponent);
-                    acc[accTop] = newComponent;
-                    break;
-                }
-            }
         }
 
         var newVertex = root.InsertVertex(vertex, newType, newComponent);
 
-        return TraverseAndCreateHelp(newVertex, in type, stack - 1, acc, accTop + 1, root);
+        return TraverseAndCreateHelp(newVertex, in type, stack - 1, acc, root);
     }
 
     private static void MakeEdges(Archetype left, Archetype right, in ComponentMetadata componentID)
@@ -492,8 +481,7 @@ sealed unsafe class Archetype
     {
         for (int i = 0; i < _type.Count; ++i)
         {
-            //ref readonly var meta = ref ComponentStorage.Get(_type.Components[i]);
-            var meta = _type[i];
+            ref readonly var meta = ref _type[i];
             Array.Resize(ref _components[i], meta.Size * capacity);
             _capacity = capacity;
         }
@@ -693,6 +681,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
 
 
     public readonly int Count => _count;
+    public ReadOnlySpan<ComponentMetadata> Components => _components.AsSpan(0, _count);
 
     public readonly ref readonly ComponentMetadata this[int index] => ref _components[index];
 
