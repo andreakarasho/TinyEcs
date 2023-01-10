@@ -540,9 +540,9 @@ struct Query : IQueryComposition, IQuery
             if (arch.Count > 0 && t.IsSuperset(in _add))
             {
                 var ok = true;
-                foreach (var component in _remove)
+                foreach (ref readonly var component in _remove)
                 {
-                    if (t.IndexOf(component) >= 0)
+                    if (t.IndexOf(in component) >= 0)
                     {
                         ok = false;
                         break;

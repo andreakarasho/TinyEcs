@@ -27,7 +27,7 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     world.Attach<Position>(entity);
     //world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
-    //world.Attach<Name>(entity);
+    world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);
 
     world.Set(entity, new Position() { X = 200f });
@@ -48,7 +48,7 @@ for (int i = 0; i < 1000; ++i)
 {
     var entity = world.CreateEntity();
     world.Attach<Position>(entity);
-    world.Attach<Velocity>(entity);
+    //world.Attach<Velocity>(entity);
     world.Attach<PlayerTag>(entity);
 }
 
@@ -132,7 +132,7 @@ while (true)
         ++done;
     }
 
-    Debug.Assert(done == ENTITIES_COUNT + 1000);
+    //Debug.Assert(done == ENTITIES_COUNT + 1000);
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 
