@@ -9,6 +9,8 @@ const int ENTITIES_COUNT = 1_000_000 * 1;
 
 var world = new World();
 
+var t0 = typeof(Relation<Likes, Dogs>);
+var t1 = typeof(Relation<Likes, Cats>);
 
 
 var bothCount = 0;
@@ -25,12 +27,15 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //world.Attach(entity, velocityID);
 
     world.Attach<Position>(entity);
-    //world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
-    world.Attach<Name>(entity);
+
+    world.Detach<Velocity>(entity);
+
+    //world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);
-    world.Attach<Relation<Likes, Dogs>>(entity);
-    world.Attach<Relation<Likes, Cats>>(entity);
+    //world.Attach<Relation<Likes, Dogs>>(entity);
+    //world.Attach<Relation<Likes, Cats>>(entity);
+
 
     world.Set(entity, new Position() { X = 200f });
     world.Set(entity, new Velocity() { X = 100f });
@@ -117,30 +122,30 @@ while (true)
 
     sw.Restart();
 
-    world.Step();
-    //var done = 0;
-    //foreach (var view in query)
-    //{
-    //    ref readonly var entity = ref view.Entity;
-    //    ref var pos = ref view.Get<Position>();
-    //    ref var vel = ref view.Get<Velocity>();
+    //world.Step();
+    var done = 0;
+    foreach (var view in query)
+    {
+        ref readonly var entity = ref view.Entity;
+        ref var pos = ref view.Get<Position>();
+        ref var vel = ref view.Get<Velocity>();
 
-    //    //if (view.Has<Name>())
-    //    //{
-    //    //    ref var name = ref view.Get<Name>();
-    //    //}
-    //    //else
-    //    //{
+        //if (view.Has<Name>())
+        //{
+        //    ref var name = ref view.Get<Name>();
+        //}
+        //else
+        //{
 
-    //    //}
+        //}
 
-    //    pos.X++;
-    //    vel.Y++;
+        pos.X++;
+        vel.Y++;
 
-    //    //world.Destroy(entity);
+        //world.Destroy(entity);
 
-    //    ++done;
-    //}
+        ++done;
+    }
 
     //Debug.Assert(done == ENTITIES_COUNT + 1000);
 

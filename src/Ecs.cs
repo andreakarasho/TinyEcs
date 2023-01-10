@@ -111,6 +111,32 @@ sealed partial class World
         record.Archetype = arch;
     }
 
+    private void Detach(int entity, in ComponentMetadata componentID)
+    {
+        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+        if (Unsafe.IsNullRef(ref record))
+        {
+            return;
+        }
+
+        var initType = record.Archetype.EcsType;
+        var finiType = new EcsType(initType);
+        finiType.Remove(in componentID);
+
+        if (!_typeIndex.TryGetValue(finiType, out var arch))
+        {
+            arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
+        }
+        else
+        {
+            finiType.Dispose();
+        }
+
+        var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
+        record.Row = newRow;
+        record.Archetype = arch;
+    }
+
     private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
@@ -306,7 +332,9 @@ sealed unsafe class Archetype
 
         var rightRow = right.Add(removed);
 
-        for (int i = 0, j = 0; i < _type.Count; ++i)
+        var max = Math.Min(_type.Count, right._type.Count);
+
+        for (int i = 0, j = 0; i < max; ++i)
         {
             Debug.Assert(_type[i].ID >= right._type[j].ID, "elements in types mismatched");
 
@@ -692,6 +720,15 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         GrowIfNeeded();
 
         _components[_count++] = id;
+        Array.Sort(_components, 0, _count);
+    }
+
+    public void Remove(in ComponentMetadata id)
+    {
+        var idx = IndexOf(in id);
+        if (idx < 0 || _count <= 0) return;
+
+        _components[idx] = _components[--_count];
         Array.Sort(_components, 0, _count);
     }
 
