@@ -65,7 +65,7 @@ public sealed partial class World : IDisposable
         return id;
     }
 
-    public void Destroy(int entity)
+    public void DestroyEntity(int entity)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -106,6 +106,9 @@ public sealed partial class World : IDisposable
         }
 
         var initType = record.Archetype.Signature;
+        if (initType.IndexOf(in componentID) >= 0)
+            return;
+
         var finiType = new EcsSignature(initType);
         finiType.Add(in componentID);
 

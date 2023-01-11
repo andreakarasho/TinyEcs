@@ -19,9 +19,22 @@ namespace TinyEcs.Tests
         {
             using var world = new World();
             var entity = world.CreateEntity();
-            world.Destroy(entity);
+            world.DestroyEntity(entity);
             
             Assert.True(world.EntityCount == 0);
+        }
+
+        [Fact]
+        public void Entity_Attach_TwoSameComponent()
+        {
+            using var world = new World();
+            var entity = world.CreateEntity();
+
+            world.Attach<float>(entity);
+            world.Attach<float>(entity);
+            world.Detach<float>(entity);
+
+            Assert.True(!world.Has<float>(entity));
         }
 
         [Fact]
