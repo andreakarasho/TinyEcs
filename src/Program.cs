@@ -102,13 +102,12 @@ var query = world.Query()
     .With<Position>()
     .With<Velocity>()
     //.Without<PlayerTag>()
-    .End();
+    ;
 
 
 foreach (var view in world.Query()
     .With<Relation<Likes, Dogs>>()
-    .With<Relation<Likes, Cats>>()
-    .End())
+    .With<Relation<Likes, Cats>>())
 {
 
 }
@@ -129,6 +128,8 @@ while (true)
         ref readonly var entity = ref view.Entity;
         ref var pos = ref view.Get<Position>();
         ref var vel = ref view.Get<Velocity>();
+
+        //world.Attach<PlayerTag>(entity);
 
         //if (view.Has<Name>())
         //{

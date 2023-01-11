@@ -106,14 +106,6 @@ public sealed partial class World : IDisposable
         }
 
         var initType = record.Archetype.Signature;
-
-        //Span<ComponentMetadata> newMeta = stackalloc ComponentMetadata[initType.Components.Count + 1];
-        ////newMeta[0..^1];
-        //newMeta[^1] = componentID;
-        //newMeta.Sort();
-
-        //var hash = ComponentHasher.Calculate(newMeta);
-
         var finiType = new EcsSignature(initType);
         finiType.Add(in componentID);
 
@@ -180,9 +172,6 @@ public sealed partial class World : IDisposable
 
     private Span<byte> Get(int entity, in ComponentMetadata metadata)
     {
-        Debug.Assert(metadata.ID > 0);
-        Debug.Assert(metadata.Size > 0);
-
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
@@ -268,7 +257,7 @@ sealed unsafe class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
 
-        var maxID = 0;
+        var maxID = -1;
         for (int i = 0; i < sign.Count; ++i)
         {
             maxID = Math.Max(maxID, sign[i].ID);
@@ -525,94 +514,60 @@ sealed unsafe class Archetype
     }
 }
 
-public struct Query : IQueryComposition, IQuery
+public struct Query : IQueryComposition
 {
     private readonly World _world;
-    internal EcsSignature _add, _remove;
-    internal readonly List<Archetype> _archetypes;
+    private readonly EcsSignature _add, _remove;
 
-    public Query(World world)
+    internal Query(World world)
     {
         _world = world;
-        _archetypes = new List<Archetype>();
         _add = new EcsSignature(16);
         _remove = new EcsSignature(16);
     }
 
-
     public IQueryComposition With<T>() where T : struct
     {
-        _add.Add(Component<T>.Metadata);
+        _add.Add(in Component<T>.Metadata);
 
         return this;
     }
 
     public IQueryComposition Without<T>() where T : struct
     {
-        _remove.Add(Component<T>.Metadata);
+        _remove.Add(in Component<T>.Metadata);
 
         return this;
     }
 
-    public IQuery End()
-    {
-        _archetypes.Clear();
-
-        // this check if all components are contained into the archetypes
-        foreach ((var t, var arch) in _world._typeIndex)
-        {
-            if (arch.Count > 0 && t.IsSuperset(in _add))
-            {
-                var ok = true;
-                foreach (ref readonly var component in _remove)
-                {
-                    if (t.IndexOf(in component) >= 0)
-                    {
-                        ok = false;
-                        break;
-                    }
-                }
-
-                if (ok)
-                    _archetypes.Add(arch);
-            }
-        }
-
-        return this;
-    }
-
-    public QueryIterator GetEnumerator()
-    {
-        return new QueryIterator(_archetypes, _add);
-    }
-}
-
-public interface IQuery
-{
-    QueryIterator GetEnumerator();
+    public QueryIterator GetEnumerator() => new QueryIterator(_world, _add, _remove);
 }
 
 public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
     IQueryComposition Without<T>() where T : struct;
-    IQuery End();
+    QueryIterator GetEnumerator();
 }
 
+[SkipLocalsInit]
 public ref struct QueryIterator
 {
+    private readonly EcsSignature _add, _remove;
+    private readonly IEnumerator<KeyValuePair<EcsSignature, Archetype>> _archetypes;
+
     private int _index;
-    private readonly IEnumerator<Archetype> _archetypes;
-    private EcsSignature _add;
     private ref int _firstEntity;
     private byte[][] _components;
     private int[] _columns;
 
-    internal QueryIterator(List<Archetype> archetypes, EcsSignature add)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
     {
+        _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
         _index = 0;
-        _archetypes = archetypes.GetEnumerator();
         _add = add;
+        _remove = remove;
     }
 
     public readonly EcsQueryView Current
@@ -627,6 +582,7 @@ public ref struct QueryIterator
         );
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
         --_index;
@@ -638,7 +594,26 @@ public ref struct QueryIterator
         {
             if (!_archetypes.MoveNext()) return false;
 
-            archetype = _archetypes.Current;
+            var curr = _archetypes.Current;
+            var t = curr.Key;
+            archetype = curr.Value;
+
+            if (archetype.Count > 0 && t.IsSuperset(in _add))
+            {
+                var ok = true;
+                foreach (ref readonly var component in _remove)
+                {
+                    if (t.IndexOf(in component) >= 0)
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+
+                if (!ok)
+                    continue;
+            }
+
             _index = archetype.Count - 1;
 
         } while (_index < 0);
@@ -650,6 +625,7 @@ public ref struct QueryIterator
         return true;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset()
     {
         _index = -1;
@@ -657,6 +633,7 @@ public ref struct QueryIterator
     }
 }
 
+[SkipLocalsInit]
 public readonly ref struct EcsQueryView
 {
     public readonly ref readonly int Entity;
@@ -692,9 +669,6 @@ public readonly ref struct EcsQueryView
         return ref MemoryMarshal.AsRef<T>(span);
     }
 }
-
-
-record struct EcsRecord(Archetype Archetype, int Row);
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 {
@@ -828,8 +802,6 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     }
 }
 
-readonly record struct EcsEdge(in ComponentMetadata ComponentID, Archetype Archetype);
-
 unsafe class EcsSystem
 {
     public Archetype? Archetype;
@@ -844,9 +816,11 @@ public ref struct EcsView
     internal Span<int> ComponentSizes;
 }
 
+readonly record struct EcsEdge(in ComponentMetadata ComponentID, Archetype Archetype);
 
-[SkipLocalsInit]
-[StructLayout(LayoutKind.Sequential)]
+record struct EcsRecord(Archetype Archetype, int Row);
+
+[SkipLocalsInit, StructLayout(LayoutKind.Sequential)]
 readonly record struct ComponentMetadata(int ID, int Size) :
     IComparable<ComponentMetadata>,
     IEquatable<ComponentMetadata>

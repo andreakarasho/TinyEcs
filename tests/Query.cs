@@ -14,8 +14,7 @@
                 world.Attach<float>(world.CreateEntity());
 
             var query = world.Query()
-                .With<float>()
-                .End();
+                .With<float>();
 
             int done = 0;
             foreach (var _ in query)
@@ -43,8 +42,7 @@
 
             var query = world.Query()
                 .With<float>()
-                .With<int>()
-                .End();
+                .With<int>();
 
             int done = 0;
             foreach (var _ in query)
@@ -74,8 +72,7 @@
             var query = world.Query()
                 .With<float>()
                 .With<int>()
-                .With<bool>()
-                .End();
+                .With<bool>();
 
             int done = 0;
             foreach (var _ in query)
@@ -105,8 +102,7 @@
             var query = world.Query()
                 .With<float>()
                 .With<int>()
-                .Without<bool>()
-                .End();
+                .Without<bool>();
 
             int done = 0;
             foreach (var _ in query)
@@ -135,8 +131,7 @@
             var query = world.Query()
                 .With<float>()
                 .With<int>()
-                .Without<bool>()
-                .End();
+                .Without<bool>();
 
             int done = 0;
             foreach (var _ in query)
@@ -165,8 +160,7 @@
             var query = world.Query()
                 .With<float>()
                 .Without<int>()
-                .Without<bool>()
-                .End();
+                .Without<bool>();
 
             int done = 0;
             foreach (var _ in query)
