@@ -552,23 +552,36 @@ sealed unsafe class Archetype
 
     static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
     {
-        for (int i = 0; i < from._sign.Count; ++i)
+        var isLeft = to._sign.Count < from._sign.Count;
+        int i = 0, j = 0;
+        var count = isLeft ? to._sign.Count : from._sign.Count;
+
+        ref var x = ref (isLeft ? ref j : ref i);
+
+        for (; /*(isLeft ? j : i)*/ x < count; ++x)
         {
-            for (int j = 0; j < to._sign.Count; ++j)
+            while (from._sign[i] != to._sign[j])
             {
-                if (from._sign[i] == to._sign[j])
-                {
-                    ref readonly var meta = ref from._sign[i];
-                    var leftArray = from._components[i].AsSpan();
-                    var rightArray = to._components[j].AsSpan();
-                    var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
-                    var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
-                    var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
-                    removeComponent.CopyTo(insertComponent);
-                    swapComponent.CopyTo(removeComponent);
-                    break;
-                }
+                // advance the sign with less components!
+                if (isLeft)
+                    ++i;
+                else
+                    ++j;
             }
+
+            ref readonly var meta = ref from._sign[i];
+            var leftArray = from._components[i].AsSpan();
+            var rightArray = to._components[j].AsSpan();
+            var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
+            var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
+            var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
+            removeComponent.CopyTo(insertComponent);
+            swapComponent.CopyTo(removeComponent);
+
+            //if (!isLeft)
+            //    ++i;
+            //else
+            //    ++j;
         }
     }
 
