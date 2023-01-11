@@ -1,8 +1,4 @@
-﻿using System.Buffers;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -165,7 +161,8 @@ public sealed partial class World : IDisposable
     private void InternalCreateEntity(int id)
     {
         var row = _archRoot.Add(id);
-        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var _);
+        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var exists);
+        Debug.Assert(!exists);
         record.Archetype = _archRoot;
         record.Row = row;
 
@@ -195,9 +192,9 @@ public sealed partial class World : IDisposable
             arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
         }
 
-        var newRow = Archetype.MoveEntity(record.Archetype, arch, record.Row);
+        var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
         record.Row = newRow;
-        record.Archetype = arch;
+        record.Archetype = arch!;
     }
 
     private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
