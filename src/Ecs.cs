@@ -179,6 +179,8 @@ public sealed partial class World : IDisposable
         Span<ComponentMetadata> span = stackalloc ComponentMetadata[initType.Count + 1];
         initType.Components.CopyTo(span);
         span[^1] = componentID;
+        span.Sort();
+
         var hash = ComponentHasher.Calculate(span);
 
         ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
