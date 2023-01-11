@@ -20,13 +20,14 @@ public sealed partial class World : IDisposable
     private Archetype _archRoot;
     private readonly Stack<int> _recycleIds = new Stack<int>();
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
-    internal readonly Dictionary<EcsSignature, Archetype> _typeIndex = new Dictionary<EcsSignature, Archetype>();
+    internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
 
 
     public World()
     {
         _archRoot = new Archetype(this, new EcsSignature(0));
+        _typeIndex[_archRoot.GetHashCode()] = _archRoot;
     }
 
 
@@ -37,7 +38,7 @@ public sealed partial class World : IDisposable
     {
         foreach ((var type, var arch) in _typeIndex)
         {
-            type.Dispose();
+            arch.Signature.Dispose();
         }
 
         _systemIndex.Clear();
@@ -47,6 +48,7 @@ public sealed partial class World : IDisposable
         _entityCount = 0;
         _nextEntityID = 1;
         _archRoot = new Archetype(this, new EcsSignature(0));
+        _typeIndex[_archRoot.GetHashCode()] = _archRoot;
     }
 
     public void Dispose() => Destroy();
@@ -173,19 +175,22 @@ public sealed partial class World : IDisposable
     private void InternalAttachDetach(ref EcsRecord record, in ComponentMetadata componentID, bool add)
     {
         var initType = record.Archetype.Signature;
-        var finiType = new EcsSignature(initType);
-        if (add)
-            finiType.Add(in componentID);
-        else
-            finiType.Remove(in componentID);
 
-        if (!_typeIndex.TryGetValue(finiType, out var arch))
+        Span<ComponentMetadata> span = stackalloc ComponentMetadata[initType.Count + 1];
+        initType.Components.CopyTo(span);
+        span[^1] = componentID;
+        var hash = ComponentHasher.Calculate(span);
+
+        ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
+        if (!exists)
         {
+            var finiType = new EcsSignature(initType);
+            if (add)
+                finiType.Add(in componentID);
+            else
+                finiType.Remove(in componentID);
+
             arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
-        }
-        else
-        {
-            finiType.Dispose();
         }
 
         var newRow = Archetype.MoveEntity(record.Archetype, arch, record.Row);
@@ -232,16 +237,14 @@ public sealed partial class World : IDisposable
             .AsSpan(metadata.Size * record.Row, metadata.Size);
     }
 
-    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<ComponentMetadata> components)
+    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, Span<ComponentMetadata> components)
     {
-        var type = new EcsSignature(components);
-        if (!_typeIndex.TryGetValue(type, out var arch))
+        var hash = ComponentHasher.Calculate(components);
+
+        ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
+        if (!exists)
         {
-            arch = _archRoot.TraverseAndCreate(type);
-        }
-        else
-        {
-            type.Dispose();
+            arch = _archRoot.TraverseAndCreate(new EcsSignature(components));
         }
 
         if (!_recycleIds.TryPop(out var id))
@@ -250,7 +253,7 @@ public sealed partial class World : IDisposable
             Interlocked.Increment(ref _nextEntityID);
         }
 
-        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
+        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out exists);
         if (!exists)
             sys = new EcsSystem();
 
@@ -263,14 +266,12 @@ public sealed partial class World : IDisposable
 
     private unsafe void UpdateSystem(EcsSystem sys)
     {
-        var type = new EcsSignature(sys.Components);
-        if (!_typeIndex.TryGetValue(type, out var arch))
+        var hash = ComponentHasher.Calculate(sys.Components);
+
+        ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
+        if (!exists)
         {
-            arch = _archRoot.TraverseAndCreate(type);
-        }
-        else
-        {
-            type.Dispose();
+            arch = _archRoot.TraverseAndCreate(new EcsSignature(sys.Components));
         }
 
         sys.Archetype = arch;
@@ -482,8 +483,6 @@ sealed unsafe class Archetype
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
-
-        world._typeIndex[sign] = this;
     }
 
 
@@ -768,7 +767,7 @@ public ref struct QueryIterator
 {
     private readonly World _wold;
     private readonly EcsSignature _add, _remove;
-    private readonly IEnumerator<KeyValuePair<EcsSignature, Archetype>> _archetypes;
+    private readonly IEnumerator<KeyValuePair<int, Archetype>> _archetypes;
 
     private int _index;
     private ref int _firstEntity;
@@ -812,15 +811,14 @@ public ref struct QueryIterator
             if (!_archetypes.MoveNext()) return false;
 
             var curr = _archetypes.Current;
-            var t = curr.Key;
             archetype = curr.Value;
 
-            if (archetype.Count > 0 && t.IsSuperset(in _add))
+            if (archetype.Count > 0 && archetype.Signature.IsSuperset(in _add))
             {
                 var ok = true;
                 foreach (ref readonly var component in _remove)
                 {
-                    if (t.IndexOf(in component) >= 0)
+                    if (archetype.Signature.IndexOf(in component) >= 0)
                     {
                         ok = false;
                         break;
@@ -1116,7 +1114,7 @@ static class ComponentHasher
         {
             var hash = 5381;
 
-            foreach (ref var id in components)
+            foreach (ref readonly var id in components)
             {
                 hash = ((hash << 5) + hash) + id.ID;
             }

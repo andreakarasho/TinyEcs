@@ -131,10 +131,10 @@ while (true)
 
         //world.Attach<float>(entity);
 
-        var e = world.CreateEntity();
-        world.Attach<Position>(e);
-        world.Attach<Velocity>(e);
-        world.DestroyEntity(e);
+        //var e = world.CreateEntity();
+        //world.Attach<Position>(e);
+        //world.Attach<Velocity>(e);
+        //world.DestroyEntity(e);
 
         //if (view.Has<Name>())
         //{
