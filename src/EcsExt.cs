@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace TinyEcs;
 
-sealed partial class World
+public sealed partial class World
 {
     public void Attach<T>(int entity) where T : struct
         => Attach(entity, in Component<T>.Metadata);
@@ -11,7 +11,7 @@ sealed partial class World
     public void Detach<T>(int entity) where T : struct
         => Detach(entity, in Component<T>.Metadata);
 
-    public unsafe void Set<T>(int entity, T component) where T : struct
+    public void Set<T>(int entity, T component) where T : struct
     {
         var span = MemoryMarshal.CreateSpan(ref component, 1);
         Set(entity, in Component<T>.Metadata, MemoryMarshal.AsBytes(span));

@@ -101,7 +101,7 @@ unsafe
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
-    //.Without<PlayerTag>()
+    .Without<PlayerTag>()
     ;
 
 
@@ -129,7 +129,12 @@ while (true)
         ref var pos = ref view.Get<Position>();
         ref var vel = ref view.Get<Velocity>();
 
-        //world.Attach<PlayerTag>(entity);
+        //world.Attach<float>(entity);
+
+        var e = world.CreateEntity();
+        world.Attach<Position>(e);
+        world.Attach<Velocity>(e);
+        world.DestroyEntity(e);
 
         //if (view.Has<Name>())
         //{

@@ -1,5 +1,7 @@
 ﻿using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -11,10 +13,12 @@ public sealed partial class World : IDisposable
 {
     private int _nextEntityID = 1;
     private int _entityCount = 0;
+
+    private int _deferStatus, _deferActionCount;
+    private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
+
     private Archetype _archRoot;
-
-    private readonly ConcurrentStack<int> _recycleIds = new ConcurrentStack<int>();
-
+    private readonly Stack<int> _recycleIds = new Stack<int>();
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<EcsSignature, Archetype> _typeIndex = new Dictionary<EcsSignature, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -47,41 +51,6 @@ public sealed partial class World : IDisposable
 
     public void Dispose() => Destroy();
 
-
-    public int CreateEntity()
-    {
-        if (!_recycleIds.TryPop(out var id))
-        {
-            id = _nextEntityID;
-            Interlocked.Increment(ref _nextEntityID);
-        }
-
-        var row = _archRoot.Add(id);
-        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var _);
-        record.Archetype = _archRoot;
-        record.Row = row;
-        ++_entityCount;
-
-        return id;
-    }
-
-    public void DestroyEntity(int entity)
-    {
-        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            return;
-        }
-
-        var removedId = record.Archetype.Remove(record.Row);
-
-        Debug.Assert(removedId == entity);
-
-        _recycleIds.Push(removedId);
-        _entityIndex.Remove(removedId);
-        --_entityCount;
-    }
-
     public unsafe void Step()
     {
         foreach ((int id, EcsSystem system) in _systemIndex)
@@ -97,46 +66,118 @@ public sealed partial class World : IDisposable
 
     public IQueryComposition Query() => new Query(this);
 
-    private void Attach(int entity, in ComponentMetadata componentID)
+    public int CreateEntity()
     {
+        if (!_recycleIds.TryPop(out var id))
+        {
+            id = _nextEntityID;
+            Interlocked.Increment(ref _nextEntityID);
+        }
+
+        if (IsDeferred())
+        {
+            CreateDeferred(id);
+        }
+        else
+        {
+            InternalCreateEntity(id);
+        }
+
+        return id;
+    }
+
+    public void DestroyEntity(int entity)
+    {
+        if (IsDeferred())
+        {
+            DestroyDeferred(entity);
+            return;
+        }
+
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
             return;
         }
 
-        var initType = record.Archetype.Signature;
-        if (initType.IndexOf(in componentID) >= 0)
+        var removedId = record.Archetype.Remove(record.Row);
+
+        Debug.Assert(removedId == entity);
+
+        _recycleIds.Push(removedId);
+        _entityIndex.Remove(removedId);
+
+        Interlocked.Decrement(ref _entityCount);
+    }
+
+
+
+    private void Attach(int entity, in ComponentMetadata componentID)
+    {
+        if (IsDeferred())
+        {
+            AttachDeferred(entity, in componentID);
             return;
-
-        var finiType = new EcsSignature(initType);
-        finiType.Add(in componentID);
-
-        if (!_typeIndex.TryGetValue(finiType, out var arch))
-        {
-            arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
-        }
-        else
-        {
-            finiType.Dispose();
         }
 
-        var newRow = Archetype.MoveEntity(record.Archetype, arch, record.Row);
-        record.Row = newRow;
-        record.Archetype = arch;
+        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+        if (Unsafe.IsNullRef(ref record))
+        {
+            return;
+        }
+
+        var column = componentID.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID.ID];
+        if (column >= 0)
+        {
+            return;
+        }
+
+        InternalAttachDetach(ref record, in componentID, true);
     }
 
     private void Detach(int entity, in ComponentMetadata componentID)
     {
+        if (IsDeferred())
+        {
+            DetachDeferred(entity, in componentID);
+            return;
+        }
+
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
             return;
         }
 
+        var column = componentID.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID.ID];
+        if (column < 0)
+        {
+            return;
+        }
+
+        InternalAttachDetach(ref record, in componentID, false);
+    }
+
+
+
+    private void InternalCreateEntity(int id)
+    {
+        var row = _archRoot.Add(id);
+        ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var _);
+        record.Archetype = _archRoot;
+        record.Row = row;
+
+        Interlocked.Increment(ref _entityCount);
+    }
+
+    private void InternalAttachDetach(ref EcsRecord record, in ComponentMetadata componentID, bool add)
+    {
         var initType = record.Archetype.Signature;
         var finiType = new EcsSignature(initType);
-        finiType.Remove(in componentID);
+        if (add)
+            finiType.Add(in componentID);
+        else
+            finiType.Remove(in componentID);
 
         if (!_typeIndex.TryGetValue(finiType, out var arch))
         {
@@ -234,6 +275,173 @@ public sealed partial class World : IDisposable
 
         sys.Archetype = arch;
     }
+
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool IsDeferred() => _deferStatus != 0;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void BeginDefer() => Interlocked.Increment(ref _deferStatus);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EndDefer() => Interlocked.Decrement(ref _deferStatus);
+
+    private void CreateDeferred(int entity)
+    {
+        ref var cmd = ref PeekDeferredCommand();
+        cmd.Action = DeferredOp.Create;
+        cmd.Stage = _deferStatus;
+        cmd.Create.Entity = entity;
+    }
+
+    private void DestroyDeferred(int entity)
+    {
+        ref var cmd = ref PeekDeferredCommand();
+        cmd.Action = DeferredOp.Destroy;
+        cmd.Stage = _deferStatus;
+        cmd.Destroy.Entity = entity;
+    }
+
+    private void AttachDeferred(int entity, in ComponentMetadata component)
+    {
+        ref var cmd = ref PeekDeferredCommand();
+        cmd.Action = DeferredOp.Attach;
+        cmd.Stage = _deferStatus;
+        cmd.Attach.Entity = entity;
+        cmd.Attach.Component = component;
+    }
+
+    private void DetachDeferred(int entity, in ComponentMetadata component)
+    {
+        ref var cmd = ref PeekDeferredCommand();
+        cmd.Action = DeferredOp.Detach;
+        cmd.Stage = _deferStatus;
+        cmd.Detach.Entity = entity;
+        cmd.Detach.Component = component;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ref EcsDeferredAction PeekDeferredCommand()
+    {
+        if (_deferActionCount >= _deferredActions.Length)
+        {
+            Array.Resize(ref _deferredActions, _deferredActions.Length * 2);
+        }
+
+        return ref _deferredActions[_deferActionCount++];
+    }
+
+    internal void MergeDeferred()
+    {
+        // TODO: test for nested queries
+        if (IsDeferred())
+            return;
+
+        var count = _deferActionCount;
+
+        for (int i = 0; i < count; ++i)
+        {
+            ref var cmd = ref _deferredActions[i];
+
+            switch (cmd.Action)
+            {
+                case DeferredOp.Create:
+
+                    InternalCreateEntity(cmd.Create.Entity);
+
+                    break;
+
+                case DeferredOp.Destroy:
+
+                    DestroyEntity(cmd.Create.Entity);
+
+                    break;
+
+                case DeferredOp.Attach:
+
+                    Attach(cmd.Attach.Entity, in cmd.Attach.Component);
+
+                    break;
+
+                case DeferredOp.Detach:
+
+                    Detach(cmd.Detach.Entity, in cmd.Detach.Component);
+
+                    break;
+            }
+        }
+
+        _deferActionCount -= count;
+    }
+
+    private enum DeferredOp : byte
+    {
+        Create,
+        Destroy,
+        Attach,
+        Detach,
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    struct EcsDeferredAction
+    {
+        [FieldOffset(0)]
+        public DeferredOp Action;
+        
+        [FieldOffset(1)]
+        public int Stage;
+
+        [FieldOffset(1)]
+        public EcsDeferredCreateEntity Create;
+
+        [FieldOffset(1)]
+        public EcsDeferredDestroyEntity Destroy;
+
+        [FieldOffset(1)]
+        public EcsDeferredAttachComponent Attach;
+
+        [FieldOffset(1)]
+        public EcsDeferredDetachComponent Detach;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EcsDeferredCreateEntity
+    {
+        public DeferredOp Action;
+        public int Stage;
+
+        public int Entity;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EcsDeferredDestroyEntity
+    {
+        public DeferredOp Action;
+        public int Stage;
+
+        public int Entity;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EcsDeferredAttachComponent
+    {
+        public DeferredOp Action;
+        public int Stage;
+
+        public int Entity;
+        public ComponentMetadata Component;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EcsDeferredDetachComponent
+    {
+        public DeferredOp Action;
+        public int Stage;
+
+        public int Entity;
+        public ComponentMetadata Component;
+    }
 }
 
 sealed unsafe class Archetype
@@ -290,8 +498,10 @@ sealed unsafe class Archetype
     {
         if (_capacity == _count)
         {
-            Array.Resize(ref _entityIDs, _capacity * 2);
-            ResizeComponentArray(_capacity * 2);
+            _capacity *= 2;
+
+            Array.Resize(ref _entityIDs, _capacity);
+            ResizeComponentArray(_capacity);
         }
 
         _entityIDs[_count] = entityID;
@@ -556,6 +766,7 @@ public interface IQueryComposition
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
+    private readonly World _wold;
     private readonly EcsSignature _add, _remove;
     private readonly IEnumerator<KeyValuePair<EcsSignature, Archetype>> _archetypes;
 
@@ -567,6 +778,9 @@ public ref struct QueryIterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
     {
+        world!.BeginDefer();
+
+        _wold = world;
         _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
         _index = 0;
         _add = add;
@@ -633,6 +847,12 @@ public ref struct QueryIterator
     {
         _index = -1;
         _archetypes.Reset();
+    }
+
+    public void Dispose()
+    {
+        _wold!.EndDefer();
+        _wold!.MergeDeferred();
     }
 }
 
