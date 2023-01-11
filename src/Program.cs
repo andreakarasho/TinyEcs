@@ -7,7 +7,7 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 1_000_000 * 1;
 
-var world = new World();
+using var world = new World();
 
 var t0 = typeof(Relation<Likes, Dogs>);
 var t1 = typeof(Relation<Likes, Cats>);
@@ -29,7 +29,7 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     world.Attach<Position>(entity);
     world.Attach<Velocity>(entity);
 
-    world.Detach<Velocity>(entity);
+    //world.Detach<Velocity>(entity);
 
     //world.Attach<Name>(entity);
     //world.Attach<PlayerTag>(entity);

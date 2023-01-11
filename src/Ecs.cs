@@ -1,31 +1,51 @@
 ﻿using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace TinyEcs;
 
-sealed partial class World
+public sealed partial class World : IDisposable
 {
     private int _nextEntityID = 1;
     private int _entityCount = 0;
-    private readonly Archetype _archRoot;
+    private Archetype _archRoot;
 
     private readonly ConcurrentStack<int> _recycleIds = new ConcurrentStack<int>();
 
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
-    internal readonly Dictionary<EcsType, Archetype> _typeIndex = new Dictionary<EcsType, Archetype>();
+    internal readonly Dictionary<EcsSignature, Archetype> _typeIndex = new Dictionary<EcsSignature, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
 
 
     public World()
     {
-        _archRoot = new Archetype(this, new EcsType(0));
+        _archRoot = new Archetype(this, new EcsSignature(0));
     }
 
 
     public int EntityCount => _entityCount;
+
+
+    private unsafe void Destroy()
+    {
+        foreach ((var type, var arch) in _typeIndex)
+        {
+            type.Dispose();
+        }
+
+        _systemIndex.Clear();
+        _recycleIds.Clear();
+        _typeIndex.Clear();
+
+        _entityCount = 0;
+        _nextEntityID = 1;
+        _archRoot = new Archetype(this, new EcsSignature(0));
+    }
+
+    public void Dispose() => Destroy();
 
 
     public int CreateEntity()
@@ -85,7 +105,7 @@ sealed partial class World
             return;
         }
 
-        var initType = record.Archetype.EcsType;
+        var initType = record.Archetype.Signature;
 
         //Span<ComponentMetadata> newMeta = stackalloc ComponentMetadata[initType.Components.Count + 1];
         ////newMeta[0..^1];
@@ -94,7 +114,7 @@ sealed partial class World
 
         //var hash = ComponentHasher.Calculate(newMeta);
 
-        var finiType = new EcsType(initType);
+        var finiType = new EcsSignature(initType);
         finiType.Add(in componentID);
 
         if (!_typeIndex.TryGetValue(finiType, out var arch))
@@ -106,7 +126,7 @@ sealed partial class World
             finiType.Dispose();
         }
 
-        var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
+        var newRow = Archetype.MoveEntity(record.Archetype, arch, record.Row);
         record.Row = newRow;
         record.Archetype = arch;
     }
@@ -119,8 +139,8 @@ sealed partial class World
             return;
         }
 
-        var initType = record.Archetype.EcsType;
-        var finiType = new EcsType(initType);
+        var initType = record.Archetype.Signature;
+        var finiType = new EcsSignature(initType);
         finiType.Remove(in componentID);
 
         if (!_typeIndex.TryGetValue(finiType, out var arch))
@@ -132,7 +152,7 @@ sealed partial class World
             finiType.Dispose();
         }
 
-        var newRow = record.Archetype.MoveEntityRight(arch, record.Row);
+        var newRow = Archetype.MoveEntity(record.Archetype, arch, record.Row);
         record.Row = newRow;
         record.Archetype = arch;
     }
@@ -181,7 +201,7 @@ sealed partial class World
 
     private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, ReadOnlySpan<ComponentMetadata> components)
     {
-        var type = GetSystemType(components);
+        var type = new EcsSignature(components);
         if (!_typeIndex.TryGetValue(type, out var arch))
         {
             arch = _archRoot.TraverseAndCreate(type);
@@ -210,7 +230,7 @@ sealed partial class World
 
     private unsafe void UpdateSystem(EcsSystem sys)
     {
-        var type = GetSystemType(sys.Components);
+        var type = new EcsSignature(sys.Components);
         if (!_typeIndex.TryGetValue(type, out var arch))
         {
             arch = _archRoot.TraverseAndCreate(type);
@@ -221,18 +241,6 @@ sealed partial class World
         }
 
         sys.Archetype = arch;
-    }
-
-    private EcsType GetSystemType(ReadOnlySpan<ComponentMetadata> components)
-    {
-        var ecsType = new EcsType(components.Length);
-
-        for (int i = 0; i < components.Length; i++)
-        {
-            ecsType.Add(in components[i]);
-        }
-
-        return ecsType;
     }
 }
 
@@ -245,43 +253,46 @@ sealed unsafe class Archetype
     private int _capacity, _count;
     private int[] _entityIDs;
     internal byte[][] _components;
-    private readonly EcsType _type;
+    private readonly EcsSignature _sign;
     private List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly int[] _lookup;
 
-    public EcsType EcsType => _type;
-    public int Count => _count;
-    public int[] Entities => _entityIDs;
-    public int[] Lookup => _lookup;
-
-    public Archetype(World world, EcsType type)
+    public Archetype(World world, EcsSignature sign)
     {
         _world = world;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
-        _type = type;
+        _sign = sign;
         _entityIDs = new int[ARCHETYPE_INITIAL_CAPACITY];
-        _components = new byte[type.Count][];
+        _components = new byte[sign.Count][];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
 
         var maxID = 0;
-        for (int i = 0; i < type.Count; ++i)
+        for (int i = 0; i < sign.Count; ++i)
         {
-            maxID = Math.Max(maxID, type[i].ID);
+            maxID = Math.Max(maxID, sign[i].ID);
         }
 
         _lookup = new int[maxID + 1];
         _lookup.AsSpan().Fill(-1);
-        for (int i = 0; i < type.Count; ++i)
+        for (int i = 0; i < sign.Count; ++i)
         {
-            _lookup[type[i].ID] = i;
+            _lookup[sign[i].ID] = i;
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
 
-        world._typeIndex[type] = this;
+        world._typeIndex[sign] = this;
     }
+
+
+    public EcsSignature Signature => _sign;
+    public int Count => _count;
+    public int[] Entities => _entityIDs;
+    public int[] Lookup => _lookup;
+
+
 
     public int Add(int entityID)
     {
@@ -301,9 +312,9 @@ sealed unsafe class Archetype
         var removed = _entityIDs[row];
         _entityIDs[row] = _entityIDs[_count - 1];
 
-        for (int i = 0; i < _type.Count; ++i)
+        for (int i = 0; i < _sign.Count; ++i)
         {
-            ref readonly var meta = ref _type[i];
+            ref readonly var meta = ref _sign[i];
             var leftArray = _components[i].AsSpan();
 
             var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -317,7 +328,7 @@ sealed unsafe class Archetype
         return removed;
     }
 
-    public Archetype InsertVertex(Archetype left, EcsType newType, in ComponentMetadata componentID)
+    public Archetype InsertVertex(Archetype left, EcsSignature newType, in ComponentMetadata componentID)
     {
         var vertex = new Archetype(_world, newType);
         MakeEdges(left, vertex, componentID);
@@ -325,42 +336,43 @@ sealed unsafe class Archetype
         return vertex;
     }
 
-    public int MoveEntityRight(Archetype right, int leftRow)
+    public static int MoveEntity(Archetype from, Archetype to, int fromRow)
     {
-        var removed = _entityIDs[leftRow];
-        _entityIDs[leftRow] = _entityIDs[_count - 1];
+        var removed = from._entityIDs[fromRow];
+        from._entityIDs[fromRow] = from._entityIDs[from._count - 1];
 
-        var rightRow = right.Add(removed);
+        var toRow = to.Add(removed);
 
-        var max = Math.Min(_type.Count, right._type.Count);
+        Copy(from, fromRow, to, toRow);     
 
-        for (int i = 0, j = 0; i < max; ++i)
-        {
-            Debug.Assert(_type[i].ID >= right._type[j].ID, "elements in types mismatched");
+        --from._count;
 
-            while (_type[i] != right._type[j])
-            {
-                j++;
-            }
-
-            ref readonly var meta = ref _type[i];
-            var leftArray = _components[i].AsSpan();
-            var rightArray = right._components[j].AsSpan();
-
-            var insertComponent = rightArray.Slice(meta.Size * rightRow, meta.Size);
-            var removeComponent = leftArray.Slice(meta.Size * leftRow, meta.Size);
-            var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
-
-            removeComponent.CopyTo(insertComponent);
-            swapComponent.CopyTo(removeComponent);
-        }
-
-        --_count;
-
-        return rightRow;
+        return toRow;
     }
 
-    public Archetype TraverseAndCreate(EcsType type)
+    static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
+    {
+        for (int i = 0; i < from._sign.Count; ++i)
+        {
+            for (int j = 0; j < to._sign.Count; ++j)
+            {
+                if (from._sign[i] == to._sign[j])
+                {
+                    ref readonly var meta = ref from._sign[i];
+                    var leftArray = from._components[i].AsSpan();
+                    var rightArray = to._components[j].AsSpan();
+                    var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
+                    var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
+                    var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
+                    removeComponent.CopyTo(insertComponent);
+                    swapComponent.CopyTo(removeComponent);
+                    break;
+                }
+            }
+        }
+    }
+
+    public Archetype TraverseAndCreate(EcsSignature type)
     {
         var len = type.Count;
         Span<ComponentMetadata> acc = stackalloc ComponentMetadata[len];
@@ -379,10 +391,10 @@ sealed unsafe class Archetype
 
         for (int slow = 0; slow < components.Length; ++slow)
         {
-            var typeLen = _type.Count;
+            var typeLen = _sign.Count;
             for (int fast = 0; fast < typeLen; ++fast)
             {
-                ref readonly var component = ref _type[fast];
+                ref readonly var component = ref _sign[fast];
 
                 if (component == components[slow])
                 {
@@ -413,7 +425,7 @@ sealed unsafe class Archetype
         }
     }
 
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsType type, int stack, Span<ComponentMetadata> acc, Archetype root)
+    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsSignature type, int stack, Span<ComponentMetadata> acc, Archetype root)
     {
         if (stack == 0)
         {
@@ -422,7 +434,7 @@ sealed unsafe class Archetype
 
         if (vertex._edgesRight == null || vertex._edgesRight.Count == 0)
         {
-            var nt = new EcsType(type.Count);
+            var nt = new EcsSignature(type.Count);
             for (int i = 0; i < acc.Length; ++i)
             {
                 nt.Add(acc[i]);
@@ -440,11 +452,7 @@ sealed unsafe class Archetype
             }
         }
 
-        var newType = new EcsType(acc.Length);
-        for (int i = 0; i < acc.Length; ++i)
-        {
-            newType.Add(acc[i]);
-        }
+        var newType = new EcsSignature(acc);
         var newComponent = ComponentMetadata.Invalid;
         for (int i = 0; i < type.Count; ++i)
         {
@@ -456,6 +464,7 @@ sealed unsafe class Archetype
                 break;
             }
         }
+
         if (newType.Count == 0)
         {
             newType.Dispose();
@@ -475,8 +484,8 @@ sealed unsafe class Archetype
 
     private void InsertVertex(Archetype newNode)
     {
-        var nodeTypeLen = _type.Count;
-        var newTypeLen = newNode._type.Count;
+        var nodeTypeLen = _sign.Count;
+        var newTypeLen = newNode._sign.Count;
 
         if (nodeTypeLen > newTypeLen - 1)
         {
@@ -493,41 +502,41 @@ sealed unsafe class Archetype
             return;
         }
 
-        if (!_type.IsSuperset(in newNode._type))
+        if (!_sign.IsSuperset(in newNode._sign))
         {
             return;
         }
 
         var i = 0;
-        var newNodeTypeLen = newNode._type.Count;
-        for (; i < newNodeTypeLen && _type[i] == newNode._type[i]; ++i) { }
+        var newNodeTypeLen = newNode._sign.Count;
+        for (; i < newNodeTypeLen && _sign[i] == newNode._sign[i]; ++i) { }
 
-        MakeEdges(newNode, this, _type[i]);
+        MakeEdges(newNode, this, _sign[i]);
     }
 
     private void ResizeComponentArray(int capacity)
     {
-        for (int i = 0; i < _type.Count; ++i)
+        for (int i = 0; i < _sign.Count; ++i)
         {
-            ref readonly var meta = ref _type[i];
+            ref readonly var meta = ref _sign[i];
             Array.Resize(ref _components[i], meta.Size * capacity);
             _capacity = capacity;
         }
     }
 }
 
-struct Query : IQueryComposition, IQuery
+public struct Query : IQueryComposition, IQuery
 {
     private readonly World _world;
-    internal EcsType _add, _remove;
+    internal EcsSignature _add, _remove;
     internal readonly List<Archetype> _archetypes;
 
     public Query(World world)
     {
         _world = world;
         _archetypes = new List<Archetype>();
-        _add = new EcsType(16);
-        _remove = new EcsType(16);
+        _add = new EcsSignature(16);
+        _remove = new EcsSignature(16);
     }
 
 
@@ -578,28 +587,28 @@ struct Query : IQueryComposition, IQuery
     }
 }
 
-interface IQuery
+public interface IQuery
 {
     QueryIterator GetEnumerator();
 }
 
-interface IQueryComposition
+public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
     IQueryComposition Without<T>() where T : struct;
     IQuery End();
 }
 
-ref struct QueryIterator
+public ref struct QueryIterator
 {
     private int _index;
     private readonly IEnumerator<Archetype> _archetypes;
-    private EcsType _add;
+    private EcsSignature _add;
     private ref int _firstEntity;
     private byte[][] _components;
     private int[] _columns;
 
-    internal QueryIterator(List<Archetype> archetypes, EcsType add)
+    internal QueryIterator(List<Archetype> archetypes, EcsSignature add)
     {
         _index = 0;
         _archetypes = archetypes.GetEnumerator();
@@ -632,7 +641,7 @@ ref struct QueryIterator
             archetype = _archetypes.Current;
             _index = archetype.Count - 1;
 
-        } while (_index <= 0);
+        } while (_index < 0);
 
         _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
         _columns = archetype.Lookup;
@@ -687,31 +696,41 @@ public readonly ref struct EcsQueryView
 
 record struct EcsRecord(Archetype Archetype, int Row);
 
-struct EcsType : IEquatable<EcsType>, IDisposable
+sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 {
     private ComponentMetadata[] _components;
     private int _count, _capacity;
 
-    public EcsType(int capacity)
+    public EcsSignature(int capacity)
     {
         _capacity = capacity;
-        _components = ArrayPool<ComponentMetadata>.Shared.Rent(capacity);
+        _components = capacity <= 0 ? Array.Empty<ComponentMetadata>(): new ComponentMetadata[capacity];
     }
 
-    public EcsType(in EcsType other)
+    public EcsSignature(ReadOnlySpan<ComponentMetadata> components)
+    {
+        _capacity = components.Length;
+        _count = components.Length;
+        _components = new ComponentMetadata[components.Length];
+        components.CopyTo(_components);
+
+        Array.Sort(_components, 0, _count);
+    }
+
+    public EcsSignature(in EcsSignature other)
     {
         _capacity = other._capacity;
         _count = other._count;
-        _components = ArrayPool<ComponentMetadata>.Shared.Rent(other._capacity);
+        _components = new ComponentMetadata[other._components.Length];
         other._components.CopyTo(_components, 0);
+
+        Array.Sort(_components, 0, _count);
     }
 
 
-
-    public readonly int Count => _count;
+    public int Count => _count;
     public ReadOnlySpan<ComponentMetadata> Components => _components.AsSpan(0, _count);
-
-    public readonly ref readonly ComponentMetadata this[int index] => ref _components[index];
+    public ref readonly ComponentMetadata this[int index] => ref _components[index];
 
 
 
@@ -732,9 +751,9 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public readonly int IndexOf(in ComponentMetadata id) => Array.IndexOf(_components, id);
+    public int IndexOf(in ComponentMetadata id) => Array.IndexOf(_components, id);
 
-    public readonly bool IsSuperset(in EcsType other)
+    public bool IsSuperset(in EcsSignature other)
     {
         int i = 0, j = 0;
         while (i < Count && j < other.Count)
@@ -750,7 +769,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         return j == other.Count;
     }
 
-    public readonly bool Equals(EcsType other)
+    public bool Equals([NotNull] EcsSignature other)
     {
         if (Count != other.Count)
         {
@@ -768,7 +787,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
         return true;
     }
 
-    public readonly override int GetHashCode()
+    public override int GetHashCode()
     {
         unchecked
         {
@@ -793,11 +812,7 @@ struct EcsType : IEquatable<EcsType>, IDisposable
             if (_capacity == 0) _capacity = 1;
 
             _capacity *= 2;
-
-            ArrayPool<ComponentMetadata>.Shared.Return(_components);
-            var arr = ArrayPool<ComponentMetadata>.Shared.Rent(_capacity);
-            _components.CopyTo(arr, 0);
-            _components = arr;
+            Array.Resize(ref _components, _capacity);
         }
     }
 
@@ -805,9 +820,11 @@ struct EcsType : IEquatable<EcsType>, IDisposable
 
     public void Dispose()
     {
-        ArrayPool<ComponentMetadata>.Shared.Return(_components);
-        _count = 0;
-        _components = null;
+        if (_components != null)
+        {
+            _count = 0;
+            _components = Array.Empty<ComponentMetadata>();
+        }    
     }
 }
 
