@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -218,9 +219,9 @@ public sealed partial class World : IDisposable
         data.CopyTo(componentData);
     }
 
-    private bool Has(int entity, in ComponentMetadata metadata) => !Get(entity, in metadata).IsEmpty;
+    private bool Has(int entity, int componentID) => !Get(entity, componentID).IsEmpty;
 
-    private Span<byte> Get(int entity, in ComponentMetadata metadata)
+    private Span<byte> Get(int entity, int componentID)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -228,14 +229,16 @@ public sealed partial class World : IDisposable
             return Span<byte>.Empty;
         }
 
-        var column = metadata.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata.ID];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column == -1)
         {
             return Span<byte>.Empty;
         }
 
+        var size = record.Archetype.Sizes[componentID];
+
         return record.Archetype._components[column]
-            .AsSpan(metadata.Size * record.Row, metadata.Size);
+            .AsSpan(size * record.Row, size);
     }
 
     private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, Span<int> components)
@@ -446,8 +449,11 @@ public sealed partial class World : IDisposable
     internal sealed class ComponentStorage
     {
         private readonly World _world;
-        private readonly Dictionary<int, ComponentMetadata> _components = new Dictionary<int, ComponentMetadata>();
-        private readonly Dictionary<int, ComponentMetadata> _componentsByType = new Dictionary<int, ComponentMetadata>();
+        private readonly Dictionary<int, int> _idSize = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _hashId = new Dictionary<int, int>();
+
+        private readonly int[,] _componentsID = new int[1024, 1];
+        //private readonly int[] _componentsSize = new int[1024];
 
         public ComponentStorage(World world)
         {
@@ -462,35 +468,42 @@ public sealed partial class World : IDisposable
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref readonly ComponentMetadata GetOrCreate<T>() where T : struct
+        public ref readonly int GetOrCreateID<T>() where T : struct
         {
             var hash = TypeOf<T>.Hash;
-            ref var meta = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentsByType, hash, out var exists);
+            ref var id = ref CollectionsMarshal.GetValueRefOrAddDefault(_hashId, hash, out var exists);
             if (!exists)
             {
-                meta = new ComponentMetadata(_world._idGen.Next(), TypeOf<T>.Size);
-                _components.Add(meta.ID, meta);
+                id = _world._idGen.Next();
+                _idSize.Add(id, TypeOf<T>.Size);
             }
 
-            Debug.Assert(meta.ID > 0);
-            Debug.Assert(meta.Size >= 0);
-
-            return ref meta;
+            return ref id;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref readonly ComponentMetadata GetOrCreate(int componentID)
+        public int GetID<T>() where T : struct
         {
-            ref var meta = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, componentID, out var exists);
-            if (!exists)
+            var hash = TypeOf<T>.Hash;
+            ref var id = ref CollectionsMarshal.GetValueRefOrNullRef(_hashId, hash);
+            if (Unsafe.IsNullRef(ref id))
             {
-                meta = new ComponentMetadata(componentID, 0);
+                Debug.Fail($"componentID not found: {typeof(T)}");
             }
 
-            Debug.Assert(meta.ID > 0);
-            Debug.Assert(meta.Size >= 0);
+            return id;
+        }
 
-            return ref meta;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref readonly int GetSize(int componentID)
+        {
+            ref var size = ref CollectionsMarshal.GetValueRefOrNullRef(_idSize, componentID);
+            if (Unsafe.IsNullRef(ref size))
+            {
+                Debug.Fail($"componentID not found: {componentID}");
+            }
+
+            return ref size;
         }
     }
 
@@ -562,7 +575,7 @@ sealed unsafe class Archetype
         for (int i = 0; i < sign.Count; ++i)
         {
             _lookup[sign[i]] = i;
-            _sizes[sign[i]] = world._storage.GetOrCreate(sign[i]).Size;
+            _sizes[sign[i]] = world._storage.GetSize(sign[i]);
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -693,7 +706,7 @@ sealed unsafe class Archetype
 
                 if (component == components[slow])
                 {
-                    componentSizes[slow] = _world._storage.GetOrCreate(component).Size;
+                    componentSizes[slow] = _world._storage.GetSize(component);
                     signatureToIndex[slow] = fast;
 
                     break;
@@ -834,14 +847,14 @@ public struct Query : IQueryComposition
 
     public IQueryComposition With<T>() where T : struct
     {
-        _add.Add(_world._storage.GetOrCreate<T>().ID);
+        _add.Add(_world._storage.GetOrCreateID<T>());
 
         return this;
     }
 
     public IQueryComposition Without<T>() where T : struct
     {
-        _remove.Add(_world._storage.GetOrCreate<T>().ID);
+        _remove.Add(_world._storage.GetOrCreateID<T>());
 
         return this;
     }
@@ -992,9 +1005,7 @@ public readonly ref struct EcsQueryView
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Has<T>() where T : struct
     {
-        ref readonly var meta = ref _storage.GetOrCreate<T>();
-
-        return Has(meta.ID);
+        return Has(_storage.GetID<T>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1006,9 +1017,7 @@ public readonly ref struct EcsQueryView
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct
     {
-        ref readonly var meta = ref _storage.GetOrCreate<T>();
-
-        return ref Get<T>(meta.ID);
+        return ref Get<T>(_storage.GetID<T>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1171,24 +1180,6 @@ public ref struct EcsView
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
 record struct EcsRecord(Archetype Archetype, int Row);
-
-[SkipLocalsInit, StructLayout(LayoutKind.Sequential)]
-readonly record struct ComponentMetadata(int ID, int Size) :
-    IComparable<ComponentMetadata>,
-    IEquatable<ComponentMetadata>
-{
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly int CompareTo(ComponentMetadata other) => ID.CompareTo(other.ID);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Equals(ComponentMetadata other) => ID == other.ID;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly override int GetHashCode() => ID.GetHashCode();
-
-
-    public static readonly ComponentMetadata Invalid = new ComponentMetadata(-1, -1);
-}
 
 static class ComponentHasher
 {

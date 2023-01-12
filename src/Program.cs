@@ -263,8 +263,6 @@ struct Relation<TAction, TTarget>
 { }
 
 
-unsafe struct Name { public fixed char Value[64]; public Velocity Vel; }
-
 record struct ATestComp(bool X, float Y, float Z);
 record struct ASecondTestComp(IntPtr x);
 

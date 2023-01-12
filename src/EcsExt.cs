@@ -6,13 +6,13 @@ namespace TinyEcs;
 public sealed partial class World
 {
     public int Attach<T>(int entity) where T : struct
-        => Attach(entity, _storage.GetOrCreate<T>().ID);
+        => Attach(entity, _storage.GetOrCreateID<T>());
 
     public int Detach<T>(int entity) where T : struct
-        => Detach(entity, _storage.GetOrCreate<T>().ID);
+        => Detach(entity, _storage.GetOrCreateID<T>());
 
     public void Set<T>(int entity, T component) where T : struct
-        => Set(entity, _storage.GetOrCreate<T>().ID, MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref component, 1)));
+        => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref component, 1)));
 
     public int Tag(int entity, int componentID)
         => Attach(entity, componentID);
@@ -21,18 +21,18 @@ public sealed partial class World
         => Detach(entity, componentID);
 
     public int GetComponent<T>() where T : struct
-        => _storage.GetOrCreate<T>().ID;
+        => _storage.GetOrCreateID<T>();
 
 
     //public int CreateComponent<T>() where T : struct
     //    => Component<T>.Metadata.ID;
 
     public unsafe bool Has<T>(int entity) where T : struct
-        => Has(entity, in _storage.GetOrCreate<T>());
+        => Has(entity, _storage.GetOrCreateID<T>());
 
     public unsafe ref T Get<T>(int entity) where T : struct
     {
-        var raw = Get(entity, in _storage.GetOrCreate<T>());
+        var raw = Get(entity, _storage.GetOrCreateID<T>());
         return ref MemoryMarshal.AsRef<T>(raw);
     }
 
