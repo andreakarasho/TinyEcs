@@ -557,16 +557,14 @@ sealed unsafe class Archetype
         var count = isLeft ? to._sign.Count : from._sign.Count;
 
         ref var x = ref (isLeft ? ref j : ref i);
+        ref var y = ref (!isLeft ? ref j : ref i);
 
         for (; /*(isLeft ? j : i)*/ x < count; ++x)
         {
             while (from._sign[i] != to._sign[j])
             {
                 // advance the sign with less components!
-                if (isLeft)
-                    ++i;
-                else
-                    ++j;
+                ++y;
             }
 
             ref readonly var meta = ref from._sign[i];
@@ -665,6 +663,7 @@ sealed unsafe class Archetype
             }
         }
 
+        //var hash = ComponentHasher.Calculate(acc);
         var newType = new EcsSignature(acc);
         var newComponent = ComponentMetadata.Invalid;
         for (int i = 0; i < type.Count; ++i)
