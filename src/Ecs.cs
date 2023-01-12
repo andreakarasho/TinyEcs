@@ -15,7 +15,6 @@ public sealed partial class World : IDisposable
     internal readonly ComponentStorage _storage;
 
     private Archetype _archRoot;
-    private readonly Stack<int> _recycleIds = new Stack<int>();
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -40,9 +39,10 @@ public sealed partial class World : IDisposable
         }
 
         _systemIndex.Clear();
-        _recycleIds.Clear();
         _typeIndex.Clear();
 
+        _idGen.Reset();
+        _storage.Clear();
         _entityCount = 0;
         _archRoot = new Archetype(this, new EcsSignature(0));
         //_typeIndex[_archRoot.GetHashCode()] = _archRoot;
@@ -86,23 +86,25 @@ public sealed partial class World : IDisposable
         if (IsDeferred())
         {
             DestroyDeferred(entity);
-            return;
         }
-
-        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
-        if (Unsafe.IsNullRef(ref record))
+        else
         {
-            Debug.Fail("not an entity!");
+            ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+            if (Unsafe.IsNullRef(ref record))
+            {
+                Debug.Fail("not an entity!");
+            }
+
+            var removedId = record.Archetype.Remove(record.Row);
+
+            Debug.Assert(removedId == entity);
+        
+            _entityIndex.Remove(removedId);
+
+            Interlocked.Decrement(ref _entityCount);
         }
 
-        var removedId = record.Archetype.Remove(record.Row);
-
-        Debug.Assert(removedId == entity);
-
-        _recycleIds.Push(removedId);
-        _entityIndex.Remove(removedId);
-
-        Interlocked.Decrement(ref _entityCount);
+        _idGen.Return(entity);
     }
 
 
@@ -497,6 +499,14 @@ public sealed partial class World : IDisposable
             }
 
             return _componentsSizes[globalIndex];
+        }
+
+        public void Clear()
+        {
+            _componentsHashes.AsSpan().Clear();
+            _componentsIDs.AsSpan().Clear();
+            _componentsSizes.AsSpan().Clear();
+            _IDsToGlobal.Clear();
         }
 
         private void GrowIfNecessary(int current)
