@@ -1,5 +1,4 @@
-﻿using System.ComponentModel;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -389,7 +388,7 @@ public sealed partial class World : IDisposable
     {
         [FieldOffset(0)]
         public DeferredOp Action;
-        
+
         [FieldOffset(1)]
         public int Stage;
 
@@ -446,66 +445,93 @@ public sealed partial class World : IDisposable
 
 
 
+
     internal sealed class ComponentStorage
     {
-        private readonly World _world;
-        private readonly Dictionary<int, int> _idSize = new Dictionary<int, int>();
-        private readonly Dictionary<int, int> _hashId = new Dictionary<int, int>();
+        const int INITIAL_LENGTH = 32;
 
-        private readonly int[,] _componentsID = new int[1024, 1];
-        //private readonly int[] _componentsSize = new int[1024];
+        private readonly World _world;
+        private int[] _componentsHashes = new int[INITIAL_LENGTH];
+        private int[] _componentsIDs = new int[INITIAL_LENGTH];
+        private int[] _componentsSizes = new int[INITIAL_LENGTH];
+        private readonly Dictionary<int, int> _IDsToGlobal = new Dictionary<int, int>();
 
         public ComponentStorage(World world)
         {
             _world = world;
         }
 
-        [SkipLocalsInit]
-        static class TypeOf<T> where T : struct
-        {
-            public static int Size = Unsafe.SizeOf<T>();
-            public static int Hash = typeof(T).GetHashCode();
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref readonly int GetOrCreateID<T>() where T : struct
+        public int GetOrCreateID<T>() where T : struct
         {
-            var hash = TypeOf<T>.Hash;
-            ref var id = ref CollectionsMarshal.GetValueRefOrAddDefault(_hashId, hash, out var exists);
-            if (!exists)
+            var globalIndex = TypeOf<T>.GlobalIndex;
+
+            GrowIfNecessary(globalIndex);
+
+            if (_componentsHashes[globalIndex] == 0)
             {
-                id = _world._idGen.Next();
-                _idSize.Add(id, TypeOf<T>.Size);
+                _componentsHashes[globalIndex] = TypeOf<T>.Hash;
+                _componentsIDs[globalIndex] = _world._idGen.Next();
+                _componentsSizes[globalIndex] = TypeOf<T>.Size;
+
+                _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
             }
 
-            return ref id;
+            return _componentsIDs[globalIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetID<T>() where T : struct
         {
-            var hash = TypeOf<T>.Hash;
-            ref var id = ref CollectionsMarshal.GetValueRefOrNullRef(_hashId, hash);
-            if (Unsafe.IsNullRef(ref id))
-            {
-                Debug.Fail($"componentID not found: {typeof(T)}");
-            }
-
-            return id;
+            return _componentsIDs[TypeOf<T>.GlobalIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref readonly int GetSize(int componentID)
+        public int GetSize(int componentID)
         {
-            ref var size = ref CollectionsMarshal.GetValueRefOrNullRef(_idSize, componentID);
-            if (Unsafe.IsNullRef(ref size))
+            ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
+            if (Unsafe.IsNullRef(ref globalIndex))
             {
-                Debug.Fail($"componentID not found: {componentID}");
+                Debug.Fail("invalid componentID");
             }
 
-            return ref size;
+            return _componentsSizes[globalIndex];
+        }
+
+        private void GrowIfNecessary(int current)
+        {
+            if (current == _componentsHashes.Length)
+            {
+                var capacity = _componentsHashes.Length * 2;
+
+                Array.Resize(ref _componentsIDs, capacity);
+                Array.Resize(ref _componentsHashes, capacity);
+                Array.Resize(ref _componentsSizes, capacity);
+            }
+        }
+
+        [SkipLocalsInit]
+        static class TypeOf<T> where T : struct
+        {
+            public static int GlobalIndex = GlobalIDGen.Next();
+            public static int Size = Unsafe.SizeOf<T>();
+            public static int Hash = typeof(T).GetHashCode();
+        }
+
+        static class GlobalIDGen
+        {
+            private static int _next = -1;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int Next()
+            {
+                Interlocked.Increment(ref _next);
+                return _next;
+            }
         }
     }
+
 
 
     internal sealed class IDGenerator
@@ -513,8 +539,9 @@ public sealed partial class World : IDisposable
         private readonly Stack<int> _recycled = new Stack<int>();
         private int _next = 1;
 
-        public IDGenerator() { }
-        
+        public IDGenerator()
+        {
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int Next()
@@ -640,7 +667,7 @@ sealed unsafe class Archetype
 
         var toRow = to.Add(removed);
 
-        Copy(from, fromRow, to, toRow);     
+        Copy(from, fromRow, to, toRow);
 
         --from._count;
 
@@ -1005,7 +1032,7 @@ public readonly ref struct EcsQueryView
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Has<T>() where T : struct
     {
-        return Has(_storage.GetID<T>());
+        return Has(_storage.GetOrCreateID<T>());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1039,7 +1066,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     public EcsSignature(int capacity)
     {
         _capacity = capacity;
-        _components = capacity <= 0 ? Array.Empty<int>(): new int[capacity];
+        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];
     }
 
     public EcsSignature(ReadOnlySpan<int> components)
@@ -1159,7 +1186,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         {
             _count = 0;
             _components = Array.Empty<int>();
-        }    
+        }
     }
 }
 
