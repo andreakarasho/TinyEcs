@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -14,7 +15,7 @@ public sealed partial class World : IDisposable
     internal readonly IDGenerator _idGen = new IDGenerator();
     internal readonly ComponentStorage _storage;
 
-    private Archetype _archRoot;
+    internal Archetype _archRoot;
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -584,7 +585,7 @@ sealed unsafe class Archetype
     private int[] _entityIDs;
     internal byte[][] _components;
     private readonly EcsSignature _sign;
-    private List<EcsEdge> _edgesLeft, _edgesRight;
+    internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly int[] _lookup, _sizes;
 
     public Archetype(World world, EcsSignature sign)
@@ -921,11 +922,13 @@ public interface IQueryComposition
 }
 
 [SkipLocalsInit]
-public readonly ref struct QueryIterator
+public ref struct QueryIterator
 {
     private readonly World _world;
     private readonly EcsSignature _add, _remove;
-    private readonly IEnumerator<KeyValuePair<int, Archetype>> _archetypes;
+
+    private Archetype _archetype;
+    private IEnumerator<EcsEdge> _enumerator;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -934,7 +937,7 @@ public readonly ref struct QueryIterator
         world!.BeginDefer();
 
         _world = world;
-        _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
+        _archetype = world._archRoot;
         _add = add;
         _remove = remove;
     }
@@ -945,48 +948,46 @@ public readonly ref struct QueryIterator
         get => new Iterator
         (
             _world,
-            _archetypes.Current.Value
+            _archetype
         );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool MoveNext()
+    public bool MoveNext()
     {
-        Archetype archetype;
-        var ok = false;
-
         do
         {
-            if (!_archetypes.MoveNext()) return false;
+            _enumerator = _archetype._edgesRight.AsEnumerable().GetEnumerator();
 
-            archetype = _archetypes.Current.Value;
-            ok = false;
-            
-            if (archetype.Count > 0 && archetype.Signature.IsSuperset(_add))
+            while (_enumerator.MoveNext())
             {
-                ok = true;
+                _archetype = _enumerator.Current.Archetype;
 
-                if (_remove.Count > 0)
+                if (_archetype.Count > 0 && _archetype.Signature.IsSuperset(_add))
                 {
-                    foreach (var component in _remove)
+                    if (_remove.Count > 0)
                     {
-                        if (archetype.Signature.IndexOf(component) >= 0)
+                        var ok = true;
+                        foreach (var ignoreID in _remove)
                         {
-                            ok = false;
-                            break;
+                            if (_archetype.Signature.IndexOf(ignoreID) >= 0)
+                            {
+                                ok = false;
+                                break;
+                            }
                         }
+
+                        if (!ok)
+                            continue;
                     }
-                }                
+
+                    return true;
+                }
             }
-        } while (!ok);
-
-        return true;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly void Reset()
-    {
-        _archetypes.Reset();
+        }
+        while (_archetype._edgesRight.Count != 0);
+    
+        return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -998,12 +999,66 @@ public readonly ref struct QueryIterator
 }
 
 [SkipLocalsInit]
-public readonly ref struct Iterator
+public readonly ref struct View
+{
+    public readonly int Entity;
+    private readonly int _row;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal View(int entity, int row)
+    {
+        Entity = entity;
+        _row = row;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref T Get<T>(ref T first) where T : struct
+    {
+        return ref Unsafe.Add(ref first, _row);
+    }
+}
+
+[SkipLocalsInit]
+public ref struct ViewIterator
+{
+    private readonly int _count;
+    private int _index;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ViewIterator(int count)
+    {
+        _index = -1;
+        _count = count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool MoveNext() => ++_index < _count;
+
+    //[UnscopedRef]
+    public readonly View Current
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
+        {
+            return new View(0, _index);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Reset()
+    {
+        _index = -1;
+    }
+}
+
+[SkipLocalsInit]
+public ref struct Iterator
 {
     private readonly World _world;
     private readonly byte[][] _components;
     private readonly int[] _columns;
     private readonly int[] _entities;
+    private ref int _firstEntity;
 
     internal Iterator(World world, Archetype archetype)
     {
@@ -1012,6 +1067,8 @@ public readonly ref struct Iterator
         _columns = archetype.Lookup;
         _components = archetype._components;
         _entities = archetype.Entities;
+
+        _firstEntity = ref archetype.Entities[0];
     }
 
 
@@ -1019,15 +1076,40 @@ public readonly ref struct Iterator
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Span<T> Field<T>() where T : struct
+    public ViewIterator GetEnumerator() => new ViewIterator(Count);
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly unsafe Span<T> Field<T>() where T : struct
     {
         var componentID = _world._storage.GetID<T>();
         var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
-        return MemoryMarshal.Cast<byte, T>(span);
+
+        // 813
+        //return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref MemoryMarshal.AsRef<byte>(span))), Count);
+        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
+        
+        return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref span[0])), Count);
+        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.GetReference(span)), Count);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly int Entity(int index) => ref _entities[index];
+    public readonly ref T Field2<T>() where T : struct
+    {
+        var componentID = _world._storage.GetID<T>();
+        var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
+      
+        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
+        return ref MemoryMarshal.AsRef<T>(span);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T Get<T>(ref T first, int row) where T : struct 
+        => ref Unsafe.Add(ref first, row);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly int Entity(int index) 
+        => ref Unsafe.Add(ref _firstEntity, index);
 }
 
 [SkipLocalsInit]
