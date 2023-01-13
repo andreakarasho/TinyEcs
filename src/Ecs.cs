@@ -998,58 +998,6 @@ public ref struct QueryIterator
     }
 }
 
-[SkipLocalsInit]
-public readonly ref struct View
-{
-    public readonly int Entity;
-    private readonly int _row;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal View(int entity, int row)
-    {
-        Entity = entity;
-        _row = row;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>(ref T first) where T : struct
-    {
-        return ref Unsafe.Add(ref first, _row);
-    }
-}
-
-[SkipLocalsInit]
-public ref struct ViewIterator
-{
-    private readonly int _count;
-    private int _index;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal ViewIterator(int count)
-    {
-        _index = -1;
-        _count = count;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool MoveNext() => ++_index < _count;
-
-    //[UnscopedRef]
-    public readonly View Current
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get
-        {
-            return new View(0, _index);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Reset()
-    {
-        _index = -1;
-    }
-}
 
 [SkipLocalsInit]
 public ref struct Iterator
@@ -1057,7 +1005,6 @@ public ref struct Iterator
     private readonly World _world;
     private readonly byte[][] _components;
     private readonly int[] _columns;
-    private readonly int[] _entities;
     private ref int _firstEntity;
 
     internal Iterator(World world, Archetype archetype)
@@ -1066,40 +1013,32 @@ public ref struct Iterator
         Count = archetype.Count;
         _columns = archetype.Lookup;
         _components = archetype._components;
-        _entities = archetype.Entities;
-
-        _firstEntity = ref archetype.Entities[0];
+        _firstEntity = ref MemoryMarshal.GetReference<int>(archetype.Entities);
     }
 
 
     public readonly int Count;
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ViewIterator GetEnumerator() => new ViewIterator(Count);
+    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    //public readonly unsafe Span<T> Field<T>() where T : struct
+    //{
+    //    var componentID = _world._storage.GetID<T>();
+    //    var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
 
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly unsafe Span<T> Field<T>() where T : struct
-    {
-        var componentID = _world._storage.GetID<T>();
-        var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
-
-        // 813
-        //return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref MemoryMarshal.AsRef<byte>(span))), Count);
-        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
+    //    // 813
+    //    //return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref MemoryMarshal.AsRef<byte>(span))), Count);
+    //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
         
-        return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref span[0])), Count);
-        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.GetReference(span)), Count);
-    }
+    //    return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref span[0])), Count);
+    //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.GetReference(span)), Count);
+    //}
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Field2<T>() where T : struct
+    public readonly ref T Field<T>() where T : struct
     {
         var componentID = _world._storage.GetID<T>();
         var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
-      
-        //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
         return ref MemoryMarshal.AsRef<T>(span);
     }
 
@@ -1110,56 +1049,6 @@ public ref struct Iterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref readonly int Entity(int index) 
         => ref Unsafe.Add(ref _firstEntity, index);
-}
-
-[SkipLocalsInit]
-public readonly ref struct EcsQueryView
-{
-    public readonly ref readonly int Entity;
-    private readonly int _row;
-
-    private readonly World.ComponentStorage _storage;
-    private readonly byte[][] _componentArrays;
-    private readonly int[] _columns;
-    private readonly int[] _sizes;
-
-    internal EcsQueryView(World world, ref int entity, int row, byte[][] _components, int[] columns, int[] sizes)
-    {
-        _storage = world._storage;
-        Entity = ref entity;
-        _row = row;
-        _componentArrays = _components;
-        _columns = columns;
-        _sizes = sizes;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has<T>() where T : struct
-    {
-        return Has(_storage.GetOrCreateID<T>());
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has(int componentID)
-    {
-        return componentID < _columns.Length && _columns[componentID] >= 0;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>() where T : struct
-    {
-        return ref Get<T>(_storage.GetID<T>());
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>(int componentID) where T : struct
-    {
-        var size = _sizes[componentID];
-        var span = _componentArrays[_columns[componentID]]
-            .AsSpan(size * _row, size);
-
-        return ref MemoryMarshal.AsRef<T>(span);
-    }
 }
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable

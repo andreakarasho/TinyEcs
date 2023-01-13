@@ -35,32 +35,12 @@ var sw = Stopwatch.StartNew();
 while (true)
 {
     sw.Restart();
-    //for (int i = 0; i < 3600; ++i)
-    //{
-    //    foreach (var view in query)
-    //    {
-    //        var p = view.Field<Position>();
-    //        var v = view.Field<Velocity>();
-
-    //        for (int row = 0, count = view.Count; row < count; ++row)
-    //        {
-    //            ref readonly var entity = ref view.Entity(row);
-    //            ref var pos = ref p[row];
-    //            ref var vel = ref v[row];
-    //        }
-    //    }
-    //}
-
-    Console.WriteLine(sw.ElapsedMilliseconds);
-
-
-    sw.Restart();
     for (int i = 0; i < 3600; ++i)
     {
         foreach (var it in query)
         {
-            ref var p = ref it.Field2<Position>();
-            ref var v = ref it.Field2<Velocity>();
+            ref var p = ref it.Field<Position>();
+            ref var v = ref it.Field<Velocity>();
 
             for (var row = 0; row < it.Count; ++row)
             {
@@ -68,24 +48,8 @@ while (true)
                 ref var pos = ref it.Get(ref p, row);
                 ref var vel = ref it.Get(ref v, row);
             }
-
-            //foreach (var view in it)
-            //{
-            //    ref readonly var entity = ref it.Entity;
-            //    ref var pos = ref view.Get(ref p);
-            //    ref var vel = ref view.Get(ref v);
-            //}
-
-            //for (int row = 0, count = view.Count; row < count; ++row)
-            //{
-            //    ref readonly var entity = ref view.Entity(row);
-            //    ref var pos = ref view.Get(ref p, row);
-            //    ref var vel = ref view.Get(ref v, row);
-            //}
-
         }
     }
-
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
 

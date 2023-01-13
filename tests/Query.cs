@@ -17,9 +17,9 @@
                 .With<float>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(amount, done);
@@ -45,9 +45,9 @@
                 .With<int>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(amount, done);
@@ -75,9 +75,9 @@
                 .With<bool>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(amount, done);
@@ -105,9 +105,9 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(0, done);
@@ -134,9 +134,9 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(amount, done);
@@ -163,9 +163,9 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var _ in query)
+            foreach (var it in query)
             {
-                ++done;
+                done += it.Count;
             }
 
             Assert.Equal(0, done);
