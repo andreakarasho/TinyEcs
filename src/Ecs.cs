@@ -846,7 +846,7 @@ sealed unsafe class Archetype
             return;
         }
 
-        if (!_sign.IsSuperset(in newNode._sign))
+        if (!_sign.IsSuperset(newNode._sign))
         {
             return;
         }
@@ -921,16 +921,12 @@ public interface IQueryComposition
 }
 
 [SkipLocalsInit]
-public ref struct QueryIterator
+public readonly ref struct QueryIterator
 {
     private readonly World _world;
     private readonly EcsSignature _add, _remove;
     private readonly IEnumerator<KeyValuePair<int, Archetype>> _archetypes;
 
-    private int _index;
-    private ref int _firstEntity;
-    private byte[][] _components;
-    private int[] _columns, _sizes;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
@@ -939,77 +935,62 @@ public ref struct QueryIterator
 
         _world = world;
         _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
-        _index = 0;
         _add = add;
         _remove = remove;
     }
 
-    public readonly EcsQueryView Current
+    public readonly Iterator Current
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => new EcsQueryView
+        get => new Iterator
         (
             _world,
-            ref Unsafe.Subtract(ref _firstEntity, _index),
-            _index,
-            _components,
-            _columns,
-            _sizes
+            _archetypes.Current.Value
         );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool MoveNext()
+    public readonly bool MoveNext()
     {
-        --_index;
-
-        if (_index >= 0) return true;
-
         Archetype archetype;
+        var ok = false;
+
         do
         {
             if (!_archetypes.MoveNext()) return false;
 
-            var curr = _archetypes.Current;
-            archetype = curr.Value;
-
-            var ok = false;
-            if (archetype.Count > 0 && archetype.Signature.IsSuperset(in _add))
+            archetype = _archetypes.Current.Value;
+            ok = false;
+            
+            if (archetype.Count > 0 && archetype.Signature.IsSuperset(_add))
             {
                 ok = true;
-                foreach (ref readonly var component in _remove)
+
+                if (_remove.Count > 0)
                 {
-                    if (archetype.Signature.IndexOf(component) >= 0)
+                    foreach (var component in _remove)
                     {
-                        ok = false;
-                        break;
+                        if (archetype.Signature.IndexOf(component) >= 0)
+                        {
+                            ok = false;
+                            break;
+                        }
                     }
-                }
+                }                
             }
-
-            if (!ok)
-                continue;
-
-            _index = archetype.Count - 1;
-
-        } while (_index < 0);
-
-        _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
-        _columns = archetype.Lookup;
-        _sizes = archetype.Sizes;
-        _components = archetype._components;
+        } while (!ok);
 
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Reset()
+    public readonly void Reset()
     {
-        _index = -1;
         _archetypes.Reset();
     }
 
-    public void Dispose()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly void Dispose()
     {
         _world!.EndDefer();
         _world!.MergeDeferred();
@@ -1017,12 +998,45 @@ public ref struct QueryIterator
 }
 
 [SkipLocalsInit]
+public readonly ref struct Iterator
+{
+    private readonly World _world;
+    private readonly byte[][] _components;
+    private readonly int[] _columns;
+    private readonly int[] _entities;
+
+    internal Iterator(World world, Archetype archetype)
+    {
+        _world = world;
+        Count = archetype.Count;
+        _columns = archetype.Lookup;
+        _components = archetype._components;
+        _entities = archetype.Entities;
+    }
+
+
+    public readonly int Count;
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Span<T> Field<T>() where T : struct
+    {
+        var componentID = _world._storage.GetID<T>();
+        var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
+        return MemoryMarshal.Cast<byte, T>(span);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly int Entity(int index) => ref _entities[index];
+}
+
+[SkipLocalsInit]
 public readonly ref struct EcsQueryView
 {
     public readonly ref readonly int Entity;
+    private readonly int _row;
 
     private readonly World.ComponentStorage _storage;
-    private readonly int _row;
     private readonly byte[][] _componentArrays;
     private readonly int[] _columns;
     private readonly int[] _sizes;
@@ -1074,7 +1088,8 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     public EcsSignature(int capacity)
     {
         _capacity = capacity;
-        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];
+        _count = 0;
+        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];      
     }
 
     public EcsSignature(ReadOnlySpan<int> components)
@@ -1087,7 +1102,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public EcsSignature(in EcsSignature other)
+    public EcsSignature(EcsSignature other)
     {
         _capacity = other._capacity;
         _count = other._count;
@@ -1121,9 +1136,9 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public int IndexOf(int id) => Array.IndexOf(_components, id);
+    public int IndexOf(int id) => Array.IndexOf(_components, id, 0, _count);
 
-    public bool IsSuperset(in EcsSignature other)
+    public bool IsSuperset([NotNull] EcsSignature other)
     {
         int i = 0, j = 0;
         while (i < Count && j < other.Count)
@@ -1159,20 +1174,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
     public override int GetHashCode()
     {
-        unchecked
-        {
-            var hash = 5381;
-
-            ref var f0 = ref MemoryMarshal.GetReference<int>(_components);
-
-            for (int i = 0; i < Count; ++i)
-            {
-                ref readonly var id = ref Unsafe.Add(ref f0, i);
-                hash = ((hash << 5) + hash) + id;
-            }
-
-            return hash;
-        }
+        return ComponentHasher.Calculate(_components.AsSpan(0, _count));
     }
 
     private void GrowIfNeeded()
