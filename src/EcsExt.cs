@@ -20,13 +20,6 @@ public sealed partial class World
     public void UnTag(int entity, int componentID)
         => Detach(entity, componentID);
 
-    public int GetComponent<T>() where T : struct
-        => _storage.GetOrCreateID<T>();
-
-
-    //public int CreateComponent<T>() where T : struct
-    //    => Component<T>.Metadata.ID;
-
     public unsafe bool Has<T>(int entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
 

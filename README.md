@@ -20,13 +20,17 @@ var query = world.Query()
      .With<Position>()
      .With<Velocity>();
 
-foreach (var view in query)
+foreach (var it in query)
 {
-    ref readonly var entity = ref view.Entity;
-    ref var pos = ref view.Get<Position>();
-    ref var vel = ref view.Get<Velocity>();
-    
-    // do things
+	ref var p = ref it.Field<Position>();
+	ref var v = ref it.Field<Velocity>();
+
+	for (var row = 0; row < it.Count; ++row)
+	{
+		ref readonly var entity = ref it.Entity(row);
+		ref var pos = ref it.Get(ref p, row);
+		ref var vel = ref it.Get(ref v, row);
+	}
 }
 
 

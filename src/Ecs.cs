@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -14,7 +15,7 @@ public sealed partial class World : IDisposable
     internal readonly IDGenerator _idGen = new IDGenerator();
     internal readonly ComponentStorage _storage;
 
-    private Archetype _archRoot;
+    internal Archetype _archRoot;
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -584,7 +585,7 @@ sealed unsafe class Archetype
     private int[] _entityIDs;
     internal byte[][] _components;
     private readonly EcsSignature _sign;
-    private List<EcsEdge> _edgesLeft, _edgesRight;
+    internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly int[] _lookup, _sizes;
 
     public Archetype(World world, EcsSignature sign)
@@ -846,7 +847,7 @@ sealed unsafe class Archetype
             return;
         }
 
-        if (!_sign.IsSuperset(in newNode._sign))
+        if (!_sign.IsSuperset(newNode._sign))
         {
             return;
         }
@@ -925,12 +926,10 @@ public ref struct QueryIterator
 {
     private readonly World _world;
     private readonly EcsSignature _add, _remove;
-    private readonly IEnumerator<KeyValuePair<int, Archetype>> _archetypes;
 
-    private int _index;
-    private ref int _firstEntity;
-    private byte[][] _components;
-    private int[] _columns, _sizes;
+    private Archetype _archetype;
+    private IEnumerator<EcsEdge> _enumerator;
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
@@ -938,132 +937,118 @@ public ref struct QueryIterator
         world!.BeginDefer();
 
         _world = world;
-        _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
-        _index = 0;
+        _archetype = world._archRoot;
         _add = add;
         _remove = remove;
     }
 
-    public readonly EcsQueryView Current
+    public readonly Iterator Current
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => new EcsQueryView
+        get => new Iterator
         (
             _world,
-            ref Unsafe.Subtract(ref _firstEntity, _index),
-            _index,
-            _components,
-            _columns,
-            _sizes
+            _archetype
         );
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
-        --_index;
-
-        if (_index >= 0) return true;
-
-        Archetype archetype;
         do
         {
-            if (!_archetypes.MoveNext()) return false;
+            _enumerator = _archetype._edgesRight.AsEnumerable().GetEnumerator();
 
-            var curr = _archetypes.Current;
-            archetype = curr.Value;
-
-            var ok = false;
-            if (archetype.Count > 0 && archetype.Signature.IsSuperset(in _add))
+            while (_enumerator.MoveNext())
             {
-                ok = true;
-                foreach (ref readonly var component in _remove)
+                _archetype = _enumerator.Current.Archetype;
+
+                if (_archetype.Count > 0 && _archetype.Signature.IsSuperset(_add))
                 {
-                    if (archetype.Signature.IndexOf(component) >= 0)
+                    if (_remove.Count > 0)
                     {
-                        ok = false;
-                        break;
+                        var ok = true;
+                        foreach (var ignoreID in _remove)
+                        {
+                            if (_archetype.Signature.IndexOf(ignoreID) >= 0)
+                            {
+                                ok = false;
+                                break;
+                            }
+                        }
+
+                        if (!ok)
+                            continue;
                     }
+
+                    return true;
                 }
             }
-
-            if (!ok)
-                continue;
-
-            _index = archetype.Count - 1;
-
-        } while (_index < 0);
-
-        _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
-        _columns = archetype.Lookup;
-        _sizes = archetype.Sizes;
-        _components = archetype._components;
-
-        return true;
+        }
+        while (_archetype._edgesRight.Count != 0);
+    
+        return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Reset()
-    {
-        _index = -1;
-        _archetypes.Reset();
-    }
-
-    public void Dispose()
+    public readonly void Dispose()
     {
         _world!.EndDefer();
         _world!.MergeDeferred();
     }
 }
 
+
 [SkipLocalsInit]
-public readonly ref struct EcsQueryView
+public ref struct Iterator
 {
-    public readonly ref readonly int Entity;
-
-    private readonly World.ComponentStorage _storage;
-    private readonly int _row;
-    private readonly byte[][] _componentArrays;
+    private readonly World _world;
+    private readonly byte[][] _components;
     private readonly int[] _columns;
-    private readonly int[] _sizes;
+    private ref int _firstEntity;
 
-    internal EcsQueryView(World world, ref int entity, int row, byte[][] _components, int[] columns, int[] sizes)
+    internal Iterator(World world, Archetype archetype)
     {
-        _storage = world._storage;
-        Entity = ref entity;
-        _row = row;
-        _componentArrays = _components;
-        _columns = columns;
-        _sizes = sizes;
+        _world = world;
+        Count = archetype.Count;
+        _columns = archetype.Lookup;
+        _components = archetype._components;
+        _firstEntity = ref MemoryMarshal.GetReference<int>(archetype.Entities);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has<T>() where T : struct
-    {
-        return Has(_storage.GetOrCreateID<T>());
-    }
+
+    public readonly int Count;
+
+
+    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    //public readonly unsafe Span<T> Field<T>() where T : struct
+    //{
+    //    var componentID = _world._storage.GetID<T>();
+    //    var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
+
+    //    // 813
+    //    //return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref MemoryMarshal.AsRef<byte>(span))), Count);
+    //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
+        
+    //    return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref span[0])), Count);
+    //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.GetReference(span)), Count);
+    //}
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has(int componentID)
+    public readonly ref T Field<T>() where T : struct
     {
-        return componentID < _columns.Length && _columns[componentID] >= 0;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>() where T : struct
-    {
-        return ref Get<T>(_storage.GetID<T>());
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>(int componentID) where T : struct
-    {
-        var size = _sizes[componentID];
-        var span = _componentArrays[_columns[componentID]]
-            .AsSpan(size * _row, size);
-
+        var componentID = _world._storage.GetID<T>();
+        var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
         return ref MemoryMarshal.AsRef<T>(span);
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T Get<T>(ref T first, int row) where T : struct 
+        => ref Unsafe.Add(ref first, row);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly int Entity(int index) 
+        => ref Unsafe.Add(ref _firstEntity, index);
 }
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
@@ -1074,7 +1059,8 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     public EcsSignature(int capacity)
     {
         _capacity = capacity;
-        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];
+        _count = 0;
+        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];      
     }
 
     public EcsSignature(ReadOnlySpan<int> components)
@@ -1087,7 +1073,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public EcsSignature(in EcsSignature other)
+    public EcsSignature(EcsSignature other)
     {
         _capacity = other._capacity;
         _count = other._count;
@@ -1121,9 +1107,9 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public int IndexOf(int id) => Array.IndexOf(_components, id);
+    public int IndexOf(int id) => Array.IndexOf(_components, id, 0, _count);
 
-    public bool IsSuperset(in EcsSignature other)
+    public bool IsSuperset([NotNull] EcsSignature other)
     {
         int i = 0, j = 0;
         while (i < Count && j < other.Count)
@@ -1159,20 +1145,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
     public override int GetHashCode()
     {
-        unchecked
-        {
-            var hash = 5381;
-
-            ref var f0 = ref MemoryMarshal.GetReference<int>(_components);
-
-            for (int i = 0; i < Count; ++i)
-            {
-                ref readonly var id = ref Unsafe.Add(ref f0, i);
-                hash = ((hash << 5) + hash) + id;
-            }
-
-            return hash;
-        }
+        return ComponentHasher.Calculate(_components.AsSpan(0, _count));
     }
 
     private void GrowIfNeeded()
