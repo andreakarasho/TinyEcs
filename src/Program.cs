@@ -52,15 +52,14 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //world.Set(entity, new Velocity() { X = 100f });
     //ref var p = ref world.Get<Position>(entity);
 
-    //if (rnd.Next() % 3 == 0)
-    //{
-    //    world.Tag(entity, posC);
-    //    world.Tag(entity, plat);
-    //    bothCount++;
-    //    //world.Destroy(entity);
-    //}
+    if (rnd.Next() % 3 == 0)
+    {
+        world.Tag(entity, plat);
+        bothCount++;
+        //world.Destroy(entity);
+    }
 
-    
+
 }
 
 Console.WriteLine("spawned {0} entities in {1} ms", ENTITIES_COUNT, sw.ElapsedMilliseconds);
@@ -115,7 +114,7 @@ for (int i = 0; i < 1000; ++i)
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
-    //.WithTag(plat)
+    .WithTag(plat)
     //.WithTag(posC)
     .Without<PlayerTag>()
     ;
@@ -154,10 +153,10 @@ while (true)
 
         //world.Attach<float>(entity);
 
-        var e = world.CreateEntity();
+        //var e = world.CreateEntity();
         //world.Attach<Position>(e);
         //world.Attach<Velocity>(e);
-        world.DestroyEntity(e);
+        //world.DestroyEntity(e);
 
         //if (view.Has<Name>())
         //{

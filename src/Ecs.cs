@@ -100,11 +100,9 @@ public sealed partial class World : IDisposable
             Debug.Assert(removedId == entity);
         
             _entityIndex.Remove(removedId);
-
+            _idGen.Return(removedId);
             Interlocked.Decrement(ref _entityCount);
         }
-
-        _idGen.Return(entity);
     }
 
 
@@ -198,7 +196,7 @@ public sealed partial class World : IDisposable
         record.Archetype = arch!;
     }
 
-    private void Set(int entity, int metadata, ReadOnlySpan<byte> data)
+    private void Set(int entity, int componentID, ReadOnlySpan<byte> data)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -206,15 +204,15 @@ public sealed partial class World : IDisposable
             Debug.Fail("not an entity!");
         }
 
-        var column = metadata >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column == -1)
         {
-            Attach(entity, metadata);
-            column = metadata >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata];
+            Attach(entity, componentID);
+            column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
             //return;
         }
 
-        var size = record.Archetype.Sizes[metadata];
+        var size = record.Archetype.Sizes[componentID];
         var componentData = record.Archetype._components[column]
             .AsSpan(size * record.Row, size);
         data.CopyTo(componentData);
