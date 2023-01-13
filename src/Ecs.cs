@@ -7,14 +7,14 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
-    private int _nextEntityID = 1;
     private int _entityCount = 0;
 
     private int _deferStatus, _deferActionCount;
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
+    internal readonly IDGenerator _idGen = new IDGenerator();
+    internal readonly ComponentStorage _storage;
 
     private Archetype _archRoot;
-    private readonly Stack<int> _recycleIds = new Stack<int>();
     internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
@@ -22,8 +22,9 @@ public sealed partial class World : IDisposable
 
     public World()
     {
+        _storage = new ComponentStorage(this);
         _archRoot = new Archetype(this, new EcsSignature(0));
-        _typeIndex[_archRoot.GetHashCode()] = _archRoot;
+        //_typeIndex[_archRoot.GetHashCode()] = _archRoot;
     }
 
 
@@ -38,13 +39,13 @@ public sealed partial class World : IDisposable
         }
 
         _systemIndex.Clear();
-        _recycleIds.Clear();
         _typeIndex.Clear();
 
+        _idGen.Reset();
+        _storage.Clear();
         _entityCount = 0;
-        _nextEntityID = 1;
         _archRoot = new Archetype(this, new EcsSignature(0));
-        _typeIndex[_archRoot.GetHashCode()] = _archRoot;
+        //_typeIndex[_archRoot.GetHashCode()] = _archRoot;
     }
 
     public void Dispose() => Destroy();
@@ -66,11 +67,7 @@ public sealed partial class World : IDisposable
 
     public int CreateEntity()
     {
-        if (!_recycleIds.TryPop(out var id))
-        {
-            id = _nextEntityID;
-            Interlocked.Increment(ref _nextEntityID);
-        }
+        var id = _idGen.Next();
 
         if (IsDeferred())
         {
@@ -89,71 +86,73 @@ public sealed partial class World : IDisposable
         if (IsDeferred())
         {
             DestroyDeferred(entity);
-            return;
         }
-
-        ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
-        if (Unsafe.IsNullRef(ref record))
+        else
         {
-            return;
+            ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
+            if (Unsafe.IsNullRef(ref record))
+            {
+                Debug.Fail("not an entity!");
+            }
+
+            var removedId = record.Archetype.Remove(record.Row);
+
+            Debug.Assert(removedId == entity);
+        
+            _entityIndex.Remove(removedId);
+            _idGen.Return(removedId);
+            Interlocked.Decrement(ref _entityCount);
         }
-
-        var removedId = record.Archetype.Remove(record.Row);
-
-        Debug.Assert(removedId == entity);
-
-        _recycleIds.Push(removedId);
-        _entityIndex.Remove(removedId);
-
-        Interlocked.Decrement(ref _entityCount);
     }
 
 
 
-    private void Attach(int entity, in ComponentMetadata componentID)
+    private int Attach(int entity, int componentID)
     {
         if (IsDeferred())
         {
-            AttachDeferred(entity, in componentID);
-            return;
+            AttachDeferred(entity, componentID);
+            return componentID;
         }
 
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
-            return;
+            Debug.Fail("not an entity!");
         }
 
-        var column = componentID.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID.ID];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column >= 0)
         {
-            return;
+            return -1;
         }
 
-        InternalAttachDetach(ref record, in componentID, true);
+        InternalAttachDetach(ref record, componentID, true);
+        return componentID;
     }
 
-    private void Detach(int entity, in ComponentMetadata componentID)
+    private int Detach(int entity, int componentID)
     {
         if (IsDeferred())
         {
-            DetachDeferred(entity, in componentID);
-            return;
+            DetachDeferred(entity, componentID);
+            return componentID;
         }
 
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
-            return;
+            Debug.Fail("not an entity!");
         }
 
-        var column = componentID.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID.ID];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column < 0)
         {
-            return;
+            return -1;
         }
 
-        InternalAttachDetach(ref record, in componentID, false);
+        InternalAttachDetach(ref record, componentID, false);
+        return componentID;
     }
 
 
@@ -169,11 +168,11 @@ public sealed partial class World : IDisposable
         Interlocked.Increment(ref _entityCount);
     }
 
-    private void InternalAttachDetach(ref EcsRecord record, in ComponentMetadata componentID, bool add)
+    private void InternalAttachDetach(ref EcsRecord record, int componentID, bool add)
     {
         var initType = record.Archetype.Signature;
 
-        Span<ComponentMetadata> span = stackalloc ComponentMetadata[initType.Count + 1];
+        Span<int> span = stackalloc int[initType.Count + 1];
         initType.Components.CopyTo(span);
         span[^1] = componentID;
         span.Sort();
@@ -185,9 +184,9 @@ public sealed partial class World : IDisposable
         {
             var finiType = new EcsSignature(initType);
             if (add)
-                finiType.Add(in componentID);
+                finiType.Add(componentID);
             else
-                finiType.Remove(in componentID);
+                finiType.Remove(componentID);
 
             arch = _archRoot.InsertVertex(record.Archetype, finiType, componentID);
         }
@@ -197,28 +196,31 @@ public sealed partial class World : IDisposable
         record.Archetype = arch!;
     }
 
-    private void Set(int entity, in ComponentMetadata metadata, ReadOnlySpan<byte> data)
+    private void Set(int entity, int componentID, ReadOnlySpan<byte> data)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
         {
-            return;
+            Debug.Fail("not an entity!");
         }
 
-        var column = metadata.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata.ID];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column == -1)
         {
-            return;
+            Attach(entity, componentID);
+            column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
+            //return;
         }
 
+        var size = record.Archetype.Sizes[componentID];
         var componentData = record.Archetype._components[column]
-            .AsSpan(metadata.Size * record.Row, metadata.Size);
+            .AsSpan(size * record.Row, size);
         data.CopyTo(componentData);
     }
 
-    private bool Has(int entity, in ComponentMetadata metadata) => !Get(entity, in metadata).IsEmpty;
+    private bool Has(int entity, int componentID) => !Get(entity, componentID).IsEmpty;
 
-    private Span<byte> Get(int entity, in ComponentMetadata metadata)
+    private Span<byte> Get(int entity, int componentID)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -226,17 +228,19 @@ public sealed partial class World : IDisposable
             return Span<byte>.Empty;
         }
 
-        var column = metadata.ID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[metadata.ID];
+        var column = componentID >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[componentID];
         if (column == -1)
         {
             return Span<byte>.Empty;
         }
 
+        var size = record.Archetype.Sizes[componentID];
+
         return record.Archetype._components[column]
-            .AsSpan(metadata.Size * record.Row, metadata.Size);
+            .AsSpan(size * record.Row, size);
     }
 
-    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, Span<ComponentMetadata> components)
+    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, Span<int> components)
     {
         var hash = ComponentHasher.Calculate(components);
 
@@ -246,11 +250,7 @@ public sealed partial class World : IDisposable
             arch = _archRoot.TraverseAndCreate(new EcsSignature(components));
         }
 
-        if (!_recycleIds.TryPop(out var id))
-        {
-            id = _nextEntityID;
-            Interlocked.Increment(ref _nextEntityID);
-        }
+        var id = _idGen.Next();
 
         ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out exists);
         if (!exists)
@@ -303,7 +303,7 @@ public sealed partial class World : IDisposable
         cmd.Destroy.Entity = entity;
     }
 
-    private void AttachDeferred(int entity, in ComponentMetadata component)
+    private void AttachDeferred(int entity, int component)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Attach;
@@ -312,7 +312,7 @@ public sealed partial class World : IDisposable
         cmd.Attach.Component = component;
     }
 
-    private void DetachDeferred(int entity, in ComponentMetadata component)
+    private void DetachDeferred(int entity, int component)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Detach;
@@ -360,13 +360,13 @@ public sealed partial class World : IDisposable
 
                 case DeferredOp.Attach:
 
-                    Attach(cmd.Attach.Entity, in cmd.Attach.Component);
+                    Attach(cmd.Attach.Entity, cmd.Attach.Component);
 
                     break;
 
                 case DeferredOp.Detach:
 
-                    Detach(cmd.Detach.Entity, in cmd.Detach.Component);
+                    Detach(cmd.Detach.Entity, cmd.Detach.Component);
 
                     break;
             }
@@ -388,7 +388,7 @@ public sealed partial class World : IDisposable
     {
         [FieldOffset(0)]
         public DeferredOp Action;
-        
+
         [FieldOffset(1)]
         public int Stage;
 
@@ -430,7 +430,7 @@ public sealed partial class World : IDisposable
         public int Stage;
 
         public int Entity;
-        public ComponentMetadata Component;
+        public int Component;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -440,7 +440,138 @@ public sealed partial class World : IDisposable
         public int Stage;
 
         public int Entity;
-        public ComponentMetadata Component;
+        public int Component;
+    }
+
+
+
+
+    internal sealed class ComponentStorage
+    {
+        const int INITIAL_LENGTH = 32;
+
+        private readonly World _world;
+        private int[] _componentsHashes = new int[INITIAL_LENGTH];
+        private int[] _componentsIDs = new int[INITIAL_LENGTH];
+        private int[] _componentsSizes = new int[INITIAL_LENGTH];
+        private readonly Dictionary<int, int> _IDsToGlobal = new Dictionary<int, int>();
+
+        public ComponentStorage(World world)
+        {
+            _world = world;
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetOrCreateID<T>() where T : struct
+        {
+            var globalIndex = TypeOf<T>.GlobalIndex;
+
+            GrowIfNecessary(globalIndex);
+
+            if (_componentsHashes[globalIndex] == 0)
+            {
+                _componentsHashes[globalIndex] = TypeOf<T>.Hash;
+                _componentsIDs[globalIndex] = _world._idGen.Next();
+                _componentsSizes[globalIndex] = TypeOf<T>.Size;
+
+                _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
+            }
+
+            return _componentsIDs[globalIndex];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetID<T>() where T : struct
+        {
+            return _componentsIDs[TypeOf<T>.GlobalIndex];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetSize(int componentID)
+        {
+            ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
+            if (Unsafe.IsNullRef(ref globalIndex))
+            {
+                Debug.Fail("invalid componentID");
+            }
+
+            return _componentsSizes[globalIndex];
+        }
+
+        public void Clear()
+        {
+            _componentsHashes.AsSpan().Clear();
+            _componentsIDs.AsSpan().Clear();
+            _componentsSizes.AsSpan().Clear();
+            _IDsToGlobal.Clear();
+        }
+
+        private void GrowIfNecessary(int current)
+        {
+            if (current == _componentsHashes.Length)
+            {
+                var capacity = _componentsHashes.Length * 2;
+
+                Array.Resize(ref _componentsIDs, capacity);
+                Array.Resize(ref _componentsHashes, capacity);
+                Array.Resize(ref _componentsSizes, capacity);
+            }
+        }
+
+        [SkipLocalsInit]
+        static class TypeOf<T> where T : struct
+        {
+            public static int GlobalIndex = GlobalIDGen.Next();
+            public static int Size = Unsafe.SizeOf<T>();
+            public static int Hash = typeof(T).GetHashCode();
+        }
+
+        static class GlobalIDGen
+        {
+            private static int _next = -1;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int Next()
+            {
+                Interlocked.Increment(ref _next);
+                return _next;
+            }
+        }
+    }
+
+
+
+    internal sealed class IDGenerator
+    {
+        private readonly Stack<int> _recycled = new Stack<int>();
+        private int _next = 1;
+
+        public IDGenerator()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Next()
+        {
+            if (!_recycled.TryPop(out var id))
+            {
+                id = _next;
+                Interlocked.Increment(ref _next);
+            }
+
+            return id;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Return(int id) => _recycled.Push(id);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Reset()
+        {
+            _next = 1;
+            _recycled.Clear();
+        }
     }
 }
 
@@ -449,13 +580,12 @@ sealed unsafe class Archetype
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
     private readonly World _world;
-
     private int _capacity, _count;
     private int[] _entityIDs;
     internal byte[][] _components;
     private readonly EcsSignature _sign;
     private List<EcsEdge> _edgesLeft, _edgesRight;
-    private readonly int[] _lookup;
+    private readonly int[] _lookup, _sizes;
 
     public Archetype(World world, EcsSignature sign)
     {
@@ -471,14 +601,16 @@ sealed unsafe class Archetype
         var maxID = -1;
         for (int i = 0; i < sign.Count; ++i)
         {
-            maxID = Math.Max(maxID, sign[i].ID);
+            maxID = Math.Max(maxID, sign[i]);
         }
 
         _lookup = new int[maxID + 1];
+        _sizes = new int[maxID + 1];
         _lookup.AsSpan().Fill(-1);
         for (int i = 0; i < sign.Count; ++i)
         {
-            _lookup[sign[i].ID] = i;
+            _lookup[sign[i]] = i;
+            _sizes[sign[i]] = world._storage.GetSize(sign[i]);
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -489,7 +621,7 @@ sealed unsafe class Archetype
     public int Count => _count;
     public int[] Entities => _entityIDs;
     public int[] Lookup => _lookup;
-
+    public int[] Sizes => _sizes;
 
 
     public int Add(int entityID)
@@ -514,11 +646,11 @@ sealed unsafe class Archetype
 
         for (int i = 0; i < _sign.Count; ++i)
         {
-            ref readonly var meta = ref _sign[i];
+            var size = _sizes[i];
             var leftArray = _components[i].AsSpan();
 
-            var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
-            var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
+            var removeComponent = leftArray.Slice(size * row, size);
+            var swapComponent = leftArray.Slice(size * (_count - 1), size);
 
             swapComponent.CopyTo(removeComponent);
         }
@@ -528,9 +660,9 @@ sealed unsafe class Archetype
         return removed;
     }
 
-    public Archetype InsertVertex(Archetype left, EcsSignature newType, in ComponentMetadata componentID)
+    public Archetype InsertVertex(Archetype left, EcsSignature newType, int componentID)
     {
-        var vertex = new Archetype(_world, newType);
+        var vertex = new Archetype(left._world, newType);
         MakeEdges(left, vertex, componentID);
         InsertVertex(vertex);
         return vertex;
@@ -543,7 +675,7 @@ sealed unsafe class Archetype
 
         var toRow = to.Add(removed);
 
-        Copy(from, fromRow, to, toRow);     
+        Copy(from, fromRow, to, toRow);
 
         --from._count;
 
@@ -567,12 +699,12 @@ sealed unsafe class Archetype
                 ++y;
             }
 
-            ref readonly var meta = ref from._sign[i];
+            var size = from.Sizes[from._sign[i]];
             var leftArray = from._components[i].AsSpan();
             var rightArray = to._components[j].AsSpan();
-            var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
-            var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
-            var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
+            var insertComponent = rightArray.Slice(size * toRow, size);
+            var removeComponent = leftArray.Slice(size * fromRow, size);
+            var swapComponent = leftArray.Slice(size * (from._count - 1), size);
             removeComponent.CopyTo(insertComponent);
             swapComponent.CopyTo(removeComponent);
 
@@ -586,13 +718,13 @@ sealed unsafe class Archetype
     public Archetype TraverseAndCreate(EcsSignature type)
     {
         var len = type.Count;
-        Span<ComponentMetadata> acc = stackalloc ComponentMetadata[len];
+        Span<int> acc = stackalloc int[len];
         type.Components.CopyTo(acc);
 
         return TraverseAndCreateHelp(this, in type, len, acc, this);
     }
 
-    public void StepHelp(ReadOnlySpan<ComponentMetadata> components, delegate* managed<in EcsView, int, void> run)
+    public void StepHelp(ReadOnlySpan<int> components, delegate* managed<in EcsView, int, void> run)
     {
         if (_count == 0)
             return;
@@ -609,7 +741,7 @@ sealed unsafe class Archetype
 
                 if (component == components[slow])
                 {
-                    componentSizes[slow] = component.Size;
+                    componentSizes[slow] = _world._storage.GetSize(component);
                     signatureToIndex[slow] = fast;
 
                     break;
@@ -636,7 +768,7 @@ sealed unsafe class Archetype
         }
     }
 
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsSignature type, int stack, Span<ComponentMetadata> acc, Archetype root)
+    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsSignature type, int stack, Span<int> acc, Archetype root)
     {
         if (stack == 0)
         {
@@ -665,7 +797,7 @@ sealed unsafe class Archetype
 
         //var hash = ComponentHasher.Calculate(acc);
         var newType = new EcsSignature(acc);
-        var newComponent = ComponentMetadata.Invalid;
+        var newComponent = -1;
         for (int i = 0; i < type.Count; ++i)
         {
             if (type[i] != newType[i])
@@ -688,7 +820,7 @@ sealed unsafe class Archetype
         return TraverseAndCreateHelp(newVertex, in type, stack - 1, acc, root);
     }
 
-    private static void MakeEdges(Archetype left, Archetype right, in ComponentMetadata componentID)
+    private static void MakeEdges(Archetype left, Archetype right, int componentID)
     {
         left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
         right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = componentID });
@@ -730,8 +862,7 @@ sealed unsafe class Archetype
     {
         for (int i = 0; i < _sign.Count; ++i)
         {
-            ref readonly var meta = ref _sign[i];
-            Array.Resize(ref _components[i], meta.Size * capacity);
+            Array.Resize(ref _components[i], _sizes[_sign[i]] * capacity);
             _capacity = capacity;
         }
     }
@@ -751,14 +882,28 @@ public struct Query : IQueryComposition
 
     public IQueryComposition With<T>() where T : struct
     {
-        _add.Add(in Component<T>.Metadata);
+        _add.Add(_world._storage.GetOrCreateID<T>());
 
         return this;
     }
 
     public IQueryComposition Without<T>() where T : struct
     {
-        _remove.Add(in Component<T>.Metadata);
+        _remove.Add(_world._storage.GetOrCreateID<T>());
+
+        return this;
+    }
+
+    public IQueryComposition WithTag(int componentID)
+    {
+        _add.Add(componentID);
+
+        return this;
+    }
+
+    public IQueryComposition WithoutTag(int componentID)
+    {
+        _remove.Add(componentID);
 
         return this;
     }
@@ -770,27 +915,29 @@ public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
     IQueryComposition Without<T>() where T : struct;
+    IQueryComposition WithTag(int componentID);
+    IQueryComposition WithoutTag(int componentID);
     QueryIterator GetEnumerator();
 }
 
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
-    private readonly World _wold;
+    private readonly World _world;
     private readonly EcsSignature _add, _remove;
     private readonly IEnumerator<KeyValuePair<int, Archetype>> _archetypes;
 
     private int _index;
     private ref int _firstEntity;
     private byte[][] _components;
-    private int[] _columns;
+    private int[] _columns, _sizes;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
     {
         world!.BeginDefer();
 
-        _wold = world;
+        _world = world;
         _archetypes = world._typeIndex.AsEnumerable().GetEnumerator();
         _index = 0;
         _add = add;
@@ -802,10 +949,12 @@ public ref struct QueryIterator
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => new EcsQueryView
         (
+            _world,
             ref Unsafe.Subtract(ref _firstEntity, _index),
             _index,
             _components,
-            _columns
+            _columns,
+            _sizes
         );
     }
 
@@ -824,21 +973,22 @@ public ref struct QueryIterator
             var curr = _archetypes.Current;
             archetype = curr.Value;
 
+            var ok = false;
             if (archetype.Count > 0 && archetype.Signature.IsSuperset(in _add))
             {
-                var ok = true;
+                ok = true;
                 foreach (ref readonly var component in _remove)
                 {
-                    if (archetype.Signature.IndexOf(in component) >= 0)
+                    if (archetype.Signature.IndexOf(component) >= 0)
                     {
                         ok = false;
                         break;
                     }
                 }
-
-                if (!ok)
-                    continue;
             }
+
+            if (!ok)
+                continue;
 
             _index = archetype.Count - 1;
 
@@ -846,6 +996,7 @@ public ref struct QueryIterator
 
         _firstEntity = ref MemoryMarshal.GetReference(archetype.Entities.AsSpan(_index));
         _columns = archetype.Lookup;
+        _sizes = archetype.Sizes;
         _components = archetype._components;
 
         return true;
@@ -860,8 +1011,8 @@ public ref struct QueryIterator
 
     public void Dispose()
     {
-        _wold!.EndDefer();
-        _wold!.MergeDeferred();
+        _world!.EndDefer();
+        _world!.MergeDeferred();
     }
 }
 
@@ -870,33 +1021,46 @@ public readonly ref struct EcsQueryView
 {
     public readonly ref readonly int Entity;
 
+    private readonly World.ComponentStorage _storage;
     private readonly int _row;
     private readonly byte[][] _componentArrays;
     private readonly int[] _columns;
+    private readonly int[] _sizes;
 
-    internal EcsQueryView(ref int entity, int row, byte[][] _components, int[] columns)
+    internal EcsQueryView(World world, ref int entity, int row, byte[][] _components, int[] columns, int[] sizes)
     {
+        _storage = world._storage;
         Entity = ref entity;
         _row = row;
         _componentArrays = _components;
         _columns = columns;
+        _sizes = sizes;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Has<T>() where T : struct
     {
-        ref readonly var meta = ref Component<T>.Metadata;
+        return Has(_storage.GetOrCreateID<T>());
+    }
 
-        return meta.ID < _columns.Length && _columns[meta.ID] >= 0;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Has(int componentID)
+    {
+        return componentID < _columns.Length && _columns[componentID] >= 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct
     {
-        ref readonly var meta = ref Component<T>.Metadata;
+        return ref Get<T>(_storage.GetID<T>());
+    }
 
-        var span = _componentArrays[_columns[meta.ID]]
-            .AsSpan(meta.Size * _row, meta.Size);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref T Get<T>(int componentID) where T : struct
+    {
+        var size = _sizes[componentID];
+        var span = _componentArrays[_columns[componentID]]
+            .AsSpan(size * _row, size);
 
         return ref MemoryMarshal.AsRef<T>(span);
     }
@@ -904,20 +1068,20 @@ public readonly ref struct EcsQueryView
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 {
-    private ComponentMetadata[] _components;
+    private int[] _components;
     private int _count, _capacity;
 
     public EcsSignature(int capacity)
     {
         _capacity = capacity;
-        _components = capacity <= 0 ? Array.Empty<ComponentMetadata>(): new ComponentMetadata[capacity];
+        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];
     }
 
-    public EcsSignature(ReadOnlySpan<ComponentMetadata> components)
+    public EcsSignature(ReadOnlySpan<int> components)
     {
         _capacity = components.Length;
         _count = components.Length;
-        _components = new ComponentMetadata[components.Length];
+        _components = new int[components.Length];
         components.CopyTo(_components);
 
         Array.Sort(_components, 0, _count);
@@ -927,7 +1091,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     {
         _capacity = other._capacity;
         _count = other._count;
-        _components = new ComponentMetadata[other._components.Length];
+        _components = new int[other._components.Length];
         other._components.CopyTo(_components, 0);
 
         Array.Sort(_components, 0, _count);
@@ -935,12 +1099,12 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
 
     public int Count => _count;
-    public ReadOnlySpan<ComponentMetadata> Components => _components.AsSpan(0, _count);
-    public ref readonly ComponentMetadata this[int index] => ref _components[index];
+    public ReadOnlySpan<int> Components => _components.AsSpan(0, _count);
+    public ref readonly int this[int index] => ref _components[index];
 
 
 
-    public void Add(in ComponentMetadata id)
+    public void Add(int id)
     {
         GrowIfNeeded();
 
@@ -948,16 +1112,16 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         Array.Sort(_components, 0, _count);
     }
 
-    public void Remove(in ComponentMetadata id)
+    public void Remove(int id)
     {
-        var idx = IndexOf(in id);
+        var idx = IndexOf(id);
         if (idx < 0 || _count <= 0) return;
 
         _components[idx] = _components[--_count];
         Array.Sort(_components, 0, _count);
     }
 
-    public int IndexOf(in ComponentMetadata id) => Array.IndexOf(_components, id);
+    public int IndexOf(int id) => Array.IndexOf(_components, id);
 
     public bool IsSuperset(in EcsSignature other)
     {
@@ -999,12 +1163,12 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         {
             var hash = 5381;
 
-            ref var f0 = ref MemoryMarshal.GetReference<ComponentMetadata>(_components);
+            ref var f0 = ref MemoryMarshal.GetReference<int>(_components);
 
             for (int i = 0; i < Count; ++i)
             {
                 ref readonly var id = ref Unsafe.Add(ref f0, i);
-                hash = ((hash << 5) + hash) + id.ID;
+                hash = ((hash << 5) + hash) + id;
             }
 
             return hash;
@@ -1022,22 +1186,22 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         }
     }
 
-    public Span<ComponentMetadata>.Enumerator GetEnumerator() => _components.AsSpan(0, _count).GetEnumerator();
+    public Span<int>.Enumerator GetEnumerator() => _components.AsSpan(0, _count).GetEnumerator();
 
     public void Dispose()
     {
         if (_components != null)
         {
             _count = 0;
-            _components = Array.Empty<ComponentMetadata>();
-        }    
+            _components = Array.Empty<int>();
+        }
     }
 }
 
 unsafe class EcsSystem
 {
     public Archetype? Archetype;
-    public ComponentMetadata[]? Components;
+    public int[]? Components;
     public delegate* managed<in EcsView, int, void> Func;
 }
 
@@ -1048,78 +1212,14 @@ public ref struct EcsView
     internal Span<int> ComponentSizes;
 }
 
-readonly record struct EcsEdge(in ComponentMetadata ComponentID, Archetype Archetype);
+readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
 record struct EcsRecord(Archetype Archetype, int Row);
-
-[SkipLocalsInit, StructLayout(LayoutKind.Sequential)]
-readonly record struct ComponentMetadata(int ID, int Size) :
-    IComparable<ComponentMetadata>,
-    IEquatable<ComponentMetadata>
-{
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly int CompareTo(ComponentMetadata other) => ID.CompareTo(other.ID);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Equals(ComponentMetadata other) => ID == other.ID;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly override int GetHashCode() => ID.GetHashCode();
-
-
-    public static readonly ComponentMetadata Invalid = new ComponentMetadata(-1, -1);
-}
-
-static class Component<T> where T : struct
-{
-    private static ComponentMetadata _meta = ComponentStorage.Create<T>();
-    public static ref readonly ComponentMetadata Metadata => ref _meta;
-}
-
-static class ComponentStorage
-{
-    private static readonly Dictionary<int, ComponentMetadata> _components = new Dictionary<int, ComponentMetadata>();
-    private static readonly Dictionary<Type, ComponentMetadata> _componentsByType = new Dictionary<Type, ComponentMetadata>();
-
-    public static ref readonly ComponentMetadata Create<T>()
-    {
-        ref var meta = ref CollectionsMarshal.GetValueRefOrAddDefault(_componentsByType, typeof(T), out var exists);
-        if (!exists)
-        {
-            meta = new ComponentMetadata(ComponentIDGen.Next(), Unsafe.SizeOf<T>());
-            _components.Add(meta.ID, meta);
-        }
-
-
-        return ref meta;
-    }
-
-    public static ref readonly ComponentMetadata Get(int id)
-    {
-        ref var meta = ref CollectionsMarshal.GetValueRefOrNullRef(_components, id);
-
-        if (Unsafe.IsNullRef(ref meta))
-        {
-            Debug.Fail("invalid component");
-        }
-
-        Debug.Assert(meta.ID > 0);
-        Debug.Assert(meta.Size > 0);
-
-        return ref meta;
-    }
-}
-
-static class ComponentIDGen
-{
-    private static int _next = 1;
-    public static int Next() => _next++;
-}
 
 static class ComponentHasher
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int Calculate(Span<ComponentMetadata> components)
+    public static int Calculate(Span<int> components)
     {
         unchecked
         {
@@ -1127,7 +1227,7 @@ static class ComponentHasher
 
             foreach (ref readonly var id in components)
             {
-                hash = ((hash << 5) + hash) + id.ID;
+                hash = ((hash << 5) + hash) + id;
             }
 
             return hash;

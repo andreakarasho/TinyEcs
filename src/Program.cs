@@ -8,10 +8,14 @@ using TinyEcs;
 const int ENTITIES_COUNT = 1_000_000 * 1;
 
 using var world = new World();
+using var world2 = new World();
 
-var t0 = typeof(Relation<Likes, Dogs>);
-var t1 = typeof(Relation<Likes, Cats>);
+var id1_1 = world.Attach<Velocity>(world.CreateEntity());
+var id1 = world.Attach<Position>(world.CreateEntity());
 
+var id2 = world2.Attach<Position>(world2.CreateEntity());
+
+Debug.Assert(id1 != id2);
 
 var bothCount = 0;
 var velocicyCount = 0;
@@ -19,6 +23,13 @@ var positionCount = 0;
 
 var rnd = new Random();
 var sw = Stopwatch.StartNew();
+
+
+//var singletonC = world.CreateComponent<ReflectedPosition>();
+//world.Set<ReflectedPosition>(singletonC, default);
+
+var plat = world.CreateEntity();
+
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
@@ -37,16 +48,18 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //world.Attach<Relation<Likes, Cats>>(entity);
 
 
-    world.Set(entity, new Position() { X = 200f });
-    world.Set(entity, new Velocity() { X = 100f });
-    ref var p = ref world.Get<Position>(entity);
+    //world.Set(entity, new Position() { X = 200f });
+    //world.Set(entity, new Velocity() { X = 100f });
+    //ref var p = ref world.Get<Position>(entity);
 
     if (rnd.Next() % 3 == 0)
     {
+        world.Tag(entity, plat);
+        bothCount++;
         //world.Destroy(entity);
     }
 
-    bothCount++;
+
 }
 
 Console.WriteLine("spawned {0} entities in {1} ms", ENTITIES_COUNT, sw.ElapsedMilliseconds);
@@ -89,28 +102,22 @@ for (int i = 0; i < 1000; ++i)
 
 
 
-unsafe
-{
-    world.RegisterSystem<Position, Velocity>(&TwoComponentsSystem);
-    world.RegisterSystem<Position>(&PositionOnlySystem);
-    world.RegisterSystem<Velocity>(&VelocityOnlySystem);
-    world.RegisterSystem<Position, Velocity, PlayerTag>(&ThreeComponentsSystem);
-    world.RegisterSystem<ATestComp, ASecondTestComp>(&PosAndTagComponentsSystem);
-}
+//unsafe
+//{
+//    world.RegisterSystem<Position, Velocity>(&TwoComponentsSystem);
+//    world.RegisterSystem<Position>(&PositionOnlySystem);
+//    world.RegisterSystem<Velocity>(&VelocityOnlySystem);
+//    world.RegisterSystem<Position, Velocity, PlayerTag>(&ThreeComponentsSystem);
+//    world.RegisterSystem<ATestComp, ASecondTestComp>(&PosAndTagComponentsSystem);
+//}
 
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
+    .WithTag(plat)
+    //.WithTag(posC)
     .Without<PlayerTag>()
     ;
-
-
-foreach (var view in world.Query()
-    .With<Relation<Likes, Dogs>>()
-    .With<Relation<Likes, Cats>>())
-{
-
-}
 
 
 while (true)
@@ -119,15 +126,30 @@ while (true)
     DEBUG.PositionCount = 0;
     DEBUG.Both = 0;
 
-    sw.Restart();
+    
 
     //world.Step();
     var done = 0;
+
+    var posID = world.GetComponent<Position>();
+    var velID = world.GetComponent<Velocity>();
+
+    sw.Restart();
     foreach (var view in query)
     {
         ref readonly var entity = ref view.Entity;
         ref var pos = ref view.Get<Position>();
         ref var vel = ref view.Get<Velocity>();
+
+
+        //if (view.Has(plat))
+        //{
+        //    world.UnTag(entity, plat);
+        //}
+        //else
+        //{
+        //    world.Tag(entity, plat);
+        //}
 
         //world.Attach<float>(entity);
 
@@ -232,13 +254,13 @@ struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 record struct PlayerTag();
 
+struct ReflectedPosition { public float X, Y; }
+
 struct Relation<TAction, TTarget> 
     where TAction : struct 
     where TTarget : struct
 { }
 
-
-unsafe struct Name { public fixed char Value[64]; public Velocity Vel; }
 
 record struct ATestComp(bool X, float Y, float Z);
 record struct ASecondTestComp(IntPtr x);
