@@ -33,3 +33,6 @@ foreach (var view in query)
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 ```
+
+# Credits
+Base code idea inspired by https://github.com/jasonliang-dev/entity-component-system
