@@ -1043,6 +1043,13 @@ public ref struct Iterator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Has<T>() where T : struct
+    {
+        var componentID = _world._storage.GetID<T>();
+        return componentID < _columns.Length && _columns[componentID] >= 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T Get<T>(ref T first, int row) where T : struct 
         => ref Unsafe.Add(ref first, row);
 
