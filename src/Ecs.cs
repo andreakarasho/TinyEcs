@@ -890,12 +890,14 @@ public struct Query : IQueryComposition
 {
     private readonly World _world;
     private readonly EcsSignature _add, _remove;
+    private readonly Stack<Archetype> _stack;
 
     internal Query(World world)
     {
         _world = world;
         _add = new EcsSignature(16);
         _remove = new EcsSignature(16);
+        _stack = new Stack<Archetype>();
     }
 
     public IQueryComposition With<T>() where T : struct
@@ -929,11 +931,12 @@ public struct Query : IQueryComposition
     public QueryIterator GetEnumerator()
     {
         var hash = _add.GetHashCode();
-        if (!_world._typeIndex.TryGetValue(hash, out var arch))
+        if (_world._typeIndex.TryGetValue(hash, out var arch))
         {
+            _stack.Push(arch);
         }
 
-        return new QueryIterator(_world, arch, _remove);
+        return new QueryIterator(_world, _stack, _remove);
     }
 }
 
@@ -974,22 +977,21 @@ public ref struct QueryIterator
 {
     private readonly World _world;
     private readonly EcsSignature _remove;
+    private readonly Stack<Archetype> _stack;
 
     private Archetype _archetype;
-    private Stack<Archetype> _stack;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal QueryIterator(World world, Archetype root, EcsSignature remove)
+    internal QueryIterator(World world, Stack<Archetype> stack, EcsSignature remove)
     {
         world!.BeginDefer();
      
         _world = world;
         _remove = remove;
 
-        _archetype = root;
-        _stack = new Stack<Archetype>();
-        _stack.Push(root);
+        stack.TryPeek(out _archetype);
+        _stack = stack;
     }
 
     public readonly Iterator Current
@@ -1005,11 +1007,11 @@ public ref struct QueryIterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
-        if (_archetype == null || _stack.Count == 0)
-            return false;
-
         do
         {
+            if (_archetype == null || _stack.Count == 0)
+                return false;
+
             _archetype = _stack.Pop();
 
             if (_remove.Count > 0)
@@ -1026,6 +1028,7 @@ public ref struct QueryIterator
 
                 if (!ok)
                 {
+                    // maybe if removed we can just set _archetype = null; becase the whole graph is invalid
                     return MoveNext();
                 }
             }
@@ -1041,6 +1044,7 @@ public ref struct QueryIterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Dispose()
     {
+        _stack.Clear();
         _world!.EndDefer();
         _world!.MergeDeferred();
     }
