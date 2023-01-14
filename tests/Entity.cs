@@ -30,9 +30,9 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<float>(entity);
-            world.Detach<float>(entity);
+            world.Set<float>(entity);
+            world.Set<float>(entity);
+            world.Unset<float>(entity);
 
             Assert.True(!world.Has<float>(entity));
         }
@@ -43,7 +43,7 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
+            world.Set<float>(entity);
 
             Assert.True(world.Has<float>(entity));
         }
@@ -54,8 +54,8 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<int>(entity);
+            world.Set<float>(entity);
+            world.Set<int>(entity);
 
             Assert.True(world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
@@ -67,9 +67,9 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<int>(entity);
-            world.Attach<LargeComponent>(entity);
+            world.Set<float>(entity);
+            world.Set<int>(entity);
+            world.Set<LargeComponent>(entity);
 
             Assert.True(world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
@@ -82,8 +82,8 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Detach<float>(entity);
+            world.Set<float>(entity);
+            world.Unset<float>(entity);
 
             Assert.True(!world.Has<float>(entity));
         }
@@ -94,17 +94,17 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<int>(entity);
+            world.Set<float>(entity);
+            world.Set<int>(entity);
 
             Assert.True(world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
 
-            world.Detach<float>(entity);
+            world.Unset<float>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
 
-            world.Detach<int>(entity);
+            world.Unset<int>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(!world.Has<int>(entity));
         }
@@ -119,9 +119,9 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<int>(entity);
-            world.Attach<LargeComponent>(entity);
+            world.Set<float>(entity);
+            world.Set<int>(entity);
+            world.Set<LargeComponent>(entity);
 
             world.Get<float>(entity) = FLOAT_VALUE;
             world.Get<int>(entity) = INT_VALUE;
@@ -135,20 +135,20 @@ namespace TinyEcs.Tests
             Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
             
-            world.Detach<float>(entity);
+            world.Unset<float>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
             Assert.True(world.Has<LargeComponent>(entity));
             Assert.Equal(INT_VALUE, world.Get<int>(entity));
             Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
-            world.Detach<int>(entity);
+            world.Unset<int>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(!world.Has<int>(entity));
             Assert.True(world.Has<LargeComponent>(entity));
             Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
-            world.Detach<LargeComponent>(entity);
+            world.Unset<LargeComponent>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(!world.Has<int>(entity));
             Assert.True(!world.Has<LargeComponent>(entity));
@@ -164,9 +164,9 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<float>(entity);
-            world.Attach<int>(entity);
-            world.Attach<LargeComponent>(entity);
+            world.Set<float>(entity);
+            world.Set<int>(entity);
+            world.Set<LargeComponent>(entity);
 
             world.Get<float>(entity) = FLOAT_VALUE;
             world.Get<int>(entity) = INT_VALUE;
@@ -180,20 +180,20 @@ namespace TinyEcs.Tests
             Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
 
-            world.Detach<LargeComponent>(entity);
+            world.Unset<LargeComponent>(entity);
             Assert.True(world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
             Assert.True(!world.Has<LargeComponent>(entity));
             Assert.Equal(FLOAT_VALUE, world.Get<float>(entity));
             Assert.Equal(INT_VALUE, world.Get<int>(entity));
 
-            world.Detach<int>(entity);
+            world.Unset<int>(entity);
             Assert.True(world.Has<float>(entity));
             Assert.True(!world.Has<int>(entity));
             Assert.True(!world.Has<LargeComponent>(entity));
             Assert.Equal(FLOAT_VALUE, world.Get<float>(entity));
 
-            world.Detach<float>(entity);
+            world.Unset<float>(entity);
             Assert.True(!world.Has<float>(entity));
             Assert.True(!world.Has<int>(entity));
             Assert.True(!world.Has<LargeComponent>(entity));
@@ -212,9 +212,9 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.CreateEntity();
 
-            world.Attach<T0>(entity);
-            world.Attach<T1>(entity);
-            world.Attach<T2>(entity);
+            world.Set<T0>(entity);
+            world.Set<T1>(entity);
+            world.Set<T2>(entity);
 
             world.Get<T0>(entity) = t0;
             world.Get<T1>(entity) = t1;
@@ -229,20 +229,20 @@ namespace TinyEcs.Tests
             Assert.Equal(t2, world.Get<T2>(entity));
 
 
-            world.Detach<T0>(entity);
+            world.Unset<T0>(entity);
             Assert.True(!world.Has<T0>(entity));
             Assert.True(world.Has<T1>(entity));
             Assert.True(world.Has<T2>(entity));
             Assert.Equal(t1, world.Get<T1>(entity));
             Assert.Equal(t2, world.Get<T2>(entity));
 
-            world.Detach<T1>(entity);
+            world.Unset<T1>(entity);
             Assert.True(!world.Has<T0>(entity));
             Assert.True(!world.Has<T1>(entity));
             Assert.True(world.Has<T2>(entity));
             Assert.Equal(t2, world.Get<T2>(entity));
 
-            world.Detach<T2>(entity);
+            world.Unset<T2>(entity);
             Assert.True(!world.Has<T0>(entity));
             Assert.True(!world.Has<T1>(entity));
             Assert.True(!world.Has<T2>(entity));
@@ -263,9 +263,9 @@ namespace TinyEcs.Tests
 
             for (int i = 0; i < times; i++)
             {
-                world.Attach<float>(entity);
-                world.Attach<int>(entity);
-                world.Attach<LargeComponent>(entity);
+                world.Set<float>(entity);
+                world.Set<int>(entity);
+                world.Set<LargeComponent>(entity);
 
                 world.Get<float>(entity) = FLOAT_VALUE;
                 world.Get<int>(entity) = INT_VALUE;
@@ -279,20 +279,20 @@ namespace TinyEcs.Tests
                 Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
 
-                world.Detach<float>(entity);
+                world.Unset<float>(entity);
                 Assert.True(!world.Has<float>(entity));
                 Assert.True(world.Has<int>(entity));
                 Assert.True(world.Has<LargeComponent>(entity));
                 Assert.Equal(INT_VALUE, world.Get<int>(entity));
                 Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
-                world.Detach<int>(entity);
+                world.Unset<int>(entity);
                 Assert.True(!world.Has<float>(entity));
                 Assert.True(!world.Has<int>(entity));
                 Assert.True(world.Has<LargeComponent>(entity));
                 Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
-                world.Detach<LargeComponent>(entity);
+                world.Unset<LargeComponent>(entity);
                 Assert.True(!world.Has<float>(entity));
                 Assert.True(!world.Has<int>(entity));
                 Assert.True(!world.Has<LargeComponent>(entity));

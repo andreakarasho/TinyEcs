@@ -11,36 +11,39 @@ using var world = new World();
 
 var rnd = new Random();
 
+var sw = Stopwatch.StartNew();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var entity = world.CreateEntity();
-    world.Attach<Position>(entity);
-    world.Attach<Velocity>(entity);
+    world.Set<Position>(entity);
+    world.Set<Velocity>(entity);
 }
 
 
 for (int i = 0; i < 2; ++i)
 {
     var e = world.CreateEntity();
-    world.Attach<Position>(e);
-    world.Attach<Velocity>(e);
-    world.Attach<PlayerTag>(e);
+    world.Set<Position>(e);
+    world.Set<Velocity>(e);
+    world.Set<PlayerTag>(e);
 }
 
 
 var e2 = world.CreateEntity();
-world.Attach<Position>(e2);
-world.Attach<Velocity>(e2);
-world.Attach<int>(e2); 
-world.Attach<float>(e2);
+world.Set<Position>(e2);
+world.Set<Velocity>(e2);
+world.Set<int>(e2); 
+world.Set<float>(e2);
 
 var e3 = world.CreateEntity();
-world.Attach<Position>(e3);
-world.Attach<Velocity>(e3);
-world.Attach<int>(e3);
-world.Attach<float>(e3);
-world.Attach<PlayerTag>(e3);
+world.Set<Position>(e3);
+world.Set<Velocity>(e3);
+world.Set<int>(e3);
+world.Set<float>(e3);
+world.Set<PlayerTag>(e3);
+
+Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
 var query = world.Query()
     .With<Position>()
@@ -51,15 +54,10 @@ var query = world.Query()
     ;
 
 
-unsafe
-{
-    world.RegisterSystem(query, &ASystem);
-    world.RegisterSystem(query, &ASystem2);
+world.RegisterSystem(query, ASystem);
+world.RegisterSystem(query, ASystem2);
 
-    //world.Step();
-}
 
-var sw = Stopwatch.StartNew();
 while (true)
 {
     sw.Restart();
@@ -88,7 +86,7 @@ Console.ReadLine();
 
 static void ASystem(in Iterator it)
 {
-    Console.WriteLine("ASystem - Count: {0}", it.Count);
+    //Console.WriteLine("ASystem - Count: {0}", it.Count);
 
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
@@ -103,7 +101,7 @@ static void ASystem(in Iterator it)
 
 static void ASystem2(in Iterator it)
 {
-    Console.WriteLine("ASystem2 - Count: {0}", it.Count);
+    //Console.WriteLine("ASystem2 - Count: {0}", it.Count);
 
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();

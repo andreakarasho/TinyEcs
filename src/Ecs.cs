@@ -238,17 +238,12 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe int RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func)
+    public unsafe int RegisterSystem(IQueryComposition query, CallbackIterator func)
     {
         var id = _idGen.Next();
-
         ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
-        if (!exists)
-            sys = new EcsSystem();
-
-        sys!.Func = func;
-        sys.Query = query;
-
+        Debug.Assert(!exists);
+        sys = new EcsSystem(query, func);
         return id;
     }
 
@@ -1072,11 +1067,10 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     }
 }
 
-unsafe class EcsSystem
-{
-    public IQueryComposition Query;
-    public delegate* managed<in Iterator, void> Func;
-}
+
+public delegate void CallbackIterator(in Iterator iterator);
+
+readonly record struct EcsSystem(IQueryComposition Query, CallbackIterator Func);
 
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
@@ -1105,17 +1099,14 @@ static class ComponentHasher
 
 
 
-
 public sealed partial class World
 {
-    public int Attach<T>(int entity) where T : struct
-        => Attach(entity, _storage.GetOrCreateID<T>());
+    [SkipLocalsInit]
+    public void Set<T>(int entity, T component = default) where T : struct
+        => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(new Span<T>(ref component)));
 
-    public int Detach<T>(int entity) where T : struct
-        => Detach(entity, _storage.GetOrCreateID<T>());
-
-    public void Set<T>(int entity, T component) where T : struct
-        => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref component, 1)));
+    public int Unset<T>(int entity) where T : struct
+       => Detach(entity, _storage.GetOrCreateID<T>());
 
     public int Tag(int entity, int componentID)
         => Attach(entity, componentID);

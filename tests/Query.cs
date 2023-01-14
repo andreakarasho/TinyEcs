@@ -11,7 +11,7 @@
             using var world = new World();
 
             for (int i = 0; i < amount; i++)
-                world.Attach<float>(world.CreateEntity());
+                world.Set<float>(world.CreateEntity());
 
             var query = world.Query()
                 .With<float>();
@@ -38,8 +38,8 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.CreateEntity();
-                world.Attach<float>(e);
-                world.Attach<int>(e);
+                world.Set<float>(e);
+                world.Set<int>(e);
             }
 
             var query = world.Query()
@@ -69,9 +69,9 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.CreateEntity();
-                world.Attach<float>(e);
-                world.Attach<int>(e);
-                world.Attach<bool>(e);
+                world.Set<float>(e);
+                world.Set<int>(e);
+                world.Set<bool>(e);
             }
 
             var query = world.Query()
@@ -103,9 +103,9 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.CreateEntity();
-                world.Attach<float>(e);
-                world.Attach<int>(e);
-                world.Attach<bool>(e);
+                world.Set<float>(e);
+                world.Set<int>(e);
+                world.Set<bool>(e);
             }
 
             var query = world.Query()
@@ -137,8 +137,8 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.CreateEntity();
-                world.Attach<float>(e);
-                world.Attach<int>(e);
+                world.Set<float>(e);
+                world.Set<int>(e);
             }
 
             var query = world.Query()
@@ -170,8 +170,8 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.CreateEntity();
-                world.Attach<float>(e);
-                world.Attach<int>(e);
+                world.Set<float>(e);
+                world.Set<int>(e);
             }
 
             var query = world.Query()
@@ -200,25 +200,25 @@
             var good = 0;
 
             var e = world.CreateEntity();
-            world.Attach<float>(e);
-            world.Attach<int>(e);
+            world.Set<float>(e);
+            world.Set<int>(e);
 
             var e2 = world.CreateEntity();
-            world.Attach<float>(e2);
-            world.Attach<int>(e2);
-            world.Attach<bool>(e2);
+            world.Set<float>(e2);
+            world.Set<int>(e2);
+            world.Set<bool>(e2);
 
             var e3 = world.CreateEntity();
-            world.Attach<float>(e3);
-            world.Attach<int>(e3);
-            world.Attach<byte>(e3);
+            world.Set<float>(e3);
+            world.Set<int>(e3);
+            world.Set<byte>(e3);
             good++;
 
             var e4 = world.CreateEntity();
-            world.Attach<float>(e4);
-            world.Attach<int>(e4);
-            world.Attach<byte>(e4);
-            world.Attach<decimal>(e4);
+            world.Set<float>(e4);
+            world.Set<int>(e4);
+            world.Set<byte>(e4);
+            world.Set<decimal>(e4);
 
             var query = world.Query()
                 .With<float>()
