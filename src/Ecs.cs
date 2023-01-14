@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -98,7 +96,7 @@ public sealed partial class World : IDisposable
             var removedId = record.Archetype.Remove(record.Row);
 
             Debug.Assert(removedId == entity);
-        
+
             _entityIndex.Remove(removedId);
             _idGen.Return(removedId);
             Interlocked.Decrement(ref _entityCount);
@@ -801,7 +799,7 @@ public struct Query : IQueryComposition
     {
         _stack.Clear();
 
-        var hash = _add.GetHashCode();     
+        var hash = _add.GetHashCode();
         if (_world._typeIndex.TryGetValue(hash, out var arch))
         {
             var ok = true;
@@ -846,7 +844,7 @@ public ref struct QueryIterator
     internal QueryIterator(World world, Stack<Archetype> stack, EcsSignature remove)
     {
         world!.BeginDefer();
-     
+
         _world = world;
         _remove = remove;
 
@@ -925,7 +923,7 @@ public ref struct Iterator
     //    // 813
     //    //return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref MemoryMarshal.AsRef<byte>(span))), Count);
     //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.AsRef<T>(span)), Count);
-        
+
     //    return new Span<T>(Unsafe.AsPointer<T>(ref Unsafe.As<byte, T>(ref span[0])), Count);
     //    //return new Span<T>(Unsafe.AsPointer(ref MemoryMarshal.GetReference(span)), Count);
     //}
@@ -946,11 +944,11 @@ public ref struct Iterator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref T Get<T>(ref T first, int row) where T : struct 
+    public ref T Get<T>(ref T first, int row) where T : struct
         => ref Unsafe.Add(ref first, row);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly int Entity(int index) 
+    public readonly ref readonly int Entity(int index)
         => ref Unsafe.Add(ref _firstEntity, index);
 }
 
@@ -963,7 +961,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     {
         _capacity = capacity;
         _count = 0;
-        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];      
+        _components = capacity <= 0 ? Array.Empty<int>() : new int[capacity];
     }
 
     public EcsSignature(ReadOnlySpan<int> components)
