@@ -979,7 +979,7 @@ public ref struct QueryIterator
     private readonly EcsSignature _remove;
     private readonly Stack<Archetype> _stack;
 
-    private Archetype _archetype;
+    private Archetype? _archetype;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1000,7 +1000,7 @@ public ref struct QueryIterator
         get => new Iterator
         (
             _world,
-            _archetype
+            _archetype!
         );
     }
 
@@ -1009,10 +1009,8 @@ public ref struct QueryIterator
     {
         do
         {
-            if (_archetype == null || _stack.Count == 0)
+            if (_archetype == null || !_stack.TryPop(out _archetype))
                 return false;
-
-            _archetype = _stack.Pop();
 
             if (_remove.Count > 0)
             {
@@ -1059,7 +1057,7 @@ public ref struct Iterator
     private readonly int[] _columns;
     private ref int _firstEntity;
 
-    internal Iterator(World world, Archetype archetype)
+    internal Iterator(World world, [NotNull] Archetype archetype)
     {
         _world = world;
         Count = archetype.Count;
