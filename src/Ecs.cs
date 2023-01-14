@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -456,6 +457,7 @@ public sealed partial class World : IDisposable
         private int[] _componentsIDs = new int[INITIAL_LENGTH];
         private int[] _componentsSizes = new int[INITIAL_LENGTH];
         private readonly Dictionary<int, int> _IDsToGlobal = new Dictionary<int, int>();
+        //private readonly Dictionary<int, int> _globalToIDs = new Dictionary<int, int>();
 
         public ComponentStorage(World world)
         {
@@ -476,20 +478,23 @@ public sealed partial class World : IDisposable
                 _componentsIDs[globalIndex] = _world._idGen.Next();
                 _componentsSizes[globalIndex] = TypeOf<T>.Size;
 
-                _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
+                //_IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
+                _IDsToGlobal[globalIndex] = _componentsIDs[globalIndex];
+
+                //_globalToIDs[globalIndex] = _componentsIDs[globalIndex];
             }
 
-            return _componentsIDs[globalIndex];
+            return globalIndex; // _componentsIDs[globalIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetID<T>() where T : struct
         {
-            return _componentsIDs[TypeOf<T>.GlobalIndex];
+            return TypeOf<T>.GlobalIndex; // _componentsIDs[TypeOf<T>.GlobalIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetSize(int componentID)
+        public int GetGlobalID(int componentID)
         {
             ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
             if (Unsafe.IsNullRef(ref globalIndex))
@@ -497,7 +502,19 @@ public sealed partial class World : IDisposable
                 Debug.Fail("invalid componentID");
             }
 
-            return _componentsSizes[globalIndex];
+            return globalIndex;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetSize(int componentID)
+        {
+            //ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
+            //if (Unsafe.IsNullRef(ref globalIndex))
+            //{
+            //    Debug.Fail("invalid componentID");
+            //}
+
+            return _componentsSizes[componentID];
         }
 
         public void Clear()
@@ -647,7 +664,7 @@ sealed unsafe class Archetype
 
         for (int i = 0; i < _sign.Count; ++i)
         {
-            var size = _sizes[i];
+            var size = _sizes[_sign[i]];
             var leftArray = _components[i].AsSpan();
 
             var removeComponent = leftArray.Slice(size * row, size);
@@ -909,7 +926,15 @@ public struct Query : IQueryComposition
         return this;
     }
 
-    public QueryIterator GetEnumerator() => new QueryIterator(_world, _add, _remove);
+    public QueryIterator GetEnumerator()
+    {
+        var hash = _add.GetHashCode();
+        if (!_world._typeIndex.TryGetValue(hash, out var arch))
+        {
+        }
+
+        return new QueryIterator(_world, arch, _remove);
+    }
 }
 
 public interface IQueryComposition
@@ -921,25 +946,50 @@ public interface IQueryComposition
     QueryIterator GetEnumerator();
 }
 
+ref struct EdgeEnumerator
+{
+    private readonly Span<EcsEdge> _edges;
+    private int _currentIndex;
+
+    public EdgeEnumerator(List<EcsEdge> edges)
+    {
+        _edges = CollectionsMarshal.AsSpan(edges);
+        _currentIndex = -1;
+    }
+
+    public bool MoveNext()
+    {
+        _currentIndex++;
+        return (_currentIndex < _edges.Length);
+    }
+
+    public ref EcsEdge Current
+    {
+        get { return ref _edges[_currentIndex]; }
+    }
+}
+
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
     private readonly World _world;
-    private readonly EcsSignature _add, _remove;
+    private readonly EcsSignature _remove;
 
     private Archetype _archetype;
-    private IEnumerator<EcsEdge> _enumerator;
+    private Stack<Archetype> _stack;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal QueryIterator(World world, EcsSignature add, EcsSignature remove)
+    internal QueryIterator(World world, Archetype root, EcsSignature remove)
     {
         world!.BeginDefer();
-
+     
         _world = world;
-        _archetype = world._archRoot;
-        _add = add;
         _remove = remove;
+
+        _archetype = root;
+        _stack = new Stack<Archetype>();
+        _stack.Push(root);
     }
 
     public readonly Iterator Current
@@ -955,39 +1005,37 @@ public ref struct QueryIterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
+        if (_archetype == null || _stack.Count == 0)
+            return false;
+
         do
         {
-            _enumerator = _archetype._edgesRight.AsEnumerable().GetEnumerator();
+            _archetype = _stack.Pop();
 
-            while (_enumerator.MoveNext())
+            if (_remove.Count > 0)
             {
-                _archetype = _enumerator.Current.Archetype;
-
-                if (_archetype.Count > 0 && _archetype.Signature.IsSuperset(_add))
+                var ok = true;
+                foreach (var ignoreID in _remove)
                 {
-                    if (_remove.Count > 0)
+                    if (_archetype.Signature.IndexOf(ignoreID) >= 0)
                     {
-                        var ok = true;
-                        foreach (var ignoreID in _remove)
-                        {
-                            if (_archetype.Signature.IndexOf(ignoreID) >= 0)
-                            {
-                                ok = false;
-                                break;
-                            }
-                        }
-
-                        if (!ok)
-                            continue;
+                        ok = false;
+                        break;
                     }
+                }
 
-                    return true;
+                if (!ok)
+                {
+                    return MoveNext();
                 }
             }
+
+            for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
+                _stack.Push(_archetype._edgesRight[i].Archetype);
         }
-        while (_archetype._edgesRight.Count != 0);
-    
-        return false;
+        while (_archetype.Count <= 0);
+
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

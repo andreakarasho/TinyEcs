@@ -20,6 +20,21 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 }
 
 
+for (int i = 0; i < 2; ++i)
+{
+    var e = world.CreateEntity();
+    world.Attach<Position>(e);
+    world.Attach<Velocity>(e);
+    world.Attach<PlayerTag>(e);
+}
+
+
+var e2 = world.CreateEntity();
+world.Attach<Position>(e2);
+world.Attach<Velocity>(e2);
+world.Attach<int>(e2); 
+world.Attach<float>(e2);
+
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
