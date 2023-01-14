@@ -10,16 +10,16 @@ namespace TinyEcs;
 public sealed partial class World : IDisposable
 {
     private int _entityCount = 0;
-
     private int _deferStatus, _deferActionCount;
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
+
+    private Archetype _archRoot;
     internal readonly IDGenerator _idGen = new IDGenerator();
     internal readonly ComponentStorage _storage;
 
-    internal Archetype _archRoot;
-    internal readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    internal readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
+    private readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
+    private readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
 
 
     public World()
@@ -56,12 +56,10 @@ public sealed partial class World : IDisposable
     {
         foreach ((int id, EcsSystem system) in _systemIndex)
         {
-            if (system.Archetype == null)
+            foreach (var it in system.Query)
             {
-                UpdateSystem(system);
+                system.Func(in it);
             }
-
-            system.Archetype?.StepHelp(system.Components.AsSpan(), system.Func);
         }
     }
 
@@ -242,43 +240,19 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    private unsafe int RegisterSystem(delegate* managed<in EcsView, int, void> system, Span<int> components)
+    public unsafe int RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func)
     {
-        var hash = ComponentHasher.Calculate(components);
-
-        ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
-        if (!exists)
-        {
-            arch = _archRoot.TraverseAndCreate(new EcsSignature(components));
-        }
-
         var id = _idGen.Next();
 
-        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out exists);
+        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
         if (!exists)
             sys = new EcsSystem();
 
-        sys!.Archetype = arch;
-        sys.Components = components.ToArray();
-        sys.Func = system;
+        sys!.Func = func;
+        sys.Query = query;
 
         return id;
     }
-
-    private unsafe void UpdateSystem(EcsSystem sys)
-    {
-        var hash = ComponentHasher.Calculate(sys.Components);
-
-        ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
-        if (!exists)
-        {
-            arch = _archRoot.TraverseAndCreate(new EcsSignature(sys.Components));
-        }
-
-        sys.Archetype = arch;
-    }
-
-
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool IsDeferred() => _deferStatus != 0;
@@ -733,111 +707,6 @@ sealed unsafe class Archetype
         }
     }
 
-    public Archetype TraverseAndCreate(EcsSignature type)
-    {
-        var len = type.Count;
-        Span<int> acc = stackalloc int[len];
-        type.Components.CopyTo(acc);
-
-        return TraverseAndCreateHelp(this, in type, len, acc, this);
-    }
-
-    public void StepHelp(ReadOnlySpan<int> components, delegate* managed<in EcsView, int, void> run)
-    {
-        if (_count == 0)
-            return;
-
-        Span<int> signatureToIndex = stackalloc int[components.Length];
-        Span<int> componentSizes = stackalloc int[components.Length];
-
-        for (int slow = 0; slow < components.Length; ++slow)
-        {
-            var typeLen = _sign.Count;
-            for (int fast = 0; fast < typeLen; ++fast)
-            {
-                ref readonly var component = ref _sign[fast];
-
-                if (component == components[slow])
-                {
-                    componentSizes[slow] = _world._storage.GetSize(component);
-                    signatureToIndex[slow] = fast;
-
-                    break;
-                }
-            }
-        }
-
-        var view = new EcsView()
-        {
-            ComponentArrays = _components,
-            SignatureToIndex = signatureToIndex,
-            ComponentSizes = componentSizes,
-        };
-
-        for (int i = 0; i < _count; ++i)
-        {
-            run(in view, i);
-        }
-
-        foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
-        {
-            if (components.IndexOf(edge.ComponentID) != -1)
-                edge.Archetype.StepHelp(components, run);
-        }
-    }
-
-    private static Archetype TraverseAndCreateHelp(Archetype vertex, in EcsSignature type, int stack, Span<int> acc, Archetype root)
-    {
-        if (stack == 0)
-        {
-            return vertex;
-        }
-
-        if (vertex._edgesRight == null || vertex._edgesRight.Count == 0)
-        {
-            var nt = new EcsSignature(type.Count);
-            for (int i = 0; i < acc.Length; ++i)
-            {
-                nt.Add(acc[i]);
-            }
-            return new Archetype(vertex._world, nt);
-        }
-
-        for (int i = 0; i < vertex._edgesRight.Count; i++)
-        {
-            var edge = vertex._edgesRight[i];
-            if (type.IndexOf(edge.ComponentID) != -1)
-            {
-                acc[stack - 1] = edge.ComponentID;
-                return TraverseAndCreateHelp(edge.Archetype, in type, stack - 1, acc, root);
-            }
-        }
-
-        //var hash = ComponentHasher.Calculate(acc);
-        var newType = new EcsSignature(acc);
-        var newComponent = -1;
-        for (int i = 0; i < type.Count; ++i)
-        {
-            if (type[i] != newType[i])
-            {
-                newComponent = type[i];
-                newType.Add(newComponent);
-                acc[stack - 1] = newComponent;
-                break;
-            }
-        }
-
-        if (newType.Count == 0)
-        {
-            newType.Dispose();
-            return new Archetype(vertex._world, type);
-        }
-
-        var newVertex = root.InsertVertex(vertex, newType, newComponent);
-
-        return TraverseAndCreateHelp(newVertex, in type, stack - 1, acc, root);
-    }
-
     private static void MakeEdges(Archetype left, Archetype right, int componentID)
     {
         left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = componentID });
@@ -962,28 +831,6 @@ public interface IQueryComposition
     QueryIterator GetEnumerator();
 }
 
-ref struct EdgeEnumerator
-{
-    private readonly Span<EcsEdge> _edges;
-    private int _currentIndex;
-
-    public EdgeEnumerator(List<EcsEdge> edges)
-    {
-        _edges = CollectionsMarshal.AsSpan(edges);
-        _currentIndex = -1;
-    }
-
-    public bool MoveNext()
-    {
-        _currentIndex++;
-        return (_currentIndex < _edges.Length);
-    }
-
-    public ref EcsEdge Current
-    {
-        get { return ref _edges[_currentIndex]; }
-    }
-}
 
 [SkipLocalsInit]
 public ref struct QueryIterator
@@ -1068,7 +915,7 @@ public ref struct Iterator
 
     public readonly int Count;
 
-
+    // NOTE: returning Span<T> is a way slower... have I did anything wrong? :\
     //[MethodImpl(MethodImplOptions.AggressiveInlining)]
     //public readonly unsafe Span<T> Field<T>() where T : struct
     //{
@@ -1181,9 +1028,9 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         return j == other.Count;
     }
 
-    public bool Equals([NotNull] EcsSignature other)
+    public bool Equals(EcsSignature? other)
     {
-        if (Count != other.Count)
+        if (Count != other!.Count)
         {
             return false;
         }
@@ -1229,16 +1076,8 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
 unsafe class EcsSystem
 {
-    public Archetype? Archetype;
-    public int[]? Components;
-    public delegate* managed<in EcsView, int, void> Func;
-}
-
-public ref struct EcsView
-{
-    internal byte[][] ComponentArrays;
-    internal Span<int> SignatureToIndex;
-    internal Span<int> ComponentSizes;
+    public IQueryComposition Query;
+    public delegate* managed<in Iterator, void> Func;
 }
 
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
@@ -1261,5 +1100,37 @@ static class ComponentHasher
 
             return hash;
         }
+    }
+}
+
+
+
+
+
+
+public sealed partial class World
+{
+    public int Attach<T>(int entity) where T : struct
+        => Attach(entity, _storage.GetOrCreateID<T>());
+
+    public int Detach<T>(int entity) where T : struct
+        => Detach(entity, _storage.GetOrCreateID<T>());
+
+    public void Set<T>(int entity, T component) where T : struct
+        => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref component, 1)));
+
+    public int Tag(int entity, int componentID)
+        => Attach(entity, componentID);
+
+    public void UnTag(int entity, int componentID)
+        => Detach(entity, componentID);
+
+    public unsafe bool Has<T>(int entity) where T : struct
+        => Has(entity, _storage.GetOrCreateID<T>());
+
+    public unsafe ref T Get<T>(int entity) where T : struct
+    {
+        var raw = Get(entity, _storage.GetOrCreateID<T>());
+        return ref MemoryMarshal.AsRef<T>(raw);
     }
 }

@@ -47,29 +47,38 @@ var query = world.Query()
     .With<Velocity>()
     //.WithTag(plat)
     //.WithTag(posC)
-    .Without<PlayerTag>()
+    //.Without<PlayerTag>()
     ;
 
 
+unsafe
+{
+    world.RegisterSystem(query, &ASystem);
+    world.RegisterSystem(query, &ASystem2);
+
+    //world.Step();
+}
 
 var sw = Stopwatch.StartNew();
 while (true)
 {
     sw.Restart();
+    
     for (int i = 0; i < 3600; ++i)
     {
-        foreach (var it in query)
-        {
-            ref var p = ref it.Field<Position>();
-            ref var v = ref it.Field<Velocity>();
+        world.Step();
+        //foreach (var it in query)
+        //{
+        //    ref var p = ref it.Field<Position>();
+        //    ref var v = ref it.Field<Velocity>();
 
-            for (var row = 0; row < it.Count; ++row)
-            {
-                ref readonly var entity = ref it.Entity(row);
-                ref var pos = ref it.Get(ref p, row);
-                ref var vel = ref it.Get(ref v, row);
-            }
-        }
+        //    for (var row = 0; row < it.Count; ++row)
+        //    {
+        //        ref readonly var entity = ref it.Entity(row);
+        //        ref var pos = ref it.Get(ref p, row);
+        //        ref var vel = ref it.Get(ref v, row);
+        //    }
+        //}
     }
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
@@ -77,6 +86,35 @@ while (true)
 Console.ReadLine();
 
 
+static void ASystem(in Iterator it)
+{
+    Console.WriteLine("ASystem - Count: {0}", it.Count);
+
+    ref var p = ref it.Field<Position>();
+    ref var v = ref it.Field<Velocity>();
+
+    for (var row = 0; row < it.Count; ++row)
+    {
+        ref readonly var entity = ref it.Entity(row);
+        ref var pos = ref it.Get(ref p, row);
+        ref var vel = ref it.Get(ref v, row);
+    }
+}
+
+static void ASystem2(in Iterator it)
+{
+    Console.WriteLine("ASystem2 - Count: {0}", it.Count);
+
+    ref var p = ref it.Field<Position>();
+    ref var v = ref it.Field<Velocity>();
+
+    for (var row = 0; row < it.Count; ++row)
+    {
+        ref readonly var entity = ref it.Entity(row);
+        ref var pos = ref it.Get(ref p, row);
+        ref var vel = ref it.Get(ref v, row);
+    }
+}
 
 struct Likes { }
 struct Dogs { }
