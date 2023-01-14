@@ -13,6 +13,7 @@ var rnd = new Random();
 
 var sw = Stopwatch.StartNew();
 
+
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var entity = world.CreateEntity();
@@ -55,7 +56,7 @@ var query = world.Query()
 
 
 world.RegisterSystem(query, ASystem);
-world.RegisterSystem(query, ASystem2);
+//world.RegisterSystem(query, ASystem2);
 
 
 while (true)

@@ -3,6 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using EntityID = System.UInt64;
+
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -16,8 +18,8 @@ public sealed partial class World : IDisposable
     internal readonly ComponentStorage _storage;
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    private readonly Dictionary<int, EcsRecord> _entityIndex = new Dictionary<int, EcsRecord>();
-    private readonly Dictionary<int, EcsSystem> _systemIndex = new Dictionary<int, EcsSystem>();
+    private readonly Dictionary<EntityID, EcsRecord> _entityIndex = new Dictionary<EntityID, EcsRecord>();
+    private readonly Dictionary<EntityID, EcsSystem> _systemIndex = new Dictionary<EntityID, EcsSystem>();
 
 
     public World()
@@ -52,7 +54,7 @@ public sealed partial class World : IDisposable
 
     public unsafe void Step()
     {
-        foreach ((int id, EcsSystem system) in _systemIndex)
+        foreach ((var id, EcsSystem system) in _systemIndex)
         {
             foreach (var it in system.Query)
             {
@@ -63,7 +65,7 @@ public sealed partial class World : IDisposable
 
     public IQueryComposition Query() => new Query(this);
 
-    public int CreateEntity()
+    public EntityID CreateEntity()
     {
         var id = _idGen.Next();
 
@@ -79,7 +81,7 @@ public sealed partial class World : IDisposable
         return id;
     }
 
-    public void DestroyEntity(int entity)
+    public void DestroyEntity(EntityID entity)
     {
         if (IsDeferred())
         {
@@ -105,7 +107,7 @@ public sealed partial class World : IDisposable
 
 
 
-    private int Attach(int entity, int componentID)
+    private int Attach(EntityID entity, int componentID)
     {
         if (IsDeferred())
         {
@@ -129,7 +131,7 @@ public sealed partial class World : IDisposable
         return componentID;
     }
 
-    private int Detach(int entity, int componentID)
+    private int Detach(EntityID entity, int componentID)
     {
         if (IsDeferred())
         {
@@ -155,7 +157,7 @@ public sealed partial class World : IDisposable
 
 
 
-    private void InternalCreateEntity(int id)
+    private void InternalCreateEntity(EntityID id)
     {
         var row = _archRoot.Add(id);
         ref var record = ref CollectionsMarshal.GetValueRefOrAddDefault(_entityIndex, id, out var exists);
@@ -194,7 +196,7 @@ public sealed partial class World : IDisposable
         record.Archetype = arch!;
     }
 
-    private void Set(int entity, int componentID, ReadOnlySpan<byte> data)
+    private void Set(EntityID entity, int componentID, ReadOnlySpan<byte> data)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -216,9 +218,9 @@ public sealed partial class World : IDisposable
         data.CopyTo(componentData);
     }
 
-    private bool Has(int entity, int componentID) => !Get(entity, componentID).IsEmpty;
+    private bool Has(EntityID entity, int componentID) => !Get(entity, componentID).IsEmpty;
 
-    private Span<byte> Get(int entity, int componentID)
+    private Span<byte> Get(EntityID entity, int componentID)
     {
         ref var record = ref CollectionsMarshal.GetValueRefOrNullRef(_entityIndex, entity);
         if (Unsafe.IsNullRef(ref record))
@@ -238,7 +240,7 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe int RegisterSystem(IQueryComposition query, CallbackIterator func)
+    public unsafe ulong RegisterSystem(IQueryComposition query, CallbackIterator func)
     {
         var id = _idGen.Next();
         ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
@@ -256,7 +258,7 @@ public sealed partial class World : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EndDefer() => Interlocked.Decrement(ref _deferStatus);
 
-    private void CreateDeferred(int entity)
+    private void CreateDeferred(EntityID entity)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Create;
@@ -264,7 +266,7 @@ public sealed partial class World : IDisposable
         cmd.Create.Entity = entity;
     }
 
-    private void DestroyDeferred(int entity)
+    private void DestroyDeferred(EntityID entity)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Destroy;
@@ -272,7 +274,7 @@ public sealed partial class World : IDisposable
         cmd.Destroy.Entity = entity;
     }
 
-    private void AttachDeferred(int entity, int component)
+    private void AttachDeferred(EntityID entity, int component)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Attach;
@@ -281,7 +283,7 @@ public sealed partial class World : IDisposable
         cmd.Attach.Component = component;
     }
 
-    private void DetachDeferred(int entity, int component)
+    private void DetachDeferred(EntityID entity, int component)
     {
         ref var cmd = ref PeekDeferredCommand();
         cmd.Action = DeferredOp.Detach;
@@ -380,7 +382,7 @@ public sealed partial class World : IDisposable
         public DeferredOp Action;
         public int Stage;
 
-        public int Entity;
+        public EntityID Entity;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -389,7 +391,7 @@ public sealed partial class World : IDisposable
         public DeferredOp Action;
         public int Stage;
 
-        public int Entity;
+        public EntityID Entity;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -398,7 +400,7 @@ public sealed partial class World : IDisposable
         public DeferredOp Action;
         public int Stage;
 
-        public int Entity;
+        public EntityID Entity;
         public int Component;
     }
 
@@ -408,7 +410,7 @@ public sealed partial class World : IDisposable
         public DeferredOp Action;
         public int Stage;
 
-        public int Entity;
+        public EntityID Entity;
         public int Component;
     }
 
@@ -421,9 +423,9 @@ public sealed partial class World : IDisposable
 
         private readonly World _world;
         private int[] _componentsHashes = new int[INITIAL_LENGTH];
-        private int[] _componentsIDs = new int[INITIAL_LENGTH];
+        private EntityID[] _componentsIDs = new EntityID[INITIAL_LENGTH];
         private int[] _componentsSizes = new int[INITIAL_LENGTH];
-        private readonly Dictionary<int, int> _IDsToGlobal = new Dictionary<int, int>();
+        private readonly Dictionary<int, EntityID> _IDsToGlobal = new Dictionary<int, EntityID>();
         //private readonly Dictionary<int, int> _globalToIDs = new Dictionary<int, int>();
 
         public ComponentStorage(World world)
@@ -460,17 +462,17 @@ public sealed partial class World : IDisposable
             return TypeOf<T>.GlobalIndex; // _componentsIDs[TypeOf<T>.GlobalIndex];
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetGlobalID(int componentID)
-        {
-            ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
-            if (Unsafe.IsNullRef(ref globalIndex))
-            {
-                Debug.Fail("invalid componentID");
-            }
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //public int GetGlobalID(int componentID)
+        //{
+        //    ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
+        //    if (Unsafe.IsNullRef(ref globalIndex))
+        //    {
+        //        Debug.Fail("invalid componentID");
+        //    }
 
-            return globalIndex;
-        }
+        //    return globalIndex;
+        //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetSize(int componentID)
@@ -529,15 +531,15 @@ public sealed partial class World : IDisposable
 
     internal sealed class IDGenerator
     {
-        private readonly Stack<int> _recycled = new Stack<int>();
-        private int _next = 1;
+        private readonly Stack<EntityID> _recycled = new Stack<EntityID>();
+        private EntityID _next = 1;
 
         public IDGenerator()
         {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int Next()
+        public EntityID Next()
         {
             if (!_recycled.TryPop(out var id))
             {
@@ -549,7 +551,7 @@ public sealed partial class World : IDisposable
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Return(int id) => _recycled.Push(id);
+        public void Return(EntityID id) => _recycled.Push(id);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Reset()
@@ -566,7 +568,7 @@ sealed unsafe class Archetype
 
     private readonly World _world;
     private int _capacity, _count;
-    private int[] _entityIDs;
+    private EntityID[] _entityIDs;
     internal byte[][] _components;
     private readonly EcsSignature _sign;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
@@ -578,7 +580,7 @@ sealed unsafe class Archetype
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
         _sign = sign;
-        _entityIDs = new int[ARCHETYPE_INITIAL_CAPACITY];
+        _entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
         _components = new byte[sign.Count][];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
@@ -604,12 +606,12 @@ sealed unsafe class Archetype
 
     public EcsSignature Signature => _sign;
     public int Count => _count;
-    public int[] Entities => _entityIDs;
+    public EntityID[] Entities => _entityIDs;
     public int[] Lookup => _lookup;
     public int[] Sizes => _sizes;
 
 
-    public int Add(int entityID)
+    public int Add(EntityID entityID)
     {
         if (_capacity == _count)
         {
@@ -624,7 +626,7 @@ sealed unsafe class Archetype
         return _count++;
     }
 
-    public int Remove(int row)
+    public EntityID Remove(int row)
     {
         var removed = _entityIDs[row];
         _entityIDs[row] = _entityIDs[_count - 1];
@@ -894,7 +896,7 @@ public ref struct Iterator
     private readonly World _world;
     private readonly byte[][] _components;
     private readonly int[] _columns;
-    private ref int _firstEntity;
+    private ref EntityID _firstEntity;
 
     internal Iterator(World world, [NotNull] Archetype archetype)
     {
@@ -902,7 +904,7 @@ public ref struct Iterator
         Count = archetype.Count;
         _columns = archetype.Lookup;
         _components = archetype._components;
-        _firstEntity = ref MemoryMarshal.GetReference<int>(archetype.Entities);
+        _firstEntity = ref MemoryMarshal.GetReference<EntityID>(archetype.Entities);
     }
 
 
@@ -943,7 +945,7 @@ public ref struct Iterator
         => ref Unsafe.Add(ref first, row);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly int Entity(int index)
+    public readonly ref readonly EntityID Entity(int index)
         => ref Unsafe.Add(ref _firstEntity, index);
 }
 
@@ -1039,10 +1041,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
         return true;
     }
 
-    public override int GetHashCode()
-    {
-        return ComponentHasher.Calculate(_components.AsSpan(0, _count));
-    }
+    public override int GetHashCode() => ComponentHasher.Calculate(_components.AsSpan(0, _count));
 
     private void GrowIfNeeded()
     {
@@ -1096,28 +1095,60 @@ static class ComponentHasher
 }
 
 
+//readonly struct EntityID
+//{
+//    private readonly ulong _value;
+
+//    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+//    public EntityID(ulong value) => _value = value;
+//}
 
 
+static class IDOp
+{
+    const EntityID ECS_ENTITY_MASK = 0xFFFFFFFFul;
+    const EntityID ECS_GENERATION_MASK = (0xFFFFul << 32);
+
+    const EntityID ID_TOGGLE = 1ul << 61;
+
+
+    public static void Toggle(ref EntityID id)
+    {
+        //id ^= ID_TOGGLE;
+    }
+
+    public static EntityID Generation(EntityID id)
+    {
+        return ((id & ECS_GENERATION_MASK) >> 32);
+    }
+
+    public static EntityID RealID(EntityID id)
+    {
+        //var generation = Generation(id);
+        id &= ECS_ENTITY_MASK;
+        return id;
+    }
+}
 
 public sealed partial class World
 {
     [SkipLocalsInit]
-    public void Set<T>(int entity, T component = default) where T : struct
+    public void Set<T>(EntityID entity, T component = default) where T : struct
         => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(new Span<T>(ref component)));
 
-    public int Unset<T>(int entity) where T : struct
+    public int Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
-    public int Tag(int entity, int componentID)
+    public int Tag(EntityID entity, int componentID)
         => Attach(entity, componentID);
 
-    public void UnTag(int entity, int componentID)
+    public void UnTag(EntityID entity, int componentID)
         => Detach(entity, componentID);
 
-    public unsafe bool Has<T>(int entity) where T : struct
+    public unsafe bool Has<T>(EntityID entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
 
-    public unsafe ref T Get<T>(int entity) where T : struct
+    public unsafe ref T Get<T>(EntityID entity) where T : struct
     {
         var raw = Get(entity, _storage.GetOrCreateID<T>());
         return ref MemoryMarshal.AsRef<T>(raw);

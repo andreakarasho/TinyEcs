@@ -8,8 +8,9 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
+	
 
-	<PropertyGroup>
+	<PropertyGroup Condition="$(PublishAot) == 'true'">
 		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
 		<IlcOptimizationPreference>Size</IlcOptimizationPreference>
 		<IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
@@ -17,13 +18,17 @@
 		<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
 		<IlcDisableReflection>true</IlcDisableReflection>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<GenerateTargetFrameworkAttribute>true</GenerateTargetFrameworkAttribute>
+		<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
 		<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
 		<NoStdLib>true</NoStdLib>
 		<NoConfig>true</NoConfig>
 		<TrimMode>link</TrimMode>
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
+
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
+	</ItemGroup>
 
 </Project>
