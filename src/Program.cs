@@ -35,19 +35,19 @@ world.Attach<Velocity>(e2);
 world.Attach<int>(e2); 
 world.Attach<float>(e2);
 
-//var e3 = world.CreateEntity();
-//world.Attach<Position>(e3);
-//world.Attach<Velocity>(e3);
-//world.Attach<int>(e3);
-//world.Attach<float>(e3);
-//world.Attach<PlayerTag>(e3);
+var e3 = world.CreateEntity();
+world.Attach<Position>(e3);
+world.Attach<Velocity>(e3);
+world.Attach<int>(e3);
+world.Attach<float>(e3);
+world.Attach<PlayerTag>(e3);
 
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
     //.WithTag(plat)
     //.WithTag(posC)
-    //.Without<PlayerTag>()
+    .Without<PlayerTag>()
     ;
 
 

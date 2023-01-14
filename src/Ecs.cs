@@ -930,10 +930,23 @@ public struct Query : IQueryComposition
 
     public QueryIterator GetEnumerator()
     {
-        var hash = _add.GetHashCode();
+        _stack.Clear();
+
+        var hash = _add.GetHashCode();     
         if (_world._typeIndex.TryGetValue(hash, out var arch))
         {
-            _stack.Push(arch);
+            var ok = true;
+            foreach (var id in _remove)
+            {
+                if (arch.Signature.IndexOf(id) >= 0)
+                {
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (ok)
+                _stack.Push(arch);
         }
 
         return new QueryIterator(_world, _stack, _remove);
@@ -1012,27 +1025,13 @@ public ref struct QueryIterator
             if (_archetype == null || !_stack.TryPop(out _archetype))
                 return false;
 
-            if (_remove.Count > 0)
+            for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
             {
-                var ok = true;
-                foreach (var ignoreID in _remove)
+                if (_remove.IndexOf(_archetype._edgesRight[i].ComponentID) < 0)
                 {
-                    if (_archetype.Signature.IndexOf(ignoreID) >= 0)
-                    {
-                        ok = false;
-                        break;
-                    }
-                }
-
-                if (!ok)
-                {
-                    // maybe if removed we can just set _archetype = null; becase the whole graph is invalid
-                    return MoveNext();
+                    _stack.Push(_archetype._edgesRight[i].Archetype);
                 }
             }
-
-            for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
-                _stack.Push(_archetype._edgesRight[i].Archetype);
         }
         while (_archetype.Count <= 0);
 
