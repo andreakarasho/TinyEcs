@@ -21,6 +21,8 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
     //entity = world.CreateEntity();
     world.Set<Position>(entity);
     world.Set<Velocity>(entity);
+
+    //world.Unset<Velocity>(entity);
 }
 
 

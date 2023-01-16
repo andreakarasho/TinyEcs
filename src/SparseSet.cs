@@ -12,6 +12,7 @@ sealed class SparseSet<T>
     }
 
     const int CHUNK_SIZE = 4096;
+    const int TOLERANCE = 0;
 
     private Chunk[] _chunks;
     public SimpleVector<int> _dense;
@@ -53,7 +54,7 @@ sealed class SparseSet<T>
         if (Unsafe.IsNullRef(ref chunk))
             return false;
 
-        return chunk.Sparse[outerIdx % CHUNK_SIZE] > -1;
+        return chunk.Sparse[outerIdx % CHUNK_SIZE] > TOLERANCE;
     }
 
     public ref T Add(int outerIdx, T value)
@@ -76,7 +77,7 @@ sealed class SparseSet<T>
             return;
 
         var innerIndex = chunk.Sparse[outerIdx % CHUNK_SIZE];
-        chunk.Sparse[outerIdx % CHUNK_SIZE] = -1;
+        chunk.Sparse[outerIdx % CHUNK_SIZE] = TOLERANCE;
         chunk.Values.Remove(innerIndex);
         _dense.Remove(innerIndex);
 
@@ -125,7 +126,7 @@ sealed class SparseSet<T>
             chunk.Sparse = new int[CHUNK_SIZE];
             chunk.Values = new SimpleVector<T>(CHUNK_SIZE);
 
-            Array.Fill(chunk.Sparse, -1);
+            //Array.Fill(chunk.Sparse, TOLERANCE);
         }    
 
         return ref chunk;
