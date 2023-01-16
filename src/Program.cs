@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 1;
+const int ENTITIES_COUNT = 524_288 * 2;
 
 using var world = new World();
 
@@ -17,6 +17,8 @@ var sw = Stopwatch.StartNew();
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var entity = world.CreateEntity();
+    //world.DestroyEntity(entity);
+    //entity = world.CreateEntity();
     world.Set<Position>(entity);
     world.Set<Velocity>(entity);
 }
@@ -44,6 +46,9 @@ world.Set<int>(e3);
 world.Set<float>(e3);
 world.Set<PlayerTag>(e3);
 
+//var plat = world.CreateEntity();
+//world.Tag(e3, plat);
+
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
 var query = world.Query()
@@ -65,19 +70,19 @@ while (true)
     
     for (int i = 0; i < 3600; ++i)
     {
-        world.Step();
-        //foreach (var it in query)
-        //{
-        //    ref var p = ref it.Field<Position>();
-        //    ref var v = ref it.Field<Velocity>();
+        //world.Step();
+        foreach (var it in query)
+        {
+            ref var p = ref it.Field<Position>();
+            ref var v = ref it.Field<Velocity>();
 
-        //    for (var row = 0; row < it.Count; ++row)
-        //    {
-        //        ref readonly var entity = ref it.Entity(row);
-        //        ref var pos = ref it.Get(ref p, row);
-        //        ref var vel = ref it.Get(ref v, row);
-        //    }
-        //}
+            for (var row = 0; row < it.Count; ++row)
+            {
+                ref readonly var entity = ref it.Entity(row);
+                ref var pos = ref it.Get(ref p, row);
+                ref var vel = ref it.Get(ref v, row);
+            }
+        }
     }
     Console.WriteLine(sw.ElapsedMilliseconds);
 }

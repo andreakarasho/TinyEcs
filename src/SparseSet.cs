@@ -3,74 +3,214 @@
 
 namespace TinyEcs;
 
-sealed class SparseSet
+sealed class SparseSet<T>
 {
+    private struct Chunk
+    {
+        public int[] Sparse;
+        public SimpleVector<T> Values;
+    }
+
     const int CHUNK_SIZE = 4096;
 
-    private Chunk[] _chunks = new Chunk[32];
+    private Chunk[] _chunks;
+    public SimpleVector<int> _dense;
     private int _count;
 
-    public int Count => _count;
 
-    public void Add(int value)
+    public SparseSet(int initialCapacity = 0)
     {
-        var chunkIndex = value >> 12;
-
-        ref var chunk = ref GetChunk(chunkIndex);
-        chunk.Sparse[value % CHUNK_SIZE] = chunk.Count;
-        chunk.Dense[chunk.Count] = value;
-        ++chunk.Count;
-
-        ++_count;
+        _dense = new SimpleVector<int>(initialCapacity);
+        _chunks = new Chunk[initialCapacity];
     }
 
-    public bool Has(int value)
-    {
-        var chunkIndex = value >> 12;
 
-        ref var chunk = ref GetChunk(chunkIndex);
-        var index = chunk.Sparse[value % CHUNK_SIZE];
-        return index != -1 && chunk.Dense[index] == value;
+    public int Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _count;
     }
 
-    private ref Chunk GetChunk(int index)
+    public ref T this[int i]
     {
-        GrowIfNecessary(index);
-
-        ref var chunk = ref _chunks[index];
-        chunk.Sparse ??= new int[CHUNK_SIZE];
-        chunk.Dense ??= new int[CHUNK_SIZE];
-
-        return ref chunk;
-    }
-
-    private void GrowIfNecessary(int chunkIndex)
-    {
-        if (chunkIndex >= _chunks.Length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
         {
-            var newSize = GetPow2(chunkIndex + 1);
-            Array.Resize(ref _chunks, newSize);
+            ref var chunk = ref GetChunk(i);
+            return ref chunk.Values[chunk.Sparse[i % CHUNK_SIZE]];
         }
-    }
-
-    struct Chunk
-    {
-        public int[] Sparse, Dense;
-        public int Count;
     }
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int GetPow2(int v)
+    public bool Contains(int outerIdx)
     {
-        v--;
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
+        var chunkIdx = outerIdx >> 12;
+        if (chunkIdx >= _chunks.Length)
+            return false;
 
-        return v;
+        ref var chunk = ref GetChunk(outerIdx);
+        if (Unsafe.IsNullRef(ref chunk))
+            return false;
+
+        return chunk.Sparse[outerIdx % CHUNK_SIZE] > -1;
+    }
+
+    public ref T Add(int outerIdx, T value)
+    {
+        ref var chunk = ref GetChunkOrCreate(outerIdx);
+        chunk.Sparse[outerIdx % CHUNK_SIZE] = chunk.Values.Length;
+        chunk.Values.Add(value);
+
+        _dense.Add(outerIdx);
+        ++_count;
+
+        return ref chunk.Values[chunk.Sparse[outerIdx % CHUNK_SIZE]];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Remove(int outerIdx)
+    {
+        ref var chunk = ref GetChunk(outerIdx);
+        if (Unsafe.IsNullRef(ref chunk))
+            return;
+
+        var innerIndex = chunk.Sparse[outerIdx % CHUNK_SIZE];
+        chunk.Sparse[outerIdx % CHUNK_SIZE] = -1;
+        chunk.Values.Remove(innerIndex);
+        _dense.Remove(innerIndex);
+
+        --_count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Clear()
+    {
+        Array.Clear(_chunks);
+        _count = 0;
+        _dense.Clear();
+    }
+
+    public void Copy(in SparseSet<T> other)
+    {
+//        if (_sparse.Length < other._sparse.Length)
+//            Array.Resize(ref _sparse, other._sparse.Length);
+//        else if (_sparse.Length > other._sparse.Length)
+//        {
+//#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP2_0_OR_GREATER || NET5_0_OR_GREATER
+//            Array.Fill(_sparse, -1, other._sparse.Length, _sparse.Length - other._sparse.Length);
+//#else
+//                for (int i = other._sparse.Length; i < _sparse.Length; i++)
+//                    _sparse[i] = -1;
+//#endif
+//        }
+//        Array.Copy(other._sparse, _sparse, other._sparse.Length);
+
+//        _values.Copy(other._values);
+//        _dense.Copy(other._dense);
+    }
+
+    private ref Chunk GetChunk(int index)
+    {
+        var chunkIndex = index >> 12;
+
+        if (chunkIndex >= _chunks.Length)
+        {
+            return ref Unsafe.NullRef<Chunk>();
+        }
+
+        ref var chunk = ref _chunks[chunkIndex];
+        if (chunk.Sparse == null)
+        {
+            chunk.Sparse = new int[CHUNK_SIZE];
+            chunk.Values = new SimpleVector<T>(CHUNK_SIZE);
+
+            Array.Fill(chunk.Sparse, -1);
+        }    
+
+        return ref chunk;
+    }
+
+    private ref Chunk GetChunkOrCreate(int index)
+    {
+        var chunkIndex = index >> 12;
+
+        if (chunkIndex >= _chunks.Length)
+        {
+            var oldLength = _chunks.Length;
+            var newLength = oldLength > 0 ? oldLength << 1 : 2;
+            while (chunkIndex >= newLength)
+                newLength <<= 1;
+
+            Array.Resize(ref _chunks, newLength);
+        }
+
+        return ref GetChunk(index);
+    }
+}
+
+sealed class SimpleVector<T>
+{
+    public T[] _elements;
+    public int _end = 0;
+
+    public int Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _end;
+    }
+
+    public int Reserved
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _elements.Length;
+    }
+
+    public ref T this[int i]
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => ref _elements[i];
+    }
+
+    public SimpleVector(int reserved = 0)
+    {
+        _elements = new T[reserved];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Copy(in SimpleVector<T> other)
+    {
+        _end = other._end;
+        if (_elements.Length < _end)
+            Array.Resize(ref _elements, other._elements.Length);
+        Array.Copy(other._elements, _elements, _end);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Remove(int idx)
+    {
+        _end--;
+        if (idx < _end)
+            _elements[idx] = _elements[_end];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Clear()
+    {
+        _end = 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Add(T element)
+    {
+        if (_end >= _elements.Length)
+        {
+            var newLength = _elements.Length > 0 ? _elements.Length * 2 : 2;
+            while (_end >= newLength)
+                newLength *= 2;
+            Array.Resize(ref _elements, newLength);
+        }
+        _elements[_end] = element;
+        _end++;
     }
 }
