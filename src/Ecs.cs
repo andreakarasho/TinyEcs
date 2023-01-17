@@ -18,7 +18,7 @@ public sealed partial class World : IDisposable
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     private readonly Dictionary<EntityID, EcsSystem> _systemIndex = new Dictionary<EntityID, EcsSystem>();
-    private readonly SparseSet<EcsRecord> _entities = new SparseSet<EcsRecord>(0);
+    private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>(0);
 
 
     public World()
@@ -66,10 +66,32 @@ public sealed partial class World : IDisposable
     {
         var id = NewID();
         var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add((int)IDOp.RealID(id), default);
+        ref var record = ref _entities.Add(id, default);
         record.Archetype = _archRoot;
         record.Row = row;
 
+        Interlocked.Increment(ref _entityCount);
+
+        //if (IsDeferred())
+        //{
+        //    CreateDeferred(id);
+        //}
+        //else
+        //{
+        //    InternalCreateEntity(id);
+        //}
+
+        return id;
+    }
+
+
+    internal EntityID CreateComponent()
+    {
+        var id = NewID();
+        var row = _archRoot.Add(id);
+        ref var record = ref _entities.Add(id, default);
+        record.Archetype = _archRoot;
+        record.Row = row;
         Interlocked.Increment(ref _entityCount);
 
         //if (IsDeferred())
@@ -92,7 +114,7 @@ public sealed partial class World : IDisposable
         }
         else
         {
-            ref var record = ref _entities[(int) IDOp.RealID(entity)];
+            ref var record = ref _entities.Get(entity);
             if (Unsafe.IsNullRef(ref record))
             {
                 Debug.Fail("not an entity!");
@@ -102,13 +124,13 @@ public sealed partial class World : IDisposable
 
             Debug.Assert(removedId == entity);
 
-            _entities.Remove((int) IDOp.RealID(removedId));
+            _entities.Remove(removedId);
 
             Interlocked.Decrement(ref _entityCount);
         }
     }
 
-    public bool IsEntityAlive(EntityID entity) => IDOp.GetGeneration(entity) > 0;
+    public bool IsEntityAlive(EntityID entity) => _entities.Contains(entity);
 
     private int Attach(EntityID entity, int componentID)
     {
@@ -118,7 +140,7 @@ public sealed partial class World : IDisposable
             return componentID;
         }
 
-        ref var record = ref _entities[(int)IDOp.RealID(entity)];
+        ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
             Debug.Fail("not an entity!");
@@ -142,7 +164,7 @@ public sealed partial class World : IDisposable
             return componentID;
         }
 
-        ref var record = ref _entities[(int)IDOp.RealID(entity)];
+        ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
             Debug.Fail("not an entity!");
@@ -163,7 +185,7 @@ public sealed partial class World : IDisposable
     private void InternalCreateEntity(EntityID id)
     {
         var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add((int)IDOp.RealID(id), default);
+        ref var record = ref _entities.Add(id, default);
         record.Archetype = _archRoot;
         record.Row = row;
 
@@ -216,7 +238,7 @@ public sealed partial class World : IDisposable
 
     private void Set(EntityID entity, int componentID, ReadOnlySpan<byte> data)
     {
-        ref var record = ref _entities[(int)IDOp.RealID(entity)];
+        ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
             Debug.Fail("not an entity!");
@@ -236,12 +258,12 @@ public sealed partial class World : IDisposable
         data.CopyTo(componentData);
     }
 
-    private bool Has(EntityID entity, int componentID) 
+    private bool Has(EntityID entity, int componentID)
         => !Get(entity, componentID).IsEmpty;
 
     private Span<byte> Get(EntityID entity, int componentID)
     {
-        ref var record = ref _entities[(int)IDOp.RealID(entity)];
+        ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
             return Span<byte>.Empty;
@@ -271,18 +293,7 @@ public sealed partial class World : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EntityID NewID()
     {
-        var recycle = _entities.Length < _entities._dense.Reserved;
-
-        if (recycle)
-        {
-            var id = _entities._dense[_entities._dense.Reserved - 1];
-            if (id > 0 && !_entities.Contains(id))
-            {
-                return (EntityID) id;
-            }
-        }
-
-        return (EntityID)(_entities.Length + 1);
+        return _entities.NewID();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -462,13 +473,12 @@ public sealed partial class World : IDisposable
         private EntityID[] _componentsIDs = new EntityID[INITIAL_LENGTH];
         private int[] _componentsSizes = new int[INITIAL_LENGTH];
         private readonly Dictionary<EntityID, int> _IDsToGlobal = new Dictionary<EntityID, int>();
-        //private readonly Dictionary<int, int> _globalToIDs = new Dictionary<int, int>();
+
 
         public ComponentStorage(World world)
         {
             _world = world;
         }
-
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetOrCreateID<T>() where T : struct
@@ -479,23 +489,23 @@ public sealed partial class World : IDisposable
 
             if (_componentsHashes[globalIndex] == 0)
             {
+                var id = _world.CreateComponent();
                 _componentsHashes[globalIndex] = TypeOf<T>.Hash;
-                _componentsIDs[globalIndex] = _world.CreateEntity();
+                _componentsIDs[globalIndex] = id;
                 _componentsSizes[globalIndex] = TypeOf<T>.Size;
-
                 _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
-                //_IDsToGlobal[globalIndex] = _componentsIDs[globalIndex];
 
-                //_globalToIDs[globalIndex] = _componentsIDs[globalIndex];
+
+                _world.Set(id, new EcsComponent() { Size = TypeOf<T>.Size });
             }
 
-            return globalIndex; // _componentsIDs[globalIndex];
+            return globalIndex;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetID<T>() where T : struct
         {
-            return TypeOf<T>.GlobalIndex; // _componentsIDs[TypeOf<T>.GlobalIndex];
+            return TypeOf<T>.GlobalIndex;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -513,12 +523,6 @@ public sealed partial class World : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetSize(int componentID)
         {
-            //ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
-            //if (Unsafe.IsNullRef(ref globalIndex))
-            //{
-            //    Debug.Fail("invalid componentID");
-            //}
-
             return _componentsSizes[componentID];
         }
 
@@ -1120,12 +1124,7 @@ static class IDOp
     // | 32 |16|16|
     // | ID |SZ|? |
 
-    const EntityID ECS_ENTITY_MASK = 0xFFFFFFFFul;
-    const EntityID ECS_GENERATION_MASK = (0xFFFFul << 32);
-    const EntityID ECS_ID_FLAGS_MASK = (0xFFul << 60);
-    const EntityID ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
 
-    const EntityID ID_TOGGLE = 1ul << 61;
 
     public static void Toggle(ref EntityID id)
     {
@@ -1135,19 +1134,19 @@ static class IDOp
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EntityID GetGeneration(EntityID id)
     {
-        return ((id & ECS_GENERATION_MASK) >> 32);
+        return ((id & EcsConst.ECS_GENERATION_MASK) >> 32);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void IncreaseGeneration(ref EntityID id)
     {
-        id = ((id & ~ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
+        id = ((id & ~EcsConst.ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EntityID RealID(EntityID id)
     {
-        return id &= ECS_ENTITY_MASK;
+        return id &= EcsConst.ECS_ENTITY_MASK;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1159,13 +1158,13 @@ static class IDOp
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsComponent(EntityID id)
     {
-        return (id & ECS_COMPONENT_MASK) != 0;
+        return (id & EcsConst.ECS_COMPONENT_MASK) != 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static EntityID SetAsComponent(EntityID id)
     {
-        return id |= ECS_ID_FLAGS_MASK;
+        return id |= EcsConst.ECS_ID_FLAGS_MASK;
     }
 }
 
@@ -1203,3 +1202,262 @@ public sealed partial class World
         return ref MemoryMarshal.AsRef<T>(raw);
     }
 }
+
+
+
+
+
+sealed class EntitySparseSet<T>
+{
+    private struct Chunk
+    {
+        public int[] Sparse;
+        public T[] Values;
+    }
+
+    const int CHUNK_SIZE = 4096;
+    const int TOLERANCE = 0;
+
+    private Chunk[] _chunks;
+    public EntityID[] _dense;
+    private int _count, _denseCount;
+
+
+    public EntitySparseSet(int initialCapacity = 0)
+    {
+        _dense = new EntityID[initialCapacity];
+        _chunks = new Chunk[initialCapacity];
+        _count = 1;
+        _denseCount = 1;
+    }
+
+
+    public int Length
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _count;
+    }
+
+    public int Unused => _denseCount - _count;
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityID NewID()
+    {
+        var recycle = Unused > 0;
+
+        if (recycle)
+        {
+            var id = _dense[Length + Unused - 1];
+            if (id > 0 && !Contains(id))
+            {
+                return id;
+            }
+        }
+
+        return (EntityID)(Length);
+    }
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref T Get(EntityID outerIdx)
+    {
+        ref var chunk = ref GetChunk((int)outerIdx >> 12);
+        if (Unsafe.IsNullRef(ref chunk))
+            return ref Unsafe.NullRef<T>();
+
+        var gen = SplitGeneration(ref outerIdx);
+        var realID = (int)outerIdx & 0xFFF;
+        var dense = chunk.Sparse[realID];
+        var insUse = dense != 0 && (dense < _count);
+        if (!insUse)
+            return ref Unsafe.NullRef<T>();
+
+        var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
+        if (gen != curGen)
+            return ref Unsafe.NullRef<T>();
+
+        return ref chunk.Values[realID];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Contains(EntityID outerIdx)
+    {
+        return !Unsafe.IsNullRef(ref Get(outerIdx));
+    }
+
+    public ref T Add(EntityID outerIdx, T value)
+    {
+        var gen = SplitGeneration(ref outerIdx);
+        var realID = (int)outerIdx & 0xFFF;
+        ref var chunk = ref GetChunkOrCreate((int)outerIdx >> 12);
+        var dense = chunk.Sparse[realID];
+
+        if (dense != 0)
+        {
+            var count = _count;
+            if (dense == count)
+            {
+                _count++;
+            }
+            else if (dense > count)
+            {
+                SwapDense(ref chunk, dense, count);
+                _count++;
+            }
+
+            //var xx = _dense[dense];
+            //Debug.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
+        }
+        else
+        {
+            var count = _count++;
+            if (count >= _dense.Length)
+            {
+                var newLength = _dense.Length > 0 ? _dense.Length * 2 : 2;
+                while (count >= newLength)
+                    newLength *= 2;
+                Array.Resize(ref _dense, newLength);
+            }
+
+            var denseCount = _denseCount - 1;
+            ++_denseCount;
+
+            if (count < denseCount)
+            {
+                var unused = _dense[count];
+                ref var unusedChunk = ref GetChunkOrCreate((int)unused >> 12);
+                SparseAssignIndex(ref unusedChunk, unused, denseCount);
+            }
+
+            SparseAssignIndex(ref chunk, outerIdx, count);
+            _dense[count] |= gen;
+        }
+
+        chunk.Values[realID] = value;
+        return ref chunk.Values[realID];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Remove(EntityID outerIdx)
+    {
+        ref var chunk = ref GetChunk((int)outerIdx >> 12);
+        if (Unsafe.IsNullRef(ref chunk))
+            return;
+
+        var gen = SplitGeneration(ref outerIdx);
+        var realID = (int)outerIdx & 0xFFF;
+
+        var dense = chunk.Sparse[realID];
+
+        if (dense != 0)
+        {
+            var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
+            if (gen != curGen)
+            {
+                return;
+            }
+
+            IDOp.IncreaseGeneration(ref curGen);
+            _dense[dense] = outerIdx | curGen;
+
+            var count = _count;
+            if (dense == (_count - 1))
+            {
+                --_count;
+            }
+            else if (dense < _count)
+            {
+                SwapDense(ref chunk, dense, count - 1);
+                --_count;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        chunk.Values[realID] = default;
+    }
+
+    private void SwapDense(ref Chunk chunkA, int a, int b)
+    {
+        var idxA = _dense[a];
+        var idxB = _dense[b];
+
+        ref var chunkB = ref GetChunkOrCreate((int)idxB >> 12);
+        SparseAssignIndex(ref chunkA, idxA, b);
+        SparseAssignIndex(ref chunkB, idxB, a);
+    }
+
+    private void SparseAssignIndex(ref Chunk chunk, EntityID index, int dense)
+    {
+        chunk.Sparse[(int)index & 0xFFF] = dense;
+        _dense[dense] = index;
+    }
+
+    private EntityID SplitGeneration(ref EntityID index)
+    {
+        var gen = index & EcsConst.ECS_GENERATION_MASK;
+        Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
+        index -= gen;
+        return gen;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Clear()
+    {
+        Array.Clear(_dense);
+        Array.Clear(_chunks);
+        _count = 0;
+    }
+
+    private ref Chunk GetChunk(int index)
+    {
+        if (index >= _chunks.Length)
+        {
+            return ref Unsafe.NullRef<Chunk>();
+        }
+
+        return ref _chunks[index];
+    }
+
+    private ref Chunk GetChunkOrCreate(int index)
+    {
+        if (index >= _chunks.Length)
+        {
+            var oldLength = _chunks.Length;
+            var newLength = oldLength > 0 ? oldLength << 1 : 2;
+            while (index >= newLength)
+                newLength <<= 1;
+
+            Array.Resize(ref _chunks, newLength);
+        }
+
+        ref var chunk = ref _chunks[index];
+
+        if (chunk.Sparse == null)
+        {
+            chunk.Sparse = new int[CHUNK_SIZE];
+            chunk.Values = new T[CHUNK_SIZE];
+
+            if (TOLERANCE != 0)
+                Array.Fill(chunk.Sparse, TOLERANCE);
+        }
+
+        return ref chunk;
+    }
+}
+
+
+static class EcsConst
+{
+    public const EntityID ECS_ENTITY_MASK = 0xFFFFFFFFul;
+    public const EntityID ECS_GENERATION_MASK = (0xFFFFul << 32);
+    public const EntityID ECS_ID_FLAGS_MASK = (0xFFul << 60);
+    public const EntityID ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
+    public const EntityID ID_TOGGLE = 1ul << 61;
+}
+
+
+public struct EcsComponent { public int Size; }

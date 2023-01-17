@@ -17,16 +17,28 @@ var sw = Stopwatch.StartNew();
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var entity = world.CreateEntity();
-    //world.DestroyEntity(entity);
-    //entity = world.CreateEntity();
     world.Set<Position>(entity);
     world.Set<Velocity>(entity);
-
-    //world.Unset<Velocity>(entity);
 }
 
+var list = new List<ulong>();
 
-for (int i = 0; i < 2; ++i)
+for (int i = 0; i < 200000; ++i)
+{
+    var e = world.CreateEntity();
+    world.Set<Position>(e);
+    world.Set<Velocity>(e);
+    world.Set<PlayerTag>(e);
+
+    list.Add(e);
+}
+
+foreach (var e in list)
+{
+    world.DestroyEntity(e);
+}
+
+for (int i = 0; i < list.Count; ++i)
 {
     var e = world.CreateEntity();
     world.Set<Position>(e);
@@ -61,6 +73,20 @@ var query = world.Query()
     //.Without<PlayerTag>()
     ;
 
+
+var queryCmp = world.Query()
+    .With<EcsComponent>();
+
+foreach (var it in queryCmp)
+{
+    ref var p = ref it.Field<EcsComponent>();
+
+    for (var row = 0; row < it.Count; ++row)
+    {
+        ref readonly var entity = ref it.Entity(row);
+        ref var pos = ref it.Get(ref p, row);
+    }
+}
 
 world.RegisterSystem(query, ASystem);
 //world.RegisterSystem(query, ASystem2);
