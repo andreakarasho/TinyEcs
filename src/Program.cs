@@ -14,16 +14,16 @@ var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 
-for (int i = 0; i < ENTITIES_COUNT; ++i)
-{
-    var entity = world.CreateEntity();
-    world.Set<Position>(entity);
-    world.Set<Velocity>(entity);
-}
+//for (int i = 0; i < ENTITIES_COUNT; ++i)
+//{
+//    var entity = world.CreateEntity();
+//    world.Set<Position>(entity);
+//    world.Set<Velocity>(entity);
+//}
 
 var list = new List<ulong>();
 
-for (int i = 0; i < 200000; ++i)
+for (int i = 0; i < 100; ++i)
 {
     var e = world.CreateEntity();
     world.Set<Position>(e);
@@ -41,9 +41,10 @@ foreach (var e in list)
 for (int i = 0; i < list.Count; ++i)
 {
     var e = world.CreateEntity();
-    world.Set<Position>(e);
-    world.Set<Velocity>(e);
-    world.Set<PlayerTag>(e);
+    Console.WriteLine(e);
+    //world.Set<Position>(e);
+    //world.Set<Velocity>(e);
+    //world.Set<PlayerTag>(e);
 }
 
 

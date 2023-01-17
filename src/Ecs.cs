@@ -18,7 +18,7 @@ public sealed partial class World : IDisposable
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
     private readonly Dictionary<EntityID, EcsSystem> _systemIndex = new Dictionary<EntityID, EcsSystem>();
-    private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>(0);
+    private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>();
 
 
     public World()
@@ -1225,7 +1225,7 @@ sealed class EntitySparseSet<T>
 
     public EntitySparseSet(int initialCapacity = 0)
     {
-        _dense = new EntityID[initialCapacity];
+        _dense = new EntityID[Math.Min(1, initialCapacity)];
         _chunks = new Chunk[initialCapacity];
         _count = 1;
         _denseCount = 1;
@@ -1235,7 +1235,7 @@ sealed class EntitySparseSet<T>
     public int Length
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _count;
+        get => _count - 1;
     }
 
     public int Unused => _denseCount - _count;
@@ -1244,18 +1244,20 @@ sealed class EntitySparseSet<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public EntityID NewID()
     {
-        var recycle = Unused > 0;
+        var unused = Unused;
+        var recycle = unused > 0;
 
         if (recycle)
         {
-            var id = _dense[Length + Unused - 1];
+            //var id = _dense[_count + unused - 1];
+            var id = _dense[_count];
             if (id > 0 && !Contains(id))
             {
                 return id;
             }
         }
 
-        return (EntityID)(Length);
+        return (EntityID)_count;
     }
 
 
@@ -1347,7 +1349,6 @@ sealed class EntitySparseSet<T>
 
         var gen = SplitGeneration(ref outerIdx);
         var realID = (int)outerIdx & 0xFFF;
-
         var dense = chunk.Sparse[realID];
 
         if (dense != 0)
