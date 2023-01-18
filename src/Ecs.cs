@@ -25,6 +25,9 @@ public sealed partial class World : IDisposable
     {
         _storage = new ComponentStorage(this);
         _archRoot = new Archetype(this, new EcsSignature(0));
+
+        // initialize pre-built cmps
+        _ = _storage.GetOrCreateID<EcsComponent>();
     }
 
 
@@ -64,34 +67,12 @@ public sealed partial class World : IDisposable
 
     public EntityID CreateEntity()
     {
-        var id = NewID();
+        var id = _entities.NewID();
         var row = _archRoot.Add(id);
         ref var record = ref _entities.Add(id, default);
         record.Archetype = _archRoot;
         record.Row = row;
 
-        Interlocked.Increment(ref _entityCount);
-
-        //if (IsDeferred())
-        //{
-        //    CreateDeferred(id);
-        //}
-        //else
-        //{
-        //    InternalCreateEntity(id);
-        //}
-
-        return id;
-    }
-
-
-    internal EntityID CreateComponent()
-    {
-        var id = NewID();
-        var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add(id, default);
-        record.Archetype = _archRoot;
-        record.Row = row;
         Interlocked.Increment(ref _entityCount);
 
         //if (IsDeferred())
@@ -291,12 +272,6 @@ public sealed partial class World : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal EntityID NewID()
-    {
-        return _entities.NewID();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool IsDeferred() => _deferStatus != 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -489,14 +464,19 @@ public sealed partial class World : IDisposable
 
             if (_componentsHashes[globalIndex] == 0)
             {
-                var id = _world.CreateComponent();
+                var id = _world.CreateEntity();
                 _componentsHashes[globalIndex] = TypeOf<T>.Hash;
                 _componentsIDs[globalIndex] = id;
                 _componentsSizes[globalIndex] = TypeOf<T>.Size;
                 _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
 
 
-                _world.Set(id, new EcsComponent() { Size = TypeOf<T>.Size });
+                _world.Set(id, new EcsComponent() 
+                { 
+                    //Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+                    GlobalIndex = globalIndex,
+                    Size = TypeOf<T>.Size 
+                });
             }
 
             return globalIndex;
@@ -549,7 +529,7 @@ public sealed partial class World : IDisposable
         [SkipLocalsInit]
         static class TypeOf<T> where T : struct
         {
-            public static int GlobalIndex = GlobalIDGen.Next();
+            public static int GlobalIndex = GlobalIDGen.Next;
             public static int Size = Unsafe.SizeOf<T>();
             public static int Hash = typeof(T).GetHashCode();
         }
@@ -557,13 +537,7 @@ public sealed partial class World : IDisposable
         static class GlobalIDGen
         {
             private static int _next = -1;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static int Next()
-            {
-                Interlocked.Increment(ref _next);
-                return _next;
-            }
+            public static int Next => Interlocked.Increment(ref _next);
         }
     }
 }
@@ -1177,6 +1151,11 @@ public sealed partial class World
     public int Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
+    public void Add(EntityID entity, EntityID componentID)
+    {
+        //_storage.GetGlobalID(componentID);
+    }
+
     public int Tag(EntityID entity, EntityID componentID)
     {
         var id = IDOp.RealID(componentID);
@@ -1284,9 +1263,7 @@ sealed class EntitySparseSet<T>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Contains(EntityID outerIdx)
-    {
-        return !Unsafe.IsNullRef(ref Get(outerIdx));
-    }
+        => !Unsafe.IsNullRef(ref Get(outerIdx));
 
     public ref T Add(EntityID outerIdx, T value)
     {
@@ -1308,8 +1285,7 @@ sealed class EntitySparseSet<T>
                 _count++;
             }
 
-            //var xx = _dense[dense];
-            //Debug.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
+            Debug.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
         }
         else
         {
@@ -1391,12 +1367,14 @@ sealed class EntitySparseSet<T>
         SparseAssignIndex(ref chunkB, idxB, a);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void SparseAssignIndex(ref Chunk chunk, EntityID index, int dense)
     {
         chunk.Sparse[(int)index & 0xFFF] = dense;
         _dense[dense] = index;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private EntityID SplitGeneration(ref EntityID index)
     {
         var gen = index & EcsConst.ECS_GENERATION_MASK;
@@ -1410,18 +1388,13 @@ sealed class EntitySparseSet<T>
     {
         Array.Clear(_dense);
         Array.Clear(_chunks);
-        _count = 0;
+        _count = 1;
+        _denseCount = 1;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ref Chunk GetChunk(int index)
-    {
-        if (index >= _chunks.Length)
-        {
-            return ref Unsafe.NullRef<Chunk>();
-        }
-
-        return ref _chunks[index];
-    }
+        => ref (index >= _chunks.Length ? ref Unsafe.NullRef<Chunk>() : ref _chunks[index]);
 
     private ref Chunk GetChunkOrCreate(int index)
     {
@@ -1461,4 +1434,29 @@ static class EcsConst
 }
 
 
-public struct EcsComponent { public int Size; }
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EcsComponent 
+{
+    private fixed char _name[64];
+
+    public ReadOnlySpan<char> Name
+    {
+        get
+        {
+            fixed(char* ptr = _name)
+            {
+                return new ReadOnlySpan<char>(ptr, 64);
+            } 
+        }
+        set
+        {
+            for (int i = 0, max = Math.Min(64, value.Length); i < max; i++)
+            {
+                _name[i] = value[i];
+            }
+        }
+    }
+
+    public int Size;
+    public int GlobalIndex;
+}

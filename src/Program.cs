@@ -14,12 +14,13 @@ var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 
-//for (int i = 0; i < ENTITIES_COUNT; ++i)
-//{
-//    var entity = world.CreateEntity();
-//    world.Set<Position>(entity);
-//    world.Set<Velocity>(entity);
-//}
+
+for (int i = 0; i < ENTITIES_COUNT; ++i)
+{
+    var entity = world.CreateEntity();
+    world.Set<Position>(entity);
+    world.Set<Velocity>(entity);
+}
 
 var list = new List<ulong>();
 
@@ -86,6 +87,8 @@ foreach (var it in queryCmp)
     {
         ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
+
+        Console.WriteLine("Component {{ ID = {0}, Name = {1}, Size = {2} }}", entity, pos.Name.ToString(), pos.Size);
     }
 }
 
