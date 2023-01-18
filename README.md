@@ -12,8 +12,8 @@ using var world = new World();
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
    var entity = world.CreateEntity();
-   world.Attach<Position>(entity);
-   world.Attach<Velocity>(entity);
+   world.Set<Position>(entity);
+   world.Set<Velocity>(entity);
 }
 
 var query = world.Query()
