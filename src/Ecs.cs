@@ -1316,7 +1316,6 @@ sealed class EntitySparseSet<T>
         return ref chunk.Values[realID];
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Remove(EntityID outerIdx)
     {
         ref var chunk = ref GetChunk((int)outerIdx >> 12);
