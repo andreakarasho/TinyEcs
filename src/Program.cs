@@ -88,11 +88,14 @@ foreach (var it in queryCmp)
         ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
 
-        Console.WriteLine("Component {{ ID = {0}, Name = {1}, Size = {2} }}", entity, pos.Name.ToString(), pos.Size);
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
     }
 }
 
-world.RegisterSystem(query, ASystem);
+unsafe
+{
+    world.RegisterSystem(query, &ASystem);
+}
 //world.RegisterSystem(query, ASystem2);
 
 
@@ -102,19 +105,19 @@ while (true)
     
     for (int i = 0; i < 3600; ++i)
     {
-        //world.Step();
-        foreach (var it in query)
-        {
-            ref var p = ref it.Field<Position>();
-            ref var v = ref it.Field<Velocity>();
+        world.Step();
+        //foreach (var it in query)
+        //{
+        //    ref var p = ref it.Field<Position>();
+        //    ref var v = ref it.Field<Velocity>();
 
-            for (var row = 0; row < it.Count; ++row)
-            {
-                ref readonly var entity = ref it.Entity(row);
-                ref var pos = ref it.Get(ref p, row);
-                ref var vel = ref it.Get(ref v, row);
-            }
-        }
+        //    for (var row = 0; row < it.Count; ++row)
+        //    {
+        //        ref readonly var entity = ref it.Entity(row);
+        //        ref var pos = ref it.Get(ref p, row);
+        //        ref var vel = ref it.Get(ref v, row);
+        //    }
+        //}
     }
     Console.WriteLine(sw.ElapsedMilliseconds);
 }

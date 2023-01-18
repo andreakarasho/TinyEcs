@@ -17,8 +17,10 @@ public sealed partial class World : IDisposable
     internal readonly ComponentStorage _storage;
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    private readonly Dictionary<EntityID, EcsSystem> _systemIndex = new Dictionary<EntityID, EcsSystem>();
+    private readonly Dictionary<EntityID, SysCallback> _systemIndex = new Dictionary<EntityID, SysCallback>();
     private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>();
+
+    private readonly IQueryComposition _querySystems;
 
 
     public World()
@@ -28,6 +30,10 @@ public sealed partial class World : IDisposable
 
         // initialize pre-built cmps
         _ = _storage.GetOrCreateID<EcsComponent>();
+        _ = _storage.GetOrCreateID<EcsSystem>();
+        _ = _storage.GetOrCreateID<EcsQuery>();
+
+        _querySystems = Query().With<EcsSystem>();
     }
 
 
@@ -52,9 +58,23 @@ public sealed partial class World : IDisposable
 
     public void Dispose() => Destroy();
 
+
     public unsafe void Step()
     {
-        foreach ((var id, EcsSystem system) in _systemIndex)
+
+        foreach (var it in _querySystems)
+        {
+            ref var s = ref it.Field<EcsSystem>();
+
+            for (int i = 0; i < it.Count; ++i)
+            {
+                ref var sys = ref it.Get(ref s, i);
+
+                //sys.Func(it);
+            }
+        }
+
+        foreach ((var id, SysCallback system) in _systemIndex)
         {
             foreach (var it in system.Query)
             {
@@ -262,12 +282,18 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe ulong RegisterSystem(IQueryComposition query, CallbackIterator func)
+    public unsafe EntityID RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func)
     {
+        var qryID = CreateEntity();
+        Set<EcsQuery>(qryID);
+
         var id = CreateEntity();
+        Set<EcsSystem>(id, new EcsSystem(qryID, func));
+
+
         ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
         Debug.Assert(!exists);
-        sys = new EcsSystem(query, func);
+        sys = new SysCallback(query, func);
         return id;
     }
 
@@ -1046,10 +1072,19 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     }
 }
 
-
 public delegate void CallbackIterator(in Iterator iterator);
 
-readonly record struct EcsSystem(IQueryComposition Query, CallbackIterator Func);
+unsafe readonly struct SysCallback
+{
+    public readonly IQueryComposition Query;
+    public readonly delegate* managed<in Iterator, void> Func;
+
+    public SysCallback(IQueryComposition query, delegate* managed<in Iterator, void> func)
+    {
+        Query = query;
+        Func = func;
+    }
+}
 
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
@@ -1449,13 +1484,32 @@ public unsafe struct EcsComponent
         }
         set
         {
-            for (int i = 0, max = Math.Min(64, value.Length); i < max; i++)
+            fixed (char* ptr = _name)
             {
-                _name[i] = value[i];
+               var span = new Span<char>(ptr, 64);
+               value.Slice(0, Math.Min(64, value.Length)).CopyTo(span);
             }
         }
     }
 
     public int Size;
     public int GlobalIndex;
+}
+
+public unsafe struct EcsQuery
+{
+    private fixed int _add[32];
+    private fixed int _remove[32];
+}
+
+public unsafe readonly struct EcsSystem
+{
+    public readonly EntityID Query;
+    public readonly delegate* managed<in Iterator, void> Func;
+
+    public EcsSystem(EntityID query, delegate* managed<in Iterator, void> func)
+    {
+        Query = query;
+        Func = func;
+    }
 }
