@@ -95,8 +95,9 @@ foreach (var it in queryCmp)
 unsafe
 {
     world.RegisterSystem(query, &ASystem);
+    world.RegisterSystem(query, &PreUpdate, SystemPhase.OnPreUpdate);
+    world.RegisterSystem(query, &PostUpdate, SystemPhase.OnPostUpdate);
 }
-//world.RegisterSystem(query, ASystem2);
 
 
 while (true)
@@ -153,6 +154,16 @@ static void ASystem2(in Iterator it)
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
     }
+}
+
+static void PreUpdate(in Iterator it)
+{
+    Console.WriteLine("pre update");
+}
+
+static void PostUpdate(in Iterator it)
+{
+    Console.WriteLine("post update");
 }
 
 struct Likes { }

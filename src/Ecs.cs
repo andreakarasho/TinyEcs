@@ -9,6 +9,7 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
+    private int _totalFrames;
     private int _entityCount = 0;
     private int _deferStatus, _deferActionCount;
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
@@ -17,10 +18,16 @@ public sealed partial class World : IDisposable
     internal readonly ComponentStorage _storage;
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    private readonly Dictionary<EntityID, SysCallback> _systemIndex = new Dictionary<EntityID, SysCallback>();
     private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>();
+    private readonly Dictionary<EntityID, Query> _queryIndex = new Dictionary<EntityID, Query>();
 
     private readonly IQueryComposition _querySystems;
+    private readonly IQueryComposition _querySystemsOnUpdate;
+    private readonly IQueryComposition _querySystemsOnPreUpdate;
+    private readonly IQueryComposition _querySystemsOnPostUpdate;
+    private readonly IQueryComposition _querySystemsOnStartup;
+    private readonly IQueryComposition _querySystemsOnPreStartup;
+    private readonly IQueryComposition _querySystemsOnPostStartup;
 
 
     public World()
@@ -33,7 +40,42 @@ public sealed partial class World : IDisposable
         _ = _storage.GetOrCreateID<EcsSystem>();
         _ = _storage.GetOrCreateID<EcsQuery>();
 
-        _querySystems = Query().With<EcsSystem>();
+        _ = _storage.GetOrCreateID<EcsSystemPhaseOnUpdate>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePreUpdate>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePostUpdate>();
+
+        _ = _storage.GetOrCreateID<EcsSystemPhaseOnStartup>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePreStartup>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePostStartup>();
+
+
+        // initialize pre-built queries
+        _querySystems = Query()
+            .With<EcsSystem>();
+
+        _querySystemsOnUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhaseOnUpdate>();
+
+        _querySystemsOnPreUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePreUpdate>();
+
+        _querySystemsOnPostUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePostUpdate>();
+
+        _querySystemsOnStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhaseOnStartup>();
+
+        _querySystemsOnPreStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePreStartup>();
+
+        _querySystemsOnPostStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePostStartup>();
     }
 
 
@@ -47,9 +89,8 @@ public sealed partial class World : IDisposable
             arch.Signature.Dispose();
         }
 
-        _systemIndex.Clear();
         _typeIndex.Clear();
-
+        _queryIndex.Clear();
         _entities.Clear();
         _storage.Clear();
         _entityCount = 0;
@@ -59,28 +100,52 @@ public sealed partial class World : IDisposable
     public void Dispose() => Destroy();
 
 
-    public unsafe void Step()
+    private unsafe void RunSystemSets(SystemPhase phase)
     {
+        var qry = phase switch
+        {
+            SystemPhase.OnUpdate => _querySystemsOnUpdate,
+            SystemPhase.OnPreUpdate => _querySystemsOnPreUpdate,
+            SystemPhase.OnPostUpdate => _querySystemsOnPostUpdate,
 
-        foreach (var it in _querySystems)
+            SystemPhase.OnStartup => _querySystemsOnStartup,
+            SystemPhase.OnPreStartup => _querySystemsOnPreStartup,
+            SystemPhase.OnPostStartup => _querySystemsOnPostStartup,
+
+            _ => throw new NotImplementedException(),
+        };
+
+        foreach (var it in qry)
         {
             ref var s = ref it.Field<EcsSystem>();
+            ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
 
             for (int i = 0; i < it.Count; ++i)
             {
                 ref var sys = ref it.Get(ref s, i);
 
-                //sys.Func(it);
+                foreach (var itSys in query)
+                {
+                    sys.Func(in itSys);
+                }
             }
+        }
+    }
+
+    public unsafe void Step()
+    {
+        if (_totalFrames == 0)
+        {
+            RunSystemSets(SystemPhase.OnPreStartup);
+            RunSystemSets(SystemPhase.OnStartup);
+            RunSystemSets(SystemPhase.OnPostStartup);
         }
 
-        foreach ((var id, SysCallback system) in _systemIndex)
-        {
-            foreach (var it in system.Query)
-            {
-                system.Func(in it);
-            }
-        }
+        RunSystemSets(SystemPhase.OnPreUpdate);
+        RunSystemSets(SystemPhase.OnUpdate);
+        RunSystemSets(SystemPhase.OnPostUpdate);
+
+        Interlocked.Increment(ref _totalFrames);
     }
 
     public IQueryComposition Query() => new Query(this);
@@ -282,18 +347,32 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe EntityID RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func)
+    public unsafe EntityID RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
         var qryID = CreateEntity();
         Set<EcsQuery>(qryID);
 
+        _queryIndex.Add(qryID, (Query)query);
+
         var id = CreateEntity();
         Set<EcsSystem>(id, new EcsSystem(qryID, func));
 
+        switch (phase)
+        {
+            case SystemPhase.OnStartup:
+                Set<EcsSystemPhaseOnStartup>(id);
+                break;
+            case SystemPhase.OnPreUpdate:
+                Set<EcsSystemPhasePreUpdate>(id);
+                break;
+            case SystemPhase.OnPostUpdate:
+                Set<EcsSystemPhasePostUpdate>(id);
+                break;
+            case SystemPhase.OnUpdate:
+                Set<EcsSystemPhaseOnUpdate>(id);
+                break;
+        }
 
-        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
-        Debug.Assert(!exists);
-        sys = new SysCallback(query, func);
         return id;
     }
 
@@ -497,11 +576,13 @@ public sealed partial class World : IDisposable
                 _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
 
 
-                _world.Set(id, new EcsComponent() 
-                { 
-                    //Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+                _world.Set(id, new EcsComponent()
+                {
+#if DEBUG
+                    Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+#endif
                     GlobalIndex = globalIndex,
-                    Size = TypeOf<T>.Size 
+                    Size = TypeOf<T>.Size
                 });
             }
 
@@ -1074,18 +1155,6 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
 public delegate void CallbackIterator(in Iterator iterator);
 
-unsafe readonly struct SysCallback
-{
-    public readonly IQueryComposition Query;
-    public readonly delegate* managed<in Iterator, void> Func;
-
-    public SysCallback(IQueryComposition query, delegate* managed<in Iterator, void> func)
-    {
-        Query = query;
-        Func = func;
-    }
-}
-
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
 record struct EcsRecord(Archetype Archetype, int Row);
@@ -1469,7 +1538,7 @@ static class EcsConst
 
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct EcsComponent 
+public unsafe struct EcsComponent
 {
     private fixed char _name[64];
 
@@ -1477,17 +1546,17 @@ public unsafe struct EcsComponent
     {
         get
         {
-            fixed(char* ptr = _name)
+            fixed (char* ptr = _name)
             {
                 return new ReadOnlySpan<char>(ptr, 64);
-            } 
+            }
         }
         set
         {
             fixed (char* ptr = _name)
             {
-               var span = new Span<char>(ptr, 64);
-               value.Slice(0, Math.Min(64, value.Length)).CopyTo(span);
+                var span = new Span<char>(ptr, 64);
+                value.Slice(0, Math.Min(64, value.Length)).CopyTo(span);
             }
         }
     }
@@ -1498,8 +1567,8 @@ public unsafe struct EcsComponent
 
 public unsafe struct EcsQuery
 {
-    private fixed int _add[32];
-    private fixed int _remove[32];
+    //private fixed int _add[32];
+    //private fixed int _remove[32];
 }
 
 public unsafe readonly struct EcsSystem
@@ -1512,4 +1581,22 @@ public unsafe readonly struct EcsSystem
         Query = query;
         Func = func;
     }
+}
+
+public struct EcsSystemPhaseOnUpdate { }
+public struct EcsSystemPhasePreUpdate { }
+public struct EcsSystemPhasePostUpdate { }
+public struct EcsSystemPhaseOnStartup { }
+public struct EcsSystemPhasePreStartup { }
+public struct EcsSystemPhasePostStartup { }
+
+public enum SystemPhase
+{
+    OnUpdate,
+    OnPreUpdate,
+    OnPostUpdate,
+
+    OnStartup,
+    OnPreStartup,
+    OnPostStartup
 }
