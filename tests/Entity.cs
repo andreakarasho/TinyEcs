@@ -19,9 +19,12 @@ namespace TinyEcs.Tests
         {
             using var world = new World();
             var entity = world.CreateEntity();
-            world.DestroyEntity(entity);
+
+            Assert.True(world.IsEntityAlive(entity));
+
+            world.DestroyEntity(entity);  
             
-            Assert.True(world.EntityCount == 0);
+            Assert.False(world.IsEntityAlive(entity));
         }
 
         [Fact]
