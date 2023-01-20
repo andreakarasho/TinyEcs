@@ -357,8 +357,8 @@ public sealed partial class World : IDisposable
 
         switch (phase)
         {
-            case SystemPhase.OnStartup:
-                Set<EcsSystemPhaseOnStartup>(id);
+            case SystemPhase.OnUpdate:
+                Set<EcsSystemPhaseOnUpdate>(id);
                 break;
             case SystemPhase.OnPreUpdate:
                 Set<EcsSystemPhasePreUpdate>(id);
@@ -366,8 +366,15 @@ public sealed partial class World : IDisposable
             case SystemPhase.OnPostUpdate:
                 Set<EcsSystemPhasePostUpdate>(id);
                 break;
-            case SystemPhase.OnUpdate:
-                Set<EcsSystemPhaseOnUpdate>(id);
+
+            case SystemPhase.OnStartup:
+                Set<EcsSystemPhaseOnStartup>(id);
+                break;
+            case SystemPhase.OnPreStartup:
+                Set<EcsSystemPhasePreStartup>(id);
+                break;
+            case SystemPhase.OnPostStartup:
+                Set<EcsSystemPhasePostStartup>(id);
                 break;
         }
 
@@ -954,6 +961,7 @@ public ref struct QueryIterator
 
             for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
             {
+                // NOTE: maybe breaks when found the _remove componentID
                 if (_remove.IndexOf(_archetype._edgesRight[i].ComponentID) < 0)
                 {
                     _stack.Push(_archetype._edgesRight[i].Archetype);
@@ -1253,26 +1261,26 @@ public sealed partial class World
     public int Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
-    public void Add(EntityID entity, EntityID componentID)
-    {
-        //_storage.GetGlobalID(componentID);
-    }
+    //public void Add(EntityID entity, EntityID componentID)
+    //{
+    //    //_storage.GetGlobalID(componentID);
+    //}
 
-    public int Tag(EntityID entity, EntityID componentID)
-    {
-        var id = IDOp.RealID(componentID);
+    //public int Tag(EntityID entity, EntityID componentID)
+    //{
+    //    var id = IDOp.RealID(componentID);
 
-        //IDOp.HasFlag
-        //_entities
+    //    //IDOp.HasFlag
+    //    //_entities
 
-        //var globalIdx = _storage.GetGlobalID(id);
-        //return Attach(entity, globalIdx);
+    //    //var globalIdx = _storage.GetGlobalID(id);
+    //    //return Attach(entity, globalIdx);
 
-        return (int)id;
-    }
+    //    return (int)id;
+    //}
 
-    public void UnTag(EntityID entity, int componentID)
-        => Detach(entity, componentID);
+    //public void UnTag(EntityID entity, int componentID)
+    //    => Detach(entity, componentID);
 
     public unsafe bool Has<T>(EntityID entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
