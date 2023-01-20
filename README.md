@@ -30,6 +30,9 @@ foreach (var it in query)
 		ref readonly var entity = ref it.Entity(row);
 		ref var pos = ref it.Get(ref p, row);
 		ref var vel = ref it.Get(ref v, row);
+
+		pos.X *= vel.X;
+		pos.Y *= vel.Y;
 	}
 }
 
