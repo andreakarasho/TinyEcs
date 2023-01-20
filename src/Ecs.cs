@@ -118,6 +118,9 @@ public sealed partial class World : IDisposable
         foreach (var it in qry)
         {
             ref var s = ref it.Field<EcsSystem>();
+
+            // NOTE: This is quite bad to see, but it's the only way to grab
+            //       the query avoding to the managed reference in a struct issue
             ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
 
             for (int i = 0; i < it.Count; ++i)
