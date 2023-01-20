@@ -95,8 +95,8 @@ foreach (var it in queryCmp)
 unsafe
 {
     world.RegisterSystem(query, &ASystem);
-    world.RegisterSystem(query, &PreUpdate, SystemPhase.OnPreUpdate);
-    world.RegisterSystem(query, &PostUpdate, SystemPhase.OnPostUpdate);
+    //world.RegisterSystem(query, &PreUpdate, SystemPhase.OnPreUpdate);
+    //world.RegisterSystem(query, &PostUpdate, SystemPhase.OnPostUpdate);
 }
 
 

@@ -152,11 +152,9 @@ public sealed partial class World : IDisposable
 
     public EntityID CreateEntity()
     {
-        var id = _entities.NewID();
-        var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add(id, default);
+        ref var record = ref _entities.CreateNew(out var id);
         record.Archetype = _archRoot;
-        record.Row = row;
+        record.Row = _archRoot.Add(id);
 
         Interlocked.Increment(ref _entityCount);
 
@@ -1325,7 +1323,7 @@ sealed class EntitySparseSet<T>
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EntityID NewID()
+    public ref T CreateNew(out EntityID id)
     {
         var unused = Unused;
         var recycle = unused > 0;
@@ -1333,14 +1331,16 @@ sealed class EntitySparseSet<T>
         if (recycle)
         {
             //var id = _dense[_count + unused - 1];
-            var id = _dense[_count];
+            id = _dense[_count];
             if (id > 0 && !Contains(id))
             {
-                return id;
+                return ref Add(id, default!);
             }
         }
 
-        return (EntityID)_count;
+        id = (EntityID)_count;
+
+        return ref Add(id, default!);
     }
 
 
