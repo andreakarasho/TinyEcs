@@ -12,7 +12,7 @@ using var world = new World();
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
    var entity = world.CreateEntity();
-   world.Set<Position>(entity);
+   world.Set<Position>(entity, new Position() { X = 1f, Y = -1f });
    world.Set<Velocity>(entity);
 }
 
