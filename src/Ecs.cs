@@ -9,6 +9,7 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
+    private int _totalFrames;
     private int _entityCount = 0;
     private int _deferStatus, _deferActionCount;
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
@@ -17,8 +18,16 @@ public sealed partial class World : IDisposable
     internal readonly ComponentStorage _storage;
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    private readonly Dictionary<EntityID, EcsSystem> _systemIndex = new Dictionary<EntityID, EcsSystem>();
     private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>();
+    private readonly Dictionary<EntityID, Query> _queryIndex = new Dictionary<EntityID, Query>();
+
+    private readonly IQueryComposition _querySystems;
+    private readonly IQueryComposition _querySystemsOnUpdate;
+    private readonly IQueryComposition _querySystemsOnPreUpdate;
+    private readonly IQueryComposition _querySystemsOnPostUpdate;
+    private readonly IQueryComposition _querySystemsOnStartup;
+    private readonly IQueryComposition _querySystemsOnPreStartup;
+    private readonly IQueryComposition _querySystemsOnPostStartup;
 
 
     public World()
@@ -28,6 +37,45 @@ public sealed partial class World : IDisposable
 
         // initialize pre-built cmps
         _ = _storage.GetOrCreateID<EcsComponent>();
+        _ = _storage.GetOrCreateID<EcsSystem>();
+        _ = _storage.GetOrCreateID<EcsQuery>();
+
+        _ = _storage.GetOrCreateID<EcsSystemPhaseOnUpdate>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePreUpdate>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePostUpdate>();
+
+        _ = _storage.GetOrCreateID<EcsSystemPhaseOnStartup>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePreStartup>();
+        _ = _storage.GetOrCreateID<EcsSystemPhasePostStartup>();
+
+
+        // initialize pre-built queries
+        _querySystems = Query()
+            .With<EcsSystem>();
+
+        _querySystemsOnUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhaseOnUpdate>();
+
+        _querySystemsOnPreUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePreUpdate>();
+
+        _querySystemsOnPostUpdate = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePostUpdate>();
+
+        _querySystemsOnStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhaseOnStartup>();
+
+        _querySystemsOnPreStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePreStartup>();
+
+        _querySystemsOnPostStartup = Query()
+            .With<EcsSystem>()
+            .With<EcsSystemPhasePostStartup>();
     }
 
 
@@ -41,9 +89,8 @@ public sealed partial class World : IDisposable
             arch.Signature.Dispose();
         }
 
-        _systemIndex.Clear();
         _typeIndex.Clear();
-
+        _queryIndex.Clear();
         _entities.Clear();
         _storage.Clear();
         _entityCount = 0;
@@ -52,26 +99,65 @@ public sealed partial class World : IDisposable
 
     public void Dispose() => Destroy();
 
-    public unsafe void Step()
+
+    private unsafe void RunSystemSets(SystemPhase phase)
     {
-        foreach ((var id, EcsSystem system) in _systemIndex)
+        var qry = phase switch
         {
-            foreach (var it in system.Query)
+            SystemPhase.OnUpdate => _querySystemsOnUpdate,
+            SystemPhase.OnPreUpdate => _querySystemsOnPreUpdate,
+            SystemPhase.OnPostUpdate => _querySystemsOnPostUpdate,
+
+            SystemPhase.OnStartup => _querySystemsOnStartup,
+            SystemPhase.OnPreStartup => _querySystemsOnPreStartup,
+            SystemPhase.OnPostStartup => _querySystemsOnPostStartup,
+
+            _ => throw new NotImplementedException(),
+        };
+
+        foreach (var it in qry)
+        {
+            ref var s = ref it.Field<EcsSystem>();
+
+            // NOTE: This is quite bad to see, but it's the only way to grab
+            //       the query avoding to the managed reference in a struct issue
+            ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
+
+            for (int i = 0; i < it.Count; ++i)
             {
-                system.Func(in it);
+                ref var sys = ref it.Get(ref s, i);
+
+                foreach (var itSys in query)
+                {
+                    sys.Func(in itSys);
+                }
             }
         }
+    }
+
+    public unsafe void Step()
+    {
+        if (_totalFrames == 0)
+        {
+            RunSystemSets(SystemPhase.OnPreStartup);
+            RunSystemSets(SystemPhase.OnStartup);
+            RunSystemSets(SystemPhase.OnPostStartup);
+        }
+
+        RunSystemSets(SystemPhase.OnPreUpdate);
+        RunSystemSets(SystemPhase.OnUpdate);
+        RunSystemSets(SystemPhase.OnPostUpdate);
+
+        Interlocked.Increment(ref _totalFrames);
     }
 
     public IQueryComposition Query() => new Query(this);
 
     public EntityID CreateEntity()
     {
-        var id = _entities.NewID();
-        var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add(id, default);
+        ref var record = ref _entities.CreateNew(out var id);
         record.Archetype = _archRoot;
-        record.Row = row;
+        record.Row = _archRoot.Add(id);
 
         Interlocked.Increment(ref _entityCount);
 
@@ -262,12 +348,39 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe ulong RegisterSystem(IQueryComposition query, CallbackIterator func)
+    public unsafe EntityID RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
+        var qryID = CreateEntity();
+        Set<EcsQuery>(qryID);
+
+        _queryIndex.Add(qryID, (Query)query);
+
         var id = CreateEntity();
-        ref var sys = ref CollectionsMarshal.GetValueRefOrAddDefault(_systemIndex, id, out var exists);
-        Debug.Assert(!exists);
-        sys = new EcsSystem(query, func);
+        Set<EcsSystem>(id, new EcsSystem(qryID, func));
+
+        switch (phase)
+        {
+            case SystemPhase.OnUpdate:
+                Set<EcsSystemPhaseOnUpdate>(id);
+                break;
+            case SystemPhase.OnPreUpdate:
+                Set<EcsSystemPhasePreUpdate>(id);
+                break;
+            case SystemPhase.OnPostUpdate:
+                Set<EcsSystemPhasePostUpdate>(id);
+                break;
+
+            case SystemPhase.OnStartup:
+                Set<EcsSystemPhaseOnStartup>(id);
+                break;
+            case SystemPhase.OnPreStartup:
+                Set<EcsSystemPhasePreStartup>(id);
+                break;
+            case SystemPhase.OnPostStartup:
+                Set<EcsSystemPhasePostStartup>(id);
+                break;
+        }
+
         return id;
     }
 
@@ -471,11 +584,13 @@ public sealed partial class World : IDisposable
                 _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
 
 
-                _world.Set(id, new EcsComponent() 
-                { 
-                    //Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+                _world.Set(id, new EcsComponent()
+                {
+#if DEBUG
+                    Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+#endif
                     GlobalIndex = globalIndex,
-                    Size = TypeOf<T>.Size 
+                    Size = TypeOf<T>.Size
                 });
             }
 
@@ -849,6 +964,7 @@ public ref struct QueryIterator
 
             for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
             {
+                // NOTE: maybe breaks when found the _remove componentID
                 if (_remove.IndexOf(_archetype._edgesRight[i].ComponentID) < 0)
                 {
                     _stack.Push(_archetype._edgesRight[i].Archetype);
@@ -1046,10 +1162,7 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
     }
 }
 
-
 public delegate void CallbackIterator(in Iterator iterator);
-
-readonly record struct EcsSystem(IQueryComposition Query, CallbackIterator Func);
 
 readonly record struct EcsEdge(int ComponentID, Archetype Archetype);
 
@@ -1151,26 +1264,26 @@ public sealed partial class World
     public int Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
-    public void Add(EntityID entity, EntityID componentID)
-    {
-        //_storage.GetGlobalID(componentID);
-    }
+    //public void Add(EntityID entity, EntityID componentID)
+    //{
+    //    //_storage.GetGlobalID(componentID);
+    //}
 
-    public int Tag(EntityID entity, EntityID componentID)
-    {
-        var id = IDOp.RealID(componentID);
+    //public int Tag(EntityID entity, EntityID componentID)
+    //{
+    //    var id = IDOp.RealID(componentID);
 
-        //IDOp.HasFlag
-        //_entities
+    //    //IDOp.HasFlag
+    //    //_entities
 
-        //var globalIdx = _storage.GetGlobalID(id);
-        //return Attach(entity, globalIdx);
+    //    //var globalIdx = _storage.GetGlobalID(id);
+    //    //return Attach(entity, globalIdx);
 
-        return (int)id;
-    }
+    //    return (int)id;
+    //}
 
-    public void UnTag(EntityID entity, int componentID)
-        => Detach(entity, componentID);
+    //public void UnTag(EntityID entity, int componentID)
+    //    => Detach(entity, componentID);
 
     public unsafe bool Has<T>(EntityID entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
@@ -1221,7 +1334,7 @@ sealed class EntitySparseSet<T>
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public EntityID NewID()
+    public ref T CreateNew(out EntityID id)
     {
         var unused = Unused;
         var recycle = unused > 0;
@@ -1229,14 +1342,16 @@ sealed class EntitySparseSet<T>
         if (recycle)
         {
             //var id = _dense[_count + unused - 1];
-            var id = _dense[_count];
+            id = _dense[_count];
             if (id > 0 && !Contains(id))
             {
-                return id;
+                return ref Add(id, default!);
             }
         }
 
-        return (EntityID)_count;
+        id = (EntityID)_count;
+
+        return ref Add(id, default!);
     }
 
 
@@ -1434,7 +1549,7 @@ static class EcsConst
 
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct EcsComponent 
+public unsafe struct EcsComponent
 {
     private fixed char _name[64];
 
@@ -1442,20 +1557,57 @@ public unsafe struct EcsComponent
     {
         get
         {
-            fixed(char* ptr = _name)
+            fixed (char* ptr = _name)
             {
                 return new ReadOnlySpan<char>(ptr, 64);
-            } 
+            }
         }
         set
         {
-            for (int i = 0, max = Math.Min(64, value.Length); i < max; i++)
+            fixed (char* ptr = _name)
             {
-                _name[i] = value[i];
+                var span = new Span<char>(ptr, 64);
+                value.Slice(0, Math.Min(64, value.Length)).CopyTo(span);
             }
         }
     }
 
     public int Size;
     public int GlobalIndex;
+}
+
+public unsafe struct EcsQuery
+{
+    //private fixed int _add[32];
+    //private fixed int _remove[32];
+}
+
+public unsafe readonly struct EcsSystem
+{
+    public readonly EntityID Query;
+    public readonly delegate* managed<in Iterator, void> Func;
+
+    public EcsSystem(EntityID query, delegate* managed<in Iterator, void> func)
+    {
+        Query = query;
+        Func = func;
+    }
+}
+
+public struct EcsSystemPhaseOnUpdate { }
+public struct EcsSystemPhasePreUpdate { }
+public struct EcsSystemPhasePostUpdate { }
+public struct EcsSystemPhaseOnStartup { }
+public struct EcsSystemPhasePreStartup { }
+public struct EcsSystemPhasePostStartup { }
+
+public enum SystemPhase
+{
+    OnUpdate,
+    OnPreUpdate,
+    OnPostUpdate,
+
+    OnStartup,
+    OnPreStartup,
+    OnPostStartup
 }

@@ -10,13 +10,8 @@
 
             for (var i = 0; i < amount; i++)
             {
-                var cmp = new EcsComponent()
-                {
-                    Size = 123 + i
-                };
-
-                var id = set.NewID();
-                set.Add(id, cmp);
+                ref var cmp = ref set.CreateNew(out var id);
+                cmp.Size = 123 + i;
 
                 Assert.True(set.Contains(id));
                 Assert.Equal(cmp, set.Get(id));
@@ -39,8 +34,7 @@
 
                 for (int i = 0; i < count; i++)
                 {
-                    var id = set.NewID();
-                    set.Add(id, default);
+                    set.CreateNew(out var id);
                     ids.Add(id);
 
                     var curGen = IDOp.GetGeneration(id);
@@ -62,19 +56,19 @@
         public void SparseSet_CheckSequence(int amount)
         {
             var set = new EntitySparseSet<EcsComponent>();
+          
+            var i = 0;
+            ulong last = 1;
 
-            ulong last = set.NewID();
-
-            for (var i = 0; i < amount; ++i)
+            do
             {
-                var id = set.NewID();
-
+                set.CreateNew(out var id);
                 var genHi = id & EcsConst.ECS_GENERATION_MASK;
-                Assert.Equal(id, last - genHi);
-
+                Assert.Equal(id - genHi, last - genHi);
                 set.Remove(id);
-                last = id;
-            }
+                IDOp.IncreaseGeneration(ref last);
+
+            } while (i++ < amount);
         }
     }
 }
