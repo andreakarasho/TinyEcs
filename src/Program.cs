@@ -1,5 +1,6 @@
 ﻿// https://github.com/jasonliang-dev/entity-component-system
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -62,8 +63,9 @@ world.Set<int>(e3);
 world.Set<float>(e3);
 world.Set<PlayerTag>(e3);
 
-//var plat = world.CreateEntity();
-//world.Tag(e3, plat);
+var plat = world.CreateEntity();
+world.Tag(e3, plat);
+world.Untag(e3, plat);
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -76,21 +78,21 @@ var query = world.Query()
     ;
 
 
-var queryCmp = world.Query()
-    .With<EcsComponent>();
+//var queryCmp = world.Query()
+//    .With<EcsComponent>();
 
-foreach (var it in queryCmp)
-{
-    ref var p = ref it.Field<EcsComponent>();
+//foreach (var it in queryCmp)
+//{
+//    ref var p = ref it.Field<EcsComponent>();
 
-    for (var row = 0; row < it.Count; ++row)
-    {
-        ref readonly var entity = ref it.Entity(row);
-        ref var pos = ref it.Get(ref p, row);
+//    for (var row = 0; row < it.Count; ++row)
+//    {
+//        ref readonly var entity = ref it.Entity(row);
+//        ref var pos = ref it.Get(ref p, row);
 
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
-    }
-}
+//        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
+//    }
+//}
 
 unsafe
 {
@@ -138,6 +140,9 @@ static void ASystem(in Iterator it)
         ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
+
+        pos.X *= vel.X;
+        pos.Y *= vel.Y;
     }
 }
 
