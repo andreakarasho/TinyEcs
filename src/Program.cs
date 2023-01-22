@@ -65,7 +65,7 @@ world.Set<PlayerTag>(e3);
 
 var plat = world.CreateEntity();
 world.Tag(e3, plat);
-world.Untag(e3, plat);
+//world.Untag(e3, plat);
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -78,27 +78,27 @@ var query = world.Query()
     ;
 
 
-//var queryCmp = world.Query()
-//    .With<EcsComponent>();
+var queryCmp = world.Query()
+    .With<EcsComponent>();
 
-//foreach (var it in queryCmp)
-//{
-//    ref var p = ref it.Field<EcsComponent>();
+foreach (var it in queryCmp)
+{
+    ref var p = ref it.Field<EcsComponent>();
 
-//    for (var row = 0; row < it.Count; ++row)
-//    {
-//        ref readonly var entity = ref it.Entity(row);
-//        ref var pos = ref it.Get(ref p, row);
+    for (var row = 0; row < it.Count; ++row)
+    {
+        ref readonly var entity = ref it.Entity(row);
+        ref var pos = ref it.Get(ref p, row);
 
-//        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
-//    }
-//}
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
+    }
+}
 
 unsafe
 {
     world.RegisterSystem(query, &ASystem);
-    //world.RegisterSystem(query, &PreUpdate, SystemPhase.OnPreUpdate);
-    //world.RegisterSystem(query, &PostUpdate, SystemPhase.OnPostUpdate);
+    //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
+    //world.RegisterSystem(world.Query(), &PostUpdate, SystemPhase.OnPostUpdate);
 }
 
 
@@ -106,7 +106,7 @@ while (true)
 {
     sw.Restart();
     
-    for (int i = 0; i < 3600; ++i)
+    //for (int i = 0; i < 3600; ++i)
     {
         world.Step();
         //foreach (var it in query)
