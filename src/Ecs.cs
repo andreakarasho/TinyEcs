@@ -1,8 +1,12 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
+using System.Threading;
+using System.Xml.Linq;
 using EntityID = System.UInt64;
 
 namespace TinyEcs;
@@ -14,7 +18,7 @@ public sealed partial class World : IDisposable
     private int _deferStatus, _deferActionCount;
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
 
-    private Archetype _archRoot;
+    internal Archetype _archRoot;
     internal readonly ComponentStorage _storage;
 
     internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
@@ -119,8 +123,8 @@ public sealed partial class World : IDisposable
         {
             ref var s = ref it.Field<EcsSystem>();
 
-            // NOTE: This is quite bad to see, but it's the only way to grab
-            //       the query avoding to the managed reference in a struct issue
+            // NOTE: This is quite bad to use, but it's the only way to grab
+            //       the query avoding the managed reference in a struct issue
             ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
 
             for (int i = 0; i < it.Count; ++i)
@@ -578,20 +582,16 @@ public sealed partial class World : IDisposable
             if (_componentsHashes[globalIndex] == 0)
             {
                 var id = _world.CreateEntity();
-                _componentsHashes[globalIndex] = TypeOf<T>.Hash;
-                _componentsIDs[globalIndex] = id;
-                _componentsSizes[globalIndex] = TypeOf<T>.Size;
-                _IDsToGlobal[_componentsIDs[globalIndex]] = globalIndex;
 
-
-                _world.Set(id, new EcsComponent()
-                {
+                CreateComponent(id, globalIndex, TypeOf<T>.Hash, TypeOf<T>.Size,
 #if DEBUG
-                    Name = typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture),
+                    typeof(T).FullName!.Replace("+", ".", StringComparison.InvariantCulture)
+#else
+                    string.Empty
 #endif
-                    GlobalIndex = globalIndex,
-                    Size = TypeOf<T>.Size
-                });
+                    );
+
+                _IDsToGlobal[id] = globalIndex;
             }
 
             return globalIndex;
@@ -604,21 +604,44 @@ public sealed partial class World : IDisposable
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetGlobalID(EntityID componentID)
+        public int GetOrCreateID(EntityID componentID)
         {
-            ref var globalIndex = ref CollectionsMarshal.GetValueRefOrNullRef(_IDsToGlobal, componentID);
-            if (Unsafe.IsNullRef(ref globalIndex))
+            ref var globalIndex = ref CollectionsMarshal.GetValueRefOrAddDefault(_IDsToGlobal, componentID, out var exists);
+            if (!exists /*Unsafe.IsNullRef(ref globalIndex)*/)
             {
-                Debug.Fail("invalid componentID");
+                globalIndex = GlobalIDGen.Next;
+               
+                CreateComponent(componentID, globalIndex, componentID.GetHashCode(), 0, string.Empty);
             }
 
             return globalIndex;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetSize(int componentID)
+        public int GetSize(int globalID)
         {
-            return _componentsSizes[componentID];
+            return _componentsSizes[globalID];
+        }
+
+        private void CreateComponent(EntityID id, int globalID, int hash, int size, string name)
+        {
+            GrowIfNecessary(globalID);
+
+            if (_componentsHashes[globalID] != 0)
+            {
+                return;
+            }
+
+            _componentsHashes[globalID] = id.GetHashCode();
+            _componentsIDs[globalID] = id;
+            _componentsSizes[globalID] = size;
+
+            _world.Set(id, new EcsComponent()
+            {
+                Name = name,
+                GlobalIndex = globalID,
+                Size = size
+            });
         }
 
         public void Clear()
@@ -873,16 +896,16 @@ public struct Query : IQueryComposition
         return this;
     }
 
-    public IQueryComposition WithTag(int componentID)
+    public IQueryComposition WithTag(EntityID componentID)
     {
-        _add.Add(componentID);
+        _add.Add(_world._storage.GetOrCreateID(componentID));
 
         return this;
     }
 
-    public IQueryComposition WithoutTag(int componentID)
+    public IQueryComposition WithoutTag(EntityID componentID)
     {
-        _remove.Add(componentID);
+        _remove.Add(_world._storage.GetOrCreateID(componentID));
 
         return this;
     }
@@ -890,25 +913,9 @@ public struct Query : IQueryComposition
     public QueryIterator GetEnumerator()
     {
         _stack.Clear();
+        _stack.Push(_world._archRoot);
 
-        var hash = _add.GetHashCode();
-        if (_world._typeIndex.TryGetValue(hash, out var arch))
-        {
-            var ok = true;
-            foreach (var id in _remove)
-            {
-                if (arch.Signature.IndexOf(id) >= 0)
-                {
-                    ok = false;
-                    break;
-                }
-            }
-
-            if (ok)
-                _stack.Push(arch);
-        }
-
-        return new QueryIterator(_world, _stack, _remove);
+        return new QueryIterator(_world, _stack, _add, _remove);
     }
 }
 
@@ -916,8 +923,8 @@ public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
     IQueryComposition Without<T>() where T : struct;
-    IQueryComposition WithTag(int componentID);
-    IQueryComposition WithoutTag(int componentID);
+    IQueryComposition WithTag(EntityID componentID);
+    IQueryComposition WithoutTag(EntityID componentID);
     QueryIterator GetEnumerator();
 }
 
@@ -926,21 +933,20 @@ public interface IQueryComposition
 public ref struct QueryIterator
 {
     private readonly World _world;
-    private readonly EcsSignature _remove;
+    private readonly EcsSignature _add, _remove;
     private readonly Stack<Archetype> _stack;
 
     private Archetype? _archetype;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal QueryIterator(World world, Stack<Archetype> stack, EcsSignature remove)
+    internal QueryIterator(World world, Stack<Archetype> stack, EcsSignature add, EcsSignature remove)
     {
         world!.BeginDefer();
 
         _world = world;
+        _add = add;
         _remove = remove;
-
-        stack.TryPeek(out _archetype);
         _stack = stack;
     }
 
@@ -959,7 +965,7 @@ public ref struct QueryIterator
     {
         do
         {
-            if (_archetype == null || !_stack.TryPop(out _archetype))
+            if (!_stack.TryPop(out _archetype) || _archetype == null)
                 return false;
 
             for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
@@ -971,7 +977,7 @@ public ref struct QueryIterator
                 }
             }
         }
-        while (_archetype.Count <= 0);
+        while (!_archetype.Signature.IsSuperset(_add) || _archetype.Count <= 0);
 
         return true;
     }
@@ -1264,26 +1270,11 @@ public sealed partial class World
     public int Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
-    //public void Add(EntityID entity, EntityID componentID)
-    //{
-    //    //_storage.GetGlobalID(componentID);
-    //}
+    public void Tag(EntityID entity, EntityID componentID)
+        => Set(entity, _storage.GetOrCreateID(componentID), ReadOnlySpan<byte>.Empty);
 
-    //public int Tag(EntityID entity, EntityID componentID)
-    //{
-    //    var id = IDOp.RealID(componentID);
-
-    //    //IDOp.HasFlag
-    //    //_entities
-
-    //    //var globalIdx = _storage.GetGlobalID(id);
-    //    //return Attach(entity, globalIdx);
-
-    //    return (int)id;
-    //}
-
-    //public void UnTag(EntityID entity, int componentID)
-    //    => Detach(entity, componentID);
+    public void Untag(EntityID entity, EntityID componentID)
+        => Detach(entity, _storage.GetOrCreateID(componentID));
 
     public unsafe bool Has<T>(EntityID entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
@@ -1308,7 +1299,6 @@ sealed class EntitySparseSet<T>
     }
 
     const int CHUNK_SIZE = 4096;
-    const int TOLERANCE = 0;
 
     private Chunk[] _chunks;
     public EntityID[] _dense;
@@ -1468,7 +1458,7 @@ sealed class EntitySparseSet<T>
             }
         }
 
-        chunk.Values[realID] = default;
+        chunk.Values[realID] = default!;
     }
 
     private void SwapDense(ref Chunk chunkA, int a, int b)
@@ -1528,9 +1518,6 @@ sealed class EntitySparseSet<T>
         {
             chunk.Sparse = new int[CHUNK_SIZE];
             chunk.Values = new T[CHUNK_SIZE];
-
-            if (TOLERANCE != 0)
-                Array.Fill(chunk.Sparse, TOLERANCE);
         }
 
         return ref chunk;

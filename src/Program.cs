@@ -1,5 +1,6 @@
 ﻿// https://github.com/jasonliang-dev/entity-component-system
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -62,8 +63,9 @@ world.Set<int>(e3);
 world.Set<float>(e3);
 world.Set<PlayerTag>(e3);
 
-//var plat = world.CreateEntity();
-//world.Tag(e3, plat);
+var plat = world.CreateEntity();
+world.Tag(e3, plat);
+//world.Untag(e3, plat);
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -95,8 +97,8 @@ foreach (var it in queryCmp)
 unsafe
 {
     world.RegisterSystem(query, &ASystem);
-    //world.RegisterSystem(query, &PreUpdate, SystemPhase.OnPreUpdate);
-    //world.RegisterSystem(query, &PostUpdate, SystemPhase.OnPostUpdate);
+    //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
+    //world.RegisterSystem(world.Query(), &PostUpdate, SystemPhase.OnPostUpdate);
 }
 
 
@@ -104,7 +106,7 @@ while (true)
 {
     sw.Restart();
     
-    for (int i = 0; i < 3600; ++i)
+    //for (int i = 0; i < 3600; ++i)
     {
         world.Step();
         //foreach (var it in query)
@@ -138,6 +140,9 @@ static void ASystem(in Iterator it)
         ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
+
+        pos.X *= vel.X;
+        pos.Y *= vel.Y;
     }
 }
 
