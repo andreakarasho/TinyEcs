@@ -11,9 +11,9 @@ using var world = new World();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-   var entity = world.CreateEntity();
-   world.Set<Position>(entity, new Position() { X = 1f, Y = -1f });
-   world.Set<Velocity>(entity);
+   var entity = world.CreateEntity()
+	.Set<Position>(new Position() { X = 1f, Y = -1f })
+	.Set<Velocity>();
 }
 
 var query = world.Query()
@@ -27,7 +27,6 @@ foreach (var it in query)
 
 	for (var row = 0; row < it.Count; ++row)
 	{
-		ref readonly var entity = ref it.Entity(row);
 		ref var pos = ref it.Get(ref p, row);
 		ref var vel = ref it.Get(ref v, row);
 
