@@ -18,54 +18,61 @@ var sw = Stopwatch.StartNew();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-    var entity = world.CreateEntity();
-    world.Set<Position>(entity);
-    world.Set<Velocity>(entity);
+    //var entity = world.CreateEntity();
+    //entity.Set<Position>();
+    //entity.Set<Velocity>();
+
+    var e = world.CreateEntity()
+        .Set<Position>()
+        .Set<Velocity>();
+
+    //world.Set<Position>(entity);
+    //world.Set<Velocity>(entity);
 }
 
-var list = new List<ulong>();
+//var list = new List<ulong>();
 
-for (int i = 0; i < 100; ++i)
-{
-    var e = world.CreateEntity();
-    world.Set<Position>(e);
-    world.Set<Velocity>(e);
-    world.Set<PlayerTag>(e);
+//for (int i = 0; i < 100; ++i)
+//{
+//    var e = world.CreateEntity();
+//    world.Set<Position>(e);
+//    world.Set<Velocity>(e);
+//    world.Set<PlayerTag>(e);
 
-    list.Add(e);
-}
+//    list.Add(e);
+//}
 
-foreach (var e in list)
-{
-    world.DestroyEntity(e);
-}
+//foreach (var e in list)
+//{
+//    world.DestroyEntity(e);
+//}
 
-for (int i = 0; i < list.Count; ++i)
-{
-    var e = world.CreateEntity();
-    Console.WriteLine(e);
-    //world.Set<Position>(e);
-    //world.Set<Velocity>(e);
-    //world.Set<PlayerTag>(e);
-}
+//for (int i = 0; i < list.Count; ++i)
+//{
+//    var e = world.CreateEntity();
+//    Console.WriteLine(e);
+//    //world.Set<Position>(e);
+//    //world.Set<Velocity>(e);
+//    //world.Set<PlayerTag>(e);
+//}
 
 
-var e2 = world.CreateEntity();
-world.Set<Position>(e2);
-world.Set<Velocity>(e2);
-world.Set<int>(e2); 
-world.Set<float>(e2);
+//var e2 = world.CreateEntity();
+//world.Set<Position>(e2);
+//world.Set<Velocity>(e2);
+//world.Set<int>(e2); 
+//world.Set<float>(e2);
 
-var e3 = world.CreateEntity();
-world.Set<Position>(e3);
-world.Set<Velocity>(e3);
-world.Set<int>(e3);
-world.Set<float>(e3);
-world.Set<PlayerTag>(e3);
+//var e3 = world.CreateEntity();
+//world.Set<Position>(e3);
+//world.Set<Velocity>(e3);
+//world.Set<int>(e3);
+//world.Set<float>(e3);
+//world.Set<PlayerTag>(e3);
 
-var plat = world.CreateEntity();
-world.Tag(e3, plat);
-//world.Untag(e3, plat);
+//var plat = world.CreateEntity();
+//world.Tag(e3, plat);
+////world.Untag(e3, plat);
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -87,10 +94,10 @@ foreach (var it in queryCmp)
 
     for (var row = 0; row < it.Count; ++row)
     {
-        ref readonly var entity = ref it.Entity(row);
-        ref var pos = ref it.Get(ref p, row);
+        //ref readonly var entity = ref it.Entity(row);
+        //ref var pos = ref it.Get(ref p, row);
 
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
+        //Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
     }
 }
 
@@ -106,7 +113,7 @@ while (true)
 {
     sw.Restart();
     
-    //for (int i = 0; i < 3600; ++i)
+    for (int i = 0; i < 3600; ++i)
     {
         world.Step();
         //foreach (var it in query)
@@ -137,7 +144,8 @@ static void ASystem(in Iterator it)
 
     for (var row = 0; row < it.Count; ++row)
     {
-        ref readonly var entity = ref it.Entity(row);
+        //var e = it.Entity(row);
+        //ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
 
@@ -155,7 +163,7 @@ static void ASystem2(in Iterator it)
 
     for (var row = 0; row < it.Count; ++row)
     {
-        ref readonly var entity = ref it.Entity(row);
+        //ref readonly var entity = ref it.Entity(row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
     }

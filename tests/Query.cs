@@ -236,7 +236,7 @@
                 Assert.False(it.Has<bool>());
             }
 
-            Assert.Equal(0, done);
+            Assert.Equal(good, done);
         }
     }
 }

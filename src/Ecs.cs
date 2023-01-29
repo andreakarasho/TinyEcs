@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Xml.Linq;
 using EntityID = System.UInt64;
 
 namespace TinyEcs;
@@ -157,9 +155,9 @@ public sealed partial class World : IDisposable
 
     public IQueryComposition Query() => new Query(this);
 
-    public EntityID CreateEntity()
+    public Entity CreateEntity(/*EntityID id = 0*/)
     {
-        ref var record = ref _entities.CreateNew(out var id);
+        ref var record = /*ref id > 0 ? ref _entities.Add(id, default!) :*/ ref _entities.CreateNew(out var id);
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
 
@@ -174,7 +172,7 @@ public sealed partial class World : IDisposable
         //    InternalCreateEntity(id);
         //}
 
-        return id;
+        return new Entity(this, id);
     }
 
     public void DestroyEntity(EntityID entity)
@@ -352,7 +350,7 @@ public sealed partial class World : IDisposable
             .AsSpan(size * record.Row, size);
     }
 
-    public unsafe EntityID RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
+    public unsafe Entity RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
         var qryID = CreateEntity();
         Set<EcsQuery>(qryID);
@@ -385,7 +383,7 @@ public sealed partial class World : IDisposable
                 break;
         }
 
-        return id;
+        return new Entity(this, id);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1036,7 +1034,7 @@ public ref struct Iterator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Has<T>() where T : struct
+    public readonly bool Has<T>() where T : struct
     {
         var componentID = _world._storage.GetID<T>();
         return componentID < _columns.Length && _columns[componentID] >= 0;
@@ -1047,8 +1045,20 @@ public ref struct Iterator
         => ref Unsafe.Add(ref first, row);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly EntityID Entity(int index)
-        => ref Unsafe.Add(ref _firstEntity, index);
+    public readonly Entity Entity(int index)
+    {
+        //ref var e = ref Unsafe.As<EntityID, Entity>(ref Unsafe.Add(ref _firstEntity, index));
+
+
+        //return ref e;
+        return new Entity(_world, Unsafe.Add(ref _firstEntity, index));
+    }
+
+    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    //public readonly ref readonly EntityID Entity(int index)
+    //{
+    //    return ref Unsafe.Add(ref _firstEntity, index);
+    //}
 }
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
@@ -1111,6 +1121,30 @@ sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
 
     public bool IsSuperset([NotNull] EcsSignature other)
     {
+        //var left = 0;
+        //var right = 0;
+
+        //if (Count < other.Count)
+        //    return false;
+
+        //while (left < Count && right < other.Count)
+        //{
+        //    if (_components[left] < other._components[right])
+        //    {
+        //        ++left;
+        //    }
+        //    else if (_components[left] == other._components[right])
+        //    {
+        //        ++left;
+        //        ++right;
+        //    }
+        //    else
+        //    {
+        //        return false;
+        //    }
+        //}
+
+        //return right == other.Count;
         int i = 0, j = 0;
         while (i < Count && j < other.Count)
         {
@@ -1194,14 +1228,6 @@ static class ComponentHasher
 }
 
 
-//readonly struct EntityID
-//{
-//    private readonly ulong _value;
-
-//    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-//    public EntityID(ulong value) => _value = value;
-//}
-
 
 static class IDOp
 {
@@ -1267,7 +1293,7 @@ public sealed partial class World
     public void Set<T>(EntityID entity, T component = default) where T : struct
         => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(new Span<T>(ref component)));
 
-    public int Unset<T>(EntityID entity) where T : struct
+    public void Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
     public void Tag(EntityID entity, EntityID componentID)
@@ -1307,7 +1333,7 @@ sealed class EntitySparseSet<T>
 
     public EntitySparseSet(int initialCapacity = 0)
     {
-        _dense = new EntityID[Math.Min(1, initialCapacity)];
+        _dense = new EntityID[initialCapacity];
         _chunks = new Chunk[initialCapacity];
         _count = 1;
         _denseCount = 1;
@@ -1326,12 +1352,8 @@ sealed class EntitySparseSet<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T CreateNew(out EntityID id)
     {
-        var unused = Unused;
-        var recycle = unused > 0;
-
-        if (recycle)
+        if (Unused > 0)
         {
-            //var id = _dense[_count + unused - 1];
             id = _dense[_count];
             if (id > 0 && !Contains(id))
             {
@@ -1479,7 +1501,7 @@ sealed class EntitySparseSet<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private EntityID SplitGeneration(ref EntityID index)
+    private static EntityID SplitGeneration(ref EntityID index)
     {
         var gen = index & EcsConst.ECS_GENERATION_MASK;
         Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
@@ -1597,4 +1619,69 @@ public enum SystemPhase
     OnStartup,
     OnPreStartup,
     OnPostStartup
+}
+
+
+[SkipLocalsInit]
+[StructLayout(LayoutKind.Explicit)]
+public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
+{
+    [FieldOffset(0)]
+    public readonly EntityID ID;
+
+    [FieldOffset(8)]
+    private readonly World _world;
+   
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Entity(World world, EntityID id)
+    {
+        _world = world;
+        ID = id;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Equals(ulong other)
+    {
+        return ID == other;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Equals(Entity other)
+    {
+        return ID == other.ID;
+    }
+
+    public readonly Entity Set<T>(T component = default) where T : struct
+    {
+        _world.Set(ID, component);
+        return this;
+    }
+
+    public readonly Entity Unset<T>() where T : struct
+    {
+        _world.Unset<T>(ID);
+        return this;
+    }
+
+    public readonly Entity Tag(EntityID componentID)
+    {
+        _world.Tag(ID, componentID);
+        return this;
+    }
+
+    public readonly Entity Untag(EntityID componentID)
+    {
+        _world.Untag(ID, componentID);
+        return this;
+    }
+
+    public readonly void Destroy() 
+        => _world.DestroyEntity(ID);
+
+    public readonly bool IsAlive()
+        => _world.IsEntityAlive(ID);
+
+
+    public static implicit operator EntityID(in Entity d) => d.ID;
 }
