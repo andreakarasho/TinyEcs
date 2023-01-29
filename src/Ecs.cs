@@ -894,19 +894,19 @@ public struct Query : IQueryComposition
         return this;
     }
 
-    public IQueryComposition WithTag(EntityID componentID)
-    {
-        _add.Add(_world._storage.GetOrCreateID(componentID));
+    //public IQueryComposition WithTag(EntityID componentID)
+    //{
+    //    _add.Add(_world._storage.GetOrCreateID(componentID));
 
-        return this;
-    }
+    //    return this;
+    //}
 
-    public IQueryComposition WithoutTag(EntityID componentID)
-    {
-        _remove.Add(_world._storage.GetOrCreateID(componentID));
+    //public IQueryComposition WithoutTag(EntityID componentID)
+    //{
+    //    _remove.Add(_world._storage.GetOrCreateID(componentID));
 
-        return this;
-    }
+    //    return this;
+    //}
 
     public QueryIterator GetEnumerator()
     {
@@ -921,8 +921,8 @@ public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
     IQueryComposition Without<T>() where T : struct;
-    IQueryComposition WithTag(EntityID componentID);
-    IQueryComposition WithoutTag(EntityID componentID);
+    //IQueryComposition WithTag(EntityID componentID);
+    //IQueryComposition WithoutTag(EntityID componentID);
     QueryIterator GetEnumerator();
 }
 
@@ -1296,11 +1296,11 @@ public sealed partial class World
     public void Unset<T>(EntityID entity) where T : struct
        => Detach(entity, _storage.GetOrCreateID<T>());
 
-    public void Tag(EntityID entity, EntityID componentID)
-        => Set(entity, _storage.GetOrCreateID(componentID), ReadOnlySpan<byte>.Empty);
+    //public void Tag(EntityID entity, EntityID componentID)
+    //    => Set(entity, _storage.GetOrCreateID(componentID), ReadOnlySpan<byte>.Empty);
 
-    public void Untag(EntityID entity, EntityID componentID)
-        => Detach(entity, _storage.GetOrCreateID(componentID));
+    //public void Untag(EntityID entity, EntityID componentID)
+    //    => Detach(entity, _storage.GetOrCreateID(componentID));
 
     public unsafe bool Has<T>(EntityID entity) where T : struct
         => Has(entity, _storage.GetOrCreateID<T>());
@@ -1664,17 +1664,17 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
         return this;
     }
 
-    public readonly Entity Tag(EntityID componentID)
-    {
-        _world.Tag(ID, componentID);
-        return this;
-    }
+    //public readonly Entity Tag(EntityID componentID)
+    //{
+    //    _world.Tag(ID, componentID);
+    //    return this;
+    //}
 
-    public readonly Entity Untag(EntityID componentID)
-    {
-        _world.Untag(ID, componentID);
-        return this;
-    }
+    //public readonly Entity Untag(EntityID componentID)
+    //{
+    //    _world.Untag(ID, componentID);
+    //    return this;
+    //}
 
     public readonly void Destroy() 
         => _world.DestroyEntity(ID);
