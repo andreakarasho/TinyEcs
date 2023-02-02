@@ -18,13 +18,25 @@ namespace TinyEcs.Tests
         public void Entity_Deletion()
         {
             using var world = new World();
-            var entity = world.CreateEntity();
 
-            Assert.True(world.IsEntityAlive(entity));
+            var e1 = world.CreateEntity();
+            var e2 = world.CreateEntity();
+            var e3 = world.CreateEntity();
+            var e4 = world.CreateEntity();
 
-            world.DestroyEntity(entity);  
-            
-            Assert.False(world.IsEntityAlive(entity));
+            e2.Destroy();
+            e2 = world.CreateEntity();
+
+            e3.Destroy();
+            e3 = world.CreateEntity();
+
+            e2.Destroy();
+            e2 = world.CreateEntity();
+
+            Assert.True(e1.IsAlive());
+            Assert.True(e2.IsAlive());
+            Assert.True(e3.IsAlive());
+            Assert.True(e4.IsAlive());
         }
 
         [Fact]

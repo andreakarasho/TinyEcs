@@ -11,6 +11,10 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
+    private static readonly object _lock = new object();
+    internal static readonly EntitySparseSet<World> _allWorlds = new EntitySparseSet<World>();
+
+    internal readonly EntityID _worldID;
     private int _totalFrames;
     private int _entityCount = 0;
     private int _deferStatus, _deferActionCount;
@@ -36,6 +40,9 @@ public sealed partial class World : IDisposable
     {
         _storage = new ComponentStorage(this);
         _archRoot = new Archetype(this, new EcsSignature(0));
+
+        lock (_lock)
+            _allWorlds.CreateNew(out _worldID) = this;
 
         // initialize pre-built cmps
         _ = _storage.GetOrCreateID<EcsComponent>();
@@ -97,6 +104,9 @@ public sealed partial class World : IDisposable
         _storage.Clear();
         _entityCount = 0;
         _archRoot = new Archetype(this, new EcsSignature(0));
+
+        lock (_lock)
+            _allWorlds.Remove(_worldID);
     }
 
     public void Dispose() => Destroy();
@@ -172,7 +182,7 @@ public sealed partial class World : IDisposable
         //    InternalCreateEntity(id);
         //}
 
-        return new Entity(this, id);
+        return new Entity(_worldID, id);
     }
 
     public void DestroyEntity(EntityID entity)
@@ -192,6 +202,9 @@ public sealed partial class World : IDisposable
             var removedId = record.Archetype.Remove(record.Row);
 
             Debug.Assert(removedId == entity);
+
+            var last = record.Archetype.Entities[record.Row];
+            _entities.Get(last) = record;
 
             _entities.Remove(removedId);
 
@@ -383,11 +396,11 @@ public sealed partial class World : IDisposable
                 break;
         }
 
-        return new Entity(this, id);
+        return new Entity(_worldID, id);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool IsDeferred() => _deferStatus != 0;
+    internal bool IsDeferred() => false; // _deferStatus != 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void BeginDefer() => Interlocked.Increment(ref _deferStatus);
@@ -608,7 +621,7 @@ public sealed partial class World : IDisposable
             if (!exists /*Unsafe.IsNullRef(ref globalIndex)*/)
             {
                 globalIndex = GlobalIDGen.Next;
-               
+
                 CreateComponent(componentID, globalIndex, componentID.GetHashCode(), 0, string.Empty);
             }
 
@@ -1051,7 +1064,7 @@ public ref struct Iterator
 
 
         //return ref e;
-        return new Entity(_world, Unsafe.Add(ref _firstEntity, index));
+        return new Entity(_world._worldID, Unsafe.Add(ref _firstEntity, index));
     }
 
     //[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1257,9 +1270,9 @@ static class IDOp
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void IncreaseGeneration(ref EntityID id)
+    public static EntityID IncreaseGeneration(EntityID id)
     {
-        id = ((id & ~EcsConst.ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
+        return ((id & ~EcsConst.ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1324,48 +1337,101 @@ sealed class EntitySparseSet<T>
         public T[] Values;
     }
 
+    private class Vec<T0> where T0 : struct
+    {
+        private T0[] _array;
+        private int _count;
+
+        public Vec()
+        {
+            _array = new T0[2];
+            _count = 0;
+        }
+
+        public int Count => _count;
+        public ref T0 this[int index] => ref _array[index];
+
+        public void Add(in T0 elem)
+        {
+            GrowIfNecessary(_count + 1);
+
+            this[_count] = elem;
+
+            ++_count;
+        }
+
+        private void GrowIfNecessary(int length)
+        {
+            if (length >= _array.Length)
+            {
+                var newLength = _array.Length > 0 ? _array.Length * 2 : 2;
+                while (length >= newLength)
+                    newLength *= 2;
+                Array.Resize(ref _array, newLength);
+            }
+        }
+    }
+
     const int CHUNK_SIZE = 4096;
 
     private Chunk[] _chunks;
-    public EntityID[] _dense;
-    private int _count, _denseCount;
+    private int _count;
+    private EntityID _maxID;
+    private Vec<EntityID> _dense;
 
 
-    public EntitySparseSet(int initialCapacity = 0)
+    public EntitySparseSet()
     {
-        _dense = new EntityID[initialCapacity];
-        _chunks = new Chunk[initialCapacity];
+        _dense = new Vec<EntityID>();
+        _chunks = new Chunk[0];
         _count = 1;
-        _denseCount = 1;
+        _maxID = EntityID.MinValue;
+
+        _dense.Add(0);
     }
 
+    public int Length => _count - 1;
 
-    public int Length
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _count - 1;
-    }
-
-    public int Unused => _denseCount - _count;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T CreateNew(out EntityID id)
     {
-        if (Unused > 0)
+        var count = _count++;
+        var denseCount = _dense.Count;
+
+        Debug.Assert(count <= denseCount);
+
+        if (count < denseCount)
         {
-            id = _dense[_count];
-            if (id > 0 && !Contains(id))
-            {
-                return ref Add(id, default!);
-            }
+            id = _dense[count];
+        }
+        else
+        {
+            id = NewID(count);
         }
 
-        id = (EntityID)_count;
 
-        return ref Add(id, default!);
+        ref var chunk = ref GetChunk((int)id >> 12);
+        if (Unsafe.IsNullRef(ref chunk))
+            return ref Unsafe.NullRef<T>();
+
+        return ref chunk.Values[(int)id & 0xFFF];
+        //return ref Get(id);
     }
 
+    private EntityID NewID(int dense)
+    {
+        var index = ++_maxID;
+        _dense.Add(0);
+
+        ref var chunk = ref GetChunkOrCreate((int)index >> 12);
+        Debug.Assert(chunk.Sparse[(int)index & 0xFFF] == 0);
+
+        SparseAssignIndex(ref chunk, index, dense);
+
+        return index;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T Get(EntityID outerIdx)
@@ -1376,9 +1442,9 @@ sealed class EntitySparseSet<T>
 
         var gen = SplitGeneration(ref outerIdx);
         var realID = (int)outerIdx & 0xFFF;
+
         var dense = chunk.Sparse[realID];
-        var insUse = dense != 0 && (dense < _count);
-        if (!insUse)
+        if (dense == 0 || dense >= _count)
             return ref Unsafe.NullRef<T>();
 
         var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
@@ -1409,6 +1475,7 @@ sealed class EntitySparseSet<T>
             else if (dense > count)
             {
                 SwapDense(ref chunk, dense, count);
+                dense = count;
                 _count++;
             }
 
@@ -1416,17 +1483,15 @@ sealed class EntitySparseSet<T>
         }
         else
         {
-            var count = _count++;
-            if (count >= _dense.Length)
-            {
-                var newLength = _dense.Length > 0 ? _dense.Length * 2 : 2;
-                while (count >= newLength)
-                    newLength *= 2;
-                Array.Resize(ref _dense, newLength);
-            }
+            _dense.Add(0);
 
-            var denseCount = _denseCount - 1;
-            ++_denseCount;
+            var denseCount = _dense.Count - 1;
+            var count = _count++;
+
+            if (outerIdx >= _maxID)
+            {
+                _maxID = outerIdx;
+            }
 
             if (count < denseCount)
             {
@@ -1453,31 +1518,30 @@ sealed class EntitySparseSet<T>
         var realID = (int)outerIdx & 0xFFF;
         var dense = chunk.Sparse[realID];
 
-        if (dense != 0)
+        if (dense == 0)
+            return;
+
+        var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
+        if (gen != curGen)
         {
-            var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
-            if (gen != curGen)
-            {
-                return;
-            }
+            return;
+        }
 
-            IDOp.IncreaseGeneration(ref curGen);
-            _dense[dense] = outerIdx | curGen;
+        _dense[dense] = outerIdx | IDOp.IncreaseGeneration(curGen);
 
-            var count = _count;
-            if (dense == (_count - 1))
-            {
-                --_count;
-            }
-            else if (dense < _count)
-            {
-                SwapDense(ref chunk, dense, count - 1);
-                --_count;
-            }
-            else
-            {
-                return;
-            }
+        var count = _count;
+        if (dense == (count - 1))
+        {
+            _count--;
+        }
+        else if (dense < count)
+        {
+            SwapDense(ref chunk, dense, count - 1);
+            _count--;
+        }
+        else
+        {
+            return;
         }
 
         chunk.Values[realID] = default!;
@@ -1485,6 +1549,8 @@ sealed class EntitySparseSet<T>
 
     private void SwapDense(ref Chunk chunkA, int a, int b)
     {
+        Debug.Assert(a != b);
+
         var idxA = _dense[a];
         var idxB = _dense[b];
 
@@ -1512,10 +1578,10 @@ sealed class EntitySparseSet<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Clear()
     {
-        Array.Clear(_dense);
+        //Array.Clear(_dense);
         Array.Clear(_chunks);
         _count = 1;
-        _denseCount = 1;
+        //_denseCount = 1;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1621,24 +1687,59 @@ public enum SystemPhase
     OnPostStartup
 }
 
+partial class World
+{
+    internal static void Set<T>(in EntityID worldID, EntityID entity, T component = default) where T : struct
+    {
+        _allWorlds.Get(worldID).Set(entity, component);
+    }
+
+    internal static void Unset<T>(in EntityID worldID, EntityID entity) where T : struct
+    {
+        _allWorlds.Get(worldID).Unset<T>(entity);
+    }
+
+    internal static ref T Get<T>(in EntityID worldID, EntityID entity) where T : struct
+    {
+        return ref _allWorlds.Get(worldID).Get<T>(entity);
+    }
+
+    internal static bool Has<T>(in EntityID worldID, EntityID entity) where T : struct
+    {
+        return _allWorlds.Get(worldID).Has<T>(entity);
+    }
+
+    internal static bool IsEntityAlive(in EntityID worldID, EntityID entity)
+    {
+        return _allWorlds.Get(worldID).IsEntityAlive(entity);
+    }
+
+    internal static void Destroy(in EntityID worldID, EntityID entity)
+    {
+        _allWorlds.Get(worldID).DestroyEntity(entity);
+    }
+}
+
 
 [SkipLocalsInit]
-[StructLayout(LayoutKind.Explicit)]
+[StructLayout(LayoutKind.Sequential)]
 public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
 {
-    [FieldOffset(0)]
     public readonly EntityID ID;
+    private readonly EntityID _world;
 
-    [FieldOffset(8)]
-    private readonly World _world;
-   
-    
+    public override string ToString()
+    {
+        return $"{ID:X16}";
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Entity(World world, EntityID id)
+    internal Entity(EntityID world, EntityID id)
     {
         _world = world;
         ID = id;
     }
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Equals(ulong other)
@@ -1654,14 +1755,32 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
 
     public readonly Entity Set<T>(T component = default) where T : struct
     {
-        _world.Set(ID, component);
+        World.Set(in _world, ID, component);
+
+        //_world.Set(ID, component);
         return this;
     }
 
     public readonly Entity Unset<T>() where T : struct
     {
-        _world.Unset<T>(ID);
+        World.Unset<T>(in _world, ID);
+
+        //_world.Unset<T>(ID);
         return this;
+    }
+
+    public readonly ref T Get<T>() where T : struct
+    {
+        return ref World._allWorlds.Get(_world).Get<T>(ID);
+        //ref var p = ref World.Get<T>(in _world, ID);
+        //return ref p;
+        //return ref _world.Get<T>(ID);
+    }
+
+    public readonly bool Has<T>() where T : struct
+    {
+        return World.Has<T>(in _world, ID);
+        //return _world.Has<T>(ID);
     }
 
     //public readonly Entity Tag(EntityID componentID)
@@ -1676,12 +1795,17 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
     //    return this;
     //}
 
-    public readonly void Destroy() 
-        => _world.DestroyEntity(ID);
+    public readonly void Destroy()
+        => World.Destroy(in _world, ID);
+    //_world.DestroyEntity(ID);
 
     public readonly bool IsAlive()
-        => _world.IsEntityAlive(ID);
+        => World.IsEntityAlive(in _world, ID);
+    //_world.IsEntityAlive(ID);
 
 
     public static implicit operator EntityID(in Entity d) => d.ID;
+
+
+    public static readonly Entity Invalid = new Entity(0, 0);
 }

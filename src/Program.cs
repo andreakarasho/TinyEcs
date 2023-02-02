@@ -10,25 +10,53 @@ const int ENTITIES_COUNT = 524_288 * 2;
 
 using var world = new World();
 
+
+var e1 = world.CreateEntity();
+var e2 = world.CreateEntity();
+var e3 = world.CreateEntity();
+var e4 = world.CreateEntity();
+
+Console.WriteLine("created {0:X16}", e1);
+Console.WriteLine("created {0:X16}", e2);
+Console.WriteLine("created {0:X16}", e3);
+Console.WriteLine("created {0:X16}", e4);
+
+e2.Destroy();
+e2 = world.CreateEntity();
+Console.WriteLine("created {0:X16}", e2);
+
+e3.Destroy();
+e3 = world.CreateEntity();
+Console.WriteLine("created {0:X16}", e3);
+
+e4.Destroy();
+e4 = world.CreateEntity();
+Console.WriteLine("created {0:X16}", e4);
+
+
+
 var rnd = new Random();
 
 var sw = Stopwatch.StartNew();
 
 
+var e = world.CreateEntity()
+        .Set<Position>(new Position() { X = 1, Y = 1})
+        .Set<Velocity>(new Velocity() { X = 3, Y = 3});
 
-for (int i = 0; i < ENTITIES_COUNT; ++i)
-{
-    //var entity = world.CreateEntity();
-    //entity.Set<Position>();
-    //entity.Set<Velocity>();
+//for (int i = 0; i < ENTITIES_COUNT; ++i)
+//{
+//    //var entity = world.CreateEntity();
+//    //entity.Set<Position>();
+//    //entity.Set<Velocity>();
 
-    var e = world.CreateEntity()
-        .Set<Position>()
-        .Set<Velocity>();
+//    var e = world.CreateEntity()
+//        .Set<Position>()
+//        .Set<Velocity>();
 
-    //world.Set<Position>(entity);
-    //world.Set<Velocity>(entity);
-}
+//    //world.Set<Position>(entity);
+//    //world.Set<Velocity>(entity);
+//}
 
 //var list = new List<ulong>();
 
@@ -105,7 +133,7 @@ unsafe
 {
     world.RegisterSystem(query, &ASystem);
     //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
-    //world.RegisterSystem(world.Query(), &PostUpdate, SystemPhase.OnPostUpdate);
+    world.RegisterSystem(world.Query().With<Position>(), &PostUpdate, SystemPhase.OnPostUpdate);
 }
 
 
@@ -113,7 +141,7 @@ while (true)
 {
     sw.Restart();
     
-    for (int i = 0; i < 3600; ++i)
+    //for (int i = 0; i < 3600; ++i)
     {
         world.Step();
         //foreach (var it in query)
@@ -177,6 +205,17 @@ static void PreUpdate(in Iterator it)
 static void PostUpdate(in Iterator it)
 {
     Console.WriteLine("post update");
+
+    ref var p = ref it.Field<Position>();
+
+    for (var row = 0; row < it.Count; ++row)
+    {
+        //var e = it.Entity(row);
+        //ref readonly var entity = ref it.Entity(row);
+        ref var pos = ref it.Get(ref p, row);
+
+        Console.WriteLine("position: {0}, {1}", pos.X, pos.Y);
+    }
 }
 
 struct Likes { }
