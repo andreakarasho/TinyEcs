@@ -11,8 +11,8 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
-    private static readonly object _lock = new object();
-    internal static readonly EntitySparseSet<World> _allWorlds = new EntitySparseSet<World>();
+    private static readonly object _lock = new();
+    internal static readonly EntitySparseSet<World> _allWorlds = new();
 
     internal readonly EntityID _worldID;
     private int _totalFrames;
@@ -23,9 +23,9 @@ public sealed partial class World : IDisposable
     internal Archetype _archRoot;
     internal readonly ComponentStorage _storage;
 
-    internal readonly Dictionary<int, Archetype> _typeIndex = new Dictionary<int, Archetype>();
-    private readonly EntitySparseSet<EcsRecord> _entities = new EntitySparseSet<EcsRecord>();
-    private readonly Dictionary<EntityID, Query> _queryIndex = new Dictionary<EntityID, Query>();
+    internal readonly Dictionary<int, Archetype> _typeIndex = new();
+    private readonly EntitySparseSet<EcsRecord> _entities = new();
+    private readonly Dictionary<EntityID, Query> _queryIndex = new();
 
     private readonly IQueryComposition _querySystems;
     private readonly IQueryComposition _querySystemsOnUpdate;
@@ -91,25 +91,23 @@ public sealed partial class World : IDisposable
     public int EntityCount => _entityCount;
 
 
-    private unsafe void Destroy()
+    public void Dispose()
     {
         foreach ((var type, var arch) in _typeIndex)
         {
             arch.Signature.Dispose();
         }
 
+        _entities.Clear();
+        _entityCount = 0;
         _typeIndex.Clear();
         _queryIndex.Clear();
-        _entities.Clear();
         _storage.Clear();
-        _entityCount = 0;
         _archRoot = new Archetype(this, new EcsSignature(0));
 
         lock (_lock)
             _allWorlds.Remove(_worldID);
     }
-
-    public void Dispose() => Destroy();
 
 
     private unsafe void RunSystemSets(SystemPhase phase)
@@ -1360,6 +1358,11 @@ sealed class EntitySparseSet<T>
             ++_count;
         }
 
+        public void Clear()
+        {
+            _count = 0;
+        }
+
         private void GrowIfNecessary(int length)
         {
             if (length >= _array.Length)
@@ -1413,7 +1416,7 @@ sealed class EntitySparseSet<T>
 
 
         ref var chunk = ref GetChunk((int)id >> 12);
-        if (Unsafe.IsNullRef(ref chunk))
+        if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
             return ref Unsafe.NullRef<T>();
 
         return ref chunk.Values[(int)id & 0xFFF];
@@ -1437,7 +1440,7 @@ sealed class EntitySparseSet<T>
     public ref T Get(EntityID outerIdx)
     {
         ref var chunk = ref GetChunk((int)outerIdx >> 12);
-        if (Unsafe.IsNullRef(ref chunk))
+        if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
             return ref Unsafe.NullRef<T>();
 
         var gen = SplitGeneration(ref outerIdx);
@@ -1511,7 +1514,7 @@ sealed class EntitySparseSet<T>
     public void Remove(EntityID outerIdx)
     {
         ref var chunk = ref GetChunk((int)outerIdx >> 12);
-        if (Unsafe.IsNullRef(ref chunk))
+        if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
             return;
 
         var gen = SplitGeneration(ref outerIdx);
@@ -1547,6 +1550,16 @@ sealed class EntitySparseSet<T>
         chunk.Values[realID] = default!;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Clear()
+    {
+        _count = 1;
+        _maxID = uint.MinValue;
+        Array.Clear(_chunks);
+        _dense.Clear();
+        _dense.Add(0);
+    }
+
     private void SwapDense(ref Chunk chunkA, int a, int b)
     {
         Debug.Assert(a != b);
@@ -1573,15 +1586,6 @@ sealed class EntitySparseSet<T>
         Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
         index -= gen;
         return gen;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Clear()
-    {
-        //Array.Clear(_dense);
-        Array.Clear(_chunks);
-        _count = 1;
-        //_denseCount = 1;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1687,38 +1691,6 @@ public enum SystemPhase
     OnPostStartup
 }
 
-partial class World
-{
-    internal static void Set<T>(in EntityID worldID, EntityID entity, T component = default) where T : struct
-    {
-        _allWorlds.Get(worldID).Set(entity, component);
-    }
-
-    internal static void Unset<T>(in EntityID worldID, EntityID entity) where T : struct
-    {
-        _allWorlds.Get(worldID).Unset<T>(entity);
-    }
-
-    internal static ref T Get<T>(in EntityID worldID, EntityID entity) where T : struct
-    {
-        return ref _allWorlds.Get(worldID).Get<T>(entity);
-    }
-
-    internal static bool Has<T>(in EntityID worldID, EntityID entity) where T : struct
-    {
-        return _allWorlds.Get(worldID).Has<T>(entity);
-    }
-
-    internal static bool IsEntityAlive(in EntityID worldID, EntityID entity)
-    {
-        return _allWorlds.Get(worldID).IsEntityAlive(entity);
-    }
-
-    internal static void Destroy(in EntityID worldID, EntityID entity)
-    {
-        _allWorlds.Get(worldID).DestroyEntity(entity);
-    }
-}
 
 
 [SkipLocalsInit]
@@ -1726,17 +1698,13 @@ partial class World
 public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
 {
     public readonly EntityID ID;
-    private readonly EntityID _world;
+    public readonly EntityID WorldID;
 
-    public override string ToString()
-    {
-        return $"{ID:X16}";
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Entity(EntityID world, EntityID id)
     {
-        _world = world;
+        WorldID = world;
         ID = id;
     }
 
@@ -1753,59 +1721,40 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
         return ID == other.ID;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly Entity Set<T>(T component = default) where T : struct
     {
-        World.Set(in _world, ID, component);
-
-        //_world.Set(ID, component);
+        World._allWorlds.Get(WorldID).Set<T>(ID, component);
         return this;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly Entity Unset<T>() where T : struct
     {
-        World.Unset<T>(in _world, ID);
-
-        //_world.Unset<T>(ID);
+        World._allWorlds.Get(WorldID).Unset<T>(ID);
         return this;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct
-    {
-        return ref World._allWorlds.Get(_world).Get<T>(ID);
-        //ref var p = ref World.Get<T>(in _world, ID);
-        //return ref p;
-        //return ref _world.Get<T>(ID);
-    }
+        => ref World._allWorlds.Get(WorldID).Get<T>(ID);
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has<T>() where T : struct
-    {
-        return World.Has<T>(in _world, ID);
-        //return _world.Has<T>(ID);
-    }
+        => World._allWorlds.Get(WorldID).Has<T>(ID);
 
-    //public readonly Entity Tag(EntityID componentID)
-    //{
-    //    _world.Tag(ID, componentID);
-    //    return this;
-    //}
-
-    //public readonly Entity Untag(EntityID componentID)
-    //{
-    //    _world.Untag(ID, componentID);
-    //    return this;
-    //}
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Destroy()
-        => World.Destroy(in _world, ID);
-    //_world.DestroyEntity(ID);
+        => World._allWorlds.Get(WorldID).DestroyEntity(ID);
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool IsAlive()
-        => World.IsEntityAlive(in _world, ID);
-    //_world.IsEntityAlive(ID);
+        => World._allWorlds.Get(WorldID).IsEntityAlive(ID);
 
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator EntityID(in Entity d) => d.ID;
 
 
-    public static readonly Entity Invalid = new Entity(0, 0);
+    public static readonly Entity Invalid = new(0, 0);
 }
