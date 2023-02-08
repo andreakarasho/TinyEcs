@@ -1,6 +1,9 @@
 # TinyEcs
+This small drop-in single-file project borns by the need of a reflection-free dotnet ECS library.<br>
+NativeAOT compatible.
 
-<i>Non production ready.</i>
+# Status
+<i>Semi-production ready.</i>  `¯\_(ツ)_/¯`
 
 # Sample
 ```csharp
@@ -41,4 +44,6 @@ struct Velocity { public float X, Y; }
 ```
 
 # Credits
-Base code idea inspired by https://github.com/jasonliang-dev/entity-component-system
+Base code idea inspired by:
+- https://github.com/jasonliang-dev/entity-component-system
+- https://github.com/SanderMertens/flecs
