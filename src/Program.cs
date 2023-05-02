@@ -11,10 +11,10 @@ const int ENTITIES_COUNT = 524_288 * 2;
 using var world = new World();
 
 
-var e1 = world.CreateEntity();
-var e2 = world.CreateEntity();
-var e3 = world.CreateEntity();
-var e4 = world.CreateEntity();
+var e1 = world.Entity();
+var e2 = world.Entity();
+var e3 = world.Entity();
+var e4 = world.Entity();
 
 Console.WriteLine("created {0:X16}", e1);
 Console.WriteLine("created {0:X16}", e2);
@@ -22,15 +22,15 @@ Console.WriteLine("created {0:X16}", e3);
 Console.WriteLine("created {0:X16}", e4);
 
 e2.Destroy();
-e2 = world.CreateEntity();
+e2 = world.Entity();
 Console.WriteLine("created {0:X16}", e2);
 
 e3.Destroy();
-e3 = world.CreateEntity();
+e3 = world.Entity();
 Console.WriteLine("created {0:X16}", e3);
 
 e4.Destroy();
-e4 = world.CreateEntity();
+e4 = world.Entity();
 Console.WriteLine("created {0:X16}", e4);
 
 
@@ -40,23 +40,32 @@ var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 
-var e = world.CreateEntity()
+var parent = world.Entity()
         .Set<Position>(new Position() { X = 1, Y = 1})
         .Set<Velocity>(new Velocity() { X = 3, Y = 3});
 
-//for (int i = 0; i < ENTITIES_COUNT; ++i)
-//{
-//    //var entity = world.CreateEntity();
-//    //entity.Set<Position>();
-//    //entity.Set<Velocity>();
+var arr = new [] {
+    world.Entity(), world.Entity(), world.Entity(), world.Entity()
+};
 
-//    var e = world.CreateEntity()
-//        .Set<Position>()
-//        .Set<Velocity>();
+for (int i = 0; i < 10; ++i)
+{
+   //var entity = world.CreateEntity();
+   //entity.Set<Position>();
+   //entity.Set<Velocity>();
 
-//    //world.Set<Position>(entity);
-//    //world.Set<Velocity>(entity);
-//}
+   _ = world.Entity()
+       .Set<Position>()
+       .Set<Velocity>()
+       .Set<Likes, Dogs>()
+       .Set<Likes, Cats>()
+       .Set(TileType.Static)
+       .Set<ChildOf>(arr[i % arr.Length])
+       ;
+
+   //world.Set<Position>(entity);
+   //world.Set<Velocity>(entity);
+}
 
 //var list = new List<ulong>();
 
@@ -105,11 +114,13 @@ var e = world.CreateEntity()
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
 var query = world.Query()
+    .With<EcsEntity>()
     .With<Position>()
     .With<Velocity>()
-    //.WithTag(plat)
-    //.WithTag(posC)
-    //.Without<PlayerTag>()
+    .With<Likes, Dogs>()
+    .With<Likes, Cats>()
+    .With<ChildOf, EcsEntity>()
+    .With<TileType>()
     ;
 
 
@@ -133,7 +144,7 @@ unsafe
 {
     world.RegisterSystem(query, &ASystem);
     //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
-    world.RegisterSystem(world.Query().With<Position>(), &PostUpdate, SystemPhase.OnPostUpdate);
+    //world.RegisterSystem(world.Query().With<Position>(), &PostUpdate, SystemPhase.OnPostUpdate);
 }
 
 
@@ -166,16 +177,23 @@ Console.ReadLine();
 static void ASystem(in Iterator it)
 {
     //Console.WriteLine("ASystem - Count: {0}", it.Count);
-
+    ref var e = ref it.Field<EcsEntity>();
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
+    ref var b = ref it.Field<ChildOf, EcsEntity>();
+    ref var t = ref it.Field<TileType>();
 
     for (var row = 0; row < it.Count; ++row)
     {
         //var e = it.Entity(row);
         //ref readonly var entity = ref it.Entity(row);
+        ref var ent = ref it.Get(ref e, row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
+        ref var bob = ref it.Get(ref b, row);
+        ref var tileType = ref it.Get(ref t, row);
+
+        Console.WriteLine("ent: {0}, world id: {1} parent id: {2} {3}", ent.ID, ent.WorldID, bob.Target.ID, tileType);
 
         pos.X *= vel.X;
         pos.Y *= vel.Y;
@@ -222,15 +240,18 @@ struct Likes { }
 struct Dogs { }
 struct Cats { }
 
+struct ChildOf {}
+
+enum TileType
+{
+    Land = 1,
+    Static
+}
+
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 record struct PlayerTag();
 struct ReflectedPosition { public float X, Y; }
-
-struct Relation<TAction, TTarget> 
-    where TAction : struct 
-    where TTarget : struct
-{ }
 
 
 record struct ATestComp(bool X, float Y, float Z);

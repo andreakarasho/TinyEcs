@@ -11,7 +11,7 @@
             using var world = new World();
 
             for (int i = 0; i < amount; i++)
-                world.Set<float>(world.CreateEntity());
+                world.Set<float>(world.Entity());
 
             var query = world.Query()
                 .With<float>();
@@ -37,7 +37,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.CreateEntity();
+                var e = world.Entity();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -68,7 +68,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.CreateEntity();
+                var e = world.Entity();
                 world.Set<float>(e);
                 world.Set<int>(e);
                 world.Set<bool>(e);
@@ -102,7 +102,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.CreateEntity();
+                var e = world.Entity();
                 world.Set<float>(e);
                 world.Set<int>(e);
                 world.Set<bool>(e);
@@ -136,7 +136,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.CreateEntity();
+                var e = world.Entity();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -169,7 +169,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.CreateEntity();
+                var e = world.Entity();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -199,22 +199,22 @@
 
             var good = 0;
 
-            var e = world.CreateEntity();
+            var e = world.Entity();
             world.Set<float>(e);
             world.Set<int>(e);
 
-            var e2 = world.CreateEntity();
+            var e2 = world.Entity();
             world.Set<float>(e2);
             world.Set<int>(e2);
             world.Set<bool>(e2);
 
-            var e3 = world.CreateEntity();
+            var e3 = world.Entity();
             world.Set<float>(e3);
             world.Set<int>(e3);
             world.Set<byte>(e3);
             good++;
 
-            var e4 = world.CreateEntity();
+            var e4 = world.Entity();
             world.Set<float>(e4);
             world.Set<int>(e4);
             world.Set<byte>(e4);

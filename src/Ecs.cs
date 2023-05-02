@@ -45,18 +45,20 @@ public sealed partial class World : IDisposable
             _allWorlds.CreateNew(out _worldID) = this;
 
         // initialize pre-built cmps
-        _ = _storage.GetOrCreateID<EcsComponent>();
-        _ = _storage.GetOrCreateID<EcsSystem>();
-        _ = _storage.GetOrCreateID<EcsQuery>();
+        _ = _storage.GetComponent<EcsEntity>();
+        _ = _storage.GetComponent<EcsComponent>();
+        _ = _storage.GetComponent<EcsSystem>();
+        _ = _storage.GetComponent<EcsQuery>();
+        
+        _ = _storage.GetComponent<EcsSystemPhaseOnUpdate>();
+        _ = _storage.GetComponent<EcsSystemPhasePreUpdate>();
+        _ = _storage.GetComponent<EcsSystemPhasePostUpdate>();
 
-        _ = _storage.GetOrCreateID<EcsSystemPhaseOnUpdate>();
-        _ = _storage.GetOrCreateID<EcsSystemPhasePreUpdate>();
-        _ = _storage.GetOrCreateID<EcsSystemPhasePostUpdate>();
+        _ = _storage.GetComponent<EcsSystemPhaseOnStartup>();
+        _ = _storage.GetComponent<EcsSystemPhasePreStartup>();
+        _ = _storage.GetComponent<EcsSystemPhasePostStartup>();
 
-        _ = _storage.GetOrCreateID<EcsSystemPhaseOnStartup>();
-        _ = _storage.GetOrCreateID<EcsSystemPhasePreStartup>();
-        _ = _storage.GetOrCreateID<EcsSystemPhasePostStartup>();
-
+        _ = _storage.GetComponent<EcsEnabled>();
 
         // initialize pre-built queries
         _querySystems = Query()
@@ -161,9 +163,23 @@ public sealed partial class World : IDisposable
         Interlocked.Increment(ref _totalFrames);
     }
 
-    public IQueryComposition Query() => new Query(this);
+    public IQueryComposition Query()
+    {
+        var query = new Query(this);
+        query.With<EcsEnabled>();
 
-    public Entity CreateEntity(/*EntityID id = 0*/)
+        return query;
+    }
+
+    public Entity Entity() 
+    {
+        var e = CreateEntityRaw();
+        Set(e, new EcsEntity(e.ID, e.WorldID));
+        Set<EcsEnabled>(e);
+        return e;
+    }
+
+    internal Entity CreateEntityRaw(/*EntityID id = 0*/)
     {
         ref var record = /*ref id > 0 ? ref _entities.Add(id, default!) :*/ ref _entities.CreateNew(out var id);
         record.Archetype = _archRoot;
@@ -316,7 +332,7 @@ public sealed partial class World : IDisposable
         record.Archetype = arch!;
     }
 
-    private void Set(EntityID entity, int componentID, ReadOnlySpan<byte> data)
+    internal void Set(EntityID entity, int componentID, ReadOnlySpan<byte> data)
     {
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
@@ -363,12 +379,12 @@ public sealed partial class World : IDisposable
 
     public unsafe Entity RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
-        var qryID = CreateEntity();
+        var qryID = Entity();
         Set<EcsQuery>(qryID);
 
         _queryIndex.Add(qryID, (Query)query);
 
-        var id = CreateEntity();
+        var id = Entity();
         Set<EcsSystem>(id, new EcsSystem(qryID, func));
 
         switch (phase)
@@ -563,11 +579,50 @@ public sealed partial class World : IDisposable
     }
 
 
+    internal sealed class ComponentStorage2
+    {
+        private readonly EntitySparseSet<EntityID> _componentsSet = new ();
+        private readonly World _world;
 
+
+        public ComponentStorage2(World world)
+        {
+            _world = world;
+        }
+
+        public unsafe EntityID GetComponent<T>() where T : struct
+        {
+            var hash = (EntityID)typeof(T).GetHashCode();
+
+            if (_componentsSet.Contains(hash))
+            {
+                return _componentsSet.Get(hash);
+            }
+
+            var entiID = _world.CreateEntityRaw();
+            ref var id = ref _componentsSet.Add(hash, entiID);
+
+            entiID.Set(new EcsComponent()
+            {
+                Size = sizeof(T),
+            });
+            return entiID;
+        }
+
+        public int GetSize()
+        {
+            return 0;
+        }
+
+        public void Clear()
+            => _componentsSet.Clear();
+    }
 
     internal sealed class ComponentStorage
     {
         const int INITIAL_LENGTH = 32;
+
+        private EntitySparseSet<EntityID> _componentsSet = new ();
 
         private readonly World _world;
         private int[] _componentsHashes = new int[INITIAL_LENGTH];
@@ -581,8 +636,9 @@ public sealed partial class World : IDisposable
             _world = world;
         }
 
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetOrCreateID<T>() where T : struct
+        public int GetComponent<T>() where T : struct
         {
             var globalIndex = TypeOf<T>.GlobalIndex;
 
@@ -590,7 +646,7 @@ public sealed partial class World : IDisposable
 
             if (_componentsHashes[globalIndex] == 0)
             {
-                var id = _world.CreateEntity();
+                var id = _world.CreateEntityRaw();
 
                 CreateComponent(id, globalIndex, TypeOf<T>.Hash, TypeOf<T>.Size,
 #if DEBUG
@@ -610,6 +666,12 @@ public sealed partial class World : IDisposable
         public int GetID<T>() where T : struct
         {
             return TypeOf<T>.GlobalIndex;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public EntityID GetEntityID<T>() where T : struct
+        {
+            return _componentsIDs[TypeOf<T>.GlobalIndex];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -893,31 +955,31 @@ public struct Query : IQueryComposition
 
     public IQueryComposition With<T>() where T : struct
     {
-        _add.Add(_world._storage.GetOrCreateID<T>());
+        _add.Add(_world._storage.GetComponent<T>());
 
         return this;
     }
 
     public IQueryComposition Without<T>() where T : struct
     {
-        _remove.Add(_world._storage.GetOrCreateID<T>());
+        _remove.Add(_world._storage.GetComponent<T>());
 
         return this;
     }
 
-    //public IQueryComposition WithTag(EntityID componentID)
-    //{
-    //    _add.Add(_world._storage.GetOrCreateID(componentID));
+    public IQueryComposition With<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct
+    {
+        return With<EcsRelation<TPredicate, TTarget>>();
+    }
 
-    //    return this;
-    //}
-
-    //public IQueryComposition WithoutTag(EntityID componentID)
-    //{
-    //    _remove.Add(_world._storage.GetOrCreateID(componentID));
-
-    //    return this;
-    //}
+    public IQueryComposition Without<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct
+    {
+        return Without<EcsRelation<TPredicate, TTarget>>();
+    }
 
     public QueryIterator GetEnumerator()
     {
@@ -931,9 +993,17 @@ public struct Query : IQueryComposition
 public interface IQueryComposition
 {
     IQueryComposition With<T>() where T : struct;
+  
     IQueryComposition Without<T>() where T : struct;
-    //IQueryComposition WithTag(EntityID componentID);
-    //IQueryComposition WithoutTag(EntityID componentID);
+
+    IQueryComposition With<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct;
+
+    IQueryComposition Without<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct;
+
     QueryIterator GetEnumerator();
 }
 
@@ -1007,7 +1077,6 @@ public ref struct Iterator
     private readonly World _world;
     private readonly byte[][] _components;
     private readonly int[] _columns;
-    private ref EntityID _firstEntity;
 
     internal Iterator(World world, [NotNull] Archetype archetype)
     {
@@ -1015,11 +1084,11 @@ public ref struct Iterator
         Count = archetype.Count;
         _columns = archetype.Lookup;
         _components = archetype._components;
-        _firstEntity = ref MemoryMarshal.GetReference<EntityID>(archetype.Entities);
     }
 
 
     public readonly int Count;
+    public World World => _world;
 
     // NOTE: returning Span<T> is a way slower... have I did anything wrong? :\
     //[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1037,11 +1106,19 @@ public ref struct Iterator
     //}
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Field<T>() where T : struct
+    public unsafe readonly ref T Field<T>() where T : struct
     {
         var componentID = _world._storage.GetID<T>();
-        var span = _components[_columns[componentID]].AsSpan(0, Count * Unsafe.SizeOf<T>());
+        var span = _components[_columns[componentID]].AsSpan(0, Count * sizeof(T));
         return ref MemoryMarshal.AsRef<T>(span);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe readonly ref EcsRelation<TPredicate, TTarget> Field<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct
+    {
+        return ref Field<EcsRelation<TPredicate, TTarget>>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1052,24 +1129,8 @@ public ref struct Iterator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref T Get<T>(ref T first, int row) where T : struct
+    public readonly ref T Get<T>(ref T first, int row) where T : struct
         => ref Unsafe.Add(ref first, row);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Entity(int index)
-    {
-        //ref var e = ref Unsafe.As<EntityID, Entity>(ref Unsafe.Add(ref _firstEntity, index));
-
-
-        //return ref e;
-        return new Entity(_world._worldID, Unsafe.Add(ref _firstEntity, index));
-    }
-
-    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    //public readonly ref readonly EntityID Entity(int index)
-    //{
-    //    return ref Unsafe.Add(ref _firstEntity, index);
-    //}
 }
 
 sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
@@ -1302,23 +1363,17 @@ public sealed partial class World
 {
     [SkipLocalsInit]
     public void Set<T>(EntityID entity, T component = default) where T : struct
-        => Set(entity, _storage.GetOrCreateID<T>(), MemoryMarshal.AsBytes(new Span<T>(ref component)));
+        => Set(entity, _storage.GetComponent<T>(), MemoryMarshal.AsBytes(new Span<T>(ref component)));
 
     public void Unset<T>(EntityID entity) where T : struct
-       => Detach(entity, _storage.GetOrCreateID<T>());
-
-    //public void Tag(EntityID entity, EntityID componentID)
-    //    => Set(entity, _storage.GetOrCreateID(componentID), ReadOnlySpan<byte>.Empty);
-
-    //public void Untag(EntityID entity, EntityID componentID)
-    //    => Detach(entity, _storage.GetOrCreateID(componentID));
+       => Detach(entity, _storage.GetComponent<T>());
 
     public unsafe bool Has<T>(EntityID entity) where T : struct
-        => Has(entity, _storage.GetOrCreateID<T>());
+        => Has(entity, _storage.GetComponent<T>());
 
     public unsafe ref T Get<T>(EntityID entity) where T : struct
     {
-        var raw = Get(entity, _storage.GetOrCreateID<T>());
+        var raw = Get(entity, _storage.GetComponent<T>());
         return ref MemoryMarshal.AsRef<T>(raw);
     }
 }
@@ -1624,6 +1679,7 @@ static class EcsConst
     public const EntityID ECS_ID_FLAGS_MASK = (0xFFul << 60);
     public const EntityID ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
     public const EntityID ID_TOGGLE = 1ul << 61;
+    public const EntityID ECS_PAIR = (1ul << 63);
 }
 
 
@@ -1672,6 +1728,24 @@ public unsafe readonly struct EcsSystem
         Func = func;
     }
 }
+
+public readonly struct EcsEntity
+{
+    public readonly EntityID ID;
+    public readonly EntityID WorldID;
+
+    public EcsEntity(EntityID id, EntityID worldID)
+        => (ID, WorldID) = (id, worldID);
+}
+
+public struct EcsRelation<TAction, TTarget> 
+    where TAction : struct 
+    where TTarget : struct
+{ 
+    public TTarget Target;
+}
+
+public readonly struct EcsEnabled {}
 
 public struct EcsSystemPhaseOnUpdate { }
 public struct EcsSystemPhasePreUpdate { }
@@ -1732,6 +1806,57 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
     public readonly Entity Unset<T>() where T : struct
     {
         World._allWorlds.Get(WorldID).Unset<T>(ID);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Entity Set<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct
+    {
+        World._allWorlds.Get(WorldID).Set<EcsRelation<TPredicate, TTarget>>(ID);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Entity Unset<TPredicate, TTarget>() 
+        where TPredicate : struct
+        where TTarget : struct
+    {
+        World._allWorlds.Get(WorldID).Unset<EcsRelation<TPredicate, TTarget>>(ID);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Entity Set<TPredicate>(EntityID targetID) 
+        where TPredicate : struct
+    {
+        // horrible workaround
+        var world = World._allWorlds.Get(WorldID);
+        // _ = world._storage.GetOrCreateID<TPredicate>();
+
+        // var obj = targetID;
+        // var pred = world._storage.GetEntityID<TPredicate>();
+        // var rel = ((EntityID)pred << 32) + (uint)obj;
+        
+        var rel = new EcsRelation<TPredicate, EcsEntity>();
+        rel.Target = world.Get<EcsEntity>(targetID);
+
+        world.Set(ID, rel);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Entity Enable()
+    {
+        World._allWorlds.Get(WorldID).Set<EcsEnabled>(ID);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Entity Disable()
+    {
+        World._allWorlds.Get(WorldID).Unset<EcsEnabled>(ID);
         return this;
     }
 
