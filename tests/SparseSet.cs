@@ -6,12 +6,12 @@
         [InlineData(1_000_000)]
         public void SparseSet_Add(int amount)
         {
-            var set = new EntitySparseSet<EcsComponent>();
+            var set = new EntitySparseSet<float>();
 
             for (var i = 0; i < amount; i++)
             {
                 ref var cmp = ref set.CreateNew(out var id);
-                cmp.Size = 123 + i;
+                cmp = 123f + i;
 
                 Assert.True(set.Contains(id));
                 Assert.Equal(cmp, set.Get(id));

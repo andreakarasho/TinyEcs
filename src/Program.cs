@@ -6,110 +6,67 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 2;
+const int ENTITIES_COUNT = 524_288 * 2 * 1;
+
+
 
 using var world = new World();
 
 
-var e1 = world.Entity();
-var e2 = world.Entity();
-var e3 = world.Entity();
-var e4 = world.Entity();
-
-Console.WriteLine("created {0:X16}", e1);
-Console.WriteLine("created {0:X16}", e2);
-Console.WriteLine("created {0:X16}", e3);
-Console.WriteLine("created {0:X16}", e4);
-
-e2.Destroy();
-e2 = world.Entity();
-Console.WriteLine("created {0:X16}", e2);
-
-e3.Destroy();
-e3 = world.Entity();
-Console.WriteLine("created {0:X16}", e3);
-
-e4.Destroy();
-e4 = world.Entity();
-Console.WriteLine("created {0:X16}", e4);
-
-
-
 var rnd = new Random();
-
 var sw = Stopwatch.StartNew();
 
+var root = world.Entity();
+var parent = world.Entity().Set<ChildOf>(root);
+var child = world.Entity().Set<ChildOf>(parent);
 
-var parent = world.Entity()
-        .Set<Position>(new Position() { X = 1, Y = 1})
-        .Set<Velocity>(new Velocity() { X = 3, Y = 3});
 
-var arr = new [] {
-    world.Entity(), world.Entity(), world.Entity(), world.Entity()
-};
+//ref var o = ref child.Get<ChildOf>();
+
+//root.Destroy();
+
+//Console.WriteLine("root is alive? {0}", root.IsAlive());
+//Console.WriteLine("parent is alive? {0}", parent.IsAlive());
+//Console.WriteLine("child is alive? {0}", child.IsAlive());
+
+//var arr = new [] 
+//{
+//    world.Entity(), world.Entity(), 
+//    world.Entity(), world.Entity()
+//};
+
+//foreach (var item in arr) item.Destroy();
 
 for (int i = 0; i < 10; ++i)
 {
-   //var entity = world.CreateEntity();
-   //entity.Set<Position>();
-   //entity.Set<Velocity>();
-
-   _ = world.Entity()
-       .Set<Position>()
-       .Set<Velocity>()
-       .Set<Likes, Dogs>()
-       .Set<Likes, Cats>()
-       .Set(TileType.Static)
-       .Set<ChildOf>(arr[i % arr.Length])
-       ;
-
-   //world.Set<Position>(entity);
-   //world.Set<Velocity>(entity);
+    _ = world.Entity()
+        .Set<Position>()
+        .Set<Velocity>()
+        .Set<Likes, Dogs>()
+        .Set<Likes, Cats>()
+        .Set(TileType.Static)
+        .Set<ChildOf>(parent)
+        ;
 }
 
-//var list = new List<ulong>();
+_ = world.Entity()
+    .Set<Position>()
+    .Set<Velocity>()
+    .Set<Likes, Dogs>()
+    .Set<Likes, Cats>()
+    .Set(TileType.Static)
+    .Set<ChildOf>(child)
+    ;
 
-//for (int i = 0; i < 100; ++i)
-//{
-//    var e = world.CreateEntity();
-//    world.Set<Position>(e);
-//    world.Set<Velocity>(e);
-//    world.Set<PlayerTag>(e);
+_ = world.Entity()
+    .Set<Position>()
+    .Set<Velocity>()
+    .Set<Likes, Dogs>()
+    .Set<Likes, Cats>()
+    .Set(TileType.Static)
+    .Set<ChildOf>(child)
+    ;
 
-//    list.Add(e);
-//}
-
-//foreach (var e in list)
-//{
-//    world.DestroyEntity(e);
-//}
-
-//for (int i = 0; i < list.Count; ++i)
-//{
-//    var e = world.CreateEntity();
-//    Console.WriteLine(e);
-//    //world.Set<Position>(e);
-//    //world.Set<Velocity>(e);
-//    //world.Set<PlayerTag>(e);
-//}
-
-
-//var e2 = world.CreateEntity();
-//world.Set<Position>(e2);
-//world.Set<Velocity>(e2);
-//world.Set<int>(e2); 
-//world.Set<float>(e2);
-
-//var e3 = world.CreateEntity();
-//world.Set<Position>(e3);
-//world.Set<Velocity>(e3);
-//world.Set<int>(e3);
-//world.Set<float>(e3);
-//world.Set<PlayerTag>(e3);
-
-//var plat = world.CreateEntity();
-//world.Tag(e3, plat);
-////world.Untag(e3, plat);
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -119,7 +76,7 @@ var query = world.Query()
     .With<Velocity>()
     .With<Likes, Dogs>()
     .With<Likes, Cats>()
-    .With<ChildOf, EcsEntity>()
+    .With<ChildOf>(child)
     .With<TileType>()
     ;
 
@@ -129,14 +86,17 @@ var queryCmp = world.Query()
 
 foreach (var it in queryCmp)
 {
+    ref var e = ref it.Field<EcsEntity>();
     ref var p = ref it.Field<EcsComponent>();
 
     for (var row = 0; row < it.Count; ++row)
     {
-        //ref readonly var entity = ref it.Entity(row);
-        //ref var pos = ref it.Get(ref p, row);
+        ref var ent = ref it.Get(ref e, row);
+        ref var metadata = ref it.Get(ref p, row);
 
-        //Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", entity, pos.GlobalIndex, pos.Name.ToString(), pos.Size);
+        //it.World.Unset<EcsEnabled>(ent.ID);
+        
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", ent.ID, "", "" /*metadata.Name.ToString()*/, metadata.Size);
     }
 }
 
@@ -180,20 +140,24 @@ static void ASystem(in Iterator it)
     ref var e = ref it.Field<EcsEntity>();
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
-    ref var b = ref it.Field<ChildOf, EcsEntity>();
     ref var t = ref it.Field<TileType>();
 
     for (var row = 0; row < it.Count; ++row)
     {
-        //var e = it.Entity(row);
-        //ref readonly var entity = ref it.Entity(row);
+        //ref var parentID = ref it.Get(ref b, row);
         ref var ent = ref it.Get(ref e, row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
-        ref var bob = ref it.Get(ref b, row);
         ref var tileType = ref it.Get(ref t, row);
 
-        Console.WriteLine("ent: {0}, world id: {1} parent id: {2} {3}", ent.ID, ent.WorldID, bob.Target.ID, tileType);
+        //it.World.DestroyEntity((ulong)parentID);
+
+        //if (it.World.Has<ChildOf, EcsEntity>(parentID.Target.ID))
+        //{
+        //    ref var rootID = ref it.World.Get<ChildOf, EcsEntity>(parentID.Target.ID);
+        //}
+
+        //Console.WriteLine("ent: {0}, world id: {1} parent id: {2} {3}", ent.ID, ent.WorldID, bob.Target.ID, tileType);
 
         pos.X *= vel.X;
         pos.Y *= vel.Y;
@@ -240,11 +204,13 @@ struct Likes { }
 struct Dogs { }
 struct Cats { }
 
-struct ChildOf {}
+enum ChildOf : ulong {
+    
+}
 
 enum TileType
 {
-    Land = 1,
+    Land,
     Static
 }
 
