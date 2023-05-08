@@ -40,6 +40,28 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void Entity_Enable()
+        {
+            using var world = new World();
+           
+            var entity = world.Entity();
+            entity.Enable();
+
+            Assert.True(entity.IsEnabled());
+        }
+
+        [Fact]
+        public void Entity_Disabled()
+        {
+            using var world = new World();
+           
+            var entity = world.Entity();
+            entity.Disable();
+
+            Assert.True(!entity.IsEnabled());
+        }
+
+        [Fact]
         public void Entity_Attach_TwoSameComponent()
         {
             using var world = new World();

@@ -21,8 +21,9 @@ public sealed partial class World : IDisposable
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
 
     internal Archetype _archRoot;
-    internal readonly Dictionary<int, Archetype> _typeIndex = new();
+    internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
     private readonly EntitySparseSet<EcsRecord> _entities = new();
+    internal readonly EntitySparseSet<ComponentMetadata> _components = new();
     private readonly Dictionary<EntityID, Query> _queryIndex = new();
 
     private readonly IQueryComposition _querySystems;
@@ -33,29 +34,34 @@ public sealed partial class World : IDisposable
     private readonly IQueryComposition _querySystemsOnPreStartup;
     private readonly IQueryComposition _querySystemsOnPostStartup;
 
+    private readonly IQueryComposition _queryChildOf;
+    private readonly IQueryComposition _queryParent;
+
 
     public World()
     {
-        _archRoot = new Archetype(this, new EcsSignature(0));
+        _archRoot = new Archetype(this, ReadOnlySpan<EntityID>.Empty);
 
         lock (_lock)
             _allWorlds.CreateNew(out _worldID) = this;
         
         // initialize pre-built cmps
-        _ = ComponentStorage.GetOrAdd<EcsEntity>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsComponent>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsSystem>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsQuery>(this, CreateEntityRaw());
+        _ = ComponentStorage.GetOrAdd<EntityView>(this);
 
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnUpdate>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreUpdate>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostUpdate>(this, CreateEntityRaw());
+        _ = ComponentStorage.GetOrAdd<EcsChildOf>(this);
+        _ = ComponentStorage.GetOrAdd<EcsComponent>(this);
+        _ = ComponentStorage.GetOrAdd<EcsSystem>(this);
+        _ = ComponentStorage.GetOrAdd<EcsQuery>(this);
 
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnStartup>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreStartup>(this, CreateEntityRaw());
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostStartup>(this, CreateEntityRaw());
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnUpdate>(this);
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreUpdate>(this);
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostUpdate>(this);
 
-        _ = ComponentStorage.GetOrAdd<EcsEnabled>(this, CreateEntityRaw());
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnStartup>(this);
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreStartup>(this);
+        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostStartup>(this);
+
+        _ = ComponentStorage.GetOrAdd<EcsEnabled>(this);
 
         // initialize pre-built queries
         _querySystems = Query()
@@ -84,6 +90,12 @@ public sealed partial class World : IDisposable
         _querySystemsOnPostStartup = Query()
             .With<EcsSystem>()
             .With<EcsSystemPhasePostStartup>();
+
+        _queryChildOf = Query()
+            .With<EcsChildOf, EntityView>();
+
+        _queryParent = Query()
+            .With<EcsParent, EntityView>();
     }
 
 
@@ -92,16 +104,12 @@ public sealed partial class World : IDisposable
 
     public void Dispose()
     {
-        foreach ((var type, var arch) in _typeIndex)
-        {
-            arch.Signature.Dispose();
-        }
-
         _entities.Clear();
         _entityCount = 0;
         _typeIndex.Clear();
         _queryIndex.Clear();
-        _archRoot = new Archetype(this, new EcsSignature(0));
+        _components.Clear();
+        _archRoot = new Archetype(this, ReadOnlySpan<EntityID>.Empty);
 
         lock (_lock)
             _allWorlds.Remove(_worldID);
@@ -167,18 +175,18 @@ public sealed partial class World : IDisposable
         return query;
     }
 
-    public Entity Entity() 
+    public EntityView Entity() 
     {
         var e = CreateEntityRaw();
 
         return e
-            .Set(new EcsEntity(e.ID, e.WorldID))
+            .Set(e)
             .Set<EcsEnabled>();
     }
 
-    internal Entity CreateEntityRaw(/*EntityID id = 0*/)
+    internal EntityView CreateEntityRaw(EntityID id = 0)
     {
-        ref var record = /*ref id > 0 ? ref _entities.Add(id, default!) :*/ ref _entities.CreateNew(out var id);
+        ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
 
@@ -193,95 +201,71 @@ public sealed partial class World : IDisposable
         //    InternalCreateEntity(id);
         //}
 
-        return new Entity(_worldID, id);
+        return new EntityView(_worldID, id);
     }
 
-    public void DestroyEntity(EntityID entity)
+    public void Destroy(EntityID entity)
     {
         if (IsDeferred())
         {
             DestroyDeferred(entity);
+
+            return;
         }
-        else
+
+        //foreach (var it in _queryParent)
+        //{
+        //    ref var p = ref it.Field<EntityView>();
+
+        //    for (int i = 0; i < it.Count; i++)
+        //    {
+        //        ref var parent = ref it.Get(ref p, i);
+
+        //        if (parent == entity)
+        //        {
+        //            parent.Unset<EcsChildOf>();
+        //            parent.Destroy();
+
+        //            break;
+        //        }
+        //    }
+        //}
+
+        foreach (var it in _queryChildOf)
         {
-            //if (IDOp.IsPair(entity))
-            //{
-            //    var realID = IDOp.RealID(entity);
+            ref var p = ref it.Field<EntityView>();
+            ref var c = ref it.Field<EcsChildOf, EntityView>();
 
-            //    foreach (var it in Query().With<ChildOf>())
-            //    {
-            //        ref var p = ref it.Field<ChildOf>();
-            //        ref var c = ref it.Field<EcsEntity>();
-
-            //        for (int i = 0; i < it.Count; ++i)
-            //        {
-            //            ref var parentID = ref it.Get(ref p, i);
-            //            ref var ent = ref it.Get(ref c, i);
-
-            //            if (IDOp.RealID((EntityID)parentID) == entity)
-            //            {
-            //                DestroyEntity(ent.ID);
-            //            }
-            //        }
-            //    }
-
-            //    entity = realID;
-            //}
-
-            //foreach (var it in Query().With<ChildOf>())
-            //{
-            //    ref var p = ref it.Field<ChildOf>();
-            //    ref var c = ref it.Field<EcsEntity>();
-
-            //    for (int i = 0; i < it.Count; ++i)
-            //    {
-            //        ref var parentID = ref it.Get(ref p, i);
-            //        ref var ent = ref it.Get(ref c, i);
-
-            //        if (IDOp.RealID((EntityID)parentID) == entity)
-            //        {
-            //            DestroyEntity(ent.ID);
-            //        }
-            //    }
-            //}
-
-            //foreach (var it in Query().With(entity))
-            //{
-            //    ref var p = ref it.Field<ChildOf>();
-            //    ref var c = ref it.Field<EcsEntity>();
-
-            //    for (int i = 0; i < it.Count; ++i)
-            //    {
-            //        ref var parentID = ref it.Get(ref p, i);
-            //        ref var ent = ref it.Get(ref c, i);
-
-            //        if (IDOp.RealID((EntityID)parentID) == entity)
-            //        {
-            //            DestroyEntity(ent.ID);
-            //        }
-            //    }
-            //}
-
-            ref var record = ref _entities.Get(entity);
-            if (Unsafe.IsNullRef(ref record))
+            for (int i = 0; i < it.Count; i++)
             {
-                Debug.Fail("not an entity!");
+                ref var ent = ref it.Get(ref p, i);
+                ref var parent = ref it.Get(ref c, i);
+
+                if (parent.Target == entity)
+                {
+                    ent.Destroy();
+                }
             }
-
-
-            var removedId = record.Archetype.Remove(record.Row);
-
-            Debug.Assert(removedId == entity);
-
-            var last = record.Archetype.Entities[record.Row];
-            _entities.Get(last) = record;
-            _entities.Remove(removedId);
-
-            Interlocked.Decrement(ref _entityCount);
         }
+
+        ref var record = ref _entities.Get(entity);
+        if (Unsafe.IsNullRef(ref record))
+        {
+            Debug.Fail("not an entity!");
+        }
+
+        var removedId = record.Archetype.Remove(record.Row);
+
+        Debug.Assert(removedId == entity);
+
+        var last = record.Archetype.Entities[record.Row];
+        _entities.Get(last) = record;
+        _entities.Remove(removedId);
+
+        Interlocked.Decrement(ref _entityCount);
     }
 
-    public bool IsEntityAlive(EntityID entity) 
+    public bool IsAlive(EntityID entity) 
         => _entities.Contains(entity);
 
     private void Attach(EntityID entity, ref ComponentMetadata meta)
@@ -342,15 +326,15 @@ public sealed partial class World : IDisposable
 
     private void InternalAttachDetach(ref EcsRecord record, ref ComponentMetadata meta, bool add)
     {
-        var initType = record.Archetype.Signature;
-        var cmpCount = Math.Max(0, initType.Count + (add ? 1 : -1));
-        Span<ComponentMetadata> span = stackalloc ComponentMetadata[cmpCount];
+        var initType = record.Archetype.Components;
+        var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
+        Span<EntityID> span = stackalloc EntityID[cmpCount];
 
         if (!add)
         {
-            for (int i = 0, j = 0; i < initType.Count; ++i)
+            for (int i = 0, j = 0; i < initType.Length; ++i)
             {
-                if (initType[i].ID != meta.ID)
+                if (initType[i] != meta.ID)
                 {
                     span[j++] = initType[i];
                 }
@@ -358,8 +342,8 @@ public sealed partial class World : IDisposable
         }
         else if (!span.IsEmpty)
         {
-            initType.Components.CopyTo(span);
-            span[^1] = meta;
+            initType.CopyTo(span);
+            span[^1] = meta.ID;
         }
 
         span.Sort();
@@ -369,13 +353,7 @@ public sealed partial class World : IDisposable
         ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
         if (!exists)
         {
-            var finiType = new EcsSignature(initType);
-            if (add)
-                finiType.Add(ref meta);
-            else
-                finiType.Remove(ref meta);
-
-            arch = _archRoot.InsertVertex(record.Archetype, finiType, ref meta);
+            arch = _archRoot.InsertVertex(record.Archetype, span, ref meta);
         }
 
         var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
@@ -416,18 +394,18 @@ public sealed partial class World : IDisposable
         return record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
     }
 
-    public unsafe Entity RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
+    public unsafe EntityView RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
         var qryID = CreateEntityRaw();
         qryID.Set<EcsQuery>()
-             .Set(new EcsEntity(qryID.ID, qryID.WorldID))
+             .Set(qryID)
              .Set<EcsEnabled>();
 
         _queryIndex.Add(qryID, (Query)query);
 
         var id = CreateEntityRaw();
         id.Set(new EcsSystem(qryID, func))
-          .Set(new EcsEntity(id.ID, id.WorldID))
+          .Set(id)
           .Set<EcsEnabled>();
 
         switch (phase)
@@ -453,7 +431,7 @@ public sealed partial class World : IDisposable
                 break;
         }
 
-        return new Entity(_worldID, id);
+        return id;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -532,7 +510,7 @@ public sealed partial class World : IDisposable
 
                 case DeferredOp.Destroy:
 
-                    DestroyEntity(cmd.Create.Entity);
+                    Destroy(cmd.Create.Entity);
 
                     break;
 
@@ -625,63 +603,73 @@ public sealed partial class World : IDisposable
 
 static unsafe class ComponentStorage
 {
-    private static int _next = -1;
-    private static readonly EntitySparseSet<ComponentMetadata> _components = new ();
-
-
     public static ref ComponentMetadata GetOrAdd<T>(World world) where T : struct
-       => ref GetOrAdd(world, TypeInfo<T>.ID ??= world.CreateEntityRaw(), sizeof(T));
-
-    public static ref ComponentMetadata GetOrAdd<T>(World world, EntityID id) where T : struct
-        => ref GetOrAdd(world, id, sizeof(T));
-    
-    public static ref ComponentMetadata GetOrAdd(World world, EntityID id, int size = -1)
     {
-        if (IDOp.IsPair(id))
-        {
+        var id = IDOp.SetAsComponent((EntityID)TypeInfo<T>.GlobalIndex);
 
-        }
+        ref var meta = ref world._components.Get(id);
 
-        ref var meta = ref _components.Get(id);
         if (Unsafe.IsNullRef(ref meta))
         {
-            Debug.Assert(size >= 0);
-            meta = ref _components.Add(id, new ComponentMetadata(id, size, Interlocked.Increment(ref _next)));
-
-            var ent = world.CreateEntityRaw();
-            _ = ent.Set(new EcsComponent(meta.Size))
-               .Set(new EcsEntity(ent.ID, ent.WorldID))
-               .Set<EcsEnabled>();
+            meta = ref Create(world, id, TypeInfo<T>.Size, TypeInfo<T>.GlobalIndex
+#if DEBUG
+                , typeof(T).FullName
+#endif
+                );
         }
+
+        Debug.Assert(meta.GlobalIndex == TypeInfo<T>.GlobalIndex);
+        Debug.Assert(meta.Size == TypeInfo<T>.Size);
+
+        return ref meta;
+    }
+   
+    private static ref ComponentMetadata Create(World world, EntityID id, int size, int globalIdx
+#if DEBUG
+        , string name
+#endif
+        )
+    {
+        Debug.Assert(globalIdx >= 0);
+        Debug.Assert(size >= 0);
+        ref var meta = ref world._components.Add(id, new ComponentMetadata(id, size, globalIdx
+#if DEBUG
+            , name
+#endif
+            ));
+
+        var ent = world.CreateEntityRaw();
+        world.Set(ent, new EcsComponent(meta.GlobalIndex, meta.Size));
+        world.Set(ent, ent);
+        world.Set<EcsEnabled>(ent);
 
         return ref meta;
     }
 
-    private static class TypeInfo<T> where T: struct
+    private static class TypeInfo<T> where T : struct
     {
-        public static EntityID? ID;
-        //public static readonly int Size = sizeof(T);
+        public static readonly int GlobalIndex = NextID.Get();
+        public static readonly int Size = sizeof(T);
+    }
+
+    private static class NextID
+    {
+        private static int _next = -1;
+        public static int Get() => Interlocked.Increment(ref _next);
     }
 }
 
-readonly struct ComponentMetadata : IComparable<ComponentMetadata>
-{
-    public readonly EntityID ID;
-    public readonly int Size;
-    public readonly int GlobalIndex;
 
-    public ComponentMetadata(EntityID id, int size, int globalIdx)
-    {
-        ID = id;
-        Size = size;
-        GlobalIndex = globalIdx;
-    }
 
-    public int CompareTo(ComponentMetadata other)
-    {
-        return ID.CompareTo(other.ID);
-    }
-}
+readonly record struct ComponentMetadata
+(
+    EntityID ID, 
+    int Size, 
+    int GlobalIndex
+#if DEBUG
+    , string Name
+#endif
+);
 
 
 sealed unsafe class Archetype
@@ -691,42 +679,47 @@ sealed unsafe class Archetype
     private readonly World _world;
     private int _capacity, _count;
     private EntityID[] _entityIDs;
-    internal byte[][] _components;
-    private readonly EcsSignature _sign;
+    internal byte[][] _componentsData;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly int[] _lookup;
+    private EntityID[] _components;
 
-    public Archetype(World world, EcsSignature sign)
+    public Archetype(World world, ReadOnlySpan<EntityID> components)
     {
         _world = world;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
-        _sign = sign;
+        _components = new EntityID[components.Length];
         _entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
-        _components = new byte[sign.Count][];
+        _componentsData = new byte[components.Length][];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
 
+
         var maxID = -1;
-        for (int i = 0; i < sign.Count; ++i)
+        for (int i = 0; i < components.Length; i++)
         {
-            maxID = Math.Max(maxID, sign[i].GlobalIndex);
+            _components[i] = components[i];
+           
+            ref var meta = ref _world._components.Get(components[i]);
+            maxID = Math.Max(maxID, meta.GlobalIndex);
         }
 
         _lookup = new int[maxID + 1];
         _lookup.AsSpan().Fill(-1);
-        for (int i = 0; i < sign.Count; ++i)
+        for (int i = 0; i < components.Length; ++i)
         {
-            _lookup[sign[i].GlobalIndex] = i;
+            ref var meta = ref _world._components.Get(components[i]);
+            _lookup[meta.GlobalIndex] = i;
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
     }
 
 
-    public EcsSignature Signature => _sign;
     public int Count => _count;
     public EntityID[] Entities => _entityIDs;
+    public EntityID[] Components => _components;
     public int[] Lookup => _lookup;
 
 
@@ -749,11 +742,11 @@ sealed unsafe class Archetype
     {
         var removed = _entityIDs[row];
         _entityIDs[row] = _entityIDs[_count - 1];
-
-        for (int i = 0; i < _sign.Count; ++i)
+        
+        for (int i = 0; i < _components.Length; ++i)
         {
-            ref var meta = ref ComponentStorage.GetOrAdd(_world, _sign[i].ID);
-            var leftArray = _components[i].AsSpan();
+            ref var meta = ref _world._components.Get(_components[i]);
+            var leftArray = _componentsData[i].AsSpan();
 
             var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
             var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
@@ -766,7 +759,7 @@ sealed unsafe class Archetype
         return removed;
     }
 
-    public Archetype InsertVertex(Archetype left, EcsSignature newType, ref ComponentMetadata meta)
+    public Archetype InsertVertex(Archetype left, ReadOnlySpan<EntityID> newType, ref ComponentMetadata meta)
     {
         var vertex = new Archetype(left._world, newType);
         MakeEdges(left, vertex, ref meta);
@@ -796,32 +789,33 @@ sealed unsafe class Archetype
             return Span<byte>.Empty;
         }
 
-        return _components[column].AsSpan(meta.Size * row, meta.Size * count);
+        return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
     }
 
     static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
     {
-        var isLeft = to._sign.Count < from._sign.Count;
+        var isLeft = to._components.Length < from._components.Length;
         int i = 0, j = 0;
-        var count = isLeft ? to._sign.Count : from._sign.Count;
+        var count = isLeft ? to._components.Length : from._components.Length;
+        var world = from._world;
 
         ref var x = ref (isLeft ? ref j : ref i);
         ref var y = ref (!isLeft ? ref j : ref i);
-
+        
         for (;x < count; ++x)
         {
-            while (from._sign[i].GlobalIndex != to._sign[j].GlobalIndex)
+            while (from._components[i] != to._components[j])
             {
                 // advance the sign with less components!
                 ++y;
             }
 
-            var size = ComponentStorage.GetOrAdd(from._world, from._sign[i].ID).Size;
-            var leftArray = from._components[i].AsSpan();
-            var rightArray = to._components[j].AsSpan();
-            var insertComponent = rightArray.Slice(size * toRow, size);
-            var removeComponent = leftArray.Slice(size * fromRow, size);
-            var swapComponent = leftArray.Slice(size * (from._count - 1), size);
+            ref var meta = ref world._components.Get(from._components[i]);
+            var leftArray = from._componentsData[i].AsSpan();
+            var rightArray = to._componentsData[j].AsSpan();
+            var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
+            var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
+            var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
             removeComponent.CopyTo(insertComponent);
             swapComponent.CopyTo(removeComponent);
         }
@@ -835,8 +829,8 @@ sealed unsafe class Archetype
 
     private void InsertVertex(Archetype newNode)
     {
-        var nodeTypeLen = _sign.Count;
-        var newTypeLen = newNode._sign.Count;
+        var nodeTypeLen = _components.Length;
+        var newTypeLen = newNode._components.Length;
 
         if (nodeTypeLen > newTypeLen - 1)
         {
@@ -853,47 +847,63 @@ sealed unsafe class Archetype
             return;
         }
 
-        if (!_sign.IsSuperset(newNode._sign))
+        if (!IsSuperset(newNode._components))
         {
             return;
         }
 
         var i = 0;
-        var newNodeTypeLen = newNode._sign.Count;
-        for (; i < newNodeTypeLen && _sign[i].GlobalIndex == newNode._sign[i].GlobalIndex; ++i) { }
+        var newNodeTypeLen = newNode._components.Length;
+        for (; i < newNodeTypeLen && _components[i] == newNode._components[i]; ++i) { }
 
-        MakeEdges(newNode, this, ref ComponentStorage.GetOrAdd(_world, _sign[i].ID));
+        MakeEdges(newNode, this, ref _world._components.Get(_components[i]));
     }
 
     private void ResizeComponentArray(int capacity)
     {
-        for (int i = 0; i < _sign.Count; ++i)
+        for (int i = 0; i < _components.Length; ++i)
         {
-            var size = ComponentStorage.GetOrAdd(_world, _sign[i].ID).Size;
-            Array.Resize(ref _components[i], size * capacity);
+            ref var meta = ref _world._components.Get(_components[i]);
+            Array.Resize(ref _componentsData[i], meta.Size * capacity);
             _capacity = capacity;
         }
+    }
+
+    public bool IsSuperset(ReadOnlySpan<EntityID> other)
+    {
+        int i = 0, j = 0;
+        while (i < _components.Length && j < other.Length)
+        {
+            if (_components[i] == other[j])
+            {
+                j++;
+            }
+
+            i++;
+        }
+
+        return j == other.Length;
     }
 }
 
 public struct Query : IQueryComposition
 {
     private readonly World _world;
-    private readonly EcsSignature _add, _remove;
+    private readonly Vec<EntityID> _add, _remove;
     private readonly Stack<Archetype> _stack;
 
     internal Query(World world)
     {
         _world = world;
-        _add = new EcsSignature(16);
-        _remove = new EcsSignature(16);
+        _add = new Vec<EntityID>(16);
+        _remove = new Vec<EntityID>(16);
         _stack = new Stack<Archetype>();
     }
 
     public IQueryComposition With<T>() where T : struct
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        _add.Add(ref meta);
+        _add.Add(meta.ID);
 
         return this;
     }
@@ -901,7 +911,7 @@ public struct Query : IQueryComposition
     public IQueryComposition Without<T>() where T : struct
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        _remove.Add(ref meta);
+        _remove.Add(meta.ID);
 
         return this;
     }
@@ -920,42 +930,10 @@ public struct Query : IQueryComposition
         return Without<EcsRelation<TPredicate, TTarget>>();
     }
 
-    public IQueryComposition With<TPredicate>(EntityID targetID) where TPredicate : struct
-    {
-        ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(_world);
-        var rel = EcsConst.ECS_PAIR | ((pred.ID << 32) + (uint)targetID);
-
-        return With(rel);
-    }
-
-    public IQueryComposition Without<TPredicate>(EntityID targetID) where TPredicate : struct
-    {
-        ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(_world);
-        var rel = EcsConst.ECS_PAIR | ((pred.ID << 32) + (uint)targetID);
-
-        return Without(rel);
-    }
-
-    public IQueryComposition With(EntityID rel)
-    {
-        ref var meta = ref ComponentStorage.GetOrAdd(_world, rel);
-        _add.Add(ref meta);
-
-        return this;
-    }
-
-    public IQueryComposition Without(EntityID rel)
-    {
-        ref var meta = ref ComponentStorage.GetOrAdd(_world, rel);
-        _remove.Add(ref meta);
-
-        return this;
-    }
-
-
-
     public QueryIterator GetEnumerator()
     {
+        _add.Sort();
+        _remove.Sort();
         _stack.Clear();
         _stack.Push(_world._archRoot);
 
@@ -973,14 +951,6 @@ public interface IQueryComposition
 
     IQueryComposition Without<TPredicate, TTarget>() where TPredicate : struct where TTarget : struct;
 
-    IQueryComposition With(EntityID rel);
-
-    IQueryComposition Without(EntityID rel);
-
-    IQueryComposition With<T>(EntityID targetID) where T : struct;
-
-    IQueryComposition Without<T>(EntityID targetID) where T : struct;
-
     QueryIterator GetEnumerator();
 }
 
@@ -989,14 +959,14 @@ public interface IQueryComposition
 public ref struct QueryIterator
 {
     private readonly World _world;
-    private readonly EcsSignature _add, _remove;
+    private readonly Vec<EntityID> _add, _remove;
     private readonly Stack<Archetype> _stack;
 
     private Archetype? _archetype;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal QueryIterator(World world, Stack<Archetype> stack, EcsSignature add, EcsSignature remove)
+    internal QueryIterator(World world, Stack<Archetype> stack, Vec<EntityID> add, Vec<EntityID> remove)
     {
         world!.BeginDefer();
 
@@ -1033,7 +1003,7 @@ public ref struct QueryIterator
                 }
             }
         }
-        while (!_archetype.Signature.IsSuperset(_add) || _archetype.Count <= 0);
+        while (!_archetype.IsSuperset(_add.Span) || _archetype.Count <= 0);
 
         return true;
     }
@@ -1092,134 +1062,6 @@ public ref struct Iterator
         => ref Unsafe.Add(ref first, row);
 }
 
-sealed class EcsSignature : IEquatable<EcsSignature>, IDisposable
-{
-    private ComponentMetadata[] _components;
-    private int _count, _capacity;
-
-    public EcsSignature(int capacity)
-    {
-        _capacity = capacity;
-        _count = 0;
-        _components = capacity <= 0 ? Array.Empty<ComponentMetadata>() : new ComponentMetadata[capacity];
-    }
-
-    public EcsSignature(ReadOnlySpan<ComponentMetadata> components)
-    {
-        _capacity = components.Length;
-        _count = components.Length;
-        _components = new ComponentMetadata[components.Length];
-        components.CopyTo(_components);
-
-        Array.Sort(_components, 0, _count);
-    }
-
-    public EcsSignature(EcsSignature other)
-    {
-        _capacity = other._capacity;
-        _count = other._count;
-        _components = new ComponentMetadata[other._components.Length];
-        other._components.CopyTo(_components, 0);
-
-        Array.Sort(_components, 0, _count);
-    }
-
-
-    public int Count => _count;
-    public ReadOnlySpan<ComponentMetadata> Components => _components.AsSpan(0, _count);
-    public ref readonly ComponentMetadata this[int index] => ref _components[index];
-
-
-
-    public void Add(ref ComponentMetadata id)
-    {
-        GrowIfNeeded();
-
-        _components[_count++] = id;
-        Array.Sort(_components, 0, _count);
-    }
-
-    public void Remove(ref ComponentMetadata id)
-    {
-        var idx = IndexOf(ref id);
-        if (idx < 0 || _count <= 0) return;
-
-        _components[idx] = _components[--_count];
-        Array.Sort(_components, 0, _count);
-    }
-
-    public int IndexOf(ref ComponentMetadata id) => Array.IndexOf(_components, id, 0, _count);
-
-    public int IndexOf(EntityID id)
-    {
-        for (int i = 0; i <  _count; i++)
-        {
-            if (_components[i].ID == id)
-                return i;
-        }
-
-        return -1;
-    }
-
-    public bool IsSuperset([NotNull] EcsSignature other)
-    {
-        int i = 0, j = 0;
-        while (i < Count && j < other.Count)
-        {
-            if (_components[i].GlobalIndex == other._components[j].GlobalIndex)
-            {
-                j++;
-            }
-
-            i++;
-        }
-
-        return j == other.Count;
-    }
-
-    public bool Equals(EcsSignature? other)
-    {
-        if (Count != other!.Count)
-        {
-            return false;
-        }
-
-        for (int i = 0, count = Count; i < count; ++i)
-        {
-            if (_components[i].GlobalIndex != other._components[i].GlobalIndex)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public override int GetHashCode() => ComponentHasher.Calculate(_components.AsSpan(0, _count));
-
-    private void GrowIfNeeded()
-    {
-        if (_count == _capacity)
-        {
-            if (_capacity == 0) _capacity = 1;
-
-            _capacity *= 2;
-            Array.Resize(ref _components, _capacity);
-        }
-    }
-
-    public Span<ComponentMetadata>.Enumerator GetEnumerator() => _components.AsSpan(0, _count).GetEnumerator();
-
-    public void Dispose()
-    {
-        if (_components != null)
-        {
-            _count = 0;
-            _components = Array.Empty<ComponentMetadata>();
-        }
-    }
-}
-
 public delegate void CallbackIterator(in Iterator iterator);
 
 readonly record struct EcsEdge(EntityID ComponentID, Archetype Archetype);
@@ -1229,15 +1071,15 @@ record struct EcsRecord(Archetype Archetype, int Row);
 static class ComponentHasher
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int Calculate(Span<ComponentMetadata> components)
+    public static EntityID Calculate(Span<EntityID> components)
     {
         unchecked
         {
-            var hash = 5381;
+            EntityID hash = 5381;
 
             foreach (ref readonly var id in components)
             {
-                hash = ((hash << 5) + hash) + id.GlobalIndex;
+                hash = ((hash << 5) + hash) + id;
             }
 
             return hash;
@@ -1288,6 +1130,12 @@ static class IDOp
     public static EntityID SetAsComponent(EntityID id)
     {
         return id |= EcsConst.ECS_ID_FLAGS_MASK;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static EntityID Pair(EntityID first, EntityID second)
+    {
+        return EcsConst.ECS_PAIR | ((first << 32) + (uint)second);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1350,7 +1198,50 @@ public sealed partial class World
 
 
 
+class Vec<T0> where T0 : struct
+{
+    private T0[] _array;
+    private int _count;
 
+    public Vec(int initialSize = 2)
+    {
+        _array = new T0[initialSize];
+        _count = 0;
+    }
+
+    public int Count => _count;
+    public ref T0 this[int index] => ref _array[index];
+    public ReadOnlySpan<T0> Span => _count <= 0 ? ReadOnlySpan<T0>.Empty : MemoryMarshal.CreateReadOnlySpan(ref _array[0], _count);
+
+    public void Add(in T0 elem)
+    {
+        GrowIfNecessary(_count + 1);
+
+        this[_count] = elem;
+
+        ++_count;
+    }
+
+    public void Clear()
+    {
+        _count = 0;
+    }
+
+    public void Sort() => Array.Sort(_array, 0, _count);
+
+    public int IndexOf(T0 item) => Array.IndexOf(_array, item, 0, _count);
+
+    private void GrowIfNecessary(int length)
+    {
+        if (length >= _array.Length)
+        {
+            var newLength = _array.Length > 0 ? _array.Length * 2 : 2;
+            while (length >= newLength)
+                newLength *= 2;
+            Array.Resize(ref _array, newLength);
+        }
+    }
+}
 
 sealed class EntitySparseSet<T>
 {
@@ -1360,53 +1251,12 @@ sealed class EntitySparseSet<T>
         public T[] Values;
     }
 
-    private class Vec<T0> where T0 : struct
-    {
-        private T0[] _array;
-        private int _count;
-
-        public Vec()
-        {
-            _array = new T0[2];
-            _count = 0;
-        }
-
-        public int Count => _count;
-        public ref T0 this[int index] => ref _array[index];
-
-        public void Add(in T0 elem)
-        {
-            GrowIfNecessary(_count + 1);
-
-            this[_count] = elem;
-
-            ++_count;
-        }
-
-        public void Clear()
-        {
-            _count = 0;
-        }
-
-        private void GrowIfNecessary(int length)
-        {
-            if (length >= _array.Length)
-            {
-                var newLength = _array.Length > 0 ? _array.Length * 2 : 2;
-                while (length >= newLength)
-                    newLength *= 2;
-                Array.Resize(ref _array, newLength);
-            }
-        }
-    }
-
     const int CHUNK_SIZE = 4096;
 
     private Chunk[] _chunks;
     private int _count;
     private EntityID _maxID;
     private Vec<EntityID> _dense;
-
 
     public EntitySparseSet()
     {
@@ -1445,7 +1295,6 @@ sealed class EntitySparseSet<T>
             return ref Unsafe.NullRef<T>();
 
         return ref chunk.Values[(int)id & 0xFFF];
-        //return ref Get(id);
     }
 
     private EntityID NewID(int dense)
@@ -1607,8 +1456,14 @@ sealed class EntitySparseSet<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static EntityID SplitGeneration(ref EntityID index)
     {
+        if ((index & EcsConst.ECS_ID_FLAGS_MASK) != 0)
+        {
+            index &= ~(EcsConst.ECS_GENERATION_MASK | EcsConst.ECS_ID_FLAGS_MASK);
+            //return 0;
+        }
+
         var gen = index & EcsConst.ECS_GENERATION_MASK;
-        //Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
+        Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
         index -= gen;
         return gen;
     }
@@ -1649,16 +1504,17 @@ static class EcsConst
     public const EntityID ECS_ID_FLAGS_MASK = (0xFFul << 60);
     public const EntityID ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
     public const EntityID ID_TOGGLE = 1ul << 61;
-    public const EntityID ECS_PAIR = (1ul << 63);
+    public const EntityID ECS_PAIR = 1ul << 63;
 }
 
 
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct EcsComponent
 {
+    public readonly int GlobalIndex;
     public readonly int Size;
 
-    public EcsComponent(int size) => Size = size;
+    public EcsComponent(int globalIndex, int size) => (GlobalIndex, Size) = (globalIndex, size);
 }
 
 public unsafe struct EcsQuery
@@ -1679,14 +1535,6 @@ public unsafe readonly struct EcsSystem
     }
 }
 
-public readonly struct EcsEntity
-{
-    public readonly EntityID ID;
-    public readonly EntityID WorldID;
-
-    public EcsEntity(EntityID id, EntityID worldID)
-        => (ID, WorldID) = (id, worldID);
-}
 
 public readonly struct EcsRelation<TAction, TTarget> 
     where TAction : struct 
@@ -1695,10 +1543,13 @@ public readonly struct EcsRelation<TAction, TTarget>
     public readonly TTarget Target;
 
     public EcsRelation() => Target = default;
-    public EcsRelation(TTarget target) => Target = target;
+    public EcsRelation(in TTarget target) => Target = target;
 }
 
-public readonly struct EcsEnabled {}
+public enum EcsChildOf : byte { }
+public enum EcsParent : byte { }
+
+public readonly struct EcsEnabled { }
 
 public struct EcsSystemPhaseOnUpdate { }
 public struct EcsSystemPhasePreUpdate { }
@@ -1722,14 +1573,14 @@ public enum SystemPhase
 
 [SkipLocalsInit]
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
+public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 {
     public readonly EntityID ID;
     public readonly EntityID WorldID;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Entity(EntityID world, EntityID id)
+    internal EntityView(EntityID world, EntityID id)
     {
         WorldID = world;
         ID = id;
@@ -1743,27 +1594,27 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Equals(Entity other)
+    public readonly bool Equals(EntityView other)
     {
         return ID == other.ID;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Set<T>(T component = default) where T : struct
+    public readonly EntityView Set<T>(T component = default) where T : struct
     {
-        World._allWorlds.Get(WorldID).Set<T>(ID, component);
+        World._allWorlds.Get(WorldID).Set(ID, component);
         return this;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Unset<T>() where T : struct
+    public readonly EntityView Unset<T>() where T : struct
     {
         World._allWorlds.Get(WorldID).Unset<T>(ID);
         return this;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Set<TPredicate, TTarget>() 
+    public readonly EntityView Set<TPredicate, TTarget>() 
         where TPredicate : struct
         where TTarget : struct
     {
@@ -1772,7 +1623,7 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Unset<TPredicate, TTarget>() 
+    public readonly EntityView Unset<TPredicate, TTarget>() 
         where TPredicate : struct
         where TTarget : struct
     {
@@ -1781,33 +1632,38 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Set<TPredicate>(EntityID targetID) 
+    public readonly EntityView Set<TPredicate>(in EntityView targetID) 
         where TPredicate : struct
     {
         var world = World._allWorlds.Get(WorldID);
 
-        var obj = targetID;
-        ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(world);
-        var rel = EcsConst.ECS_PAIR | ((pred.ID << 32) + (uint)obj);
+        //ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(world);
+        //var rel = IDOp.Pair(targetID, (EntityID)pred.GlobalIndex);
+        //var m = new ComponentMetadata(rel, 0, -1, "");
+        //world.Set(ID, ref m, ReadOnlySpan<byte>.Empty);
 
-        //var first = IDOp.GetPairFirst(rel);
-        //var sec = IDOp.GetPairSecond(rel);
-
-        ref var c = ref ComponentStorage.GetOrAdd(world, rel, sizeof(EntityID));
-        world.Set(ID, ref c, MemoryMarshal.AsBytes(new Span<EntityID>(ref targetID)));
+        world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
 
         return this;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Enable()
+    public readonly EntityView ChildOf(in EntityView targetID)
+    {
+        //targetID.Set<EcsParent>(in this);
+        Set<EcsChildOf>(in targetID);
+        return this;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EntityView Enable()
     {
         World._allWorlds.Get(WorldID).Set<EcsEnabled>(ID);
         return this;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly Entity Disable()
+    public readonly EntityView Disable()
     {
         World._allWorlds.Get(WorldID).Unset<EcsEnabled>(ID);
         return this;
@@ -1822,17 +1678,31 @@ public readonly struct Entity : IEquatable<EntityID>, IEquatable<Entity>
         => World._allWorlds.Get(WorldID).Has<T>(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>() 
+        where TPredicate : struct where TTarget : struct
+        => ref Get<EcsRelation<TPredicate, TTarget>>();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Has<TPredicate, TTarget>()
+        where TPredicate : struct where TTarget : struct
+        => Has<EcsRelation<TPredicate, TTarget>>();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Destroy()
-        => World._allWorlds.Get(WorldID).DestroyEntity(ID);
+        => World._allWorlds.Get(WorldID).Destroy(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool IsAlive()
-        => World._allWorlds.Get(WorldID).IsEntityAlive(ID);
+        => World._allWorlds.Get(WorldID).IsAlive(ID);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool IsEnabled()
+        => Has<EcsEnabled>();
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator EntityID(in Entity d) => d.ID;
+    public static implicit operator EntityID(in EntityView d) => d.ID;
 
 
-    public static readonly Entity Invalid = new(0, 0);
+    public static readonly EntityView Invalid = new(0, 0);
 }

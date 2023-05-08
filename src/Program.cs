@@ -6,20 +6,67 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 2 * 1;
+const int ENTITIES_COUNT = 524_288 * 2 * 4;
 
 
 
 using var world = new World();
+//using var world2 = new World();
+
+
+//world2.Entity().Set(new Position() { X = 123.23f, Y = -23f, Z = 2f });
+//var eeee = world.Entity().Set<Likes>();
+//eeee.Set<Position>();
+
+
+//foreach (var it in world.Query().With<Likes>().With<Position>())
+//{
+//    ref var l = ref it.Field<Likes>();
+//    ref var b = ref it.Field<Position>();
+
+//    for (int i = 0; i < it.Count; ++i)
+//    {
+//        ref var ll = ref it.Get(ref l, i);
+//        ref var bb = ref it.Get(ref b, i);
+//    }
+//}
+
+//foreach (var it in world2.Query().With<Position>())
+//{
+//    ref var l2 = ref it.Field<Position>();
+
+//    for (int i = 0; i < it.Count; ++i)
+//    {
+//        ref var ll2 = ref it.Get(ref l2, i);
+//    }
+//}
 
 
 var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 var root = world.Entity();
-var parent = world.Entity().Set<ChildOf>(root);
-var child = world.Entity().Set<ChildOf>(parent);
+addChildrenTo(root, 100);
+var count = world.EntityCount;
 
+void addChildrenTo(EntityView parent, int count)
+{
+    for (int i = 0; i < count; i++)
+        world.Entity()
+            .ChildOf(parent);
+}
+
+root.Destroy();
+var count2 = count - world.EntityCount;
+
+//var parent = world.Entity().ChildOf(root);
+//var child = world.Entity().ChildOf(parent);
+
+
+
+//var root2 = world2.Entity();
+//var parent2 = world2.Entity().Set<ChildOf>(root2);
+//var child2 = world2.Entity().Set<ChildOf>(parent2);
 
 //ref var o = ref child.Get<ChildOf>();
 
@@ -37,48 +84,30 @@ var child = world.Entity().Set<ChildOf>(parent);
 
 //foreach (var item in arr) item.Destroy();
 
-for (int i = 0; i < 10; ++i)
+for (int i = 0; i < 100; ++i)
 {
-    _ = world.Entity()
+    var ee = world.Entity()
         .Set<Position>()
         .Set<Velocity>()
         .Set<Likes, Dogs>()
         .Set<Likes, Cats>()
         .Set(TileType.Static)
-        .Set<ChildOf>(parent)
+        //.ChildOf(root)
         ;
 }
-
-_ = world.Entity()
-    .Set<Position>()
-    .Set<Velocity>()
-    .Set<Likes, Dogs>()
-    .Set<Likes, Cats>()
-    .Set(TileType.Static)
-    .Set<ChildOf>(child)
-    ;
-
-_ = world.Entity()
-    .Set<Position>()
-    .Set<Velocity>()
-    .Set<Likes, Dogs>()
-    .Set<Likes, Cats>()
-    .Set(TileType.Static)
-    .Set<ChildOf>(child)
-    ;
 
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
 var query = world.Query()
-    .With<EcsEntity>()
     .With<Position>()
     .With<Velocity>()
     .With<Likes, Dogs>()
     .With<Likes, Cats>()
-    .With<ChildOf>(child)
+    .With<EcsChildOf, EntityView>()
     .With<TileType>()
     ;
+
 
 
 var queryCmp = world.Query()
@@ -86,7 +115,7 @@ var queryCmp = world.Query()
 
 foreach (var it in queryCmp)
 {
-    ref var e = ref it.Field<EcsEntity>();
+    ref var e = ref it.Field<EntityView>();
     ref var p = ref it.Field<EcsComponent>();
 
     for (var row = 0; row < it.Count; ++row)
@@ -96,7 +125,7 @@ foreach (var it in queryCmp)
 
         //it.World.Unset<EcsEnabled>(ent.ID);
         
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", ent.ID, "", "" /*metadata.Name.ToString()*/, metadata.Size);
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", ent.ID, metadata.GlobalIndex, "" /*metadata.Name.ToString()*/, metadata.Size);
     }
 }
 
@@ -113,21 +142,7 @@ while (true)
     sw.Restart();
     
     //for (int i = 0; i < 3600; ++i)
-    {
         world.Step();
-        //foreach (var it in query)
-        //{
-        //    ref var p = ref it.Field<Position>();
-        //    ref var v = ref it.Field<Velocity>();
-
-        //    for (var row = 0; row < it.Count; ++row)
-        //    {
-        //        ref readonly var entity = ref it.Entity(row);
-        //        ref var pos = ref it.Get(ref p, row);
-        //        ref var vel = ref it.Get(ref v, row);
-        //    }
-        //}
-    }
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
 
@@ -137,14 +152,15 @@ Console.ReadLine();
 static void ASystem(in Iterator it)
 {
     //Console.WriteLine("ASystem - Count: {0}", it.Count);
-    ref var e = ref it.Field<EcsEntity>();
+    ref var e = ref it.Field<EntityView>();
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
     ref var t = ref it.Field<TileType>();
+    ref var b = ref it.Field<EcsChildOf, EntityView>();
 
     for (var row = 0; row < it.Count; ++row)
     {
-        //ref var parentID = ref it.Get(ref b, row);
+        ref var parentID = ref it.Get(ref b, row);
         ref var ent = ref it.Get(ref e, row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
@@ -204,9 +220,6 @@ struct Likes { }
 struct Dogs { }
 struct Cats { }
 
-enum ChildOf : ulong {
-    
-}
 
 enum TileType
 {
@@ -214,7 +227,7 @@ enum TileType
     Static
 }
 
-struct Position { public float X, Y; }
+struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
 record struct PlayerTag();
 struct ReflectedPosition { public float X, Y; }
