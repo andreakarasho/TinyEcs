@@ -281,7 +281,7 @@ public sealed partial class World : IDisposable
             Debug.Fail("not an entity!");
         }
 
-        var column = meta.GlobalIndex >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[meta.GlobalIndex];
+        var column = record.Archetype.GetComponentIndex(ref meta);
         if (column >= 0)
         {
             return;
@@ -303,7 +303,7 @@ public sealed partial class World : IDisposable
             Debug.Fail("not an entity!");
         }
 
-        var column = meta.GlobalIndex >= record.Archetype.Lookup.Length ? -1 : record.Archetype.Lookup[meta.GlobalIndex];
+        var column = record.Archetype.GetComponentIndex(ref meta);
         if (column < 0)
         {
             return;
@@ -702,7 +702,11 @@ sealed unsafe class Archetype
             _components[i] = components[i];
            
             ref var meta = ref _world._components.Get(components[i]);
-            maxID = Math.Max(maxID, meta.GlobalIndex);
+           
+            var d = (int)IDOp.RealID(meta.ID);
+            maxID = Math.Max(maxID, d);
+
+            Debug.Assert(d == meta.GlobalIndex);
         }
 
         _lookup = new int[maxID + 1];
@@ -710,7 +714,7 @@ sealed unsafe class Archetype
         for (int i = 0; i < components.Length; ++i)
         {
             ref var meta = ref _world._components.Get(components[i]);
-            _lookup[meta.GlobalIndex] = i;
+            _lookup[(int)IDOp.RealID(meta.ID)] = i;
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -720,8 +724,13 @@ sealed unsafe class Archetype
     public int Count => _count;
     public EntityID[] Entities => _entityIDs;
     public EntityID[] Components => _components;
-    public int[] Lookup => _lookup;
 
+
+    public int GetComponentIndex(ref ComponentMetadata meta)
+    {
+        var index = (int)IDOp.RealID(meta.ID);
+        return index >= _lookup.Length ? -1 : _lookup[index];
+    }
 
     public int Add(EntityID entityID)
     {
@@ -783,7 +792,7 @@ sealed unsafe class Archetype
 
     public Span<byte> GetComponentRaw(ref ComponentMetadata meta, int row, int count)
     {
-        var column = meta.GlobalIndex >= _lookup.Length ? -1 : _lookup[meta.GlobalIndex];
+        var column = GetComponentIndex(ref meta);
         if (column <= -1)
         {
             return Span<byte>.Empty;
@@ -1054,7 +1063,7 @@ public ref struct Iterator
     public readonly bool Has<T>() where T : struct
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        return meta.GlobalIndex < _archetype.Lookup.Length && _archetype.Lookup[meta.GlobalIndex] >= 0;
+        return _archetype.GetComponentIndex(ref meta) >= 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1093,7 +1102,7 @@ static class IDOp
 {
     public static void Toggle(ref EntityID id)
     {
-        //id ^= ID_TOGGLE;
+        id ^= EcsConst.ECS_TOGGLE;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1503,7 +1512,8 @@ static class EcsConst
     public const EntityID ECS_GENERATION_MASK = (0xFFFFul << 32);
     public const EntityID ECS_ID_FLAGS_MASK = (0xFFul << 60);
     public const EntityID ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
-    public const EntityID ID_TOGGLE = 1ul << 61;
+
+    public const EntityID ECS_TOGGLE = 1ul << 61;
     public const EntityID ECS_PAIR = 1ul << 63;
 }
 

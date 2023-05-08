@@ -46,18 +46,18 @@ var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 var root = world.Entity();
-addChildrenTo(root, 100);
-var count = world.EntityCount;
+//addChildrenTo(root, 100);
+//var count = world.EntityCount;
 
-void addChildrenTo(EntityView parent, int count)
-{
-    for (int i = 0; i < count; i++)
-        world.Entity()
-            .ChildOf(parent);
-}
+//void addChildrenTo(EntityView parent, int count)
+//{
+//    for (int i = 0; i < count; i++)
+//        world.Entity()
+//            .ChildOf(parent);
+//}
 
-root.Destroy();
-var count2 = count - world.EntityCount;
+//root.Destroy();
+//var count2 = count - world.EntityCount;
 
 //var parent = world.Entity().ChildOf(root);
 //var child = world.Entity().ChildOf(parent);
@@ -84,7 +84,7 @@ var count2 = count - world.EntityCount;
 
 //foreach (var item in arr) item.Destroy();
 
-for (int i = 0; i < 100; ++i)
+for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var ee = world.Entity()
         .Set<Position>()
@@ -92,7 +92,7 @@ for (int i = 0; i < 100; ++i)
         .Set<Likes, Dogs>()
         .Set<Likes, Cats>()
         .Set(TileType.Static)
-        //.ChildOf(root)
+        .ChildOf(root)
         ;
 }
 
