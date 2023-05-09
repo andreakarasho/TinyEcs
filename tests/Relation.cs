@@ -10,9 +10,9 @@
             var parent = world.Entity();
             var child = world.Entity();
 
-            child.ChildOf(parent);
+            child.AttachTo(parent);
 
-            Assert.True(child.Get<EcsChildOf, EntityView>().Target == parent);
+            Assert.Equal(child.Get<EcsChild>().Parent, parent);
         }
 
         [Fact]
@@ -23,11 +23,10 @@
             var parent = world.Entity();
             var child = world.Entity();
 
-            child.ChildOf(parent);
+            child.AttachTo(parent);
+            child.Detach();
 
-            child.Unset<EcsChildOf, EntityView>();
-
-            Assert.False(child.Has<EcsChildOf, EntityView>());
+            Assert.False(child.Has<EcsChild>());
         }
 
         [Fact]
@@ -35,17 +34,34 @@
         {
             using var world = new World();
 
+            var parent1 = world.Entity();
+            var parent2 = world.Entity();
+            var child = world.Entity();
+
+            child.AttachTo(parent1);
+            child.AttachTo(parent2);
+
+            Assert.False(parent1.Has<EcsParent>());
+            Assert.True(parent2.Has<EcsParent>());
+            Assert.Equal(parent2.Get<EcsParent>().FirstChild, child);
+        }
+
+        [Fact]
+        public void Relation_Attach_Multiple_Child_To_A_Parent_Then_Cleanup()
+        {
+            using var world = new World();
+
             var parent = world.Entity();
-            var child0 = world.Entity();
-            var child1 = world.Entity();
+            var count = 1000;
 
-            child0.ChildOf(parent);
-            child0.Unset<EcsChildOf, EntityView>();
+            for (int i = 0; i < count; ++i)
+                world.Entity().AttachTo(parent);
 
-            child1.ChildOf(parent);
+            Assert.Equal(parent.Get<EcsParent>().ChildrenCount, count);
 
-            Assert.False(child0.Has<EcsChildOf, EntityView>());
-            Assert.True(child1.Has<EcsChildOf, EntityView>());
+            parent.RemoveChildren();
+
+            Assert.False(parent.Has<EcsParent>());
         }
     }
 }

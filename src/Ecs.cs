@@ -21,7 +21,7 @@ public sealed partial class World : IDisposable
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
 
     internal Archetype _archRoot;
-    internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
+    private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     internal readonly EntitySparseSet<ComponentMetadata> _components = new();
     private readonly Dictionary<EntityID, Query> _queryIndex = new();
@@ -34,9 +34,6 @@ public sealed partial class World : IDisposable
     private readonly IQueryComposition _querySystemsOnPreStartup;
     private readonly IQueryComposition _querySystemsOnPostStartup;
 
-    private readonly IQueryComposition _queryChildOf;
-    private readonly IQueryComposition _queryParent;
-
 
     public World()
     {
@@ -48,7 +45,6 @@ public sealed partial class World : IDisposable
         // initialize pre-built cmps
         _ = ComponentStorage.GetOrAdd<EntityView>(this);
 
-        _ = ComponentStorage.GetOrAdd<EcsChildOf>(this);
         _ = ComponentStorage.GetOrAdd<EcsComponent>(this);
         _ = ComponentStorage.GetOrAdd<EcsSystem>(this);
         _ = ComponentStorage.GetOrAdd<EcsQuery>(this);
@@ -62,6 +58,8 @@ public sealed partial class World : IDisposable
         _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostStartup>(this);
 
         _ = ComponentStorage.GetOrAdd<EcsEnabled>(this);
+        _ = ComponentStorage.GetOrAdd<EcsChild>(this);
+        _ = ComponentStorage.GetOrAdd<EcsParent>(this);
 
         // initialize pre-built queries
         _querySystems = Query()
@@ -90,12 +88,6 @@ public sealed partial class World : IDisposable
         _querySystemsOnPostStartup = Query()
             .With<EcsSystem>()
             .With<EcsSystemPhasePostStartup>();
-
-        _queryChildOf = Query()
-            .With<EcsChildOf, EntityView>();
-
-        _queryParent = Query()
-            .With<EcsParent, EntityView>();
     }
 
 
@@ -213,41 +205,9 @@ public sealed partial class World : IDisposable
             return;
         }
 
-        //foreach (var it in _queryParent)
-        //{
-        //    ref var p = ref it.Field<EntityView>();
-
-        //    for (int i = 0; i < it.Count; i++)
-        //    {
-        //        ref var parent = ref it.Get(ref p, i);
-
-        //        if (parent == entity)
-        //        {
-        //            parent.Unset<EcsChildOf>();
-        //            parent.Destroy();
-
-        //            break;
-        //        }
-        //    }
-        //}
-
-        foreach (var it in _queryChildOf)
-        {
-            ref var p = ref it.Field<EntityView>();
-            ref var c = ref it.Field<EcsChildOf, EntityView>();
-
-            for (int i = 0; i < it.Count; i++)
-            {
-                ref var ent = ref it.Get(ref p, i);
-                ref var parent = ref it.Get(ref c, i);
-
-                if (parent.Target == entity)
-                {
-                    ent.Destroy();
-                }
-            }
-        }
-
+        RemoveChildren(entity);
+        Detach(entity);
+        
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
@@ -290,7 +250,7 @@ public sealed partial class World : IDisposable
         InternalAttachDetach(ref record, ref meta, true);
     }
 
-    private void Detach(EntityID entity, ref ComponentMetadata meta)
+    private void DetatchComponent(EntityID entity, ref ComponentMetadata meta)
     {
         if (IsDeferred())
         {
@@ -311,8 +271,6 @@ public sealed partial class World : IDisposable
 
         InternalAttachDetach(ref record, ref meta, false);
     }
-
-
 
     private void InternalCreateEntity(EntityID id)
     {
@@ -388,7 +346,7 @@ public sealed partial class World : IDisposable
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
-            return Span<byte>.Empty;
+            Debug.Fail("invalid entity");
         }
 
         return record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
@@ -613,7 +571,7 @@ static unsafe class ComponentStorage
         {
             meta = ref Create(world, id, TypeInfo<T>.Size, TypeInfo<T>.GlobalIndex
 #if DEBUG
-                , typeof(T).FullName
+                , typeof(T).FullName!
 #endif
                 );
         }
@@ -623,15 +581,32 @@ static unsafe class ComponentStorage
 
         return ref meta;
     }
-   
+
+    public static ref ComponentMetadata GetOrAdd(World world, EntityID id, int size)
+    {
+        ref var meta = ref world._components.Get(id);
+
+        if (Unsafe.IsNullRef(ref meta))
+        {
+            meta = ref Create(world, id, size, NextID.Get()
+#if DEBUG
+                , "custom"
+#endif
+                );
+        }
+
+        return ref meta;
+    }
+
     private static ref ComponentMetadata Create(World world, EntityID id, int size, int globalIdx
 #if DEBUG
-        , string name
+        , string name = ""
 #endif
         )
     {
         Debug.Assert(globalIdx >= 0);
         Debug.Assert(size >= 0);
+ 
         ref var meta = ref world._components.Add(id, new ComponentMetadata(id, size, globalIdx
 #if DEBUG
             , name
@@ -639,7 +614,7 @@ static unsafe class ComponentStorage
             ));
 
         var ent = world.CreateEntityRaw();
-        world.Set(ent, new EcsComponent(meta.GlobalIndex, meta.Size));
+        world.Set(ent, new EcsComponent(meta.ID, meta.Size, meta.GlobalIndex));
         world.Set(ent, ent);
         world.Set<EcsEnabled>(ent);
 
@@ -663,7 +638,7 @@ static unsafe class ComponentStorage
 
 readonly record struct ComponentMetadata
 (
-    EntityID ID, 
+    EntityID ID,
     int Size, 
     int GlobalIndex
 #if DEBUG
@@ -1003,14 +978,22 @@ public ref struct QueryIterator
             if (!_stack.TryPop(out _archetype) || _archetype == null)
                 return false;
 
-            for (int i = _archetype._edgesRight.Count - 1; i >= 0; i--)
+            var span = CollectionsMarshal.AsSpan(_archetype._edgesRight);
+            if (!span.IsEmpty)
             {
-                // NOTE: maybe breaks when found the _remove componentID
-                if (_remove.IndexOf(_archetype._edgesRight[i].ComponentID) < 0)
+                ref var last = ref span[^1];
+
+                for (int i = 0; i < span.Length; ++i)
                 {
-                    _stack.Push(_archetype._edgesRight[i].Archetype);
+                    ref var edge = ref Unsafe.Subtract(ref last, i);
+
+                    // NOTE: maybe breaks when found the _remove componentID
+                    if (_remove.IndexOf(edge.ComponentID) < 0)
+                    {
+                        _stack.Push(edge.Archetype);
+                    }
                 }
-            }
+            } 
         }
         while (!_archetype.IsSuperset(_add.Span) || _archetype.Count <= 0);
 
@@ -1070,8 +1053,6 @@ public ref struct Iterator
     public readonly ref T Get<T>(ref T first, int row) where T : struct
         => ref Unsafe.Add(ref first, row);
 }
-
-public delegate void CallbackIterator(in Iterator iterator);
 
 readonly record struct EcsEdge(EntityID ComponentID, Archetype Archetype);
 
@@ -1172,36 +1153,102 @@ public sealed partial class World
         => Set(entity, ref ComponentStorage.GetOrAdd<T>(this), MemoryMarshal.AsBytes(new Span<T>(ref component)));
 
     public void Unset<T>(EntityID entity) where T : struct
-       => Detach(entity, ref ComponentStorage.GetOrAdd<T>(this));
+       => DetatchComponent(entity, ref ComponentStorage.GetOrAdd<T>(this));
 
-    public unsafe bool Has<T>(EntityID entity) where T : struct
+    public bool Has<T>(EntityID entity) where T : struct
         => Has(entity, ref ComponentStorage.GetOrAdd<T>(this));
 
     public unsafe ref T Get<T>(EntityID entity) where T : struct
     {
         var raw = Get(entity, ref ComponentStorage.GetOrAdd<T>(this));
-        Debug.Assert(!raw.IsEmpty && sizeof(T) == raw.Length);
+
+        Debug.Assert(!raw.IsEmpty);
+        Debug.Assert(sizeof(T) == raw.Length);
+
         return ref MemoryMarshal.AsRef<T>(raw);
     }
 
 
-    public void Set<TPredicate, TTarget>(EntityID entity) where TPredicate : struct where TTarget : struct
+    public void AttachTo(EntityID id, EntityID parent)
     {
-        var v = new EcsRelation<TPredicate, TTarget>();
-        Set(entity, ref ComponentStorage.GetOrAdd<EcsRelation<TPredicate, TTarget>>(this),
-            MemoryMarshal.AsBytes(new Span<EcsRelation<TPredicate, TTarget>>(ref v)));
+        Detach(id);
+
+        var t = new EntityView(_worldID, id);
+
+        if (Has<EcsParent>(parent))
+        {
+            ref var p = ref Get<EcsParent>(parent);
+            p.ChildrenCount += 1;
+
+            ref var prev = ref p.FirstChild.Get<EcsChild>().Prev;
+            ref var next = ref p.FirstChild;
+
+            prev.Get<EcsChild>().Next = t;
+            next.Get<EcsChild>().Prev = t;
+
+            Set(id, new EcsChild()
+            {
+                Parent = new EntityView(_worldID, parent),
+                Next = prev,
+                Prev = next
+            });
+
+            return;
+        }
+
+        Set(id, new EcsChild()
+        {
+            Parent = new EntityView(_worldID, parent),
+            Next = t,
+            Prev = t
+        });
+
+        Set(parent, new EcsParent()
+        {
+            ChildrenCount = 1,
+            FirstChild = t
+        });
     }
 
-    public void Unset<TPredicate, TTarget>(EntityID entity) where TPredicate : struct where TTarget : struct
-       => Detach(entity, ref ComponentStorage.GetOrAdd<EcsRelation<TPredicate, TTarget>>(this));
-
-    public unsafe bool Has<TPredicate, TTarget>(EntityID entity) where TPredicate : struct where TTarget : struct
-        => Has(entity, ref ComponentStorage.GetOrAdd<EcsRelation<TPredicate, TTarget>>(this));
-
-    public unsafe ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>(EntityID entity) where TPredicate : struct where TTarget : struct
+    public void Detach(EntityID id)
     {
-        var raw = Get(entity, ref ComponentStorage.GetOrAdd<EcsRelation<TPredicate, TTarget>>(this));
-        return ref MemoryMarshal.AsRef<EcsRelation<TPredicate, TTarget>>(raw);
+        if (!Has<EcsChild>(id))
+            return;
+
+        ref var child = ref Get<EcsChild>(id);
+        ref var parent = ref child.Parent.Get<EcsParent>();
+
+        parent.ChildrenCount -= 1;
+
+        if (parent.ChildrenCount == 0)
+        {
+            child.Parent.Unset<EcsParent>();
+        }
+        else
+        {
+            if (parent.FirstChild == id)
+            {
+                parent.FirstChild = child.Next;
+            }
+
+            child.Prev.Get<EcsChild>().Next = child.Next;
+            child.Next.Get<EcsChild>().Prev = child.Prev;
+        }
+
+        Unset<EcsChild>(id);
+    }
+
+    public void RemoveChildren(EntityID id)
+    {
+        if (!Has<EcsParent>(id))
+            return;
+
+        ref var parent = ref Get<EcsParent>(id);
+
+        while (parent.ChildrenCount > 0)
+        {
+            parent.FirstChild.Detach();
+        }
     }
 }
 
@@ -1517,15 +1564,7 @@ static class EcsConst
     public const EntityID ECS_PAIR = 1ul << 63;
 }
 
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct EcsComponent
-{
-    public readonly int GlobalIndex;
-    public readonly int Size;
-
-    public EcsComponent(int globalIndex, int size) => (GlobalIndex, Size) = (globalIndex, size);
-}
+public readonly record struct EcsComponent(EntityID ComponentID, int Size, int GlobalIndex);
 
 public unsafe struct EcsQuery
 {
@@ -1556,8 +1595,17 @@ public readonly struct EcsRelation<TAction, TTarget>
     public EcsRelation(in TTarget target) => Target = target;
 }
 
-public enum EcsChildOf : byte { }
-public enum EcsParent : byte { }
+public struct EcsParent
+{
+    public int ChildrenCount;
+    public EntityView FirstChild;
+}
+
+public struct EcsChild
+{
+    public EntityView Parent;
+    public EntityView Prev, Next;
+}
 
 public readonly struct EcsEnabled { }
 
@@ -1647,21 +1695,32 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     {
         var world = World._allWorlds.Get(WorldID);
 
-        //ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(world);
-        //var rel = IDOp.Pair(targetID, (EntityID)pred.GlobalIndex);
-        //var m = new ComponentMetadata(rel, 0, -1, "");
-        //world.Set(ID, ref m, ReadOnlySpan<byte>.Empty);
+        ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(world);
+        var rel = IDOp.Pair(pred.ID, targetID);
 
-        world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
+        ref var meta = ref ComponentStorage.GetOrAdd(world, rel, 1);
+        world.Set(ID, ref meta, stackalloc byte[1]);
+
+        //world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
 
         return this;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView ChildOf(in EntityView targetID)
+    public readonly EntityView AttachTo(EntityView parent)
     {
-        //targetID.Set<EcsParent>(in this);
-        Set<EcsChildOf>(in targetID);
+        World._allWorlds.Get(WorldID).AttachTo(ID, parent);
+        return this;
+    }
+
+    public readonly EntityView Detach()
+    {
+        World._allWorlds.Get(WorldID).Detach(ID);
+        return this;
+    }
+
+    public readonly EntityView RemoveChildren()
+    {
+        World._allWorlds.Get(WorldID).RemoveChildren(ID);
         return this;
     }
 

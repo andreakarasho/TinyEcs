@@ -46,6 +46,7 @@ var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
 var root = world.Entity();
+
 //addChildrenTo(root, 100);
 //var count = world.EntityCount;
 
@@ -84,7 +85,7 @@ var root = world.Entity();
 
 //foreach (var item in arr) item.Destroy();
 
-for (int i = 0; i < ENTITIES_COUNT; ++i)
+for (int i = 0; i < 100; ++i)
 {
     var ee = world.Entity()
         .Set<Position>()
@@ -92,7 +93,7 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
         .Set<Likes, Dogs>()
         .Set<Likes, Cats>()
         .Set(TileType.Static)
-        .ChildOf(root)
+        .AttachTo(root)
         ;
 }
 
@@ -104,7 +105,7 @@ var query = world.Query()
     .With<Velocity>()
     .With<Likes, Dogs>()
     .With<Likes, Cats>()
-    .With<EcsChildOf, EntityView>()
+    //.With<EcsParent>()
     .With<TileType>()
     ;
 
@@ -125,7 +126,7 @@ foreach (var it in queryCmp)
 
         //it.World.Unset<EcsEnabled>(ent.ID);
         
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", ent.ID, metadata.GlobalIndex, "" /*metadata.Name.ToString()*/, metadata.Size);
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", metadata.ComponentID, metadata.GlobalIndex, "", metadata.Size);
     }
 }
 
@@ -156,11 +157,11 @@ static void ASystem(in Iterator it)
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
     ref var t = ref it.Field<TileType>();
-    ref var b = ref it.Field<EcsChildOf, EntityView>();
+    //ref var b = ref it.Field<EcsChildOf, EntityView>();
 
     for (var row = 0; row < it.Count; ++row)
     {
-        ref var parentID = ref it.Get(ref b, row);
+        //ref var parentID = ref it.Get(ref b, row);
         ref var ent = ref it.Get(ref e, row);
         ref var pos = ref it.Get(ref p, row);
         ref var vel = ref it.Get(ref v, row);
