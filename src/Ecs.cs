@@ -23,7 +23,7 @@ public sealed partial class World : IDisposable
     internal Archetype _archRoot;
     private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
     private readonly EntitySparseSet<EcsRecord> _entities = new();
-    internal readonly EntitySparseSet<ComponentMetadata> _components = new();
+    internal readonly EntitySparseSet<EcsComponent> _components = new();
     private readonly Dictionary<EntityID, Query> _queryIndex = new();
 
     private readonly IQueryComposition _querySystems;
@@ -42,25 +42,6 @@ public sealed partial class World : IDisposable
         lock (_lock)
             _allWorlds.CreateNew(out _worldID) = this;
         
-        // initialize pre-built cmps
-        _ = ComponentStorage.GetOrAdd<EntityView>(this);
-
-        _ = ComponentStorage.GetOrAdd<EcsComponent>(this);
-        _ = ComponentStorage.GetOrAdd<EcsSystem>(this);
-        _ = ComponentStorage.GetOrAdd<EcsQuery>(this);
-
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnUpdate>(this);
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreUpdate>(this);
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostUpdate>(this);
-
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhaseOnStartup>(this);
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePreStartup>(this);
-        _ = ComponentStorage.GetOrAdd<EcsSystemPhasePostStartup>(this);
-
-        _ = ComponentStorage.GetOrAdd<EcsEnabled>(this);
-        _ = ComponentStorage.GetOrAdd<EcsChild>(this);
-        _ = ComponentStorage.GetOrAdd<EcsParent>(this);
-
         // initialize pre-built queries
         _querySystems = Query()
             .With<EcsSystem>();
@@ -93,15 +74,20 @@ public sealed partial class World : IDisposable
 
     public int EntityCount => _entityCount;
 
+    public int Frames => _totalFrames;
+
+
 
     public void Dispose()
     {
         _entities.Clear();
-        _entityCount = 0;
         _typeIndex.Clear();
         _queryIndex.Clear();
         _components.Clear();
         _archRoot = new Archetype(this, ReadOnlySpan<EntityID>.Empty);
+
+        _entityCount = 0;
+        _totalFrames = 0;
 
         lock (_lock)
             _allWorlds.Remove(_worldID);
@@ -228,7 +214,7 @@ public sealed partial class World : IDisposable
     public bool IsAlive(EntityID entity) 
         => _entities.Contains(entity);
 
-    private void Attach(EntityID entity, ref ComponentMetadata meta)
+    private void Attach(EntityID entity, ref EcsComponent meta)
     {
         if (IsDeferred())
         {
@@ -250,7 +236,7 @@ public sealed partial class World : IDisposable
         InternalAttachDetach(ref record, ref meta, true);
     }
 
-    private void DetatchComponent(EntityID entity, ref ComponentMetadata meta)
+    private void DetatchComponent(EntityID entity, ref EcsComponent meta)
     {
         if (IsDeferred())
         {
@@ -282,7 +268,7 @@ public sealed partial class World : IDisposable
         Interlocked.Increment(ref _entityCount);
     }
 
-    private void InternalAttachDetach(ref EcsRecord record, ref ComponentMetadata meta, bool add)
+    private void InternalAttachDetach(ref EcsRecord record, ref EcsComponent meta, bool add)
     {
         var initType = record.Archetype.Components;
         var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
@@ -319,7 +305,7 @@ public sealed partial class World : IDisposable
         record.Archetype = arch!;
     }
 
-    internal void Set(EntityID entity, ref ComponentMetadata meta, ReadOnlySpan<byte> data)
+    internal void Set(EntityID entity, ref EcsComponent meta, ReadOnlySpan<byte> data)
     {
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
@@ -338,10 +324,10 @@ public sealed partial class World : IDisposable
         data.CopyTo(buf);
     }
 
-    private bool Has(EntityID entity, ref ComponentMetadata meta)
+    private bool Has(EntityID entity, ref EcsComponent meta)
         => !Get(entity, ref meta).IsEmpty;
 
-    private Span<byte> Get(EntityID entity, ref ComponentMetadata meta)
+    private Span<byte> Get(EntityID entity, ref EcsComponent meta)
     {
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
@@ -417,7 +403,7 @@ public sealed partial class World : IDisposable
         cmd.Destroy.Entity = entity;
     }
 
-    private void AttachDeferred(EntityID entity, ref ComponentMetadata meta)
+    private void AttachDeferred(EntityID entity, ref EcsComponent meta)
     {
         //ref var cmd = ref PeekDeferredCommand();
         //cmd.Action = DeferredOp.Attach;
@@ -426,7 +412,7 @@ public sealed partial class World : IDisposable
         //cmd.Attach.Component = component;
     }
 
-    private void DetachDeferred(EntityID entity, ref ComponentMetadata meta)
+    private void DetachDeferred(EntityID entity, ref EcsComponent meta)
     {
         //ref var cmd = ref PeekDeferredCommand();
         //cmd.Action = DeferredOp.Detach;
@@ -561,19 +547,14 @@ public sealed partial class World : IDisposable
 
 static unsafe class ComponentStorage
 {
-    public static ref ComponentMetadata GetOrAdd<T>(World world) where T : struct
+    public static ref EcsComponent GetOrAdd<T>(World world) where T : struct
     {
-        var id = IDOp.SetAsComponent((EntityID)TypeInfo<T>.GlobalIndex);
-
+        var id = (EntityID)TypeInfo<T>.GlobalIndex;
         ref var meta = ref world._components.Get(id);
 
         if (Unsafe.IsNullRef(ref meta))
         {
-            meta = ref Create(world, id, TypeInfo<T>.Size, TypeInfo<T>.GlobalIndex
-#if DEBUG
-                , typeof(T).FullName!
-#endif
-                );
+            meta = ref Create(world, id, TypeInfo<T>.Size, TypeInfo<T>.GlobalIndex);
         }
 
         Debug.Assert(meta.GlobalIndex == TypeInfo<T>.GlobalIndex);
@@ -582,39 +563,16 @@ static unsafe class ComponentStorage
         return ref meta;
     }
 
-    public static ref ComponentMetadata GetOrAdd(World world, EntityID id, int size)
-    {
-        ref var meta = ref world._components.Get(id);
 
-        if (Unsafe.IsNullRef(ref meta))
-        {
-            meta = ref Create(world, id, size, NextID.Get()
-#if DEBUG
-                , "custom"
-#endif
-                );
-        }
-
-        return ref meta;
-    }
-
-    private static ref ComponentMetadata Create(World world, EntityID id, int size, int globalIdx
-#if DEBUG
-        , string name = ""
-#endif
-        )
+    private static ref EcsComponent Create(World world, EntityID id, int size, int globalIdx)
     {
         Debug.Assert(globalIdx >= 0);
         Debug.Assert(size >= 0);
  
-        ref var meta = ref world._components.Add(id, new ComponentMetadata(id, size, globalIdx
-#if DEBUG
-            , name
-#endif
-            ));
+        ref var meta = ref world._components.Add(id, new EcsComponent(id, size, globalIdx));
 
         var ent = world.CreateEntityRaw();
-        world.Set(ent, new EcsComponent(meta.ID, meta.Size, meta.GlobalIndex));
+        world.Set(ent, meta);
         world.Set(ent, ent);
         world.Set<EcsEnabled>(ent);
 
@@ -636,17 +594,6 @@ static unsafe class ComponentStorage
 
 
 
-readonly record struct ComponentMetadata
-(
-    EntityID ID,
-    int Size, 
-    int GlobalIndex
-#if DEBUG
-    , string Name
-#endif
-);
-
-
 sealed unsafe class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
@@ -657,14 +604,14 @@ sealed unsafe class Archetype
     internal byte[][] _componentsData;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly int[] _lookup;
-    private EntityID[] _components;
+    private readonly EntityID[] _components;
 
     public Archetype(World world, ReadOnlySpan<EntityID> components)
     {
         _world = world;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
-        _components = new EntityID[components.Length];
+        _components = components.ToArray();
         _entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
         _componentsData = new byte[components.Length][];
         _edgesLeft = new List<EcsEdge>();
@@ -675,9 +622,9 @@ sealed unsafe class Archetype
         for (int i = 0; i < components.Length; i++)
         {
             _components[i] = components[i];
-           
+
             ref var meta = ref _world._components.Get(components[i]);
-           
+
             var d = (int)IDOp.RealID(meta.ID);
             maxID = Math.Max(maxID, d);
 
@@ -701,7 +648,7 @@ sealed unsafe class Archetype
     public EntityID[] Components => _components;
 
 
-    public int GetComponentIndex(ref ComponentMetadata meta)
+    public int GetComponentIndex(ref EcsComponent meta)
     {
         var index = (int)IDOp.RealID(meta.ID);
         return index >= _lookup.Length ? -1 : _lookup[index];
@@ -743,10 +690,10 @@ sealed unsafe class Archetype
         return removed;
     }
 
-    public Archetype InsertVertex(Archetype left, ReadOnlySpan<EntityID> newType, ref ComponentMetadata meta)
+    public Archetype InsertVertex(Archetype left, ReadOnlySpan<EntityID> newType, ref EcsComponent meta)
     {
         var vertex = new Archetype(left._world, newType);
-        MakeEdges(left, vertex, ref meta);
+        MakeEdges(left, vertex, meta.ID);
         InsertVertex(vertex);
         return vertex;
     }
@@ -765,7 +712,7 @@ sealed unsafe class Archetype
         return toRow;
     }
 
-    public Span<byte> GetComponentRaw(ref ComponentMetadata meta, int row, int count)
+    public Span<byte> GetComponentRaw(ref EcsComponent meta, int row, int count)
     {
         var column = GetComponentIndex(ref meta);
         if (column <= -1)
@@ -805,10 +752,10 @@ sealed unsafe class Archetype
         }
     }
 
-    private static void MakeEdges(Archetype left, Archetype right, ref ComponentMetadata meta)
+    private static void MakeEdges(Archetype left, Archetype right, EntityID id)
     {
-        left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = meta.ID });
-        right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = meta.ID });
+        left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = id });
+        right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = id });
     }
 
     private void InsertVertex(Archetype newNode)
@@ -840,7 +787,7 @@ sealed unsafe class Archetype
         var newNodeTypeLen = newNode._components.Length;
         for (; i < newNodeTypeLen && _components[i] == newNode._components[i]; ++i) { }
 
-        MakeEdges(newNode, this, ref _world._components.Get(_components[i]));
+        MakeEdges(newNode, this, _components[i]);
     }
 
     private void ResizeComponentArray(int capacity)
@@ -1022,7 +969,7 @@ public ref struct Iterator
         _archetype = archetype;
     }
 
-    // FIXME: maybe we need to keep a variable. Consider when destroying an entity
+    // FIXME: maybe we need to keep a variable. Consider when destroy an entity
     public int Count => _archetype.Count;
     public World World => _world;
 
@@ -1512,14 +1459,14 @@ sealed class EntitySparseSet<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static EntityID SplitGeneration(ref EntityID index)
     {
-        if ((index & EcsConst.ECS_ID_FLAGS_MASK) != 0)
-        {
-            index &= ~(EcsConst.ECS_GENERATION_MASK | EcsConst.ECS_ID_FLAGS_MASK);
-            //return 0;
-        }
+        //if ((index & EcsConst.ECS_ID_FLAGS_MASK) != 0)
+        //{
+        //    index &= ~(EcsConst.ECS_GENERATION_MASK | EcsConst.ECS_ID_FLAGS_MASK);
+        //    //return 0;
+        //}
 
         var gen = index & EcsConst.ECS_GENERATION_MASK;
-        Debug.Assert(gen == (index & (0xFFFFFFFFul << 32)));
+        Debug.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
         index -= gen;
         return gen;
     }
@@ -1564,7 +1511,7 @@ static class EcsConst
     public const EntityID ECS_PAIR = 1ul << 63;
 }
 
-public readonly record struct EcsComponent(EntityID ComponentID, int Size, int GlobalIndex);
+public readonly record struct EcsComponent(EntityID ID, int Size, int GlobalIndex);
 
 public unsafe struct EcsQuery
 {
@@ -1694,14 +1641,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
         where TPredicate : struct
     {
         var world = World._allWorlds.Get(WorldID);
-
-        ref var pred = ref ComponentStorage.GetOrAdd<TPredicate>(world);
-        var rel = IDOp.Pair(pred.ID, targetID);
-
-        ref var meta = ref ComponentStorage.GetOrAdd(world, rel, 1);
-        world.Set(ID, ref meta, stackalloc byte[1]);
-
-        //world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
+        world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
 
         return this;
     }

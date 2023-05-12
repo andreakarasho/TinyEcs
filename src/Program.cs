@@ -6,9 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 2 * 4;
-
-
+const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = new World();
 //using var world2 = new World();
@@ -47,44 +45,6 @@ var sw = Stopwatch.StartNew();
 
 var root = world.Entity();
 
-//addChildrenTo(root, 100);
-//var count = world.EntityCount;
-
-//void addChildrenTo(EntityView parent, int count)
-//{
-//    for (int i = 0; i < count; i++)
-//        world.Entity()
-//            .ChildOf(parent);
-//}
-
-//root.Destroy();
-//var count2 = count - world.EntityCount;
-
-//var parent = world.Entity().ChildOf(root);
-//var child = world.Entity().ChildOf(parent);
-
-
-
-//var root2 = world2.Entity();
-//var parent2 = world2.Entity().Set<ChildOf>(root2);
-//var child2 = world2.Entity().Set<ChildOf>(parent2);
-
-//ref var o = ref child.Get<ChildOf>();
-
-//root.Destroy();
-
-//Console.WriteLine("root is alive? {0}", root.IsAlive());
-//Console.WriteLine("parent is alive? {0}", parent.IsAlive());
-//Console.WriteLine("child is alive? {0}", child.IsAlive());
-
-//var arr = new [] 
-//{
-//    world.Entity(), world.Entity(), 
-//    world.Entity(), world.Entity()
-//};
-
-//foreach (var item in arr) item.Destroy();
-
 for (int i = 0; i < 100; ++i)
 {
     var ee = world.Entity()
@@ -93,8 +53,10 @@ for (int i = 0; i < 100; ++i)
         .Set<Likes, Dogs>()
         .Set<Likes, Cats>()
         .Set(TileType.Static)
+        .Set<Likes>(root)
         .AttachTo(root)
         ;
+
 }
 
 
@@ -105,6 +67,7 @@ var query = world.Query()
     .With<Velocity>()
     .With<Likes, Dogs>()
     .With<Likes, Cats>()
+    .With<Likes, EntityView>()
     //.With<EcsParent>()
     .With<TileType>()
     ;
@@ -126,7 +89,7 @@ foreach (var it in queryCmp)
 
         //it.World.Unset<EcsEnabled>(ent.ID);
         
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", metadata.ComponentID, metadata.GlobalIndex, "", metadata.Size);
+        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", metadata.ID, metadata.GlobalIndex, "", metadata.Size);
     }
 }
 
@@ -142,7 +105,7 @@ while (true)
 {
     sw.Restart();
     
-    //for (int i = 0; i < 3600; ++i)
+    for (int i = 0; i < 3600; ++i)
         world.Step();
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
@@ -152,7 +115,6 @@ Console.ReadLine();
 
 static void ASystem(in Iterator it)
 {
-    //Console.WriteLine("ASystem - Count: {0}", it.Count);
     ref var e = ref it.Field<EntityView>();
     ref var p = ref it.Field<Position>();
     ref var v = ref it.Field<Velocity>();
@@ -167,19 +129,11 @@ static void ASystem(in Iterator it)
         ref var vel = ref it.Get(ref v, row);
         ref var tileType = ref it.Get(ref t, row);
 
-        //it.World.DestroyEntity((ulong)parentID);
-
-        //if (it.World.Has<ChildOf, EcsEntity>(parentID.Target.ID))
-        //{
-        //    ref var rootID = ref it.World.Get<ChildOf, EcsEntity>(parentID.Target.ID);
-        //}
-
-        //Console.WriteLine("ent: {0}, world id: {1} parent id: {2} {3}", ent.ID, ent.WorldID, bob.Target.ID, tileType);
-
         pos.X *= vel.X;
         pos.Y *= vel.Y;
     }
 }
+
 
 static void ASystem2(in Iterator it)
 {
