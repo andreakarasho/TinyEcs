@@ -14,7 +14,7 @@ using var world = new World();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-   var entity = world.CreateEntity()
+   var entity = world.Entity()
 	.Set<Position>(new Position() { X = 1f, Y = -1f })
 	.Set<Velocity>();
 }
@@ -41,6 +41,23 @@ foreach (var it in query)
 
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
+```
+# Parent-Child relation
+```csharp
+using var world = new World();
+
+var inventory = world.Entity();
+var sword = world.Entity();
+var gold = world.Entity();
+
+sword.AttachTo(inventory);
+gold.AttachTo(inventory);
+
+// detach
+sword.Detach();
+
+// cleanup
+inventory.RemoveAllChildren();
 ```
 
 # Credits
