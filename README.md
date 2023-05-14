@@ -49,6 +49,23 @@ void MoveSystem(in Iterator it)
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 ```
+# EntityView
+```csharp
+using var world = new World();
+
+EntityView e = world.Entity();
+
+// set the transform component
+e.Set<Transform>();
+
+// return the Transform component 
+ref Transform transform = ref e.Get<Transform>(); 
+
+// return true
+bool has = e.Has<Transform>(); 
+
+```
+
 # Parent-Child relation
 ```csharp
 using var world = new World();
