@@ -7,18 +7,16 @@ NativeAOT compatible.
 
 # Sample
 ```csharp
-
-const int ENTITIES_COUNT = 1_000_000;
-
+// Initialize the world
 using var world = new World();
 
-for (int i = 0; i < ENTITIES_COUNT; ++i)
-{
-	var entity = world.Entity()
-		.Set(new Position() { X = 1f, Y = -1f })
-		.Set<Velocity>();
-}
+// Spawn some entity
+var entity = world.Entity()
+	.Set(new Position() { X = 1f, Y = -1f })
+	.Set<Velocity>();
 
+
+// Search the entities
 var query = world.Query()
 	.With<Position>()
 	.With<Velocity>();
@@ -30,7 +28,6 @@ unsafe
 	
 	world.RegisterSystem(query, &MoveSystem);
 }
-
 
 
 void MoveSystem(in Iterator it)
