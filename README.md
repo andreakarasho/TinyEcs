@@ -14,16 +14,26 @@ using var world = new World();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-   var entity = world.Entity()
-	.Set<Position>(new Position() { X = 1f, Y = -1f })
-	.Set<Velocity>();
+	var entity = world.Entity()
+		.Set(new Position() { X = 1f, Y = -1f })
+		.Set<Velocity>();
 }
 
 var query = world.Query()
-     .With<Position>()
-     .With<Velocity>();
+	.With<Position>()
+	.With<Velocity>();
+     
+unsafe
+{
+	// Note: you can also parse the query 
+	//	"foreach (var it in query) { }"
+	
+	world.RegisterSystem(query, &MoveSystem);
+}
 
-foreach (var it in query)
+
+
+void MoveSystem(in Iterator it)
 {
 	var p = it.Field<Position>();
 	var v = it.Field<Velocity>();
