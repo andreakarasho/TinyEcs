@@ -25,13 +25,13 @@ var query = world.Query()
 
 foreach (var it in query)
 {
-	ref var p = ref it.Field<Position>();
-	ref var v = ref it.Field<Velocity>();
+	var p = it.Field<Position>();
+	var v = it.Field<Velocity>();
 
-	for (var row = 0; row < it.Count; ++row)
+	foreach (var row in it)
 	{
-		ref var pos = ref it.Get(ref p, row);
-		ref var vel = ref it.Get(ref v, row);
+		ref var pos = ref p.Get();
+		ref var vel = ref v.Get();
 
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;

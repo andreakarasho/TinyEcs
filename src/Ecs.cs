@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -24,15 +25,15 @@ public sealed partial class World : IDisposable
     private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     internal readonly EntitySparseSet<EcsComponent> _components = new();
-    private readonly Dictionary<EntityID, Query> _queryIndex = new();
+    private readonly Dictionary<EntityID, QueryBuilder> _queryIndex = new();
 
-    private readonly IQueryComposition _querySystems;
-    private readonly IQueryComposition _querySystemsOnUpdate;
-    private readonly IQueryComposition _querySystemsOnPreUpdate;
-    private readonly IQueryComposition _querySystemsOnPostUpdate;
-    private readonly IQueryComposition _querySystemsOnStartup;
-    private readonly IQueryComposition _querySystemsOnPreStartup;
-    private readonly IQueryComposition _querySystemsOnPostStartup;
+    private readonly QueryBuilder _querySystems;
+    private readonly QueryBuilder _querySystemsOnUpdate;
+    private readonly QueryBuilder _querySystemsOnPreUpdate;
+    private readonly QueryBuilder _querySystemsOnPostUpdate;
+    private readonly QueryBuilder _querySystemsOnStartup;
+    private readonly QueryBuilder _querySystemsOnPreStartup;
+    private readonly QueryBuilder _querySystemsOnPostStartup;
 
 
     public World()
@@ -111,21 +112,39 @@ public sealed partial class World : IDisposable
 
         foreach (var it in qry)
         {
-            ref var s = ref it.Field<EcsSystem>();
+            var s = it.Field<EcsSystem>();
 
-            // NOTE: This is quite bad to use, but it's the only way to grab
-            //       the query avoding the managed reference in a struct issue
-            ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
+            //ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Value.Query);
 
-            for (int i = 0; i < it.Count; ++i)
+            QueryBuilder query = null;
+
+            foreach (var row in it)
             {
-                ref var sys = ref it.Get(ref s, i);
+                ref var sys = ref s.Get();
+
+                query ??= _queryIndex[sys.Query];
 
                 foreach (var itSys in query)
                 {
                     sys.Func(in itSys);
                 }
             }
+
+            //ref var s = ref it.Field<EcsSystem>();
+
+            // NOTE: This is quite bad to use, but it's the only way to grab
+            //       the query avoding the managed reference in a struct issue
+            //ref var query = ref CollectionsMarshal.GetValueRefOrNullRef(_queryIndex, s.Query);
+
+            //for (int i = 0; i < it.Count; ++i)
+            //{
+            //    ref var sys = ref it.Get(ref s, i);
+
+            //    foreach (var itSys in query)
+            //    {
+            //        sys.Func(in itSys);
+            //    }
+            //}
         }
     }
 
@@ -145,9 +164,9 @@ public sealed partial class World : IDisposable
         Interlocked.Increment(ref _totalFrames);
     }
 
-    public IQueryComposition Query()
+    public QueryBuilder Query()
     {
-        var query = new Query(this);
+        var query = new QueryBuilder(this);
         query.With<EcsEnabled>();
 
         return query;
@@ -338,14 +357,14 @@ public sealed partial class World : IDisposable
         return record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
     }
 
-    public unsafe EntityView RegisterSystem(IQueryComposition query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
+    public unsafe EntityView RegisterSystem(QueryBuilder query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
         var qryID = CreateEntityRaw();
         qryID.Set<EcsQuery>()
              .Set(qryID)
              .Set<EcsEnabled>();
 
-        _queryIndex.Add(qryID, (Query)query);
+        _queryIndex.Add(qryID, query);
 
         var id = CreateEntityRaw();
         id.Set(new EcsSystem(qryID, func))
@@ -547,7 +566,7 @@ public sealed partial class World : IDisposable
 
 static unsafe class ComponentStorage
 {
-    public static ref EcsComponent GetOrAdd<T>(World world) where T : struct
+    public static ref EcsComponent GetOrAdd<T>(World world) where T : unmanaged
     {
         var id = (EntityID)TypeInfo<T>.GlobalIndex;
         ref var meta = ref world._components.Get(id);
@@ -579,7 +598,7 @@ static unsafe class ComponentStorage
         return ref meta;
     }
 
-    private static class TypeInfo<T> where T : struct
+    private static class TypeInfo<T> where T : unmanaged
     {
         public static readonly int GlobalIndex = NextID.Get();
         public static readonly int Size = sizeof(T);
@@ -817,13 +836,13 @@ sealed unsafe class Archetype
     }
 }
 
-public struct Query : IQueryComposition
+public sealed class QueryBuilder
 {
     private readonly World _world;
     private readonly Vec<EntityID> _add, _remove;
     private readonly Stack<Archetype> _stack;
 
-    internal Query(World world)
+    internal QueryBuilder(World world)
     {
         _world = world;
         _add = new Vec<EntityID>(16);
@@ -831,40 +850,40 @@ public struct Query : IQueryComposition
         _stack = new Stack<Archetype>();
     }
 
-    public IQueryComposition With<T>() where T : struct
+    public QueryBuilder With<T>() where T : unmanaged
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
         _add.Add(meta.ID);
+        _add.Sort();
 
         return this;
     }
 
-    public IQueryComposition Without<T>() where T : struct
+    public QueryBuilder Without<T>() where T : unmanaged
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
         _remove.Add(meta.ID);
+        _remove.Sort();
 
         return this;
     }
 
-    public IQueryComposition With<TPredicate, TTarget>() 
-        where TPredicate : struct
-        where TTarget : struct
+    public QueryBuilder With<TPredicate, TTarget>()
+        where TPredicate : unmanaged
+        where TTarget : unmanaged
     {
         return With<EcsRelation<TPredicate, TTarget>>();
     }
 
-    public IQueryComposition Without<TPredicate, TTarget>() 
-        where TPredicate : struct
-        where TTarget : struct
+    public QueryBuilder Without<TPredicate, TTarget>()
+        where TPredicate : unmanaged
+        where TTarget : unmanaged
     {
         return Without<EcsRelation<TPredicate, TTarget>>();
     }
 
     public QueryIterator GetEnumerator()
     {
-        _add.Sort();
-        _remove.Sort();
         _stack.Clear();
         _stack.Push(_world._archRoot);
 
@@ -872,18 +891,18 @@ public struct Query : IQueryComposition
     }
 }
 
-public interface IQueryComposition
-{
-    IQueryComposition With<T>() where T : struct;
+//public interface IQueryBuilder
+//{
+//    IQueryBuilder With<T>() where T : unmanaged;
   
-    IQueryComposition Without<T>() where T : struct;
+//    IQueryBuilder Without<T>() where T : unmanaged;
 
-    IQueryComposition With<TPredicate, TTarget>() where TPredicate : struct where TTarget : struct;
+//    IQueryBuilder With<TPredicate, TTarget>() where TPredicate : unmanaged where TTarget : unmanaged;
 
-    IQueryComposition Without<TPredicate, TTarget>() where TPredicate : struct where TTarget : struct;
+//    IQueryBuilder Without<TPredicate, TTarget>() where TPredicate : unmanaged where TTarget : unmanaged;
 
-    QueryIterator GetEnumerator();
-}
+//    QueryIterator GetEnumerator();
+//}
 
 
 [SkipLocalsInit]
@@ -947,6 +966,12 @@ public ref struct QueryIterator
         return true;
     }
 
+    //public readonly void Reset()
+    //{
+    //    _stack.Clear();
+    //    _stack.Push(_world._archRoot);
+    //}
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Dispose()
     {
@@ -962,11 +987,14 @@ public ref struct Iterator
 {
     private readonly World _world;
     private readonly Archetype _archetype;
+    private int _row;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Iterator(World world, [NotNull] Archetype archetype)
     {
         _world = world;
         _archetype = archetype;
+        _row = -1;
     }
 
     // FIXME: maybe we need to keep a variable. Consider when destroy an entity
@@ -974,32 +1002,66 @@ public ref struct Iterator
     public World World => _world;
 
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe readonly ref T Field<T>() where T : struct
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)] 
+    public unsafe Field<T> Field<T>() where T : unmanaged
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        return ref MemoryMarshal.AsRef<T>(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count));
+        ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
+
+        return new Field<T>(ref value, ref _row);
     }
 
+    [UnscopedRef]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe readonly ref EcsRelation<TPredicate, TTarget> Field<TPredicate, TTarget>() 
-        where TPredicate : struct
-        where TTarget : struct
+    public unsafe Field<EcsRelation<TPredicate, TTarget>> Field<TPredicate, TTarget>()
+        where TPredicate : unmanaged
+        where TTarget : unmanaged
     {
-        return ref Field<EcsRelation<TPredicate, TTarget>>();
+        return Field<EcsRelation<TPredicate, TTarget>>();
     }
 
+    [UnscopedRef]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Has<T>() where T : struct
-    {
-        ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        return _archetype.GetComponentIndex(ref meta) >= 0;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>(ref T first, int row) where T : struct
-        => ref Unsafe.Add(ref first, row);
+    public FieldEnumerator GetEnumerator() => new FieldEnumerator(Count, ref _row);
 }
+
+[SkipLocalsInit]
+public readonly ref struct Field<T> where T : unmanaged
+{
+    private readonly ref T _first;
+    private readonly ref int _row;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Field(ref T first, ref int row)
+    {
+        _first = ref first;
+        _row = ref row;
+    }
+  
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref T Get() => ref Unsafe.Add(ref _first, _row); 
+}
+
+[SkipLocalsInit]
+public readonly ref struct FieldEnumerator
+{
+    private readonly int _count;
+    private readonly ref int _row;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal FieldEnumerator(int count, ref int row)
+    {
+        _count = count;
+        _row = ref row;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool MoveNext() => ++_row < _count;
+
+    public readonly int Current => _row;
+}
+
 
 readonly record struct EcsEdge(EntityID ComponentID, Archetype Archetype);
 
@@ -1096,23 +1158,26 @@ static class IDOp
 
 public sealed partial class World
 {
-    public void Set<T>(EntityID entity, T component = default) where T : struct
-        => Set(entity, ref ComponentStorage.GetOrAdd<T>(this), MemoryMarshal.AsBytes(new Span<T>(ref component)));
+    public void Set<T>(EntityID entity, T component = default) where T : unmanaged
+    {
+        ref var meta = ref ComponentStorage.GetOrAdd<T>(this);
+        Set(entity, ref meta, MemoryMarshal.CreateSpan(ref Unsafe.As<T, byte>(ref component), meta.Size));
+    }
 
-    public void Unset<T>(EntityID entity) where T : struct
+    public void Unset<T>(EntityID entity) where T : unmanaged
        => DetatchComponent(entity, ref ComponentStorage.GetOrAdd<T>(this));
 
-    public bool Has<T>(EntityID entity) where T : struct
+    public bool Has<T>(EntityID entity) where T : unmanaged
         => Has(entity, ref ComponentStorage.GetOrAdd<T>(this));
 
-    public unsafe ref T Get<T>(EntityID entity) where T : struct
+    public unsafe ref T Get<T>(EntityID entity) where T : unmanaged
     {
         var raw = Get(entity, ref ComponentStorage.GetOrAdd<T>(this));
 
         Debug.Assert(!raw.IsEmpty);
         Debug.Assert(sizeof(T) == raw.Length);
 
-        return ref MemoryMarshal.AsRef<T>(raw);
+        return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
     }
 
 
@@ -1201,7 +1266,7 @@ public sealed partial class World
 
 
 
-class Vec<T0> where T0 : struct
+class Vec<T0> where T0 : unmanaged
 {
     private T0[] _array;
     private int _count;
@@ -1533,8 +1598,8 @@ public unsafe readonly struct EcsSystem
 
 
 public readonly struct EcsRelation<TAction, TTarget> 
-    where TAction : struct 
-    where TTarget : struct
+    where TAction : unmanaged 
+    where TTarget : unmanaged
 {
     public readonly TTarget Target;
 
@@ -1605,14 +1670,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Set<T>(T component = default) where T : struct
+    public readonly EntityView Set<T>(T component = default) where T : unmanaged
     {
         World._allWorlds.Get(WorldID).Set(ID, component);
         return this;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Unset<T>() where T : struct
+    public readonly EntityView Unset<T>() where T : unmanaged
     {
         World._allWorlds.Get(WorldID).Unset<T>(ID);
         return this;
@@ -1620,8 +1685,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Set<TPredicate, TTarget>() 
-        where TPredicate : struct
-        where TTarget : struct
+        where TPredicate : unmanaged
+        where TTarget : unmanaged
     {
         World._allWorlds.Get(WorldID).Set<EcsRelation<TPredicate, TTarget>>(ID);
         return this;
@@ -1629,8 +1694,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset<TPredicate, TTarget>() 
-        where TPredicate : struct
-        where TTarget : struct
+        where TPredicate : unmanaged
+        where TTarget : unmanaged
     {
         World._allWorlds.Get(WorldID).Unset<EcsRelation<TPredicate, TTarget>>(ID);
         return this;
@@ -1638,7 +1703,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Set<TPredicate>(in EntityView targetID) 
-        where TPredicate : struct
+        where TPredicate : unmanaged
     {
         var world = World._allWorlds.Get(WorldID);
         world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
@@ -1679,21 +1744,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>() where T : struct
+    public readonly ref T Get<T>() where T : unmanaged
         => ref World._allWorlds.Get(WorldID).Get<T>(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Has<T>() where T : struct
+    public readonly bool Has<T>() where T : unmanaged
         => World._allWorlds.Get(WorldID).Has<T>(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>() 
-        where TPredicate : struct where TTarget : struct
+        where TPredicate : unmanaged where TTarget : unmanaged
         => ref Get<EcsRelation<TPredicate, TTarget>>();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has<TPredicate, TTarget>()
-        where TPredicate : struct where TTarget : struct
+        where TPredicate : unmanaged where TTarget : unmanaged
         => Has<EcsRelation<TPredicate, TTarget>>();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

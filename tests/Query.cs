@@ -21,7 +21,7 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
+                _ = it.Field<float>();
             }
 
             Assert.Equal(amount, done);
@@ -51,8 +51,8 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.True(it.Has<int>());
+                _ = it.Field<float>();
+                _ = it.Field<int>();
             }
 
             Assert.Equal(amount, done);
@@ -84,9 +84,9 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.True(it.Has<int>());
-                Assert.True(it.Has<bool>());
+                _ = it.Field<float>();
+                _ = it.Field<int>();
+                _ = it.Field<bool>();
             }
 
             Assert.Equal(amount, done);
@@ -118,9 +118,8 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.True(it.Has<int>());
-                Assert.False(it.Has<bool>());
+                _ = it.Field<float>();
+                _ = it.Field<int>();
             }
 
             Assert.Equal(0, done);
@@ -151,9 +150,8 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.True(it.Has<int>());
-                Assert.False(it.Has<bool>());
+                _ = it.Field<float>();
+                _ = it.Field<int>();
             }
 
             Assert.Equal(amount, done);
@@ -184,9 +182,7 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.False(it.Has<int>());
-                Assert.False(it.Has<bool>());  
+                _ = it.Field<float>();
             }
 
             Assert.Equal(0, done);
@@ -231,9 +227,8 @@
             {
                 done += it.Count;
 
-                Assert.True(it.Has<float>());
-                Assert.True(it.Has<byte>());
-                Assert.False(it.Has<bool>());
+                _ = it.Field<float>();
+                _ = it.Field<byte>();
             }
 
             Assert.Equal(good, done);

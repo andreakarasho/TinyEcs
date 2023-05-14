@@ -242,9 +242,9 @@ namespace TinyEcs.Tests
         [InlineData(9082331231821223701, false, -0.099477f)]
         [InlineData(-0.099477f, true, 9082331231821223701)]
         public void Entity_Detach_ThreeComponent_Generics<T0, T1, T2>(T0 t0, T1 t1, T2 t2)
-            where T0 : struct
-            where T1 : struct
-            where T2 : struct
+            where T0 : unmanaged
+            where T1 : unmanaged
+            where T2 : unmanaged
         {
             using var world = new World();
             var entity = world.Entity();

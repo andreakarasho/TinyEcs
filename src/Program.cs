@@ -45,7 +45,7 @@ var sw = Stopwatch.StartNew();
 
 var root = world.Entity();
 
-for (int i = 0; i < 100; ++i)
+for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
     var ee = world.Entity()
         .Set<Position>()
@@ -54,7 +54,7 @@ for (int i = 0; i < 100; ++i)
         .Set<Likes, Cats>()
         .Set(TileType.Static)
         .Set<Likes>(root)
-        .AttachTo(root)
+        //.AttachTo(root)
         ;
 
 }
@@ -72,23 +72,18 @@ var query = world.Query()
     .With<TileType>()
     ;
 
-
-
 var queryCmp = world.Query()
     .With<EcsComponent>();
 
 foreach (var it in queryCmp)
 {
-    ref var e = ref it.Field<EntityView>();
-    ref var p = ref it.Field<EcsComponent>();
-
-    for (var row = 0; row < it.Count; ++row)
+    var e = it.Field<EntityView>();
+    var p = it.Field<EcsComponent>();
+    
+    foreach (var row in it)
     {
-        ref var ent = ref it.Get(ref e, row);
-        ref var metadata = ref it.Get(ref p, row);
-
-        //it.World.Unset<EcsEnabled>(ent.ID);
-        
+        ref var ent = ref e.Get();
+        ref var metadata = ref p.Get();
         Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", metadata.ID, metadata.GlobalIndex, "", metadata.Size);
     }
 }
@@ -106,7 +101,10 @@ while (true)
     sw.Restart();
     
     for (int i = 0; i < 3600; ++i)
-        world.Step();
+    {
+        world.Step();     
+    }
+
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
 
@@ -115,19 +113,17 @@ Console.ReadLine();
 
 static void ASystem(in Iterator it)
 {
-    ref var e = ref it.Field<EntityView>();
-    ref var p = ref it.Field<Position>();
-    ref var v = ref it.Field<Velocity>();
-    ref var t = ref it.Field<TileType>();
-    //ref var b = ref it.Field<EcsChildOf, EntityView>();
+    var e = it.Field<EntityView>();
+    var p = it.Field<Position>();
+    var v = it.Field<Velocity>();
+    var t = it.Field<TileType>();
 
-    for (var row = 0; row < it.Count; ++row)
+    foreach (var _ in it)
     {
-        //ref var parentID = ref it.Get(ref b, row);
-        ref var ent = ref it.Get(ref e, row);
-        ref var pos = ref it.Get(ref p, row);
-        ref var vel = ref it.Get(ref v, row);
-        ref var tileType = ref it.Get(ref t, row);
+        ref var ent = ref e.Get();
+        ref var pos = ref p.Get();
+        ref var vel = ref v.Get();
+        ref var tile = ref t.Get();
 
         pos.X *= vel.X;
         pos.Y *= vel.Y;
@@ -139,15 +135,15 @@ static void ASystem2(in Iterator it)
 {
     //Console.WriteLine("ASystem2 - Count: {0}", it.Count);
 
-    ref var p = ref it.Field<Position>();
-    ref var v = ref it.Field<Velocity>();
+    //ref var p = ref it.Field<Position>();
+    //ref var v = ref it.Field<Velocity>();
 
-    for (var row = 0; row < it.Count; ++row)
-    {
-        //ref readonly var entity = ref it.Entity(row);
-        ref var pos = ref it.Get(ref p, row);
-        ref var vel = ref it.Get(ref v, row);
-    }
+    //for (var row = 0; row < it.Count; ++row)
+    //{
+    //    ref readonly var entity = ref it.Entity(row);
+    //    ref var pos = ref it.Get(ref p, row);
+    //    ref var vel = ref it.Get(ref v, row);
+    //}
 }
 
 static void PreUpdate(in Iterator it)
@@ -159,16 +155,16 @@ static void PostUpdate(in Iterator it)
 {
     Console.WriteLine("post update");
 
-    ref var p = ref it.Field<Position>();
+    //ref var p = ref it.Field<Position>();
 
-    for (var row = 0; row < it.Count; ++row)
-    {
-        //var e = it.Entity(row);
-        //ref readonly var entity = ref it.Entity(row);
-        ref var pos = ref it.Get(ref p, row);
+    //for (var row = 0; row < it.Count; ++row)
+    //{
+    //    //var e = it.Entity(row);
+    //    //ref readonly var entity = ref it.Entity(row);
+    //    ref var pos = ref it.Get(ref p, row);
 
-        Console.WriteLine("position: {0}, {1}", pos.X, pos.Y);
-    }
+    //    Console.WriteLine("position: {0}, {1}", pos.X, pos.Y);
+    //}
 }
 
 struct Likes { }
