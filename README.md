@@ -59,7 +59,7 @@ using var world = new World();
 EntityView e = world.Entity();
 
 // set the transform component
-e.Set<Transform>();
+e.Set<Transform>(); // same as world.Set<Transform>(e);
 
 // return the Transform component 
 ref Transform transform = ref e.Get<Transform>(); 
