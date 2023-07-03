@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -22,8 +21,8 @@ public sealed partial class World : IDisposable
     private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
 
     internal Archetype _archRoot;
-    private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
-    private readonly EntitySparseSet<EcsRecord> _entities = new();
+    internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
+	internal readonly EntitySparseSet<EcsRecord> _entities = new();
     internal readonly EntitySparseSet<EcsComponent> _components = new();
     private readonly Dictionary<EntityID, QueryBuilder> _queryIndex = new();
 
@@ -42,7 +41,7 @@ public sealed partial class World : IDisposable
 
         lock (_lock)
             _allWorlds.CreateNew(out _worldID) = this;
-        
+
         // initialize pre-built queries
         _querySystems = Query()
             .With<EcsSystem>();
@@ -95,7 +94,7 @@ public sealed partial class World : IDisposable
     }
 
 
-    private unsafe void RunSystemSets(SystemPhase phase)
+    private unsafe void RunSystemSets(SystemPhase phase, float deltaTime)
     {
         var qry = phase switch
         {
@@ -126,7 +125,7 @@ public sealed partial class World : IDisposable
 
                 foreach (var itSys in query)
                 {
-                    sys.Func(in itSys);
+                    sys.Func(in itSys, deltaTime);
                 }
             }
 
@@ -148,18 +147,18 @@ public sealed partial class World : IDisposable
         }
     }
 
-    public unsafe void Step()
+    public unsafe void Step(float deltaTime)
     {
         if (_totalFrames == 0)
         {
-            RunSystemSets(SystemPhase.OnPreStartup);
-            RunSystemSets(SystemPhase.OnStartup);
-            RunSystemSets(SystemPhase.OnPostStartup);
+            RunSystemSets(SystemPhase.OnPreStartup, deltaTime);
+            RunSystemSets(SystemPhase.OnStartup, deltaTime);
+            RunSystemSets(SystemPhase.OnPostStartup, deltaTime);
         }
 
-        RunSystemSets(SystemPhase.OnPreUpdate);
-        RunSystemSets(SystemPhase.OnUpdate);
-        RunSystemSets(SystemPhase.OnPostUpdate);
+        RunSystemSets(SystemPhase.OnPreUpdate, deltaTime);
+        RunSystemSets(SystemPhase.OnUpdate, deltaTime);
+        RunSystemSets(SystemPhase.OnPostUpdate, deltaTime);
 
         Interlocked.Increment(ref _totalFrames);
     }
@@ -172,7 +171,7 @@ public sealed partial class World : IDisposable
         return query;
     }
 
-    public EntityView Entity() 
+    public EntityView Entity()
     {
         var e = CreateEntityRaw();
 
@@ -212,7 +211,7 @@ public sealed partial class World : IDisposable
 
         RemoveChildren(entity);
         Detach(entity);
-        
+
         ref var record = ref _entities.Get(entity);
         if (Unsafe.IsNullRef(ref record))
         {
@@ -230,7 +229,7 @@ public sealed partial class World : IDisposable
         Interlocked.Decrement(ref _entityCount);
     }
 
-    public bool IsAlive(EntityID entity) 
+    public bool IsAlive(EntityID entity)
         => _entities.Contains(entity);
 
     private void Attach(EntityID entity, ref EcsComponent meta)
@@ -313,11 +312,19 @@ public sealed partial class World : IDisposable
 
         var hash = ComponentHasher.Calculate(span);
 
+#if NET5_0_OR_GREATER
         ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
         if (!exists)
         {
             arch = _archRoot.InsertVertex(record.Archetype, span, ref meta);
         }
+#else
+        if (!_typeIndex.TryGetValue(hash, out var arch))
+        {
+			arch = _archRoot.InsertVertex(record.Archetype, span, ref meta);
+            _typeIndex[hash] = arch;
+		}
+#endif
 
         var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
         record.Row = newRow;
@@ -357,7 +364,7 @@ public sealed partial class World : IDisposable
         return record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
     }
 
-    public unsafe EntityView RegisterSystem(QueryBuilder query, delegate* managed<in Iterator, void> func, SystemPhase phase = SystemPhase.OnUpdate)
+    public unsafe EntityView RegisterSystem(QueryBuilder query, delegate* managed<in Iterator, float, void> func, SystemPhase phase = SystemPhase.OnUpdate)
     {
         var qryID = CreateEntityRaw();
         qryID.Set<EcsQuery>()
@@ -485,7 +492,7 @@ public sealed partial class World : IDisposable
 
                 case DeferredOp.Detach:
 
-                   // Detach(cmd.Detach.Entity, cmd.Detach.Component);
+                    // Detach(cmd.Detach.Entity, cmd.Detach.Component);
 
                     break;
             }
@@ -583,11 +590,11 @@ static unsafe class ComponentStorage
     }
 
 
-    private static ref EcsComponent Create(World world, EntityID id, int size, int globalIdx)
+	public static ref EcsComponent Create(World world, EntityID id, int size, int globalIdx)
     {
         Debug.Assert(globalIdx >= 0);
         Debug.Assert(size >= 0);
- 
+
         ref var meta = ref world._components.Add(id, new EcsComponent(id, size, globalIdx));
 
         var ent = world.CreateEntityRaw();
@@ -692,7 +699,7 @@ sealed unsafe class Archetype
     {
         var removed = _entityIDs[row];
         _entityIDs[row] = _entityIDs[_count - 1];
-        
+
         for (int i = 0; i < _components.Length; ++i)
         {
             ref var meta = ref _world._components.Get(_components[i]);
@@ -739,6 +746,8 @@ sealed unsafe class Archetype
             return Span<byte>.Empty;
         }
 
+        Debug.Assert(row < Count);
+
         return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
     }
 
@@ -751,8 +760,8 @@ sealed unsafe class Archetype
 
         ref var x = ref (isLeft ? ref j : ref i);
         ref var y = ref (!isLeft ? ref j : ref i);
-        
-        for (;x < count; ++x)
+
+        for (; x < count; ++x)
         {
             while (from._components[i] != to._components[j])
             {
@@ -789,7 +798,11 @@ sealed unsafe class Archetype
 
         if (nodeTypeLen < newTypeLen - 1)
         {
+#if NET5_0_OR_GREATER
             foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
+#else
+            foreach (var edge in _edgesRight)
+#endif
             {
                 edge.Archetype.InsertVertex(newNode);
             }
@@ -841,6 +854,7 @@ public sealed class QueryBuilder
     private readonly World _world;
     private readonly Vec<EntityID> _add, _remove;
     private readonly Stack<Archetype> _stack;
+    private Archetype _firstArch;
 
     internal QueryBuilder(World world)
     {
@@ -885,7 +899,9 @@ public sealed class QueryBuilder
     public QueryIterator GetEnumerator()
     {
         _stack.Clear();
-        _stack.Push(_world._archRoot);
+        if (_firstArch == null)
+            _world._typeIndex.TryGetValue(ComponentHasher.Calculate(MemoryMarshal.CreateSpan(ref _add[0], _add.Count)), out _firstArch);
+        _stack.Push(_firstArch ?? _world._archRoot);
 
         return new QueryIterator(_world, _stack, _add, _remove);
     }
@@ -894,7 +910,7 @@ public sealed class QueryBuilder
 //public interface IQueryBuilder
 //{
 //    IQueryBuilder With<T>() where T : unmanaged;
-  
+
 //    IQueryBuilder Without<T>() where T : unmanaged;
 
 //    IQueryBuilder With<TPredicate, TTarget>() where TPredicate : unmanaged where TTarget : unmanaged;
@@ -904,8 +920,9 @@ public sealed class QueryBuilder
 //    QueryIterator GetEnumerator();
 //}
 
-
+#if NET5_0_OR_GREATER
 [SkipLocalsInit]
+#endif
 public ref struct QueryIterator
 {
     private readonly World _world;
@@ -944,6 +961,7 @@ public ref struct QueryIterator
             if (!_stack.TryPop(out _archetype) || _archetype == null)
                 return false;
 
+#if NET5_0_OR_GREATER
             var span = CollectionsMarshal.AsSpan(_archetype._edgesRight);
             if (!span.IsEmpty)
             {
@@ -959,8 +977,20 @@ public ref struct QueryIterator
                         _stack.Push(edge.Archetype);
                     }
                 }
-            } 
-        }
+            }
+#else
+            for (int i = _archetype._edgesRight.Count - 1; i >= 0; --i)
+            {
+                var edge = _archetype._edgesRight[i];
+
+				if (_remove.IndexOf(edge.ComponentID) < 0)
+				{
+					_stack.Push(edge.Archetype);
+				}
+			}
+#endif
+
+		}
         while (!_archetype.IsSuperset(_add.Span) || _archetype.Count <= 0);
 
         return true;
@@ -982,7 +1012,9 @@ public ref struct QueryIterator
 }
 
 
+#if NET5_0_OR_GREATER
 [SkipLocalsInit]
+#endif
 public ref struct Iterator
 {
     private readonly World _world;
@@ -998,21 +1030,26 @@ public ref struct Iterator
     }
 
     // FIXME: maybe we need to keep a variable. Consider when destroy an entity
-    public int Count => _archetype.Count;
-    public World World => _world;
+    public readonly int Count => _archetype.Count;
+    public readonly World World => _world;
 
-
+#if NET7_0_OR_GREATER
     [UnscopedRef]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)] 
+#endif
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe Field<T> Field<T>() where T : unmanaged
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
+		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
 
-        return new Field<T>(ref value, ref _row);
+		fixed (int* ptr = &_row)
+        fixed (T* ptr2 = &value)
+            return new Field<T>(ptr2, ptr);
     }
 
+#if NET7_0_OR_GREATER
     [UnscopedRef]
+#endif
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe Field<EcsRelation<TPredicate, TTarget>> Field<TPredicate, TTarget>()
         where TPredicate : unmanaged
@@ -1021,51 +1058,85 @@ public ref struct Iterator
         return Field<EcsRelation<TPredicate, TTarget>>();
     }
 
+#if NET7_0_OR_GREATER
     [UnscopedRef]
+#endif
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public FieldEnumerator GetEnumerator() => new FieldEnumerator(Count, ref _row);
-}
-
-[SkipLocalsInit]
-public readonly ref struct Field<T> where T : unmanaged
-{
-    private readonly ref T _first;
-    private readonly ref int _row;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Field(ref T first, ref int row)
+    public unsafe FieldEnumerator GetEnumerator()
     {
-        _first = ref first;
-        _row = ref row;
-    }
-  
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get() => ref Unsafe.Add(ref _first, _row); 
+		fixed (int* ptr = &_row)
+			return new FieldEnumerator(Count, ptr);
+	}
+       
 }
 
+#if NET5_0_OR_GREATER
 [SkipLocalsInit]
-public readonly ref struct FieldEnumerator
+#endif
+public unsafe ref struct Field<T> where T : unmanaged
+{
+    //#if NET7_0_OR_GREATER
+    //    private readonly ref T _first;
+    //    private readonly ref int _row;
+    //#else
+    //    private readonly Ref<T> _first;
+    //    private readonly Ref<int> _row;
+    //#endif
+
+    private readonly T* _first;
+    private int* _row;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Field(T* first, int* row)
+    {
+        _first = first;
+        _row = row;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref T Get() => ref Unsafe.Add(ref *_first, *_row);
+}
+
+#if NET5_0_OR_GREATER
+[SkipLocalsInit]
+#endif
+public unsafe readonly ref struct FieldEnumerator
 {
     private readonly int _count;
-    private readonly ref int _row;
+
+    //#if NET7_0_OR_GREATER
+    //    private readonly ref int _row;
+    //#else
+    //    private readonly Ref<int> _row;
+    //#endif
+
+    private readonly int* _row;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal FieldEnumerator(int count, ref int row)
+    internal FieldEnumerator(int count, int* row)
     {
         _count = count;
-        _row = ref row;
+        _row = row;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool MoveNext() => ++_row < _count;
+    public readonly bool MoveNext() => ++*_row < _count;
 
-    public readonly int Current => _row;
+    public readonly int Current => *_row;
 }
 
 
-readonly record struct EcsEdge(EntityID ComponentID, Archetype Archetype);
+struct EcsEdge
+{
+    public EntityID ComponentID;
+    public Archetype Archetype;
+}
 
-record struct EcsRecord(Archetype Archetype, int Row);
+struct EcsRecord
+{
+    public Archetype Archetype;
+    public int Row;
+}
 
 static class ComponentHasher
 {
@@ -1181,76 +1252,159 @@ public sealed partial class World
     }
 
 
-    public void AttachTo(EntityID id, EntityID parent)
-    {
-        Detach(id);
+	// public void AttachTo(EntityID id, EntityID parent)
+	// {
+	//     Detach(id);
 
-        var t = new EntityView(_worldID, id);
+	//     var t = new EntityView(_worldID, id);
 
-        if (Has<EcsParent>(parent))
-        {
-            ref var p = ref Get<EcsParent>(parent);
-            p.ChildrenCount += 1;
+	//     if (Has<EcsParent>(parent))
+	//     {
+	//         ref var p = ref Get<EcsParent>(parent);
+	//         p.ChildrenCount += 1;
 
-            ref var prev = ref p.FirstChild.Get<EcsChild>().Prev;
-            ref var next = ref p.FirstChild;
+	//         ref var prev = ref p.FirstChild.Get<EcsChild>().Prev;
+	//         ref var next = ref p.FirstChild.Get<EcsChild>().Next;
 
-            prev.Get<EcsChild>().Next = t;
-            next.Get<EcsChild>().Prev = t;
+	//         if (prev.Has<EcsChild>())
+	//             prev.Get<EcsChild>().Next = t;
 
-            Set(id, new EcsChild()
-            {
-                Parent = new EntityView(_worldID, parent),
-                Next = prev,
-                Prev = next
-            });
+	//if (next.Has<EcsChild>())
+	//	next.Get<EcsChild>().Prev = t;
 
-            return;
-        }
+	//         Set(id, new EcsChild()
+	//         {
+	//             Parent = new EntityView(_worldID, parent),
+	//             Next = prev,
+	//             Prev = next
+	//         });
 
-        Set(id, new EcsChild()
-        {
-            Parent = new EntityView(_worldID, parent),
-            Next = t,
-            Prev = t
-        });
+	//         return;
+	//     }
 
-        Set(parent, new EcsParent()
-        {
-            ChildrenCount = 1,
-            FirstChild = t
-        });
-    }
+	//     Set(id, new EcsChild()
+	//     {
+	//         Parent = new EntityView(_worldID, parent),
+	//         Next = t,
+	//         Prev = t
+	//     });
 
-    public void Detach(EntityID id)
-    {
-        if (!Has<EcsChild>(id))
-            return;
+	//     Set(parent, new EcsParent()
+	//     {
+	//         ChildrenCount = 1,
+	//         FirstChild = t
+	//     });
+	// }
 
-        ref var child = ref Get<EcsChild>(id);
-        ref var parent = ref child.Parent.Get<EcsParent>();
+	// public void Detach(EntityID id)
+	// {
+	//     if (!Has<EcsChild>(id))
+	//         return;
 
-        parent.ChildrenCount -= 1;
+	//     ref var child = ref Get<EcsChild>(id);
+	//     ref var parent = ref child.Parent.Get<EcsParent>();
 
-        if (parent.ChildrenCount == 0)
-        {
-            child.Parent.Unset<EcsParent>();
-        }
-        else
-        {
-            if (parent.FirstChild == id)
-            {
-                parent.FirstChild = child.Next;
-            }
+	//     parent.ChildrenCount -= 1;
 
-            child.Prev.Get<EcsChild>().Next = child.Next;
-            child.Next.Get<EcsChild>().Prev = child.Prev;
-        }
+	//     if (parent.ChildrenCount == 0)
+	//     {
+	//         child.Parent.Unset<EcsParent>();
+	//     }
+	//     else
+	//     {
+	//         if (parent.FirstChild == id)
+	//         {
+	//             parent.FirstChild = child.Next;
+	//         }
 
-        Unset<EcsChild>(id);
-    }
+	//         child.Prev.Get<EcsChild>().Next = child.Next;
+	//         child.Next.Get<EcsChild>().Prev = child.Prev;
+	//     }
 
-    public void RemoveChildren(EntityID id)
+	//     Unset<EcsChild>(id);
+	// }
+
+
+	public void AttachTo(EntityID childID, EntityID parentID)
+	{
+		Detach(childID);
+
+		if (Has<EcsParent>(parentID))
+		{
+			ref var parent = ref Get<EcsParent>(parentID);
+			parent.ChildrenCount += 1;
+
+			ref var firstChild = ref Get<EcsChild>(parent.FirstChild);
+			firstChild.Prev = childID;
+
+			Set(childID, new EcsChild()
+			{
+				Parent = parentID,
+				Prev = 0,
+				Next = parent.FirstChild
+			});
+
+			parent.FirstChild = childID;
+
+			return;
+		}
+
+		Set(parentID, new EcsParent()
+		{
+			ChildrenCount = 1,
+			FirstChild = childID
+		});
+
+		Set(childID, new EcsChild()
+		{
+			Parent = parentID,
+			Prev = 0,
+			Next = 0
+		});
+	}
+
+	public void Detach(EntityID id)
+	{
+		if (!Has<EcsChild>(id))
+			return;
+
+		Console.WriteLine("detach {0}", id);
+
+		ref var child = ref Get<EcsChild>(id);
+		ref var parent = ref Get<EcsParent>(child.Parent);
+
+		parent.ChildrenCount -= 1;
+
+		if (parent.ChildrenCount <= 0)
+		{
+			Unset<EcsParent>(child.Parent);
+		}
+		else
+		{
+			if (parent.FirstChild == id)
+			{
+				parent.FirstChild = child.Next;
+				child.Prev = 0;
+			}
+			else
+			{
+				if (child.Prev != 0)
+				{
+					Get<EcsChild>(child.Prev).Next = child.Next;
+				}
+
+				if (child.Next != 0)
+				{
+					Get<EcsChild>(child.Next).Prev = child.Prev;
+				}
+			}
+
+		}
+
+		Unset<EcsChild>(id);
+	}
+
+	public void RemoveChildren(EntityID id)
     {
         if (!Has<EcsParent>(id))
             return;
@@ -1259,7 +1413,7 @@ public sealed partial class World
 
         while (parent.ChildrenCount > 0)
         {
-            parent.FirstChild.Detach();
+            Detach(parent.FirstChild);
         }
     }
 }
@@ -1359,6 +1513,7 @@ sealed class EntitySparseSet<T>
 
 
         ref var chunk = ref GetChunk((int)id >> 12);
+                
         if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
             return ref Unsafe.NullRef<T>();
 
@@ -1497,7 +1652,7 @@ sealed class EntitySparseSet<T>
     {
         _count = 1;
         _maxID = uint.MinValue;
-        Array.Clear(_chunks);
+        Array.Clear(_chunks, 0, _chunks.Length);
         _dense.Clear();
         _dense.Add(0);
     }
@@ -1576,7 +1731,19 @@ static class EcsConst
     public const EntityID ECS_PAIR = 1ul << 63;
 }
 
-public readonly record struct EcsComponent(EntityID ID, int Size, int GlobalIndex);
+public readonly struct EcsComponent
+{
+    public readonly EntityID ID;
+    public readonly int Size;
+    public readonly int GlobalIndex;
+
+    public EcsComponent(EntityID id, int size, int globalIndex)
+    {
+        ID = id;
+        Size = size;
+        GlobalIndex = globalIndex;
+    }
+}
 
 public unsafe struct EcsQuery
 {
@@ -1587,9 +1754,9 @@ public unsafe struct EcsQuery
 public unsafe readonly struct EcsSystem
 {
     public readonly EntityID Query;
-    public readonly delegate* managed<in Iterator, void> Func;
+    public readonly delegate* managed<in Iterator, float, void> Func;
 
-    public EcsSystem(EntityID query, delegate* managed<in Iterator, void> func)
+    public EcsSystem(EntityID query, delegate* managed<in Iterator, float, void> func)
     {
         Query = query;
         Func = func;
@@ -1597,8 +1764,8 @@ public unsafe readonly struct EcsSystem
 }
 
 
-public readonly struct EcsRelation<TAction, TTarget> 
-    where TAction : unmanaged 
+public readonly struct EcsRelation<TAction, TTarget>
+    where TAction : unmanaged
     where TTarget : unmanaged
 {
     public readonly TTarget Target;
@@ -1610,13 +1777,13 @@ public readonly struct EcsRelation<TAction, TTarget>
 public struct EcsParent
 {
     public int ChildrenCount;
-    public EntityView FirstChild;
+    public EntityID FirstChild;
 }
 
 public struct EcsChild
 {
-    public EntityView Parent;
-    public EntityView Prev, Next;
+    public EntityID Parent;
+    public EntityID Prev, Next;
 }
 
 public readonly struct EcsEnabled { }
@@ -1640,8 +1807,9 @@ public enum SystemPhase
 }
 
 
-
+#if NET5_0_OR_GREATER
 [SkipLocalsInit]
+#endif
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 {
@@ -1684,7 +1852,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Set<TPredicate, TTarget>() 
+    public readonly EntityView Set<TPredicate, TTarget>()
         where TPredicate : unmanaged
         where TTarget : unmanaged
     {
@@ -1693,7 +1861,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Unset<TPredicate, TTarget>() 
+    public readonly EntityView Unset<TPredicate, TTarget>()
         where TPredicate : unmanaged
         where TTarget : unmanaged
     {
@@ -1702,7 +1870,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Set<TPredicate>(in EntityView targetID) 
+    public readonly EntityView Set<TPredicate>(in EntityView targetID)
         where TPredicate : unmanaged
     {
         var world = World._allWorlds.Get(WorldID);
@@ -1752,7 +1920,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
         => World._allWorlds.Get(WorldID).Has<T>(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>() 
+    public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>()
         where TPredicate : unmanaged where TTarget : unmanaged
         => ref Get<EcsRelation<TPredicate, TTarget>>();
 
@@ -1780,3 +1948,161 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
     public static readonly EntityView Invalid = new(0, 0);
 }
+
+public sealed class Commands : IDisposable
+{
+    private readonly World _main, _mergeWorld;
+    private readonly QueryBuilder _entityCreated, _entityDestroyed, _componentAdded, _componentRemoved;
+
+    public Commands(World main)
+    {
+        _main = main;
+        _mergeWorld = new World();
+
+		_entityCreated = _mergeWorld.Query()
+            .With<EntityCreated>();
+
+		_entityDestroyed = _mergeWorld.Query()
+            .With<EntityDestroyed>();
+
+		_componentAdded = _mergeWorld.Query()
+            .With<ComponentAdded>();
+
+		_componentRemoved = _mergeWorld.Query()
+            .With<ComponentRemoved>();
+    }
+
+    public void MergeChanges()
+    {
+        ref var created = ref ComponentStorage.GetOrAdd<EntityCreated>(_mergeWorld);
+		ref var destroyed = ref ComponentStorage.GetOrAdd<EntityCreated>(_mergeWorld);
+
+		foreach (var it in _entityCreated)
+        {
+            var entityA = it.Field<EntityView>();
+            var createdOp = it.Field<EntityCreated>();
+
+            foreach (var row in it)
+            {
+                ref var e = ref entityA.Get();
+                ref var op = ref createdOp.Get();
+
+                ref var record = ref it.World._entities.Get(e);
+                Debug.Assert(!Unsafe.IsNullRef(ref record));
+
+                foreach (var cmp in record.Archetype.Components)
+                {
+                    if (created.ID == cmp || destroyed.ID == cmp)
+                        continue;
+
+                    ref var meta = ref _main._components.Get(cmp);
+                    if (Unsafe.IsNullRef(ref meta))
+                    {
+                        ref var mergemeta = ref _mergeWorld._components.Get(cmp);
+                        meta = ref ComponentStorage.Create(_main, cmp, mergemeta.Size, mergemeta.GlobalIndex);
+					}
+
+                    _main.Set(op.Target, ref meta, record.Archetype.GetComponentRaw(ref meta, record.Row, 1));
+                }
+
+				_main.Set(op.Target, new EntityView(_main._worldID, op.Target));
+                _main.Set<EcsEnabled>(op.Target);
+
+				e.Destroy();
+			}
+        }
+
+		foreach (var it in _entityDestroyed)
+		{
+			var entityA = it.Field<EntityView>();
+			var destroyedOp = it.Field<EntityDestroyed>();
+
+			foreach (var row in it)
+			{
+				ref var e = ref entityA.Get();
+                ref var op = ref destroyedOp.Get();
+
+				_main.Destroy(op.Target);
+
+				e.Destroy();
+			}
+		}
+	}
+
+    public EntityView Entity()
+    {
+		var e = _mergeWorld.CreateEntityRaw(_main.CreateEntityRaw());
+
+        return e
+            .Set(e)
+            .Set<EcsEnabled>()
+			.Set(new EntityCreated()
+            {
+                Target = e
+            });
+	}
+
+    public void Destroy(EntityView entity)
+    {
+        Debug.Assert(entity.WorldID == _mergeWorld._worldID);
+
+        entity.Disable();
+
+		_mergeWorld.Entity()
+            .Set(new EntityDestroyed()
+		    {
+			    Target = entity
+		    });
+	}
+
+	public void Dispose()
+	{
+        _mergeWorld?.Dispose();
+	}
+
+	struct EntityCreated 
+    {
+        public EntityID Target;
+    }
+    struct EntityDestroyed 
+    {
+        public EntityID Target;
+    }
+    struct ComponentAdded { }
+    struct ComponentRemoved { }
+}
+
+
+#if NETSTANDARD2_1
+internal readonly ref struct Ref<T>
+{
+    private readonly Span<T> span;
+
+    public Ref(ref T value)
+    {
+        span = MemoryMarshal.CreateSpan(ref value, 1);
+    }
+
+    public ref T Value => ref MemoryMarshal.GetReference(span);
+}
+
+public static class SortExtensions
+{
+	public static void Sort<T>(this Span<T> span) where T : IComparable<T>
+	{
+		for (int i = 0; i < span.Length - 1; i++)
+		{
+			for (int j = 0; j < span.Length - i - 1; j++)
+			{
+				if (span[j].CompareTo(span[j + 1]) > 0)
+				{
+					// Swap the elements
+					T temp = span[j];
+					span[j] = span[j + 1];
+					span[j + 1] = temp;
+				}
+			}
+		}
+	}
+}
+#endif

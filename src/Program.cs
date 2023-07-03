@@ -2,15 +2,33 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 2 * 1;
+const int ENTITIES_COUNT = 524_288 * 1 * 1;
 
 using var world = new World();
-//using var world2 = new World();
+using var cmd = new Commands(world);
 
+var sr = cmd.Entity();
+
+sr.Set<Position>()
+    .Set<Velocity>();
+
+sr.Unset<Position>();
+
+var ok = sr.Has<Position>();
+
+//cmd.Destroy(sr);
+
+cmd.MergeChanges();
+
+
+
+
+Console.WriteLine("");
 
 //world2.Entity().Set(new Position() { X = 123.23f, Y = -23f, Z = 2f });
 //var eeee = world.Entity().Set<Likes>();
@@ -47,29 +65,24 @@ var root = world.Entity();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-    var ee = world.Entity()
+    var ee = cmd.Entity()
         .Set<Position>()
         .Set<Velocity>()
-        .Set<Likes, Dogs>()
-        .Set<Likes, Cats>()
-        .Set(TileType.Static)
-        .Set<Likes>(root)
+        //.Set(TileType.Static)
+        //.Set<Likes>(root)
         //.AttachTo(root)
         ;
 
 }
 
+cmd.MergeChanges();
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
 var query = world.Query()
     .With<Position>()
     .With<Velocity>()
-    .With<Likes, Dogs>()
-    .With<Likes, Cats>()
-    .With<Likes, EntityView>()
-    //.With<EcsParent>()
-    .With<TileType>()
+    //.With<TileType>()
     ;
 
 var queryCmp = world.Query()
@@ -102,7 +115,11 @@ while (true)
     
     for (int i = 0; i < 3600; ++i)
     {
-        world.Step();     
+        foreach (var it in query)
+        {
+            ASystem(in it, 0f);
+        }
+        //world.Step(0f);     
     }
 
     Console.WriteLine(sw.ElapsedMilliseconds);
@@ -111,7 +128,7 @@ while (true)
 Console.ReadLine();
 
 
-static void ASystem(in Iterator it)
+static void ASystem(in Iterator it, float deltaTime)
 {
     var e = it.Field<EntityView>();
     var p = it.Field<Position>();
@@ -180,12 +197,14 @@ enum TileType
 
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
-record struct PlayerTag();
+struct PlayerTag {}
 struct ReflectedPosition { public float X, Y; }
 
+struct BigComponent
+{
+    private unsafe fixed uint _buf[128];
+}
 
-record struct ATestComp(bool X, float Y, float Z);
-record struct ASecondTestComp(IntPtr x);
 
 static class DEBUG
 {
