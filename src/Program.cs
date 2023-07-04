@@ -12,23 +12,51 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 using var world = new World();
 using var cmd = new Commands(world);
 
-cmd.Entity();
-cmd.Entity();
+var parent = cmd.Entity();
+var child = cmd.Entity();
 
-var sr = cmd.Entity();
+child.AttachTo(parent);
 
-sr.Set<Position>()
-  .Set<Velocity>();
+for (int i = 0; i < 10; ++i)
+    cmd.Entity().AttachTo(child);
 
-sr.Unset<Position>();
-
-var ok = sr.Has<Position>();
-
-sr.Destroy();
 cmd.Merge();
 
-cmd.Destroy(world.Entity());
-cmd.Merge();
+var qq = world.Query()
+        .With<EcsChild>();
+
+foreach (var it in qq)
+{
+    var c = it.Field<EcsChild>();
+    var e = it.Field<EntityView>();
+
+    foreach (var row in it)
+    {
+        ref var ee = ref e.Get();
+        ref var child1 = ref c.Get();
+        Console.WriteLine("child {0} -> parent {1}", ee.ID, child1.Parent);
+    }
+}
+
+//var worldEntity = world.Entity();
+
+//cmd.Entity();
+//cmd.Entity();
+
+//var sr = cmd.Entity();
+
+//sr.Set<Position>()
+//  .Set<Velocity>();
+
+//sr.Unset<Position>();
+
+//cmd.Set<Position>(worldEntity, new Position() { X = 23, Y = 566, Z = -123.02f });
+//cmd.Unset<Position>(worldEntity);
+//sr.Destroy();
+//cmd.Merge();
+
+//cmd.Destroy(world.Entity());
+//cmd.Merge();
 
 
 Console.WriteLine("");
@@ -68,7 +96,7 @@ foreach (var it in queryCmp)
 {
     var e = it.Field<EntityView>();
     var p = it.Field<EcsComponent>();
-    
+
     foreach (var row in it)
     {
         ref var ent = ref e.Get();
@@ -88,11 +116,11 @@ unsafe
 while (true)
 {
     sw.Restart();
-    
+
     for (int i = 0; i < 3600; ++i)
     {
-		world.Step(0f);
-	}
+        world.Step(0f);
+    }
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
@@ -169,7 +197,7 @@ enum TileType
 
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
-struct PlayerTag {}
+struct PlayerTag { }
 struct ReflectedPosition { public float X, Y; }
 
 struct BigComponent
@@ -177,14 +205,14 @@ struct BigComponent
     private unsafe fixed uint _buf[128];
 }
 
-ref struct Aspect<T0, T1, T2> 
-    where T0: unmanaged 
-    where T1: unmanaged 
-    where T2: unmanaged
+ref struct Aspect<T0, T1, T2>
+    where T0 : unmanaged
+    where T1 : unmanaged
+    where T2 : unmanaged
 {
     public Field<T0> Field0;
-	public Field<T1> Field1;
-	public Field<T2> Field2;
+    public Field<T1> Field1;
+    public Field<T2> Field2;
 }
 
 static class DEBUG

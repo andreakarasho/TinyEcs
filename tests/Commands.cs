@@ -60,5 +60,38 @@ namespace TinyEcs.Tests
 
 			Assert.True(count >= world.EntityCount);
 		}
+
+		[Fact]
+		public void Merge_SetComponent_Entity()
+		{
+			using var world = new World();
+			using var cmd = new Commands(world);
+
+			var e = world.Entity();
+
+			const float VAL = 0.012344f;
+			cmd.Set<float>(e, VAL);
+			cmd.Merge();
+
+			Assert.True(e.Has<float>());
+			Assert.True(e.Get<float>() == VAL);
+		}
+
+		[Fact]
+		public void Merge_UnsetComponent_Entity()
+		{
+			using var world = new World();
+			using var cmd = new Commands(world);
+
+			const float VAL = 0.012344f;
+
+			var e = world.Entity();
+			e.Set<float>(VAL);
+
+			cmd.Unset<float>(e);
+			cmd.Merge();
+
+			Assert.True(!e.Has<float>());
+		}
 	}
 }
