@@ -1975,7 +1975,7 @@ public sealed class Commands : IDisposable
     public void MergeChanges()
     {
         ref var created = ref ComponentStorage.GetOrAdd<EntityCreated>(_mergeWorld);
-		ref var destroyed = ref ComponentStorage.GetOrAdd<EntityCreated>(_mergeWorld);
+		ref var destroyed = ref ComponentStorage.GetOrAdd<EntityDestroyed>(_mergeWorld);
 
 		foreach (var it in _entityCreated)
         {
@@ -1986,6 +1986,8 @@ public sealed class Commands : IDisposable
             {
                 ref var e = ref entityA.Get();
                 ref var op = ref createdOp.Get();
+
+                var target = _main.CreateEntityRaw();
 
                 ref var record = ref it.World._entities.Get(e);
                 Debug.Assert(!Unsafe.IsNullRef(ref record));
@@ -2002,11 +2004,11 @@ public sealed class Commands : IDisposable
                         meta = ref ComponentStorage.Create(_main, cmp, mergemeta.Size, mergemeta.GlobalIndex);
 					}
 
-                    _main.Set(op.Target, ref meta, record.Archetype.GetComponentRaw(ref meta, record.Row, 1));
+                    _main.Set(target, ref meta, record.Archetype.GetComponentRaw(ref meta, record.Row, 1));
                 }
 
-				_main.Set(op.Target, new EntityView(_main._worldID, op.Target));
-                _main.Set<EcsEnabled>(op.Target);
+				_main.Set(target, new EntityView(_main._worldID, target));
+                _main.Set<EcsEnabled>(target);
 
 				e.Destroy();
 			}
@@ -2031,20 +2033,18 @@ public sealed class Commands : IDisposable
 
     public EntityView Entity()
     {
-		var e = _mergeWorld.CreateEntityRaw(_main.CreateEntityRaw());
+		var e = _mergeWorld.Entity();
+        //var target = _main.CreateEntityRaw();
 
-        return e
-            .Set(e)
-            .Set<EcsEnabled>()
-			.Set(new EntityCreated()
-            {
-                Target = e
-            });
+		return e.Set(new EntityCreated()
+        {
+            Target = 0
+		});
 	}
 
     public void Destroy(EntityView entity)
     {
-        Debug.Assert(entity.WorldID == _mergeWorld._worldID);
+        Debug.Assert(entity.WorldID == _main._worldID);
 
         entity.Disable();
 

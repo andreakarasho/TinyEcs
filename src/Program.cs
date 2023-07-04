@@ -7,55 +7,32 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 1 * 1;
+const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = new World();
 using var cmd = new Commands(world);
 
+cmd.Entity();
+cmd.Entity();
+
 var sr = cmd.Entity();
 
 sr.Set<Position>()
-    .Set<Velocity>();
+  .Set<Velocity>();
 
 sr.Unset<Position>();
 
 var ok = sr.Has<Position>();
 
-//cmd.Destroy(sr);
+sr.Destroy();
 
 cmd.MergeChanges();
 
-
+cmd.Destroy(world.Entity());
+cmd.MergeChanges();
 
 
 Console.WriteLine("");
-
-//world2.Entity().Set(new Position() { X = 123.23f, Y = -23f, Z = 2f });
-//var eeee = world.Entity().Set<Likes>();
-//eeee.Set<Position>();
-
-
-//foreach (var it in world.Query().With<Likes>().With<Position>())
-//{
-//    ref var l = ref it.Field<Likes>();
-//    ref var b = ref it.Field<Position>();
-
-//    for (int i = 0; i < it.Count; ++i)
-//    {
-//        ref var ll = ref it.Get(ref l, i);
-//        ref var bb = ref it.Get(ref b, i);
-//    }
-//}
-
-//foreach (var it in world2.Query().With<Position>())
-//{
-//    ref var l2 = ref it.Field<Position>();
-
-//    for (int i = 0; i < it.Count; ++i)
-//    {
-//        ref var ll2 = ref it.Get(ref l2, i);
-//    }
-//}
 
 
 var rnd = new Random();
@@ -115,12 +92,8 @@ while (true)
     
     for (int i = 0; i < 3600; ++i)
     {
-        foreach (var it in query)
-        {
-            ASystem(in it, 0f);
-        }
-        //world.Step(0f);     
-    }
+		world.Step(0f);
+	}
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
