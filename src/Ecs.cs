@@ -16,11 +16,8 @@ public sealed partial class World : IDisposable
 
     internal readonly EntityID _worldID;
     private int _totalFrames;
-    private int _entityCount = 0;
-    private int _deferStatus, _deferActionCount;
-    private EcsDeferredAction[] _deferredActions = new EcsDeferredAction[0xFF];
 
-    internal Archetype _archRoot;
+    internal readonly Archetype _archRoot;
     internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
     internal readonly EntitySparseSet<EcsComponent> _components = new();
@@ -72,7 +69,7 @@ public sealed partial class World : IDisposable
     }
 
 
-    public int EntityCount => _entityCount;
+    public int EntityCount => _entities.Length;
 
     public int Frames => _totalFrames;
 
@@ -84,15 +81,13 @@ public sealed partial class World : IDisposable
         _typeIndex.Clear();
         _queryIndex.Clear();
         _components.Clear();
-        _archRoot = new Archetype(this, ReadOnlySpan<EntityID>.Empty);
+        _archRoot.Clear();
 
-        _entityCount = 0;
         _totalFrames = 0;
 
         lock (_lock)
             _allWorlds.Remove(_worldID);
     }
-
 
     private unsafe void RunSystemSets(SystemPhase phase, float deltaTime)
     {
@@ -186,47 +181,23 @@ public sealed partial class World : IDisposable
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
 
-        Interlocked.Increment(ref _entityCount);
-
-        //if (IsDeferred())
-        //{
-        //    CreateDeferred(id);
-        //}
-        //else
-        //{
-        //    InternalCreateEntity(id);
-        //}
-
-        return new EntityView(_worldID, id);
+		return new EntityView(_worldID, id);
     }
 
     public void Destroy(EntityID entity)
     {
-        if (IsDeferred())
-        {
-            DestroyDeferred(entity);
-
-            return;
-        }
-
         RemoveChildren(entity);
         Detach(entity);
 
         ref var record = ref _entities.Get(entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            Debug.Fail("not an entity!");
-        }
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
-        var removedId = record.Archetype.Remove(record.Row);
-
+		var removedId = record.Archetype.Remove(record.Row);
         Debug.Assert(removedId == entity);
 
         var last = record.Archetype.Entities[record.Row];
         _entities.Get(last) = record;
         _entities.Remove(removedId);
-
-        Interlocked.Decrement(ref _entityCount);
     }
 
     public bool IsAlive(EntityID entity)
@@ -234,18 +205,10 @@ public sealed partial class World : IDisposable
 
     private void Attach(EntityID entity, ref EcsComponent meta)
     {
-        if (IsDeferred())
-        {
-            AttachDeferred(entity, ref meta);
-        }
-
         ref var record = ref _entities.Get(entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            Debug.Fail("not an entity!");
-        }
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
-        var column = record.Archetype.GetComponentIndex(ref meta);
+		var column = record.Archetype.GetComponentIndex(ref meta);
         if (column >= 0)
         {
             return;
@@ -256,34 +219,16 @@ public sealed partial class World : IDisposable
 
     private void DetatchComponent(EntityID entity, ref EcsComponent meta)
     {
-        if (IsDeferred())
-        {
-            DetachDeferred(entity, ref meta);
-        }
-
         ref var record = ref _entities.Get(entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            Debug.Fail("not an entity!");
-        }
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
-        var column = record.Archetype.GetComponentIndex(ref meta);
+		var column = record.Archetype.GetComponentIndex(ref meta);
         if (column < 0)
         {
             return;
         }
 
         InternalAttachDetach(ref record, ref meta, false);
-    }
-
-    private void InternalCreateEntity(EntityID id)
-    {
-        var row = _archRoot.Add(id);
-        ref var record = ref _entities.Add(id, default);
-        record.Archetype = _archRoot;
-        record.Row = row;
-
-        Interlocked.Increment(ref _entityCount);
     }
 
     private void InternalAttachDetach(ref EcsRecord record, ref EcsComponent meta, bool add)
@@ -334,12 +279,9 @@ public sealed partial class World : IDisposable
     internal void Set(EntityID entity, ref EcsComponent meta, ReadOnlySpan<byte> data)
     {
         ref var record = ref _entities.Get(entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            Debug.Fail("not an entity!");
-        }
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
-        var buf = record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
+		var buf = record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
         if (buf.IsEmpty)
         {
             Attach(entity, ref meta);
@@ -356,10 +298,7 @@ public sealed partial class World : IDisposable
     private Span<byte> Get(EntityID entity, ref EcsComponent meta)
     {
         ref var record = ref _entities.Get(entity);
-        if (Unsafe.IsNullRef(ref record))
-        {
-            Debug.Fail("invalid entity");
-        }
+        Debug.Assert(!Unsafe.IsNullRef(ref record));
 
         return record.Archetype.GetComponentRaw(ref meta, record.Row, 1);
     }
@@ -403,171 +342,6 @@ public sealed partial class World : IDisposable
 
         return id;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool IsDeferred() => false; // _deferStatus != 0;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void BeginDefer() => Interlocked.Increment(ref _deferStatus);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EndDefer() => Interlocked.Decrement(ref _deferStatus);
-
-    private void CreateDeferred(EntityID entity)
-    {
-        ref var cmd = ref PeekDeferredCommand();
-        cmd.Action = DeferredOp.Create;
-        cmd.Stage = _deferStatus;
-        cmd.Create.Entity = entity;
-    }
-
-    private void DestroyDeferred(EntityID entity)
-    {
-        ref var cmd = ref PeekDeferredCommand();
-        cmd.Action = DeferredOp.Destroy;
-        cmd.Stage = _deferStatus;
-        cmd.Destroy.Entity = entity;
-    }
-
-    private void AttachDeferred(EntityID entity, ref EcsComponent meta)
-    {
-        //ref var cmd = ref PeekDeferredCommand();
-        //cmd.Action = DeferredOp.Attach;
-        //cmd.Stage = _deferStatus;
-        //cmd.Attach.Entity = entity;
-        //cmd.Attach.Component = component;
-    }
-
-    private void DetachDeferred(EntityID entity, ref EcsComponent meta)
-    {
-        //ref var cmd = ref PeekDeferredCommand();
-        //cmd.Action = DeferredOp.Detach;
-        //cmd.Stage = _deferStatus;
-        //cmd.Detach.Entity = entity;
-        //cmd.Detach.Component = component;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ref EcsDeferredAction PeekDeferredCommand()
-    {
-        if (_deferActionCount >= _deferredActions.Length)
-        {
-            Array.Resize(ref _deferredActions, _deferredActions.Length * 2);
-        }
-
-        return ref _deferredActions[_deferActionCount++];
-    }
-
-    internal void MergeDeferred()
-    {
-        // TODO: test for nested queries
-        if (IsDeferred())
-            return;
-
-        var count = _deferActionCount;
-
-        for (int i = 0; i < count; ++i)
-        {
-            ref var cmd = ref _deferredActions[i];
-
-            switch (cmd.Action)
-            {
-                case DeferredOp.Create:
-
-                    InternalCreateEntity(cmd.Create.Entity);
-
-                    break;
-
-                case DeferredOp.Destroy:
-
-                    Destroy(cmd.Create.Entity);
-
-                    break;
-
-                case DeferredOp.Attach:
-
-                    //Attach(cmd.Attach.Entity, cmd.Attach.Component);
-
-                    break;
-
-                case DeferredOp.Detach:
-
-                    // Detach(cmd.Detach.Entity, cmd.Detach.Component);
-
-                    break;
-            }
-        }
-
-        _deferActionCount -= count;
-    }
-
-    private enum DeferredOp : byte
-    {
-        Create,
-        Destroy,
-        Attach,
-        Detach,
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    struct EcsDeferredAction
-    {
-        [FieldOffset(0)]
-        public DeferredOp Action;
-
-        [FieldOffset(1)]
-        public int Stage;
-
-        [FieldOffset(1)]
-        public EcsDeferredCreateEntity Create;
-
-        [FieldOffset(1)]
-        public EcsDeferredDestroyEntity Destroy;
-
-        [FieldOffset(1)]
-        public EcsDeferredAttachComponent Attach;
-
-        [FieldOffset(1)]
-        public EcsDeferredDetachComponent Detach;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct EcsDeferredCreateEntity
-    {
-        public DeferredOp Action;
-        public int Stage;
-
-        public EntityID Entity;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct EcsDeferredDestroyEntity
-    {
-        public DeferredOp Action;
-        public int Stage;
-
-        public EntityID Entity;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct EcsDeferredAttachComponent
-    {
-        public DeferredOp Action;
-        public int Stage;
-
-        public EntityID Entity;
-        public int Component;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct EcsDeferredDetachComponent
-    {
-        public DeferredOp Action;
-        public int Stage;
-
-        public EntityID Entity;
-        public int Component;
-    }
 }
 
 
@@ -588,7 +362,6 @@ static unsafe class ComponentStorage
 
         return ref meta;
     }
-
 
 	public static ref EcsComponent Create(World world, EntityID id, int size, int globalIdx)
     {
@@ -618,8 +391,6 @@ static unsafe class ComponentStorage
     }
 }
 
-
-
 sealed unsafe class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
@@ -647,14 +418,8 @@ sealed unsafe class Archetype
         var maxID = -1;
         for (int i = 0; i < components.Length; i++)
         {
-            _components[i] = components[i];
-
             ref var meta = ref _world._components.Get(components[i]);
-
-            var d = (int)IDOp.RealID(meta.ID);
-            maxID = Math.Max(maxID, d);
-
-            Debug.Assert(d == meta.GlobalIndex);
+            maxID = Math.Max(meta.GlobalIndex, maxID);
         }
 
         _lookup = new int[maxID + 1];
@@ -662,7 +427,7 @@ sealed unsafe class Archetype
         for (int i = 0; i < components.Length; ++i)
         {
             ref var meta = ref _world._components.Get(components[i]);
-            _lookup[(int)IDOp.RealID(meta.ID)] = i;
+            _lookup[meta.GlobalIndex] = i;
         }
 
         ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -751,6 +516,8 @@ sealed unsafe class Archetype
         return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
     }
 
+    public void Clear() => _count = 0;
+
     static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
     {
         var isLeft = to._components.Length < from._components.Length;
@@ -761,7 +528,7 @@ sealed unsafe class Archetype
         ref var x = ref (isLeft ? ref j : ref i);
         ref var y = ref (!isLeft ? ref j : ref i);
 
-        for (; x < count; ++x)
+        for (; x < count; ++x, ++y)
         {
             while (from._components[i] != to._components[j])
             {
@@ -907,19 +674,6 @@ public sealed class QueryBuilder
     }
 }
 
-//public interface IQueryBuilder
-//{
-//    IQueryBuilder With<T>() where T : unmanaged;
-
-//    IQueryBuilder Without<T>() where T : unmanaged;
-
-//    IQueryBuilder With<TPredicate, TTarget>() where TPredicate : unmanaged where TTarget : unmanaged;
-
-//    IQueryBuilder Without<TPredicate, TTarget>() where TPredicate : unmanaged where TTarget : unmanaged;
-
-//    QueryIterator GetEnumerator();
-//}
-
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
 #endif
@@ -928,15 +682,12 @@ public ref struct QueryIterator
     private readonly World _world;
     private readonly Vec<EntityID> _add, _remove;
     private readonly Stack<Archetype> _stack;
-
     private Archetype? _archetype;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal QueryIterator(World world, Stack<Archetype> stack, Vec<EntityID> add, Vec<EntityID> remove)
     {
-        world!.BeginDefer();
-
         _world = world;
         _add = add;
         _remove = remove;
@@ -996,18 +747,10 @@ public ref struct QueryIterator
         return true;
     }
 
-    //public readonly void Reset()
-    //{
-    //    _stack.Clear();
-    //    _stack.Push(_world._archRoot);
-    //}
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Dispose()
     {
         _stack.Clear();
-        _world!.EndDefer();
-        _world!.MergeDeferred();
     }
 }
 
@@ -1015,11 +758,11 @@ public ref struct QueryIterator
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
 #endif
-public ref struct Iterator
+public readonly ref struct Iterator
 {
     private readonly World _world;
     private readonly Archetype _archetype;
-    private int _row;
+    private readonly int _row;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Iterator(World world, [NotNull] Archetype archetype)
@@ -1029,19 +772,19 @@ public ref struct Iterator
         _row = -1;
     }
 
-    // FIXME: maybe we need to keep a variable. Consider when destroy an entity
     public readonly int Count => _archetype.Count;
     public readonly World World => _world;
+    internal readonly Archetype Archetype => _archetype;
 
 #if NET7_0_OR_GREATER
     [UnscopedRef]
 #endif
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe Field<T> Field<T>() where T : unmanaged
+    public readonly unsafe Field<T> Field<T>() where T : unmanaged
     {
         ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
 		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
-
+        
 		fixed (int* ptr = &_row)
         fixed (T* ptr2 = &value)
             return new Field<T>(ptr2, ptr);
@@ -1073,7 +816,7 @@ public ref struct Iterator
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
 #endif
-public unsafe ref struct Field<T> where T : unmanaged
+public readonly unsafe ref struct Field<T> where T : unmanaged
 {
     //#if NET7_0_OR_GREATER
     //    private readonly ref T _first;
@@ -1084,7 +827,7 @@ public unsafe ref struct Field<T> where T : unmanaged
     //#endif
 
     private readonly T* _first;
-    private int* _row;
+    private readonly int* _row;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Field(T* first, int* row)
@@ -1120,7 +863,7 @@ public unsafe readonly ref struct FieldEnumerator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool MoveNext() => ++*_row < _count;
+    public readonly bool MoveNext() => ++*_row >= 0;
 
     public readonly int Current => *_row;
 }
@@ -1972,7 +1715,7 @@ public sealed class Commands : IDisposable
             .With<ComponentRemoved>();
     }
 
-    public void MergeChanges()
+    public void Merge()
     {
         ref var created = ref ComponentStorage.GetOrAdd<EntityCreated>(_mergeWorld);
 		ref var destroyed = ref ComponentStorage.GetOrAdd<EntityDestroyed>(_mergeWorld);
@@ -1988,11 +1731,9 @@ public sealed class Commands : IDisposable
                 ref var op = ref createdOp.Get();
 
                 var target = _main.CreateEntityRaw();
+                var archetype = it.Archetype;
 
-                ref var record = ref it.World._entities.Get(e);
-                Debug.Assert(!Unsafe.IsNullRef(ref record));
-
-                foreach (var cmp in record.Archetype.Components)
+                foreach (var cmp in archetype.Components)
                 {
                     if (created.ID == cmp || destroyed.ID == cmp)
                         continue;
@@ -2000,17 +1741,17 @@ public sealed class Commands : IDisposable
                     ref var meta = ref _main._components.Get(cmp);
                     if (Unsafe.IsNullRef(ref meta))
                     {
-                        ref var mergemeta = ref _mergeWorld._components.Get(cmp);
-                        meta = ref ComponentStorage.Create(_main, cmp, mergemeta.Size, mergemeta.GlobalIndex);
+                        ref var mergeCmp = ref _mergeWorld._components.Get(cmp);
+                        meta = ref ComponentStorage.Create(_main, cmp, mergeCmp.Size, mergeCmp.GlobalIndex);
 					}
 
-                    _main.Set(target, ref meta, record.Archetype.GetComponentRaw(ref meta, record.Row, 1));
+                    _main.Set(target, ref meta, archetype.GetComponentRaw(ref meta, row, 1));
                 }
 
 				_main.Set(target, new EntityView(_main._worldID, target));
                 _main.Set<EcsEnabled>(target);
 
-				e.Destroy();
+                e.Destroy();
 			}
         }
 

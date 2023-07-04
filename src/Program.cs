@@ -25,11 +25,10 @@ sr.Unset<Position>();
 var ok = sr.Has<Position>();
 
 sr.Destroy();
-
-cmd.MergeChanges();
+cmd.Merge();
 
 cmd.Destroy(world.Entity());
-cmd.MergeChanges();
+cmd.Merge();
 
 
 Console.WriteLine("");
@@ -52,7 +51,7 @@ for (int i = 0; i < ENTITIES_COUNT; ++i)
 
 }
 
-cmd.MergeChanges();
+cmd.Merge();
 
 Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
 
@@ -178,6 +177,15 @@ struct BigComponent
     private unsafe fixed uint _buf[128];
 }
 
+ref struct Aspect<T0, T1, T2> 
+    where T0: unmanaged 
+    where T1: unmanaged 
+    where T2: unmanaged
+{
+    public Field<T0> Field0;
+	public Field<T1> Field1;
+	public Field<T2> Field2;
+}
 
 static class DEBUG
 {

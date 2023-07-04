@@ -41,7 +41,7 @@ namespace TinyEcs.Tests
 			var count = world.EntityCount;
 			var e = cmd.Entity();
 
-			cmd.MergeChanges();
+			cmd.Merge();
 
 			Assert.True(count < world.EntityCount);
 		}
@@ -56,7 +56,7 @@ namespace TinyEcs.Tests
 			var e = cmd.Entity();
 			e.Destroy();
 
-			cmd.MergeChanges();
+			cmd.Merge();
 
 			Assert.True(count >= world.EntityCount);
 		}
