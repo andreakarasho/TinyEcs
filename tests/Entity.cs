@@ -9,7 +9,7 @@ namespace TinyEcs.Tests
         public void Entity_Creation()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             Assert.True(entity > 0);
         }
@@ -19,19 +19,19 @@ namespace TinyEcs.Tests
         {
             using var world = new World();
 
-            var e1 = world.Entity();
-            var e2 = world.Entity();
-            var e3 = world.Entity();
-            var e4 = world.Entity();
+            var e1 = world.Spawn();
+            var e2 = world.Spawn();
+            var e3 = world.Spawn();
+            var e4 = world.Spawn();
 
             e2.Destroy();
-            e2 = world.Entity();
+            e2 = world.Spawn();
 
             e3.Destroy();
-            e3 = world.Entity();
+            e3 = world.Spawn();
 
             e2.Destroy();
-            e2 = world.Entity();
+            e2 = world.Spawn();
 
             Assert.True(e1.IsAlive());
             Assert.True(e2.IsAlive());
@@ -44,7 +44,7 @@ namespace TinyEcs.Tests
         {
             using var world = new World();
            
-            var entity = world.Entity();
+            var entity = world.Spawn();
             entity.Enable();
 
             Assert.True(entity.IsEnabled());
@@ -55,7 +55,7 @@ namespace TinyEcs.Tests
         {
             using var world = new World();
            
-            var entity = world.Entity();
+            var entity = world.Spawn();
             entity.Disable();
 
             Assert.True(!entity.IsEnabled());
@@ -65,7 +65,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_TwoSameComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<float>(entity);
@@ -78,7 +78,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_OneComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
 
@@ -89,7 +89,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_TwoComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<int>(entity);
@@ -102,7 +102,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_ThreeComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<int>(entity);
@@ -117,7 +117,7 @@ namespace TinyEcs.Tests
         public void Entity_Detach_OneComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Unset<float>(entity);
@@ -129,7 +129,7 @@ namespace TinyEcs.Tests
         public void Entity_Detach_TwoComponent()
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<int>(entity);
@@ -154,7 +154,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<int>(entity);
@@ -199,7 +199,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<float>(entity);
             world.Set<int>(entity);
@@ -247,7 +247,7 @@ namespace TinyEcs.Tests
             where T2 : unmanaged
         {
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             world.Set<T0>(entity);
             world.Set<T1>(entity);
@@ -296,7 +296,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World();
-            var entity = world.Entity();
+            var entity = world.Spawn();
 
             for (int i = 0; i < times; i++)
             {

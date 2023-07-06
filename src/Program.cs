@@ -12,13 +12,22 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 using var world = new World();
 using var cmd = new Commands(world);
 
-var parent = cmd.Entity();
-var child = cmd.Entity();
+
+var we = world.Spawn().Set<Position>();
+var weview = world.Query()
+    .With<Position>()
+    .Get(we);
+
+var ff = weview.Has<Position>();
+
+
+var parent = cmd.Spawn();
+var child = cmd.Spawn();
 
 child.AttachTo(parent);
 
 for (int i = 0; i < 10; ++i)
-    cmd.Entity().AttachTo(child);
+    cmd.Spawn().AttachTo(child);
 
 cmd.Merge();
 
@@ -65,11 +74,11 @@ Console.WriteLine("");
 var rnd = new Random();
 var sw = Stopwatch.StartNew();
 
-var root = world.Entity();
+var root = world.Spawn();
 
 for (int i = 0; i < ENTITIES_COUNT; ++i)
 {
-    var ee = cmd.Entity()
+    var ee = cmd.Spawn()
         .Set<Position>()
         .Set<Velocity>()
         //.Set(TileType.Static)

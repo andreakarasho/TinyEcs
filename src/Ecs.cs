@@ -165,7 +165,7 @@ public sealed partial class World : IDisposable
         return query;
     }
 
-    public EntityView Entity()
+    public EntityView Spawn()
     {
         var e = CreateEntityRaw();
 
@@ -662,7 +662,48 @@ public sealed class QueryBuilder
         return Without<EcsRelation<TPredicate, TTarget>>();
     }
 
-    public QueryIterator GetEnumerator()
+    public EntityView One()
+    {
+        foreach (var it in this)
+        {
+            var entityA = it.Field<EntityView>();
+            foreach (var row in it)
+            {
+                return entityA.Get();
+            }
+        }
+
+        return EntityView.Invalid;
+    }
+
+	public EntityView Get<T>(EntityID id) where T : unmanaged
+	{
+        ref var record = ref _world._entities.Get(id);
+        if (Unsafe.IsNullRef(ref record))
+            return EntityView.Invalid;
+
+        ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
+
+        if (record.Archetype.IsSuperset(_add.Span))
+        {
+            return new EntityView(_world._worldID, id);
+        }
+
+		//foreach (var it in this)
+		//{
+		//	var entityA = it.Field<EntityView>();
+		//	foreach (var row in it)
+		//	{
+  //              ref var entity = ref entityA.Get();
+  //              if (entity == id)
+  //                  return entity;
+		//	}
+		//}
+
+		return EntityView.Invalid;
+	}
+
+	public QueryIterator GetEnumerator()
     {
         _stack.Clear();
         if (_firstArch == null)
@@ -1383,6 +1424,28 @@ sealed class EntitySparseSet<T>
 
         return ref chunk;
     }
+
+	public unsafe SparseSetEnumerator GetEnumerator()
+	{
+		return new SparseSetEnumerator(this);
+	}
+
+	internal ref struct SparseSetEnumerator
+	{
+		private readonly EntitySparseSet<T> _sparseSet;
+		private int _index;
+
+		internal SparseSetEnumerator(EntitySparseSet<T> sparseSet)
+		{
+			_sparseSet = sparseSet;
+			_index = 0;
+		}
+
+		public bool MoveNext() => ++_index < _sparseSet._count;
+
+		public readonly T Current => _sparseSet._chunks[_sparseSet._dense[_index] >> 12]
+										.Values[_sparseSet._dense[_index] & 0xFFF];
+	}
 }
 
 
@@ -1757,9 +1820,27 @@ public sealed class Commands : IDisposable
 		}
     }
 
-    public EntityView Entity()
+    public EntityView Entity(EntityID id)
     {
-        return _mergeWorld.Entity()
+        if (_main.IsAlive(id))
+        {
+            if (!_mergeWorld.IsAlive(id))
+            {
+                var newId = _mergeWorld.Spawn();
+
+                id = newId.ID;
+            }
+        }
+
+        if (_mergeWorld.IsAlive(id))
+            return new EntityView(_mergeWorld._worldID, id);
+
+        return EntityView.Invalid;
+    }
+
+    public EntityView Spawn()
+    {
+        return _mergeWorld.Spawn()
             .Set(new EntityCreated()
             {
                 Target = 0
@@ -1772,7 +1853,7 @@ public sealed class Commands : IDisposable
 
         entity.Disable();
 
-        _mergeWorld.Entity()
+        _mergeWorld.Spawn()
             .Set(new EntityDestroyed()
             {
                 Target = entity
@@ -1783,7 +1864,7 @@ public sealed class Commands : IDisposable
     {
 		Debug.Assert(entity.WorldID == _main._worldID);
 
-        _mergeWorld.Entity()
+        _mergeWorld.Spawn()
             .Set(new ComponentAdded()
             {
                 Target = entity,
@@ -1796,7 +1877,7 @@ public sealed class Commands : IDisposable
 	{
 		Debug.Assert(entity.WorldID == _main._worldID);
 
-		_mergeWorld.Entity()
+		_mergeWorld.Spawn()
 			.Set(new ComponentRemoved()
 			{
 				Target = entity,
@@ -1809,7 +1890,7 @@ public sealed class Commands : IDisposable
 		Debug.Assert(entity.WorldID == _main._worldID);
 		Debug.Assert(parent.WorldID == _main._worldID);
 
-        _mergeWorld.Entity()
+        _mergeWorld.Spawn()
             .Set(new ChildAdded()
             {
                 Target = entity,

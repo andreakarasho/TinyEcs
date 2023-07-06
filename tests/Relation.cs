@@ -7,8 +7,8 @@
         {
             using var world = new World();
 
-            var parent = world.Entity();
-            var child = world.Entity();
+            var parent = world.Spawn();
+            var child = world.Spawn();
 
             child.AttachTo(parent);
 
@@ -20,8 +20,8 @@
         {
             using var world = new World();
 
-            var parent = world.Entity();
-            var child = world.Entity();
+            var parent = world.Spawn();
+            var child = world.Spawn();
 
             child.AttachTo(parent);
             child.Detach();
@@ -34,9 +34,9 @@
         {
             using var world = new World();
 
-            var parent1 = world.Entity();
-            var parent2 = world.Entity();
-            var child = world.Entity();
+            var parent1 = world.Spawn();
+            var parent2 = world.Spawn();
+            var child = world.Spawn();
 
             child.AttachTo(parent1);
             child.AttachTo(parent2);
@@ -51,11 +51,11 @@
         {
             using var world = new World();
 
-            var parent = world.Entity();
+            var parent = world.Spawn();
             var count = 1000;
 
             for (int i = 0; i < count; ++i)
-                world.Entity().AttachTo(parent);
+                world.Spawn().AttachTo(parent);
 
             Assert.Equal(parent.Get<EcsParent>().ChildrenCount, count);
 

@@ -14,7 +14,7 @@ namespace TinyEcs.Tests
 			using var world = new World();
 			using var cmd = new Commands(world);
 
-			var e = cmd.Entity();
+			var e = cmd.Spawn();
 
 			Assert.True(e.IsAlive());
 			Assert.True(e.IsEnabled());
@@ -26,7 +26,7 @@ namespace TinyEcs.Tests
 			using var world = new World();
 			using var cmd = new Commands(world);
 
-			var e = cmd.Entity();
+			var e = cmd.Spawn();
 			e.Destroy();
 
 			Assert.False(e.IsAlive());
@@ -39,7 +39,7 @@ namespace TinyEcs.Tests
 			using var cmd = new Commands(world);
 
 			var count = world.EntityCount;
-			var e = cmd.Entity();
+			var e = cmd.Spawn();
 
 			cmd.Merge();
 
@@ -53,7 +53,7 @@ namespace TinyEcs.Tests
 			using var cmd = new Commands(world);
 
 			var count = world.EntityCount;
-			var e = cmd.Entity();
+			var e = cmd.Spawn();
 			e.Destroy();
 
 			cmd.Merge();
@@ -67,7 +67,7 @@ namespace TinyEcs.Tests
 			using var world = new World();
 			using var cmd = new Commands(world);
 
-			var e = world.Entity();
+			var e = world.Spawn();
 
 			const float VAL = 0.012344f;
 			cmd.Set<float>(e, VAL);
@@ -85,7 +85,7 @@ namespace TinyEcs.Tests
 
 			const float VAL = 0.012344f;
 
-			var e = world.Entity();
+			var e = world.Spawn();
 			e.Set<float>(VAL);
 
 			cmd.Unset<float>(e);
