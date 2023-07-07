@@ -9,16 +9,88 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
+
+var ecs = new Ecs();
+
+for (int i = 0; i < 1; i++)
+    ecs.Spawn()
+        .Set<Position>(new Position() { X = 123, Y = 0.23f, Z = -1f})
+        .Set<Velocity>(new Velocity() {  X = -0.891237f, Y = 1f});
+
+
+var builder = ecs.Query()
+	.With<Position>()
+	.With<Velocity>()
+	.Without<float>()
+	;
+
+
+
+static void Setup(Commands cmds, in EntityIterator it, float delta)
+{
+    var sw = Stopwatch.StartNew();
+
+    for (int i = 0; i < 3; i++)
+        cmds.Spawn()
+            .Set<Position>()
+            .Set<Velocity>()
+            .Set<int>(123);
+
+    var character = cmds.Spawn()
+		.Set(new SerialComponent() { Value = 0xDEAD_BEEF });
+
+    Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
+}
+
+static void ParseQuery(Commands cmds, in EntityIterator it, float delta)
+{
+    Console.WriteLine("parse query");
+
+	var sw = Stopwatch.StartNew();
+	var posF = it.Field<Position>();
+	var velF = it.Field<Velocity>();
+
+    foreach (ref readonly var e in it)
+    {
+        ref var pos = ref posF.Get();
+        ref var vel = ref velF.Get();
+
+        //cmds.Set<float>(e);
+        //e.Set<float>();
+
+        //cmds.Despawn(e);
+
+        //Console.WriteLine("entity {0}", e.ID);
+    }
+
+	Console.WriteLine("query done in {0} ms - parsed {1}", sw.ElapsedMilliseconds, it.Count);
+}
+
+unsafe
+{
+	//ecs.AddStartupSystem(ecs.Query(), &Setup);
+	ecs.AddSystem(in builder, &ParseQuery);
+}
+
+while (true)
+{
+	ecs.Step(0f);
+}
+
+
+var list = new List<object>();
+list.Add(123);
+list.Add("asdasd");
+list.Add(new SerialComponent() { Value = 0xDEAD_BEEF });
+ref var ser = ref Unsafe.Unbox<SerialComponent>(list[2]);
+ser.Value = 12345;
+
+
 using var world = new World();
 using var cmd = new Commands(world);
 
 
 var we = world.Spawn().Set<Position>();
-var weview = world.Query()
-    .With<Position>()
-    .Get(we);
-
-var ff = weview.Has<Position>();
 
 
 var parent = cmd.Spawn();
@@ -46,26 +118,6 @@ foreach (var it in qq)
         Console.WriteLine("child {0} -> parent {1}", ee.ID, child1.Parent);
     }
 }
-
-//var worldEntity = world.Entity();
-
-//cmd.Entity();
-//cmd.Entity();
-
-//var sr = cmd.Entity();
-
-//sr.Set<Position>()
-//  .Set<Velocity>();
-
-//sr.Unset<Position>();
-
-//cmd.Set<Position>(worldEntity, new Position() { X = 23, Y = 566, Z = -123.02f });
-//cmd.Unset<Position>(worldEntity);
-//sr.Destroy();
-//cmd.Merge();
-
-//cmd.Destroy(world.Entity());
-//cmd.Merge();
 
 
 Console.WriteLine("");
@@ -116,7 +168,7 @@ foreach (var it in queryCmp)
 
 unsafe
 {
-    world.RegisterSystem(query, &ASystem);
+    //world.RegisterSystem(query, &ASystem);
     //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
     //world.RegisterSystem(world.Query().With<Position>(), &PostUpdate, SystemPhase.OnPostUpdate);
 }
@@ -126,10 +178,10 @@ while (true)
 {
     sw.Restart();
 
-    for (int i = 0; i < 3600; ++i)
-    {
-        world.Step(0f);
-    }
+    //for (int i = 0; i < 3600; ++i)
+    //{
+    //    world.Step(ecs0f);
+    //}
 
     Console.WriteLine(sw.ElapsedMilliseconds);
 }
@@ -137,7 +189,7 @@ while (true)
 Console.ReadLine();
 
 
-static void ASystem(in Iterator it, float deltaTime)
+static void ASystem(in EntityIterator it, float deltaTime)
 {
     var e = it.Field<EntityView>();
     var p = it.Field<Position>();
@@ -157,7 +209,7 @@ static void ASystem(in Iterator it, float deltaTime)
 }
 
 
-static void ASystem2(in Iterator it)
+static void ASystem2(in EntityIterator it)
 {
     //Console.WriteLine("ASystem2 - Count: {0}", it.Count);
 
@@ -172,12 +224,12 @@ static void ASystem2(in Iterator it)
     //}
 }
 
-static void PreUpdate(in Iterator it)
+static void PreUpdate(in EntityIterator it)
 {
     Console.WriteLine("pre update");
 }
 
-static void PostUpdate(in Iterator it)
+static void PostUpdate(in EntityIterator it)
 {
     Console.WriteLine("post update");
 
@@ -222,6 +274,11 @@ ref struct Aspect<T0, T1, T2>
     public Field<T0> Field0;
     public Field<T1> Field1;
     public Field<T2> Field2;
+}
+
+struct SerialComponent
+{
+    public uint Value;
 }
 
 static class DEBUG
