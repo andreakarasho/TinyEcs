@@ -16,7 +16,8 @@ unsafe
 {
 	ecs.AddStartupSystem(&Setup);
 
-	ecs.AddSystem(&PrintSystem);
+	ecs.AddSystem(&PrintSystem)
+		.SetTick(0.05f); // update every 50ms
 	ecs.AddSystem(&ParseQuery)
 		.SetQuery(ecs.Query()
 			.With<Position>()
@@ -26,15 +27,20 @@ unsafe
 }
 
 var sw = Stopwatch.StartNew();
+var start = 0f;
+var last = 0f;
 
 while (true)
 {
-    sw.Restart();
+    //sw.Restart();
 
-    //for (int i = 0; i < 3600; ++i)
-		ecs.Step(0f);
+	//for (int i = 0; i < 3600; ++i)
+	var cur = (start - last) / 1000f;
+	ecs.Step(cur);
 
-	Console.WriteLine("query done in {0} ms", sw.ElapsedMilliseconds);
+	last = start;
+	start = sw.ElapsedMilliseconds;
+	//Console.WriteLine("query done in {0} ms", sw.ElapsedMilliseconds);
 }
 
 
@@ -55,8 +61,6 @@ static void Setup(Commands cmds, ref EntityIterator it)
 
 static void ParseQuery(Commands cmds, ref EntityIterator it)
 {
-	Console.WriteLine("2");
-
 	var posF = it.Field<Position>();
 	var velF = it.Field<Velocity>();
 
@@ -77,7 +81,7 @@ static void PrintSystem(Commands cmds, ref EntityIterator it)
 
 static void PrintWarnSystem(Commands cmds, ref EntityIterator it)
 {
-	Console.WriteLine("3");
+	//Console.WriteLine("3");
 }
 
 
