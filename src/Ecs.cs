@@ -54,8 +54,8 @@ public sealed partial class World : IDisposable
         return new QueryBuilder(_worldID, query);
     }
 
-	public unsafe EntityView System(in QueryBuilder query, delegate* managed<Commands, ref EntityIterator, void> system)
-	    => Spawn().Set(new EcsSystem(query.ID, system));
+	public unsafe SystemBuilder System(delegate* managed<Commands, ref EntityIterator, void> system)
+	    => new SystemBuilder(_worldID, Spawn().Set(new EcsSystem(system)).Set<QueryBuilder>());
 
 	public EntityView Spawn()
     {
@@ -75,7 +75,7 @@ public sealed partial class World : IDisposable
         return new EntityView(_worldID, id);
     }
 
-    public void Destroy(EntityID entity)
+    public void Despawn(EntityID entity)
     {
         RemoveChildren(entity);
         Detach(entity);
@@ -469,112 +469,57 @@ sealed unsafe class Archetype
 }
 
 [SkipLocalsInit]
-public ref struct EntityIterator
+public readonly ref struct EntityIterator
 {
-    private readonly World _world;
     private readonly Archetype _archetype;
-    private int _row;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EntityIterator([NotNull] Archetype archetype, float delta)
     {
-        _world = archetype.World;
         _archetype = archetype;
-        _row = -1;
         Count = archetype.Count;
         DeltaTime = delta;
     }
 
-    public readonly int Count;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal EntityIterator([NotNull] Archetype archetype, int count, float delta)
+	{
+		_archetype = archetype;
+		Count = count;
+		DeltaTime = delta;
+	}
+
+	public readonly int Count;
 	public readonly float DeltaTime;
 
-	public readonly World World => _world;
 
+	internal readonly World World => _archetype.World;
     internal readonly Archetype Archetype => _archetype;
 
 
-    [UnscopedRef]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe Field<T> Field<T>() where T : unmanaged
-    {
-        ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-        ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly unsafe Span<T> Field<T>() where T : unmanaged
+	{
+		ref var meta = ref ComponentStorage.GetOrAdd<T>(World);
+		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, Count)));
 
-        return new Field<T>(ref value, ref _row);
-    }
+        Debug.Assert(!Unsafe.IsNullRef(ref value));
+
+        return MemoryMarshal.CreateSpan(ref value, Count);
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly unsafe Span<T> Span<T>() where T : unmanaged
+	public readonly unsafe bool Has<T>() where T : unmanaged
 	{
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(_world);
-		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, _archetype.Count)));
+		ref var meta = ref ComponentStorage.GetOrAdd<T>(World);
+        var data = _archetype.GetComponentRaw(ref meta, 0, Count);
+        if (data.IsEmpty)
+            return false;
 
-        return MemoryMarshal.CreateSpan(ref value, _archetype.Count);
+		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(data));
+
+		return !Unsafe.IsNullRef(ref value);
 	}
-
-	[UnscopedRef]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe Field<EcsRelation<TPredicate, TTarget>> Field<TPredicate, TTarget>()
-        where TPredicate : unmanaged
-        where TTarget : unmanaged
-    {
-        return Field<EcsRelation<TPredicate, TTarget>>();
-    }
-
-    [UnscopedRef]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe FieldEnumerator GetEnumerator()
-    {
-        return new FieldEnumerator(Field<EntityView>(), Count, ref _row);
-    }
-
-}
-
-[SkipLocalsInit]
-public readonly ref struct Field<T> where T : unmanaged
-{
-    private readonly ref T _first;
-    private readonly ref int _row;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Field(ref T first, ref int row)
-    {
-        _first = ref first;
-        _row = ref row;
-	}
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get() => ref Unsafe.Add(ref _first, _row);
-}
-
-[SkipLocalsInit]
-public unsafe readonly ref struct FieldEnumerator
-{
-    private readonly int _count;
-
-    private readonly ref int _row;
-    private readonly Field<EntityView> _view;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal FieldEnumerator(Field<EntityView> view, int count, ref int row)
-    {
-        _count = count;
-        _row = ref row;
-        _view = view;
-    }
-
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool MoveNext() => ++_row < _count;
-
-    public readonly ref readonly EntityView Current
-    {
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get
-        {
-            return ref _view.Get();
-		}
-    }
 }
 
 
@@ -1154,12 +1099,10 @@ public struct EcsQueryParameter<T> where T : unmanaged
 
 public unsafe readonly struct EcsSystem
 {
-    public readonly EntityID Query;
     public readonly delegate* managed<Commands, ref EntityIterator, void> Func;
 
-    public EcsSystem(EntityID query, delegate* managed<Commands, ref EntityIterator, void> func)
+    public EcsSystem(delegate* managed<Commands, ref EntityIterator, void> func)
     {
-        Query = query;
         Func = func;
     }
 }
@@ -1207,13 +1150,55 @@ public enum SystemPhase
     OnPostStartup
 }
 
-public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
+public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBuilder>
 {
 	public readonly EntityID ID;
 	internal readonly EntityID WorldID;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal SystemBuilder(EntityID world, EntityID id)
+	{
+		WorldID = world;
+		ID = id;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly bool Equals(ulong other)
+	{
+		return ID == other;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly bool Equals(SystemBuilder other)
+	{
+		return ID == other.ID;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly SystemBuilder Set<T>(T component = default) where T : unmanaged
+	{
+		World._allWorlds.Get(WorldID).Set(ID, component);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly SystemBuilder SetQuery(in QueryBuilder query)
+    {
+		var world = World._allWorlds.Get(WorldID);
+		world.Set(ID, query);
+
+        return this;
+	}
+}
+
+public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
+{
 	internal const EntityID FLAG_WITH = (0x01ul << 60);
 	internal const EntityID FLAG_WITHOUT = (0x02ul << 60);
+
+
+	public readonly EntityID ID;
+	internal readonly EntityID WorldID;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1381,7 +1366,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Destroy()
-        => World._allWorlds.Get(WorldID).Destroy(ID);
+        => World._allWorlds.Get(WorldID).Despawn(ID);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool IsAlive()
@@ -1534,7 +1519,7 @@ public unsafe sealed class Commands : IDisposable
 		ref var componentRemoved = ref ComponentStorage.GetOrAdd<ComponentRemoved>(merge);
 		ref var markDestroy = ref ComponentStorage.GetOrAdd<MarkDestroy>(merge);
 
-		var opA = it.Span<EntityCreated>();
+		var opA = it.Field<EntityCreated>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -1568,13 +1553,13 @@ public unsafe sealed class Commands : IDisposable
 	{
 		var main = cmds.Main;
 
-		var opA = it.Span<EntityDestroyed>();
+		var opA = it.Field<EntityDestroyed>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
             ref var op = ref opA[i];
 
-			main.Destroy(op.Target);
+			main.Despawn(op.Target);
 		}
 	}
 
@@ -1583,7 +1568,7 @@ public unsafe sealed class Commands : IDisposable
 		var main = cmds.Main;
 		var merge = it.World;
 
-		var opA = it.Span<ComponentAdded>();
+		var opA = it.Field<ComponentAdded>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -1605,7 +1590,7 @@ public unsafe sealed class Commands : IDisposable
 		var main = cmds.Main;
 		var merge = it.World;
 
-		var opA = it.Span<ComponentRemoved>();
+		var opA = it.Field<ComponentRemoved>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -1624,12 +1609,12 @@ public unsafe sealed class Commands : IDisposable
 
 	static void MarkDestroySystem(Commands cmds, ref EntityIterator it)
 	{
-        var entA = it.Span<EntityView>();
+        var entA = it.Field<EntityView>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
             ref var entity = ref entA[i];
-            cmds._mergeWorld.Destroy(entity);
+            cmds._mergeWorld.Despawn(entity);
 		}
 	}
 
@@ -1826,20 +1811,12 @@ sealed unsafe class Ecs
     public QueryBuilder Query()
         => _world.Query();
 
-	public unsafe void RunSystem(QueryBuilder query, delegate* managed<Commands, ref EntityIterator, void> system)
-		=> query.Fetch(_cmds, system, 0f);
-
-
-	//public unsafe void AddStartupSystem(delegate* managed<Commands, ref EntityIterator, void> system)
-	//    => SpawnSystem(default, system)
-	//	    .Set<EcsSystemPhaseOnStartup>();
-
-	public unsafe void AddStartupSystem(in QueryBuilder query, delegate* managed<Commands, ref EntityIterator, void> system)
-		=> _world.System(in query, system)
+	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Commands, ref EntityIterator, void> system)
+		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe void AddSystem(in QueryBuilder query, delegate* managed<Commands, ref EntityIterator, void> system)
-        => _world.System(in query, system)
+	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system)
+        => _world.System(system)
             .Set<EcsSystemPhaseOnUpdate>();
 
 
@@ -1864,15 +1841,38 @@ sealed unsafe class Ecs
 
     static unsafe void RunSystems(Commands cmds, ref EntityIterator it)
     {
-        var sysA = it.Span<EcsSystem>();
+        var sysA = it.Field<EcsSystem>();
 
-        for (int i = 0; i < it.Count; ++i)
+        var hasQry = it.Has<QueryBuilder>();
+        var queryA = hasQry ? it.Field<QueryBuilder>() : Span<QueryBuilder>.Empty;
+
+        if (hasQry)
         {
-            ref var sys = ref sysA[i];
+			var emptyIt = new EntityIterator(it.World._archRoot, 0, it.DeltaTime);
+			for (int i = 0; i < it.Count; ++i)
+			{
+				ref var sys = ref sysA[i];
+				ref var query = ref queryA[i];
 
-            var qry = new QueryBuilder(it.World.ID, sys.Query);
-            qry.Fetch(cmds, sys.Func, it.DeltaTime);
-        }
+                if (query.ID != 0)
+				    query.Fetch(cmds, sys.Func, it.DeltaTime);
+                else
+                {
+					sys.Func(cmds, ref emptyIt);
+				}
+			}
+		}
+        else
+        {
+            var emptyIt = new EntityIterator(it.World._archRoot, 0, it.DeltaTime);
+
+			for (int i = 0; i < it.Count; ++i)
+			{
+				ref var sys = ref sysA[i];
+
+                sys.Func(cmds, ref emptyIt);
+			}
+		}    
     }
 }
 
