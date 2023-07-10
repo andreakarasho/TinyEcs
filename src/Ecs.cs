@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using EntityID = System.UInt64;
+using System.Buffers;
 
 namespace TinyEcs;
 
@@ -1257,6 +1258,91 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 		return this;
 	}
+
+	public QueryIterator GetEnumerator()
+	{
+		var world = World._allWorlds.Get(WorldID);
+
+		ref var record = ref world._entities.Get(ID);
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
+
+		var components = record.Archetype.Components;
+		var cmps = ArrayPool<EntityID>.Shared.Rent(components.Length);
+
+		var withIdx = 0;
+		var withoutIdx = components.Length;
+
+		//cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
+
+		for (int i = 0; i < components.Length; ++i)
+		{
+			ref var meta = ref world._components.Get(components[i]);
+			Debug.Assert(!Unsafe.IsNullRef(ref meta));
+
+			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(ref meta, record.Row, 1)));
+
+			if ((cmp & QueryBuilder.FLAG_WITH) != 0)
+			{
+				cmps[withIdx++] = cmp & ~QueryBuilder.FLAG_WITH;
+			}
+			else if ((cmp & QueryBuilder.FLAG_WITHOUT) != 0)
+			{
+				cmps[--withoutIdx] = cmp & ~QueryBuilder.FLAG_WITHOUT;
+			}
+		}
+
+		var with = cmps.AsSpan(0, withIdx);
+		var without = cmps.AsSpan(0, components.Length).Slice(withoutIdx);
+
+		with.Sort();
+		without.Sort();
+
+		if (with.IsEmpty)
+		{
+			return default;
+		}
+		var stack = new Stack<Archetype>();
+		stack.Push(world._archRoot);
+
+		return new QueryIterator(stack, cmps, with, without);
+	}
+
+	internal static unsafe Archetype FetchArchetype
+	(
+		Stack<Archetype> stack,
+		ReadOnlySpan<EntityID> with,
+		ReadOnlySpan<EntityID> without
+	)
+	{
+		if (stack.Count == 0 || !stack.TryPop(out var archetype) || archetype == null)
+		{
+			return null;
+		}
+
+		var span = CollectionsMarshal.AsSpan(archetype._edgesRight);
+		if (!span.IsEmpty)
+		{
+			ref var last = ref span[^1];
+
+			for (int i = 0; i < span.Length; ++i)
+			{
+				ref var edge = ref Unsafe.Subtract(ref last, i);
+
+				if (without.IndexOf(edge.ComponentID) < 0)
+				{
+					stack.Push(edge.Archetype);
+				}
+			}
+		}
+
+		if (archetype.Count > 0 && archetype.IsSuperset(with))
+		{
+			// query ok, call the system now
+			return archetype;
+		}
+
+		return null;
+	}
 }
 
 
@@ -1402,9 +1488,46 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public static readonly EntityView Invalid = new(0, 0);
 }
 
+
+public unsafe ref struct QueryIterator
+{
+	private Archetype _current;
+	private readonly ReadOnlySpan<EntityID> _with, _without;
+	private readonly EntityID[] _buffer;
+	private readonly Stack<Archetype> _stack;
+
+	internal QueryIterator(Stack<Archetype> stack, EntityID[] buffer, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without)
+	{
+		_stack = stack;
+		_current = stack.Peek();
+		_with = with;
+		_without = without;
+		_buffer = buffer;
+	}
+
+	public bool MoveNext()
+	{
+		do
+		{
+			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);	
+		} while (_stack.Count > 0 && _current == null);
+		
+		return _current != null;
+	}
+
+	public readonly EntityIterator Current => new (_current, 0f);
+
+	public readonly void Dispose()
+	{
+		if (_buffer != null)
+			ArrayPool<EntityID>.Shared.Return(_buffer);
+	}
+}
+
+
 public static class QueryEx
 {
-	public static unsafe void Fetch(this in QueryBuilder query, Commands cmds, delegate* managed<Commands, ref EntityIterator, void> system, float deltaTime)
+	public static unsafe void Fetch(this in QueryBuilder query, Commands cmds, delegate* <Commands, ref EntityIterator, void> system, float deltaTime)
 	{
 		var world = World._allWorlds.Get(query.WorldID);
 
@@ -1443,14 +1566,16 @@ public static class QueryEx
 		without.Sort();
 
 		if (!with.IsEmpty)
+		{
 			FetchArchetype(world._archRoot, with, without, cmds, system, deltaTime);
+		}
 	}
 
 	private static unsafe void FetchArchetype
 	(
 		Archetype archetype,
-		Span<EntityID> with,
-		Span<EntityID> without,
+		ReadOnlySpan<EntityID> with,
+		ReadOnlySpan<EntityID> without,
 		Commands cmds,
 		delegate* managed<Commands, ref EntityIterator, void> system,
 		float deltaTime
@@ -1836,7 +1961,6 @@ sealed unsafe class Ecs
 	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
-
 
 	public unsafe void Step(float delta)
 	{

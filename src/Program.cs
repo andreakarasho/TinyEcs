@@ -11,18 +11,35 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
 var ecs = new Ecs();
+ecs.Spawn()
+			.Set<Position>()
+			.Set<Velocity>();
+
+ecs.Spawn()
+			.Set<Position>()
+			.Set<Velocity>()
+			.Set<int>();
+ecs.Step(0f);
 
 unsafe
 {
+
+	var query = ecs.Query()
+			.With<Position>()
+			.With<Velocity>()
+			.Without<float>();
+
+	foreach (var it in query)
+	{
+
+	}
+
 	ecs.AddStartupSystem(&Setup);
 
 	ecs.AddSystem(&PrintSystem)
-		.SetTick(0.05f); // update every 50ms
+		.SetTick(1f); // update every 50ms
 	ecs.AddSystem(&ParseQuery)
-		.SetQuery(ecs.Query()
-			.With<Position>()
-			.With<Velocity>()
-			.Without<float>());
+		.SetQuery(in query);
 	ecs.AddSystem(&PrintWarnSystem);
 }
 
