@@ -4,8 +4,9 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using EntityID = System.UInt64;
 using System.Buffers;
+
+using EntityID = System.UInt64;
 
 namespace TinyEcs;
 
@@ -19,7 +20,7 @@ public sealed partial class World : IDisposable
 	internal readonly Archetype _archRoot;
 	internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
-	internal readonly EntitySparseSet<EcsComponent> _components = new();
+	private readonly EntitySparseSet<EcsComponent> _components = new();
 
 
 	public World()
@@ -69,6 +70,29 @@ public sealed partial class World : IDisposable
 		return e
 			.Set(e)
 			.Set<EcsEnabled>();
+	}
+
+
+	public ref EcsComponent Component<T>() where T : unmanaged
+		=> ref AddOrGetComponent((EntityID) ComponentStorage.TypeInfo<T>.GlobalIndex, ComponentStorage.TypeInfo<T>.Size);
+
+	public ref EcsComponent Component(EntityID id, int size = 1)
+		=> ref AddOrGetComponent(id, size);
+
+	private ref EcsComponent AddOrGetComponent(EntityID id, int size)
+	{
+		ref var meta = ref _components.Get(id);
+		if (Unsafe.IsNullRef(ref meta))
+		{
+			meta = ref _components.Add(id, new EcsComponent(id, size, (int)id));
+
+			var cmp = CreateEntityRaw();
+			cmp.Set(cmp)
+				.Set(meta)
+				.Set<EcsEnabled>();
+		}
+
+		return ref meta;
 	}
 
 	internal EntityView CreateEntityRaw(EntityID id = 0)
@@ -202,38 +226,7 @@ public sealed partial class World : IDisposable
 
 static unsafe class ComponentStorage
 {
-	public static ref EcsComponent GetOrAdd<T>(World world) where T : unmanaged
-	{
-		var id = (EntityID)TypeInfo<T>.GlobalIndex;
-		ref var meta = ref world._components.Get(id);
-
-		if (Unsafe.IsNullRef(ref meta))
-		{
-			meta = ref Create(world, id, TypeInfo<T>.Size, TypeInfo<T>.GlobalIndex);
-		}
-
-		Debug.Assert(meta.GlobalIndex == TypeInfo<T>.GlobalIndex);
-		Debug.Assert(meta.Size == TypeInfo<T>.Size);
-
-		return ref meta;
-	}
-
-	public static ref EcsComponent Create(World world, EntityID id, int size, int globalIdx)
-	{
-		Debug.Assert(globalIdx >= 0);
-		Debug.Assert(size >= 0);
-
-		ref var meta = ref world._components.Add(id, new EcsComponent(id, size, globalIdx));
-
-		var ent = world.CreateEntityRaw();
-		world.Set(ent, meta);
-		world.Set(ent, ent);
-		world.Set<EcsEnabled>(ent);
-
-		return ref meta;
-	}
-
-	private static class TypeInfo<T> where T : unmanaged
+	public static class TypeInfo<T> where T : unmanaged
 	{
 		public static readonly int GlobalIndex = NextID.Get();
 		public static readonly int Size = sizeof(T);
@@ -241,7 +234,7 @@ static unsafe class ComponentStorage
 
 	private static class NextID
 	{
-		private static int _next = -1;
+		private static int _next = 0;
 		public static int Get() => ++_next;
 	}
 }
@@ -273,7 +266,7 @@ sealed unsafe class Archetype
 		var maxID = -1;
 		for (int i = 0; i < components.Length; i++)
 		{
-			ref var meta = ref _world._components.Get(components[i]);
+			ref var meta = ref _world.Component(components[i]);
 			maxID = Math.Max(meta.GlobalIndex, maxID);
 		}
 
@@ -281,7 +274,7 @@ sealed unsafe class Archetype
 		_lookup.AsSpan().Fill(-1);
 		for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref _world._components.Get(components[i]);
+			ref var meta = ref _world.Component(components[i]);
 			_lookup[meta.GlobalIndex] = i;
 		}
 
@@ -298,7 +291,7 @@ sealed unsafe class Archetype
 
 	public int GetComponentIndex(ref EcsComponent meta)
 	{
-		var index = (int)IDOp.RealID(meta.ID);
+		var index = meta.GlobalIndex;
 		return index >= _lookup.Length ? -1 : _lookup[index];
 	}
 
@@ -324,7 +317,7 @@ sealed unsafe class Archetype
 
 		for (int i = 0; i < _components.Length; ++i)
 		{
-			ref var meta = ref _world._components.Get(_components[i]);
+			ref var meta = ref _world.Component(_components[i]);
 			var leftArray = _componentsData[i].AsSpan();
 
 			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -393,7 +386,7 @@ sealed unsafe class Archetype
 				++y;
 			}
 
-			ref var meta = ref world._components.Get(from._components[i]);
+			ref var meta = ref world.Component(from._components[i]);
 			var leftArray = from._componentsData[i].AsSpan();
 			var rightArray = to._componentsData[j].AsSpan();
 			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
@@ -450,7 +443,7 @@ sealed unsafe class Archetype
 	{
 		for (int i = 0; i < _components.Length; ++i)
 		{
-			ref var meta = ref _world._components.Get(_components[i]);
+			ref var meta = ref _world.Component(_components[i]);
 			Array.Resize(ref _componentsData[i], meta.Size * capacity);
 			_capacity = capacity;
 		}
@@ -505,7 +498,8 @@ public readonly ref struct EntityIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly unsafe Span<T> Field<T>() where T : unmanaged
 	{
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(World);
+		ref var meta = ref World.Component<T>();
+
 		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(ref meta, 0, Count)));
 
 		Debug.Assert(!Unsafe.IsNullRef(ref value));
@@ -516,7 +510,7 @@ public readonly ref struct EntityIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly unsafe bool Has<T>() where T : unmanaged
 	{
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(World);
+		ref var meta = ref World.Component<T>();
 		var data = _archetype.GetComponentRaw(ref meta, 0, Count);
 		if (data.IsEmpty)
 			return false;
@@ -633,19 +627,19 @@ public sealed partial class World
 {
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(this);
+		ref var meta = ref Component<T>();
 		SetComponentData(entity, ref meta, MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), meta.Size));
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	   => DetachComponent(entity, ref ComponentStorage.GetOrAdd<T>(this));
+	   => DetachComponent(entity, ref Component<T>());
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, ref ComponentStorage.GetOrAdd<T>(this));
+		=> Has(entity, ref Component<T>());
 
 	public unsafe ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		var raw = Get(entity, ref ComponentStorage.GetOrAdd<T>(this));
+		var raw = Get(entity, ref Component<T>());
 
 		Debug.Assert(!raw.IsEmpty);
 		Debug.Assert(sizeof(T) == raw.Length);
@@ -1243,7 +1237,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	public readonly QueryBuilder With<T>() where T : unmanaged
 	{
 		var world = World._allWorlds.Get(WorldID);
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(world);
+		ref var meta = ref world.Component<T>();
 		world.Set(ID, new EcsQueryParameter<T>() { Component = meta.ID | FLAG_WITH });
 
 		return this;
@@ -1253,7 +1247,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	public readonly QueryBuilder Without<T>() where T : unmanaged
 	{
 		var world = World._allWorlds.Get(WorldID);
-		ref var meta = ref ComponentStorage.GetOrAdd<T>(world);
+		ref var meta = ref world.Component<T>();
 		world.Set(ID, new EcsQueryParameter<T>() { Component = meta.ID | FLAG_WITHOUT });
 
 		return this;
@@ -1276,7 +1270,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 		for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref world._components.Get(components[i]);
+			ref var meta = ref world.Component(components[i]);
 			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
 			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(ref meta, record.Row, 1)));
@@ -1454,6 +1448,16 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly ref T Get<T>() where T : unmanaged
 		=> ref World._allWorlds.Get(WorldID).Get<T>(ID);
 
+	//[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	//public readonly ref T Get<T>(EntityID id) where T : unmanaged
+	//{
+	//	var world = World._allWorlds.Get(WorldID);
+
+	//	ref var meta = ref world._components.Get(id);
+
+		
+	//}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged
 		=> World._allWorlds.Get(WorldID).Has<T>(ID);
@@ -1544,7 +1548,7 @@ public static class QueryEx
 
 		for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref world._components.Get(components[i]);
+			ref var meta = ref world.Component(components[i]);
 			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
 			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(ref meta, record.Row, 1)));
@@ -1656,11 +1660,11 @@ public unsafe sealed class Commands : IDisposable
 		var main = cmds.Main;
 		var merge = it.World;
 
-		ref var created = ref ComponentStorage.GetOrAdd<EntityCreated>(merge);
-		ref var destroyed = ref ComponentStorage.GetOrAdd<EntityDestroyed>(merge);
-		ref var componentAdded = ref ComponentStorage.GetOrAdd<ComponentAdded>(merge);
-		ref var componentRemoved = ref ComponentStorage.GetOrAdd<ComponentRemoved>(merge);
-		ref var markDestroy = ref ComponentStorage.GetOrAdd<MarkDestroy>(merge);
+		ref var created = ref merge.Component<EntityCreated>();
+		ref var destroyed = ref merge.Component<EntityDestroyed>();
+		ref var componentAdded = ref merge.Component<ComponentAdded>();
+		ref var componentRemoved = ref merge.Component<ComponentRemoved>();
+		ref var markDestroy = ref merge.Component<MarkDestroy>();
 
 		var opA = it.Field<EntityCreated>();
 
@@ -1677,13 +1681,7 @@ public unsafe sealed class Commands : IDisposable
 					cmp == markDestroy.ID)
 					continue;
 
-				ref var meta = ref main._components.Get(cmp);
-				if (Unsafe.IsNullRef(ref meta))
-				{
-					ref var mergeCmp = ref merge._components.Get(cmp);
-					meta = ref ComponentStorage.Create(main, cmp, mergeCmp.Size, mergeCmp.GlobalIndex);
-				}
-
+				ref var meta = ref main.Component(cmp, merge.Component(cmp).Size);
 				main.SetComponentData(target, ref meta, archetype.GetComponentRaw(ref meta, i, 1));
 			}
 
@@ -1717,13 +1715,7 @@ public unsafe sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			ref var meta = ref main._components.Get(op.Component);
-			if (Unsafe.IsNullRef(ref meta))
-			{
-				ref var mergeCmp = ref merge._components.Get(op.Component);
-				meta = ref ComponentStorage.Create(main, op.Component, mergeCmp.Size, mergeCmp.GlobalIndex);
-			}
-
+			ref var meta = ref main.Component(op.Component, merge.Component(op.Component).Size);
 			main.SetComponentData(op.Target, ref meta, it.Archetype.GetComponentRaw(ref meta, i, 1));
 		}
 	}
@@ -1739,13 +1731,7 @@ public unsafe sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			ref var meta = ref main._components.Get(op.Component);
-			if (Unsafe.IsNullRef(ref meta))
-			{
-				ref var mergeCmp = ref merge._components.Get(op.Component);
-				meta = ref ComponentStorage.Create(main, op.Component, mergeCmp.Size, mergeCmp.GlobalIndex);
-			}
-
+			ref var meta = ref main.Component(op.Component, merge.Component(op.Component).Size);
 			main.DetachComponent(op.Target, ref meta);
 		}
 	}
@@ -1811,7 +1797,7 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentAdded()
 			{
 				Target = entity,
-				Component = ComponentStorage.GetOrAdd<T>(_mergeWorld).ID
+				Component = _mergeWorld.Component<T>().ID
 			})
 			.Set(cmp);
 	}
@@ -1825,7 +1811,7 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentRemoved()
 			{
 				Target = entity,
-				Component = ComponentStorage.GetOrAdd<T>(_mergeWorld).ID
+				Component = _mergeWorld.Component<T>().ID
 			});
 	}
 
@@ -1950,6 +1936,13 @@ sealed unsafe class Ecs
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 		=> _cmds.Unset<T>(entity);
+
+	public void SetSingleton<T>(T cmp = default) where T : unmanaged
+		=> _world.Set(_world.Component<T>().ID, cmp);
+
+	public ref T GetSingleton<T>() where T : unmanaged
+		=> ref _world.Get<T>(_world.Component<T>().ID);
+
 
 	public QueryBuilder Query()
 		=> _world.Query();

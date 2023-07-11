@@ -11,36 +11,38 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
 var ecs = new Ecs();
-ecs.Spawn()
-			.Set<Position>()
-			.Set<Velocity>();
-
-ecs.Spawn()
-			.Set<Position>()
-			.Set<Velocity>()
-			.Set<int>();
-ecs.Step(0f);
 
 unsafe
 {
+	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
+	var queryCmp = ecs.Query()
+			.With<EcsComponent>();
 
-	var query = ecs.Query()
-			.With<Position>()
-			.With<Velocity>()
-			.Without<float>();
-
-	foreach (var it in query)
+	foreach (var it in queryCmp)
 	{
+		var cmpA = it.Field<EcsComponent>();
+		var entityA = it.Field<EntityView>();
 
+		for (int i = 0; i < it.Count; ++i)
+		{
+			ref var cmp = ref cmpA[i];
+			ref var ent = ref entityA[i];
+
+			Console.WriteLine("component --> ID: {0} - SIZE: {1} - INDEX: {2}", ent.ID, cmp.Size, cmp.GlobalIndex);
+		}
 	}
+
+
+	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
+	//ref var single = ref ecs.GetSingleton<PlayerTag>();
 
 	ecs.AddStartupSystem(&Setup);
 
-	ecs.AddSystem(&PrintSystem)
-		.SetTick(1f); // update every 50ms
+	//ecs.AddSystem(&PrintSystem)
+	//	.SetTick(1f); // update every 50ms
 	ecs.AddSystem(&ParseQuery)
 		.SetQuery(in query);
-	ecs.AddSystem(&PrintWarnSystem);
+	//ecs.AddSystem(&PrintWarnSystem);
 }
 
 var sw = Stopwatch.StartNew();
@@ -49,15 +51,17 @@ var last = 0f;
 
 while (true)
 {
-    //sw.Restart();
-
-	//for (int i = 0; i < 3600; ++i)
 	var cur = (start - last) / 1000f;
-	ecs.Step(cur);
 
+	for (int i = 0; i < 3600; ++i)
+	{
+		ecs.Step(cur);
+	}
+	
 	last = start;
 	start = sw.ElapsedMilliseconds;
-	//Console.WriteLine("query done in {0} ms", sw.ElapsedMilliseconds);
+
+	Console.WriteLine("query done in {0} ms", start - last);
 }
 
 
@@ -65,7 +69,7 @@ static void Setup(Commands cmds, ref EntityIterator it)
 {
 	var sw = Stopwatch.StartNew();
 
-	for (int i = 0; i < 1; i++)
+	for (int i = 0; i < ENTITIES_COUNT; i++)
 		cmds.Spawn()
 			.Set<Position>()
 			.Set<Velocity>();
@@ -112,4 +116,4 @@ enum TileType
 struct Serial { public uint Value;  }
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
-struct PlayerTag { }
+struct PlayerTag { public ulong ID; }
