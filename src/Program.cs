@@ -10,6 +10,35 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
+
+var world = new World();
+
+var e0 = world.Spawn();
+var e1 = world.Spawn();
+
+e0.Each(s =>
+{
+	ref var cmp = ref s.Get<EcsComponent>();
+	Console.WriteLine("id {0}", s.ID);
+	
+});
+
+var qry = world.Query().With<EcsComponent>();
+
+foreach (var it in qry)
+{
+	var cmpA = it.Field<EcsComponent>();
+	var entityA = it.Field<EntityView>();
+
+	for (int i = 0; i < it.Count; ++i)
+	{
+		ref var cmp = ref cmpA[i];
+		ref var ent = ref entityA[i];
+
+		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
+	}
+}
+
 var ecs = new Ecs();
 
 unsafe
@@ -28,7 +57,7 @@ unsafe
 			ref var cmp = ref cmpA[i];
 			ref var ent = ref entityA[i];
 
-			Console.WriteLine("component --> ID: {0} - SIZE: {1} - INDEX: {2}", ent.ID, cmp.Size, cmp.GlobalIndex);
+			Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
 		}
 	}
 
