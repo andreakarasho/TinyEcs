@@ -186,7 +186,7 @@ public sealed partial class World : IDisposable
 		data.CopyTo(buf);
 	}
 
-	private bool Has(EntityID entity, EntityID component)
+	internal bool Has(EntityID entity, EntityID component)
 		=> !Get(entity, component).IsEmpty;
 
 	private Span<byte> Get(EntityID entity, EntityID component)
@@ -1121,16 +1121,6 @@ internal struct EcsSystemTick
 	public float Current;
 }
 
-public readonly struct EcsRelation<TAction, TTarget>
-	where TAction : unmanaged
-	where TTarget : unmanaged
-{
-	public readonly TTarget Target;
-
-	public EcsRelation() => Target = default;
-	public EcsRelation(in TTarget target) => Target = target;
-}
-
 public struct EcsParent
 {
 	public int ChildrenCount;
@@ -1389,59 +1379,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetID(EntityID id)
-	{
-		World.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
-
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Pair(EntityID first, EntityID second)
-	{
-		var id = IDOp.Pair(first, second);
-		World.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
-
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(EntityID second) where T : unmanaged
-	{
-		return Pair(TypeInfo<T>.GetID(World), second);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset<T>() where T : unmanaged
 	{
 		World.Unset<T>(ID);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TPredicate, TTarget>()
-		where TPredicate : unmanaged
-		where TTarget : unmanaged
-	{
-		World.Set<EcsRelation<TPredicate, TTarget>>(ID);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<TPredicate, TTarget>()
-		where TPredicate : unmanaged
-		where TTarget : unmanaged
-	{
-		World.Unset<EcsRelation<TPredicate, TTarget>>(ID);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TPredicate>(in EntityView targetID)
-		where TPredicate : unmanaged
-	{
-		World.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
-
 		return this;
 	}
 
@@ -1481,40 +1421,20 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly ref T Get<T>() where T : unmanaged
 		=> ref World.Get<T>(ID);
 
-	//[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	//public readonly ref T Get<T>(EntityID id) where T : unmanaged
-	//{
-	//	var world = World._allWorlds.Get(WorldID);
-
-	//	ref var meta = ref world._components.Get(id);
-
-		
-	//}
-
-	public readonly void Each(Action<EntityView> action)
-	{
-		ref var record = ref World._entities.Get(ID);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
-
-		for (int i = 0; i < record.Archetype.Components.Length; ++i)
-		{
-			action(new EntityView(WorldID, record.Archetype.Components[i]));
-		}
-	}
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged
 		=> World.Has<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>()
-		where TPredicate : unmanaged where TTarget : unmanaged
-		=> ref Get<EcsRelation<TPredicate, TTarget>>();
+	public readonly bool Has<TKind, TTarget>()
+		where TKind : unmanaged 
+		where TTarget : unmanaged
+	{
+		var world = World;
+		var id = IDOp.Pair(TypeInfo<TKind>.GetID(world), TypeInfo<TTarget>.GetID(world));
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<TPredicate, TTarget>()
-		where TPredicate : unmanaged where TTarget : unmanaged
-		=> Has<EcsRelation<TPredicate, TTarget>>();
+		return world.Has(ID, id);
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Despawn()
@@ -1528,6 +1448,17 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly bool IsEnabled()
 		=> Has<EcsEnabled>();
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly void Each(Action<EntityView> action)
+	{
+		ref var record = ref World._entities.Get(ID);
+		Debug.Assert(!Unsafe.IsNullRef(ref record));
+
+		for (int i = 0; i < record.Archetype.Components.Length; ++i)
+		{
+			action(new EntityView(WorldID, record.Archetype.Components[i]));
+		}
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static implicit operator EntityID(in EntityView d) => d.ID;
@@ -1843,12 +1774,14 @@ public unsafe sealed class Commands : IDisposable
 		//		Target = 0
 		//	});
 
-		return new CommandEntityView(this, mainEnt);
+		return new CommandEntityView(this, mainEnt)
+			.Set<EcsEnabled>()
+			.Set(new EntityView(_main.ID, mainEnt.ID));
 	}
 
 	public void Despawn(EntityID entity)
 	{
-		Debug.Assert(_main.IsAlive(entity) || _mergeWorld.IsAlive(entity));
+		Debug.Assert(_main.IsAlive(entity));
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -1860,7 +1793,7 @@ public unsafe sealed class Commands : IDisposable
 
 	public void Set<T>(EntityID entity, T cmp = default) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity) || _mergeWorld.IsAlive(entity));
+		Debug.Assert(_main.IsAlive(entity));
 
 		var idMain = TypeInfo<T>.GetID(_main);
 		var idMerge = TypeInfo<ComponentPoc<T>>.GetID(_mergeWorld);
@@ -1874,6 +1807,68 @@ public unsafe sealed class Commands : IDisposable
 				ID = idMerge
 			})
 			.Set(new ComponentPoc<T>() { Value = cmp });
+	}
+
+	public void Set<T0, T1>(EntityID entity) 
+		where T0 : unmanaged 
+		where T1 : unmanaged
+	{
+		Debug.Assert(_main.IsAlive(entity));
+
+		var idMain0 = TypeInfo<T0>.GetID(_main);
+		var idMain1 = TypeInfo<T1>.GetID(_main);
+
+		var pair = IDOp.Pair(idMain0, idMain1);
+		var idMerge = TypeInfo<ComponentPocPair<T0, T1>>.GetID(_mergeWorld);
+
+		_mergeWorld.Spawn()
+			.Set<MarkDestroy>()
+			.Set(new ComponentAdded()
+			{
+				Target = entity,
+				Component = pair,
+				ID = idMerge
+			})
+			.Set(new ComponentPocPair<T0, T1>() { });
+	}
+
+	public void Add(EntityID entity, EntityID cmp)
+	{
+		Debug.Assert(_main.IsAlive(entity));
+		Debug.Assert(_main.IsAlive(cmp));
+
+		var idMain = cmp;
+		var idMerge = TypeInfo<ComponentPocEntity>.GetID(_mergeWorld);
+
+		_mergeWorld.Spawn()
+			.Set<MarkDestroy>()
+			.Set(new ComponentAdded()
+			{
+				Target = entity,
+				Component = idMain,
+				ID = idMerge
+			})
+			.Set(new ComponentPocEntity() { Value = cmp });
+	}
+
+	public void Add(EntityID entity, EntityID first, EntityID second)
+	{
+		Debug.Assert(_main.IsAlive(entity));
+		Debug.Assert(_main.IsAlive(first));
+		Debug.Assert(_main.IsAlive(second));
+
+		var idMain = IDOp.Pair(first, second);
+		var idMerge = TypeInfo<ComponentPocEntityPair>.GetID(_mergeWorld);
+
+		_mergeWorld.Spawn()
+			.Set<MarkDestroy>()
+			.Set(new ComponentAdded()
+			{
+				Target = entity,
+				Component = idMain,
+				ID = idMerge
+			})
+			.Set(new ComponentPocEntityPair() { First = first, Second = second });
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
@@ -1943,14 +1938,33 @@ public unsafe sealed class Commands : IDisposable
 	{
 	}
 
+	struct ComponentPocEntity
+	{
+		public EntityID Value;
+	}
+
+	struct ComponentPocEntityPair
+	{
+		public EntityID First;
+		public EntityID Second;
+	}
+
 	struct ComponentPoc<T> where T : unmanaged
 	{
 		public T Value;
 	}
+
+	struct ComponentPocPair<T0, T1> 
+		where T0 : unmanaged
+		where T1 : unmanaged
+	{
+		public T0 First;
+		public T1 Second;
+	}
 }
 
 
-public struct CommandEntityView
+public ref struct CommandEntityView
 {
 	private readonly EntityID _id;
 	private readonly Commands _cmds;
@@ -1961,19 +1975,47 @@ public struct CommandEntityView
 		_id = id;
 	}
 
-	public CommandEntityView Set<T>(T cmp = default) where T : unmanaged
+	public readonly EntityID ID => _id;
+
+	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged
 	{
 		_cmds.Set(_id, cmp);
 		return this;
 	}
 
-	public CommandEntityView Unset<T>() where T : unmanaged
+	public readonly CommandEntityView Add(EntityID id)
+	{
+		_cmds.Add(_id, id);
+		return this;
+	}
+
+	public readonly CommandEntityView Add<TKind>(EntityID id) where TKind : unmanaged
+	{
+		_cmds.Add(_id, id);
+		return this;
+	}
+
+	public readonly CommandEntityView Add(EntityID first, EntityID second)
+	{
+		_cmds.Add(_id, first, second);
+		return this;
+	}
+
+	public readonly CommandEntityView Set<TKind, TTarget>() 
+		where TKind : unmanaged 
+		where TTarget : unmanaged
+	{
+		_cmds.Set<TKind, TTarget>(_id);
+		return this;
+	}
+
+	public readonly CommandEntityView Unset<T>() where T : unmanaged
 	{
 		_cmds.Unset<T>(_id);
 		return this;
 	}
 
-	public CommandEntityView Despawn()
+	public readonly CommandEntityView Despawn()
 	{
 		_cmds.Despawn(_id);
 		return this;
@@ -2033,6 +2075,13 @@ sealed unsafe class Ecs
 			.With<EcsEnabled>()
 			.With<EcsSystem>()
 			.With<EcsSystemPhasePostStartup>();
+	}
+
+	public EntityView Entity(EntityID id)
+	{
+		Debug.Assert(_world.IsAlive(id));
+
+		return new EntityView(_world.ID, id);
 	}
 
 	public CommandEntityView Spawn()

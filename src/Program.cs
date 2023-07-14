@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
@@ -54,6 +55,35 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 //}
 
 var ecs = new Ecs();
+
+var pos = ecs.Spawn();
+var vel = ecs.Spawn();
+
+var likes = ecs.Spawn();
+var cats = ecs.Spawn();
+
+var id = ecs.Spawn()
+	.Set(new Position() { X = 10, Y = 29 })
+	.Set<Likes, Dogs>()
+	.Add(pos.ID)
+	.Add(likes.ID, cats.ID)
+	.ID;
+
+ecs.Step(0f);
+
+var ok = ecs.Entity(id).Has<Likes, Dogs>();
+
+ecs.Entity(id).Each(s =>
+{
+	if (IDOp.IsPair(s.ID))
+	{
+		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
+	}
+	else
+	{
+		Console.WriteLine("entity {0}", s.ID);
+	}
+});
 
 unsafe
 {
@@ -160,3 +190,6 @@ struct Serial { public uint Value;  }
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
 struct PlayerTag { public ulong ID; }
+
+struct Likes { }
+struct Dogs { }
