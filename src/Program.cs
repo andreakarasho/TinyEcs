@@ -79,7 +79,7 @@ ecs.Step(0f);
 var ok = ecs.Entity(id)
 	.Has<Likes, Dogs>();
 
-var qry1 = ecs.Query().With(IDOp.Pair(childOf.ID, root));
+var qry1 = ecs.Query().With(childOf.ID, root);
 
 foreach (var it in qry1)
 {

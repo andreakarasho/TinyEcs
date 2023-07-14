@@ -1238,6 +1238,26 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryBuilder With<TKind, TTarget>()
+		where TKind : unmanaged
+		where TTarget : unmanaged
+	{
+		var world = World._allWorlds.Get(WorldID);
+
+		return With(TypeInfo<TKind>.GetID(world), TypeInfo<TTarget>.GetID(world));
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryBuilder With(EntityID first, EntityID second)
+	{
+		var world = World._allWorlds.Get(WorldID);
+		var id = IDOp.Pair(first, second);
+		world.Set(ID, id | FLAG_WITH);
+
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID id)
 	{
 		var world = World._allWorlds.Get(WorldID);
