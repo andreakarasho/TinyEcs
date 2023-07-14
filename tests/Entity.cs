@@ -24,13 +24,13 @@ namespace TinyEcs.Tests
             var e3 = world.Spawn();
             var e4 = world.Spawn();
 
-            e2.Destroy();
+            e2.Despawn();
             e2 = world.Spawn();
 
-            e3.Destroy();
+            e3.Despawn();
             e3 = world.Spawn();
 
-            e2.Destroy();
+            e2.Despawn();
             e2 = world.Spawn();
 
             Assert.True(e1.IsAlive());

@@ -27,7 +27,7 @@ namespace TinyEcs.Tests
 			using var cmd = new Commands(world);
 
 			var e = cmd.Spawn();
-			e.Destroy();
+			e.Despawn();
 
 			Assert.False(e.IsAlive());
 		}
@@ -54,7 +54,7 @@ namespace TinyEcs.Tests
 
 			var count = world.EntityCount;
 			var e = cmd.Spawn();
-			e.Destroy();
+			e.Despawn();
 
 			cmd.Merge();
 

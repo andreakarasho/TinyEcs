@@ -1370,6 +1370,10 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 
+	public readonly World World
+		=> World._allWorlds.Get(WorldID);
+
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Equals(ulong other)
 	{
@@ -1379,22 +1383,20 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Equals(EntityView other)
 	{
-		return ID == other.ID;
+		return ID == other.ID && WorldID == other.WorldID;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Set<T>(T component = default) where T : unmanaged
 	{
-		World._allWorlds.Get(WorldID).Set(ID, component);
+		World.Set(ID, component);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView SetID(EntityID id)
 	{
-		var world = World._allWorlds.Get(WorldID);
-
-		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
+		World.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
 
 		return this;
 	}
@@ -1402,9 +1404,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Pair(EntityID first, EntityID second)
 	{
-		var world = World._allWorlds.Get(WorldID);
 		var id = IDOp.Pair(first, second);
-		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
+		World.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
 
 		return this;
 	}
@@ -1412,17 +1413,13 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Set<T>(EntityID second) where T : unmanaged
 	{
-		var world = World._allWorlds.Get(WorldID);
-		var id = IDOp.Pair(TypeInfo<T>.GetID(world), second);
-		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
-
-		return this;
+		return Pair(TypeInfo<T>.GetID(World), second);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset<T>() where T : unmanaged
 	{
-		World._allWorlds.Get(WorldID).Unset<T>(ID);
+		World.Unset<T>(ID);
 		return this;
 	}
 
@@ -1431,7 +1428,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TPredicate : unmanaged
 		where TTarget : unmanaged
 	{
-		World._allWorlds.Get(WorldID).Set<EcsRelation<TPredicate, TTarget>>(ID);
+		World.Set<EcsRelation<TPredicate, TTarget>>(ID);
 		return this;
 	}
 
@@ -1440,7 +1437,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TPredicate : unmanaged
 		where TTarget : unmanaged
 	{
-		World._allWorlds.Get(WorldID).Unset<EcsRelation<TPredicate, TTarget>>(ID);
+		World.Unset<EcsRelation<TPredicate, TTarget>>(ID);
 		return this;
 	}
 
@@ -1448,47 +1445,46 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Set<TPredicate>(in EntityView targetID)
 		where TPredicate : unmanaged
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
+		World.Set(ID, new EcsRelation<TPredicate, EntityView>(in targetID));
 
 		return this;
 	}
 
 	public readonly EntityView AttachTo(EntityView parent)
 	{
-		World._allWorlds.Get(WorldID).AttachTo(ID, parent);
+		World.AttachTo(ID, parent);
 		return this;
 	}
 
 	public readonly EntityView Detach()
 	{
-		World._allWorlds.Get(WorldID).Detach(ID);
+		World.Detach(ID);
 		return this;
 	}
 
 	public readonly EntityView RemoveChildren()
 	{
-		World._allWorlds.Get(WorldID).RemoveChildren(ID);
+		World.RemoveChildren(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{
-		World._allWorlds.Get(WorldID).Set<EcsEnabled>(ID);
+		World.Set<EcsEnabled>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Disable()
 	{
-		World._allWorlds.Get(WorldID).Unset<EcsEnabled>(ID);
+		World.Unset<EcsEnabled>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T Get<T>() where T : unmanaged
-		=> ref World._allWorlds.Get(WorldID).Get<T>(ID);
+		=> ref World.Get<T>(ID);
 
 	//[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	//public readonly ref T Get<T>(EntityID id) where T : unmanaged
@@ -1502,9 +1498,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	public readonly void Each(Action<EntityView> action)
 	{
-		var world = World._allWorlds.Get(WorldID);
-
-		ref var record = ref world._entities.Get(ID);
+		ref var record = ref World._entities.Get(ID);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
 		for (int i = 0; i < record.Archetype.Components.Length; ++i)
@@ -1515,7 +1509,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged
-		=> World._allWorlds.Get(WorldID).Has<T>(ID);
+		=> World.Has<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref EcsRelation<TPredicate, TTarget> Get<TPredicate, TTarget>()
@@ -1528,12 +1522,12 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		=> Has<EcsRelation<TPredicate, TTarget>>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly void Destroy()
-		=> World._allWorlds.Get(WorldID).Despawn(ID);
+	public readonly void Despawn()
+		=> World.Despawn(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsAlive()
-		=> World._allWorlds.Get(WorldID).IsAlive(ID);
+		=> World.IsAlive(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsEnabled()
