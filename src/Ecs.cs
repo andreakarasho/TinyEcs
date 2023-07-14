@@ -514,6 +514,10 @@ public readonly ref struct EntityIterator
 
 		return !Unsafe.IsNullRef(ref value);
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Entity(int row) => 
+		new (World.ID, _archetype.Entities[row]);
 }
 
 
@@ -750,7 +754,7 @@ public sealed partial class World
 
 
 
-class Vec<T0> where T0 : unmanaged
+sealed class Vec<T0> where T0 : unmanaged
 {
 	private T0[] _array;
 	private int _count;
@@ -1084,6 +1088,7 @@ static class EcsConst
 	public const EntityID ECS_PAIR = 1ul << 63;
 }
 
+
 public readonly struct EcsComponent
 {
 	public readonly EntityID ID;
@@ -1142,16 +1147,7 @@ public struct EcsSystemPhaseOnStartup { }
 public struct EcsSystemPhasePreStartup { }
 public struct EcsSystemPhasePostStartup { }
 
-public enum SystemPhase
-{
-	OnUpdate,
-	OnPreUpdate,
-	OnPostUpdate,
 
-	OnStartup,
-	OnPreStartup,
-	OnPostStartup
-}
 
 public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBuilder>
 {
@@ -1237,6 +1233,15 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	{
 		var world = World._allWorlds.Get(WorldID);
 		world.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(world) | FLAG_WITH });
+
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryBuilder With(EntityID id)
+	{
+		var world = World._allWorlds.Get(WorldID);
+		world.Set(ID, id | FLAG_WITH);
 
 		return this;
 	}
@@ -1335,7 +1340,6 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		return null;
 	}
 }
-
 
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
@@ -1467,7 +1471,6 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public static readonly EntityView Invalid = new(0, 0);
 }
 
-
 public unsafe ref struct QueryIterator
 {
 	private Archetype _current;
@@ -1588,7 +1591,6 @@ public static class QueryEx
 		}
 	}
 }
-
 
 public unsafe sealed class Commands : IDisposable
 {
@@ -1746,22 +1748,11 @@ public unsafe sealed class Commands : IDisposable
 	}
 
 
-	public EntityView Entity(EntityID id)
+	public CommandEntityView Entity(EntityID id)
 	{
-		if (_main.IsAlive(id))
-		{
-			if (!_mergeWorld.IsAlive(id))
-			{
-				var newId = _mergeWorld.Spawn();
+		Debug.Assert(_main.IsAlive(id));
 
-				id = newId.ID;
-			}
-		}
-
-		if (_mergeWorld.IsAlive(id))
-			return new EntityView(_mergeWorld.ID, id);
-
-		return EntityView.Invalid;
+		return new CommandEntityView(this, id);
 	}
 
 	public CommandEntityView Spawn()
@@ -1818,18 +1809,20 @@ public unsafe sealed class Commands : IDisposable
 		var idMain0 = TypeInfo<T0>.GetID(_main);
 		var idMain1 = TypeInfo<T1>.GetID(_main);
 
-		var pair = IDOp.Pair(idMain0, idMain1);
-		var idMerge = TypeInfo<ComponentPocPair<T0, T1>>.GetID(_mergeWorld);
+		Add(entity, idMain0, idMain1);
 
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentAdded()
-			{
-				Target = entity,
-				Component = pair,
-				ID = idMerge
-			})
-			.Set(new ComponentPocPair<T0, T1>() { });
+		//var pair = IDOp.Pair(idMain0, idMain1);
+		//var idMerge = TypeInfo<ComponentPocPair<T0, T1>>.GetID(_mergeWorld);
+
+		//_mergeWorld.Spawn()
+		//	.Set<MarkDestroy>()
+		//	.Set(new ComponentAdded()
+		//	{
+		//		Target = entity,
+		//		Component = pair,
+		//		ID = idMerge
+		//	})
+		//	.Set(new ComponentPocPair<T0, T1>() { });
 	}
 
 	public void Add(EntityID entity, EntityID cmp)
@@ -1884,20 +1877,7 @@ public unsafe sealed class Commands : IDisposable
 			});
 	}
 
-	public void AttachTo(EntityView entity, EntityView parent)
-	{
-		Debug.Assert(entity.WorldID == _main.ID);
-		Debug.Assert(parent.WorldID == _main.ID);
-
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ChildAdded()
-			{
-				Target = entity,
-				Parent = parent
-			});
-	}
-
+	
 	public void Dispose()
 	{
 		_mergeWorld?.Dispose();
@@ -1928,15 +1908,7 @@ public unsafe sealed class Commands : IDisposable
 		public EntityID Component;
 	}
 
-	struct ChildAdded
-	{
-		public EntityID Target;
-		public EntityID Parent;
-	}
-
-	struct MarkDestroy
-	{
-	}
+	struct MarkDestroy{ }
 
 	struct ComponentPocEntity
 	{
@@ -1963,7 +1935,6 @@ public unsafe sealed class Commands : IDisposable
 	}
 }
 
-
 public ref struct CommandEntityView
 {
 	private readonly EntityID _id;
@@ -1983,7 +1954,7 @@ public ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Add(EntityID id)
+	public readonly CommandEntityView Set(EntityID id)
 	{
 		_cmds.Add(_id, id);
 		return this;
@@ -1995,7 +1966,7 @@ public ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Add(EntityID first, EntityID second)
+	public readonly CommandEntityView Set(EntityID first, EntityID second)
 	{
 		_cmds.Add(_id, first, second);
 		return this;

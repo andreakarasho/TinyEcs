@@ -62,16 +62,29 @@ var vel = ecs.Spawn();
 var likes = ecs.Spawn();
 var cats = ecs.Spawn();
 
+var childOf = ecs.Spawn();
+
+var root = ecs.Spawn().ID;
+
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
 	.Set<Likes, Dogs>()
-	.Add(pos.ID)
-	.Add(likes.ID, cats.ID)
+	.Set(pos.ID)
+	.Set(likes.ID, cats.ID)
+	.Set(childOf.ID, root)
 	.ID;
 
 ecs.Step(0f);
 
-var ok = ecs.Entity(id).Has<Likes, Dogs>();
+var ok = ecs.Entity(id)
+	.Has<Likes, Dogs>();
+
+var qry1 = ecs.Query().With(IDOp.Pair(childOf.ID, root));
+
+foreach (var it in qry1)
+{
+	
+}
 
 ecs.Entity(id).Each(s =>
 {
@@ -101,7 +114,7 @@ unsafe
 			ref var cmp = ref cmpA[i];
 			ref var ent = ref entityA[i];
 
-			Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
+			Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", ent.ID, cmp.Size, cmp.ID);
 		}
 	}
 
@@ -142,7 +155,7 @@ static void Setup(Commands cmds, ref EntityIterator it)
 {
 	var sw = Stopwatch.StartNew();
 
-	for (int i = 0; i < ENTITIES_COUNT; i++)
+	for (int i = 0; i < 10; i++)
 		cmds.Spawn()
 			.Set<Position>()
 			.Set<Velocity>();
@@ -165,6 +178,11 @@ static void ParseQuery(Commands cmds, ref EntityIterator it)
 
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;
+
+		//cmds.Entity(it.Entity(i))
+		//	.Set(1f);
+
+		
 	}
 }
 
