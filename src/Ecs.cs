@@ -20,8 +20,6 @@ public sealed partial class World : IDisposable
 	internal readonly Archetype _archRoot;
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
-	private readonly EntitySparseSet<Stage> _stages = new();
-	
 
 
 	public World()
@@ -30,8 +28,6 @@ public sealed partial class World : IDisposable
 
 		lock (_lock)
 			_allWorlds.CreateNew(out _worldID) = this;
-
-		_stages.CreateNew(out _) = new Stage(this);
 	}
 
 
@@ -112,7 +108,7 @@ public sealed partial class World : IDisposable
 		InternalAttachDetach(entity, component, -1);
 	}
 
-	private void InternalAttachDetach(EntityID entity, EntityID component, int size)
+	private bool InternalAttachDetach(EntityID entity, EntityID component, int size)
 	{
 		ref var record = ref _entities.Get(entity);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
@@ -122,11 +118,11 @@ public sealed partial class World : IDisposable
 
 		if (add && column >= 0)
 		{
-			return;
+			return false;
 		}
 		else if (!add && column < 0)
 		{
-			return;
+			return false;
 		}
 
 		var initType = record.Archetype.ComponentInfo;
@@ -167,15 +163,11 @@ public sealed partial class World : IDisposable
 		}
 #endif
 
-		//ref var stage = ref _stages.Get(0);
-		//if (stage.DeferSet(entity, component, ReadOnlyMemory<byte>.Empty))
-		//{
-		//	return;
-		//}
-
 		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
 		record.Row = newRow;
 		record.Archetype = arch!;
+
+		return true;
 	}
 
 	internal void SetComponentData(EntityID entity, EntityID component, ReadOnlySpan<byte> data)
@@ -645,7 +637,9 @@ static class IDOp
 public sealed partial class World
 {
 	public void Set<T>(EntityID entity, T component = default) where T : unmanaged
-		=> SetComponentData(entity, TypeInfo<T>.GetID(this), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
+	{
+		SetComponentData(entity, TypeInfo<T>.GetID(this), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
+	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 	   => DetachComponent(entity, TypeInfo<T>.GetID(this));
@@ -665,79 +659,79 @@ public sealed partial class World
 
 	public void AttachTo(EntityID childID, EntityID parentID)
 	{
-		Detach(childID);
+		//Detach(childID);
 
-		if (Has<EcsParent>(parentID))
-		{
-			ref var parent = ref Get<EcsParent>(parentID);
-			parent.ChildrenCount += 1;
+		//if (Has<EcsParent>(parentID))
+		//{
+		//	ref var parent = ref Get<EcsParent>(parentID);
+		//	parent.ChildrenCount += 1;
 
-			ref var firstChild = ref Get<EcsChild>(parent.FirstChild);
-			firstChild.Prev = childID;
+		//	ref var firstChild = ref Get<EcsChild>(parent.FirstChild);
+		//	firstChild.Prev = childID;
 
-			Set(childID, new EcsChild()
-			{
-				Parent = parentID,
-				Prev = 0,
-				Next = parent.FirstChild
-			});
+		//	Set(childID, new EcsChild()
+		//	{
+		//		Parent = parentID,
+		//		Prev = 0,
+		//		Next = parent.FirstChild
+		//	});
 
-			parent.FirstChild = childID;
+		//	parent.FirstChild = childID;
 
-			return;
-		}
+		//	return;
+		//}
 
-		Set(parentID, new EcsParent()
-		{
-			ChildrenCount = 1,
-			FirstChild = childID
-		});
+		//Set(parentID, new EcsParent()
+		//{
+		//	ChildrenCount = 1,
+		//	FirstChild = childID
+		//});
 
-		Set(childID, new EcsChild()
-		{
-			Parent = parentID,
-			Prev = 0,
-			Next = 0
-		});
+		//Set(childID, new EcsChild()
+		//{
+		//	Parent = parentID,
+		//	Prev = 0,
+		//	Next = 0
+		//});
 	}
 
 	public void Detach(EntityID id)
 	{
-		if (!Has<EcsChild>(id))
-			return;
+		//if (!Has<EcsChild>(id))
+		//	return;
 
-		ref var child = ref Get<EcsChild>(id);
-		ref var parent = ref Get<EcsParent>(child.Parent);
+		//ref var child = ref Get<EcsChild>(id);
+		//ref var parent = ref Get<EcsParent>(child.Parent);
 
-		parent.ChildrenCount -= 1;
+		//parent.ChildrenCount -= 1;
 
-		if (parent.ChildrenCount <= 0)
-		{
-			Unset<EcsParent>(child.Parent);
-		}
-		else
-		{
-			if (parent.FirstChild == id)
-			{
-				parent.FirstChild = child.Next;
-				child.Prev = 0;
-			}
-			else
-			{
-				if (child.Prev != 0)
-				{
-					Get<EcsChild>(child.Prev).Next = child.Next;
-				}
+		//if (parent.ChildrenCount <= 0)
+		//{
+		//	Unset<EcsParent>(child.Parent);
+		//}
+		//else
+		//{
+		//	if (parent.FirstChild == id)
+		//	{
+		//		parent.FirstChild = child.Next;
+		//		child.Prev = 0;
+		//	}
+		//	else
+		//	{
+		//		if (child.Prev != 0)
+		//		{
+		//			Get<EcsChild>(child.Prev).Next = child.Next;
+		//		}
 
-				if (child.Next != 0)
-				{
-					Get<EcsChild>(child.Next).Prev = child.Prev;
-				}
-			}
+		//		if (child.Next != 0)
+		//		{
+		//			Get<EcsChild>(child.Next).Prev = child.Prev;
+		//		}
+		//	}
 
-		}
+		//}
 
-		Unset<EcsChild>(id);
+		//Unset<EcsChild>(id);
 	}
 
 	public void RemoveChildren(EntityID id)
@@ -1307,6 +1301,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		{
 			return default;
 		}
+
 		var stack = new Stack<Archetype>();
 		stack.Push(world._archRoot);
 
@@ -1562,7 +1557,8 @@ public unsafe ref struct QueryIterator
 	{
 		do
 		{
-			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);	
+			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);
+
 		} while (_stack.Count > 0 && _current == null);
 		
 		return _current != null;
@@ -1641,7 +1637,7 @@ public static class QueryEx
 
 		if (archetype.Count > 0 && archetype.IsSuperset(with))
 		{
-			// query ok, call the system now
+			// query ok, call the system now			
 			var it = new EntityIterator(archetype, deltaTime);
 			system(cmds, ref it);
 		}
@@ -1662,167 +1658,6 @@ public static class QueryEx
 	}
 }
 
-sealed class Stage
-{
-	private readonly Commands2 _cmds;
-
-	public Stage(World world)
-	{
-		World = world;
-		_cmds = new Commands2(this);
-	}
-
-
-	public World World { get; }
-
-	public int DeferLevel { get; private set; } = -1;
-
-
-
-	public bool DeferSet(EntityID entity, EntityID component, ReadOnlyMemory<byte> raw)
-	{
-		if (CanAppendCommand())
-		{
-			_cmds.Append(CommandAction.SetComponent, entity, component, raw);
-
-			return true;
-		}
-
-		return false;
-	}
-
-	public bool DeferUnset(EntityID entity, EntityID component)
-	{
-		if (CanAppendCommand())
-		{
-			_cmds.Append(CommandAction.UnsetComponent, entity, component, ReadOnlyMemory<byte>.Empty);
-
-			return true;
-		}
-
-		return false;
-	}
-
-	public bool DeferDespawn(EntityID entity)
-	{
-		if (CanAppendCommand())
-		{
-			_cmds.Append(CommandAction.DespawnEntity, entity, 0, ReadOnlyMemory<byte>.Empty);
-
-			return true;
-		}
-
-		return false;
-	}
-
-	private bool CanAppendCommand()
-	{
-		if (DeferLevel != 0)
-			return DeferLevel > 0;
-
-		++DeferLevel;
-
-		return false;
-	}
-
-	public bool Begin()
-	{
-		if (DeferLevel < 0) 
-			return false;
-
-		return ++DeferLevel == 1;
-	}
-
-	public bool End()
-	{
-		if (DeferLevel < 0)
-			return false;
-
-		if (--DeferLevel == 0)
-		{
-			return _cmds.Merge();
-		}
-
-		return false;
-	}
-}
-
-public sealed class Commands2
-{
-	private readonly Stage _stage;
-	private readonly EntitySparseSet<CommandEntry> _commandQueue = new();
-
-
-	internal Commands2(Stage stage) => _stage = stage;
-
-
-	internal void Append(CommandAction action, EntityID entity, EntityID id, ReadOnlyMemory<byte> raw)
-	{
-		ref var cmd = ref _commandQueue.CreateNew(out _);
-		cmd.Action = action;
-		cmd.ID = id;
-		cmd.Entity = entity;
-		cmd.Raw = raw;
-	}
-
-
-	public bool Merge()
-	{
-		if (_commandQueue.Length == 0)
-			return false;
-
-		foreach (ref var cmd in _commandQueue)
-		{
-			if (!_stage.World.IsAlive(cmd.Entity))
-			{
-				continue;
-			}
-
-			switch (cmd.Action)
-			{
-				case CommandAction.SetComponent:
-
-					Debug.Assert(_stage.World.IsAlive(cmd.ID));
-
-					_stage.World.SetComponentData(cmd.Entity, cmd.ID, cmd.Raw.Span);
-
-					break;
-
-				case CommandAction.UnsetComponent:
-
-					Debug.Assert(_stage.World.IsAlive(cmd.ID));
-
-					_stage.World.DetachComponent(cmd.Entity, cmd.ID);
-
-					break;
-
-				case CommandAction.DespawnEntity:
-
-					_stage.World.Despawn(cmd.Entity);
-
-					break;
-			}
-		}
-
-		return true;
-	}
-}
-
-struct CommandEntry
-{
-	public CommandAction Action;
-	public EntityID ID; // component
-	public EntityID Entity;
-
-	public ReadOnlyMemory<byte> Raw;
-}
-
-enum CommandAction : byte
-{
-	SetComponent,
-	UnsetComponent,
-	DespawnEntity,
-}
 
 public unsafe sealed class Commands : IDisposable
 {
@@ -1858,9 +1693,9 @@ public unsafe sealed class Commands : IDisposable
 	{
 		// we pass the Commands, but must not be used to edit entities!
 		_entityCreated.Fetch(this, &EntityCreatedSystem, 0f);
-		_entityDestroyed.Fetch(this, &EntityDestroyedSystem, 0f);
 		_componentSet.Fetch(this, &ComponentSetSystem, 0f);
 		_componentUnset.Fetch(this, &ComponentUnsetSystem, 0f);
+		_entityDestroyed.Fetch(this, &EntityDestroyedSystem, 0f);
 		_toBeDestroyed.Fetch(this, &MarkDestroySystem, 0f);
 	}
 
@@ -1876,34 +1711,51 @@ public unsafe sealed class Commands : IDisposable
 		var componentAdded = TypeInfo<ComponentAdded>.GetID(merge);
 		var componentRemoved = TypeInfo<ComponentRemoved>.GetID(merge);
 		var markDestroy = TypeInfo<MarkDestroy>.GetID(merge);
+		var entityViewComp = TypeInfo<EntityView>.GetID(merge);
+		var entityEnabledCmp = TypeInfo<EcsEnabled>.GetID(merge);
+		var ecsComp = TypeInfo<EcsComponent>.GetID(merge);
 
 		var opA = it.Field<EntityCreated>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
-			var target = main.SpawnEmpty();
+			//var target = main.SpawnEmpty();
 
-			for (int j = 0; j < archetype.ComponentInfo.Length; ++j)
-			{
-				ref readonly var cmp = ref archetype.ComponentInfo[j];
+			//for (int j = 0; j < archetype.ComponentInfo.Length; ++j)
+			//{
+			//	ref readonly var cmp = ref archetype.ComponentInfo[j];
 
-				// TODO: find a better way to find unecessary components
-				//       maybe apply a flag to the component ID?
-				if (cmp.ID == created || cmp.ID == destroyed ||
-					cmp.ID == componentAdded || cmp.ID == componentRemoved ||
-					cmp.ID == markDestroy)
-					continue;
+			//	// TODO: find a better way to find unecessary components
+			//	//       maybe apply a flag to the component ID?
+			//	if (cmp.ID == created || cmp.ID == destroyed ||
+			//		cmp.ID == componentAdded || cmp.ID == componentRemoved ||
+			//		cmp.ID == markDestroy || cmp.ID == entityViewComp ||
+			//		cmp.ID == entityEnabledCmp || cmp.ID == ecsComp)
+			//		continue;
 
-				var raw = archetype.GetComponentRaw(cmp.ID, i, 1);
-				//main.SetComponentData(target, )
-				//ref var metaMerge = ref merge.Component(cmp);
-				//ref var meta = ref main.Component(metaMerge.Type, cmp, metaMerge.Size);
+			//	var raw = archetype.GetComponentRaw(cmp.ID, i, 1);
+				
 
-				//main.SetComponentData(target, ref meta, archetype.GetComponentRaw(cmp.ID, i, 1));
-			}
+			//	Debug.Assert(main.IsAlive(cmp.ID));
+			//	Debug.Assert(main.Has<EcsComponent>(cmp.ID));
+			//	var id = TypeInfo<Serial>.GetID(main);
+			//	ref var ff = ref main.Get<EcsComponent>(id);
 
-			main.Set(target, new EntityView(main.ID, target));
-			main.Set<EcsEnabled>(target);
+			//	var e = merge.Spawn()
+			//		.Set<MarkDestroy>()
+			//		.Set(new ComponentAdded()
+			//		{
+			//			Target = target,
+			//			Component = cmp.ID,
+			//			ID = cmp.ID
+			//		})
+			//		.Set(cmp);
+
+			//	merge.SetComponentData(e, cmp.ID, raw);
+			//}
+
+			//main.Set(target, new EntityView(main.ID, target));
+			//main.Set<EcsEnabled>(target);
 		}
 	}
 
@@ -1924,7 +1776,6 @@ public unsafe sealed class Commands : IDisposable
 	static void ComponentSetSystem(Commands cmds, ref EntityIterator it)
 	{
 		var main = cmds.Main;
-		var merge = it.World;
 
 		var opA = it.Field<ComponentAdded>();
 
@@ -1932,10 +1783,8 @@ public unsafe sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			//ref var metaMerge = ref merge.Component(op.Component);
-			//ref var meta = ref main.Component(metaMerge.Type, op.Component, metaMerge.Size);
-
-			//main.SetComponentData(op.Target, ref meta, it.Archetype.GetComponentRaw(ref metaMerge, i, 1));
+			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
+			main.SetComponentData(op.Target, op.Component, raw);
 		}
 	}
 
@@ -1950,10 +1799,7 @@ public unsafe sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			//ref var metaMerge = ref merge.Component(op.Component);
-			//ref var meta = ref main.Component(metaMerge.Type, op.Component, metaMerge.Size);
-
-			//main.DetachComponent(op.Target, meta.ID);
+			main.DetachComponent(op.Target, op.Component);
 		}
 	}
 
@@ -1987,14 +1833,17 @@ public unsafe sealed class Commands : IDisposable
 		return EntityView.Invalid;
 	}
 
-	public EntityView Spawn()
+	public CommandEntityView Spawn()
 	{
-		return _mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new EntityCreated()
-			{
-				Target = 0
-			});
+		var mainEnt = _main.SpawnEmpty();
+		//var mergeEnt = _mergeWorld.Spawn()
+		//	.Set<MarkDestroy>()
+		//	.Set(new EntityCreated()
+		//	{
+		//		Target = 0
+		//	});
+
+		return new CommandEntityView(this, mainEnt);
 	}
 
 	public void Despawn(EntityID entity)
@@ -2013,14 +1862,18 @@ public unsafe sealed class Commands : IDisposable
 	{
 		Debug.Assert(_main.IsAlive(entity) || _mergeWorld.IsAlive(entity));
 
+		var idMain = TypeInfo<T>.GetID(_main);
+		var idMerge = TypeInfo<ComponentPoc<T>>.GetID(_mergeWorld);
+
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
 			.Set(new ComponentAdded()
 			{
 				Target = entity,
-				Component = TypeInfo<T>.GetID(_mergeWorld)
+				Component = idMain,
+				ID = idMerge
 			})
-			.Set(cmp);
+			.Set(new ComponentPoc<T>() { Value = cmp });
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
@@ -2032,7 +1885,7 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentRemoved()
 			{
 				Target = entity,
-				Component = TypeInfo<T>.GetID(_mergeWorld)
+				Component = TypeInfo<T>.GetID(_main)
 			});
 	}
 
@@ -2070,6 +1923,7 @@ public unsafe sealed class Commands : IDisposable
 	struct ComponentAdded
 	{
 		public EntityID Target;
+		public EntityID ID;
 		public EntityID Component;
 	}
 
@@ -2088,8 +1942,43 @@ public unsafe sealed class Commands : IDisposable
 	struct MarkDestroy
 	{
 	}
+
+	struct ComponentPoc<T> where T : unmanaged
+	{
+		public T Value;
+	}
 }
 
+
+public struct CommandEntityView
+{
+	private readonly EntityID _id;
+	private readonly Commands _cmds;
+
+	internal CommandEntityView(Commands cmds, EntityID id)
+	{
+		_cmds = cmds;
+		_id = id;
+	}
+
+	public CommandEntityView Set<T>(T cmp = default) where T : unmanaged
+	{
+		_cmds.Set(_id, cmp);
+		return this;
+	}
+
+	public CommandEntityView Unset<T>() where T : unmanaged
+	{
+		_cmds.Unset<T>(_id);
+		return this;
+	}
+
+	public CommandEntityView Despawn()
+	{
+		_cmds.Despawn(_id);
+		return this;
+	}
+}
 
 sealed unsafe class Ecs
 {
@@ -2146,7 +2035,7 @@ sealed unsafe class Ecs
 			.With<EcsSystemPhasePostStartup>();
 	}
 
-	public EntityView Spawn()
+	public CommandEntityView Spawn()
 		=> _cmds.Spawn();
 
 	public void Despawn(EntityID entity)

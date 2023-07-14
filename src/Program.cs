@@ -10,46 +10,48 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
-var world = new World();
+//var world = new World();
 
 
-var e0 = world.Spawn().Set<Position>();
-var e1 = world.Spawn();
-var likes = world.Spawn();
-var apple = world.Spawn();
+//var e0 = world.Spawn().Set<Position>();
+//var e1 = world.Spawn();
+//var likes = world.Spawn();
+//var apple = world.Spawn();
 
-e0.SetID(e1);
+//e0.SetID(e1);
 
-e0.Pair(likes, apple);
+//e0.Pair(likes, apple);
 
-e0.Each(s =>
-{
-	//ref var cmp = ref s.Get<EcsComponent>();
-	if (IDOp.IsPair(s.ID))
-	{
-		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
-	}
-	else
-	{
-		Console.WriteLine("entity {0}", s.ID);
-	}
-});
+//e0.Each(s =>
+//{
+//	//ref var cmp = ref s.Get<EcsComponent>();
+//	if (IDOp.IsPair(s.ID))
+//	{
+//		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
+//	}
+//	else
+//	{
+//		Console.WriteLine("entity {0}", s.ID);
+//	}
+//});
 
-var qry = world.Query().With<EcsComponent>();
+//var qry = world.Query().With<EcsComponent>();
 
-foreach (var it in qry)
-{
-	var cmpA = it.Field<EcsComponent>();
-	var entityA = it.Field<EntityView>();
+//foreach (var it in qry)
+//{
+//	var cmpA = it.Field<EcsComponent>();
+//	var entityA = it.Field<EntityView>();
 
-	for (int i = 0; i < it.Count; ++i)
-	{
-		ref var cmp = ref cmpA[i];
-		ref var ent = ref entityA[i];
+//	for (int i = 0; i < it.Count; ++i)
+//	{
+//		ref var cmp = ref cmpA[i];
+//		ref var ent = ref entityA[i];
 
-		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
-	}
-}
+//		var xx = it.World.Spawn();
+
+//		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
+//	}
+//}
 
 var ecs = new Ecs();
 
