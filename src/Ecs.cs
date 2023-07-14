@@ -7,9 +7,6 @@ using System.Runtime.InteropServices;
 using System.Buffers;
 
 using EntityID = System.UInt64;
-using System.Reflection;
-using System.Drawing;
-using System.Security.Cryptography;
 
 namespace TinyEcs;
 
@@ -21,9 +18,10 @@ public sealed partial class World : IDisposable
 	private readonly EntityID _worldID;
 
 	internal readonly Archetype _archRoot;
-	internal readonly Dictionary<EntityID, Archetype> _typeIndex = new();
+	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
-	private readonly EntitySparseSet<EcsComponent> _components = new();
+	private readonly EntitySparseSet<Stage> _stages = new();
+	
 
 
 	public World()
@@ -33,18 +31,7 @@ public sealed partial class World : IDisposable
 		lock (_lock)
 			_allWorlds.CreateNew(out _worldID) = this;
 
-		//var Position = SpawnEmpty();
-		//var e = SpawnEmpty();
-
-		//ref var cmp = ref Component(NextID.Get(), Position, 2);
-		//AttachComponent(e, ref cmp);
-
-		//var raw = Get(e, ref cmp);
-
-		//Set<EntityView>(e, e);
-
-		//var enable = e.Has<EcsEnabled>();
-		//var raw2 = Get(e, ref Component<EntityView>());
+		_stages.CreateNew(out _) = new Stage(this);
 	}
 
 
@@ -57,7 +44,6 @@ public sealed partial class World : IDisposable
 	{
 		_entities.Clear();
 		_typeIndex.Clear();
-		_components.Clear();
 		_archRoot.Clear();
 
 		lock (_lock)
@@ -118,36 +104,31 @@ public sealed partial class World : IDisposable
 
 	private void AttachComponent(EntityID entity, EntityID component, int size)
 	{
-		ref var record = ref _entities.Get(entity);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
-
-		var column = record.Archetype.GetComponentIndex(component);
-		if (column >= 0)
-		{
-			return;
-		}
-
-		var cmp = new EcsComponent(-1, component, size);
-
-		InternalAttachDetach(ref record, ref cmp, true);
+		InternalAttachDetach(entity, component, size);
 	}
 
 	internal void DetachComponent(EntityID entity, EntityID component)
 	{
+		InternalAttachDetach(entity, component, -1);
+	}
+
+	private void InternalAttachDetach(EntityID entity, EntityID component, int size)
+	{
 		ref var record = ref _entities.Get(entity);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
 		var column = record.Archetype.GetComponentIndex(component);
-		if (column < 0)
+		var add = size > 0;
+
+		if (add && column >= 0)
+		{
+			return;
+		}
+		else if (!add && column < 0)
 		{
 			return;
 		}
 
-		InternalAttachDetach(ref record, ref record.Archetype.ComponentInfo[column], false);
-	}
-
-	private void InternalAttachDetach(ref EcsRecord record, ref EcsComponent meta, bool add)
-	{
 		var initType = record.Archetype.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
 		Span<EcsComponent> span = stackalloc EcsComponent[cmpCount];
@@ -156,7 +137,7 @@ public sealed partial class World : IDisposable
 		{
 			for (int i = 0, j = 0; i < initType.Length; ++i)
 			{
-				if (initType[i].ID != meta.ID)
+				if (initType[i].ID != component)
 				{
 					span[j++] = initType[i];
 				}
@@ -165,7 +146,7 @@ public sealed partial class World : IDisposable
 		else if (!span.IsEmpty)
 		{
 			initType.CopyTo(span);
-			span[^1] = meta;
+			span[^1] = new EcsComponent(component, size);
 		}
 
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
@@ -176,7 +157,7 @@ public sealed partial class World : IDisposable
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			arch = _archRoot.InsertVertex(record.Archetype, span, meta.ID);
+			arch = _archRoot.InsertVertex(record.Archetype, span, component);
 		}
 #else
         if (!_typeIndex.TryGetValue(hash, out var arch))
@@ -185,6 +166,12 @@ public sealed partial class World : IDisposable
             _typeIndex[hash] = arch;
 		}
 #endif
+
+		//ref var stage = ref _stages.Get(0);
+		//if (stage.DeferSet(entity, component, ReadOnlyMemory<byte>.Empty))
+		//{
+		//	return;
+		//}
 
 		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
 		record.Row = newRow;
@@ -223,7 +210,6 @@ static class TypeInfo<T> where T : unmanaged
 {
 	private static EntityID _id;
 
-	public static readonly int Type = NextID.Get();
 	public static unsafe readonly int Size = sizeof(T);
 
 	public static EntityID GetID(World world, EntityID id = 0)
@@ -242,7 +228,7 @@ static class TypeInfo<T> where T : unmanaged
 			Debug.Assert(id == 0 || _id == id);
 
 			_id = world.SpawnEmpty();
-			world.Set(_id, new EcsComponent(Type, _id, Size));
+			world.Set(_id, new EcsComponent(_id, Size));
 			world.Set<EcsEnabled>(_id);
 			world.Set(_id, new EntityView(world.ID, _id));
 		}
@@ -261,11 +247,6 @@ static class TypeInfo<T> where T : unmanaged
 	}
 }
 
-static class NextID
-{
-	private static int _next = 0;
-	public static int Get() => ++_next;
-}
 
 sealed unsafe class Archetype
 {
@@ -339,7 +320,7 @@ sealed unsafe class Archetype
 
 		for (int i = 0; i < _components.Length; ++i)
 		{
-			ref var meta = ref ComponentInfo[i];
+			ref readonly var meta = ref ComponentInfo[i];
 			var leftArray = _componentsData[i].AsSpan();
 
 			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -385,7 +366,7 @@ sealed unsafe class Archetype
 
 		Debug.Assert(row < Count);
 
-		ref var meta = ref ComponentInfo[column];
+		ref readonly var meta = ref ComponentInfo[column];
 
 		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
 	}
@@ -409,7 +390,7 @@ sealed unsafe class Archetype
 				++y;
 			}
 
-			ref var meta = ref from.ComponentInfo[i];
+			ref readonly var meta = ref from.ComponentInfo[i];
 			var leftArray = from._componentsData[i].AsSpan();
 			var rightArray = to._componentsData[j].AsSpan();
 			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
@@ -466,7 +447,7 @@ sealed unsafe class Archetype
 	{
 		for (int i = 0; i < _components.Length; ++i)
 		{
-			ref var meta = ref ComponentInfo[i];
+			ref readonly var meta = ref ComponentInfo[i];
 			Array.Resize(ref _componentsData[i], meta.Size * capacity);
 			_capacity = capacity;
 		}
@@ -663,10 +644,8 @@ static class IDOp
 
 public sealed partial class World
 {
-	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
-	{
-		SetComponentData(entity, TypeInfo<T>.GetID(this), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
-	}
+	public void Set<T>(EntityID entity, T component = default) where T : unmanaged
+		=> SetComponentData(entity, TypeInfo<T>.GetID(this), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 	   => DetachComponent(entity, TypeInfo<T>.GetID(this));
@@ -674,12 +653,12 @@ public sealed partial class World
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, TypeInfo<T>.GetID(this));
 
-	public unsafe ref T Get<T>(EntityID entity) where T : unmanaged
+	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
 		var raw = Get(entity, TypeInfo<T>.GetID(this));
 
 		Debug.Assert(!raw.IsEmpty);
-		Debug.Assert(sizeof(T) == raw.Length);
+		Debug.Assert(TypeInfo<T>.Size == raw.Length);
 
 		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
 	}
@@ -1036,15 +1015,16 @@ sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static EntityID SplitGeneration(ref EntityID index)
 	{
-		//if ((index & EcsConst.ECS_ID_FLAGS_MASK) != 0)
-		//{
-		//    index &= ~(EcsConst.ECS_GENERATION_MASK | EcsConst.ECS_ID_FLAGS_MASK);
-		//    //return 0;
-		//}
+		if (IDOp.IsPair(index))
+		{
+			index &= ~EcsConst.ECS_ID_FLAGS_MASK;
+			//index &= ~(EcsConst.ECS_GENERATION_MASK /*| EcsConst.ECS_ID_FLAGS_MASK*/);
+		}
 
 		var gen = index & EcsConst.ECS_GENERATION_MASK;
 		Debug.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
 		index -= gen;
+
 		return gen;
 	}
 
@@ -1093,7 +1073,7 @@ sealed class EntitySparseSet<T>
 
 		public bool MoveNext() => ++_index < _sparseSet._count;
 
-		public readonly T Current => _sparseSet._chunks[_sparseSet._dense[_index] >> 12]
+		public readonly ref T Current => ref _sparseSet._chunks[_sparseSet._dense[_index] >> 12]
 										.Values[_sparseSet._dense[_index] & 0xFFF];
 	}
 }
@@ -1112,13 +1092,11 @@ static class EcsConst
 
 public readonly struct EcsComponent
 {
-	public readonly int Type;
 	public readonly EntityID ID;
 	public readonly int Size;
 
-	public EcsComponent(int type, EntityID id, int size)
+	public EcsComponent(EntityID id, int size)
 	{
-		Type = type;
 		ID = id;
 		Size = size;
 	}
@@ -1305,8 +1283,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 		for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref components[i];
-			Debug.Assert(!Unsafe.IsNullRef(ref meta));
+			ref readonly var meta = ref components[i];
 
 			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(meta.ID, record.Row, 1)));
 
@@ -1409,6 +1386,36 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Set<T>(T component = default) where T : unmanaged
 	{
 		World._allWorlds.Get(WorldID).Set(ID, component);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView SetID(EntityID id)
+	{
+		var world = World._allWorlds.Get(WorldID);
+
+		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
+
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Pair(EntityID first, EntityID second)
+	{
+		var world = World._allWorlds.Get(WorldID);
+		var id = IDOp.Pair(first, second);
+		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
+
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set<T>(EntityID second) where T : unmanaged
+	{
+		var world = World._allWorlds.Get(WorldID);
+		var id = IDOp.Pair(TypeInfo<T>.GetID(world), second);
+		world.SetComponentData(ID, id, MemoryMarshal.AsBytes(new ReadOnlySpan<EntityID>(id)));
+
 		return this;
 	}
 
@@ -1661,6 +1668,168 @@ public static class QueryEx
 	}
 }
 
+sealed class Stage
+{
+	private readonly Commands2 _cmds;
+
+	public Stage(World world)
+	{
+		World = world;
+		_cmds = new Commands2(this);
+	}
+
+
+	public World World { get; }
+
+	public int DeferLevel { get; private set; } = -1;
+
+
+
+	public bool DeferSet(EntityID entity, EntityID component, ReadOnlyMemory<byte> raw)
+	{
+		if (CanAppendCommand())
+		{
+			_cmds.Append(CommandAction.SetComponent, entity, component, raw);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	public bool DeferUnset(EntityID entity, EntityID component)
+	{
+		if (CanAppendCommand())
+		{
+			_cmds.Append(CommandAction.UnsetComponent, entity, component, ReadOnlyMemory<byte>.Empty);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	public bool DeferDespawn(EntityID entity)
+	{
+		if (CanAppendCommand())
+		{
+			_cmds.Append(CommandAction.DespawnEntity, entity, 0, ReadOnlyMemory<byte>.Empty);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	private bool CanAppendCommand()
+	{
+		if (DeferLevel != 0)
+			return DeferLevel > 0;
+
+		++DeferLevel;
+
+		return false;
+	}
+
+	public bool Begin()
+	{
+		if (DeferLevel < 0) 
+			return false;
+
+		return ++DeferLevel == 1;
+	}
+
+	public bool End()
+	{
+		if (DeferLevel < 0)
+			return false;
+
+		if (--DeferLevel == 0)
+		{
+			return _cmds.Merge();
+		}
+
+		return false;
+	}
+}
+
+public sealed class Commands2
+{
+	private readonly Stage _stage;
+	private readonly EntitySparseSet<CommandEntry> _commandQueue = new();
+
+
+	internal Commands2(Stage stage) => _stage = stage;
+
+
+	internal void Append(CommandAction action, EntityID entity, EntityID id, ReadOnlyMemory<byte> raw)
+	{
+		ref var cmd = ref _commandQueue.CreateNew(out _);
+		cmd.Action = action;
+		cmd.ID = id;
+		cmd.Entity = entity;
+		cmd.Raw = raw;
+	}
+
+
+	public bool Merge()
+	{
+		if (_commandQueue.Length == 0)
+			return false;
+
+		foreach (ref var cmd in _commandQueue)
+		{
+			if (!_stage.World.IsAlive(cmd.Entity))
+			{
+				continue;
+			}
+
+			switch (cmd.Action)
+			{
+				case CommandAction.SetComponent:
+
+					Debug.Assert(_stage.World.IsAlive(cmd.ID));
+
+					_stage.World.SetComponentData(cmd.Entity, cmd.ID, cmd.Raw.Span);
+
+					break;
+
+				case CommandAction.UnsetComponent:
+
+					Debug.Assert(_stage.World.IsAlive(cmd.ID));
+
+					_stage.World.DetachComponent(cmd.Entity, cmd.ID);
+
+					break;
+
+				case CommandAction.DespawnEntity:
+
+					_stage.World.Despawn(cmd.Entity);
+
+					break;
+			}
+		}
+
+		return true;
+	}
+}
+
+struct CommandEntry
+{
+	public CommandAction Action;
+	public EntityID ID; // component
+	public EntityID Entity;
+
+	public ReadOnlyMemory<byte> Raw;
+}
+
+enum CommandAction : byte
+{
+	SetComponent,
+	UnsetComponent,
+	DespawnEntity,
+}
+
 public unsafe sealed class Commands : IDisposable
 {
 	private readonly World _main, _mergeWorld;
@@ -1722,7 +1891,7 @@ public unsafe sealed class Commands : IDisposable
 
 			for (int j = 0; j < archetype.ComponentInfo.Length; ++j)
 			{
-				ref var cmp = ref archetype.ComponentInfo[j];
+				ref readonly var cmp = ref archetype.ComponentInfo[j];
 
 				// TODO: find a better way to find unecessary components
 				//       maybe apply a flag to the component ID?

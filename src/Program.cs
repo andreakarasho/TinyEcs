@@ -10,17 +10,29 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
-
 var world = new World();
 
-var e0 = world.Spawn();
+
+var e0 = world.Spawn().Set<Position>();
 var e1 = world.Spawn();
+var likes = world.Spawn();
+var apple = world.Spawn();
+
+e0.SetID(e1);
+
+e0.Pair(likes, apple);
 
 e0.Each(s =>
 {
-	ref var cmp = ref s.Get<EcsComponent>();
-	Console.WriteLine("id {0}", s.ID);
-	
+	//ref var cmp = ref s.Get<EcsComponent>();
+	if (IDOp.IsPair(s.ID))
+	{
+		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
+	}
+	else
+	{
+		Console.WriteLine("entity {0}", s.ID);
+	}
 });
 
 var qry = world.Query().With<EcsComponent>();
