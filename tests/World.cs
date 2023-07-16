@@ -5,8 +5,8 @@
         [Fact]
         public void World_Create_Destroy()
         {
-            using var world = new World();
-            world.Entity();
+            var world = new World();
+            world.Spawn();
             world.Dispose();
 
             Assert.Equal(0, world.EntityCount);

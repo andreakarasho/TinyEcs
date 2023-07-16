@@ -8,10 +8,10 @@
         [InlineData(1_000_000)]
         public void Query_AttachOneComponent_WithOneComponent(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
-                world.Set<float>(world.Entity());
+                world.Set<float>(world.Spawn());
 
             var query = world.Query()
                 .With<float>();
@@ -33,11 +33,11 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
+                var e = world.Spawn();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -64,11 +64,11 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithThreeComponents(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
+                var e = world.Spawn();
                 world.Set<float>(e);
                 world.Set<int>(e);
                 world.Set<bool>(e);
@@ -98,11 +98,11 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
+                var e = world.Spawn();
                 world.Set<float>(e);
                 world.Set<int>(e);
                 world.Set<bool>(e);
@@ -131,11 +131,11 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
+                var e = world.Spawn();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -163,11 +163,11 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent(int amount)
         {
-            using var world = new World();
+            var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
+                var e = world.Spawn();
                 world.Set<float>(e);
                 world.Set<int>(e);
             }
@@ -191,26 +191,26 @@
         [Fact]
         public void Query_EdgeValidation()
         {
-            using var world = new World();
+            var world = new World();
 
             var good = 0;
 
-            var e = world.Entity();
+            var e = world.Spawn();
             world.Set<float>(e);
             world.Set<int>(e);
 
-            var e2 = world.Entity();
+            var e2 = world.Spawn();
             world.Set<float>(e2);
             world.Set<int>(e2);
             world.Set<bool>(e2);
 
-            var e3 = world.Entity();
+            var e3 = world.Spawn();
             world.Set<float>(e3);
             world.Set<int>(e3);
             world.Set<byte>(e3);
             good++;
 
-            var e4 = world.Entity();
+            var e4 = world.Spawn();
             world.Set<float>(e4);
             world.Set<int>(e4);
             world.Set<byte>(e4);

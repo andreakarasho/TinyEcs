@@ -2,174 +2,209 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-using var world = new World();
-//using var world2 = new World();
+
+//var world = new World();
 
 
-//world2.Entity().Set(new Position() { X = 123.23f, Y = -23f, Z = 2f });
-//var eeee = world.Entity().Set<Likes>();
-//eeee.Set<Position>();
+//var e0 = world.Spawn().Set<Position>();
+//var e1 = world.Spawn();
+//var likes = world.Spawn();
+//var apple = world.Spawn();
 
+//e0.SetID(e1);
 
-//foreach (var it in world.Query().With<Likes>().With<Position>())
+//e0.Pair(likes, apple);
+
+//e0.Each(s =>
 //{
-//    ref var l = ref it.Field<Likes>();
-//    ref var b = ref it.Field<Position>();
+//	//ref var cmp = ref s.Get<EcsComponent>();
+//	if (IDOp.IsPair(s.ID))
+//	{
+//		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
+//	}
+//	else
+//	{
+//		Console.WriteLine("entity {0}", s.ID);
+//	}
+//});
 
-//    for (int i = 0; i < it.Count; ++i)
-//    {
-//        ref var ll = ref it.Get(ref l, i);
-//        ref var bb = ref it.Get(ref b, i);
-//    }
+//var qry = world.Query().With<EcsComponent>();
+
+//foreach (var it in qry)
+//{
+//	var cmpA = it.Field<EcsComponent>();
+//	var entityA = it.Field<EntityView>();
+
+//	for (int i = 0; i < it.Count; ++i)
+//	{
+//		ref var cmp = ref cmpA[i];
+//		ref var ent = ref entityA[i];
+
+//		var xx = it.World.Spawn();
+
+//		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
+//	}
 //}
 
-//foreach (var it in world2.Query().With<Position>())
-//{
-//    ref var l2 = ref it.Field<Position>();
 
-//    for (int i = 0; i < it.Count; ++i)
-//    {
-//        ref var ll2 = ref it.Get(ref l2, i);
-//    }
-//}
+var ecs = new Ecs();
 
+var pos = ecs.Spawn();
+var vel = ecs.Spawn();
 
-var rnd = new Random();
-var sw = Stopwatch.StartNew();
+var likes = ecs.Spawn();
+var cats = ecs.Spawn();
 
-var root = world.Entity();
+var childOf = ecs.Spawn();
 
-for (int i = 0; i < ENTITIES_COUNT; ++i)
+var root = ecs.Spawn().ID;
+
+var id = ecs.Spawn()
+	.Set(new Position() { X = 10, Y = 29 })
+	.Set<Likes, Dogs>()
+	.Set(pos.ID)
+	.Set(likes.ID, cats.ID)
+	.Set(childOf.ID, root)
+	.ID;
+
+ecs.Step(0f);
+
+var ok = ecs.Entity(id)
+	.Has<Likes, Dogs>();
+
+var qry1 = ecs.Query().With(childOf.ID, root);
+
+foreach (var it in qry1)
 {
-    var ee = world.Entity()
-        .Set<Position>()
-        .Set<Velocity>()
-        .Set<Likes, Dogs>()
-        .Set<Likes, Cats>()
-        .Set(TileType.Static)
-        .Set<Likes>(root)
-        //.AttachTo(root)
-        ;
-
+	
 }
 
-
-Console.WriteLine("entities created in {0} ms", sw.ElapsedMilliseconds);
-
-var query = world.Query()
-    .With<Position>()
-    .With<Velocity>()
-    .With<Likes, Dogs>()
-    .With<Likes, Cats>()
-    .With<Likes, EntityView>()
-    //.With<EcsParent>()
-    .With<TileType>()
-    ;
-
-var queryCmp = world.Query()
-    .With<EcsComponent>();
-
-foreach (var it in queryCmp)
+ecs.Entity(id).Each(s =>
 {
-    var e = it.Field<EntityView>();
-    var p = it.Field<EcsComponent>();
-    
-    foreach (var row in it)
-    {
-        ref var ent = ref e.Get();
-        ref var metadata = ref p.Get();
-        Console.WriteLine("Component {{ ID = {0}, GlobalID: {1}, Name = {2}, Size = {3} }}", metadata.ID, metadata.GlobalIndex, "", metadata.Size);
-    }
-}
+	if (IDOp.IsPair(s.ID))
+	{
+		var first = IDOp.GetPairFirst(s.ID);
+		var second = IDOp.GetPairSecond(s.ID);
+
+		Console.WriteLine("pair: {0} {1}", first, second);
+	}
+	else
+	{
+		if (s.Has<EcsComponent>())
+		{
+			Console.WriteLine("entity {0} [component]", s.ID);
+		}
+		else
+		{
+			Console.WriteLine("entity {0} [entity]", s.ID);
+		}
+	}
+});
 
 unsafe
 {
-    world.RegisterSystem(query, &ASystem);
-    //world.RegisterSystem(world.Query(), &PreUpdate, SystemPhase.OnPreUpdate);
-    //world.RegisterSystem(world.Query().With<Position>(), &PostUpdate, SystemPhase.OnPostUpdate);
+	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
+	var queryCmp = ecs.Query()
+			.With<EcsComponent>();
+
+	foreach (var it in queryCmp)
+	{
+		var cmpA = it.Field<EcsComponent>();
+
+		for (int i = 0; i < it.Count; ++i)
+		{
+			ref var cmp = ref cmpA[i];
+			var entity = it.Entity(i);
+
+			Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity, cmp.Size, cmp.ID);
+		}
+	}
+
+
+	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
+	//ref var single = ref ecs.GetSingleton<PlayerTag>();
+
+	ecs.AddStartupSystem(&Setup);
+
+	//ecs.AddSystem(&PrintSystem)
+	//	.SetTick(1f); // update every 50ms
+	ecs.AddSystem(&ParseQuery)
+		.SetQuery(query.ID);
+	//ecs.AddSystem(&PrintWarnSystem);
 }
 
+var sw = Stopwatch.StartNew();
+var start = 0f;
+var last = 0f;
 
 while (true)
 {
-    sw.Restart();
-    
-    for (int i = 0; i < 3600; ++i)
-    {
-        world.Step();     
-    }
+	var cur = (start - last) / 1000f;
 
-    Console.WriteLine(sw.ElapsedMilliseconds);
+	for (int i = 0; i < 3600; ++i)
+	{
+		ecs.Step(cur);
+	}
+	
+	last = start;
+	start = sw.ElapsedMilliseconds;
+
+	Console.WriteLine("query done in {0} ms", start - last);
 }
 
-Console.ReadLine();
 
-
-static void ASystem(in Iterator it)
+static void Setup(Commands cmds, ref EntityIterator it)
 {
-    var e = it.Field<EntityView>();
-    var p = it.Field<Position>();
-    var v = it.Field<Velocity>();
-    var t = it.Field<TileType>();
+	var sw = Stopwatch.StartNew();
 
-    foreach (var _ in it)
-    {
-        ref var ent = ref e.Get();
-        ref var pos = ref p.Get();
-        ref var vel = ref v.Get();
-        ref var tile = ref t.Get();
+	for (int i = 0; i < ENTITIES_COUNT; i++)
+		cmds.Spawn()
+			.Set<Position>()
+			.Set<Velocity>();
 
-        pos.X *= vel.X;
-        pos.Y *= vel.Y;
-    }
+	var character = cmds.Spawn()
+		.Set(new Serial() { Value = 0xDEAD_BEEF });
+
+	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
-
-static void ASystem2(in Iterator it)
+static void ParseQuery(Commands cmds, ref EntityIterator it)
 {
-    //Console.WriteLine("ASystem2 - Count: {0}", it.Count);
+	var posF = it.Field<Position>();
+	var velF = it.Field<Velocity>();
 
-    //ref var p = ref it.Field<Position>();
-    //ref var v = ref it.Field<Velocity>();
+	for (int i = 0; i < it.Count; ++i)
+	{
+		ref var pos = ref posF[i];
+		ref var vel = ref velF[i];
 
-    //for (var row = 0; row < it.Count; ++row)
-    //{
-    //    ref readonly var entity = ref it.Entity(row);
-    //    ref var pos = ref it.Get(ref p, row);
-    //    ref var vel = ref it.Get(ref v, row);
-    //}
+		pos.X *= vel.X;
+		pos.Y *= vel.Y;
+
+		//cmds.Entity(it.Entity(i))
+		//	.Set(1f);
+
+		
+	}
 }
 
-static void PreUpdate(in Iterator it)
+static void PrintSystem(Commands cmds, ref EntityIterator it)
 {
-    Console.WriteLine("pre update");
+	Console.WriteLine("1");
 }
 
-static void PostUpdate(in Iterator it)
+static void PrintWarnSystem(Commands cmds, ref EntityIterator it)
 {
-    Console.WriteLine("post update");
-
-    //ref var p = ref it.Field<Position>();
-
-    //for (var row = 0; row < it.Count; ++row)
-    //{
-    //    //var e = it.Entity(row);
-    //    //ref readonly var entity = ref it.Entity(row);
-    //    ref var pos = ref it.Get(ref p, row);
-
-    //    Console.WriteLine("position: {0}, {1}", pos.X, pos.Y);
-    //}
+	//Console.WriteLine("3");
 }
-
-struct Likes { }
-struct Dogs { }
-struct Cats { }
 
 
 enum TileType
@@ -178,16 +213,11 @@ enum TileType
     Static
 }
 
+
+struct Serial { public uint Value;  }
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
-record struct PlayerTag();
-struct ReflectedPosition { public float X, Y; }
+struct PlayerTag { public ulong ID; }
 
-
-record struct ATestComp(bool X, float Y, float Z);
-record struct ASecondTestComp(IntPtr x);
-
-static class DEBUG
-{
-    public static int VelocityCount = 0, PositionCount = 0, Both = 0;
-}
+struct Likes { }
+struct Dogs { }
