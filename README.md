@@ -2,6 +2,9 @@
 This small drop-in single-file project borns by the need of a reflection-free dotnet ECS library.<br>
 NativeAOT compatible.
 
+# Requirements
+`net7.0+` atm
+
 # Status
 <i>Semi-production ready.</i>  `¯\_(ツ)_/¯`
 
