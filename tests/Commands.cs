@@ -43,7 +43,8 @@ namespace TinyEcs.Tests
 
 			cmd.Merge();
 
-			Assert.True(count < world.EntityCount);
+			Assert.True(cmd.Main.IsAlive(e.ID));
+			Assert.True(cmd.Main.Has<EcsEnabled>(e.ID));
 		}
 
 		[Fact]
@@ -52,13 +53,11 @@ namespace TinyEcs.Tests
 			using var world = new World();
 			using var cmd = new Commands(world);
 
-			var count = world.EntityCount;
 			var e = cmd.Spawn();
 			e.Despawn();
-
 			cmd.Merge();
 
-			Assert.True(count >= world.EntityCount);
+			Assert.False(cmd.Main.IsAlive(e.ID));
 		}
 
 		[Fact]

@@ -238,9 +238,9 @@ namespace TinyEcs.Tests
 
 
         [Theory]
-        [InlineData(true, 9082331231821223701, -0.099477f)]
-        [InlineData(9082331231821223701, false, -0.099477f)]
-        [InlineData(-0.099477f, true, 9082331231821223701)]
+        [InlineData(true, 123, -0.099477f)]
+        [InlineData(123, false, -0.099477f)]
+        [InlineData(-0.099477f, true, 123)]
         public void Entity_Detach_ThreeComponent_Generics<T0, T1, T2>(T0 t0, T1 t1, T2 t2)
             where T0 : unmanaged
             where T1 : unmanaged
