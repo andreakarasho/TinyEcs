@@ -23,17 +23,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <PropertyGroup>
-    <DisableTestParallelization>true</DisableTestParallelization>
-  </PropertyGroup>
-
-
-  <ItemGroup>
-    <None Update="xunit.runner.json"> 
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\src\TinyEcs.csproj" />
   </ItemGroup>
