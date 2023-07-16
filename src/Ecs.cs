@@ -13,27 +13,20 @@ namespace TinyEcs;
 public sealed partial class World : IDisposable
 {
 	private static readonly object _lock = new();
-	internal static readonly EntitySparseSet<World> _allWorlds = new();
+	private static EntityID _worldIDCount;
 
 	internal readonly Archetype _archRoot;
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 
 
-	public static World New()
+	public World()
 	{
-		lock (_lock)
-		{
-			var world =_allWorlds.CreateNew(out var id) = new World(id);
-
-			return world;
-		}
-	}
-
-	internal World(EntityID id)
-	{
-		ID = id;
 		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
+
+		// hacky
+		lock (_lock)
+			ID = ++_worldIDCount;
 	}
 
 
@@ -48,17 +41,13 @@ public sealed partial class World : IDisposable
 		_entities.Clear();
 		_typeIndex.Clear();
 		_archRoot.Clear();
-
-		lock (_lock)
-			_allWorlds.Remove(ID);
 	}
 
 	public QueryBuilder Query()
 	{
-		var query = Spawn()
-			.Set<EcsQuery>();
+		var query = Spawn().Set<EcsQueryBuilder>();
 
-		return new QueryBuilder(ID, query);
+		return new QueryBuilder(this, query);
 	}
 
 	public unsafe SystemBuilder System(delegate* managed<Commands, ref EntityIterator, void> system)
@@ -66,7 +55,7 @@ public sealed partial class World : IDisposable
 			Spawn()
 				.Set(new EcsSystem(system))
 				.Set(new EcsSystemTick() { Value = 0 })
-				.Set<QueryBuilder>());
+				.Set<EcsQuery>());
 
 	public EntityView Spawn()
 		=> SpawnEmpty().Set<EcsEnabled>();	
@@ -1114,8 +1103,10 @@ public readonly struct EcsComponent
 	}
 }
 
-public unsafe struct EcsQuery
+public struct EcsQueryBuilder { }
+public struct EcsQuery
 {
+	public EntityID ID;
 }
 
 public struct EcsQueryParameter<T> where T : unmanaged
@@ -1194,9 +1185,9 @@ public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBu
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly SystemBuilder SetQuery(in QueryBuilder query)
+	public readonly SystemBuilder SetQuery(EntityID query)
 	{
-		World.Set(ID, query);
+		World.Set(ID, new EcsQuery() { ID = query });
 		return this;
 	}
 
@@ -1215,13 +1206,13 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 
 	public readonly EntityID ID;
-	internal readonly EntityID WorldID;
+	internal readonly World World;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryBuilder(EntityID world, EntityID id)
+	internal QueryBuilder(World world, EntityID id)
 	{
-		WorldID = world;
+		World = world;
 		ID = id;
 	}
 
@@ -1240,9 +1231,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With<T>() where T : unmanaged
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(world) | FLAG_WITH });
-
+		World.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(World) | FLAG_WITH });
 		return this;
 	}
 
@@ -1251,44 +1240,34 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
-		var world = World._allWorlds.Get(WorldID);
-
-		return With(TypeInfo<TKind>.GetID(world), TypeInfo<TTarget>.GetID(world));
+		return With(TypeInfo<TKind>.GetID(World), TypeInfo<TTarget>.GetID(World));
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID first, EntityID second)
 	{
-		var world = World._allWorlds.Get(WorldID);
 		var id = IDOp.Pair(first, second);
-		world.Set(ID, id | FLAG_WITH);
-
+		World.Set(ID, id | FLAG_WITH);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID id)
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, id | FLAG_WITH);
-
+		World.Set(ID, id | FLAG_WITH);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder Without<T>() where T : unmanaged
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(world) | FLAG_WITHOUT });
-
+		World.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(World) | FLAG_WITHOUT });
 		return this;
 	}
 
 	public QueryIterator GetEnumerator()
 	{
-		var world = World._allWorlds.Get(WorldID);
-
-		ref var record = ref world._entities.Get(ID);
+		ref var record = ref World._entities.Get(ID);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
 		var components = record.Archetype.ComponentInfo;
@@ -1327,7 +1306,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		}
 
 		var stack = new Stack<Archetype>();
-		stack.Push(world._archRoot);
+		stack.Push(World._archRoot);
 
 		return new QueryIterator(stack, cmps, with, without);
 	}
@@ -1534,11 +1513,11 @@ public unsafe ref struct QueryIterator
 
 public static class QueryEx
 {
-	public static unsafe void Fetch(this in QueryBuilder query, Commands cmds, delegate* <Commands, ref EntityIterator, void> system, float deltaTime)
+	public static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate* <Commands, ref EntityIterator, void> system, float deltaTime)
 	{
-		var world = World._allWorlds.Get(query.WorldID);
+		Debug.Assert(world.Has<EcsQueryBuilder>(query));
 
-		ref var record = ref world._entities.Get(query.ID);
+		ref var record = ref world._entities.Get(query);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
 		var components = record.Archetype.ComponentInfo;
@@ -1625,7 +1604,7 @@ public unsafe sealed class Commands : IDisposable
 	public Commands(World main)
 	{
 		_main = main;
-		_mergeWorld = World.New();
+		_mergeWorld = new World();
 
 		_entityCreated = _mergeWorld.Query()
 			.With<EntityCreated>();
@@ -1649,11 +1628,11 @@ public unsafe sealed class Commands : IDisposable
 	public void Merge()
 	{
 		// we pass the Commands, but must not be used to edit entities!
-		_entityCreated.Fetch(this, &EntityCreatedSystem, 0f);
-		_componentSet.Fetch(this, &ComponentSetSystem, 0f);
-		_componentUnset.Fetch(this, &ComponentUnsetSystem, 0f);
-		_entityDestroyed.Fetch(this, &EntityDestroyedSystem, 0f);
-		_toBeDestroyed.Fetch(this, &MarkDestroySystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _entityCreated.ID, this, &EntityCreatedSystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _componentSet.ID, this, &ComponentSetSystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _componentUnset.ID, this, &ComponentUnsetSystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _entityDestroyed.ID, this, &EntityDestroyedSystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _toBeDestroyed.ID, this, &MarkDestroySystem, 0f);
 	}
 
 
@@ -2036,7 +2015,7 @@ sealed unsafe class Ecs
 
 	public Ecs()
 	{
-		_world = World.New();
+		_world = new World();
 		_cmds = new Commands(_world);
 
 		_querySystemUpdate = Query()
@@ -2114,14 +2093,14 @@ sealed unsafe class Ecs
 
 		if (_frame == 0)
 		{
-			_querySystemPreStartup.Fetch(_cmds, &RunSystems, delta);
-			_querySystemStartup.Fetch(_cmds, &RunSystems, delta);
-			_querySystemPostStartup.Fetch(_cmds, &RunSystems, delta);
+			QueryEx.Fetch(_world, _querySystemPreStartup.ID, _cmds, &RunSystems, delta);
+			QueryEx.Fetch(_world, _querySystemStartup.ID, _cmds, &RunSystems, delta);
+			QueryEx.Fetch(_world, _querySystemPostStartup.ID, _cmds, &RunSystems, delta);
 		}
 
-		_querySystemPreUpdate.Fetch(_cmds, &RunSystems, delta);
-		_querySystemUpdate.Fetch(_cmds, &RunSystems, delta);
-		_querySystemPostUpdate.Fetch(_cmds, &RunSystems, delta);
+		QueryEx.Fetch(_world, _querySystemPreUpdate.ID, _cmds, &RunSystems, delta);
+		QueryEx.Fetch(_world, _querySystemUpdate.ID, _cmds, &RunSystems, delta);
+		QueryEx.Fetch(_world, _querySystemPostUpdate.ID, _cmds, &RunSystems, delta);
 
 		_cmds.Merge();
 		_frame += 1;
@@ -2131,7 +2110,7 @@ sealed unsafe class Ecs
 	{
 		var sysA = it.Field<EcsSystem>();
 		var sysTickA = it.Field<EcsSystemTick>();
-		var queryA = it.Field<QueryBuilder>();
+		var queryA = it.Field<EcsQuery>();
 
 		var emptyIt = new EntityIterator(it.World._archRoot, 0, it.DeltaTime);
 
@@ -2156,7 +2135,7 @@ sealed unsafe class Ecs
 
 			if (query.ID != 0)
 			{
-				query.Fetch(cmds, sys.Func, it.DeltaTime);
+				QueryEx.Fetch(it.World, query.ID, cmds, sys.Func, it.DeltaTime);
 			}
 			else
 			{

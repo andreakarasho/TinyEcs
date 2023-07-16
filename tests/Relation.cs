@@ -5,7 +5,7 @@
         // [Fact]
         // public void Relation_Child_Attach_To_Parent()
         // {
-        //     var world = World.New();
+        //     var world = new World();
 
         //     var parent = world.Spawn();
         //     var child = world.Spawn();
@@ -18,7 +18,7 @@
         // [Fact]
         // public void Relation_Child_Detach_From_Parent()
         // {
-        //     var world = World.New();
+        //     var world = new World();
 
         //     var parent = world.Spawn();
         //     var child = world.Spawn();
@@ -32,7 +32,7 @@
         // [Fact]
         // public void Relation_Child_Switch_Parent()
         // {
-        //     var world = World.New();
+        //     var world = new World();
 
         //     var parent1 = world.Spawn();
         //     var parent2 = world.Spawn();
@@ -49,7 +49,7 @@
         // [Fact]
         // public void Relation_Attach_Multiple_Child_To_A_Parent_Then_Cleanup()
         // {
-        //     var world = World.New();
+        //     var world = new World();
 
         //     var parent = world.Spawn();
         //     var count = 1000;

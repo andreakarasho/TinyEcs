@@ -5,7 +5,7 @@
         [Fact]
         public void World_Create_Destroy()
         {
-            var world = World.New();
+            var world = new World();
             world.Spawn();
             world.Dispose();
 
@@ -18,7 +18,7 @@
         //[InlineData(1_000_000)]
         //public async void World_Create_Destroy_Threading(int times)
         //{
-        //    var world = World.New();
+        //    var world = new World();
 
         //    var list = new List<Task>();
         //    for (var i = 0; i < times;i++)

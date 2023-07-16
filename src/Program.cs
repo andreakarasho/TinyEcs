@@ -11,7 +11,7 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
-//var world = World.New();
+//var world = new World();
 
 
 //var e0 = world.Spawn().Set<Position>();
@@ -137,7 +137,7 @@ unsafe
 	//ecs.AddSystem(&PrintSystem)
 	//	.SetTick(1f); // update every 50ms
 	ecs.AddSystem(&ParseQuery)
-		.SetQuery(in query);
+		.SetQuery(query.ID);
 	//ecs.AddSystem(&PrintWarnSystem);
 }
 
