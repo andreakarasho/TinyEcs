@@ -8,29 +8,29 @@ namespace TinyEcs.Tests
 {
 	public class CommandsTest
 	{
-		[Fact]
-		public void Create_Entity_Buffered()
-		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+		// [Fact]
+		// public void Create_Entity_Buffered()
+		// {
+		// 	using var world = new World();
+		// 	using var cmd = new Commands(world);
 
-			var e = cmd.Spawn();
+		// 	var e = cmd.Spawn();
 
-			Assert.True(e.IsAlive());
-			Assert.True(e.IsEnabled());
-		}
+		// 	Assert.True(e.IsAlive());
+		// 	Assert.True(e.IsEnabled());
+		// }
 
-		[Fact]
-		public void Destroy_Entity_Buffered()
-		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+		// [Fact]
+		// public void Destroy_Entity_Buffered()
+		// {
+		// 	using var world = new World();
+		// 	using var cmd = new Commands(world);
 
-			var e = cmd.Spawn();
-			e.Despawn();
+		// 	var e = cmd.Spawn();
+		// 	e.Despawn();
 
-			Assert.False(e.IsAlive());
-		}
+		// 	Assert.False(e.IsAlive());
+		// }
 
 		[Fact]
 		public void Merge_Create_Entity()

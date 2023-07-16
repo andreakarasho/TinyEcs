@@ -90,11 +90,21 @@ ecs.Entity(id).Each(s =>
 {
 	if (IDOp.IsPair(s.ID))
 	{
-		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
+		var first = IDOp.GetPairFirst(s.ID);
+		var second = IDOp.GetPairSecond(s.ID);
+
+		Console.WriteLine("pair: {0} {1}", first, second);
 	}
 	else
 	{
-		Console.WriteLine("entity {0}", s.ID);
+		if (s.Has<EcsComponent>())
+		{
+			Console.WriteLine("entity {0} [component]", s.ID);
+		}
+		else
+		{
+			Console.WriteLine("entity {0} [entity]", s.ID);
+		}
 	}
 });
 
@@ -107,14 +117,13 @@ unsafe
 	foreach (var it in queryCmp)
 	{
 		var cmpA = it.Field<EcsComponent>();
-		var entityA = it.Field<EntityView>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
 			ref var cmp = ref cmpA[i];
-			ref var ent = ref entityA[i];
+			var entity = it.Entity(i);
 
-			Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", ent.ID, cmp.Size, cmp.ID);
+			Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity, cmp.Size, cmp.ID);
 		}
 	}
 

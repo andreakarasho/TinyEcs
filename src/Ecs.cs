@@ -62,13 +62,7 @@ public sealed partial class World : IDisposable
 				.Set<QueryBuilder>());
 
 	public EntityView Spawn()
-	{
-		var e = SpawnEmpty();
-
-		return e
-			.Set(e)
-			.Set<EcsEnabled>();
-	}
+		=> SpawnEmpty().Set<EcsEnabled>();	
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -108,6 +102,7 @@ public sealed partial class World : IDisposable
 		InternalAttachDetach(entity, component, -1);
 	}
 
+	[SkipLocalsInit]
 	private bool InternalAttachDetach(EntityID entity, EntityID component, int size)
 	{
 		ref var record = ref _entities.Get(entity);
@@ -222,7 +217,6 @@ static class TypeInfo<T> where T : unmanaged
 			_id = world.SpawnEmpty();
 			world.Set(_id, new EcsComponent(_id, Size));
 			world.Set<EcsEnabled>(_id);
-			world.Set(_id, new EntityView(world.ID, _id));
 		}
 
 		return _id;
@@ -516,8 +510,8 @@ public readonly ref struct EntityIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Entity(int row) => 
-		new (World.ID, _archetype.Entities[row]);
+	public readonly EntityID Entity(int row) 
+		=> _archetype.Entities[row];
 }
 
 
@@ -1758,11 +1752,10 @@ public unsafe sealed class Commands : IDisposable
 
 	static void MarkDestroySystem(Commands cmds, ref EntityIterator it)
 	{
-		var entA = it.Field<EntityView>();
-
 		for (int i = 0; i < it.Count; ++i)
 		{
-			ref var entity = ref entA[i];
+			var entity = it.Entity(i);
+
 			cmds._mergeWorld.Despawn(entity);
 		}
 	}
@@ -1775,9 +1768,11 @@ public unsafe sealed class Commands : IDisposable
 		return new CommandEntityView(this, id);
 	}
 
-	public CommandEntityView Spawn()
+	public CommandEntityView Spawn(EntityID id = 0)
 	{
-		var mainEnt = _main.SpawnEmpty();
+		Debug.Assert(!_main.IsAlive(id));
+		
+		var mainEnt = _main.SpawnEmpty(id);
 		//var mergeEnt = _mergeWorld.Spawn()
 		//	.Set<MarkDestroy>()
 		//	.Set(new EntityCreated()
@@ -1786,8 +1781,7 @@ public unsafe sealed class Commands : IDisposable
 		//	});
 
 		return new CommandEntityView(this, mainEnt)
-			.Set<EcsEnabled>()
-			.Set(new EntityView(_main.ID, mainEnt.ID));
+			.Set<EcsEnabled>();
 	}
 
 	public void Despawn(EntityID entity)
@@ -1955,7 +1949,7 @@ public unsafe sealed class Commands : IDisposable
 	}
 }
 
-public ref struct CommandEntityView
+public readonly ref struct CommandEntityView
 {
 	private readonly EntityID _id;
 	private readonly Commands _cmds;
