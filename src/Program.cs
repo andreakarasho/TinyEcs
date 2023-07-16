@@ -11,7 +11,7 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
-//var world = new World();
+//var world = World.New();
 
 
 //var e0 = world.Spawn().Set<Position>();
@@ -53,6 +53,7 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 //		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
 //	}
 //}
+
 
 var ecs = new Ecs();
 
@@ -164,7 +165,7 @@ static void Setup(Commands cmds, ref EntityIterator it)
 {
 	var sw = Stopwatch.StartNew();
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < ENTITIES_COUNT; i++)
 		cmds.Spawn()
 			.Set<Position>()
 			.Set<Velocity>();

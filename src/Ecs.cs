@@ -15,25 +15,32 @@ public sealed partial class World : IDisposable
 	private static readonly object _lock = new();
 	internal static readonly EntitySparseSet<World> _allWorlds = new();
 
-	private readonly EntityID _worldID;
-
 	internal readonly Archetype _archRoot;
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 
 
-	public World()
+	public static World New()
 	{
-		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
-
 		lock (_lock)
-			_allWorlds.CreateNew(out _worldID) = this;
+		{
+			var world =_allWorlds.CreateNew(out var id) = new World(id);
+
+			return world;
+		}
+	}
+
+	internal World(EntityID id)
+	{
+		ID = id;
+		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
 	}
 
 
-	public EntityID ID => _worldID;
+	public EntityID ID { get; }
 
-	public int EntityCount => _entities.Length;
+	public int EntityCount 
+		=> _entities.Length;
 
 
 	public void Dispose()
@@ -43,7 +50,7 @@ public sealed partial class World : IDisposable
 		_archRoot.Clear();
 
 		lock (_lock)
-			_allWorlds.Remove(_worldID);
+			_allWorlds.Remove(ID);
 	}
 
 	public QueryBuilder Query()
@@ -51,11 +58,11 @@ public sealed partial class World : IDisposable
 		var query = Spawn()
 			.Set<EcsQuery>();
 
-		return new QueryBuilder(_worldID, query);
+		return new QueryBuilder(ID, query);
 	}
 
 	public unsafe SystemBuilder System(delegate* managed<Commands, ref EntityIterator, void> system)
-		=> new SystemBuilder(_worldID,
+		=> new SystemBuilder(this,
 			Spawn()
 				.Set(new EcsSystem(system))
 				.Set(new EcsSystemTick() { Value = 0 })
@@ -70,7 +77,7 @@ public sealed partial class World : IDisposable
 		record.Archetype = _archRoot;
 		record.Row = _archRoot.Add(id);
 
-		return new EntityView(_worldID, id);
+		return new EntityView(this, id);
 	}
 
 	public void Despawn(EntityID entity)
@@ -196,6 +203,7 @@ public sealed partial class World : IDisposable
 static class TypeInfo<T> where T : unmanaged
 {
 	private static EntityID _id;
+	private static readonly EntitySparseSet<EntityID> _ids = new();
 
 	public static unsafe readonly int Size = sizeof(T);
 
@@ -203,23 +211,34 @@ static class TypeInfo<T> where T : unmanaged
 	{
 		Debug.Assert(world != null);
 
-		if (_id != 0)
+		ref var cmpID = ref _ids.Get(world.ID);
+		if (Unsafe.IsNullRef(ref cmpID) || !world.IsAlive(cmpID))
 		{
-			Debug.Assert(id == 0 || _id == id);
+			var ent = world.SpawnEmpty();
+			cmpID = ref _ids.Add(world.ID, ent.ID);
+			world.Set(cmpID, new EcsComponent(cmpID, Size));
+			world.Set<EcsEnabled>(cmpID);
 		}
 
-		if (_id == 0 || !world.IsAlive(_id))
-		{
-			Init(world, _id != 0 ? _id : id);
+		return cmpID;
 
-			Debug.Assert(id == 0 || _id == id);
+		// if (_id != 0)
+		// {
+		// 	Debug.Assert(id == 0 || _id == id);
+		// }
 
-			_id = world.SpawnEmpty();
-			world.Set(_id, new EcsComponent(_id, Size));
-			world.Set<EcsEnabled>(_id);
-		}
+		// if (_id == 0 || !world.IsAlive(_id))
+		// {
+		// 	Init(world, _id != 0 ? _id : id);
 
-		return _id;
+		// 	Debug.Assert(id == 0 || _id == id);
+
+		// 	_id = world.SpawnEmpty();
+		// 	world.Set(_id, new EcsComponent(_id, Size));
+		// 	world.Set<EcsEnabled>(_id);
+		// }
+
+		// return _id;
 	}
 
 	public static void Init(World world, EntityID id)
@@ -1146,12 +1165,12 @@ public struct EcsSystemPhasePostStartup { }
 public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBuilder>
 {
 	public readonly EntityID ID;
-	internal readonly EntityID WorldID;
+	internal readonly World World;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal SystemBuilder(EntityID world, EntityID id)
+	internal SystemBuilder(World world, EntityID id)
 	{
-		WorldID = world;
+		World = world;
 		ID = id;
 	}
 
@@ -1170,25 +1189,21 @@ public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBu
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal readonly SystemBuilder Set<T>(T component = default) where T : unmanaged
 	{
-		World._allWorlds.Get(WorldID).Set(ID, component);
+		World.Set(ID, component);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly SystemBuilder SetQuery(in QueryBuilder query)
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, query);
-
+		World.Set(ID, query);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly SystemBuilder SetTick(float tick)
 	{
-		var world = World._allWorlds.Get(WorldID);
-		world.Set(ID, new EcsSystemTick() { Value = tick });
-
+		World.Set(ID, new EcsSystemTick() { Value = tick });
 		return this;
 	}
 }
@@ -1362,19 +1377,14 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 {
 	public readonly EntityID ID;
-	public readonly EntityID WorldID;
-
+	public readonly World World;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal EntityView(EntityID world, EntityID id)
+	internal EntityView(World world, EntityID id)
 	{
-		WorldID = world;
+		World = world;
 		ID = id;
 	}
-
-
-	public readonly World World
-		=> World._allWorlds.Get(WorldID);
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1386,7 +1396,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Equals(EntityView other)
 	{
-		return ID == other.ID && WorldID == other.WorldID;
+		return ID == other.ID /*&& World?.ID == other.World?.ID*/;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1474,7 +1484,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 		for (int i = 0; i < record.Archetype.Components.Length; ++i)
 		{
-			action(new EntityView(WorldID, record.Archetype.Components[i]));
+			action(new EntityView(World, record.Archetype.Components[i]));
 		}
 	}
 
@@ -1482,7 +1492,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public static implicit operator EntityID(in EntityView d) => d.ID;
 
 
-	public static readonly EntityView Invalid = new(0, 0);
+	public static readonly EntityView Invalid = new(null, 0);
 }
 
 public unsafe ref struct QueryIterator
@@ -1615,7 +1625,7 @@ public unsafe sealed class Commands : IDisposable
 	public Commands(World main)
 	{
 		_main = main;
-		_mergeWorld = new World();
+		_mergeWorld = World.New();
 
 		_entityCreated = _mergeWorld.Query()
 			.With<EntityCreated>();
@@ -1658,7 +1668,6 @@ public unsafe sealed class Commands : IDisposable
 		var componentAdded = TypeInfo<ComponentAdded>.GetID(merge);
 		var componentRemoved = TypeInfo<ComponentRemoved>.GetID(merge);
 		var markDestroy = TypeInfo<MarkDestroy>.GetID(merge);
-		var entityViewComp = TypeInfo<EntityView>.GetID(merge);
 		var entityEnabledCmp = TypeInfo<EcsEnabled>.GetID(merge);
 		var ecsComp = TypeInfo<EcsComponent>.GetID(merge);
 
@@ -2027,7 +2036,7 @@ sealed unsafe class Ecs
 
 	public Ecs()
 	{
-		_world = new World();
+		_world = World.New();
 		_cmds = new Commands(_world);
 
 		_querySystemUpdate = Query()
@@ -2066,7 +2075,7 @@ sealed unsafe class Ecs
 	{
 		Debug.Assert(_world.IsAlive(id));
 
-		return new EntityView(_world.ID, id);
+		return new EntityView(_world, id);
 	}
 
 	public CommandEntityView Spawn()

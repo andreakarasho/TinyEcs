@@ -11,8 +11,8 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Create_Entity_Buffered()
 		// {
-		// 	using var world = new World();
-		// 	using var cmd = new Commands(world);
+		// 	var world = World.New();
+		// 	var cmd = new Commands(world);
 
 		// 	var e = cmd.Spawn();
 
@@ -23,8 +23,8 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Destroy_Entity_Buffered()
 		// {
-		// 	using var world = new World();
-		// 	using var cmd = new Commands(world);
+		// 	var world = World.New();
+		// 	var cmd = new Commands(world);
 
 		// 	var e = cmd.Spawn();
 		// 	e.Despawn();
@@ -35,10 +35,9 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_Create_Entity()
 		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+			var world = World.New();
+			var cmd = new Commands(world);
 
-			var count = world.EntityCount;
 			var e = cmd.Spawn();
 
 			cmd.Merge();
@@ -50,8 +49,8 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_Destroy_Entity()
 		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+			var world = World.New();
+			var cmd = new Commands(world);
 
 			var e = cmd.Spawn();
 			e.Despawn();
@@ -63,8 +62,8 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_SetComponent_Entity()
 		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+			var world = World.New();
+			var cmd = new Commands(world);
 
 			var e = world.Spawn();
 
@@ -73,14 +72,14 @@ namespace TinyEcs.Tests
 			cmd.Merge();
 
 			Assert.True(e.Has<float>());
-			Assert.True(e.Get<float>() == VAL);
+			Assert.Equal(VAL, e.Get<float>());
 		}
 
 		[Fact]
 		public void Merge_UnsetComponent_Entity()
 		{
-			using var world = new World();
-			using var cmd = new Commands(world);
+			var world = World.New();
+			var cmd = new Commands(world);
 
 			const float VAL = 0.012344f;
 
@@ -90,7 +89,7 @@ namespace TinyEcs.Tests
 			cmd.Unset<float>(e);
 			cmd.Merge();
 
-			Assert.True(!e.Has<float>());
+			Assert.False(e.Has<float>());
 		}
 	}
 }
