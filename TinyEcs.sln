@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B5D54911
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcs.Tests", "tests\TinyEcs.Tests.csproj", "{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyEcsMonogameSample", "src\TinyEcs.MonogameSample\TinyEcsMonogameSample.csproj", "{92A3C830-B742-42AD-AF5A-12E6A3613D6F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -25,6 +27,10 @@ Global
 		{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{92A3C830-B742-42AD-AF5A-12E6A3613D6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92A3C830-B742-42AD-AF5A-12E6A3613D6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92A3C830-B742-42AD-AF5A-12E6A3613D6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92A3C830-B742-42AD-AF5A-12E6A3613D6F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -32,6 +38,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{7756CBAB-A03A-4AE7-A2AF-3E8FD8FD5C6D} = {E5F5B263-28C0-415E-BBD3-AA370FEE093A}
 		{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36} = {B5D54911-41E4-4FB5-BA9F-4E5E71FCBDA3}
+		{92A3C830-B742-42AD-AF5A-12E6A3613D6F} = {E5F5B263-28C0-415E-BBD3-AA370FEE093A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {41A04670-264C-4A26-AE2E-874466E06CF9}
