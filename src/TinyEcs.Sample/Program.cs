@@ -54,6 +54,15 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 //	}
 //}
 
+var world = new World();
+var w0 = world.SpawnEmpty();
+w0.Despawn();
+
+var w1 = world.SpawnEmpty();
+var oo = w1.IsAlive();
+
+
+Console.WriteLine();
 
 var ecs = new Ecs();
 

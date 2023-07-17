@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcs", "src\TinyEcs.csproj", "{7756CBAB-A03A-4AE7-A2AF-3E8FD8FD5C6D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcs", "src\TinyEcs.Sample\TinyEcs.csproj", "{7756CBAB-A03A-4AE7-A2AF-3E8FD8FD5C6D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E5F5B263-28C0-415E-BBD3-AA370FEE093A}"
 EndProject

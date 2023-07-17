@@ -6,6 +6,7 @@
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>preview</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
 	
@@ -25,6 +26,11 @@
 		<TrimMode>link</TrimMode>
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
 	</PropertyGroup>
+
+
+	<ItemGroup>
+		<Compile Include = "../TinyEcs.Core/**/*.cs" />
+  	</ItemGroup>
 
 
 	<ItemGroup>
