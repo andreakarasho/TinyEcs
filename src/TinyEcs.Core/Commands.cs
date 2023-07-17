@@ -3,22 +3,23 @@ namespace TinyEcs;
 public unsafe sealed class Commands : IDisposable
 {
 	private readonly World _main, _mergeWorld;
-	private readonly QueryBuilder _entityCreated, _entityDestroyed, _componentSet, _componentUnset, _toBeDestroyed;
-
+	private readonly QueryBuilder _entityDestroyed, 
+		_componentSet, _componentUnset, _componentEdited, 
+		_toBeDestroyed;
 
 	public Commands(World main)
 	{
 		_main = main;
 		_mergeWorld = new World();
 
-		_entityCreated = _mergeWorld.Query()
-			.With<EntityCreated>();
-
 		_entityDestroyed = _mergeWorld.Query()
 			.With<EntityDestroyed>();
 
 		_componentSet = _mergeWorld.Query()
 			.With<ComponentAdded>();
+
+        _componentEdited = _mergeWorld.Query()
+            .With<ComponentEdited>();
 
 		_componentUnset = _mergeWorld.Query()
 			.With<ComponentRemoved>();
@@ -33,71 +34,13 @@ public unsafe sealed class Commands : IDisposable
 	public void Merge()
 	{
 		// we pass the Commands, but must not be used to edit entities!
-		QueryEx.Fetch(_mergeWorld, _entityCreated.ID, this, &EntityCreatedSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _componentSet.ID, this, &ComponentSetSystem, 0f);
+        QueryEx.Fetch(_mergeWorld, _componentEdited.ID, this, &ComponentEditedSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _componentUnset.ID, this, &ComponentUnsetSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _entityDestroyed.ID, this, &EntityDestroyedSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _toBeDestroyed.ID, this, &MarkDestroySystem, 0f);
 	}
 
-
-	static void EntityCreatedSystem(Commands cmds, ref EntityIterator it)
-	{
-		var archetype = it.Archetype;
-		var main = cmds.Main;
-		var merge = it.World;
-
-		var created = TypeInfo<EntityCreated>.GetID(merge);
-		var destroyed = TypeInfo<EntityDestroyed>.GetID(merge);
-		var componentAdded = TypeInfo<ComponentAdded>.GetID(merge);
-		var componentRemoved = TypeInfo<ComponentRemoved>.GetID(merge);
-		var markDestroy = TypeInfo<MarkDestroy>.GetID(merge);
-		var entityEnabledCmp = TypeInfo<EcsEnabled>.GetID(merge);
-		var ecsComp = TypeInfo<EcsComponent>.GetID(merge);
-
-		var opA = it.Field<EntityCreated>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			//var target = main.SpawnEmpty();
-
-			//for (int j = 0; j < archetype.ComponentInfo.Length; ++j)
-			//{
-			//	ref readonly var cmp = ref archetype.ComponentInfo[j];
-
-			//	// TODO: find a better way to find unecessary components
-			//	//       maybe apply a flag to the component ID?
-			//	if (cmp.ID == created || cmp.ID == destroyed ||
-			//		cmp.ID == componentAdded || cmp.ID == componentRemoved ||
-			//		cmp.ID == markDestroy || cmp.ID == entityViewComp ||
-			//		cmp.ID == entityEnabledCmp || cmp.ID == ecsComp)
-			//		continue;
-
-			//	var raw = archetype.GetComponentRaw(cmp.ID, i, 1);
-				
-
-			//	Debug.Assert(main.IsAlive(cmp.ID));
-			//	Debug.Assert(main.Has<EcsComponent>(cmp.ID));
-			//	var id = TypeInfo<Serial>.GetID(main);
-			//	ref var ff = ref main.Get<EcsComponent>(id);
-
-			//	var e = merge.Spawn()
-			//		.Set<MarkDestroy>()
-			//		.Set(new ComponentAdded()
-			//		{
-			//			Target = target,
-			//			Component = cmp.ID,
-			//			ID = cmp.ID
-			//		})
-			//		.Set(cmp);
-
-			//	merge.SetComponentData(e, cmp.ID, raw);
-			//}
-
-			//main.Set(target, new EntityView(main.ID, target));
-			//main.Set<EcsEnabled>(target);
-		}
-	}
 
 	static void EntityDestroyedSystem(Commands cmds, ref EntityIterator it)
 	{
@@ -128,10 +71,33 @@ public unsafe sealed class Commands : IDisposable
 		}
 	}
 
+    static void ComponentEditedSystem(Commands cmds, ref EntityIterator it)
+    {
+        var main = cmds.Main;
+
+        var opA = it.Field<ComponentEdited>();
+
+        for (int i = 0; i < it.Count; ++i)
+		{
+			ref var op = ref opA[i];
+
+			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
+			main.SetComponentData(op.Target, op.Component, raw);
+
+			// var index = it.Archetype.GetComponentIndex(op.ID);
+            // if (index < 0)
+            //     continue;
+            // ref readonly var meta = ref it.Archetype.ComponentInfo[index];
+
+			// main.SetComponentData(op.Target, op.Component, new ReadOnlySpan<byte>((byte*) op.Data, meta.Size));
+
+            // op.Pool.Free(op.Data);
+		}
+    }
+
 	static void ComponentUnsetSystem(Commands cmds, ref EntityIterator it)
 	{
 		var main = cmds.Main;
-		var merge = it.World;
 
 		var opA = it.Field<ComponentRemoved>();
 
@@ -192,7 +158,7 @@ public unsafe sealed class Commands : IDisposable
 		Debug.Assert(_main.IsAlive(entity));
 
 		var idMain = TypeInfo<T>.GetID(_main);
-		var idMerge = TypeInfo<ComponentPoc<T>>.GetID(_mergeWorld);
+		var idMerge = TypeInfo<ComponentPocWithValue<T>>.GetID(_mergeWorld);
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -202,7 +168,7 @@ public unsafe sealed class Commands : IDisposable
 				Component = idMain,
 				ID = idMerge
 			})
-			.Set(new ComponentPoc<T>() { Value = cmp });
+			.Set(new ComponentPocWithValue<T>() { Value = cmp });
 	}
 
 	public void Set<T0, T1>(EntityID entity) 
@@ -215,19 +181,6 @@ public unsafe sealed class Commands : IDisposable
 		var idMain1 = TypeInfo<T1>.GetID(_main);
 
 		Add(entity, idMain0, idMain1);
-
-		//var pair = IDOp.Pair(idMain0, idMain1);
-		//var idMerge = TypeInfo<ComponentPocPair<T0, T1>>.GetID(_mergeWorld);
-
-		//_mergeWorld.Spawn()
-		//	.Set<MarkDestroy>()
-		//	.Set(new ComponentAdded()
-		//	{
-		//		Target = entity,
-		//		Component = pair,
-		//		ID = idMerge
-		//	})
-		//	.Set(new ComponentPocPair<T0, T1>() { });
 	}
 
 	public void Add(EntityID entity, EntityID cmp)
@@ -271,7 +224,7 @@ public unsafe sealed class Commands : IDisposable
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity) || _mergeWorld.IsAlive(entity));
+		Debug.Assert(_main.IsAlive(entity));
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -282,6 +235,32 @@ public unsafe sealed class Commands : IDisposable
 			});
 	}
 
+    public ref T Get<T>(EntityID entity) where T : unmanaged
+    {
+        Debug.Assert(_main.IsAlive(entity));
+
+        if (_main.Has<T>(entity))
+        {
+            return ref _main.Get<T>(entity);
+        }
+
+		var idMain = TypeInfo<T>.GetID(_main);
+		var idMerge = TypeInfo<ComponentPocWithValue<T>>.GetID(_mergeWorld);
+
+		Unsafe.SkipInit<T>(out var value);
+
+		var e = _mergeWorld.Spawn()
+			.Set<MarkDestroy>()
+			.Set(new ComponentEdited()
+			{
+				Target = entity,
+				Component = idMain,
+				ID = idMerge,
+			})
+			.Set(new ComponentPocWithValue<T>() { Value = value });
+
+		return ref e.Get<ComponentPocWithValue<T>>().Value;
+    }
 	
 	public void Dispose()
 	{
@@ -299,6 +278,15 @@ public unsafe sealed class Commands : IDisposable
 	{
 		public EntityID Target;
 	}
+
+    struct ComponentEdited
+    {
+        public EntityID Target;
+        public EntityID ID;
+        public EntityID Component;
+        // public void* Data;
+		// public UnsafeMemory Pool;
+    }
 
 	struct ComponentAdded
 	{
@@ -326,17 +314,9 @@ public unsafe sealed class Commands : IDisposable
 		public EntityID Second;
 	}
 
-	struct ComponentPoc<T> where T : unmanaged
+	struct ComponentPocWithValue<T> where T : unmanaged
 	{
 		public T Value;
-	}
-
-	struct ComponentPocPair<T0, T1> 
-		where T0 : unmanaged
-		where T1 : unmanaged
-	{
-		public T0 First;
-		public T1 Second;
 	}
 }
 
@@ -396,4 +376,9 @@ public readonly ref struct CommandEntityView
 		_cmds.Despawn(_id);
 		return this;
 	}
+
+    public readonly ref T Get<T>() where T : unmanaged
+    {
+        return ref _cmds.Get<T>(_id);
+    }
 }

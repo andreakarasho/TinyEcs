@@ -54,15 +54,6 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 //	}
 //}
 
-var world = new World();
-var w0 = world.SpawnEmpty();
-w0.Despawn();
-
-var w1 = world.SpawnEmpty();
-var oo = w1.IsAlive();
-
-
-Console.WriteLine();
 
 var ecs = new Ecs();
 
@@ -84,7 +75,16 @@ var id = ecs.Spawn()
 	.Set(childOf.ID, root)
 	.ID;
 
-//ecs.Step(0f);
+var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9});
+
+ref var p = ref ent.Get<Position>();
+p.X = 9999;
+p.Y = 12;
+p.Z = 0.2f;
+
+ecs.Step(0f);
+
+ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
 
 var ok = ecs.Entity(id)
 	.Has<Likes, Dogs>();
