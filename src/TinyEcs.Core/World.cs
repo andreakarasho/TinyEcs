@@ -278,15 +278,15 @@ public sealed class World : IDisposable
 
 	public void RemoveChildren(EntityID id)
 	{
-		if (!Has<EcsParent>(id))
-			return;
+		// if (!Has<EcsParent>(id))
+		// 	return;
 
-		ref var parent = ref Get<EcsParent>(id);
+		// ref var parent = ref Get<EcsParent>(id);
 
-		while (parent.ChildrenCount > 0)
-		{
-			Detach(parent.FirstChild);
-		}
+		// while (parent.ChildrenCount > 0)
+		// {
+		// 	Detach(parent.FirstChild);
+		// }
 	}
 }
 

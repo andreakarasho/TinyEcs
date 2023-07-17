@@ -84,7 +84,7 @@ var id = ecs.Spawn()
 	.Set(childOf.ID, root)
 	.ID;
 
-ecs.Step(0f);
+//ecs.Step(0f);
 
 var ok = ecs.Entity(id)
 	.Has<Likes, Dogs>();

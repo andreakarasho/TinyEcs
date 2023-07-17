@@ -18,7 +18,7 @@ sealed unsafe class Archetype
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
 		_components = new EntityID[components.Length];
-		ComponentInfo = new EcsComponent[components.Length];
+		ComponentInfo = components.ToArray();
 		_entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
 		_componentsData = new byte[components.Length][];
 		_edgesLeft = new List<EcsEdge>();

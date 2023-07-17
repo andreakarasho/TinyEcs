@@ -13,7 +13,7 @@ sealed class EntitySparseSet<T>
 	private Chunk[] _chunks;
 	private int _count;
 	private EntityID _maxID;
-	private Vec<EntityID> _dense;
+	private readonly Vec<EntityID> _dense;
 
 	public EntitySparseSet()
 	{
