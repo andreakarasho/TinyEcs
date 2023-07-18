@@ -35,6 +35,9 @@ public sealed class World : IDisposable
 
 	public EntityID Component<T>() where T : unmanaged
 		=> TypeInfo<T>.GetID(this);
+		
+	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+		=> IDOp.Pair(Component<TKind>(), Component<TTarget>());
 
 	public QueryBuilder Query()
 	{
