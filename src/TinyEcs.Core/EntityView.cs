@@ -85,7 +85,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<TKind, TTarget>()
-		where TKind : unmanaged 
+		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
 		var world = World;

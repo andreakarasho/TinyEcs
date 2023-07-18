@@ -54,7 +54,7 @@ public readonly ref struct EntityIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID Entity(int row) 
+	public readonly EntityID Entity(int row)
 		=> _archetype.Entities[row];
 }
 

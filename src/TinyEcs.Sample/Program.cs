@@ -1,4 +1,4 @@
-﻿// https://github.com/jasonliang-dev/entity-component-system
+// https://github.com/jasonliang-dev/entity-component-system
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -75,7 +75,7 @@ var id = ecs.Spawn()
 	.Set(childOf.ID, root)
 	.ID;
 
-var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9});
+var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9 });
 
 ref var p = ref ent.Get<Position>();
 p.X = 9999;
@@ -93,7 +93,7 @@ var qry1 = ecs.Query().With(childOf.ID, root);
 
 foreach (var it in qry1)
 {
-	
+
 }
 
 ecs.Entity(id).Each(s =>
@@ -162,7 +162,7 @@ while (true)
 	{
 		ecs.Step(cur);
 	}
-	
+
 	last = start;
 	start = sw.ElapsedMilliseconds;
 
@@ -201,7 +201,7 @@ static void ParseQuery(Commands cmds, ref EntityIterator it)
 		//cmds.Entity(it.Entity(i))
 		//	.Set(1f);
 
-		
+
 	}
 }
 
@@ -218,12 +218,12 @@ static void PrintWarnSystem(Commands cmds, ref EntityIterator it)
 
 enum TileType
 {
-    Land,
-    Static
+	Land,
+	Static
 }
 
 
-struct Serial { public uint Value;  }
+struct Serial { public uint Value; }
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
 struct PlayerTag { public ulong ID; }

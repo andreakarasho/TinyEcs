@@ -3,8 +3,8 @@ namespace TinyEcs;
 public unsafe sealed class Commands : IDisposable
 {
 	private readonly World _main, _mergeWorld;
-	private readonly QueryBuilder _entityDestroyed, 
-		_componentSet, _componentUnset, _componentEdited, 
+	private readonly QueryBuilder _entityDestroyed,
+		_componentSet, _componentUnset, _componentEdited,
 		_toBeDestroyed;
 
 	public Commands(World main)
@@ -18,8 +18,8 @@ public unsafe sealed class Commands : IDisposable
 		_componentSet = _mergeWorld.Query()
 			.With<ComponentAdded>();
 
-        _componentEdited = _mergeWorld.Query()
-            .With<ComponentEdited>();
+		_componentEdited = _mergeWorld.Query()
+			.With<ComponentEdited>();
 
 		_componentUnset = _mergeWorld.Query()
 			.With<ComponentRemoved>();
@@ -35,7 +35,7 @@ public unsafe sealed class Commands : IDisposable
 	{
 		// we pass the Commands, but must not be used to edit entities!
 		QueryEx.Fetch(_mergeWorld, _componentSet.ID, this, &ComponentSetSystem, 0f);
-        QueryEx.Fetch(_mergeWorld, _componentEdited.ID, this, &ComponentEditedSystem, 0f);
+		QueryEx.Fetch(_mergeWorld, _componentEdited.ID, this, &ComponentEditedSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _componentUnset.ID, this, &ComponentUnsetSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _entityDestroyed.ID, this, &EntityDestroyedSystem, 0f);
 		QueryEx.Fetch(_mergeWorld, _toBeDestroyed.ID, this, &MarkDestroySystem, 0f);
@@ -71,13 +71,13 @@ public unsafe sealed class Commands : IDisposable
 		}
 	}
 
-    static void ComponentEditedSystem(Commands cmds, ref EntityIterator it)
-    {
-        var main = cmds.Main;
+	static void ComponentEditedSystem(Commands cmds, ref EntityIterator it)
+	{
+		var main = cmds.Main;
 
-        var opA = it.Field<ComponentEdited>();
+		var opA = it.Field<ComponentEdited>();
 
-        for (int i = 0; i < it.Count; ++i)
+		for (int i = 0; i < it.Count; ++i)
 		{
 			ref var op = ref opA[i];
 
@@ -85,15 +85,15 @@ public unsafe sealed class Commands : IDisposable
 			main.SetComponentData(op.Target, op.Component, raw);
 
 			// var index = it.Archetype.GetComponentIndex(op.ID);
-            // if (index < 0)
-            //     continue;
-            // ref readonly var meta = ref it.Archetype.ComponentInfo[index];
+			// if (index < 0)
+			//     continue;
+			// ref readonly var meta = ref it.Archetype.ComponentInfo[index];
 
 			// main.SetComponentData(op.Target, op.Component, new ReadOnlySpan<byte>((byte*) op.Data, meta.Size));
 
-            // op.Pool.Free(op.Data);
+			// op.Pool.Free(op.Data);
 		}
-    }
+	}
 
 	static void ComponentUnsetSystem(Commands cmds, ref EntityIterator it)
 	{
@@ -128,7 +128,7 @@ public unsafe sealed class Commands : IDisposable
 	}
 
 	public CommandEntityView Spawn()
-	{		
+	{
 		var mainEnt = _main.SpawnEmpty();
 		//var mergeEnt = _mergeWorld.Spawn()
 		//	.Set<MarkDestroy>()
@@ -171,8 +171,8 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentPocWithValue<T>() { Value = cmp });
 	}
 
-	public void Set<T0, T1>(EntityID entity) 
-		where T0 : unmanaged 
+	public void Set<T0, T1>(EntityID entity)
+		where T0 : unmanaged
 		where T1 : unmanaged
 	{
 		Debug.Assert(_main.IsAlive(entity));
@@ -235,14 +235,14 @@ public unsafe sealed class Commands : IDisposable
 			});
 	}
 
-    public ref T Get<T>(EntityID entity) where T : unmanaged
-    {
-        Debug.Assert(_main.IsAlive(entity));
+	public ref T Get<T>(EntityID entity) where T : unmanaged
+	{
+		Debug.Assert(_main.IsAlive(entity));
 
-        if (_main.Has<T>(entity))
-        {
-            return ref _main.Get<T>(entity);
-        }
+		if (_main.Has<T>(entity))
+		{
+			return ref _main.Get<T>(entity);
+		}
 
 		var idMain = _main.Component<T>();
 		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
@@ -260,8 +260,8 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentPocWithValue<T>() { Value = value });
 
 		return ref e.Get<ComponentPocWithValue<T>>().Value;
-    }
-	
+	}
+
 	public void Dispose()
 	{
 		_mergeWorld?.Dispose();
@@ -279,14 +279,14 @@ public unsafe sealed class Commands : IDisposable
 		public EntityID Target;
 	}
 
-    struct ComponentEdited
-    {
-        public EntityID Target;
-        public EntityID ID;
-        public EntityID Component;
-        // public void* Data;
+	struct ComponentEdited
+	{
+		public EntityID Target;
+		public EntityID ID;
+		public EntityID Component;
+		// public void* Data;
 		// public UnsafeMemory Pool;
-    }
+	}
 
 	struct ComponentAdded
 	{
@@ -301,7 +301,7 @@ public unsafe sealed class Commands : IDisposable
 		public EntityID Component;
 	}
 
-	struct MarkDestroy{ }
+	struct MarkDestroy { }
 
 	struct ComponentPocEntity
 	{
@@ -357,8 +357,8 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Set<TKind, TTarget>() 
-		where TKind : unmanaged 
+	public readonly CommandEntityView Set<TKind, TTarget>()
+		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
 		_cmds.Set<TKind, TTarget>(_id);
@@ -377,8 +377,8 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-    public readonly ref T Get<T>() where T : unmanaged
-    {
-        return ref _cmds.Get<T>(_id);
-    }
+	public readonly ref T Get<T>() where T : unmanaged
+	{
+		return ref _cmds.Get<T>(_id);
+	}
 }

@@ -23,11 +23,11 @@ public unsafe ref struct QueryIterator
 			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);
 
 		} while (_stack.Count > 0 && _current == null);
-		
+
 		return _current != null;
 	}
 
-	public readonly EntityIterator Current => new (_current, 0f);
+	public readonly EntityIterator Current => new(_current, 0f);
 
 	public readonly void Dispose()
 	{
@@ -38,7 +38,7 @@ public unsafe ref struct QueryIterator
 
 internal static class QueryEx
 {
-	public static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate* <Commands, ref EntityIterator, void> system, float deltaTime)
+	public static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<Commands, ref EntityIterator, void> system, float deltaTime)
 	{
 		Debug.Assert(world.Has<EcsQueryBuilder>(query));
 

@@ -123,7 +123,7 @@ sealed unsafe class Archetype
 		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
 	}
 
-	public void Clear() 
+	public void Clear()
 		=> _count = 0;
 
 	static void Copy(Archetype from, int fromRow, Archetype to, int toRow)

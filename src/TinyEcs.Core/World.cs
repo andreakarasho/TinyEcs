@@ -22,7 +22,7 @@ public sealed class World : IDisposable
 
 	public EntityID ID { get; }
 
-	public int EntityCount 
+	public int EntityCount
 		=> _entities.Length;
 
 
@@ -51,7 +51,7 @@ public sealed class World : IDisposable
 				.Set<EcsQuery>());
 
 	public EntityView Spawn()
-		=> SpawnEmpty().Set<EcsEnabled>();	
+		=> SpawnEmpty().Set<EcsEnabled>();
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -181,7 +181,7 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentRaw(component, record.Row, 1);
 	}
 
-    public void Set<T>(EntityID entity, T component = default) where T : unmanaged
+	public void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
 		SetComponentData(entity, Component<T>(), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
 	}

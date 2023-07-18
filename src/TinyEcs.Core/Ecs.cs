@@ -1,4 +1,4 @@
-﻿namespace TinyEcs;
+namespace TinyEcs;
 
 
 sealed unsafe class Ecs
