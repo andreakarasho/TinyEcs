@@ -45,12 +45,8 @@ public readonly ref struct EntityIterator
 	{
 		var id = World.Component<T>();
 		var data = _archetype.GetComponentRaw(id, 0, Count);
-		if (data.IsEmpty)
-			return false;
-
-		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(data));
-
-		return !Unsafe.IsNullRef(ref value);
+		
+		return !data.IsEmpty;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

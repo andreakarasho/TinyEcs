@@ -62,6 +62,7 @@ var vel = ecs.Spawn();
 
 var likes = ecs.Spawn();
 var cats = ecs.Spawn();
+var flowers = ecs.Spawn();
 
 var childOf = ecs.Spawn();
 
@@ -72,6 +73,7 @@ var id = ecs.Spawn()
 	.Set<Likes, Dogs>()
 	.Set(pos.ID)
 	.Set(likes.ID, cats.ID)
+	.Set(likes.ID, flowers.ID)
 	.Set(childOf.ID, root)
 	.ID;
 
@@ -101,23 +103,17 @@ foreach (var it in qry1)
 
 ecs.Entity(id).Each(s =>
 {
-	if (IDOp.IsPair(s.ID))
+	if (s.IsPair())
 	{
-		var first = IDOp.GetPairFirst(s.ID);
-		var second = IDOp.GetPairSecond(s.ID);
-
-		Console.WriteLine("pair: {0} {1}", first, second);
+		Console.WriteLine("pair: ({0}, {1})", s.First(), s.Second());
+	}
+	else if (s.IsEntity())
+	{
+		Console.WriteLine("entity: {0}", s.ID);
 	}
 	else
 	{
-		if (s.Has<EcsComponent>())
-		{
-			Console.WriteLine("entity {0} [component]", s.ID);
-		}
-		else
-		{
-			Console.WriteLine("entity {0} [entity]", s.ID);
-		}
+		Console.WriteLine("unknown: {0}", s.ID);
 	}
 });
 

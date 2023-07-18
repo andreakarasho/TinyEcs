@@ -107,6 +107,22 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		=> Has<EcsEnabled>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly bool IsEntity()
+		=> (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly bool IsPair()
+		=> IDOp.IsPair(ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityID First()
+		=> IDOp.GetPairFirst(ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityID Second()
+		=> IDOp.GetPairSecond(ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Each(Action<EntityView> action)
 	{
 		ref var record = ref World._entities.Get(ID);
