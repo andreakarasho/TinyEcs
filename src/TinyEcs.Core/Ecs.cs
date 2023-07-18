@@ -66,6 +66,9 @@ sealed unsafe class Ecs
 	public CommandEntityView Spawn()
 		=> _cmds.Spawn();
 
+	public EntityID Component<T>() where T : unmanaged
+		=> _world.Component<T>();
+
 	public void Despawn(EntityID entity)
 		=> _cmds.Despawn(entity);
 
