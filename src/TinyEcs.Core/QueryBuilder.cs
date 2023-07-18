@@ -32,7 +32,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With<T>() where T : unmanaged
 	{
-		World.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(World) | FLAG_WITH });
+		World.Set(ID, new EcsQueryParameter<T>() { Component = World.Component<T>() | FLAG_WITH });
 		return this;
 	}
 
@@ -41,7 +41,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
-		return With(TypeInfo<TKind>.GetID(World), TypeInfo<TTarget>.GetID(World));
+		return With(World.Component<TKind>(), World.Component<TTarget>());
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -62,7 +62,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder Without<T>() where T : unmanaged
 	{
-		World.Set(ID, new EcsQueryParameter<T>() { Component = TypeInfo<T>.GetID(World) | FLAG_WITHOUT });
+		World.Set(ID, new EcsQueryParameter<T>() { Component = World.Component<T>() | FLAG_WITHOUT });
 		return this;
 	}
 

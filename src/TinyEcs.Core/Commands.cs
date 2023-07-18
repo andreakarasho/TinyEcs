@@ -157,8 +157,8 @@ public unsafe sealed class Commands : IDisposable
 	{
 		Debug.Assert(_main.IsAlive(entity));
 
-		var idMain = TypeInfo<T>.GetID(_main);
-		var idMerge = TypeInfo<ComponentPocWithValue<T>>.GetID(_mergeWorld);
+		var idMain = _main.Component<T>();
+		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -177,8 +177,8 @@ public unsafe sealed class Commands : IDisposable
 	{
 		Debug.Assert(_main.IsAlive(entity));
 
-		var idMain0 = TypeInfo<T0>.GetID(_main);
-		var idMain1 = TypeInfo<T1>.GetID(_main);
+		var idMain0 = _main.Component<T0>();
+		var idMain1 = _main.Component<T1>();
 
 		Add(entity, idMain0, idMain1);
 	}
@@ -189,7 +189,7 @@ public unsafe sealed class Commands : IDisposable
 		Debug.Assert(_main.IsAlive(cmp));
 
 		var idMain = cmp;
-		var idMerge = TypeInfo<ComponentPocEntity>.GetID(_mergeWorld);
+		var idMerge = _mergeWorld.Component<ComponentPocEntity>();
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -209,7 +209,7 @@ public unsafe sealed class Commands : IDisposable
 		Debug.Assert(_main.IsAlive(second));
 
 		var idMain = IDOp.Pair(first, second);
-		var idMerge = TypeInfo<ComponentPocEntityPair>.GetID(_mergeWorld);
+		var idMerge = _mergeWorld.Component<ComponentPocEntityPair>();
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -231,7 +231,7 @@ public unsafe sealed class Commands : IDisposable
 			.Set(new ComponentRemoved()
 			{
 				Target = entity,
-				Component = TypeInfo<T>.GetID(_main)
+				Component = _main.Component<T>()
 			});
 	}
 
@@ -244,8 +244,8 @@ public unsafe sealed class Commands : IDisposable
             return ref _main.Get<T>(entity);
         }
 
-		var idMain = TypeInfo<T>.GetID(_main);
-		var idMerge = TypeInfo<ComponentPocWithValue<T>>.GetID(_mergeWorld);
+		var idMain = _main.Component<T>();
+		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
 
 		Unsafe.SkipInit<T>(out var value);
 

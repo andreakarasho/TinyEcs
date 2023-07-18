@@ -76,10 +76,10 @@ sealed unsafe class Ecs
 		=> _cmds.Unset<T>(entity);
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
-		=> _world.Set(TypeInfo<T>.GetID(_world), cmp);
+		=> _world.Set(_world.Component<T>(), cmp);
 
 	public ref T GetSingleton<T>() where T : unmanaged
-		=> ref _world.Get<T>(TypeInfo<T>.GetID(_world));
+		=> ref _world.Get<T>(_world.Component<T>());
 
 
 	public QueryBuilder Query()

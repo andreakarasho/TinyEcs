@@ -89,7 +89,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TTarget : unmanaged
 	{
 		var world = World;
-		var id = IDOp.Pair(TypeInfo<TKind>.GetID(world), TypeInfo<TTarget>.GetID(world));
+		var id = IDOp.Pair(world.Component<TKind>(), world.Component<TTarget>());
 
 		return world.Has(ID, id);
 	}

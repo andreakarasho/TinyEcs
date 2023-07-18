@@ -33,6 +33,9 @@ public sealed class World : IDisposable
 		_archRoot.Clear();
 	}
 
+	public EntityID Component<T>() where T : unmanaged
+		=> TypeInfo<T>.GetID(this);
+
 	public QueryBuilder Query()
 	{
 		var query = Spawn().Set<EcsQueryBuilder>();
@@ -180,18 +183,18 @@ public sealed class World : IDisposable
 
     public void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
-		SetComponentData(entity, TypeInfo<T>.GetID(this), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
+		SetComponentData(entity, Component<T>(), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	   => DetachComponent(entity, TypeInfo<T>.GetID(this));
+	   => DetachComponent(entity, Component<T>());
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, TypeInfo<T>.GetID(this));
+		=> Has(entity, Component<T>());
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		var raw = Get(entity, TypeInfo<T>.GetID(this));
+		var raw = Get(entity, Component<T>());
 
 		Debug.Assert(!raw.IsEmpty);
 		Debug.Assert(TypeInfo<T>.Size == raw.Length);

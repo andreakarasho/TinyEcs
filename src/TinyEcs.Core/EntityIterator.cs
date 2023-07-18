@@ -32,7 +32,7 @@ public readonly ref struct EntityIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly unsafe Span<T> Field<T>() where T : unmanaged
 	{
-		var id = TypeInfo<T>.GetID(World);
+		var id = World.Component<T>();
 		ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(_archetype.GetComponentRaw(id, 0, Count)));
 
 		Debug.Assert(!Unsafe.IsNullRef(ref value));
@@ -43,7 +43,7 @@ public readonly ref struct EntityIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly unsafe bool Has<T>() where T : unmanaged
 	{
-		var id = TypeInfo<T>.GetID(World);
+		var id = World.Component<T>();
 		var data = _archetype.GetComponentRaw(id, 0, Count);
 		if (data.IsEmpty)
 			return false;
