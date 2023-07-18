@@ -1,5 +1,5 @@
 # TinyEcs
-Small project borns by the need of a reflection-free dotnet ECS library.<br>
+Small project born by the need of a reflection-free dotnet ECS library.<br>
 NativeAOT compatible.
 
 # Requirements
