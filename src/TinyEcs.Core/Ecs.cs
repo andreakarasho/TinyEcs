@@ -87,6 +87,12 @@ sealed unsafe class Ecs
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
 
+	public void SetSingleton<T>(T cmp = default) where T : unmanaged
+		=> _world.SetSingleton(cmp);
+
+	public ref T GetSingleton<T>() where T : unmanaged
+		=> ref _world.GetSingleton<T>();
+
 	public unsafe void Step(float delta)
 	{
 		_cmds.Merge();

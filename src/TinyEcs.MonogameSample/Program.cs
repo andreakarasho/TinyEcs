@@ -18,12 +18,7 @@ sealed unsafe class TinyGame : Game
 
     private readonly GraphicsDeviceManager _graphicsDeviceManager;
     private SpriteBatch? _spriteBatch;
-    private Texture2D? _texture;
     private Ecs _ecs;
-
-    public static SpriteBatch Batch { get; private set; }
-    public static Texture2D Texture { get; private set; }
-
 
     public TinyGame()
     {
@@ -37,7 +32,7 @@ sealed unsafe class TinyGame : Game
     {
         base.Initialize();
 
-        Batch = _spriteBatch = new SpriteBatch(GraphicsDevice);
+        _spriteBatch = new SpriteBatch(GraphicsDevice);
 
         _graphicsDeviceManager.SynchronizeWithVerticalRetrace = false;
         _graphicsDeviceManager.PreferredBackBufferWidth = WINDOW_WIDTH;
@@ -45,9 +40,16 @@ sealed unsafe class TinyGame : Game
         _graphicsDeviceManager.ApplyChanges();
 
         _ecs = new Ecs();
+
+        var deviceHandle = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
+        var batcherHandle = Assets<SpriteBatch>.Register("device", _spriteBatch);
+
+        _ecs.SetSingleton(new GameState(deviceHandle, batcherHandle));
         
-        var qry = _ecs.Query().With<Position>().With<Velocity>().With<Rotation>();
+        _ecs.AddStartupSystem(&Setup);
         _ecs.AddStartupSystem(&SpawnEntities);
+
+        var qry = _ecs.Query().With<Position>().With<Velocity>().With<Rotation>();
         _ecs.AddSystem(&MoveSystem)
             .SetQuery(qry.ID);
         _ecs.AddSystem(&CheckBorderSystem)
@@ -60,14 +62,6 @@ sealed unsafe class TinyGame : Game
 
         _ecs.AddSystem(&PrintMessage)
             .SetTick(1f);
-    }
-
-    protected override void LoadContent()
-    {
-        // Texture = _texture = new Texture2D(GraphicsDevice, 1, 1, false, SurfaceFormat.Color);
-        // _texture.SetData(new Color[] { Color.White });
-
-        Texture = _texture = Texture2D.FromFile(GraphicsDevice, "Content/pepe.png");
     }
 
     protected override void Update(GameTime gameTime)
@@ -87,9 +81,17 @@ sealed unsafe class TinyGame : Game
         Console.WriteLine("print!");
     }
 
+    static void Setup(Commands commands, ref EntityIterator it)
+    {
+        
+    }
+
     static void SpawnEntities(Commands commands, ref EntityIterator it)
     {
         var rnd = new Random();
+        ref var gameState = ref it.World.GetSingleton<GameState>();
+        var texture = Texture2D.FromFile(gameState.Device.GetValue(), Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
+        var textureHandle = Assets<Texture2D>.Register("texture", texture);
 
         for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
         {
@@ -102,7 +104,8 @@ sealed unsafe class TinyGame : Game
                 })
                 .Set(new Sprite() { 
                     Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256)),
-                    Scale = rnd.NextSingle()
+                    Scale = rnd.NextSingle(),
+                    Texture = textureHandle
                 })
                 .Set(new Rotation() { 
                     Value = 0f, 
@@ -166,19 +169,25 @@ sealed unsafe class TinyGame : Game
 
     static void BeginRender(Commands commands, ref EntityIterator it)
     {
-        Batch.GraphicsDevice.Clear(Color.Black);
-        Batch.Begin();
+        ref var gameState = ref it.World.GetSingleton<GameState>();
+        var batch = gameState.Batch.GetValue();
+
+        batch.GraphicsDevice.Clear(Color.Black);
+        batch.Begin();
     }
 
     static void EndRender(Commands commands, ref EntityIterator it)
     {
-        Batch.End();
+        ref var gameState = ref it.World.GetSingleton<GameState>();
+        var batch = gameState.Batch.GetValue();
+
+        batch.End();
     }
 
     static void Render(Commands commands, ref EntityIterator it)
     {
-        var batch = Batch;
-        var texture = Texture;
+        ref var gameState = ref it.World.GetSingleton<GameState>();
+        var batch = gameState.Batch.GetValue();
 
         var p = it.Field<Position>();
         var s = it.Field<Sprite>();
@@ -192,7 +201,7 @@ sealed unsafe class TinyGame : Game
             ref var rotation = ref r[i];
 
             batch.Draw(
-                texture,
+                sprite.Texture,
                 pos.Value,
                 null,
                 sprite.Color,
@@ -208,5 +217,69 @@ sealed unsafe class TinyGame : Game
 
 struct Position { public Vector2 Value; }
 struct Velocity { public Vector2 Value; }
-struct Sprite { public Color Color; public float Scale; }
+struct Sprite { public Color Color; public float Scale; public Handle<Texture2D> Texture; }
 struct Rotation { public float Value; public float Acceleration; }
+
+
+readonly struct GameState
+{
+    public readonly Handle<GraphicsDevice> Device;
+    public readonly Handle<SpriteBatch> Batch;
+
+    public GameState(Handle<GraphicsDevice> device, Handle<SpriteBatch> batch)
+    {
+        Device = device;
+        Batch = batch;
+    }
+}
+
+public static class Assets<T>
+{
+    private static T[] assets = new T[32];
+    private static readonly Dictionary<string, int> identifierToSlot = new Dictionary<string, int>();
+    private static int nextFreeSlot;
+
+    public static int Count { get; private set; }
+
+    public static Handle<T> Register(string identifier, T asset)
+    {
+        if (identifierToSlot.ContainsKey(identifier))
+            throw new Exception("Cannot register multiple assets with the same name: " + identifier);
+
+        int slot = nextFreeSlot++;
+
+        if (slot >= assets.Length)
+            Array.Resize(ref assets, assets.Length * 2);
+
+        assets[slot] = asset;
+        identifierToSlot[identifier] = slot;
+
+        return new Handle<T>(slot);
+    }
+
+    public static Handle<T> Get(string identifier)
+    {
+        if (!identifierToSlot.TryGetValue(identifier, out int value))
+            throw new Exception("Asset does not exist: " + identifier);
+
+        return new Handle<T>(value);
+    }
+
+    internal static T Get(int slot) => assets[slot];
+
+    internal static bool Has(string identifier) => identifierToSlot.ContainsKey(identifier);
+}
+
+public readonly struct Handle<T>
+{
+    private readonly int slot;
+
+    internal Handle(int slot)
+    {
+        this.slot = slot;
+    }
+
+    public readonly T GetValue() => Assets<T>.Get(slot);
+
+    public static implicit operator T(Handle<T> handle) => handle.GetValue();
+}
