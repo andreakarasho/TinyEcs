@@ -1,6 +1,5 @@
 namespace TinyEcs;
 
-
 sealed unsafe class Ecs
 {
 	private readonly World _world;
@@ -69,24 +68,13 @@ sealed unsafe class Ecs
 	public EntityID Component<T>() where T : unmanaged
 		=> _world.Component<T>();
 	
-	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public EntityID Component<TKind, TTarget>() 
+	where TKind : unmanaged 
+	where TTarget : unmanaged
 		=> _world.Component<TKind, TTarget>();
 
 	public void Despawn(EntityID entity)
 		=> _cmds.Despawn(entity);
-
-	public void Set<T>(EntityID entity, T value = default) where T : unmanaged
-		=> _cmds.Set(entity, value);
-
-	public void Unset<T>(EntityID entity) where T : unmanaged
-		=> _cmds.Unset<T>(entity);
-
-	public void SetSingleton<T>(T cmp = default) where T : unmanaged
-		=> _world.Set(_world.Component<T>(), cmp);
-
-	public ref T GetSingleton<T>() where T : unmanaged
-		=> ref _world.Get<T>(_world.Component<T>());
-
 
 	public QueryBuilder Query()
 		=> _world.Query();
@@ -154,7 +142,6 @@ sealed unsafe class Ecs
 				sys.Func(cmds, ref emptyIt);
 			}
 		}
-
 	}
 }
 

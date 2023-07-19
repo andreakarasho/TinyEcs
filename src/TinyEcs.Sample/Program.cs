@@ -68,9 +68,11 @@ var childOf = ecs.Spawn();
 
 var root = ecs.Spawn().ID;
 
+
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
 	.Set<Likes, Dogs>()
+	.Set<Likes, Apples>()
 	.Set(pos.ID)
 	.Set(likes.ID, cats.ID)
 	.Set(likes.ID, flowers.ID)
@@ -229,3 +231,4 @@ struct PlayerTag { public ulong ID; }
 
 struct Likes { }
 struct Dogs { }
+struct Apples { }

@@ -205,6 +205,12 @@ public sealed class World : IDisposable
 		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
 	}
 
+	public void SetSingleton<T>(T cmp = default) where T : unmanaged
+		=> Set(Component<T>(), cmp);
+
+	public ref T GetSingleton<T>() where T : unmanaged
+		=> ref Get<T>(Component<T>());
+
 	public void AttachTo(EntityID childID, EntityID parentID)
 	{
 		//Detach(childID);
