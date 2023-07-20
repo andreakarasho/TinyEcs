@@ -35,7 +35,7 @@ public sealed class World : IDisposable
 
 	public EntityID Component<T>() where T : unmanaged
 		=> TypeInfo<T>.GetID(this);
-		
+
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 		=> IDOp.Pair(Component<TKind>(), Component<TTarget>());
 
@@ -114,7 +114,15 @@ public sealed class World : IDisposable
 
 		var initType = record.Archetype.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
-		Span<EcsComponent> span = stackalloc EcsComponent[cmpCount];
+
+		const int STACKALLOC_SIZE = 32;
+
+		EcsComponent[]? buffer = null;
+		Span<EcsComponent> span = cmpCount <= STACKALLOC_SIZE ?
+		 stackalloc EcsComponent[STACKALLOC_SIZE] :
+		 (buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount));
+
+		span = span[..cmpCount];
 
 		if (!add)
 		{
@@ -153,6 +161,11 @@ public sealed class World : IDisposable
 		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
 		record.Row = newRow;
 		record.Archetype = arch!;
+
+		if (buffer != null)
+		{
+			ArrayPool<EcsComponent>.Shared.Return(buffer);
+		}
 
 		return true;
 	}

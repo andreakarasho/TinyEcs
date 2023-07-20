@@ -45,7 +45,7 @@ public readonly ref struct EntityIterator
 	{
 		var id = World.Component<T>();
 		var data = _archetype.GetComponentRaw(id, 0, Count);
-		
+
 		return !data.IsEmpty;
 	}
 

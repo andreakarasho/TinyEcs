@@ -67,9 +67,9 @@ sealed unsafe class Ecs
 
 	public EntityID Component<T>() where T : unmanaged
 		=> _world.Component<T>();
-	
-	public EntityID Component<TKind, TTarget>() 
-	where TKind : unmanaged 
+
+	public EntityID Component<TKind, TTarget>()
+	where TKind : unmanaged
 	where TTarget : unmanaged
 		=> _world.Component<TKind, TTarget>();
 
@@ -86,6 +86,11 @@ sealed unsafe class Ecs
 	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
+
+	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system, in QueryBuilder query)
+		=> _world.System(system)
+			.Set<EcsSystemPhaseOnUpdate>()
+			.Set(new EcsQuery() { ID = query.ID });
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
 		=> _world.SetSingleton(cmp);
