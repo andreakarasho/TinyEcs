@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace TinyEcs;
 
 sealed unsafe class Archetype
@@ -124,7 +126,24 @@ sealed unsafe class Archetype
 	}
 
 	public void Clear()
-		=> _count = 0;
+	{
+		_count = 0;
+		_capacity = ARCHETYPE_INITIAL_CAPACITY;
+		Array.Resize(ref _entityIDs, _capacity);
+		ResizeComponentArray(_capacity);
+	}
+
+	public void Optimize()
+	{
+		var pow = (int) BitOperations.RoundUpToPowerOf2((uint) _count);
+		var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
+		if (newCapacity < _capacity)
+		{
+			_capacity = newCapacity;
+			Array.Resize(ref _entityIDs, _capacity);
+			ResizeComponentArray(_capacity);
+		}
+	}
 
 	static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
 	{

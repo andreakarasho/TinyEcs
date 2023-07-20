@@ -6,7 +6,6 @@ public sealed class World : IDisposable
 	private static EntityID _worldIDCount;
 
 	internal readonly Archetype _archRoot;
-	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 
 
@@ -29,8 +28,22 @@ public sealed class World : IDisposable
 	public void Dispose()
 	{
 		_entities.Clear();
-		_typeIndex.Clear();
 		_archRoot.Clear();
+	}
+
+	public void Optimize()
+	{
+		InternalOptimize(_archRoot);
+
+		static void InternalOptimize(Archetype root)
+		{
+			root.Optimize();
+
+			foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
+			{
+				InternalOptimize(edge.Archetype);
+			}
+		}
 	}
 
 	public EntityID Component<T>() where T : unmanaged
@@ -142,21 +155,28 @@ public sealed class World : IDisposable
 
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
 
-		var hash = ComponentHasher.Calculate(span);
 
-#if NET5_0_OR_GREATER
-		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
-		if (!exists)
+		var baseArch = record.Archetype;
+		var edges = add ? baseArch._edgesRight : baseArch._edgesLeft;
+
+		Archetype? arch = null;
+		foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
+		{
+			if (edge.ComponentID == component)
+			{
+				arch = edge.Archetype;
+				break;
+			}
+		}
+
+		// !add -> an archetype always exists!
+		// add -> archetype might not exist
+		Debug.Assert(add || (!add && arch != null));
+
+		if (arch == null)
 		{
 			arch = _archRoot.InsertVertex(record.Archetype, span, component);
 		}
-#else
-        if (!_typeIndex.TryGetValue(hash, out var arch))
-        {
-			arch = _archRoot.InsertVertex(record.Archetype, span, ref meta);
-            _typeIndex[hash] = arch;
-		}
-#endif
 
 		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
 		record.Row = newRow;
@@ -198,9 +218,11 @@ public sealed class World : IDisposable
 	}
 
 	public void Set<T>(EntityID entity, T component = default) where T : unmanaged
-	{
-		SetComponentData(entity, Component<T>(), MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size));
-	}
+		=> SetComponentData(
+				entity,
+				Component<T>(),
+				MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, byte>(ref component), TypeInfo<T>.Size)
+			);
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 	   => DetachComponent(entity, Component<T>());
@@ -320,40 +342,4 @@ struct EcsRecord
 {
 	public Archetype Archetype;
 	public int Row;
-}
-
-
-static class ComponentHasher
-{
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID Calculate(Span<EntityID> components)
-	{
-		unchecked
-		{
-			EntityID hash = 5381;
-
-			foreach (ref readonly var id in components)
-			{
-				hash = ((hash << 5) + hash) + id;
-			}
-
-			return hash;
-		}
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID Calculate(Span<EcsComponent> components)
-	{
-		unchecked
-		{
-			EntityID hash = 5381;
-
-			foreach (ref readonly var id in components)
-			{
-				hash = ((hash << 5) + hash) + id.ID;
-			}
-
-			return hash;
-		}
-	}
 }

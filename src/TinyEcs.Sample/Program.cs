@@ -54,7 +54,6 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 //	}
 //}
 
-
 var ecs = new Ecs();
 
 var pos = ecs.Spawn();
@@ -89,9 +88,9 @@ p.X = 9999;
 p.Y = 12;
 p.Z = 0.2f;
 
-//ecs.Step(0f);
+// ecs.Step(0f);
 
-ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
+// ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
 
 var ok = ecs.Entity(id)
 	.Has<Likes, Dogs>();
