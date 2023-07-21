@@ -7,7 +7,6 @@ public sealed class World : IDisposable
 
 	internal readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
-	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 
 	public World()
 	{
@@ -29,7 +28,6 @@ public sealed class World : IDisposable
 	{
 		_entities.Clear();
 		_archRoot.Clear();
-		_typeIndex.Clear();
 	}
 
 	public void Optimize()
