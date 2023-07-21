@@ -59,7 +59,7 @@ p.X = 9999;
 p.Y = 12;
 p.Z = 0.2f;
 
-//ecs.Step(0f);
+ecs.Step(0f);
 
 //ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
 

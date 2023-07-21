@@ -28,20 +28,6 @@ public struct EcsQuery
 	public EntityID ID;
 }
 
-
-public struct EcsQueryParameterWith
-{
-}
-
-public struct EcsQueryParameterWithout
-{
-}
-
-public struct EcsQueryParameter<T> where T : unmanaged
-{
-	public EntityID Component;
-}
-
 public unsafe readonly struct EcsSystem
 {
 	public readonly delegate* managed<Commands, ref EntityIterator, void> Func;

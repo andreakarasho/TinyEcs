@@ -54,30 +54,22 @@ internal static class QueryEx
 		var withIdx = 0;
 		var withoutIdx = components.Length;
 
-        //cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
-
-        var withID = world.Component<EcsQueryParameterWith>();
-        var withoutID = world.Component<EcsQueryParameterWithout>();
 
         for (int i = 0; i < components.Length; ++i)
 		{
 			ref var meta = ref components[i];
 			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
-            if (!IDOp.IsPair(meta.ID))
-                continue;
+            var cmp = meta.ID;
 
-            var first = IDOp.GetPairFirst(meta.ID);
-            var second = IDOp.GetPairSecond(meta.ID);
-
-            if (first == withID)
-            {
-                cmps[withIdx++] = second;
-            }
-            else if (first == withoutID)
-            {
-                cmps[--withoutIdx] = second;
-            }
+			if ((cmp & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
+			{
+				cmps[withIdx++] = cmp & ~EcsConst.ECS_QUERY_WITH;
+			}
+			else if ((cmp & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
+			{
+				cmps[--withoutIdx] = cmp & ~EcsConst.ECS_QUERY_WITHOUT;
+			}
 		}
 
 		var with = cmps.Slice(0, withIdx);

@@ -28,7 +28,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With<T>() where T : unmanaged
 	{
-        World.SetComponentData(ID, IDOp.Pair(World.Component<EcsQueryParameterWith>(), World.Component<T>()), stackalloc byte[1]);
+		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
 		return this;
 	}
 
@@ -43,23 +43,23 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID first, EntityID second)
 	{
-		var id = IDOp.Pair(first, second);
-		World.Set(ID, id | FLAG_WITH);
+		var id = IDOp.Pair(first, second) | EcsConst.ECS_QUERY_WITH;
+		World.SetComponentData(ID, id, stackalloc byte[1]);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID id)
 	{
-        World.Set(ID, IDOp.Pair(World.Component<EcsQueryParameterWith>(), id));
+        World.SetComponentData(ID, id | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder Without<T>() where T : unmanaged
 	{
-        World.SetComponentData(ID, IDOp.Pair(World.Component<EcsQueryParameterWithout>(), World.Component<T>()), stackalloc byte[1]);
-        return this;
+		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITHOUT, stackalloc byte[1]);
+		return this;
 	}
 
 	public QueryIterator GetEnumerator()
@@ -73,30 +73,36 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		var withIdx = 0;
 		var withoutIdx = components.Length;
 
-		//cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
-
-		var withID = World.Component<EcsQueryParameterWith>();
-        var withoutID = World.Component<EcsQueryParameterWithout>();
-
         for (int i = 0; i < components.Length; ++i)
 		{
 			ref var meta = ref components[i];
 			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
-            if (!IDOp.IsPair(meta.ID))
-                continue;
+			var cmp = meta.ID;
 
-            var first = IDOp.GetPairFirst(meta.ID);
-            var second = IDOp.GetPairSecond(meta.ID);
+			if ((cmp & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
+			{
+				cmps[withIdx++] = cmp & ~EcsConst.ECS_QUERY_WITH;
+			}
+			else if ((cmp & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
+			{
+				cmps[--withoutIdx] = cmp & ~EcsConst.ECS_QUERY_WITHOUT;
+			}
 
-            if (first == withID)
-            {
-                cmps[withIdx++] = second;
-            }
-            else if (first == withoutID)
-            {
-                cmps[--withoutIdx] = second;
-            }
+            // if (!IDOp.IsPair(meta.ID))
+            //     continue;
+
+            // var first = IDOp.GetPairFirst(meta.ID);
+            // var second = IDOp.GetPairSecond(meta.ID);
+
+            // if (first == withID)
+            // {
+            //     cmps[withIdx++] = second;
+            // }
+            // else if (first == withoutID)
+            // {
+            //     cmps[--withoutIdx] = second;
+            // }
 		}
 
 		var with = cmps.AsSpan(0, withIdx);
