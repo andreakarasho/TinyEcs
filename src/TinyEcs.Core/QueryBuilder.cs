@@ -2,10 +2,6 @@ namespace TinyEcs;
 
 public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
 {
-	internal const EntityID FLAG_WITH = (0x01ul << 60);
-	internal const EntityID FLAG_WITHOUT = (0x02ul << 60);
-
-
 	public readonly EntityID ID;
 	internal readonly World World;
 
