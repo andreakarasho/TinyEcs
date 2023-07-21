@@ -37,6 +37,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Add(EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		World.SetComponentData(ID, id, stackalloc byte[1]);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset<T>() where T : unmanaged
 	{
 		World.Unset<T>(ID);

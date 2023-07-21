@@ -7,7 +7,7 @@ public sealed class World : IDisposable
 
 	internal readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
-
+	private readonly Dictionary<EntityID, Archetype> _typeIndex = new();
 
 	public World()
 	{
@@ -29,6 +29,7 @@ public sealed class World : IDisposable
 	{
 		_entities.Clear();
 		_archRoot.Clear();
+		_typeIndex.Clear();
 	}
 
 	public void Optimize()
@@ -155,15 +156,36 @@ public sealed class World : IDisposable
 
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
 
+		// ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, Hash(span), out var exists);
+		// if (!exists)
+		// {
+		// 	arch = _archRoot.InsertVertex(record.Archetype, span, component);
+		// }
 
-		var arch = FetchArchetype(record.Archetype, add, component);
+		// static EntityID Hash(Span<EcsComponent> components)
+		// {
+		// 	unchecked
+		// 	{
+		// 		EntityID hash = 5381;
 
-        static Archetype? FetchArchetype(Archetype root, bool add, EntityID cmp)
+		// 		foreach (ref readonly var id in components)
+		// 		{
+		// 			hash = ((hash << 5) + hash) + id.ID;
+		// 		}
+
+		// 		return hash;
+		// 	}
+		// }
+
+		var arch = FetchArchetype(record.Archetype, add, span);
+
+        static Archetype? FetchArchetype(Archetype root, bool add, ReadOnlySpan<EcsComponent> cmp)
         {
             var edges = add ? root._edgesRight : root._edgesLeft;
             foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
             {
-                if (edge.ComponentID == cmp)
+                if (cmp.SequenceEqual(edge.Archetype.ComponentInfo))
+				//if (edge.ComponentID == cmp)
                 {
                     return edge.Archetype;
                 }
@@ -176,9 +198,7 @@ public sealed class World : IDisposable
             return null;
         }
 
-		// !add -> an archetype always exists!
-		// add -> archetype might not exist
-		Debug.Assert(add || (!add && arch != null));
+		//Debug.Assert(add || (!add && arch != null));
 
 		if (arch == null)
 		{

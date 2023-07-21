@@ -83,15 +83,6 @@ public unsafe sealed class Commands : IDisposable
 
 			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
 			main.SetComponentData(op.Target, op.Component, raw);
-
-			// var index = it.Archetype.GetComponentIndex(op.ID);
-			// if (index < 0)
-			//     continue;
-			// ref readonly var meta = ref it.Archetype.ComponentInfo[index];
-
-			// main.SetComponentData(op.Target, op.Component, new ReadOnlySpan<byte>((byte*) op.Data, meta.Size));
-
-			// op.Pool.Free(op.Data);
 		}
 	}
 
@@ -347,7 +338,7 @@ public readonly ref struct CommandEntityView
 
 	public readonly CommandEntityView Add<TKind>(EntityID id) where TKind : unmanaged
 	{
-		_cmds.Add(_id, id);
+		_cmds.Add(_id, _cmds.Main.Component<TKind>(), id);
 		return this;
 	}
 

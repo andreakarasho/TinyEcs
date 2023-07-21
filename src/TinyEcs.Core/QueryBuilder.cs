@@ -32,7 +32,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With<T>() where T : unmanaged
 	{
-		World.Set(ID, new EcsQueryParameter<T>() { Component = World.Component<T>() | FLAG_WITH });
+        World.SetComponentData(ID, IDOp.Pair(World.Component<EcsQueryParameterWith>(), World.Component<T>()), stackalloc byte[1]);
 		return this;
 	}
 
@@ -55,15 +55,15 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID id)
 	{
-		World.Set(ID, id | FLAG_WITH);
+        World.Set(ID, IDOp.Pair(World.Component<EcsQueryParameterWith>(), id));
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder Without<T>() where T : unmanaged
 	{
-		World.Set(ID, new EcsQueryParameter<T>() { Component = World.Component<T>() | FLAG_WITHOUT });
-		return this;
+        World.SetComponentData(ID, IDOp.Pair(World.Component<EcsQueryParameterWithout>(), World.Component<T>()), stackalloc byte[1]);
+        return this;
 	}
 
 	public QueryIterator GetEnumerator()
@@ -79,20 +79,28 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 		//cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
 
-		for (int i = 0; i < components.Length; ++i)
+		var withID = World.Component<EcsQueryParameterWith>();
+        var withoutID = World.Component<EcsQueryParameterWithout>();
+
+        for (int i = 0; i < components.Length; ++i)
 		{
-			ref readonly var meta = ref components[i];
+			ref var meta = ref components[i];
+			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
-			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(meta.ID, record.Row, 1)));
+            if (!IDOp.IsPair(meta.ID))
+                continue;
 
-			if ((cmp & QueryBuilder.FLAG_WITH) != 0)
-			{
-				cmps[withIdx++] = cmp & ~QueryBuilder.FLAG_WITH;
-			}
-			else if ((cmp & QueryBuilder.FLAG_WITHOUT) != 0)
-			{
-				cmps[--withoutIdx] = cmp & ~QueryBuilder.FLAG_WITHOUT;
-			}
+            var first = IDOp.GetPairFirst(meta.ID);
+            var second = IDOp.GetPairSecond(meta.ID);
+
+            if (first == withID)
+            {
+                cmps[withIdx++] = second;
+            }
+            else if (first == withoutID)
+            {
+                cmps[--withoutIdx] = second;
+            }
 		}
 
 		var with = cmps.AsSpan(0, withIdx);
@@ -132,10 +140,11 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				if (without.IndexOf(start.ComponentID) >= 0)
-					break;
+				if (without.IndexOf(start.ComponentID) < 0)
+				{
+					stack.Push(start.Archetype);
+				}
 
-				stack.Push(start.Archetype);
 				start = ref Unsafe.Add(ref start, 1);
 			}
 		}

@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public readonly struct EcsComponent
+public readonly struct EcsComponent : IEquatable<EcsComponent>
 {
 	public readonly EntityID ID;
 	public readonly int Size;
@@ -10,12 +10,31 @@ public readonly struct EcsComponent
 		ID = id;
 		Size = size;
 	}
+
+	public override readonly bool Equals(object? other)
+	{
+		return other is EcsComponent c && c.Equals(this);
+	}
+
+	public readonly bool Equals(EcsComponent other)
+	{
+		return ID == other.ID && Size == other.Size;
+	}
 }
 
 public struct EcsQueryBuilder { }
 public struct EcsQuery
 {
 	public EntityID ID;
+}
+
+
+public struct EcsQueryParameterWith
+{
+}
+
+public struct EcsQueryParameterWithout
+{
 }
 
 public struct EcsQueryParameter<T> where T : unmanaged

@@ -18,6 +18,9 @@ public unsafe ref struct QueryIterator
 
 	public bool MoveNext()
 	{
+		if (_stack == null)
+			return false;
+
 		do
 		{
 			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);
@@ -45,29 +48,36 @@ internal static class QueryEx
 		ref var record = ref world._entities.Get(query);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
-		var components = record.Archetype.ComponentInfo;
+        var components = record.Archetype.ComponentInfo;
 		Span<EntityID> cmps = stackalloc EntityID[components.Length + 0];
 
 		var withIdx = 0;
 		var withoutIdx = components.Length;
 
-		//cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
+        //cmps[withoutIdx] = ComponentStorage.GetOrAdd<EcsQuery>(world).ID;
 
-		for (int i = 0; i < components.Length; ++i)
+        var withID = world.Component<EcsQueryParameterWith>();
+        var withoutID = world.Component<EcsQueryParameterWithout>();
+
+        for (int i = 0; i < components.Length; ++i)
 		{
 			ref var meta = ref components[i];
 			Debug.Assert(!Unsafe.IsNullRef(ref meta));
 
-			var cmp = Unsafe.As<byte, EntityID>(ref MemoryMarshal.GetReference(record.Archetype.GetComponentRaw(meta.ID, record.Row, 1)));
+            if (!IDOp.IsPair(meta.ID))
+                continue;
 
-			if ((cmp & QueryBuilder.FLAG_WITH) != 0)
-			{
-				cmps[withIdx++] = cmp & ~QueryBuilder.FLAG_WITH;
-			}
-			else if ((cmp & QueryBuilder.FLAG_WITHOUT) != 0)
-			{
-				cmps[--withoutIdx] = cmp & ~QueryBuilder.FLAG_WITHOUT;
-			}
+            var first = IDOp.GetPairFirst(meta.ID);
+            var second = IDOp.GetPairSecond(meta.ID);
+
+            if (first == withID)
+            {
+                cmps[withIdx++] = second;
+            }
+            else if (first == withoutID)
+            {
+                cmps[--withoutIdx] = second;
+            }
 		}
 
 		var with = cmps.Slice(0, withIdx);
@@ -76,7 +86,7 @@ internal static class QueryEx
 		with.Sort();
 		without.Sort();
 
-		if (!with.IsEmpty)
+        if (!with.IsEmpty)
 		{
 			FetchArchetype(world._archRoot, with, without, cmds, system, deltaTime);
 		}
@@ -112,12 +122,11 @@ internal static class QueryEx
 
 			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				if (without.IndexOf(start.ComponentID) >= 0)
-					break;
+                if (without.IndexOf(start.ComponentID) < 0)
+                    FetchArchetype(start.Archetype, with, without, cmds, system, deltaTime);
 
-				FetchArchetype(start.Archetype, with, without, cmds, system, deltaTime);
-				start = ref Unsafe.Add(ref start, 1);
-			}
+                start = ref Unsafe.Add(ref start, 1);
+            }
 		}
 	}
 }

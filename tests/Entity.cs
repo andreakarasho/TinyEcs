@@ -43,7 +43,7 @@ namespace TinyEcs.Tests
         public void Entity_Enable()
         {
             var world = new World();
-           
+
             var entity = world.Spawn();
             entity.Enable();
 
@@ -54,7 +54,7 @@ namespace TinyEcs.Tests
         public void Entity_Disabled()
         {
             var world = new World();
-           
+
             var entity = world.Spawn();
             entity.Disable();
 
@@ -171,7 +171,7 @@ namespace TinyEcs.Tests
             Assert.Equal(FLOAT_VALUE, world.Get<float>(entity));
             Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
 
-            
+
             world.Unset<float>(entity);
             Assert.False(world.Has<float>(entity));
             Assert.True(world.Has<int>(entity));
@@ -333,7 +333,23 @@ namespace TinyEcs.Tests
                 Assert.False(world.Has<float>(entity));
                 Assert.False(world.Has<int>(entity));
                 Assert.False(world.Has<LargeComponent>(entity));
-            }         
+            }
         }
+
+		[Fact]
+		public void Detach_Sequential_Components()
+		{
+			var world = new World();
+
+			var e0 = world.Spawn();
+			var e1 = world.Spawn();
+
+			e0.Set<int>();
+			e1.Set<int>();
+			e0.Unset<int>();
+
+			Assert.True(world.Has<int>(e1));
+			Assert.False(world.Has<int>(e0));
+		}
     }
 }

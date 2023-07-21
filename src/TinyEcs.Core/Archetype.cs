@@ -11,8 +11,9 @@ sealed unsafe class Archetype
 	private EntityID[] _entityIDs;
 	internal byte[][] _componentsData;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
-	private readonly EntitySparseSet<EntityID> _lookup;
+	//private readonly EntitySparseSet<EntityID> _lookup;
 	private readonly EntityID[] _components;
+	private readonly Dictionary<EntityID, int> _lookup = new();
 
 	public Archetype(World world, ReadOnlySpan<EcsComponent> components)
 	{
@@ -25,12 +26,13 @@ sealed unsafe class Archetype
 		_componentsData = new byte[components.Length][];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
-		_lookup = new EntitySparseSet<EntityID>();
+		//_lookup = new EntitySparseSet<EntityID>();
 
 		for (var i = 0; i < components.Length; i++)
 		{
 			_components[i] = components[i].ID;
-			_lookup.Add(components[i].ID, (EntityID)i);
+			//_lookup.Add(components[i].ID, (EntityID)i);
+			_lookup.Add(components[i].ID, i);
 		}
 
 		ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
@@ -47,7 +49,8 @@ sealed unsafe class Archetype
 
 	public int GetComponentIndex(EntityID component)
 	{
-		ref var idx = ref _lookup.Get(component);
+		ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
+		//ref var idx = ref _lookup.Get(component);
 
 		return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
 	}
@@ -118,7 +121,7 @@ sealed unsafe class Archetype
 			return Span<byte>.Empty;
 		}
 
-		Debug.Assert(row < Count);
+		//Debug.Assert(row < Count); // this is not true when removing
 
 		ref readonly var meta = ref ComponentInfo[column];
 

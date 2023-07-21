@@ -11,48 +11,19 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
-//var world = new World();
+var world = new World();
 
+var e0 = world.Spawn();
+var e1 = world.Spawn();
 
-//var e0 = world.Spawn().Set<Position>();
-//var e1 = world.Spawn();
-//var likes = world.Spawn();
-//var apple = world.Spawn();
+e0.Set<Position>();
+e1.Set<Position>();
+// world.Spawn().Set<Position>();
+// world.Spawn().Set<Position>();
+e0.Unset<Position>();
 
-//e0.SetID(e1);
-
-//e0.Pair(likes, apple);
-
-//e0.Each(s =>
-//{
-//	//ref var cmp = ref s.Get<EcsComponent>();
-//	if (IDOp.IsPair(s.ID))
-//	{
-//		Console.WriteLine("pair: {0} {1}", IDOp.GetPairFirst(s.ID), IDOp.GetPairSecond(s.ID));
-//	}
-//	else
-//	{
-//		Console.WriteLine("entity {0}", s.ID);
-//	}
-//});
-
-//var qry = world.Query().With<EcsComponent>();
-
-//foreach (var it in qry)
-//{
-//	var cmpA = it.Field<EcsComponent>();
-//	var entityA = it.Field<EntityView>();
-
-//	for (int i = 0; i < it.Count; ++i)
-//	{
-//		ref var cmp = ref cmpA[i];
-//		ref var ent = ref entityA[i];
-
-//		var xx = it.World.Spawn();
-
-//		Console.WriteLine("component --> ID: {0} - SIZE: {1}", ent.ID, cmp.Size);
-//	}
-//}
+//e1.Set<Position>();
+ref var pppp = ref e1.Get<Position>();
 
 var ecs = new Ecs();
 
@@ -88,9 +59,9 @@ p.X = 9999;
 p.Y = 12;
 p.Z = 0.2f;
 
-// ecs.Step(0f);
+//ecs.Step(0f);
 
-// ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
+//ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
 
 var ok = ecs.Entity(id)
 	.Has<Likes, Dogs>();
