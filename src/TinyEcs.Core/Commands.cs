@@ -253,6 +253,13 @@ public unsafe sealed class Commands : IDisposable
 		return ref e.Get<ComponentPocWithValue<T>>().Value;
 	}
 
+	public bool Has<T>(EntityID entity) where T : unmanaged
+	{
+		Debug.Assert(_main.IsAlive(entity));
+
+		return _main.Has<T>(entity);
+	}
+
 	public void Dispose()
 	{
 		_mergeWorld?.Dispose();
@@ -371,5 +378,10 @@ public readonly ref struct CommandEntityView
 	public readonly ref T Get<T>() where T : unmanaged
 	{
 		return ref _cmds.Get<T>(_id);
+	}
+
+	public readonly bool Has<T>() where T : unmanaged
+	{
+		return _cmds.Has<T>(_id);
 	}
 }

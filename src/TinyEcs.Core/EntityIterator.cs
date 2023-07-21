@@ -50,7 +50,7 @@ public readonly ref struct EntityIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID Entity(int row)
-		=> _archetype.Entities[row];
+	public readonly EntityView Entity(int row)
+		=> new (World, _archetype.Entities[row]);
 }
 
