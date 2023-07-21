@@ -127,16 +127,16 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		var span = CollectionsMarshal.AsSpan(archetype._edgesRight);
 		if (!span.IsEmpty)
 		{
-			ref var last = ref span[^1];
+			ref var start = ref MemoryMarshal.GetReference(span);
+			ref var end = ref Unsafe.Add(ref start, span.Length);
 
-			for (int i = 0; i < span.Length; ++i)
+			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				ref var edge = ref Unsafe.Subtract(ref last, i);
+				if (without.IndexOf(start.ComponentID) >= 0)
+					break;
 
-				if (without.IndexOf(edge.ComponentID) < 0)
-				{
-					stack.Push(edge.Archetype);
-				}
+				stack.Push(start.Archetype);
+				start = ref Unsafe.Add(ref start, 1);
 			}
 		}
 

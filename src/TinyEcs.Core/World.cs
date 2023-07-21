@@ -156,18 +156,25 @@ public sealed class World : IDisposable
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
 
 
-		var baseArch = record.Archetype;
-		var edges = add ? baseArch._edgesRight : baseArch._edgesLeft;
+		var arch = FetchArchetype(record.Archetype, add, component);
 
-		Archetype? arch = null;
-		foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
-		{
-			if (edge.ComponentID == component)
-			{
-				arch = edge.Archetype;
-				break;
-			}
-		}
+        static Archetype? FetchArchetype(Archetype root, bool add, EntityID cmp)
+        {
+            var edges = add ? root._edgesRight : root._edgesLeft;
+            foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
+            {
+                if (edge.ComponentID == cmp)
+                {
+                    return edge.Archetype;
+                }
+
+                var sub = FetchArchetype(edge.Archetype, add, cmp);
+                if (sub != null)
+                    return sub;
+            }
+
+            return null;
+        }
 
 		// !add -> an archetype always exists!
 		// add -> archetype might not exist

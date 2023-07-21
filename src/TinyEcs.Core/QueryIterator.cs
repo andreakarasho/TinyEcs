@@ -99,7 +99,7 @@ internal static class QueryEx
 
 		if (archetype.Count > 0 && archetype.IsSuperset(with))
 		{
-			// query ok, call the system now			
+			// query ok, call the system now
 			var it = new EntityIterator(archetype, deltaTime);
 			system(cmds, ref it);
 		}
@@ -107,14 +107,16 @@ internal static class QueryEx
 		var span = CollectionsMarshal.AsSpan(archetype._edgesRight);
 		if (!span.IsEmpty)
 		{
-			ref var last = ref span[^1];
+			ref var start = ref MemoryMarshal.GetReference(span);
+			ref var end = ref Unsafe.Add(ref start, span.Length);
 
-			for (int i = 0; i < span.Length; ++i)
+			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				ref var edge = ref Unsafe.Subtract(ref last, i);
+				if (without.IndexOf(start.ComponentID) >= 0)
+					break;
 
-				if (without.IndexOf(edge.ComponentID) < 0)
-					FetchArchetype(edge.Archetype, with, without, cmds, system, deltaTime);
+				FetchArchetype(start.Archetype, with, without, cmds, system, deltaTime);
+				start = ref Unsafe.Add(ref start, 1);
 			}
 		}
 	}
