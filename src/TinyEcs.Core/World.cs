@@ -30,20 +30,20 @@ public sealed class World : IDisposable
 		_archRoot.Clear();
 	}
 
-	public void Optimize()
-	{
-		InternalOptimize(_archRoot);
+	// public void Optimize()
+	// {
+	// 	InternalOptimize(_archRoot);
 
-		static void InternalOptimize(Archetype root)
-		{
-			root.Optimize();
+	// 	static void InternalOptimize(Archetype root)
+	// 	{
+	// 		root.Optimize();
 
-			foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
-			{
-				InternalOptimize(edge.Archetype);
-			}
-		}
-	}
+	// 		foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
+	// 		{
+	// 			InternalOptimize(edge.Archetype);
+	// 		}
+	// 	}
+	// }
 
 	public EntityID Component<T>() where T : unmanaged
 		=> TypeInfo<T>.GetID(this);
