@@ -43,6 +43,7 @@ internal static class QueryEx
 {
 	public static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<Commands, ref EntityIterator, void> system, float deltaTime)
 	{
+		Debug.Assert(world.IsAlive(query));
 		Debug.Assert(world.Has<EcsQueryBuilder>(query));
 
 		ref var record = ref world._entities.Get(query);
@@ -54,32 +55,27 @@ internal static class QueryEx
 		var withIdx = 0;
 		var withoutIdx = components.Length;
 
-
         for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref components[i];
-			Debug.Assert(!Unsafe.IsNullRef(ref meta));
+			ref readonly var meta = ref components[i];
 
-            var cmp = meta.ID;
-
-			if ((cmp & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
+			if ((meta.ID & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
 			{
-				cmps[withIdx++] = cmp & ~EcsConst.ECS_QUERY_WITH;
+				cmps[withIdx++] = meta.ID  & ~EcsConst.ECS_QUERY_WITH;
 			}
-			else if ((cmp & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
+			else if ((meta.ID  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
 			{
-				cmps[--withoutIdx] = cmp & ~EcsConst.ECS_QUERY_WITHOUT;
+				cmps[--withoutIdx] = meta.ID  & ~EcsConst.ECS_QUERY_WITHOUT;
 			}
 		}
 
 		var with = cmps.Slice(0, withIdx);
 		var without = cmps.Slice(withoutIdx);
 
-		with.Sort();
-		without.Sort();
-
         if (!with.IsEmpty)
 		{
+			with.Sort();
+			without.Sort();
 			FetchArchetype(world._archRoot, with, without, cmds, system, deltaTime);
 		}
 	}

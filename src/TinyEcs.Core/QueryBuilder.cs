@@ -75,46 +75,28 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
         for (int i = 0; i < components.Length; ++i)
 		{
-			ref var meta = ref components[i];
-			Debug.Assert(!Unsafe.IsNullRef(ref meta));
+			ref readonly var meta = ref components[i];
 
-			var cmp = meta.ID;
-
-			if ((cmp & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
+			if ((meta.ID & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
 			{
-				cmps[withIdx++] = cmp & ~EcsConst.ECS_QUERY_WITH;
+				cmps[withIdx++] = meta.ID  & ~EcsConst.ECS_QUERY_WITH;
 			}
-			else if ((cmp & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
+			else if ((meta.ID  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
 			{
-				cmps[--withoutIdx] = cmp & ~EcsConst.ECS_QUERY_WITHOUT;
+				cmps[--withoutIdx] = meta.ID  & ~EcsConst.ECS_QUERY_WITHOUT;
 			}
-
-            // if (!IDOp.IsPair(meta.ID))
-            //     continue;
-
-            // var first = IDOp.GetPairFirst(meta.ID);
-            // var second = IDOp.GetPairSecond(meta.ID);
-
-            // if (first == withID)
-            // {
-            //     cmps[withIdx++] = second;
-            // }
-            // else if (first == withoutID)
-            // {
-            //     cmps[--withoutIdx] = second;
-            // }
 		}
 
 		var with = cmps.AsSpan(0, withIdx);
 		var without = cmps.AsSpan(0, components.Length).Slice(withoutIdx);
 
-		with.Sort();
-		without.Sort();
-
 		if (with.IsEmpty)
 		{
 			return default;
 		}
+
+		with.Sort();
+		without.Sort();
 
 		var stack = new Stack<Archetype>();
 		stack.Push(World._archRoot);
@@ -122,7 +104,7 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		return new QueryIterator(stack, cmps, with, without);
 	}
 
-	internal static unsafe Archetype FetchArchetype
+	internal static unsafe Archetype? FetchArchetype
 	(
 		Stack<Archetype> stack,
 		ReadOnlySpan<EntityID> with,
