@@ -103,42 +103,4 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 
 		return new QueryIterator(stack, cmps, with, without);
 	}
-
-	internal static unsafe Archetype? FetchArchetype
-	(
-		Stack<Archetype> stack,
-		ReadOnlySpan<EntityID> with,
-		ReadOnlySpan<EntityID> without
-	)
-	{
-		if (stack.Count == 0 || !stack.TryPop(out var archetype) || archetype == null)
-		{
-			return null;
-		}
-
-		var span = CollectionsMarshal.AsSpan(archetype._edgesRight);
-		if (!span.IsEmpty)
-		{
-			ref var start = ref MemoryMarshal.GetReference(span);
-			ref var end = ref Unsafe.Add(ref start, span.Length);
-
-			while (Unsafe.IsAddressLessThan(ref start, ref end))
-			{
-				if (without.IndexOf(start.ComponentID) < 0)
-				{
-					stack.Push(start.Archetype);
-				}
-
-				start = ref Unsafe.Add(ref start, 1);
-			}
-		}
-
-		if (archetype.Count > 0 && archetype.IsSuperset(with))
-		{
-			// query ok, call the system now
-			return archetype;
-		}
-
-		return null;
-	}
 }

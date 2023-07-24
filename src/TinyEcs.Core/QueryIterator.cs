@@ -23,7 +23,7 @@ public unsafe ref struct QueryIterator
 
 		do
 		{
-			_current = QueryBuilder.FetchArchetype(_stack, _with, _without);
+			_current = FetchArchetype(_stack, _with, _without);
 
 		} while (_stack.Count > 0 && _current == null);
 
@@ -37,7 +37,47 @@ public unsafe ref struct QueryIterator
 		if (_buffer != null)
 			ArrayPool<EntityID>.Shared.Return(_buffer);
 	}
+
+	private static unsafe Archetype? FetchArchetype
+	(
+		Stack<Archetype> stack,
+		ReadOnlySpan<EntityID> with,
+		ReadOnlySpan<EntityID> without
+	)
+	{
+		if (stack.Count == 0 || !stack.TryPop(out var archetype) || archetype == null)
+		{
+			return null;
+		}
+
+		var span = CollectionsMarshal.AsSpan(archetype._edgesRight);
+		if (!span.IsEmpty)
+		{
+			ref var start = ref MemoryMarshal.GetReference(span);
+			ref var end = ref Unsafe.Add(ref start, span.Length);
+
+			while (Unsafe.IsAddressLessThan(ref start, ref end))
+			{
+				if (without.IndexOf(start.ComponentID) < 0)
+				{
+					stack.Push(start.Archetype);
+				}
+
+				start = ref Unsafe.Add(ref start, 1);
+			}
+		}
+
+		if (archetype.Count > 0 && archetype.IsSuperset(with))
+		{
+			// query ok, call the system now
+			return archetype;
+		}
+
+		return null;
+	}
 }
+
+
 
 internal static class QueryEx
 {
