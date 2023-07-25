@@ -179,15 +179,14 @@ public sealed class World : IDisposable
 
         static Archetype? FetchArchetype(Archetype root, bool add, ReadOnlySpan<EcsComponent> cmp)
         {
+			if (cmp.SequenceEqual(root.ComponentInfo))
+			{
+				return root;
+			}
+
             var edges = add ? root._edgesRight : root._edgesLeft;
             foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
             {
-                if (cmp.SequenceEqual(edge.Archetype.ComponentInfo))
-				//if (edge.ComponentID == cmp)
-                {
-                    return edge.Archetype;
-                }
-
                 var sub = FetchArchetype(edge.Archetype, add, cmp);
                 if (sub != null)
                     return sub;
@@ -270,6 +269,90 @@ public sealed class World : IDisposable
 
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref Get<T>(Component<T>());
+
+
+	public void PrintGraph()
+	{
+		PrintRec(_archRoot, 0, 0);
+
+		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
+		{
+			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
+
+			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
+			{
+				PrintRec(edge.Archetype, depth + 1, edge.ComponentID);
+			}
+		}
+	}
+
+	internal void Query(ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Action<Archetype> action)
+	{
+		QueryRec(_archRoot, with, without, action);
+
+		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Action<Archetype> action)
+		{
+			if (root.Count > 0 && root.IsSuperset(with))
+			{
+				action(root);
+			}
+
+			var span = CollectionsMarshal.AsSpan(root._edgesRight);
+			if (span.IsEmpty)
+			{
+				return;
+			}
+
+			ref var start = ref MemoryMarshal.GetReference(span);
+			ref var end = ref Unsafe.Add(ref start, span.Length);
+
+			while (Unsafe.IsAddressLessThan(ref start, ref end))
+			{
+				if (without.IndexOf(start.ComponentID) < 0)
+				{
+					QueryRec(start.Archetype, with, without, action);
+				}
+
+				start = ref Unsafe.Add(ref start, 1);
+			}
+		}
+	}
+
+	internal static unsafe Archetype? GetArchetype(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without)
+	{
+		if (root == null)
+		{
+			return null;
+		}
+
+		var span = CollectionsMarshal.AsSpan(root._edgesRight);
+		if (span.IsEmpty)
+		{
+			return null;
+		}
+
+		ref var start = ref MemoryMarshal.GetReference(span);
+		ref var end = ref Unsafe.Add(ref start, span.Length);
+
+		while (Unsafe.IsAddressLessThan(ref start, ref end))
+		{
+			if (without.IndexOf(start.ComponentID) < 0)
+			{
+				if (start.Archetype.Count > 0 && start.Archetype.IsSuperset(with))
+				{
+					return start.Archetype;
+				}
+
+				var arch = GetArchetype(start.Archetype, with, without);
+				if (arch != null)
+					return arch;
+			}
+
+			start = ref Unsafe.Add(ref start, 1);
+		}
+
+		return null;
+	}
 
 	public void AttachTo(EntityID childID, EntityID parentID)
 	{

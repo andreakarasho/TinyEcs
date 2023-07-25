@@ -1,31 +1,13 @@
 namespace TinyEcs;
 
-public unsafe sealed class Commands : IDisposable
+public sealed class Commands : IDisposable
 {
 	private readonly World _main, _mergeWorld;
-	private readonly QueryBuilder _entityDestroyed,
-		_componentSet, _componentUnset, _componentEdited,
-		_toBeDestroyed;
 
 	public Commands(World main)
 	{
 		_main = main;
 		_mergeWorld = new World();
-
-		_entityDestroyed = _mergeWorld.Query()
-			.With<EntityDestroyed>();
-
-		_componentSet = _mergeWorld.Query()
-			.With<ComponentAdded>();
-
-		_componentEdited = _mergeWorld.Query()
-			.With<ComponentEdited>();
-
-		_componentUnset = _mergeWorld.Query()
-			.With<ComponentRemoved>();
-
-		_toBeDestroyed = _mergeWorld.Query()
-			.With<MarkDestroy>();
 	}
 
 	public World Main => _main;
@@ -34,11 +16,66 @@ public unsafe sealed class Commands : IDisposable
 	public void Merge()
 	{
 		// we pass the Commands, but must not be used to edit entities!
-		QueryEx.Fetch(_mergeWorld, _componentSet.ID, this, &ComponentSetSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _componentEdited.ID, this, &ComponentEditedSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _componentUnset.ID, this, &ComponentUnsetSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _entityDestroyed.ID, this, &EntityDestroyedSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _toBeDestroyed.ID, this, &MarkDestroySystem, 0f);
+
+		_mergeWorld.Query(
+			stackalloc EntityID[] {
+				_mergeWorld.Component<EcsEnabled>(),
+				_mergeWorld.Component<ComponentAdded>(),
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, 0f);
+				ComponentSetSystem(this, ref it);
+			}
+		);
+
+		_mergeWorld.Query(
+			stackalloc EntityID[] {
+				_mergeWorld.Component<EcsEnabled>(),
+				_mergeWorld.Component<ComponentEdited>(),
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, 0f);
+				ComponentEditedSystem(this, ref it);
+			}
+		);
+
+		_mergeWorld.Query(
+			stackalloc EntityID[] {
+				_mergeWorld.Component<EcsEnabled>(),
+				_mergeWorld.Component<ComponentRemoved>(),
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, 0f);
+				ComponentUnsetSystem(this, ref it);
+			}
+		);
+
+		_mergeWorld.Query(
+			stackalloc EntityID[] {
+				_mergeWorld.Component<EcsEnabled>(),
+				_mergeWorld.Component<EntityDestroyed>(),
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, 0f);
+				EntityDestroyedSystem(this, ref it);
+			}
+		);
+
+		_mergeWorld.Query(
+			stackalloc EntityID[] {
+				_mergeWorld.Component<EcsEnabled>(),
+				_mergeWorld.Component<MarkDestroy>(),
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, 0f);
+				MarkDestroySystem(this, ref it);
+			}
+		);
 	}
 
 
@@ -121,13 +158,6 @@ public unsafe sealed class Commands : IDisposable
 	public CommandEntityView Spawn()
 	{
 		var mainEnt = _main.SpawnEmpty();
-		//var mergeEnt = _mergeWorld.Spawn()
-		//	.Set<MarkDestroy>()
-		//	.Set(new EntityCreated()
-		//	{
-		//		Target = 0
-		//	});
-
 		return new CommandEntityView(this, mainEnt)
 			.Set<EcsEnabled>();
 	}

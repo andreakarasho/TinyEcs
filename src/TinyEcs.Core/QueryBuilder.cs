@@ -1,5 +1,51 @@
 namespace TinyEcs;
 
+
+// sealed class Query
+// {
+// 	private readonly World _world;
+// 	private readonly HashSet<EntityID> _with, _without;
+
+// 	internal Query(World world)
+// 	{
+// 		_world = world;
+// 		_with = new ();
+// 		_without = new ();
+// 	}
+
+// 	public Query With<T>() where T : unmanaged
+// 	{
+// 		_with.Add(_world.Component<T>());
+// 		return this;
+// 	}
+
+// 	public Query Without<T>() where T : unmanaged
+// 	{
+// 		_without.Add(_world.Component<T>());
+// 		return this;
+// 	}
+
+
+// 	public Query With(ReadOnlySpan<EntityID> with)
+// 	{
+
+
+// 		return this;
+// 	}
+
+// 	public Query Without(ReadOnlySpan<EntityID> without)
+// 	{
+
+// 		return this;
+// 	}
+
+// 	public void Iterate()
+// 	{
+// 		_with.
+// 	}
+// }
+
+
 public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
 {
 	public readonly EntityID ID;
@@ -62,13 +108,15 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		return this;
 	}
 
-	public QueryIterator GetEnumerator()
+
+
+	public unsafe QueryIterator GetEnumerator()
 	{
 		ref var record = ref World._entities.Get(ID);
 		Debug.Assert(!Unsafe.IsNullRef(ref record));
 
 		var components = record.Archetype.ComponentInfo;
-		var cmps = ArrayPool<EntityID>.Shared.Rent(components.Length);
+		Span<EntityID> cmps = new EntityID[components.Length];
 
 		var withIdx = 0;
 		var withoutIdx = components.Length;
@@ -87,8 +135,8 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 			}
 		}
 
-		var with = cmps.AsSpan(0, withIdx);
-		var without = cmps.AsSpan(0, components.Length).Slice(withoutIdx);
+		var with = cmps.Slice(0, withIdx);
+		var without = cmps.Slice(0, components.Length).Slice(withoutIdx);
 
 		if (with.IsEmpty)
 		{
@@ -98,9 +146,10 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 		with.Sort();
 		without.Sort();
 
-		var stack = new Stack<Archetype>();
-		stack.Push(World._archRoot);
+		// var arch = World.GetArchetype(, with, without);
+		// if (arch == null)
+		// 	return default;
 
-		return new QueryIterator(stack, cmps, with, without);
+		return new QueryIterator(World._archRoot, with, without);
 	}
 }

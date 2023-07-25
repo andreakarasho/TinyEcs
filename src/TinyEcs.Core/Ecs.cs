@@ -4,55 +4,12 @@ sealed unsafe class Ecs
 {
 	private readonly World _world;
 	private readonly Commands _cmds;
-
-	private readonly QueryBuilder
-		_querySystemUpdate,
-		_querySystemPreUpdate,
-		_querySystemPostUpdate;
-
-	private readonly QueryBuilder
-		_querySystemStartup,
-		_querySystemPreStartup,
-		_querySystemPostStartup;
-
 	private ulong _frame;
-
 
 	public Ecs()
 	{
 		_world = new World();
 		_cmds = new Commands(_world);
-
-		_querySystemUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhaseOnUpdate>();
-
-		_querySystemPreUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePreUpdate>();
-
-		_querySystemPostUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePostUpdate>();
-
-
-		_querySystemStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhaseOnStartup>();
-
-		_querySystemPreStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePreStartup>();
-
-		_querySystemPostStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePostStartup>();
 	}
 
 	public EntityView Entity(EntityID id)
@@ -104,18 +61,89 @@ sealed unsafe class Ecs
 
 		if (_frame == 0)
 		{
-			QueryEx.Fetch(_world, _querySystemPreStartup.ID, _cmds, &RunSystems, delta);
-			QueryEx.Fetch(_world, _querySystemStartup.ID, _cmds, &RunSystems, delta);
-			QueryEx.Fetch(_world, _querySystemPostStartup.ID, _cmds, &RunSystems, delta);
+			_world.Query(
+				stackalloc EntityID[] {
+					_world.Component<EcsEnabled>(),
+					_world.Component<EcsSystem>(),
+					_world.Component<EcsSystemPhasePreStartup>()
+				},
+				ReadOnlySpan<EntityID>.Empty,
+				arch => {
+					var it = new EntityIterator(arch, delta);
+					RunSystems(_cmds, ref it);
+				}
+			);
+
+			_world.Query(
+				stackalloc EntityID[] {
+					_world.Component<EcsEnabled>(),
+					_world.Component<EcsSystem>(),
+					_world.Component<EcsSystemPhaseOnStartup>()
+				},
+				ReadOnlySpan<EntityID>.Empty,
+				arch => {
+					var it = new EntityIterator(arch, delta);
+					RunSystems(_cmds, ref it);
+				}
+			);
+
+			_world.Query(
+				stackalloc EntityID[] {
+					_world.Component<EcsEnabled>(),
+					_world.Component<EcsSystem>(),
+					_world.Component<EcsSystemPhasePostStartup>()
+				},
+				ReadOnlySpan<EntityID>.Empty,
+				arch => {
+					var it = new EntityIterator(arch, delta);
+					RunSystems(_cmds, ref it);
+				}
+			);
 		}
 
-		QueryEx.Fetch(_world, _querySystemPreUpdate.ID, _cmds, &RunSystems, delta);
-		QueryEx.Fetch(_world, _querySystemUpdate.ID, _cmds, &RunSystems, delta);
-		QueryEx.Fetch(_world, _querySystemPostUpdate.ID, _cmds, &RunSystems, delta);
+		_world.Query(
+			stackalloc EntityID[] {
+				_world.Component<EcsEnabled>(),
+				_world.Component<EcsSystem>(),
+				_world.Component<EcsSystemPhasePreUpdate>()
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, delta);
+				RunSystems(_cmds, ref it);
+			}
+		);
+
+		_world.Query(
+			stackalloc EntityID[] {
+				_world.Component<EcsEnabled>(),
+				_world.Component<EcsSystem>(),
+				_world.Component<EcsSystemPhaseOnUpdate>()
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, delta);
+				RunSystems(_cmds, ref it);
+			}
+		);
+
+		_world.Query(
+			stackalloc EntityID[] {
+				_world.Component<EcsEnabled>(),
+				_world.Component<EcsSystem>(),
+				_world.Component<EcsSystemPhasePostUpdate>()
+			},
+			ReadOnlySpan<EntityID>.Empty,
+			arch => {
+				var it = new EntityIterator(arch, delta);
+				RunSystems(_cmds, ref it);
+			}
+		);
 
 		_cmds.Merge();
 		_frame += 1;
 	}
+
 
 	static unsafe void RunSystems(Commands cmds, ref EntityIterator it)
 	{

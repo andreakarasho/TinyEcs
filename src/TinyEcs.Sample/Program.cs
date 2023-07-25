@@ -13,31 +13,31 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 var world = new World();
 
-var e0 = world.Spawn();
-var e1 = world.Spawn();
+world.Spawn().Set<float>().Set<byte>().Set<int>();
+world.Spawn().Set<float>().Set<float>().Set<int>();
+world.Spawn().Set<int>().Set<double>().Set<int>();
 
-e0.Set<Position>();
-e1.Set<Position>();
-// world.Spawn().Set<Position>();
-// world.Spawn().Set<Position>();
-e0.Unset<Position>();
+world.PrintGraph();
 
-//e1.Set<Position>();
-ref var pppp = ref e1.Get<Position>();
+unsafe
+{
+	world.Query(stackalloc EntityID[] { world.Component<float>() }, ReadOnlySpan<EntityID>.Empty, arch => {
+		Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
+	});
+}
+
+
 
 var ecs = new Ecs();
 
+
 var pos = ecs.Spawn();
 var vel = ecs.Spawn();
-
 var likes = ecs.Spawn();
 var cats = ecs.Spawn();
 var flowers = ecs.Spawn();
-
 var childOf = ecs.Spawn();
-
 var root = ecs.Spawn().ID;
-
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
@@ -59,7 +59,7 @@ p.X = 9999;
 p.Y = 12;
 p.Z = 0.2f;
 
-ecs.Step(0f);
+//ecs.Step(0f);
 
 //ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
 
@@ -185,6 +185,8 @@ static void PrintWarnSystem(Commands cmds, ref EntityIterator it)
 {
 	//Console.WriteLine("3");
 }
+
+
 
 
 enum TileType
