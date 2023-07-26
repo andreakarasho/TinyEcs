@@ -30,9 +30,9 @@ public struct EcsQuery
 
 public unsafe readonly struct EcsSystem
 {
-	public readonly delegate* managed<Commands, ref EntityIterator, void> Func;
+	public readonly delegate* managed<Commands, Archetype, void> Func;
 
-	public EcsSystem(delegate* managed<Commands, ref EntityIterator, void> func)
+	public EcsSystem(delegate* managed<Commands, Archetype, void> func)
 	{
 		Func = func;
 	}

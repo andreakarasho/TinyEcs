@@ -134,7 +134,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly void Each(Action<EntityView> action)
 	{
 		ref var record = ref World._entities.Get(ID);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
 		for (int i = 0; i < record.Archetype.Components.Length; ++i)
 		{

@@ -21,11 +21,27 @@ world.PrintGraph();
 
 unsafe
 {
-	world.Query(stackalloc EntityID[] { world.Component<float>() }, ReadOnlySpan<EntityID>.Empty, arch => {
-		Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
-	});
+	world.Query(stackalloc EntityID[] {
+			world.Component<float>(),
+			world.Component<byte>()
+		},
+		Span<EntityID>.Empty,
+		arch => {
+			Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
+		}
+	);
 }
 
+world.Query2().With<float>().With<int>().Iterate(static a => {
+	var floatA = a.Field<float>();
+	var intA = a.Field<int>();
+
+	for (int i = 0; i < a.Count; ++i)
+	{
+		ref var ff = ref floatA[i];
+
+	}
+});
 
 
 var ecs = new Ecs();
@@ -68,10 +84,10 @@ var ok = ecs.Entity(id)
 
 var qry1 = ecs.Query().With(childOf.ID, root);
 
-foreach (var it in qry1)
-{
+// foreach (var it in qry1)
+// {
 
-}
+// }
 
 ecs.Entity(id).Each(s =>
 {
@@ -92,21 +108,21 @@ ecs.Entity(id).Each(s =>
 unsafe
 {
 	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
-	var queryCmp = ecs.Query()
-			.With<EcsComponent>();
 
-	foreach (var it in queryCmp)
-	{
-		var cmpA = it.Field<EcsComponent>();
+	ecs.Query2()
+		.With<EcsComponent>()
+		.Iterate(it => {
+			var cmpA = it.Field<EcsComponent>();
 
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var cmp = ref cmpA[i];
-			var entity = it.Entity(i);
+			for (int i = 0; i < it.Count; ++i)
+			{
+				ref var cmp = ref cmpA[i];
+				var entity = it.Entity(i);
 
-			Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity, cmp.Size, cmp.ID);
-		}
-	}
+				Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity.ID, cmp.Size, cmp.ID);
+			}
+		});
+
 
 
 	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
@@ -141,7 +157,7 @@ while (true)
 }
 
 
-static void Setup(Commands cmds, ref EntityIterator it)
+static void Setup(Commands cmds, Archetype it)
 {
 	var sw = Stopwatch.StartNew();
 
@@ -156,7 +172,7 @@ static void Setup(Commands cmds, ref EntityIterator it)
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
-static void ParseQuery(Commands cmds, ref EntityIterator it)
+static void ParseQuery(Commands cmds, Archetype it)
 {
 	var posF = it.Field<Position>();
 	var velF = it.Field<Velocity>();
@@ -176,17 +192,15 @@ static void ParseQuery(Commands cmds, ref EntityIterator it)
 	}
 }
 
-static void PrintSystem(Commands cmds, ref EntityIterator it)
+static void PrintSystem(Commands cmds, Archetype it)
 {
 	Console.WriteLine("1");
 }
 
-static void PrintWarnSystem(Commands cmds, ref EntityIterator it)
+static void PrintWarnSystem(Commands cmds, Archetype it)
 {
 	//Console.WriteLine("3");
 }
-
-
 
 
 enum TileType

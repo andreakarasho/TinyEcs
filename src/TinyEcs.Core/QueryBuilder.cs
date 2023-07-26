@@ -1,49 +1,54 @@
 namespace TinyEcs;
 
 
-// sealed class Query
-// {
-// 	private readonly World _world;
-// 	private readonly HashSet<EntityID> _with, _without;
 
-// 	internal Query(World world)
-// 	{
-// 		_world = world;
-// 		_with = new ();
-// 		_without = new ();
-// 	}
+public readonly ref struct Query2
+{
+	private readonly World _world;
+	private readonly List<EntityID> _with, _without;
 
-// 	public Query With<T>() where T : unmanaged
-// 	{
-// 		_with.Add(_world.Component<T>());
-// 		return this;
-// 	}
+	internal Query2(World world)
+	{
+		_world = world;
+		_with = new List<EntityID>();
+		_without = new List<EntityID>();
+	}
 
-// 	public Query Without<T>() where T : unmanaged
-// 	{
-// 		_without.Add(_world.Component<T>());
-// 		return this;
-// 	}
+	public readonly Query2 With<T>() where T : unmanaged
+	{
+		_with.Add(_world.Component<T>());
+		return this;
+	}
 
+	public readonly Query2 Without<T>() where T : unmanaged
+	{
+		_without.Add(_world.Component<T>());
+		return this;
+	}
 
-// 	public Query With(ReadOnlySpan<EntityID> with)
-// 	{
+	public readonly void Build()
+	{
+		var spanWith = CollectionsMarshal.AsSpan(_with);
+		var spawnWithout = CollectionsMarshal.AsSpan(_without);
 
+		var ent = _world.Spawn()
+			.Set<EcsQuery>();
 
-// 		return this;
-// 	}
+		Span<byte> empty = stackalloc byte[1];
 
-// 	public Query Without(ReadOnlySpan<EntityID> without)
-// 	{
+		foreach (var cmp in spanWith)
+			_world.SetComponentData(ent.ID, cmp | EcsConst.ECS_QUERY_WITH, empty);
 
-// 		return this;
-// 	}
+		foreach (var cmp in spawnWithout)
+			_world.SetComponentData(ent.ID, cmp | EcsConst.ECS_QUERY_WITHOUT, empty);
+	}
 
-// 	public void Iterate()
-// 	{
-// 		_with.
-// 	}
-// }
+	public readonly void Iterate(Action<Archetype> action)
+	{
+		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), action);
+	}
+}
+
 
 
 public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
@@ -106,50 +111,5 @@ public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuil
 	{
 		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITHOUT, stackalloc byte[1]);
 		return this;
-	}
-
-
-
-	public unsafe QueryIterator GetEnumerator()
-	{
-		ref var record = ref World._entities.Get(ID);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
-
-		var components = record.Archetype.ComponentInfo;
-		Span<EntityID> cmps = new EntityID[components.Length];
-
-		var withIdx = 0;
-		var withoutIdx = components.Length;
-
-        for (int i = 0; i < components.Length; ++i)
-		{
-			ref readonly var meta = ref components[i];
-
-			if ((meta.ID & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
-			{
-				cmps[withIdx++] = meta.ID  & ~EcsConst.ECS_QUERY_WITH;
-			}
-			else if ((meta.ID  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
-			{
-				cmps[--withoutIdx] = meta.ID  & ~EcsConst.ECS_QUERY_WITHOUT;
-			}
-		}
-
-		var with = cmps.Slice(0, withIdx);
-		var without = cmps.Slice(0, components.Length).Slice(withoutIdx);
-
-		if (with.IsEmpty)
-		{
-			return default;
-		}
-
-		with.Sort();
-		without.Sort();
-
-		// var arch = World.GetArchetype(, with, without);
-		// if (arch == null)
-		// 	return default;
-
-		return new QueryIterator(World._archRoot, with, without);
 	}
 }

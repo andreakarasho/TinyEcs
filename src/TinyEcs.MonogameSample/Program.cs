@@ -88,12 +88,12 @@ sealed unsafe class TinyGame : Game
 		base.Draw(gameTime);
 	}
 
-	static void PrintMessage(Commands commands, ref EntityIterator it)
+	static void PrintMessage(Commands commands, Archetype it)
 	{
 		Console.WriteLine("print!");
 	}
 
-    static void Setup(Commands commands, ref EntityIterator it)
+    static void Setup(Commands commands, Archetype it)
     {
         var deviceHandle = Assets<GraphicsDevice>.Get("device");
         var batcherHandle = Assets<SpriteBatch>.Get("batcher");
@@ -101,7 +101,7 @@ sealed unsafe class TinyGame : Game
         it.World.SetSingleton(new GameState(deviceHandle, batcherHandle));
     }
 
-	static void SpawnEntities(Commands commands, ref EntityIterator it)
+	static void SpawnEntities(Commands commands, Archetype it)
 	{
 		var rnd = new Random();
 		ref var gameState = ref it.World.GetSingleton<GameState>();
@@ -133,8 +133,9 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void MoveSystem(Commands commands, ref EntityIterator it)
+	static void MoveSystem(Commands commands, Archetype it)
 	{
+		var deltaTime = 0f;
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
 		var r = it.Field<Rotation>();
@@ -145,14 +146,14 @@ sealed unsafe class TinyGame : Game
 			ref var vel = ref v[i];
 			ref var rot = ref r[i];
 
-			Vector2.Multiply(ref vel.Value, it.DeltaTime, out var res);
+			Vector2.Multiply(ref vel.Value, deltaTime, out var res);
 			Vector2.Add(ref pos.Value, ref res, out pos.Value);
 
-			rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * it.DeltaTime));
+			rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * deltaTime));
 		}
 	}
 
-	static void CheckBorderSystem(Commands commands, ref EntityIterator it)
+	static void CheckBorderSystem(Commands commands, Archetype it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -186,7 +187,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void BeginRender(Commands commands, ref EntityIterator it)
+	static void BeginRender(Commands commands, Archetype it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -195,7 +196,7 @@ sealed unsafe class TinyGame : Game
 		batch.Begin();
 	}
 
-	static void EndRender(Commands commands, ref EntityIterator it)
+	static void EndRender(Commands commands, Archetype it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -203,7 +204,7 @@ sealed unsafe class TinyGame : Game
 		batch.End();
 	}
 
-	static void Render(Commands commands, ref EntityIterator it)
+	static void Render(Commands commands, Archetype it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();

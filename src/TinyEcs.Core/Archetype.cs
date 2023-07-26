@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace TinyEcs;
 
-sealed unsafe class Archetype
+public sealed unsafe class Archetype
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
@@ -15,7 +15,7 @@ sealed unsafe class Archetype
 	private readonly EntityID[] _components;
 	private readonly Dictionary<EntityID, int> _lookup = new();
 
-	public Archetype(World world, ReadOnlySpan<EcsComponent> components)
+	internal Archetype(World world, ReadOnlySpan<EcsComponent> components)
 	{
 		_world = world;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
@@ -39,15 +39,18 @@ sealed unsafe class Archetype
 	}
 
 
-	public int Count => _count;
-	public EntityID[] Entities => _entityIDs;
-	public EntityID[] Components => _components;
-	public readonly EcsComponent[] ComponentInfo;
+	internal readonly EcsComponent[] ComponentInfo;
+
+
+	internal EntityID[] Entities => _entityIDs;
+	internal EntityID[] Components => _components;
+
 	public World World => _world;
+	public int Count => _count;
 
 
-
-	public int GetComponentIndex(EntityID component)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int GetComponentIndex(EntityID component)
 	{
 		ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
 		//ref var idx = ref _lookup.Get(component);
@@ -55,7 +58,7 @@ sealed unsafe class Archetype
 		return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
 	}
 
-	public int Add(EntityID entityID)
+	internal int Add(EntityID entityID)
 	{
 		if (_capacity == _count)
 		{
@@ -70,7 +73,7 @@ sealed unsafe class Archetype
 		return _count++;
 	}
 
-	public EntityID Remove(int row)
+	internal EntityID Remove(int row)
 	{
 		var removed = _entityIDs[row];
 		_entityIDs[row] = _entityIDs[_count - 1];
@@ -91,7 +94,7 @@ sealed unsafe class Archetype
 		return removed;
 	}
 
-	public Archetype InsertVertex(Archetype left, ReadOnlySpan<EcsComponent> newType, EntityID component)
+	internal Archetype InsertVertex(Archetype left, ReadOnlySpan<EcsComponent> newType, EntityID component)
 	{
 		var vertex = new Archetype(left._world, newType);
 		MakeEdges(left, vertex, component);
@@ -99,7 +102,7 @@ sealed unsafe class Archetype
 		return vertex;
 	}
 
-	public static int MoveEntity(Archetype from, Archetype to, int fromRow)
+	internal static int MoveEntity(Archetype from, Archetype to, int fromRow)
 	{
 		var removed = from._entityIDs[fromRow];
 		from._entityIDs[fromRow] = from._entityIDs[from._count - 1];
@@ -113,7 +116,7 @@ sealed unsafe class Archetype
 		return toRow;
 	}
 
-	public Span<byte> GetComponentRaw(EntityID component, int row, int count)
+	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)
 	{
 		var column = GetComponentIndex(component);
 		if (column < 0)
@@ -121,14 +124,14 @@ sealed unsafe class Archetype
 			return Span<byte>.Empty;
 		}
 
-		//Debug.Assert(row < Count); // this is not true when removing
+		//EcsAssert.Assert(row < Count); // this is not true when removing
 
 		ref readonly var meta = ref ComponentInfo[column];
 
 		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
 	}
 
-	public void Clear()
+	internal void Clear()
 	{
 		_count = 0;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
@@ -136,7 +139,7 @@ sealed unsafe class Archetype
 		ResizeComponentArray(_capacity);
 	}
 
-	public void Optimize()
+	internal void Optimize()
 	{
 		var pow = (int) BitOperations.RoundUpToPowerOf2((uint) _count);
 		var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
@@ -228,7 +231,7 @@ sealed unsafe class Archetype
 		}
 	}
 
-	public bool IsSuperset(ReadOnlySpan<EntityID> other)
+	internal bool IsSuperset(ReadOnlySpan<EntityID> other)
 	{
 		int i = 0, j = 0;
 		while (i < _components.Length && j < other.Length)
@@ -243,6 +246,38 @@ sealed unsafe class Archetype
 
 		return j == other.Length;
 	}
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public Span<T> Field<T>() where T : unmanaged
+	{
+		var id = World.Component<T>();
+		var size = TypeInfo<T>.Size;
+		var column = GetComponentIndex(id);
+
+		EcsAssert.Assert(column >= 0);
+
+		return MemoryMarshal.Cast<byte, T>(_componentsData[column].AsSpan(0, size * Count));
+
+		// ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(GetComponentRaw(id, 0, Count)));
+
+		// EcsAssert.Assert(!Unsafe.IsNullRef(ref value));
+
+		// return MemoryMarshal.CreateSpan(ref value, Count);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool Has<T>() where T : unmanaged
+	{
+		var id = World.Component<T>();
+		var column = GetComponentIndex(id);
+
+		return column >= 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public EntityView Entity(int row)
+		=> new (World, Entities[row]);
 }
 
 struct EcsEdge

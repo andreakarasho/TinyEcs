@@ -7,13 +7,13 @@ static class TypeInfo<T> where T : unmanaged
 
 	public static unsafe readonly int Size = sizeof(T);
 
-	public static EntityID GetID(World world, EntityID id = 0)
+	public static EntityID GetID(World world)
 	{
-		Debug.Assert(world != null);
+		EcsAssert.Assert(world != null);
 
 		lock (_lock)
 		{
-			ref var cmpID = ref _ids.Get(world.ID);
+			ref var cmpID = ref _ids.Get(world!.ID);
 			if (Unsafe.IsNullRef(ref cmpID) || !world.IsAlive(cmpID))
 			{
 				var ent = world.SpawnEmpty();

@@ -22,10 +22,9 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EcsEnabled>(),
 				_mergeWorld.Component<ComponentAdded>(),
 			},
-			ReadOnlySpan<EntityID>.Empty,
+			Span<EntityID>.Empty,
 			arch => {
-				var it = new EntityIterator(arch, 0f);
-				ComponentSetSystem(this, ref it);
+				ComponentSetSystem(this, arch);
 			}
 		);
 
@@ -34,10 +33,9 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EcsEnabled>(),
 				_mergeWorld.Component<ComponentEdited>(),
 			},
-			ReadOnlySpan<EntityID>.Empty,
+			Span<EntityID>.Empty,
 			arch => {
-				var it = new EntityIterator(arch, 0f);
-				ComponentEditedSystem(this, ref it);
+				ComponentEditedSystem(this, arch);
 			}
 		);
 
@@ -46,10 +44,9 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EcsEnabled>(),
 				_mergeWorld.Component<ComponentRemoved>(),
 			},
-			ReadOnlySpan<EntityID>.Empty,
+			Span<EntityID>.Empty,
 			arch => {
-				var it = new EntityIterator(arch, 0f);
-				ComponentUnsetSystem(this, ref it);
+				ComponentUnsetSystem(this, arch);
 			}
 		);
 
@@ -58,10 +55,9 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EcsEnabled>(),
 				_mergeWorld.Component<EntityDestroyed>(),
 			},
-			ReadOnlySpan<EntityID>.Empty,
+			Span<EntityID>.Empty,
 			arch => {
-				var it = new EntityIterator(arch, 0f);
-				EntityDestroyedSystem(this, ref it);
+				EntityDestroyedSystem(this, arch);
 			}
 		);
 
@@ -70,16 +66,15 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EcsEnabled>(),
 				_mergeWorld.Component<MarkDestroy>(),
 			},
-			ReadOnlySpan<EntityID>.Empty,
+			Span<EntityID>.Empty,
 			arch => {
-				var it = new EntityIterator(arch, 0f);
-				MarkDestroySystem(this, ref it);
+				MarkDestroySystem(this, arch);
 			}
 		);
 	}
 
 
-	static void EntityDestroyedSystem(Commands cmds, ref EntityIterator it)
+	static void EntityDestroyedSystem(Commands cmds, Archetype it)
 	{
 		var main = cmds.Main;
 
@@ -93,7 +88,7 @@ public sealed class Commands : IDisposable
 		}
 	}
 
-	static void ComponentSetSystem(Commands cmds, ref EntityIterator it)
+	static void ComponentSetSystem(Commands cmds, Archetype it)
 	{
 		var main = cmds.Main;
 
@@ -103,12 +98,12 @@ public sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
+			var raw = it.GetComponentRaw(op.ID, i, 1);
 			main.SetComponentData(op.Target, op.Component, raw);
 		}
 	}
 
-	static void ComponentEditedSystem(Commands cmds, ref EntityIterator it)
+	static void ComponentEditedSystem(Commands cmds, Archetype it)
 	{
 		var main = cmds.Main;
 
@@ -118,12 +113,12 @@ public sealed class Commands : IDisposable
 		{
 			ref var op = ref opA[i];
 
-			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
+			var raw = it.GetComponentRaw(op.ID, i, 1);
 			main.SetComponentData(op.Target, op.Component, raw);
 		}
 	}
 
-	static void ComponentUnsetSystem(Commands cmds, ref EntityIterator it)
+	static void ComponentUnsetSystem(Commands cmds, Archetype it)
 	{
 		var main = cmds.Main;
 
@@ -137,7 +132,7 @@ public sealed class Commands : IDisposable
 		}
 	}
 
-	static void MarkDestroySystem(Commands cmds, ref EntityIterator it)
+	static void MarkDestroySystem(Commands cmds, Archetype it)
 	{
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -150,7 +145,7 @@ public sealed class Commands : IDisposable
 
 	public CommandEntityView Entity(EntityID id)
 	{
-		Debug.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.IsAlive(id));
 
 		return new CommandEntityView(this, id);
 	}
@@ -164,7 +159,7 @@ public sealed class Commands : IDisposable
 
 	public void Despawn(EntityID entity)
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -176,7 +171,7 @@ public sealed class Commands : IDisposable
 
 	public void Set<T>(EntityID entity, T cmp = default) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		var idMain = _main.Component<T>();
 		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
@@ -196,7 +191,7 @@ public sealed class Commands : IDisposable
 		where T0 : unmanaged
 		where T1 : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		var idMain0 = _main.Component<T0>();
 		var idMain1 = _main.Component<T1>();
@@ -206,8 +201,8 @@ public sealed class Commands : IDisposable
 
 	public void Add(EntityID entity, EntityID cmp)
 	{
-		Debug.Assert(_main.IsAlive(entity));
-		Debug.Assert(_main.IsAlive(cmp));
+		EcsAssert.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(cmp));
 
 		var idMain = cmp;
 		var idMerge = _mergeWorld.Component<ComponentPocEntity>();
@@ -225,9 +220,9 @@ public sealed class Commands : IDisposable
 
 	public void Add(EntityID entity, EntityID first, EntityID second)
 	{
-		Debug.Assert(_main.IsAlive(entity));
-		Debug.Assert(_main.IsAlive(first));
-		Debug.Assert(_main.IsAlive(second));
+		EcsAssert.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(first));
+		EcsAssert.Assert(_main.IsAlive(second));
 
 		var idMain = IDOp.Pair(first, second);
 		var idMerge = _mergeWorld.Component<ComponentPocEntityPair>();
@@ -245,7 +240,7 @@ public sealed class Commands : IDisposable
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		_mergeWorld.Spawn()
 			.Set<MarkDestroy>()
@@ -258,7 +253,7 @@ public sealed class Commands : IDisposable
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		if (_main.Has<T>(entity))
 		{
@@ -285,7 +280,7 @@ public sealed class Commands : IDisposable
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		return _main.Has<T>(entity);
 	}
