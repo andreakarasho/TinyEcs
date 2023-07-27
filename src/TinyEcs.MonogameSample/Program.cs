@@ -52,8 +52,7 @@ sealed unsafe class TinyGame : Game
 		var qry = _ecs.Query()
 			.With<Position>()
 			.With<Velocity>()
-			.With<Rotation>()
-			.ID;
+			.With<Rotation>();
 
 		_ecs.AddSystem(&MoveSystem)
 		    .SetQuery(qry);
@@ -62,11 +61,11 @@ sealed unsafe class TinyGame : Game
 
 		_ecs.AddSystem(&BeginRender);
 		_ecs.AddSystem(&Render)
-				.SetQuery(_ecs.Query()
+			.SetQuery(
+				_ecs.Query()
 				.With<Position>()
 				.With<Rotation>()
 				.With<Sprite>()
-				.ID
 			);
 		_ecs.AddSystem(&EndRender);
 

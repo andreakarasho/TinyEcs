@@ -1,38 +1,69 @@
 namespace TinyEcs;
 
-
-
-public readonly ref struct Query2
+public ref struct QueryBuilder
 {
 	private readonly World _world;
 	private readonly List<EntityID> _with, _without;
+	private EntityID _id;
 
-	internal Query2(World world)
+	internal QueryBuilder(World world)
 	{
 		_world = world;
 		_with = new List<EntityID>();
 		_without = new List<EntityID>();
 	}
 
-	public readonly Query2 With<T>() where T : unmanaged
+	public readonly QueryBuilder With<T>() where T : unmanaged
+		=> With(_world.Component<T>());
+
+	public readonly QueryBuilder With<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+		=> With(_world.Component<TKind>(), _world.Component<TTarget>());
+
+	public readonly QueryBuilder With(EntityID id)
 	{
-		_with.Add(_world.Component<T>());
+		_with.Add(id);
 		return this;
 	}
 
-	public readonly Query2 Without<T>() where T : unmanaged
+	public readonly QueryBuilder With(EntityID first, EntityID second)
 	{
-		_without.Add(_world.Component<T>());
+		_with.Add(IDOp.Pair(first, second));
 		return this;
 	}
 
-	public readonly void Build()
+	public readonly QueryBuilder Without<T>() where T : unmanaged
+		=> Without(_world.Component<T>());
+
+	public readonly QueryBuilder Without<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+		=> Without(_world.Component<TKind>(), _world.Component<TTarget>());
+
+	public readonly QueryBuilder Without(EntityID id)
 	{
+		_without.Add(id);
+		return this;
+	}
+
+	public readonly QueryBuilder Without(EntityID first, EntityID second)
+	{
+		_without.Add(IDOp.Pair(first, second));
+		return this;
+	}
+
+	public EntityView Build()
+	{
+		if (_id != 0)
+			return new EntityView(_world, _id);
+
+		_with.Sort();
+		_without.Sort();
+
 		var spanWith = CollectionsMarshal.AsSpan(_with);
 		var spawnWithout = CollectionsMarshal.AsSpan(_without);
 
 		var ent = _world.Spawn()
-			.Set<EcsQuery>();
+			.Set<EcsQueryBuilder>();
+
+		_id = ent.ID;
 
 		Span<byte> empty = stackalloc byte[1];
 
@@ -41,75 +72,12 @@ public readonly ref struct Query2
 
 		foreach (var cmp in spawnWithout)
 			_world.SetComponentData(ent.ID, cmp | EcsConst.ECS_QUERY_WITHOUT, empty);
+
+		return ent;
 	}
 
 	public readonly void Iterate(Action<Archetype> action)
 	{
 		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), action);
-	}
-}
-
-
-
-public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
-{
-	public readonly EntityID ID;
-	internal readonly World World;
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryBuilder(World world, EntityID id)
-	{
-		World = world;
-		ID = id;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(ulong other)
-	{
-		return ID == other;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(QueryBuilder other)
-	{
-		return ID == other.ID;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With<T>() where T : unmanaged
-	{
-		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With<TKind, TTarget>()
-		where TKind : unmanaged
-		where TTarget : unmanaged
-	{
-		return With(World.Component<TKind>(), World.Component<TTarget>());
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With(EntityID first, EntityID second)
-	{
-		var id = IDOp.Pair(first, second) | EcsConst.ECS_QUERY_WITH;
-		World.SetComponentData(ID, id, stackalloc byte[1]);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With(EntityID id)
-	{
-        World.SetComponentData(ID, id | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder Without<T>() where T : unmanaged
-	{
-		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITHOUT, stackalloc byte[1]);
-		return this;
 	}
 }

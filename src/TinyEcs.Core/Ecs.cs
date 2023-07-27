@@ -36,9 +36,6 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public Query2 Query2()
-		=> _world.Query2();
-
 	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Commands, Archetype, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
@@ -50,7 +47,7 @@ sealed unsafe class Ecs
 	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, Archetype, void> system, in QueryBuilder query)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>()
-			.Set(new EcsQuery() { ID = query.ID });
+			.Set(new EcsQuery() { ID = query.Build() });
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
 		=> _world.SetSingleton(cmp);

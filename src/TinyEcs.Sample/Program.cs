@@ -26,13 +26,13 @@ unsafe
 			world.Component<byte>()
 		},
 		Span<EntityID>.Empty,
-		arch => {
+		static arch => {
 			Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
 		}
 	);
 }
 
-world.Query2().With<float>().With<int>().Iterate(static a => {
+world.Query().With<float>().With<int>().Iterate(static a => {
 	var floatA = a.Field<float>();
 	var intA = a.Field<int>();
 
@@ -89,7 +89,7 @@ var qry1 = ecs.Query().With(childOf.ID, root);
 
 // }
 
-ecs.Entity(id).Each(s =>
+ecs.Entity(id).Each(static s =>
 {
 	if (s.IsPair())
 	{
@@ -109,9 +109,9 @@ unsafe
 {
 	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
 
-	ecs.Query2()
+	ecs.Query()
 		.With<EcsComponent>()
-		.Iterate(it => {
+		.Iterate(static it => {
 			var cmpA = it.Field<EcsComponent>();
 
 			for (int i = 0; i < it.Count; ++i)
@@ -133,7 +133,9 @@ unsafe
 	//ecs.AddSystem(&PrintSystem)
 	//	.SetTick(1f); // update every 50ms
 	ecs.AddSystem(&ParseQuery)
-		.SetQuery(query.ID);
+		.SetQuery(ecs.Query().With<Position>().With<Velocity>().Without<float>());
+
+		//.SetQuery(query.ID);
 	//ecs.AddSystem(&PrintWarnSystem);
 }
 
