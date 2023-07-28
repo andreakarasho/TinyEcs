@@ -15,7 +15,7 @@ var world = new World();
 
 for (int i = 0; i < 100; ++i)
 	world.Spawn();
-var cmds = new Commands2(world);
+var cmds = new Commands(world);
 var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
 //ref var floatt = ref e.Get<float>();
 cmds.Merge();
@@ -71,12 +71,12 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.Set<Likes, Dogs>()
-	.Set<Likes, Apples>()
-	.Set(pos.ID)
-	.Set(likes.ID, cats.ID)
-	.Set(likes.ID, flowers.ID)
-	.Set(childOf.ID, root)
+	.Add<Likes, Dogs>()
+	.Add<Likes, Apples>()
+	.Add(pos.ID)
+	.Add(likes.ID, cats.ID)
+	.Add(likes.ID, flowers.ID)
+	.Add(childOf.ID, root)
 	.ID;
 
 var posID = ecs.Component<Position>();

@@ -294,18 +294,18 @@ public sealed class World : IDisposable
 		}
 	}
 
-	public void Query(Span<EntityID> with, Span<EntityID> without, IteratorDelegate action)
+	public void Query(Span<EntityID> with, Span<EntityID> without, Commands commands, IteratorDelegate action)
 	{
 		with.Sort();
 		without.Sort();
 
-		QueryRec(_archRoot, with, without, action);
+		QueryRec(_archRoot, with, without, commands, action);
 
-		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, IteratorDelegate action)
+		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Commands commands, IteratorDelegate action)
 		{
 			if (root.Count > 0 && root.IsSuperset(with))
 			{
-				var it = new Iterator(null, root);
+				var it = new Iterator(commands, root);
 				action(it);
 			}
 
@@ -322,7 +322,7 @@ public sealed class World : IDisposable
 			{
 				if (without.IndexOf(start.ComponentID) < 0)
 				{
-					QueryRec(start.Archetype, with, without, action);
+					QueryRec(start.Archetype, with, without, commands, action);
 				}
 
 				start = ref Unsafe.Add(ref start, 1);

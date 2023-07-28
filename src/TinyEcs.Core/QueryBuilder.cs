@@ -78,6 +78,6 @@ public ref struct QueryBuilder
 
 	public readonly void Iterate(IteratorDelegate action)
 	{
-		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), action);
+		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), null, action);
 	}
 }

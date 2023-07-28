@@ -69,6 +69,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhasePreStartup>()
 				},
 				Span<EntityID>.Empty,
+				_cmds,
 				RunSystems
 			);
 
@@ -79,6 +80,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhaseOnStartup>()
 				},
 				Span<EntityID>.Empty,
+				_cmds,
 				RunSystems
 			);
 
@@ -89,6 +91,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhasePostStartup>()
 				},
 				Span<EntityID>.Empty,
+				_cmds,
 				RunSystems
 			);
 		}
@@ -100,6 +103,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhasePreUpdate>()
 			},
 			Span<EntityID>.Empty,
+			_cmds,
 			RunSystems
 		);
 
@@ -110,6 +114,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhaseOnUpdate>()
 			},
 			Span<EntityID>.Empty,
+			_cmds,
 			RunSystems
 		);
 
@@ -120,6 +125,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhasePostUpdate>()
 			},
 			Span<EntityID>.Empty,
+			_cmds,
 			RunSystems
 		);
 
@@ -202,7 +208,7 @@ sealed unsafe class Ecs
 			with.Sort();
 			without.Sort();
 
-			world.Query(with, without, it => {
+			world.Query(with, without, cmds, it => {
 				system(it);
 			});
 		}
