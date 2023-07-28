@@ -36,15 +36,15 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Commands, Archetype, void> system)
+	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, Archetype, void> system)
+	public unsafe SystemBuilder AddSystem(delegate* managed<Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, Archetype, void> system, in QueryBuilder query)
+	public unsafe SystemBuilder AddSystem(delegate* managed<Iterator, void> system, in QueryBuilder query)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>()
 			.Set(new EcsQuery() { ID = query.Build() });
@@ -55,6 +55,7 @@ sealed unsafe class Ecs
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref _world.GetSingleton<T>();
 
+	[SkipLocalsInit]
 	public unsafe void Step(float delta = 0.0f)
 	{
 		_cmds.Merge();
@@ -68,9 +69,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhasePreStartup>()
 				},
 				Span<EntityID>.Empty,
-				arch => {
-					RunSystems(_cmds, arch);
-				}
+				RunSystems
 			);
 
 			_world.Query(
@@ -80,9 +79,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhaseOnStartup>()
 				},
 				Span<EntityID>.Empty,
-				arch => {
-					RunSystems(_cmds, arch);
-				}
+				RunSystems
 			);
 
 			_world.Query(
@@ -92,9 +89,7 @@ sealed unsafe class Ecs
 					_world.Component<EcsSystemPhasePostStartup>()
 				},
 				Span<EntityID>.Empty,
-				arch => {
-					RunSystems(_cmds, arch);
-				}
+				RunSystems
 			);
 		}
 
@@ -105,9 +100,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhasePreUpdate>()
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				RunSystems(_cmds, arch);
-			}
+			RunSystems
 		);
 
 		_world.Query(
@@ -117,9 +110,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhaseOnUpdate>()
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				RunSystems(_cmds, arch);
-			}
+			RunSystems
 		);
 
 		_world.Query(
@@ -129,9 +120,7 @@ sealed unsafe class Ecs
 				_world.Component<EcsSystemPhasePostUpdate>()
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				RunSystems(_cmds, arch);
-			}
+			RunSystems
 		);
 
 		_cmds.Merge();
@@ -139,15 +128,15 @@ sealed unsafe class Ecs
 	}
 
 
-	static unsafe void RunSystems(Commands cmds, Archetype arch)
+	static unsafe void RunSystems(Iterator it)
 	{
 		var deltaTime = 0f;
 
-		var sysA = arch.Field<EcsSystem>();
-		var sysTickA = arch.Field<EcsSystemTick>();
-		var queryA = arch.Field<EcsQuery>();
+		var sysA = it.Field<EcsSystem>();
+		var sysTickA = it.Field<EcsSystemTick>();
+		var queryA = it.Field<EcsQuery>();
 
-		for (int i = 0; i < arch.Count; ++i)
+		for (int i = 0; i < it.Count; ++i)
 		{
 			ref var sys = ref sysA[i];
 			ref var query = ref queryA[i];
@@ -168,16 +157,16 @@ sealed unsafe class Ecs
 
 			if (query.ID != 0)
 			{
-				Fetch(arch.World, query.ID, cmds, sys.Func, deltaTime);
+				Fetch(it.World, query.ID, it.Commands!, sys.Func, deltaTime);
 			}
 			else
 			{
-				sys.Func(cmds, arch);
+				sys.Func(it);
 			}
 		}
 	}
 
-	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<Commands, Archetype, void> system, float deltaTime)
+	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<Iterator, void> system, float deltaTime)
 	{
 		EcsAssert.Assert(world.IsAlive(query));
 		EcsAssert.Assert(world.Has<EcsQueryBuilder>(query));
@@ -213,8 +202,8 @@ sealed unsafe class Ecs
 			with.Sort();
 			without.Sort();
 
-			world.Query(with, without, arch => {
-				system(cmds, arch);
+			world.Query(with, without, it => {
+				system(it);
 			});
 		}
 	}
@@ -254,3 +243,36 @@ public static class SortExtensions
 	}
 }
 #endif
+
+
+
+public delegate void IteratorDelegate(Iterator it);
+
+public readonly ref struct Iterator
+{
+	private readonly Archetype _archetype;
+
+	internal Iterator(Commands? commands, Archetype archetype)
+	{
+		Commands = commands;
+		_archetype = archetype;
+	}
+
+	public Commands? Commands { get; }
+	public World World => _archetype.World;
+	public int Count => _archetype.Count;
+	public float DeltaTime => World.DeltaTime;
+
+
+	public readonly Span<T> Field<T>() where T : unmanaged
+		=> _archetype.Field<T>();
+
+	public readonly bool Has<T>() where T : unmanaged
+		=> _archetype.Has<T>();
+
+	public readonly EntityView Entity(int i)
+		=> _archetype.Entity(i);
+
+	internal readonly Span<byte> GetComponentRaw(EntityID id, int row, int count)
+		=> _archetype.GetComponentRaw(id, row, count);
+}

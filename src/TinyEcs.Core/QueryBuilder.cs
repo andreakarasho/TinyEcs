@@ -68,15 +68,15 @@ public ref struct QueryBuilder
 		Span<byte> empty = stackalloc byte[1];
 
 		foreach (var cmp in spanWith)
-			_world.SetComponentData(ent.ID, cmp | EcsConst.ECS_QUERY_WITH, empty);
+			_world.Set(ent.ID, cmp | EcsConst.ECS_QUERY_WITH, empty);
 
 		foreach (var cmp in spawnWithout)
-			_world.SetComponentData(ent.ID, cmp | EcsConst.ECS_QUERY_WITHOUT, empty);
+			_world.Set(ent.ID, cmp | EcsConst.ECS_QUERY_WITHOUT, empty);
 
 		return ent;
 	}
 
-	public readonly void Iterate(Action<Archetype> action)
+	public readonly void Iterate(IteratorDelegate action)
 	{
 		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), action);
 	}

@@ -40,7 +40,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Add(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		World.SetComponentData(ID, id, stackalloc byte[1]);
+		World.Set(ID, id, stackalloc byte[1]);
 		return this;
 	}
 

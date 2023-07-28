@@ -23,9 +23,7 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<ComponentAdded>(),
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				ComponentSetSystem(this, arch);
-			}
+			ComponentSetSystem
 		);
 
 		_mergeWorld.Query(
@@ -34,9 +32,7 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<ComponentEdited>(),
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				ComponentEditedSystem(this, arch);
-			}
+			ComponentEditedSystem
 		);
 
 		_mergeWorld.Query(
@@ -45,9 +41,7 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<ComponentRemoved>(),
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				ComponentUnsetSystem(this, arch);
-			}
+			ComponentUnsetSystem
 		);
 
 		_mergeWorld.Query(
@@ -56,9 +50,7 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<EntityDestroyed>(),
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				EntityDestroyedSystem(this, arch);
-			}
+			EntityDestroyedSystem
 		);
 
 		_mergeWorld.Query(
@@ -67,16 +59,14 @@ public sealed class Commands : IDisposable
 				_mergeWorld.Component<MarkDestroy>(),
 			},
 			Span<EntityID>.Empty,
-			arch => {
-				MarkDestroySystem(this, arch);
-			}
+			MarkDestroySystem
 		);
 	}
 
 
-	static void EntityDestroyedSystem(Commands cmds, Archetype it)
+	static void EntityDestroyedSystem(Iterator it)
 	{
-		var main = cmds.Main;
+		var main = it.Commands!.Main;
 
 		var opA = it.Field<EntityDestroyed>();
 
@@ -88,9 +78,9 @@ public sealed class Commands : IDisposable
 		}
 	}
 
-	static void ComponentSetSystem(Commands cmds, Archetype it)
+	static void ComponentSetSystem(Iterator it)
 	{
-		var main = cmds.Main;
+		var main = it.Commands!.Main;
 
 		var opA = it.Field<ComponentAdded>();
 
@@ -99,13 +89,13 @@ public sealed class Commands : IDisposable
 			ref var op = ref opA[i];
 
 			var raw = it.GetComponentRaw(op.ID, i, 1);
-			main.SetComponentData(op.Target, op.Component, raw);
+			main.Set(op.Target, op.Component, raw);
 		}
 	}
 
-	static void ComponentEditedSystem(Commands cmds, Archetype it)
+	static void ComponentEditedSystem(Iterator it)
 	{
-		var main = cmds.Main;
+		var main = it.Commands!.Main;
 
 		var opA = it.Field<ComponentEdited>();
 
@@ -114,13 +104,13 @@ public sealed class Commands : IDisposable
 			ref var op = ref opA[i];
 
 			var raw = it.GetComponentRaw(op.ID, i, 1);
-			main.SetComponentData(op.Target, op.Component, raw);
+			main.Set(op.Target, op.Component, raw);
 		}
 	}
 
-	static void ComponentUnsetSystem(Commands cmds, Archetype it)
+	static void ComponentUnsetSystem(Iterator it)
 	{
-		var main = cmds.Main;
+		var main = it.Commands!.Main;
 
 		var opA = it.Field<ComponentRemoved>();
 
@@ -132,13 +122,13 @@ public sealed class Commands : IDisposable
 		}
 	}
 
-	static void MarkDestroySystem(Commands cmds, Archetype it)
+	static void MarkDestroySystem(Iterator it)
 	{
 		for (int i = 0; i < it.Count; ++i)
 		{
 			var entity = it.Entity(i);
 
-			cmds._mergeWorld.Despawn(entity);
+			it.Commands!._mergeWorld.Despawn(entity);
 		}
 	}
 

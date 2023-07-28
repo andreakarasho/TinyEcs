@@ -60,7 +60,7 @@ public sealed class World : IDisposable
 		return new QueryBuilder(this);
 	}
 
-	public unsafe SystemBuilder System(delegate* managed<Commands, Archetype, void> system)
+	public unsafe SystemBuilder System(delegate* managed<Iterator, void> system)
 		=> new SystemBuilder(this,
 			Spawn()
 				.Set(new EcsSystem(system))
@@ -81,9 +81,6 @@ public sealed class World : IDisposable
 
 	public void Despawn(EntityID entity)
 	{
-		RemoveChildren(entity);
-		Detach(entity);
-
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
@@ -108,7 +105,6 @@ public sealed class World : IDisposable
 		InternalAttachDetach(entity, component, -1);
 	}
 
-	[SkipLocalsInit]
 	private bool InternalAttachDetach(EntityID entity, EntityID component, int size)
 	{
 		ref var record = ref _entities.Get(entity);
@@ -125,6 +121,7 @@ public sealed class World : IDisposable
 		return true;
 	}
 
+	[SkipLocalsInit]
 	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size)
 	{
 		var column = root.GetComponentIndex(component);
@@ -224,7 +221,7 @@ public sealed class World : IDisposable
 		return arch;
 	}
 
-	internal void SetComponentData(EntityID entity, EntityID component, ReadOnlySpan<byte> data)
+	internal void Set(EntityID entity, EntityID component, ReadOnlySpan<byte> data)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
@@ -253,7 +250,7 @@ public sealed class World : IDisposable
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
-		=> SetComponentData(
+		=> Set(
 				entity,
 				Component<T>(),
 				new ReadOnlySpan<byte>(&component, TypeInfo<T>.Size)
@@ -297,18 +294,19 @@ public sealed class World : IDisposable
 		}
 	}
 
-	public void Query(Span<EntityID> with, Span<EntityID> without, Action<Archetype> action)
+	public void Query(Span<EntityID> with, Span<EntityID> without, IteratorDelegate action)
 	{
 		with.Sort();
 		without.Sort();
 
 		QueryRec(_archRoot, with, without, action);
 
-		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Action<Archetype> action)
+		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, IteratorDelegate action)
 		{
 			if (root.Count > 0 && root.IsSuperset(with))
 			{
-				action(root);
+				var it = new Iterator(null, root);
+				action(it);
 			}
 
 			var span = CollectionsMarshal.AsSpan(root._edgesRight);

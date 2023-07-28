@@ -21,15 +21,15 @@ world.PrintGraph();
 
 unsafe
 {
-	world.Query(stackalloc EntityID[] {
-			world.Component<float>(),
-			world.Component<byte>()
-		},
-		Span<EntityID>.Empty,
-		static arch => {
-			Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
-		}
-	);
+	// world.Query(stackalloc EntityID[] {
+	// 		world.Component<float>(),
+	// 		world.Component<byte>()
+	// 	},
+	// 	Span<EntityID>.Empty,
+	// 	static arch => {
+	// 		Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
+	// 	}
+	// );
 }
 
 world.Query().With<float>().With<int>().Iterate(static a => {
@@ -159,22 +159,22 @@ while (true)
 }
 
 
-static void Setup(Commands cmds, Archetype it)
+static void Setup(Iterator it)
 {
 	var sw = Stopwatch.StartNew();
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
-		cmds.Spawn()
+		it.Commands!.Spawn()
 			.Set<Position>()
 			.Set<Velocity>();
 
-	var character = cmds.Spawn()
+	var character = it.Commands!.Spawn()
 		.Set(new Serial() { Value = 0xDEAD_BEEF });
 
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
-static void ParseQuery(Commands cmds, Archetype it)
+static void ParseQuery(Iterator it)
 {
 	var posF = it.Field<Position>();
 	var velF = it.Field<Velocity>();
@@ -194,12 +194,12 @@ static void ParseQuery(Commands cmds, Archetype it)
 	}
 }
 
-static void PrintSystem(Commands cmds, Archetype it)
+static void PrintSystem(Iterator it)
 {
 	Console.WriteLine("1");
 }
 
-static void PrintWarnSystem(Commands cmds, Archetype it)
+static void PrintWarnSystem(Iterator it)
 {
 	//Console.WriteLine("3");
 }
