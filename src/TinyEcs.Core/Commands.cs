@@ -69,7 +69,7 @@ public sealed class Commands2
 
 		if (set.Data.Length < set.Size)
 		{
-			set.Data = new byte[Math.Max(8, (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
 		}
 
 		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span);
