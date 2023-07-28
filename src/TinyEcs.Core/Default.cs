@@ -30,9 +30,9 @@ public struct EcsQuery
 
 public unsafe readonly struct EcsSystem
 {
-	public readonly delegate* managed<Iterator, void> Func;
+	public readonly delegate* managed<ref Iterator, void> Func;
 
-	public EcsSystem(delegate* managed<Iterator, void> func)
+	public EcsSystem(delegate* managed<ref Iterator, void> func)
 	{
 		Func = func;
 	}

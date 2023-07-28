@@ -23,7 +23,7 @@ public sealed class World : IDisposable
 
 	public int EntityCount => _entities.Length;
 
-	public float DeltaTime { get; private set; }
+	public float DeltaTime { get; internal set; }
 
 
 
@@ -60,7 +60,7 @@ public sealed class World : IDisposable
 		return new QueryBuilder(this);
 	}
 
-	public unsafe SystemBuilder System(delegate* managed<Iterator, void> system)
+	public unsafe SystemBuilder System(delegate* managed<ref Iterator, void> system)
 		=> new SystemBuilder(this,
 			Spawn()
 				.Set(new EcsSystem(system))
@@ -306,7 +306,7 @@ public sealed class World : IDisposable
 			if (root.Count > 0 && root.IsSuperset(with))
 			{
 				var it = new Iterator(commands, root);
-				action(it);
+				action(ref it);
 			}
 
 			var span = CollectionsMarshal.AsSpan(root._edgesRight);

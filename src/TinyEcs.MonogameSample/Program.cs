@@ -87,12 +87,12 @@ sealed unsafe class TinyGame : Game
 		base.Draw(gameTime);
 	}
 
-	static void PrintMessage(Iterator it)
+	static void PrintMessage(ref Iterator it)
 	{
 		Console.WriteLine("print!");
 	}
 
-    static void Setup(Iterator it)
+    static void Setup(ref Iterator it)
     {
         var deviceHandle = Assets<GraphicsDevice>.Get("device");
         var batcherHandle = Assets<SpriteBatch>.Get("batcher");
@@ -100,7 +100,7 @@ sealed unsafe class TinyGame : Game
         it.World.SetSingleton(new GameState(deviceHandle, batcherHandle));
     }
 
-	static void SpawnEntities(Iterator it)
+	static void SpawnEntities(ref Iterator it)
 	{
 		var rnd = new Random();
 		ref var gameState = ref it.World.GetSingleton<GameState>();
@@ -132,9 +132,8 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void MoveSystem(Iterator it)
+	static void MoveSystem(ref Iterator it)
 	{
-		var deltaTime = 0f;
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
 		var r = it.Field<Rotation>();
@@ -145,14 +144,14 @@ sealed unsafe class TinyGame : Game
 			ref var vel = ref v[i];
 			ref var rot = ref r[i];
 
-			Vector2.Multiply(ref vel.Value, deltaTime, out var res);
+			Vector2.Multiply(ref vel.Value, it.DeltaTime, out var res);
 			Vector2.Add(ref pos.Value, ref res, out pos.Value);
 
-			rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * deltaTime));
+			rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * it.DeltaTime));
 		}
 	}
 
-	static void CheckBorderSystem(Iterator it)
+	static void CheckBorderSystem(ref Iterator it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -186,7 +185,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void BeginRender(Iterator it)
+	static void BeginRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -195,7 +194,7 @@ sealed unsafe class TinyGame : Game
 		batch.Begin();
 	}
 
-	static void EndRender(Iterator it)
+	static void EndRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -203,7 +202,7 @@ sealed unsafe class TinyGame : Game
 		batch.End();
 	}
 
-	static void Render(Iterator it)
+	static void Render(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();

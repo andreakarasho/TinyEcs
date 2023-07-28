@@ -36,15 +36,15 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Iterator, void> system)
+	public unsafe SystemBuilder AddStartupSystem(delegate* managed<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Iterator, void> system)
+	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Iterator, void> system, in QueryBuilder query)
+	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system, in QueryBuilder query)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>()
 			.Set(new EcsQuery() { ID = query.Build() });
@@ -58,6 +58,8 @@ sealed unsafe class Ecs
 	[SkipLocalsInit]
 	public unsafe void Step(float delta = 0.0f)
 	{
+		_world.DeltaTime = delta;
+
 		_cmds.Merge();
 
 		if (_frame == 0)
@@ -70,7 +72,7 @@ sealed unsafe class Ecs
 				},
 				Span<EntityID>.Empty,
 				_cmds,
-				RunSystems
+				static (ref Iterator it) => RunSystems(ref it)
 			);
 
 			_world.Query(
@@ -81,7 +83,7 @@ sealed unsafe class Ecs
 				},
 				Span<EntityID>.Empty,
 				_cmds,
-				RunSystems
+				static (ref Iterator it) => RunSystems(ref it)
 			);
 
 			_world.Query(
@@ -92,7 +94,7 @@ sealed unsafe class Ecs
 				},
 				Span<EntityID>.Empty,
 				_cmds,
-				RunSystems
+				static (ref Iterator it) => RunSystems(ref it)
 			);
 		}
 
@@ -104,7 +106,7 @@ sealed unsafe class Ecs
 			},
 			Span<EntityID>.Empty,
 			_cmds,
-			RunSystems
+			static (ref Iterator it) => RunSystems(ref it)
 		);
 
 		_world.Query(
@@ -115,7 +117,7 @@ sealed unsafe class Ecs
 			},
 			Span<EntityID>.Empty,
 			_cmds,
-			RunSystems
+			static (ref Iterator it) => RunSystems(ref it)
 		);
 
 		_world.Query(
@@ -126,7 +128,7 @@ sealed unsafe class Ecs
 			},
 			Span<EntityID>.Empty,
 			_cmds,
-			RunSystems
+			static (ref Iterator it) => RunSystems(ref it)
 		);
 
 		_cmds.Merge();
@@ -134,10 +136,8 @@ sealed unsafe class Ecs
 	}
 
 
-	static unsafe void RunSystems(Iterator it)
+	static unsafe void RunSystems(ref Iterator it)
 	{
-		var deltaTime = 0f;
-
 		var sysA = it.Field<EcsSystem>();
 		var sysTickA = it.Field<EcsSystemTick>();
 		var queryA = it.Field<EcsQuery>();
@@ -151,7 +151,7 @@ sealed unsafe class Ecs
 			if (tick.Value > 0.00f)
 			{
 				// TODO: check for it.DeltaTime > 0?
-				tick.Current += deltaTime;
+				tick.Current += it.DeltaTime;
 
 				if (tick.Current < tick.Value)
 				{
@@ -163,16 +163,16 @@ sealed unsafe class Ecs
 
 			if (query.ID != 0)
 			{
-				Fetch(it.World, query.ID, it.Commands!, sys.Func, deltaTime);
+				Fetch(it.World, query.ID, it.Commands!, sys.Func, it.DeltaTime);
 			}
 			else
 			{
-				sys.Func(it);
+				sys.Func(ref it);
 			}
 		}
 	}
 
-	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<Iterator, void> system, float deltaTime)
+	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<ref Iterator, void> system, float deltaTime)
 	{
 		EcsAssert.Assert(world.IsAlive(query));
 		EcsAssert.Assert(world.Has<EcsQueryBuilder>(query));
@@ -208,8 +208,8 @@ sealed unsafe class Ecs
 			with.Sort();
 			without.Sort();
 
-			world.Query(with, without, cmds, it => {
-				system(it);
+			world.Query(with, without, cmds, (ref Iterator it) => {
+				system(ref it);
 			});
 		}
 	}
@@ -252,7 +252,7 @@ public static class SortExtensions
 
 
 
-public delegate void IteratorDelegate(Iterator it);
+public delegate void IteratorDelegate(ref Iterator it);
 
 public readonly ref struct Iterator
 {

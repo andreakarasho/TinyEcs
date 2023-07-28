@@ -140,6 +140,11 @@ public sealed class Commands
 
 	public void Merge()
 	{
+		if (_despawn.Length == 0 && _set.Length == 0 && _unset.Length == 0)
+		{
+			return;
+		}
+
 		foreach (ref var set in _set)
 		{
 			EcsAssert.Assert(_main.IsAlive(set.Entity));

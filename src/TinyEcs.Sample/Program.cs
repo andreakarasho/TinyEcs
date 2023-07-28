@@ -46,7 +46,7 @@ unsafe
 	// );
 }
 
-world.Query().With<float>().With<int>().Iterate(static a => {
+world.Query().With<float>().With<int>().Iterate(static (ref Iterator a) => {
 	var floatA = a.Field<float>();
 	var intA = a.Field<int>();
 
@@ -125,7 +125,7 @@ unsafe
 
 	ecs.Query()
 		.With<EcsComponent>()
-		.Iterate(static it => {
+		.Iterate(static (ref Iterator it) => {
 			var cmpA = it.Field<EcsComponent>();
 
 			for (int i = 0; i < it.Count; ++i)
@@ -173,7 +173,7 @@ while (true)
 }
 
 
-static void Setup(Iterator it)
+static void Setup(ref Iterator it)
 {
 	var sw = Stopwatch.StartNew();
 
@@ -188,7 +188,7 @@ static void Setup(Iterator it)
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
-static void ParseQuery(Iterator it)
+static void ParseQuery(ref Iterator it)
 {
 	var posF = it.Field<Position>();
 	var velF = it.Field<Velocity>();
@@ -208,12 +208,12 @@ static void ParseQuery(Iterator it)
 	}
 }
 
-static void PrintSystem(Iterator it)
+static void PrintSystem(ref Iterator it)
 {
 	Console.WriteLine("1");
 }
 
-static void PrintWarnSystem(Iterator it)
+static void PrintWarnSystem(ref Iterator it)
 {
 	//Console.WriteLine("3");
 }

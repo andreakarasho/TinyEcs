@@ -17,7 +17,7 @@
                 .With<float>();
 
             int done = 0;
-			query.Iterate(it => done += it.Count);
+			query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -42,7 +42,7 @@
                 .With<int>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -69,7 +69,7 @@
                 .With<bool>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -96,7 +96,7 @@
                 .Without<bool>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
@@ -122,7 +122,7 @@
                 .Without<bool>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -148,7 +148,7 @@
                 .Without<bool>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
@@ -188,7 +188,7 @@
                 .Without<decimal>();
 
             int done = 0;
-            query.Iterate(it => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(good, done);
         }

@@ -185,6 +185,9 @@ sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Clear()
 	{
+		if (_count <= 1)
+			return;
+
 		_maxID = uint.MinValue;
 		for (int i = 0; i < _chunks.Length; ++i)
 		{
