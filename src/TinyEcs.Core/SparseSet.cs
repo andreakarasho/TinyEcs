@@ -185,11 +185,18 @@ sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Clear()
 	{
-		_count = 1;
 		_maxID = uint.MinValue;
-		Array.Clear(_chunks, 0, _chunks.Length);
+		for (int i = 0; i < _chunks.Length; ++i)
+		{
+			ref var chunk = ref _chunks[i];
+			if (chunk.Sparse != null)
+				Array.Clear(chunk.Sparse, 0, chunk.Sparse.Length);
+		}
+
 		_dense.Clear();
 		_dense.Add(0);
+
+		_count = 1;
 	}
 
 	private void SwapDense(ref Chunk chunkA, int a, int b)
