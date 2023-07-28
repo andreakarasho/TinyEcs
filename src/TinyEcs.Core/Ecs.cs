@@ -73,8 +73,8 @@ sealed unsafe class Ecs
 		if (_frame == 0)
 		{
 			sequence[0] = _world.Component<EcsSystemPhasePreStartup>();
-			sequence[1] =_world.Component<EcsSystemPhaseOnStartup>();
-			sequence[2] =_world.Component<EcsSystemPhasePostStartup>();
+			sequence[1] = _world.Component<EcsSystemPhaseOnStartup>();
+			sequence[2] = _world.Component<EcsSystemPhasePostStartup>();
 
 			for (int i = 0; i < 3; ++i)
 			{
@@ -90,8 +90,8 @@ sealed unsafe class Ecs
 		}
 
 		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>();
-		sequence[1] =_world.Component<EcsSystemPhaseOnUpdate>();
-		sequence[2] =_world.Component<EcsSystemPhasePostUpdate>();
+		sequence[1] = _world.Component<EcsSystemPhaseOnUpdate>();
+		sequence[2] = _world.Component<EcsSystemPhasePostUpdate>();
 
 		for (int i = 0; i < 3; ++i)
 		{

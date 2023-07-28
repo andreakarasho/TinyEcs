@@ -145,28 +145,29 @@ public sealed class Commands
 			return;
 		}
 
-		foreach (ref var set in _set)
+		foreach (ref readonly var set in _set)
 		{
 			EcsAssert.Assert(_main.IsAlive(set.Entity));
 
 			_main.Set(set.Entity, set.ComponentID, set.Data.Span.Slice(0, set.Size));
 		}
 
-		foreach (ref var unset in _unset)
+		foreach (ref readonly var unset in _unset)
 		{
 			EcsAssert.Assert(_main.IsAlive(unset.Entity));
 
 			_main.DetachComponent(unset.Entity, unset.ComponentID);
 		}
 
-		foreach (ref var despawn in _despawn)
+		foreach (ref readonly var despawn in _despawn)
 		{
 			_main.Despawn(despawn);
 		}
 
-		_despawn.Clear();
+
 		_set.Clear();
 		_unset.Clear();
+		_despawn.Clear();
 	}
 
 	private struct SetComponent

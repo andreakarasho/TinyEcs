@@ -139,7 +139,7 @@ public sealed class World : IDisposable
 		var initType = root.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
 
-		const int STACKALLOC_SIZE = 32;
+		const int STACKALLOC_SIZE = 16;
 
 		EcsComponent[]? buffer = null;
 		Span<EcsComponent> span = cmpCount <= STACKALLOC_SIZE ?
