@@ -39,6 +39,14 @@ public readonly struct SystemBuilder : IEquatable<EntityID>, IEquatable<SystemBu
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly SystemBuilder SetQuery(QueryBuilder query)
+	{
+		var id = query.Build();
+		World.Set(ID, new EcsQuery() { ID = id });
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly SystemBuilder SetTick(float tick)
 	{
 		World.Set(ID, new EcsSystemTick() { Value = tick });

@@ -52,8 +52,7 @@ sealed unsafe class TinyGame : Game
 		var qry = _ecs.Query()
 			.With<Position>()
 			.With<Velocity>()
-			.With<Rotation>()
-			.ID;
+			.With<Rotation>();
 
 		_ecs.AddSystem(&MoveSystem)
 		    .SetQuery(qry);
@@ -62,11 +61,11 @@ sealed unsafe class TinyGame : Game
 
 		_ecs.AddSystem(&BeginRender);
 		_ecs.AddSystem(&Render)
-				.SetQuery(_ecs.Query()
+			.SetQuery(
+				_ecs.Query()
 				.With<Position>()
 				.With<Rotation>()
 				.With<Sprite>()
-				.ID
 			);
 		_ecs.AddSystem(&EndRender);
 
@@ -88,12 +87,12 @@ sealed unsafe class TinyGame : Game
 		base.Draw(gameTime);
 	}
 
-	static void PrintMessage(Commands commands, ref EntityIterator it)
+	static void PrintMessage(ref Iterator it)
 	{
 		Console.WriteLine("print!");
 	}
 
-    static void Setup(Commands commands, ref EntityIterator it)
+    static void Setup(ref Iterator it)
     {
         var deviceHandle = Assets<GraphicsDevice>.Get("device");
         var batcherHandle = Assets<SpriteBatch>.Get("batcher");
@@ -101,7 +100,7 @@ sealed unsafe class TinyGame : Game
         it.World.SetSingleton(new GameState(deviceHandle, batcherHandle));
     }
 
-	static void SpawnEntities(Commands commands, ref EntityIterator it)
+	static void SpawnEntities(ref Iterator it)
 	{
 		var rnd = new Random();
 		ref var gameState = ref it.World.GetSingleton<GameState>();
@@ -110,7 +109,7 @@ sealed unsafe class TinyGame : Game
 
 		for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
 		{
-			commands.Spawn()
+			it.Commands!.Spawn()
 				.Set(new Position()
 				{
 					Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))
@@ -133,7 +132,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void MoveSystem(Commands commands, ref EntityIterator it)
+	static void MoveSystem(ref Iterator it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -152,7 +151,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void CheckBorderSystem(Commands commands, ref EntityIterator it)
+	static void CheckBorderSystem(ref Iterator it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -186,7 +185,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void BeginRender(Commands commands, ref EntityIterator it)
+	static void BeginRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -195,7 +194,7 @@ sealed unsafe class TinyGame : Game
 		batch.Begin();
 	}
 
-	static void EndRender(Commands commands, ref EntityIterator it)
+	static void EndRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -203,7 +202,7 @@ sealed unsafe class TinyGame : Game
 		batch.End();
 	}
 
-	static void Render(Commands commands, ref EntityIterator it)
+	static void Render(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();

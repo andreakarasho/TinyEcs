@@ -1,320 +1,187 @@
+using System.Numerics;
+
 namespace TinyEcs;
 
-public unsafe sealed class Commands : IDisposable
+public sealed class Commands
 {
-	private readonly World _main, _mergeWorld;
-	private readonly QueryBuilder _entityDestroyed,
-		_componentSet, _componentUnset, _componentEdited,
-		_toBeDestroyed;
+	private readonly World _main;
+	private readonly EntitySparseSet<EntityID> _despawn;
+	private readonly EntitySparseSet<SetComponent> _set;
+	private readonly EntitySparseSet<UnsetComponent> _unset;
 
 	public Commands(World main)
 	{
 		_main = main;
-		_mergeWorld = new World();
-
-		_entityDestroyed = _mergeWorld.Query()
-			.With<EntityDestroyed>();
-
-		_componentSet = _mergeWorld.Query()
-			.With<ComponentAdded>();
-
-		_componentEdited = _mergeWorld.Query()
-			.With<ComponentEdited>();
-
-		_componentUnset = _mergeWorld.Query()
-			.With<ComponentRemoved>();
-
-		_toBeDestroyed = _mergeWorld.Query()
-			.With<MarkDestroy>();
-	}
-
-	public World Main => _main;
-
-
-	public void Merge()
-	{
-		// we pass the Commands, but must not be used to edit entities!
-		QueryEx.Fetch(_mergeWorld, _componentSet.ID, this, &ComponentSetSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _componentEdited.ID, this, &ComponentEditedSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _componentUnset.ID, this, &ComponentUnsetSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _entityDestroyed.ID, this, &EntityDestroyedSystem, 0f);
-		QueryEx.Fetch(_mergeWorld, _toBeDestroyed.ID, this, &MarkDestroySystem, 0f);
-	}
-
-
-	static void EntityDestroyedSystem(Commands cmds, ref EntityIterator it)
-	{
-		var main = cmds.Main;
-
-		var opA = it.Field<EntityDestroyed>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var op = ref opA[i];
-
-			main.Despawn(op.Target);
-		}
-	}
-
-	static void ComponentSetSystem(Commands cmds, ref EntityIterator it)
-	{
-		var main = cmds.Main;
-
-		var opA = it.Field<ComponentAdded>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var op = ref opA[i];
-
-			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
-			main.SetComponentData(op.Target, op.Component, raw);
-		}
-	}
-
-	static void ComponentEditedSystem(Commands cmds, ref EntityIterator it)
-	{
-		var main = cmds.Main;
-
-		var opA = it.Field<ComponentEdited>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var op = ref opA[i];
-
-			var raw = it.Archetype.GetComponentRaw(op.ID, i, 1);
-			main.SetComponentData(op.Target, op.Component, raw);
-		}
-	}
-
-	static void ComponentUnsetSystem(Commands cmds, ref EntityIterator it)
-	{
-		var main = cmds.Main;
-
-		var opA = it.Field<ComponentRemoved>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var op = ref opA[i];
-
-			main.DetachComponent(op.Target, op.Component);
-		}
-	}
-
-	static void MarkDestroySystem(Commands cmds, ref EntityIterator it)
-	{
-		for (int i = 0; i < it.Count; ++i)
-		{
-			var entity = it.Entity(i);
-
-			cmds._mergeWorld.Despawn(entity);
-		}
+		_despawn = new();
+		_set = new();
+		_unset = new();
 	}
 
 
 	public CommandEntityView Entity(EntityID id)
 	{
-		Debug.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.IsAlive(id));
 
 		return new CommandEntityView(this, id);
 	}
 
 	public CommandEntityView Spawn()
 	{
-		var mainEnt = _main.SpawnEmpty();
-		//var mergeEnt = _mergeWorld.Spawn()
-		//	.Set<MarkDestroy>()
-		//	.Set(new EntityCreated()
-		//	{
-		//		Target = 0
-		//	});
+		var ent = _main.SpawnEmpty();
 
-		return new CommandEntityView(this, mainEnt)
+		return new CommandEntityView(this, ent.ID)
 			.Set<EcsEnabled>();
 	}
 
-	public void Despawn(EntityID entity)
+	public void Despawn(EntityID id)
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(id));
 
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new EntityDestroyed()
-			{
-				Target = entity
-			});
+		ref var entity = ref _despawn.Get(id);
+		if (Unsafe.IsNullRef(ref entity))
+		{
+			_despawn.Add(id, id);
+		}
 	}
 
-	public void Set<T>(EntityID entity, T cmp = default) where T : unmanaged
+	public unsafe ref T Set<T>(EntityID id, T cmp = default) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(id));
 
-		var idMain = _main.Component<T>();
-		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
+		if (_main.Has<T>(id))
+		{
+			ref var value = ref _main.Get<T>(id);
+			value = cmp;
 
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentAdded()
-			{
-				Target = entity,
-				Component = idMain,
-				ID = idMerge
-			})
-			.Set(new ComponentPocWithValue<T>() { Value = cmp });
+			return ref value;
+		}
+
+		var cmpID = _main.Component<T>();
+
+		ref var set = ref _set.CreateNew(out _);
+		set.Entity = id;
+		set.ComponentID = cmpID;
+		set.Size = sizeof(T);
+
+		if (set.Data.Length < set.Size)
+		{
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
+		}
+
+		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span);
+		fixed (byte* ptr = &reference)
+			Unsafe.Copy(ptr, ref cmp);
+
+		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public void Set<T0, T1>(EntityID entity)
-		where T0 : unmanaged
-		where T1 : unmanaged
+	public unsafe void Add(EntityID id, EntityID cmp)
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(id));
 
-		var idMain0 = _main.Component<T0>();
-		var idMain1 = _main.Component<T1>();
+		if (_main.Has(id, cmp))
+		{
+			return;
+		}
 
-		Add(entity, idMain0, idMain1);
+		ref var set = ref _set.CreateNew(out _);
+		set.Entity = id;
+		set.ComponentID = cmp;
+		set.Size = 1;
+
+		if (set.Data.Length < set.Size)
+		{
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
+		}
 	}
 
-	public void Add(EntityID entity, EntityID cmp)
+	public unsafe void Add(EntityID id, EntityID first, EntityID second)
 	{
-		Debug.Assert(_main.IsAlive(entity));
-		Debug.Assert(_main.IsAlive(cmp));
-
-		var idMain = cmp;
-		var idMerge = _mergeWorld.Component<ComponentPocEntity>();
-
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentAdded()
-			{
-				Target = entity,
-				Component = idMain,
-				ID = idMerge
-			})
-			.Set(new ComponentPocEntity() { Value = cmp });
+		Add(id, IDOp.Pair(first, second));
 	}
 
-	public void Add(EntityID entity, EntityID first, EntityID second)
+	public unsafe void Add<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
-		Debug.Assert(_main.IsAlive(first));
-		Debug.Assert(_main.IsAlive(second));
-
-		var idMain = IDOp.Pair(first, second);
-		var idMerge = _mergeWorld.Component<ComponentPocEntityPair>();
-
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentAdded()
-			{
-				Target = entity,
-				Component = idMain,
-				ID = idMerge
-			})
-			.Set(new ComponentPocEntityPair() { First = first, Second = second });
+		Add(id, _main.Component<TKind>(),  _main.Component<TTarget>());
 	}
 
-	public void Unset<T>(EntityID entity) where T : unmanaged
+	public void Unset<T>(EntityID id) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(id));
 
-		_mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentRemoved()
-			{
-				Target = entity,
-				Component = _main.Component<T>()
-			});
+		var cmpID = _main.Component<T>();
+
+		ref var unset = ref _unset.CreateNew(out _);
+		unset.Entity = id;
+		unset.ComponentID = cmpID;
 	}
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		if (_main.Has<T>(entity))
 		{
 			return ref _main.Get<T>(entity);
 		}
 
-		var idMain = _main.Component<T>();
-		var idMerge = _mergeWorld.Component<ComponentPocWithValue<T>>();
+		Unsafe.SkipInit<T>(out var cmp);
 
-		Unsafe.SkipInit<T>(out var value);
-
-		var e = _mergeWorld.Spawn()
-			.Set<MarkDestroy>()
-			.Set(new ComponentEdited()
-			{
-				Target = entity,
-				Component = idMain,
-				ID = idMerge,
-			})
-			.Set(new ComponentPocWithValue<T>() { Value = value });
-
-		return ref e.Get<ComponentPocWithValue<T>>().Value;
+		return ref Set(entity, cmp);
 	}
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
 	{
-		Debug.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.IsAlive(entity));
 
 		return _main.Has<T>(entity);
 	}
 
-	public void Dispose()
+
+	public void Merge()
 	{
-		_mergeWorld?.Dispose();
+		if (_despawn.Length == 0 && _set.Length == 0 && _unset.Length == 0)
+		{
+			return;
+		}
+
+		foreach (ref readonly var set in _set)
+		{
+			EcsAssert.Assert(_main.IsAlive(set.Entity));
+
+			_main.Set(set.Entity, set.ComponentID, set.Data.Span.Slice(0, set.Size));
+		}
+
+		foreach (ref readonly var unset in _unset)
+		{
+			EcsAssert.Assert(_main.IsAlive(unset.Entity));
+
+			_main.DetachComponent(unset.Entity, unset.ComponentID);
+		}
+
+		foreach (ref readonly var despawn in _despawn)
+		{
+			_main.Despawn(despawn);
+		}
+
+
+		_set.Clear();
+		_unset.Clear();
+		_despawn.Clear();
 	}
 
-
-
-	struct EntityCreated
+	private struct SetComponent
 	{
-		public EntityID Target;
+		public EntityID Entity;
+		public EntityID ComponentID;
+		public int Size;
+		public Memory<byte> Data;
 	}
 
-	struct EntityDestroyed
+	private struct UnsetComponent
 	{
-		public EntityID Target;
-	}
-
-	struct ComponentEdited
-	{
-		public EntityID Target;
-		public EntityID ID;
-		public EntityID Component;
-		// public void* Data;
-		// public UnsafeMemory Pool;
-	}
-
-	struct ComponentAdded
-	{
-		public EntityID Target;
-		public EntityID ID;
-		public EntityID Component;
-	}
-
-	struct ComponentRemoved
-	{
-		public EntityID Target;
-		public EntityID Component;
-	}
-
-	struct MarkDestroy { }
-
-	struct ComponentPocEntity
-	{
-		public EntityID Value;
-	}
-
-	struct ComponentPocEntityPair
-	{
-		public EntityID First;
-		public EntityID Second;
-	}
-
-	struct ComponentPocWithValue<T> where T : unmanaged
-	{
-		public T Value;
+		public EntityID Entity;
+		public EntityID ComponentID;
 	}
 }
 
@@ -337,29 +204,23 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Set(EntityID id)
+	public readonly CommandEntityView Add(EntityID id)
 	{
 		_cmds.Add(_id, id);
 		return this;
 	}
 
-	public readonly CommandEntityView Add<TKind>(EntityID id) where TKind : unmanaged
-	{
-		_cmds.Add(_id, _cmds.Main.Component<TKind>(), id);
-		return this;
-	}
-
-	public readonly CommandEntityView Set(EntityID first, EntityID second)
+	public readonly CommandEntityView Add(EntityID first, EntityID second)
 	{
 		_cmds.Add(_id, first, second);
 		return this;
 	}
 
-	public readonly CommandEntityView Set<TKind, TTarget>()
+	public readonly CommandEntityView Add<TKind, TTarget>()
 		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
-		_cmds.Set<TKind, TTarget>(_id);
+		_cmds.Add<TKind, TTarget>(_id);
 		return this;
 	}
 

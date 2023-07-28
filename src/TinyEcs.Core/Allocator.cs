@@ -65,8 +65,8 @@ namespace TinyEcs
 
 		public static UnsafeMemory AllocPool(int blockSize, int numBlocks)
 		{
-			Debug.Assert(blockSize >= MinimumPoolBlockSize);
-			Debug.Assert(numBlocks > 0);
+			EcsAssert.Assert(blockSize >= MinimumPoolBlockSize);
+			EcsAssert.Assert(numBlocks > 0);
 
 			blockSize = ((blockSize + 7) & (-8));
 

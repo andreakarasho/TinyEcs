@@ -40,7 +40,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Add(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		World.SetComponentData(ID, id, stackalloc byte[1]);
+		World.Set(ID, id, stackalloc byte[1]);
 		return this;
 	}
 
@@ -134,7 +134,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly void Each(Action<EntityView> action)
 	{
 		ref var record = ref World._entities.Get(ID);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
 		for (int i = 0; i < record.Archetype.Components.Length; ++i)
 		{

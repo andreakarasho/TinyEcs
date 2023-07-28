@@ -1,106 +1,83 @@
 namespace TinyEcs;
 
-public readonly struct QueryBuilder : IEquatable<EntityID>, IEquatable<QueryBuilder>
+public ref struct QueryBuilder
 {
-	public readonly EntityID ID;
-	internal readonly World World;
+	private readonly World _world;
+	private readonly List<EntityID> _with, _without;
+	private EntityID _id;
 
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryBuilder(World world, EntityID id)
+	internal QueryBuilder(World world)
 	{
-		World = world;
-		ID = id;
+		_world = world;
+		_with = new List<EntityID>();
+		_without = new List<EntityID>();
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(ulong other)
-	{
-		return ID == other;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(QueryBuilder other)
-	{
-		return ID == other.ID;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With<T>() where T : unmanaged
-	{
-		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
-		return this;
-	}
+		=> With(_world.Component<T>());
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With<TKind, TTarget>()
-		where TKind : unmanaged
-		where TTarget : unmanaged
-	{
-		return With(World.Component<TKind>(), World.Component<TTarget>());
-	}
+	public readonly QueryBuilder With<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+		=> With(_world.Component<TKind>(), _world.Component<TTarget>());
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryBuilder With(EntityID first, EntityID second)
-	{
-		var id = IDOp.Pair(first, second) | EcsConst.ECS_QUERY_WITH;
-		World.SetComponentData(ID, id, stackalloc byte[1]);
-		return this;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryBuilder With(EntityID id)
 	{
-        World.SetComponentData(ID, id | EcsConst.ECS_QUERY_WITH, stackalloc byte[1]);
+		_with.Add(id);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryBuilder With(EntityID first, EntityID second)
+	{
+		_with.Add(IDOp.Pair(first, second));
+		return this;
+	}
+
 	public readonly QueryBuilder Without<T>() where T : unmanaged
+		=> Without(_world.Component<T>());
+
+	public readonly QueryBuilder Without<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+		=> Without(_world.Component<TKind>(), _world.Component<TTarget>());
+
+	public readonly QueryBuilder Without(EntityID id)
 	{
-		World.SetComponentData(ID, World.Component<T>() | EcsConst.ECS_QUERY_WITHOUT, stackalloc byte[1]);
+		_without.Add(id);
 		return this;
 	}
 
-	public QueryIterator GetEnumerator()
+	public readonly QueryBuilder Without(EntityID first, EntityID second)
 	{
-		ref var record = ref World._entities.Get(ID);
-		Debug.Assert(!Unsafe.IsNullRef(ref record));
+		_without.Add(IDOp.Pair(first, second));
+		return this;
+	}
 
-		var components = record.Archetype.ComponentInfo;
-		var cmps = ArrayPool<EntityID>.Shared.Rent(components.Length);
+	public EntityView Build()
+	{
+		if (_id != 0)
+			return new EntityView(_world, _id);
 
-		var withIdx = 0;
-		var withoutIdx = components.Length;
+		_with.Sort();
+		_without.Sort();
 
-        for (int i = 0; i < components.Length; ++i)
-		{
-			ref readonly var meta = ref components[i];
+		var spanWith = CollectionsMarshal.AsSpan(_with);
+		var spawnWithout = CollectionsMarshal.AsSpan(_without);
 
-			if ((meta.ID & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
-			{
-				cmps[withIdx++] = meta.ID  & ~EcsConst.ECS_QUERY_WITH;
-			}
-			else if ((meta.ID  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
-			{
-				cmps[--withoutIdx] = meta.ID  & ~EcsConst.ECS_QUERY_WITHOUT;
-			}
-		}
+		var ent = _world.Spawn()
+			.Set<EcsQueryBuilder>();
 
-		var with = cmps.AsSpan(0, withIdx);
-		var without = cmps.AsSpan(0, components.Length).Slice(withoutIdx);
+		_id = ent.ID;
 
-		if (with.IsEmpty)
-		{
-			return default;
-		}
+		Span<byte> empty = stackalloc byte[1];
 
-		with.Sort();
-		without.Sort();
+		foreach (var cmp in spanWith)
+			_world.Set(ent.ID, cmp | EcsConst.ECS_QUERY_WITH, empty);
 
-		var stack = new Stack<Archetype>();
-		stack.Push(World._archRoot);
+		foreach (var cmp in spawnWithout)
+			_world.Set(ent.ID, cmp | EcsConst.ECS_QUERY_WITHOUT, empty);
 
-		return new QueryIterator(stack, cmps, with, without);
+		return ent;
+	}
+
+	public readonly void Iterate(IteratorDelegate action, Commands? commands = null)
+	{
+		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), commands, action);
 	}
 }

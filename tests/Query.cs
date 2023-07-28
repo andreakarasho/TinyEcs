@@ -17,12 +17,7 @@
                 .With<float>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-            }
+			query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -47,13 +42,7 @@
                 .With<int>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-                _ = it.Field<int>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -80,14 +69,7 @@
                 .With<bool>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-                _ = it.Field<int>();
-                _ = it.Field<bool>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -114,13 +96,7 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-                _ = it.Field<int>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
@@ -146,13 +122,7 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-                _ = it.Field<int>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -178,12 +148,7 @@
                 .Without<bool>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
@@ -223,13 +188,7 @@
                 .Without<decimal>();
 
             int done = 0;
-            foreach (var it in query)
-            {
-                done += it.Count;
-
-                _ = it.Field<float>();
-                _ = it.Field<byte>();
-            }
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(good, done);
         }

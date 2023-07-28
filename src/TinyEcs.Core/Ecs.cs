@@ -4,60 +4,17 @@ sealed unsafe class Ecs
 {
 	private readonly World _world;
 	private readonly Commands _cmds;
-
-	private readonly QueryBuilder
-		_querySystemUpdate,
-		_querySystemPreUpdate,
-		_querySystemPostUpdate;
-
-	private readonly QueryBuilder
-		_querySystemStartup,
-		_querySystemPreStartup,
-		_querySystemPostStartup;
-
 	private ulong _frame;
-
 
 	public Ecs()
 	{
 		_world = new World();
 		_cmds = new Commands(_world);
-
-		_querySystemUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhaseOnUpdate>();
-
-		_querySystemPreUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePreUpdate>();
-
-		_querySystemPostUpdate = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePostUpdate>();
-
-
-		_querySystemStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhaseOnStartup>();
-
-		_querySystemPreStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePreStartup>();
-
-		_querySystemPostStartup = Query()
-			.With<EcsEnabled>()
-			.With<EcsSystem>()
-			.With<EcsSystemPhasePostStartup>();
 	}
 
 	public EntityView Entity(EntityID id)
 	{
-		Debug.Assert(_world.IsAlive(id));
+		EcsAssert.Assert(_world.IsAlive(id));
 
 		return new EntityView(_world, id);
 	}
@@ -79,18 +36,18 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public unsafe SystemBuilder AddStartupSystem(delegate* managed<Commands, ref EntityIterator, void> system)
+	public unsafe SystemBuilder AddStartupSystem(delegate* managed<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system)
+	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<Commands, ref EntityIterator, void> system, in QueryBuilder query)
+	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system, in QueryBuilder query)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>()
-			.Set(new EcsQuery() { ID = query.ID });
+			.Set(new EcsQuery() { ID = query.Build() });
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
 		=> _world.SetSingleton(cmp);
@@ -98,32 +55,66 @@ sealed unsafe class Ecs
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref _world.GetSingleton<T>();
 
-	public unsafe void Step(float delta)
+	[SkipLocalsInit]
+	public unsafe void Step(float delta = 0.0f)
 	{
+		_world.DeltaTime = delta;
+
 		_cmds.Merge();
+
+		Span<EntityID> with = stackalloc EntityID[] {
+			_world.Component<EcsEnabled>(),
+			_world.Component<EcsSystem>(),
+			0
+		};
+
+		Span<EntityID> sequence = stackalloc EntityID[3];
 
 		if (_frame == 0)
 		{
-			QueryEx.Fetch(_world, _querySystemPreStartup.ID, _cmds, &RunSystems, delta);
-			QueryEx.Fetch(_world, _querySystemStartup.ID, _cmds, &RunSystems, delta);
-			QueryEx.Fetch(_world, _querySystemPostStartup.ID, _cmds, &RunSystems, delta);
+			sequence[0] = _world.Component<EcsSystemPhasePreStartup>();
+			sequence[1] = _world.Component<EcsSystemPhaseOnStartup>();
+			sequence[2] = _world.Component<EcsSystemPhasePostStartup>();
+
+			for (int i = 0; i < 3; ++i)
+			{
+				with[^1] = sequence[i];
+
+				_world.Query(
+					with,
+					Span<EntityID>.Empty,
+					_cmds,
+					static (ref Iterator it) => RunSystems(ref it)
+				);
+			}
 		}
 
-		QueryEx.Fetch(_world, _querySystemPreUpdate.ID, _cmds, &RunSystems, delta);
-		QueryEx.Fetch(_world, _querySystemUpdate.ID, _cmds, &RunSystems, delta);
-		QueryEx.Fetch(_world, _querySystemPostUpdate.ID, _cmds, &RunSystems, delta);
+		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>();
+		sequence[1] = _world.Component<EcsSystemPhaseOnUpdate>();
+		sequence[2] = _world.Component<EcsSystemPhasePostUpdate>();
+
+		for (int i = 0; i < 3; ++i)
+		{
+			with[^1] = sequence[i];
+
+			_world.Query(
+				with,
+				Span<EntityID>.Empty,
+				_cmds,
+				static (ref Iterator it) => RunSystems(ref it)
+			);
+		}
 
 		_cmds.Merge();
 		_frame += 1;
 	}
 
-	static unsafe void RunSystems(Commands cmds, ref EntityIterator it)
+
+	static unsafe void RunSystems(ref Iterator it)
 	{
 		var sysA = it.Field<EcsSystem>();
 		var sysTickA = it.Field<EcsSystemTick>();
 		var queryA = it.Field<EcsQuery>();
-
-		var emptyIt = new EntityIterator(it.World._archRoot, 0, it.DeltaTime);
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -146,12 +137,54 @@ sealed unsafe class Ecs
 
 			if (query.ID != 0)
 			{
-				QueryEx.Fetch(it.World, query.ID, cmds, sys.Func, it.DeltaTime);
+				Fetch(it.World, query.ID, it.Commands!, sys.Func, it.DeltaTime);
 			}
 			else
 			{
-				sys.Func(cmds, ref emptyIt);
+				sys.Func(ref it);
 			}
+		}
+	}
+
+	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<ref Iterator, void> system, float deltaTime)
+	{
+		EcsAssert.Assert(world.IsAlive(query));
+		EcsAssert.Assert(world.Has<EcsQueryBuilder>(query));
+
+		ref var record = ref world._entities.Get(query);
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+
+        var components = record.Archetype.Components;
+		Span<EntityID> cmps = stackalloc EntityID[components.Length + 0];
+
+		var withIdx = 0;
+		var withoutIdx = components.Length;
+
+        for (int i = 0; i < components.Length; ++i)
+		{
+			ref var meta = ref components[i];
+
+			if ((meta & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
+			{
+				cmps[withIdx++] = meta  & ~EcsConst.ECS_QUERY_WITH;
+			}
+			else if ((meta  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
+			{
+				cmps[--withoutIdx] = meta  & ~EcsConst.ECS_QUERY_WITHOUT;
+			}
+		}
+
+		var with = cmps.Slice(0, withIdx);
+		var without = cmps.Slice(withoutIdx);
+
+        if (!with.IsEmpty)
+		{
+			with.Sort();
+			without.Sort();
+
+			world.Query(with, without, cmds, (ref Iterator it) => {
+				system(ref it);
+			});
 		}
 	}
 }
@@ -190,3 +223,36 @@ public static class SortExtensions
 	}
 }
 #endif
+
+
+
+public delegate void IteratorDelegate(ref Iterator it);
+
+public readonly ref struct Iterator
+{
+	private readonly Archetype _archetype;
+
+	internal Iterator(Commands? commands, Archetype archetype)
+	{
+		Commands = commands;
+		_archetype = archetype;
+	}
+
+	public Commands? Commands { get; }
+	public World World => _archetype.World;
+	public int Count => _archetype.Count;
+	public float DeltaTime => World.DeltaTime;
+
+
+	public readonly Span<T> Field<T>() where T : unmanaged
+		=> _archetype.Field<T>();
+
+	public readonly bool Has<T>() where T : unmanaged
+		=> _archetype.Has<T>();
+
+	public readonly EntityView Entity(int i)
+		=> _archetype.Entity(i);
+
+	internal readonly Span<byte> GetComponentRaw(EntityID id, int row, int count)
+		=> _archetype.GetComponentRaw(id, row, count);
+}

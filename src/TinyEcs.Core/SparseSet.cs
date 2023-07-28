@@ -35,7 +35,7 @@ sealed class EntitySparseSet<T>
 		var count = _count++;
 		var denseCount = _dense.Count;
 
-		Debug.Assert(count <= denseCount);
+		EcsAssert.Assert(count <= denseCount);
 
 		if (count < denseCount)
 		{
@@ -61,7 +61,7 @@ sealed class EntitySparseSet<T>
 		_dense.Add(0);
 
 		ref var chunk = ref GetChunkOrCreate((int)index >> 12);
-		Debug.Assert(chunk.Sparse[(int)index & 0xFFF] == 0);
+		EcsAssert.Assert(chunk.Sparse[(int)index & 0xFFF] == 0);
 
 		SparseAssignIndex(ref chunk, index, dense);
 
@@ -114,7 +114,7 @@ sealed class EntitySparseSet<T>
 				_count++;
 			}
 
-			Debug.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
+			EcsAssert.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
 		}
 		else
 		{
@@ -185,16 +185,26 @@ sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Clear()
 	{
-		_count = 1;
+		if (_count <= 1)
+			return;
+
 		_maxID = uint.MinValue;
-		Array.Clear(_chunks, 0, _chunks.Length);
+		for (int i = 0; i < _chunks.Length; ++i)
+		{
+			ref var chunk = ref _chunks[i];
+			if (chunk.Sparse != null)
+				Array.Clear(chunk.Sparse, 0, chunk.Sparse.Length);
+		}
+
 		_dense.Clear();
 		_dense.Add(0);
+
+		_count = 1;
 	}
 
 	private void SwapDense(ref Chunk chunkA, int a, int b)
 	{
-		Debug.Assert(a != b);
+		EcsAssert.Assert(a != b);
 
 		var idxA = _dense[a];
 		var idxB = _dense[b];
@@ -221,7 +231,7 @@ sealed class EntitySparseSet<T>
 		}
 
 		var gen = index & EcsConst.ECS_GENERATION_MASK;
-		Debug.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
+		EcsAssert.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
 		index -= gen;
 
 		return gen;
