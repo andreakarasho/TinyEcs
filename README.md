@@ -37,17 +37,17 @@ while (true)
     ecs.Step(deltaTime);
 
 
-static void Setup(Commands commands, ref EntityIterator it)
+static void Setup(ref Iterator it)
 {
     // Create an empty entity into the main world.
     // All changes to the entity are done in a secondary world 
     // which will get merged at the end of the frame
-    var ent = commands.Spawn()
+    var ent = it.Commands.Spawn()
         .Set(new Position() { X = -12f, Y = 0f, Z = 75f })
         .Set<Player>();
 }
 
-static void MovePlayer(Commands commands, ref EntityIterator it)
+static void MovePlayer(ref Iterator it)
 {
     var posSpan = it.Field<Position>();
     
