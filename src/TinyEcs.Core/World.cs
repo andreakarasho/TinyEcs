@@ -8,6 +8,7 @@ public sealed class World : IDisposable
 	internal readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
+	private readonly EntitySparseSet<EntityID> _components = new();
 
 	public World()
 	{
@@ -32,6 +33,7 @@ public sealed class World : IDisposable
 		_entities.Clear();
 		_archRoot.Clear();
 		_typeIndex.Clear();
+		_components.Clear();
 	}
 
 	// public void Optimize()
@@ -50,7 +52,19 @@ public sealed class World : IDisposable
 	// }
 
 	public EntityID Component<T>() where T : unmanaged
-		=> TypeInfo<T>.GetID(this);
+	{
+		ref var cmpID = ref _components.Get(TypeInfo<T>.Hash);
+
+		if (Unsafe.IsNullRef(ref cmpID) || !IsAlive(cmpID))
+		{
+			var ent = SpawnEmpty();
+			cmpID = ref _components.Add(TypeInfo<T>.Hash, ent.ID);
+			Set(cmpID, new EcsComponent(cmpID, TypeInfo<T>.Size));
+			Set<EcsEnabled>(cmpID);
+		}
+
+		return cmpID;
+	}
 
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 		=> IDOp.Pair(Component<TKind>(), Component<TTarget>());
