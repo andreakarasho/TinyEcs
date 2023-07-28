@@ -5,14 +5,13 @@ namespace TinyEcs;
 public sealed class Commands2
 {
 	private readonly World _main;
-	private readonly EntitySparseSet<EntityID> _register, _despawn;
+	private readonly EntitySparseSet<EntityID> _despawn;
 	private readonly EntitySparseSet<SetComponent> _set;
 	private readonly EntitySparseSet<UnsetComponent> _unset;
 
 	internal Commands2(World main)
 	{
 		_main = main;
-		_register = new();
 		_despawn = new();
 		_set = new();
 		_unset = new();
@@ -29,7 +28,6 @@ public sealed class Commands2
 	public CommandEntityView2 Spawn()
 	{
 		var ent = _main.SpawnEmpty();
-		_ = RegisterEntity(ent.ID);
 
 		return new CommandEntityView2(this, ent.ID)
 			.Set<EcsEnabled>();
@@ -39,11 +37,10 @@ public sealed class Commands2
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		var ent = RegisterEntity(id);
-		ref var entity = ref _despawn.Get(ent);
+		ref var entity = ref _despawn.Get(id);
 		if (!Unsafe.IsNullRef(ref entity))
 		{
-			_despawn.Add(ent, id);
+			_despawn.Add(id, id);
 		}
 	}
 
@@ -59,11 +56,10 @@ public sealed class Commands2
 			return ref value;
 		}
 
-		var ent = RegisterEntity(id);
 		var cmpID = _main.Component<T>();
 
 		ref var set = ref _set.CreateNew(out _);
-		set.Entity = ent;
+		set.Entity = id;
 		set.ComponentID = cmpID;
 		set.Size = sizeof(T);
 
@@ -93,11 +89,10 @@ public sealed class Commands2
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		var ent = RegisterEntity(id);
 		var cmpID = _main.Component<T>();
 
 		ref var unset = ref _unset.CreateNew(out _);
-		unset.Entity = ent;
+		unset.Entity = id;
 		unset.ComponentID = cmpID;
 	}
 
@@ -132,29 +127,15 @@ public sealed class Commands2
 			_main.DetachComponent(unset.Entity, unset.ComponentID);
 		}
 
-		foreach (ref var e in _despawn)
+		foreach (ref var despawn in _despawn)
 		{
-			_main.Despawn(e);
+			_main.Despawn(despawn);
 		}
 
-		_register.Clear();
 		_despawn.Clear();
 		_set.Clear();
 		_unset.Clear();
 	}
-
-	private EntityID RegisterEntity(EntityID id)
-	{
-		ref var ent = ref _register.Get(id);
-		if (Unsafe.IsNullRef(ref ent))
-		{
-			_register.CreateNew(out var ent2) = id;
-			return ent2;
-		}
-
-		return ent;
-	}
-
 
 	private struct SetComponent
 	{

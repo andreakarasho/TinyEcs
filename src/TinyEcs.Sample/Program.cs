@@ -13,6 +13,8 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 var world = new World();
 
+for (int i = 0; i < 100; ++i)
+	world.Spawn();
 var cmds = new Commands2(world);
 var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
 //ref var floatt = ref e.Get<float>();
