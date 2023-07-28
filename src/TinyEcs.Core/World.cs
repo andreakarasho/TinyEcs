@@ -2,25 +2,18 @@ namespace TinyEcs;
 
 public sealed class World : IDisposable
 {
-	private static readonly object _lock = new();
-	private static EntityID _worldIDCount;
-
-	internal readonly Archetype _archRoot;
+	private readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly EntitySparseSet<EntityID> _components = new();
 
+
 	public World()
 	{
 		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
-
-		// hacky
-		lock (_lock)
-			ID = ++_worldIDCount;
 	}
 
 
-	public EntityID ID { get; }
 
 	public int EntityCount => _entities.Length;
 
