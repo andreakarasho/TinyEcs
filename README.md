@@ -40,8 +40,8 @@ while (true)
 static void Setup(ref Iterator it)
 {
     // Create an empty entity into the main world.
-    // All changes to the entity are done in a secondary world 
-    // which will get merged at the end of the frame
+    // All changes to the entity are done without modifing the world.
+    // Commands will get merged at the end of the frame.
     var ent = it.Commands.Spawn()
         .Set(new Position() { X = -12f, Y = 0f, Z = 75f })
         .Set<Player>();
