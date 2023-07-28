@@ -62,74 +62,48 @@ sealed unsafe class Ecs
 
 		_cmds.Merge();
 
+		Span<EntityID> with = stackalloc EntityID[] {
+			_world.Component<EcsEnabled>(),
+			_world.Component<EcsSystem>(),
+			0
+		};
+
+		Span<EntityID> sequence = stackalloc EntityID[3];
+
 		if (_frame == 0)
 		{
-			_world.Query(
-				stackalloc EntityID[] {
-					_world.Component<EcsEnabled>(),
-					_world.Component<EcsSystem>(),
-					_world.Component<EcsSystemPhasePreStartup>()
-				},
-				Span<EntityID>.Empty,
-				_cmds,
-				static (ref Iterator it) => RunSystems(ref it)
-			);
+			sequence[0] = _world.Component<EcsSystemPhasePreStartup>();
+			sequence[1] =_world.Component<EcsSystemPhaseOnStartup>();
+			sequence[2] =_world.Component<EcsSystemPhasePostStartup>();
+
+			for (int i = 0; i < 3; ++i)
+			{
+				with[^1] = sequence[i];
+
+				_world.Query(
+					with,
+					Span<EntityID>.Empty,
+					_cmds,
+					static (ref Iterator it) => RunSystems(ref it)
+				);
+			}
+		}
+
+		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>();
+		sequence[1] =_world.Component<EcsSystemPhaseOnUpdate>();
+		sequence[2] =_world.Component<EcsSystemPhasePostUpdate>();
+
+		for (int i = 0; i < 3; ++i)
+		{
+			with[^1] = sequence[i];
 
 			_world.Query(
-				stackalloc EntityID[] {
-					_world.Component<EcsEnabled>(),
-					_world.Component<EcsSystem>(),
-					_world.Component<EcsSystemPhaseOnStartup>()
-				},
-				Span<EntityID>.Empty,
-				_cmds,
-				static (ref Iterator it) => RunSystems(ref it)
-			);
-
-			_world.Query(
-				stackalloc EntityID[] {
-					_world.Component<EcsEnabled>(),
-					_world.Component<EcsSystem>(),
-					_world.Component<EcsSystemPhasePostStartup>()
-				},
+				with,
 				Span<EntityID>.Empty,
 				_cmds,
 				static (ref Iterator it) => RunSystems(ref it)
 			);
 		}
-
-		_world.Query(
-			stackalloc EntityID[] {
-				_world.Component<EcsEnabled>(),
-				_world.Component<EcsSystem>(),
-				_world.Component<EcsSystemPhasePreUpdate>()
-			},
-			Span<EntityID>.Empty,
-			_cmds,
-			static (ref Iterator it) => RunSystems(ref it)
-		);
-
-		_world.Query(
-			stackalloc EntityID[] {
-				_world.Component<EcsEnabled>(),
-				_world.Component<EcsSystem>(),
-				_world.Component<EcsSystemPhaseOnUpdate>()
-			},
-			Span<EntityID>.Empty,
-			_cmds,
-			static (ref Iterator it) => RunSystems(ref it)
-		);
-
-		_world.Query(
-			stackalloc EntityID[] {
-				_world.Component<EcsEnabled>(),
-				_world.Component<EcsSystem>(),
-				_world.Component<EcsSystemPhasePostUpdate>()
-			},
-			Span<EntityID>.Empty,
-			_cmds,
-			static (ref Iterator it) => RunSystems(ref it)
-		);
 
 		_cmds.Merge();
 		_frame += 1;

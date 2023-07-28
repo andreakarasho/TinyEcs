@@ -42,8 +42,8 @@ namespace TinyEcs.Tests
 
 			cmd.Merge();
 
-			Assert.True(cmd.Main.IsAlive(e.ID));
-			Assert.True(cmd.Main.Has<EcsEnabled>(e.ID));
+			Assert.True(world.IsAlive(e.ID));
+			Assert.True(world.Has<EcsEnabled>(e.ID));
 		}
 
 		[Fact]
@@ -56,7 +56,7 @@ namespace TinyEcs.Tests
 			e.Despawn();
 			cmd.Merge();
 
-			Assert.False(cmd.Main.IsAlive(e.ID));
+			Assert.False(world.IsAlive(e.ID));
 		}
 
 		[Fact]

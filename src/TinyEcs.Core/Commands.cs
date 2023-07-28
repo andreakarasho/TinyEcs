@@ -38,7 +38,7 @@ public sealed class Commands
 		EcsAssert.Assert(_main.IsAlive(id));
 
 		ref var entity = ref _despawn.Get(id);
-		if (!Unsafe.IsNullRef(ref entity))
+		if (Unsafe.IsNullRef(ref entity))
 		{
 			_despawn.Add(id, id);
 		}

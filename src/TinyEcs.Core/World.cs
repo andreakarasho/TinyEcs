@@ -294,14 +294,14 @@ public sealed class World : IDisposable
 		}
 	}
 
-	public void Query(Span<EntityID> with, Span<EntityID> without, Commands commands, IteratorDelegate action)
+	public void Query(Span<EntityID> with, Span<EntityID> without, Commands? commands, IteratorDelegate action)
 	{
 		with.Sort();
 		without.Sort();
 
 		QueryRec(_archRoot, with, without, commands, action);
 
-		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Commands commands, IteratorDelegate action)
+		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Commands? commands, IteratorDelegate action)
 		{
 			if (root.Count > 0 && root.IsSuperset(with))
 			{

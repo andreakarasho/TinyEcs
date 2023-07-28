@@ -76,8 +76,8 @@ public ref struct QueryBuilder
 		return ent;
 	}
 
-	public readonly void Iterate(IteratorDelegate action)
+	public readonly void Iterate(IteratorDelegate action, Commands? commands = null)
 	{
-		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), null, action);
+		_world.Query(CollectionsMarshal.AsSpan(_with), CollectionsMarshal.AsSpan(_without), commands, action);
 	}
 }
