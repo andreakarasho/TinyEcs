@@ -68,12 +68,9 @@ public sealed class World : IDisposable
 		return new QueryBuilder(this);
 	}
 
-	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system)
-		=> new SystemBuilder(this,
-			Spawn()
-				.Set(new EcsSystem(system))
-				.Set(new EcsSystemTick() { Value = 0 })
-				.Set<EcsQuery>());
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
+		=> Spawn()
+			.Set(new EcsSystem(system, query, terms, tick));
 
 	public EntityView Spawn()
 		=> SpawnEmpty().Set<EcsEnabled>();
@@ -304,29 +301,32 @@ public sealed class World : IDisposable
 
 	public unsafe void Query
 	(
-		Span<EntityID> with,
-		Span<EntityID> without,
+		Span<Term> terms,
 		Commands? commands,
 		delegate* <ref Iterator, void> action,
 		object? userData = null
 	)
 	{
-		with.Sort();
-		without.Sort();
+		terms.Sort(static (a, b) => a.ID.CompareTo(b.ID));
 
-		QueryRec(_archRoot, with, without, commands, action, userData);
+		QueryRec(_archRoot, terms, commands, action, userData);
 
 		static void QueryRec
 		(
 			Archetype root,
-			ReadOnlySpan<EntityID> with,
-			ReadOnlySpan<EntityID> without,
+			ReadOnlySpan<Term> terms,
 			Commands? commands,
 			delegate* <ref Iterator, void> action,
 			object? userData
 		)
 		{
-			if (root.Count > 0 && root.IsSuperset(with))
+			var result = root.IsSuperset(terms);
+			if (result < 0)
+			{
+				return;
+			}
+
+			if (result == 0 && root.Count > 0)
 			{
 				var it = new Iterator(commands, root, userData);
 				action(ref it);
@@ -343,10 +343,7 @@ public sealed class World : IDisposable
 
 			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				if (without.IndexOf(start.ComponentID) < 0)
-				{
-					QueryRec(start.Archetype, with, without, commands, action, userData);
-				}
+				QueryRec(start.Archetype, terms, commands, action, userData);
 
 				start = ref Unsafe.Add(ref start, 1);
 			}

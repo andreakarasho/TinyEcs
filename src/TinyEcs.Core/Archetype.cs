@@ -247,6 +247,37 @@ public sealed unsafe class Archetype
 		return j == other.Length;
 	}
 
+	internal int IsSuperset(ReadOnlySpan<Term> other)
+	{
+		int i = 0, j = 0, n = 0;
+		while (i < _components.Length && j + n < other.Length)
+		{
+			if (_components[i] == other[j + n].ID)
+			{
+				if (other[j + n].Op != TermOp.With)
+				{
+					return -1;
+				}
+
+				j++;
+			}
+			else if (other[j + n].Op != TermOp.With)
+			{
+				n++;
+				continue;
+			}
+
+			i++;
+		}
+
+		while (j + n < other.Length && other[j + n].Op != TermOp.With)
+		{
+			n++;
+		}
+
+		return j == other.Length - n ? 0 : 1;
+	}
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Span<T> Field<T>() where T : unmanaged

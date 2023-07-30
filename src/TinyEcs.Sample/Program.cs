@@ -146,8 +146,7 @@ unsafe
 
 	//ecs.AddSystem(&PrintSystem)
 	//	.SetTick(1f); // update every 50ms
-	ecs.System(&ParseQuery)
-		.SetQuery(ecs.Query().With<Position>().With<Velocity>().Without<float>());
+	ecs.System(&ParseQuery, ecs.Query().With<Position>().With<Velocity>().Without<float>());
 
 		//.SetQuery(query.ID);
 	//ecs.AddSystem(&PrintWarnSystem);
@@ -200,11 +199,6 @@ static void ParseQuery(ref Iterator it)
 
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;
-
-		//cmds.Entity(it.Entity(i))
-		//	.Set(1f);
-
-
 	}
 }
 

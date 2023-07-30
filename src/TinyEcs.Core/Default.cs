@@ -23,25 +23,36 @@ public readonly struct EcsComponent : IEquatable<EcsComponent>
 }
 
 public struct EcsQueryBuilder { }
-public struct EcsQuery
-{
-	public EntityID ID;
-}
 
-public unsafe readonly struct EcsSystem
+public unsafe struct EcsSystem
 {
 	public readonly delegate*<ref Iterator, void> Func;
+	public readonly EntityID Query;
+	public readonly float Tick;
+	public float TickCurrent;
+	private fixed byte _terms[32 * (sizeof(EntityID) + sizeof(byte))];
+	private readonly int _termsCount;
 
-	public EcsSystem(delegate*<ref Iterator, void> func)
+	public Span<Term> Terms
+	{
+		get
+		{
+			fixed (byte* ptr = _terms)
+			{
+				return new Span<Term>(ptr, _termsCount);
+			}
+		}
+	}
+
+	public EcsSystem(delegate*<ref Iterator, void> func, EntityID query, ReadOnlySpan<Term> terms, float tick)
 	{
 		Func = func;
+		Query = query;
+		_termsCount = terms.Length;
+		terms.CopyTo(Terms);
+		Tick = tick;
+		TickCurrent = 0f;
 	}
-}
-
-internal struct EcsSystemTick
-{
-	public float Value;
-	public float Current;
 }
 
 public struct EcsParent

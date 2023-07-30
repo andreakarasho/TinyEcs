@@ -36,18 +36,25 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public unsafe SystemBuilder StartupSystem(delegate*<ref Iterator, void> system)
-		=> _world.System(system)
+	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
+		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, 0f)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system)
-		=> _world.System(system)
+	public unsafe EntityView System(delegate*<ref Iterator, void> system)
+		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, 0f)
 			.Set<EcsSystemPhaseOnUpdate>();
 
-	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system, in QueryBuilder query)
-		=> _world.System(system)
-			.Set<EcsSystemPhaseOnUpdate>()
-			.Set(new EcsQuery() { ID = query.Build() });
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
+		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, tick)
+			.Set<EcsSystemPhaseOnUpdate>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
+		=> _world.System(system, query.Build(), query.Terms, 0f)
+			.Set<EcsSystemPhaseOnUpdate>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
+		=> _world.System(system, query.Build(), query.Terms, tick)
+			.Set<EcsSystemPhaseOnUpdate>();
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
 		=> _world.SetSingleton(cmp);
@@ -62,10 +69,10 @@ sealed unsafe class Ecs
 
 		_cmds.Merge();
 
-		Span<EntityID> with = stackalloc EntityID[] {
-			_world.Component<EcsEnabled>(),
-			_world.Component<EcsSystem>(),
-			0
+		Span<Term> terms = stackalloc Term[] {
+			new () { ID = _world.Component<EcsEnabled>(), Op = TermOp.With },
+			new () { ID = _world.Component<EcsSystem>(), Op = TermOp.With },
+			new () { ID = 0, Op = TermOp.With}
 		};
 
 		Span<EntityID> sequence = stackalloc EntityID[3];
@@ -78,11 +85,10 @@ sealed unsafe class Ecs
 
 			for (int i = 0; i < 3; ++i)
 			{
-				with[^1] = sequence[i];
+				terms[^1].ID = sequence[i];
 
 				_world.Query(
-					with,
-					Span<EntityID>.Empty,
+					terms,
 					_cmds,
 					&RunSystems
 				);
@@ -95,11 +101,10 @@ sealed unsafe class Ecs
 
 		for (int i = 0; i < 3; ++i)
 		{
-			with[^1] = sequence[i];
+			terms[^1].ID = sequence[i];
 
 			_world.Query(
-				with,
-				Span<EntityID>.Empty,
+				terms,
 				_cmds,
 				&RunSystems
 			);
@@ -113,76 +118,32 @@ sealed unsafe class Ecs
 	static unsafe void RunSystems(ref Iterator it)
 	{
 		var sysA = it.Field<EcsSystem>();
-		var sysTickA = it.Field<EcsSystemTick>();
-		var queryA = it.Field<EcsQuery>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
 			ref var sys = ref sysA[i];
-			ref var query = ref queryA[i];
-			ref var tick = ref sysTickA[i];
 
-			if (tick.Value > 0.00f)
+			if (sys.Tick > 0.00f)
 			{
 				// TODO: check for it.DeltaTime > 0?
-				tick.Current += it.DeltaTime;
+				sys.TickCurrent += it.DeltaTime;
 
-				if (tick.Current < tick.Value)
+				if (sys.TickCurrent < sys.Tick)
 				{
 					continue;
 				}
 
-				tick.Current = 0;
+				sys.TickCurrent = 0;
 			}
 
-			if (query.ID != 0)
+			if (sys.Query != 0)
 			{
-				Fetch(it.World, query.ID, it.Commands!, sys.Func);
+				it.World.Query(sys.Terms, it.Commands!, sys.Func);
 			}
 			else
 			{
 				sys.Func(ref it);
 			}
-		}
-	}
-
-	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<ref Iterator, void> system)
-	{
-		EcsAssert.Assert(world.IsAlive(query));
-		EcsAssert.Assert(world.Has<EcsQueryBuilder>(query));
-
-		ref var record = ref world._entities.Get(query);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
-
-        var components = record.Archetype.Components;
-		Span<EntityID> cmps = stackalloc EntityID[components.Length];
-
-		var withIdx = 0;
-		var withoutIdx = components.Length;
-
-        for (int i = 0; i < components.Length; ++i)
-		{
-			ref var meta = ref components[i];
-
-			if ((meta & EcsConst.ECS_QUERY_WITH) == EcsConst.ECS_QUERY_WITH)
-			{
-				cmps[withIdx++] = meta  & ~EcsConst.ECS_QUERY_WITH;
-			}
-			else if ((meta  & EcsConst.ECS_QUERY_WITHOUT) == EcsConst.ECS_QUERY_WITHOUT)
-			{
-				cmps[--withoutIdx] = meta  & ~EcsConst.ECS_QUERY_WITHOUT;
-			}
-		}
-
-		var with = cmps.Slice(0, withIdx);
-		var without = cmps.Slice(withoutIdx);
-
-        if (!with.IsEmpty)
-		{
-			with.Sort();
-			without.Sort();
-
-			world.Query(with, without, cmds, system);
 		}
 	}
 }
