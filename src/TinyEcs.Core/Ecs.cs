@@ -36,15 +36,15 @@ sealed unsafe class Ecs
 	public QueryBuilder Query()
 		=> _world.Query();
 
-	public unsafe SystemBuilder AddStartupSystem(delegate* managed<ref Iterator, void> system)
+	public unsafe SystemBuilder StartupSystem(delegate*<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnStartup>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system)
+	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>();
 
-	public unsafe SystemBuilder AddSystem(delegate* managed<ref Iterator, void> system, in QueryBuilder query)
+	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system, in QueryBuilder query)
 		=> _world.System(system)
 			.Set<EcsSystemPhaseOnUpdate>()
 			.Set(new EcsQuery() { ID = query.Build() });
@@ -84,7 +84,7 @@ sealed unsafe class Ecs
 					with,
 					Span<EntityID>.Empty,
 					_cmds,
-					static (ref Iterator it) => RunSystems(ref it)
+					&RunSystems
 				);
 			}
 		}
@@ -101,7 +101,7 @@ sealed unsafe class Ecs
 				with,
 				Span<EntityID>.Empty,
 				_cmds,
-				static (ref Iterator it) => RunSystems(ref it)
+				&RunSystems
 			);
 		}
 
@@ -137,7 +137,7 @@ sealed unsafe class Ecs
 
 			if (query.ID != 0)
 			{
-				Fetch(it.World, query.ID, it.Commands!, sys.Func, it.DeltaTime);
+				Fetch(it.World, query.ID, it.Commands!, sys.Func);
 			}
 			else
 			{
@@ -146,7 +146,7 @@ sealed unsafe class Ecs
 		}
 	}
 
-	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<ref Iterator, void> system, float deltaTime)
+	static unsafe void Fetch(World world, EntityID query, Commands cmds, delegate*<ref Iterator, void> system)
 	{
 		EcsAssert.Assert(world.IsAlive(query));
 		EcsAssert.Assert(world.Has<EcsQueryBuilder>(query));
@@ -155,7 +155,7 @@ sealed unsafe class Ecs
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
         var components = record.Archetype.Components;
-		Span<EntityID> cmps = stackalloc EntityID[components.Length + 0];
+		Span<EntityID> cmps = stackalloc EntityID[components.Length];
 
 		var withIdx = 0;
 		var withoutIdx = components.Length;
@@ -182,9 +182,7 @@ sealed unsafe class Ecs
 			with.Sort();
 			without.Sort();
 
-			world.Query(with, without, cmds, (ref Iterator it) => {
-				system(ref it);
-			});
+			world.Query(with, without, cmds, system);
 		}
 	}
 }

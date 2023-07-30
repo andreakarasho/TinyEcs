@@ -5,7 +5,7 @@ public sealed class World : IDisposable
 	private readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
-	private readonly EntitySparseSet<EntityID> _components = new();
+	private readonly Dictionary<int, EntityID> _components = new();
 
 
 	public World()
@@ -46,12 +46,13 @@ public sealed class World : IDisposable
 
 	public EntityID Component<T>() where T : unmanaged
 	{
-		ref var cmpID = ref _components.Get(TypeInfo<T>.Hash);
-
-		if (Unsafe.IsNullRef(ref cmpID) || !IsAlive(cmpID))
+		//ref var cmpID = ref _components.Get((EntityID)TypeInfo<T>.Hash);
+		ref var cmpID = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
+		if (/*Unsafe.IsNullRef(ref cmpID)*/ !exists || !IsAlive(cmpID))
 		{
 			var ent = SpawnEmpty();
-			cmpID = ref _components.Add(TypeInfo<T>.Hash, ent.ID);
+			cmpID = ent.ID;
+			//cmpID = ref _components.Add((EntityID)TypeInfo<T>.Hash, ent.ID);
 			Set(cmpID, new EcsComponent(cmpID, TypeInfo<T>.Size));
 			Set<EcsEnabled>(cmpID);
 		}
@@ -67,7 +68,7 @@ public sealed class World : IDisposable
 		return new QueryBuilder(this);
 	}
 
-	public unsafe SystemBuilder System(delegate* managed<ref Iterator, void> system)
+	public unsafe SystemBuilder System(delegate*<ref Iterator, void> system)
 		=> new SystemBuilder(this,
 			Spawn()
 				.Set(new EcsSystem(system))
@@ -301,18 +302,33 @@ public sealed class World : IDisposable
 		}
 	}
 
-	public void Query(Span<EntityID> with, Span<EntityID> without, Commands? commands, IteratorDelegate action)
+	public unsafe void Query
+	(
+		Span<EntityID> with,
+		Span<EntityID> without,
+		Commands? commands,
+		delegate* <ref Iterator, void> action,
+		object? userData = null
+	)
 	{
 		with.Sort();
 		without.Sort();
 
-		QueryRec(_archRoot, with, without, commands, action);
+		QueryRec(_archRoot, with, without, commands, action, userData);
 
-		static void QueryRec(Archetype root, ReadOnlySpan<EntityID> with, ReadOnlySpan<EntityID> without, Commands? commands, IteratorDelegate action)
+		static void QueryRec
+		(
+			Archetype root,
+			ReadOnlySpan<EntityID> with,
+			ReadOnlySpan<EntityID> without,
+			Commands? commands,
+			delegate* <ref Iterator, void> action,
+			object? userData
+		)
 		{
 			if (root.Count > 0 && root.IsSuperset(with))
 			{
-				var it = new Iterator(commands, root);
+				var it = new Iterator(commands, root, userData);
 				action(ref it);
 			}
 
@@ -329,7 +345,7 @@ public sealed class World : IDisposable
 			{
 				if (without.IndexOf(start.ComponentID) < 0)
 				{
-					QueryRec(start.Archetype, with, without, commands, action);
+					QueryRec(start.Archetype, with, without, commands, action, userData);
 				}
 
 				start = ref Unsafe.Add(ref start, 1);

@@ -142,11 +142,11 @@ unsafe
 	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
 	//ref var single = ref ecs.GetSingleton<PlayerTag>();
 
-	ecs.AddStartupSystem(&Setup);
+	ecs.StartupSystem(&Setup);
 
 	//ecs.AddSystem(&PrintSystem)
 	//	.SetTick(1f); // update every 50ms
-	ecs.AddSystem(&ParseQuery)
+	ecs.System(&ParseQuery)
 		.SetQuery(ecs.Query().With<Position>().With<Velocity>().Without<float>());
 
 		//.SetQuery(query.ID);

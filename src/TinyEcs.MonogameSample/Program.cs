@@ -46,30 +46,28 @@ sealed unsafe class TinyGame : Game
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
 
 
-        _ecs.AddStartupSystem(&Setup);
-		_ecs.AddStartupSystem(&SpawnEntities);
+        _ecs.StartupSystem(&Setup);
+		_ecs.StartupSystem(&SpawnEntities);
 
 		var qry = _ecs.Query()
 			.With<Position>()
 			.With<Velocity>()
 			.With<Rotation>();
 
-		_ecs.AddSystem(&MoveSystem)
-		    .SetQuery(qry);
-		_ecs.AddSystem(&CheckBorderSystem)
-			.SetQuery(qry);
+		_ecs.System(&MoveSystem, qry);
+		_ecs.System(&CheckBorderSystem, qry);
 
-		_ecs.AddSystem(&BeginRender);
-		_ecs.AddSystem(&Render)
+		_ecs.System(&BeginRender);
+		_ecs.System(&Render)
 			.SetQuery(
 				_ecs.Query()
-				.With<Position>()
-				.With<Rotation>()
-				.With<Sprite>()
-			);
-		_ecs.AddSystem(&EndRender);
+					.With<Position>()
+					.With<Rotation>()
+					.With<Sprite>()
+				);
+		_ecs.System(&EndRender);
 
-		_ecs.AddSystem(&PrintMessage)
+		_ecs.System(&PrintMessage)
 			.SetTick(1f);
 	}
 

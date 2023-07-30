@@ -9,7 +9,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
-	
+
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
 		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
