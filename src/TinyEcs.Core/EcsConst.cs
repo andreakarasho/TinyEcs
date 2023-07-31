@@ -9,7 +9,4 @@ static class EcsConst
 
 	public const EntityID ECS_TOGGLE = 1ul << 61;
 	public const EntityID ECS_PAIR = 1ul << 63;
-
-	public const EntityID ECS_QUERY_WITH = 1ul << 60;
-	public const EntityID ECS_QUERY_WITHOUT = 2ul << 60;
 }

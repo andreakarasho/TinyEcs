@@ -58,17 +58,15 @@ sealed unsafe class TinyGame : Game
 		_ecs.System(&CheckBorderSystem, qry);
 
 		_ecs.System(&BeginRender);
-		_ecs.System(&Render)
-			.SetQuery(
-				_ecs.Query()
-					.With<Position>()
-					.With<Rotation>()
-					.With<Sprite>()
-				);
-		_ecs.System(&EndRender);
+		_ecs.System(&Render,
+			_ecs.Query()
+				.With<Position>()
+				.With<Rotation>()
+				.With<Sprite>()
+		);
 
-		_ecs.System(&PrintMessage)
-			.SetTick(1f);
+		_ecs.System(&EndRender);
+		_ecs.System(&PrintMessage, 1f);
 	}
 
 

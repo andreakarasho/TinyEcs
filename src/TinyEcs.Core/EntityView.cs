@@ -51,24 +51,6 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		return this;
 	}
 
-	public readonly EntityView AttachTo(EntityView parent)
-	{
-		World.AttachTo(ID, parent);
-		return this;
-	}
-
-	public readonly EntityView Detach()
-	{
-		World.Detach(ID);
-		return this;
-	}
-
-	public readonly EntityView RemoveChildren()
-	{
-		World.RemoveChildren(ID);
-		return this;
-	}
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{

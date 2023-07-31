@@ -138,19 +138,9 @@ unsafe
 		});
 
 
-
-	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
-	//ref var single = ref ecs.GetSingleton<PlayerTag>();
-
 	ecs.StartupSystem(&Setup);
-
-	//ecs.AddSystem(&PrintSystem)
-	//	.SetTick(1f); // update every 50ms
-	ecs.System(&ParseQuery)
-		.SetQuery(ecs.Query().With<Position>().With<Velocity>().Without<float>());
-
-		//.SetQuery(query.ID);
-	//ecs.AddSystem(&PrintWarnSystem);
+	//ecs.System(&PrintSystem, 1f);
+	ecs.System(&ParseQuery, ecs.Query().With<Position>().With<Velocity>().Without<float>());
 }
 
 var sw = Stopwatch.StartNew();
@@ -190,21 +180,16 @@ static void Setup(ref Iterator it)
 
 static void ParseQuery(ref Iterator it)
 {
-	var posF = it.Field<Position>();
-	var velF = it.Field<Velocity>();
+	var posA = it.Field<Position>();
+	var velA = it.Field<Velocity>();
 
-	for (int i = 0; i < it.Count; ++i)
+	for (int i = 0, count = it.Count; i < count; ++i)
 	{
-		ref var pos = ref posF[i];
-		ref var vel = ref velF[i];
+		ref var pos = ref posA[i];
+		ref var vel = ref velA[i];
 
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;
-
-		//cmds.Entity(it.Entity(i))
-		//	.Set(1f);
-
-
 	}
 }
 

@@ -247,6 +247,42 @@ public sealed unsafe class Archetype
 		return j == other.Length;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int FindMatch(Span<Term> other)
+	{
+		ref var thisStart = ref MemoryMarshal.GetArrayDataReference(_components);
+		ref var thisEnd = ref Unsafe.Add(ref thisStart, _components.Length);
+
+		ref var otherStart = ref MemoryMarshal.GetReference(other);
+		ref var otherEnd = ref Unsafe.Add(ref otherStart, other.Length);
+
+		while (Unsafe.IsAddressLessThan(ref thisStart, ref thisEnd) &&
+			   Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd))
+		{
+			if (thisStart == otherStart.ID)
+			{
+				if (otherStart.Op != TermOp.With)
+				{
+					return -1;
+				}
+
+				otherStart = ref Unsafe.Add(ref otherStart, 1);
+			}
+			else if (otherStart.Op != TermOp.With)
+			{
+				otherStart = ref Unsafe.Add(ref otherStart, 1);
+				continue;
+			}
+
+			thisStart = ref Unsafe.Add(ref thisStart, 1);
+		}
+
+		while (Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd) && otherStart.Op != TermOp.With)
+			otherStart = ref Unsafe.Add(ref otherStart, 1);
+
+		return Unsafe.AreSame(ref otherStart, ref otherEnd) ? 0 : 1;
+	}
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Span<T> Field<T>() where T : unmanaged
