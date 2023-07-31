@@ -138,18 +138,9 @@ unsafe
 		});
 
 
-
-	//ecs.SetSingleton<PlayerTag>(new PlayerTag() { ID = 123 });
-	//ref var single = ref ecs.GetSingleton<PlayerTag>();
-
 	ecs.StartupSystem(&Setup);
-
-	//ecs.AddSystem(&PrintSystem)
-	//	.SetTick(1f); // update every 50ms
+	//ecs.System(&PrintSystem, 1f);
 	ecs.System(&ParseQuery, ecs.Query().With<Position>().With<Velocity>().Without<float>());
-
-		//.SetQuery(query.ID);
-	//ecs.AddSystem(&PrintWarnSystem);
 }
 
 var sw = Stopwatch.StartNew();
