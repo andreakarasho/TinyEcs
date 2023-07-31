@@ -247,35 +247,40 @@ public sealed unsafe class Archetype
 		return j == other.Length;
 	}
 
-	internal int IsSuperset(ReadOnlySpan<Term> other)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int FindMatch(Span<Term> other)
 	{
-		int i = 0, found = 0, ignored = 0;
-		while (i < _components.Length && found + ignored < other.Length)
+		ref var thisStart = ref MemoryMarshal.GetArrayDataReference(_components);
+		ref var thisEnd = ref Unsafe.Add(ref thisStart, _components.Length);
+
+		ref var otherStart = ref MemoryMarshal.GetReference(other);
+		ref var otherEnd = ref Unsafe.Add(ref otherStart, other.Length);
+
+		while (Unsafe.IsAddressLessThan(ref thisStart, ref thisEnd) &&
+			   Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd))
 		{
-			if (_components[i] == other[found + ignored].ID)
+			if (thisStart == otherStart.ID)
 			{
-				if (other[found + ignored].Op != TermOp.With)
+				if (otherStart.Op != TermOp.With)
 				{
 					return -1;
 				}
 
-				found++;
+				otherStart = ref Unsafe.Add(ref otherStart, 1);
 			}
-			else if (other[found + ignored].Op != TermOp.With)
+			else if (otherStart.Op != TermOp.With)
 			{
-				ignored++;
+				otherStart = ref Unsafe.Add(ref otherStart, 1);
 				continue;
 			}
 
-			i++;
+			thisStart = ref Unsafe.Add(ref thisStart, 1);
 		}
 
-		while (found + ignored < other.Length && other[found + ignored].Op != TermOp.With)
-		{
-			ignored++;
-		}
+		while (Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd) && otherStart.Op != TermOp.With)
+			otherStart = ref Unsafe.Add(ref otherStart, 1);
 
-		return found + ignored == other.Length ? 0 : 1;
+		return Unsafe.AreSame(ref otherStart, ref otherEnd) ? 0 : 1;
 	}
 
 

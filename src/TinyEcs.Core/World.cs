@@ -314,13 +314,13 @@ public sealed class World : IDisposable
 		static void QueryRec
 		(
 			Archetype root,
-			ReadOnlySpan<Term> terms,
+			Span<Term> terms,
 			Commands? commands,
 			delegate* <ref Iterator, void> action,
 			object? userData
 		)
 		{
-			var result = root.IsSuperset(terms);
+			var result = root.FindMatch(terms);
 			if (result < 0)
 			{
 				return;
