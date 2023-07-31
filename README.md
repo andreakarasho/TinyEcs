@@ -20,17 +20,20 @@ var ecs = new Ecs();
 
 // Create a run-once system which will run the first time
 // the app calls "ecs.Step(deltaTime)" method
-ecs.AddStartupSystem(&Setup);
+ecs.StartupSystem(&Setup);
 
 // Create a frame which will run every frame 
 // if the query condition is satisfied
-ecs.AddSystem(&MovePlayer)
-    .SetQuery(
-        ecs.Query()
-            .With<Position>()
-            .With<Player>()
-            .ID
-    );
+ecs.System
+(
+	&MovePlayer, 
+	ecs.Query()
+		.With<Position>()
+		.With<Player>()
+);
+
+// Create a system that runs every second
+ecs.System(&MessageEverySecond, 1f);
 
 
 while (true)
@@ -57,6 +60,12 @@ static void MovePlayer(ref Iterator it)
         pos.X += 0.5f;     
     }
 }
+
+static void MessageEverySecond(ref Iterator it)
+{
+	Console.WriteLine("message!");
+}
+
 
 struct Position { float X, Y, Z; }
 struct Player { }
