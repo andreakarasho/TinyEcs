@@ -189,13 +189,13 @@ static void Setup(ref Iterator it)
 
 static void ParseQuery(ref Iterator it)
 {
-	var posF = it.Field<Position>();
-	var velF = it.Field<Velocity>();
+	var posA = it.Field<Position>();
+	var velA = it.Field<Velocity>();
 
-	for (int i = 0; i < it.Count; ++i)
+	for (int i = 0, count = it.Count; i < count; ++i)
 	{
-		ref var pos = ref posF[i];
-		ref var vel = ref velF[i];
+		ref var pos = ref posA[i];
+		ref var vel = ref velA[i];
 
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;
