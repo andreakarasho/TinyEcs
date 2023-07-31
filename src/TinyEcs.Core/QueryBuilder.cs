@@ -1,5 +1,6 @@
 namespace TinyEcs;
 
+[SkipLocalsInit]
 public unsafe ref struct QueryBuilder
 {
 	const int TERMS_COUNT = 16;
@@ -9,13 +10,13 @@ public unsafe ref struct QueryBuilder
 	private int _termIndex;
 	private unsafe fixed byte _terms[TERMS_COUNT * (sizeof(uint) + sizeof(byte))];
 
-	private Span<Term> _allTerms
+	private ref Term CurrentTerm
 	{
 		get
 		{
-			fixed (byte* termPtr = &_terms[0])
+			fixed (byte* termPtr = &_terms[_termIndex * sizeof(Term)])
 			{
-				return new Span<Term>(termPtr, TERMS_COUNT);
+				return ref Unsafe.AsRef<Term>(termPtr);
 			}
 		}
 	}
@@ -49,9 +50,11 @@ public unsafe ref struct QueryBuilder
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
-		ref var term = ref _allTerms[_termIndex++];
+		ref var term = ref CurrentTerm;
 		term.ID = id;
 		term.Op = TermOp.With;
+
+		_termIndex += 1;
 
 		return this;
 	}
@@ -69,13 +72,14 @@ public unsafe ref struct QueryBuilder
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
-		ref var term = ref _allTerms[_termIndex++];
+		ref var term = ref CurrentTerm;
 		term.ID = id;
 		term.Op = TermOp.Without;
 
+		_termIndex += 1;
+
 		return this;
 	}
-
 
 	public EntityView Build()
 	{

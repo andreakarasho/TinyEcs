@@ -249,33 +249,33 @@ public sealed unsafe class Archetype
 
 	internal int IsSuperset(ReadOnlySpan<Term> other)
 	{
-		int i = 0, j = 0, n = 0;
-		while (i < _components.Length && j + n < other.Length)
+		int i = 0, found = 0, ignored = 0;
+		while (i < _components.Length && found + ignored < other.Length)
 		{
-			if (_components[i] == other[j + n].ID)
+			if (_components[i] == other[found + ignored].ID)
 			{
-				if (other[j + n].Op != TermOp.With)
+				if (other[found + ignored].Op != TermOp.With)
 				{
 					return -1;
 				}
 
-				j++;
+				found++;
 			}
-			else if (other[j + n].Op != TermOp.With)
+			else if (other[found + ignored].Op != TermOp.With)
 			{
-				n++;
+				ignored++;
 				continue;
 			}
 
 			i++;
 		}
 
-		while (j + n < other.Length && other[j + n].Op != TermOp.With)
+		while (found + ignored < other.Length && other[found + ignored].Op != TermOp.With)
 		{
-			n++;
+			ignored++;
 		}
 
-		return j == other.Length - n ? 0 : 1;
+		return found + ignored == other.Length ? 0 : 1;
 	}
 
 

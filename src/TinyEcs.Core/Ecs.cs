@@ -86,12 +86,7 @@ sealed unsafe class Ecs
 			for (int i = 0; i < 3; ++i)
 			{
 				terms[^1].ID = sequence[i];
-
-				_world.Query(
-					terms,
-					_cmds,
-					&RunSystems
-				);
+				_world.Query(terms, _cmds, &RunSystems);
 			}
 		}
 
@@ -102,12 +97,7 @@ sealed unsafe class Ecs
 		for (int i = 0; i < 3; ++i)
 		{
 			terms[^1].ID = sequence[i];
-
-			_world.Query(
-				terms,
-				_cmds,
-				&RunSystems
-			);
+			_world.Query(terms, _cmds, &RunSystems);
 		}
 
 		_cmds.Merge();

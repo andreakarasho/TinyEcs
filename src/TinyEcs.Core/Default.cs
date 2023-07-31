@@ -26,11 +26,13 @@ public struct EcsQueryBuilder { }
 
 public unsafe struct EcsSystem
 {
+	const int TERMS_COUNT = 32;
+
 	public readonly delegate*<ref Iterator, void> Func;
 	public readonly EntityID Query;
 	public readonly float Tick;
 	public float TickCurrent;
-	private fixed byte _terms[32 * (sizeof(EntityID) + sizeof(byte))];
+	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(byte))];
 	private readonly int _termsCount;
 
 	public Span<Term> Terms
