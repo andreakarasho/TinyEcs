@@ -37,11 +37,11 @@ sealed unsafe class Ecs
 		=> _world.Query();
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
-		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, 0f)
+		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
 			.Set<EcsSystemPhaseOnStartup>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system)
-		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, 0f)
+		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
 			.Set<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
@@ -49,7 +49,7 @@ sealed unsafe class Ecs
 			.Set<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
-		=> _world.System(system, query.Build(), query.Terms, 0f)
+		=> _world.System(system, query.Build(), query.Terms, float.NaN)
 			.Set<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
@@ -113,7 +113,7 @@ sealed unsafe class Ecs
 		{
 			ref var sys = ref sysA[i];
 
-			if (sys.Tick > 0.00f)
+			if (!float.IsNaN(sys.Tick))
 			{
 				// TODO: check for it.DeltaTime > 0?
 				sys.TickCurrent += it.DeltaTime;
