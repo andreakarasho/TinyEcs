@@ -178,15 +178,17 @@ public sealed class World : IDisposable
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static EntityID Hash(Span<EcsComponent> components)
+		static EntityID Hash(UnsafeSpan<EcsComponent> components)
 		{
 			unchecked
 			{
 				EntityID hash = 5381;
 
-				foreach (ref readonly var id in components)
+				while (components.CanAdvance())
 				{
-					hash = ((hash << 5) + hash) + id.ID;
+					hash = ((hash << 5) + hash) + components.Value.ID;
+
+					components.Advance();
 				}
 
 				return hash;
@@ -314,7 +316,7 @@ public sealed class World : IDisposable
 		static void QueryRec
 		(
 			Archetype root,
-			Span<Term> terms,
+			UnsafeSpan<Term> terms,
 			Commands? commands,
 			delegate* <ref Iterator, void> action,
 			object? userData

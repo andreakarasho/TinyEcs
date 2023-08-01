@@ -183,6 +183,15 @@ static void ParseQuery(ref Iterator it)
 	var posA = it.Field<Position>();
 	var velA = it.Field<Velocity>();
 
+	// while (posA.IsValid() && velA.IsValid())
+	// {
+	// 	posA.Value.X *= velA.Value.X;
+	// 	posA.Value.Y *= velA.Value.Y;
+
+	// 	posA.Next();
+	// 	velA.Next();
+	// }
+
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{
 		ref var pos = ref posA[i];

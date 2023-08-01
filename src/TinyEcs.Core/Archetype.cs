@@ -68,6 +68,7 @@ public sealed unsafe class Archetype
 			ResizeComponentArray(_capacity);
 		}
 
+		//Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_entityIDs), _count) = entityID;
 		_entityIDs[_count] = entityID;
 
 		return _count++;
@@ -231,75 +232,68 @@ public sealed unsafe class Archetype
 		}
 	}
 
-	internal bool IsSuperset(ReadOnlySpan<EntityID> other)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal bool IsSuperset(UnsafeSpan<EntityID> other)
 	{
-		int i = 0, j = 0;
-		while (i < _components.Length && j < other.Length)
+		var thisComps = new UnsafeSpan<EntityID>(_components);
+
+		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
-			if (_components[i] == other[j])
+			if (thisComps.Value == other.Value)
 			{
-				j++;
+				other.Advance();
 			}
 
-			i++;
+			thisComps.Advance();
 		}
 
-		return j == other.Length;
+		return Unsafe.AreSame(ref other.Value, ref other.End);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal int FindMatch(Span<Term> other)
+	internal int FindMatch(UnsafeSpan<Term> other)
 	{
-		ref var thisStart = ref MemoryMarshal.GetArrayDataReference(_components);
-		ref var thisEnd = ref Unsafe.Add(ref thisStart, _components.Length);
+		var thisComps = new UnsafeSpan<EntityID>(_components);
 
-		ref var otherStart = ref MemoryMarshal.GetReference(other);
-		ref var otherEnd = ref Unsafe.Add(ref otherStart, other.Length);
-
-		while (Unsafe.IsAddressLessThan(ref thisStart, ref thisEnd) &&
-			   Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd))
+		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
-			if (thisStart == otherStart.ID)
+			if (thisComps.Value == other.Value.ID)
 			{
-				if (otherStart.Op != TermOp.With)
+				if (other.Value.Op != TermOp.With)
 				{
 					return -1;
 				}
 
-				otherStart = ref Unsafe.Add(ref otherStart, 1);
+				other.Advance();
 			}
-			else if (otherStart.Op != TermOp.With)
+			else if (other.Value.Op != TermOp.With)
 			{
-				otherStart = ref Unsafe.Add(ref otherStart, 1);
+				other.Advance();
 				continue;
 			}
 
-			thisStart = ref Unsafe.Add(ref thisStart, 1);
+			thisComps.Advance();
 		}
 
-		while (Unsafe.IsAddressLessThan(ref otherStart, ref otherEnd) && otherStart.Op != TermOp.With)
-			otherStart = ref Unsafe.Add(ref otherStart, 1);
+		while (other.CanAdvance() && other.Value.Op != TermOp.With)
+			other.Advance();
 
-		return Unsafe.AreSame(ref otherStart, ref otherEnd) ? 0 : 1;
+		return Unsafe.AreSame(ref other.Value, ref other.End) ? 0 : 1;
 	}
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Span<T> Field<T>() where T : unmanaged
+	public UnsafeSpan<T> Field<T>() where T : unmanaged
 	{
 		var id = World.Component<T>();
-		var size = TypeInfo<T>.Size;
 		var column = GetComponentIndex(id);
 
 		EcsAssert.Assert(column >= 0);
 
-		return MemoryMarshal.Cast<byte, T>(_componentsData[column].AsSpan(0, size * Count));
+		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(_componentsData[column]));
+		ref var end = ref Unsafe.Add(ref start, Count);
 
-		// ref var value = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(GetComponentRaw(id, 0, Count)));
-
-		// EcsAssert.Assert(!Unsafe.IsNullRef(ref value));
-
-		// return MemoryMarshal.CreateSpan(ref value, Count);
+		return new UnsafeSpan<T>(ref start, ref end);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
