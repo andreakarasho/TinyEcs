@@ -137,38 +137,3 @@ sealed unsafe class Ecs
 		}
 	}
 }
-
-
-#if NETSTANDARD2_1
-internal readonly ref struct Ref<T>
-{
-    private readonly Span<T> span;
-
-    public Ref(ref T value)
-    {
-        span = MemoryMarshal.CreateSpan(ref value, 1);
-    }
-
-    public ref T Value => ref MemoryMarshal.GetReference(span);
-}
-
-public static class SortExtensions
-{
-	public static void Sort<T>(this Span<T> span) where T : IComparable<T>
-	{
-		for (int i = 0; i < span.Length - 1; i++)
-		{
-			for (int j = 0; j < span.Length - i - 1; j++)
-			{
-				if (span[j].CompareTo(span[j + 1]) > 0)
-				{
-					// Swap the elements
-					T temp = span[j];
-					span[j] = span[j + 1];
-					span[j + 1] = temp;
-				}
-			}
-		}
-	}
-}
-#endif
