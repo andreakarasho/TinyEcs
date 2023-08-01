@@ -48,15 +48,14 @@ public sealed class Commands
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		if (_main.Has<T>(id))
+		var cmpID = _main.Component<T>();
+		if (_main.Has(id, cmpID))
 		{
 			ref var value = ref _main.Get<T>(id);
 			value = cmp;
 
 			return ref value;
 		}
-
-		var cmpID = _main.Component<T>();
 
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
@@ -68,7 +67,7 @@ public sealed class Commands
 			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
 		}
 
-		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span);
+		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Size));
 		fixed (byte* ptr = &reference)
 			Unsafe.Copy(ptr, ref cmp);
 
