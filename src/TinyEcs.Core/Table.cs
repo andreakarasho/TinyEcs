@@ -44,12 +44,6 @@ sealed class Table
 		return _count++;
 	}
 
-	public int Decrease()
-	{
-
-		return --_count;
-	}
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int GetComponentIndex(EntityID component)
 	{
@@ -91,7 +85,7 @@ sealed class Table
 	}
 
 	[SkipLocalsInit]
-	public void CopyTo(int fromRow, Table to, int toRow)
+	public void MoveTo(int fromRow, Table to, int toRow)
 	{
 		var isLeft = to.Components.Length < Components.Length;
 		int i = 0, j = 0;
@@ -144,6 +138,8 @@ sealed class Table
 			// 	(uint) meta.Size
 			// );
 		}
+
+		_count = fromCount;
 	}
 
 	private void ResizeComponentArray(int capacity)

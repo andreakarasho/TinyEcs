@@ -84,8 +84,8 @@ public sealed unsafe class Archetype
 
 		(var toRow, var toTableRow) = to.Add(removed);
 
-		from._table.CopyTo(fromTableRow, to._table, toTableRow);
-		from._table.Decrease();
+		from._table.MoveTo(fromTableRow, to._table, toTableRow);
+
 		--from._count;
 
 		return (toRow, toTableRow);
@@ -159,8 +159,6 @@ public sealed unsafe class Archetype
 		MakeEdges(newNode, this, _table.Components[i]);
 	}
 
-
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal bool IsSuperset(UnsafeSpan<EntityID> other)
 	{
@@ -216,16 +214,9 @@ public sealed unsafe class Archetype
 	{
 		var id = World.Component<T>();
 
-		var span = GetComponentRaw(id, 0, Count);
+		var span = _table.GetComponentRaw(id, 0, _count);
 		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
-		ref var end = ref Unsafe.Add(ref start, Count);
-
-		// var column = GetComponentIndex(id);
-
-		// EcsAssert.Assert(column >= 0);
-
-		// ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(_componentsData[column]));
-		// ref var end = ref Unsafe.Add(ref start, Count);
+		ref var end = ref Unsafe.Add(ref start, _count);
 
 		return new UnsafeSpan<T>(ref start, ref end);
 	}
