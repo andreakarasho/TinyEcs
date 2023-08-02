@@ -79,7 +79,7 @@ public sealed unsafe class Archetype
 		var removed = _entityIDs[row];
 		_entityIDs[row] = _entityIDs[_count - 1];
 
-		for (int i = 0; i < _components.Length; ++i)
+		for (int i = 0; i < ComponentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref ComponentInfo[i];
 			var leftArray = _componentsData[i].AsSpan();
@@ -152,6 +152,7 @@ public sealed unsafe class Archetype
 		}
 	}
 
+	[SkipLocalsInit]
 	static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
 	{
 		var isLeft = to._components.Length < from._components.Length;
@@ -161,6 +162,10 @@ public sealed unsafe class Archetype
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
 
+		ref var cmpFromStart = ref MemoryMarshal.GetArrayDataReference(from.ComponentInfo);
+
+		var fromCount = from._count - 1;
+
 		for (; x < count; ++x, ++y)
 		{
 			while (from._components[i] != to._components[j])
@@ -169,7 +174,8 @@ public sealed unsafe class Archetype
 				++y;
 			}
 
-			ref readonly var meta = ref from.ComponentInfo[i];
+			ref var meta = ref Unsafe.Add(ref cmpFromStart, i);
+
 			var leftArray = from._componentsData[i].AsSpan();
 			var rightArray = to._componentsData[j].AsSpan();
 			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
@@ -177,6 +183,29 @@ public sealed unsafe class Archetype
 			var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
 			removeComponent.CopyTo(insertComponent);
 			swapComponent.CopyTo(removeComponent);
+
+			// var uLeft = new UnsafeSpan<byte>(from._componentsData[i]);
+			// var uRight = new UnsafeSpan<byte>(to._componentsData[j]);
+
+			// var toIndex = meta.Size * toRow;
+			// var fromIndex = meta.Size * fromRow;
+			// ref var left = ref Unsafe.Add(ref uLeft.Value, fromIndex);
+
+			// // remove -> insert
+			// Unsafe.CopyBlockUnaligned
+			// (
+			// 	ref Unsafe.Add(ref uRight.Value, toIndex),
+			// 	ref left,
+			// 	(uint) meta.Size
+			// );
+
+			// // swap -> remove
+			// Unsafe.CopyBlockUnaligned
+			// (
+			// 	ref left,
+			// 	ref Unsafe.Add(ref uLeft.Value, meta.Size * fromCount),
+			// 	(uint) meta.Size
+			// );
 		}
 	}
 

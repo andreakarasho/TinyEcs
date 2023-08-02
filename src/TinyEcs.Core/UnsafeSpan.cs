@@ -20,6 +20,13 @@ public ref struct UnsafeSpan<T> where T : unmanaged
 		_end = ref Unsafe.Add(ref _start, span.Length);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public UnsafeSpan(T[] span)
+	{
+		_start = ref MemoryMarshal.GetArrayDataReference(span);
+		_end = ref Unsafe.Add(ref _start, span.Length);
+	}
+
 
 	public ref T Value => ref _start;
 	public readonly ref T End => ref _end;
@@ -49,7 +56,7 @@ public ref struct UnsafeSpan<T> where T : unmanaged
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static unsafe implicit operator Span<T>(UnsafeSpan<T> span)
 	{
-		var size2 = (T*)Unsafe.AsPointer(ref span.End) - (T*)Unsafe.AsPointer(ref span.Value);
-		return MemoryMarshal.CreateSpan(ref span.Value, (int) size2);
+		var size = (T*)Unsafe.AsPointer(ref span.End) - (T*)Unsafe.AsPointer(ref span.Value);
+		return MemoryMarshal.CreateSpan(ref span.Value, (int) size);
 	}
 }

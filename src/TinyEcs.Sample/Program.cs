@@ -33,19 +33,6 @@ world.Spawn().Set<int>().Set<double>().Set<int>();
 
 world.PrintGraph();
 
-unsafe
-{
-	// world.Query(stackalloc EntityID[] {
-	// 		world.Component<float>(),
-	// 		world.Component<byte>()
-	// 	},
-	// 	Span<EntityID>.Empty,
-	// 	static arch => {
-	// 		Console.WriteLine("arch: [{0}]", string.Join(", ", arch.Components));
-	// 	}
-	// );
-}
-
 world.Query().With<float>().With<int>().Iterate(static (ref Iterator a) => {
 	var floatA = a.Field<float>();
 	var intA = a.Field<int>();
@@ -170,7 +157,14 @@ static void Setup(ref Iterator it)
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		it.Commands!.Spawn()
 			.Set<Position>()
-			.Set<Velocity>();
+			.Set<Velocity>()
+			.Set<int>()
+			.Set<short>()
+			.Set<byte>()
+			.Set<decimal>()
+			.Set<uint>()
+			.Set<ushort>()
+			;
 
 	var character = it.Commands!.Spawn()
 		.Set(new Serial() { Value = 0xDEAD_BEEF });
