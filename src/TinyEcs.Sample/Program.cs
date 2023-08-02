@@ -127,7 +127,11 @@ unsafe
 
 	ecs.StartupSystem(&Setup);
 	//ecs.System(&PrintSystem, 1f);
-	ecs.System(&ParseQuery, ecs.Query().With<Position>().With<Velocity>().Without<float>());
+	ecs.System(&ParseQuery, ecs.Query()
+		.With<Position>()
+		.With<Velocity>()
+		.Without<float>()
+		.Without<Likes, Dogs>());
 }
 
 var sw = Stopwatch.StartNew();
@@ -164,6 +168,7 @@ static void Setup(ref Iterator it)
 			.Set<decimal>()
 			.Set<uint>()
 			.Set<ushort>()
+			.Add<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()

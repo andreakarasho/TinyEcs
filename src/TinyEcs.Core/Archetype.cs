@@ -46,7 +46,7 @@ public sealed unsafe class Archetype
 		return _table.GetComponentIndex(component);
 	}
 
-	internal (int, int) Add(EntityID entityID)
+	internal int Add(EntityID entityID)
 	{
 		if (_capacity == _count)
 		{
@@ -55,12 +55,11 @@ public sealed unsafe class Archetype
 			Array.Resize(ref _entityIDs, _capacity);
 		}
 
-		var tableRow = _table.Increase();
 
 		//Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_entityIDs), _count) = entityID;
 		_entityIDs[_count] = entityID;
 
-		return (_count++, tableRow);
+		return _count++;
 	}
 
 	internal EntityID Remove(ref EcsRecord record)
@@ -83,14 +82,19 @@ public sealed unsafe class Archetype
 		return vertex;
 	}
 
-	internal static (int, int) MoveEntity(Archetype from, Archetype to, int fromRow, int fromTableRow)
+	internal static (int, int) MoveEntity(Archetype from, Archetype to, int fromRow, int fromTableRow, int size)
 	{
 		var removed = from._entityIDs[fromRow];
 		from._entityIDs[fromRow] = from._entityIDs[from._count - 1];
 
-		(var toRow, var toTableRow) = to.Add(removed);
+		var toRow = to.Add(removed);
 
-		from._table.MoveTo(fromTableRow, to._table, toTableRow);
+		var toTableRow = fromTableRow;
+		if (size > 0)
+		{
+			toTableRow = to._table.Increase();
+			from._table.MoveTo(fromTableRow, to._table, toTableRow);
+		}
 
 		--from._count;
 

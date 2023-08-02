@@ -79,7 +79,8 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
-		(record.ArchetypeRow, record.TableRow) = _archRoot.Add(id);
+		record.ArchetypeRow = _archRoot.Add(id);
+		record.TableRow = _archRoot.Table.Increase();
 
 		return new EntityView(this, id);
 	}
@@ -107,6 +108,7 @@ public sealed class World : IDisposable
 
 	internal void DetachComponent(EntityID entity, EntityID component)
 	{
+		// FIXME: handle component with size == 0
 		InternalAttachDetach(entity, component, -1);
 	}
 
@@ -119,7 +121,7 @@ public sealed class World : IDisposable
 		if (arch == null)
 			return false;
 
-		(var newRow, var newTableRow) = Archetype.MoveEntity(record.Archetype, arch!, record.ArchetypeRow, record.TableRow);
+		(var newRow, var newTableRow) = Archetype.MoveEntity(record.Archetype, arch!, record.ArchetypeRow, record.TableRow, size);
 		record.ArchetypeRow = newRow;
 		record.TableRow = newTableRow;
 		record.Archetype = arch!;
@@ -255,7 +257,7 @@ public sealed class World : IDisposable
 			AttachComponent(entity, component, data.Length);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(component, record.ArchetypeRow, 1);
+		var buf = record.Archetype.GetComponentRaw(component, record.TableRow, 1);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
@@ -269,7 +271,7 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentRaw(component, record.ArchetypeRow, 1);
+		return record.Archetype.GetComponentRaw(component, record.TableRow, 1);
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged

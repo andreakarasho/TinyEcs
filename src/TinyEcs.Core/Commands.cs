@@ -86,7 +86,7 @@ public sealed class Commands
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
 		set.ComponentID = cmp;
-		set.Size = 1;
+		set.Size = 0;
 
 		if (set.Data.Length < set.Size)
 		{

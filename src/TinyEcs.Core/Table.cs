@@ -90,7 +90,6 @@ sealed class Table
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
 
-		ref var cmpFromStart = ref MemoryMarshal.GetArrayDataReference(_componentInfo);
 		var fromCount = _count - 1;
 
 		for (; x < count; ++x, ++y)
@@ -101,7 +100,7 @@ sealed class Table
 				++y;
 			}
 
-			ref var meta = ref Unsafe.Add(ref cmpFromStart, i);
+			ref readonly var meta = ref _componentInfo[i];
 
 			var leftArray = _componentsData[i].AsSpan();
 			var rightArray = to._componentsData[j].AsSpan();
@@ -111,7 +110,7 @@ sealed class Table
 			removeComponent.CopyTo(insertComponent);
 			swapComponent.CopyTo(removeComponent);
 
-			// var uLeft = new UnsafeSpan<byte>(from._componentsData[i]);
+			// var uLeft = new UnsafeSpan<byte>(_componentsData[i]);
 			// var uRight = new UnsafeSpan<byte>(to._componentsData[j]);
 
 			// var toIndex = meta.Size * toRow;
