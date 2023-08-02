@@ -9,93 +9,67 @@ public sealed unsafe class Archetype
 	private readonly World _world;
 	private int _capacity, _count;
 	private EntityID[] _entityIDs;
-	internal byte[][] _componentsData;
-	internal List<EcsEdge> _edgesLeft, _edgesRight;
-	//private readonly EntitySparseSet<EntityID> _lookup;
-	private readonly EntityID[] _components;
-	private readonly Dictionary<EntityID, int> _lookup = new();
 
-	internal Archetype(World world, ReadOnlySpan<EcsComponent> components)
+	internal List<EcsEdge> _edgesLeft, _edgesRight;
+
+	private readonly Table _table;
+
+
+	internal Archetype(World world, Table table)
 	{
 		_world = world;
+		_table = table;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
-		_components = new EntityID[components.Length];
-		ComponentInfo = components.ToArray();
 		_entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
-		_componentsData = new byte[components.Length][];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
-		//_lookup = new EntitySparseSet<EntityID>();
 
-		for (var i = 0; i < components.Length; i++)
-		{
-			_components[i] = components[i].ID;
-			//_lookup.Add(components[i].ID, (EntityID)i);
-			_lookup.Add(components[i].ID, i);
-		}
-
-		ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
+		//ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
 	}
-
-
-	internal readonly EcsComponent[] ComponentInfo;
-
 
 	internal EntityID[] Entities => _entityIDs;
-	internal EntityID[] Components => _components;
-
 	public World World => _world;
 	public int Count => _count;
+	internal Table Table => _table;
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EntityID component)
 	{
-		ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
-		//ref var idx = ref _lookup.Get(component);
-
-		return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
+		return _table.GetComponentIndex(component);
 	}
 
-	internal int Add(EntityID entityID)
+	internal (int, int) Add(EntityID entityID)
 	{
 		if (_capacity == _count)
 		{
 			_capacity *= 2;
 
 			Array.Resize(ref _entityIDs, _capacity);
-			ResizeComponentArray(_capacity);
+			//ResizeComponentArray(_capacity);
 		}
+
+		var tableRow = _table.Increase();
 
 		//Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_entityIDs), _count) = entityID;
 		_entityIDs[_count] = entityID;
 
-		return _count++;
+		return (_count++, tableRow);
 	}
 
-	internal EntityID Remove(int row)
+	internal EntityID Remove(ref EcsRecord record)
 	{
-		var removed = _entityIDs[row];
-		_entityIDs[row] = _entityIDs[_count - 1];
+		var removed = _entityIDs[record.ArchetypeRow];
+		_entityIDs[record.ArchetypeRow] = _entityIDs[_count - 1];
 
-		for (int i = 0; i < ComponentInfo.Length; ++i)
-		{
-			ref readonly var meta = ref ComponentInfo[i];
-			var leftArray = _componentsData[i].AsSpan();
-
-			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
-			var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
-
-			swapComponent.CopyTo(removeComponent);
-		}
+		_table.Remove(ref record);
 
 		--_count;
 
 		return removed;
 	}
 
-	internal Archetype InsertVertex(Archetype left, ReadOnlySpan<EcsComponent> newType, EntityID component)
+	internal Archetype InsertVertex(Archetype left, Table newType, EntityID component)
 	{
 		var vertex = new Archetype(left._world, newType);
 		MakeEdges(left, vertex, component);
@@ -103,33 +77,23 @@ public sealed unsafe class Archetype
 		return vertex;
 	}
 
-	internal static int MoveEntity(Archetype from, Archetype to, int fromRow)
+	internal static (int, int) MoveEntity(Archetype from, Archetype to, int fromRow, int fromTableRow)
 	{
 		var removed = from._entityIDs[fromRow];
 		from._entityIDs[fromRow] = from._entityIDs[from._count - 1];
 
-		var toRow = to.Add(removed);
+		(var toRow, var toTableRow) = to.Add(removed);
 
-		Copy(from, fromRow, to, toRow);
-
+		from._table.CopyTo(fromTableRow, to._table, toTableRow);
+		from._table.Decrease();
 		--from._count;
 
-		return toRow;
+		return (toRow, toTableRow);
 	}
 
 	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)
 	{
-		var column = GetComponentIndex(component);
-		if (column < 0)
-		{
-			return Span<byte>.Empty;
-		}
-
-		//EcsAssert.Assert(row < Count); // this is not true when removing
-
-		ref readonly var meta = ref ComponentInfo[column];
-
-		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
+		return _table.GetComponentRaw(component, row, count);
 	}
 
 	internal void Clear()
@@ -137,77 +101,21 @@ public sealed unsafe class Archetype
 		_count = 0;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		Array.Resize(ref _entityIDs, _capacity);
-		ResizeComponentArray(_capacity);
+		//ResizeComponentArray(_capacity);
 	}
 
 	internal void Optimize()
 	{
-		var pow = (int) BitOperations.RoundUpToPowerOf2((uint) _count);
-		var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
-		if (newCapacity < _capacity)
-		{
-			_capacity = newCapacity;
-			Array.Resize(ref _entityIDs, _capacity);
-			ResizeComponentArray(_capacity);
-		}
+		// var pow = (int) BitOperations.RoundUpToPowerOf2((uint) _count);
+		// var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
+		// if (newCapacity < _capacity)
+		// {
+		// 	_capacity = newCapacity;
+		// 	Array.Resize(ref _entityIDs, _capacity);
+		// 	ResizeComponentArray(_capacity);
+		// }
 	}
 
-	[SkipLocalsInit]
-	static void Copy(Archetype from, int fromRow, Archetype to, int toRow)
-	{
-		var isLeft = to._components.Length < from._components.Length;
-		int i = 0, j = 0;
-		var count = isLeft ? to._components.Length : from._components.Length;
-
-		ref var x = ref (isLeft ? ref j : ref i);
-		ref var y = ref (!isLeft ? ref j : ref i);
-
-		ref var cmpFromStart = ref MemoryMarshal.GetArrayDataReference(from.ComponentInfo);
-
-		var fromCount = from._count - 1;
-
-		for (; x < count; ++x, ++y)
-		{
-			while (from._components[i] != to._components[j])
-			{
-				// advance the sign with less components!
-				++y;
-			}
-
-			ref var meta = ref Unsafe.Add(ref cmpFromStart, i);
-
-			var leftArray = from._componentsData[i].AsSpan();
-			var rightArray = to._componentsData[j].AsSpan();
-			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
-			var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
-			var swapComponent = leftArray.Slice(meta.Size * (from._count - 1), meta.Size);
-			removeComponent.CopyTo(insertComponent);
-			swapComponent.CopyTo(removeComponent);
-
-			// var uLeft = new UnsafeSpan<byte>(from._componentsData[i]);
-			// var uRight = new UnsafeSpan<byte>(to._componentsData[j]);
-
-			// var toIndex = meta.Size * toRow;
-			// var fromIndex = meta.Size * fromRow;
-			// ref var left = ref Unsafe.Add(ref uLeft.Value, fromIndex);
-
-			// // remove -> insert
-			// Unsafe.CopyBlockUnaligned
-			// (
-			// 	ref Unsafe.Add(ref uRight.Value, toIndex),
-			// 	ref left,
-			// 	(uint) meta.Size
-			// );
-
-			// // swap -> remove
-			// Unsafe.CopyBlockUnaligned
-			// (
-			// 	ref left,
-			// 	ref Unsafe.Add(ref uLeft.Value, meta.Size * fromCount),
-			// 	(uint) meta.Size
-			// );
-		}
-	}
 
 	private static void MakeEdges(Archetype left, Archetype right, EntityID id)
 	{
@@ -217,8 +125,8 @@ public sealed unsafe class Archetype
 
 	private void InsertVertex(Archetype newNode)
 	{
-		var nodeTypeLen = _components.Length;
-		var newTypeLen = newNode._components.Length;
+		var nodeTypeLen = _table.Components.Length;
+		var newTypeLen = newNode._table.Components.Length;
 
 		if (nodeTypeLen > newTypeLen - 1)
 		{
@@ -239,32 +147,24 @@ public sealed unsafe class Archetype
 			return;
 		}
 
-		if (!IsSuperset(newNode._components))
+		if (!IsSuperset(newNode._table.Components))
 		{
 			return;
 		}
 
 		var i = 0;
-		var newNodeTypeLen = newNode._components.Length;
-		for (; i < newNodeTypeLen && _components[i] == newNode._components[i]; ++i) { }
+		var newNodeTypeLen = newNode._table.Components.Length;
+		for (; i < newNodeTypeLen && _table.Components[i] == newNode._table.Components[i]; ++i) { }
 
-		MakeEdges(newNode, this, _components[i]);
+		MakeEdges(newNode, this, _table.Components[i]);
 	}
 
-	private void ResizeComponentArray(int capacity)
-	{
-		for (int i = 0; i < _components.Length; ++i)
-		{
-			ref readonly var meta = ref ComponentInfo[i];
-			Array.Resize(ref _componentsData[i], meta.Size * capacity);
-			_capacity = capacity;
-		}
-	}
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal bool IsSuperset(UnsafeSpan<EntityID> other)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_components);
+		var thisComps = new UnsafeSpan<EntityID>(_table.Components);
 
 		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
@@ -282,7 +182,7 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int FindMatch(UnsafeSpan<Term> other)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_components);
+		var thisComps = new UnsafeSpan<EntityID>(_table.Components);
 
 		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
@@ -315,12 +215,17 @@ public sealed unsafe class Archetype
 	public UnsafeSpan<T> Field<T>() where T : unmanaged
 	{
 		var id = World.Component<T>();
-		var column = GetComponentIndex(id);
 
-		EcsAssert.Assert(column >= 0);
-
-		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(_componentsData[column]));
+		var span = GetComponentRaw(id, 0, Count);
+		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		ref var end = ref Unsafe.Add(ref start, Count);
+
+		// var column = GetComponentIndex(id);
+
+		// EcsAssert.Assert(column >= 0);
+
+		// ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetArrayDataReference(_componentsData[column]));
+		// ref var end = ref Unsafe.Add(ref start, Count);
 
 		return new UnsafeSpan<T>(ref start, ref end);
 	}

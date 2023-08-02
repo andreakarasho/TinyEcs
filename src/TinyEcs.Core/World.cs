@@ -5,12 +5,13 @@ public sealed class World : IDisposable
 	private readonly Archetype _archRoot;
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
+	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<int, EntityID> _components = new();
 
 
 	public World()
 	{
-		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
+		_archRoot = new Archetype(this, new (ReadOnlySpan<EcsComponent>.Empty));
 	}
 
 
@@ -79,7 +80,7 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
-		record.Row = _archRoot.Add(id);
+		(record.ArchetypeRow, record.TableRow) = _archRoot.Add(id);
 
 		return new EntityView(this, id);
 	}
@@ -89,10 +90,10 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var removedId = record.Archetype.Remove(record.Row);
+		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.Row];
+		var last = record.Archetype.Entities[record.ArchetypeRow];
 		_entities.Get(last) = record;
 		_entities.Remove(removedId);
 	}
@@ -119,8 +120,9 @@ public sealed class World : IDisposable
 		if (arch == null)
 			return false;
 
-		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
-		record.Row = newRow;
+		(var newRow, var newTableRow) = Archetype.MoveEntity(record.Archetype, arch!, record.ArchetypeRow, record.TableRow);
+		record.ArchetypeRow = newRow;
+		record.TableRow = newTableRow;
 		record.Archetype = arch!;
 
 		return true;
@@ -130,7 +132,7 @@ public sealed class World : IDisposable
 	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size)
 	{
 		var column = root.GetComponentIndex(component);
-		var add = size > 0;
+		var add = size >= 0;
 
 		if (add && column >= 0)
 		{
@@ -141,7 +143,7 @@ public sealed class World : IDisposable
 			return null;
 		}
 
-		var initType = root.ComponentInfo;
+		var initType = root.Table.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
 
 		const int STACKALLOC_SIZE = 16;
@@ -170,11 +172,26 @@ public sealed class World : IDisposable
 		}
 
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
+		var hash = Hash(span);
 
-		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, Hash(span), out var exists);
+		Table? table;
+		if (size != 0)
+		{
+			if (!_tableIndex.TryGetValue(hash, out table))
+			{
+				table = new Table(span);
+				_tableIndex[hash] = table;
+			}
+		}
+		else
+		{
+			table = root.Table;
+		}
+
+		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			arch = _archRoot.InsertVertex(root, span, component);
+			arch = _archRoot.InsertVertex(root, table, component);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -239,7 +256,7 @@ public sealed class World : IDisposable
 			AttachComponent(entity, component, data.Length);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(component, record.Row, 1);
+		var buf = record.Archetype.GetComponentRaw(component, record.ArchetypeRow, 1);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
@@ -253,7 +270,7 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentRaw(component, record.Row, 1);
+		return record.Archetype.GetComponentRaw(component, record.ArchetypeRow, 1);
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
@@ -292,7 +309,7 @@ public sealed class World : IDisposable
 
 		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
 		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
+			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Table.Components), rootComponent);
 
 			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
 			{
@@ -357,5 +374,6 @@ public sealed class World : IDisposable
 struct EcsRecord
 {
 	public Archetype Archetype;
-	public int Row;
+	public int ArchetypeRow;
+	public int TableRow;
 }
