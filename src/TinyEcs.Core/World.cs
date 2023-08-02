@@ -11,9 +11,8 @@ public sealed class World : IDisposable
 
 	public World()
 	{
-		_archRoot = new Archetype(this, new (ReadOnlySpan<EcsComponent>.Empty));
+		_archRoot = new Archetype(this, new (ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
 	}
-
 
 
 	public int EntityCount => _entities.Length;
@@ -143,7 +142,7 @@ public sealed class World : IDisposable
 			return null;
 		}
 
-		var initType = root.Table.ComponentInfo;
+		var initType = root.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
 
 		const int STACKALLOC_SIZE = 16;
@@ -191,7 +190,7 @@ public sealed class World : IDisposable
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			arch = _archRoot.InsertVertex(root, table, component);
+			arch = _archRoot.InsertVertex(root, table, span, component);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -309,7 +308,7 @@ public sealed class World : IDisposable
 
 		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
 		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Table.Components), rootComponent);
+			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
 
 			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
 			{

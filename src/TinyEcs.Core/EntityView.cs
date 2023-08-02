@@ -118,9 +118,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		ref var record = ref World._entities.Get(ID);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		for (int i = 0; i < record.Archetype.Table.Components.Length; ++i)
+		for (int i = 0; i < record.Archetype.Components.Length; ++i)
 		{
-			action(new EntityView(World, record.Archetype.Table.Components[i]));
+			action(new EntityView(World, record.Archetype.Components[i]));
 		}
 	}
 

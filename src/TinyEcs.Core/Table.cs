@@ -6,17 +6,18 @@ sealed class Table
 
 	private readonly byte[][] _componentsData;
 	private readonly EntityID[] _components;
+	private readonly EcsComponent[] _componentInfo;
 	private readonly Dictionary<EntityID, int> _lookup = new();
 	private int _capacity;
 	private int _count;
 
-	public Table(ReadOnlySpan<EcsComponent> components)
+	internal Table(ReadOnlySpan<EcsComponent> components)
 	{
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
 		_componentsData = new byte[components.Length][];
 		_components = new EntityID[components.Length];
-		ComponentInfo = components.ToArray();
+		_componentInfo = components.ToArray();
 
 		for (var i = 0; i < components.Length; i++)
 		{
@@ -28,11 +29,7 @@ sealed class Table
 	}
 
 
-	public EntityID[] Components => _components;
-	public readonly EcsComponent[] ComponentInfo;
-
-
-	public int Increase()
+	internal int Increase()
 	{
 		if (_capacity == _count)
 		{
@@ -45,7 +42,7 @@ sealed class Table
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public int GetComponentIndex(EntityID component)
+	internal int GetComponentIndex(EntityID component)
 	{
 		ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
 		//ref var idx = ref _lookup.Get(component);
@@ -53,26 +50,25 @@ sealed class Table
 		return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
 	}
 
-	public Span<byte> GetComponentRaw(EntityID component, int row, int count)
+	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)
 	{
 		var column = GetComponentIndex(component);
 		if (column < 0)
 		{
+			// FIXME: this will be valid for empty custom components
 			return Span<byte>.Empty;
 		}
 
-		//EcsAssert.Assert(row < Count); // this is not true when removing
-
-		ref readonly var meta = ref ComponentInfo[column];
+		ref readonly var meta = ref _componentInfo[column];
 
 		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
 	}
 
-	public void Remove(ref EcsRecord record)
+	internal void Remove(ref EcsRecord record)
 	{
-		for (int i = 0; i < ComponentInfo.Length; ++i)
+		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
-			ref readonly var meta = ref ComponentInfo[i];
+			ref readonly var meta = ref _componentInfo[i];
 			var leftArray = _componentsData[i].AsSpan();
 
 			var removeComponent = leftArray.Slice(meta.Size * record.TableRow, meta.Size);
@@ -85,21 +81,21 @@ sealed class Table
 	}
 
 	[SkipLocalsInit]
-	public void MoveTo(int fromRow, Table to, int toRow)
+	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
-		var isLeft = to.Components.Length < Components.Length;
+		var isLeft = to._components.Length < _components.Length;
 		int i = 0, j = 0;
-		var count = isLeft ? to.Components.Length : Components.Length;
+		var count = isLeft ? to._components.Length : _components.Length;
 
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
 
-		ref var cmpFromStart = ref MemoryMarshal.GetArrayDataReference(ComponentInfo);
+		ref var cmpFromStart = ref MemoryMarshal.GetArrayDataReference(_componentInfo);
 		var fromCount = _count - 1;
 
 		for (; x < count; ++x, ++y)
 		{
-			while (Components[i] != to.Components[j])
+			while (_components[i] != to._components[j])
 			{
 				// advance the sign with less components!
 				++y;
@@ -146,7 +142,7 @@ sealed class Table
 	{
 		for (int i = 0; i < _components.Length; ++i)
 		{
-			ref readonly var meta = ref ComponentInfo[i];
+			ref readonly var meta = ref _componentInfo[i];
 			Array.Resize(ref _componentsData[i], meta.Size * capacity);
 			_capacity = capacity;
 		}

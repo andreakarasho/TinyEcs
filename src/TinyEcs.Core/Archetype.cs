@@ -9,13 +9,12 @@ public sealed unsafe class Archetype
 	private readonly World _world;
 	private int _capacity, _count;
 	private EntityID[] _entityIDs;
-
+	private readonly EntityID[] _components;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
-
 	private readonly Table _table;
 
 
-	internal Archetype(World world, Table table)
+	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components)
 	{
 		_world = world;
 		_table = table;
@@ -24,14 +23,22 @@ public sealed unsafe class Archetype
 		_entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
-
-		//ResizeComponentArray(ARCHETYPE_INITIAL_CAPACITY);
+		_components = new EntityID[components.Length];
+		ComponentInfo = components.ToArray();
+		for (int i = 0; i < components.Length; ++i)
+		{
+			_components[i] = components[i].ID;
+		}
 	}
 
 	internal EntityID[] Entities => _entityIDs;
 	public World World => _world;
 	public int Count => _count;
 	internal Table Table => _table;
+
+	public readonly EcsComponent[] ComponentInfo;
+	public EntityID[] Components => _components;
+
 
 
 	internal int GetComponentIndex(EntityID component)
@@ -46,7 +53,6 @@ public sealed unsafe class Archetype
 			_capacity *= 2;
 
 			Array.Resize(ref _entityIDs, _capacity);
-			//ResizeComponentArray(_capacity);
 		}
 
 		var tableRow = _table.Increase();
@@ -69,9 +75,9 @@ public sealed unsafe class Archetype
 		return removed;
 	}
 
-	internal Archetype InsertVertex(Archetype left, Table newType, EntityID component)
+	internal Archetype InsertVertex(Archetype left, Table newType, ReadOnlySpan<EcsComponent> components, EntityID component)
 	{
-		var vertex = new Archetype(left._world, newType);
+		var vertex = new Archetype(left._world, newType, components);
 		MakeEdges(left, vertex, component);
 		InsertVertex(vertex);
 		return vertex;
@@ -101,7 +107,6 @@ public sealed unsafe class Archetype
 		_count = 0;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		Array.Resize(ref _entityIDs, _capacity);
-		//ResizeComponentArray(_capacity);
 	}
 
 	internal void Optimize()
@@ -125,8 +130,8 @@ public sealed unsafe class Archetype
 
 	private void InsertVertex(Archetype newNode)
 	{
-		var nodeTypeLen = _table.Components.Length;
-		var newTypeLen = newNode._table.Components.Length;
+		var nodeTypeLen = _components.Length;
+		var newTypeLen = newNode._components.Length;
 
 		if (nodeTypeLen > newTypeLen - 1)
 		{
@@ -147,22 +152,22 @@ public sealed unsafe class Archetype
 			return;
 		}
 
-		if (!IsSuperset(newNode._table.Components))
+		if (!IsSuperset(newNode._components))
 		{
 			return;
 		}
 
 		var i = 0;
-		var newNodeTypeLen = newNode._table.Components.Length;
-		for (; i < newNodeTypeLen && _table.Components[i] == newNode._table.Components[i]; ++i) { }
+		var newNodeTypeLen = newNode._components.Length;
+		for (; i < newNodeTypeLen && _components[i] == newNode._components[i]; ++i) { }
 
-		MakeEdges(newNode, this, _table.Components[i]);
+		MakeEdges(newNode, this, _components[i]);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal bool IsSuperset(UnsafeSpan<EntityID> other)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_table.Components);
+		var thisComps = new UnsafeSpan<EntityID>(_components);
 
 		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
@@ -180,7 +185,7 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int FindMatch(UnsafeSpan<Term> other)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_table.Components);
+		var thisComps = new UnsafeSpan<EntityID>(_components);
 
 		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
