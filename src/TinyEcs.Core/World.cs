@@ -27,6 +27,7 @@ public sealed class World : IDisposable
 		_archRoot.Clear();
 		_typeIndex.Clear();
 		_components.Clear();
+		_tableIndex.Clear();
 	}
 
 	// public void Optimize()
