@@ -121,7 +121,7 @@ public sealed class World : IDisposable
 		if (arch == null)
 			return false;
 
-		(var newRow, var newTableRow) = Archetype.MoveEntity(record.Archetype, arch!, record.ArchetypeRow, record.TableRow, size);
+		(var newRow, var newTableRow) = record.Archetype.MoveEntity(arch!, record.ArchetypeRow, record.TableRow, size);
 		record.ArchetypeRow = newRow;
 		record.TableRow = newTableRow;
 		record.Archetype = arch!;
@@ -132,7 +132,7 @@ public sealed class World : IDisposable
 	[SkipLocalsInit]
 	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size)
 	{
-		var column = root.GetComponentIndex(component);
+		var column = root.GetComponentIndex(component, size);
 		var add = size >= 0;
 
 		if (add && column >= 0)
@@ -251,7 +251,7 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var column = record.Archetype.GetComponentIndex(component);
+		var column = record.Archetype.GetComponentIndex(component, data.Length);
 		if (column < 0)
 		{
 			AttachComponent(entity, component, data.Length);
@@ -306,17 +306,7 @@ public sealed class World : IDisposable
 
 	public void PrintGraph()
 	{
-		PrintRec(_archRoot, 0, 0);
-
-		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
-		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
-
-			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
-			{
-				PrintRec(edge.Archetype, depth + 1, edge.ComponentID);
-			}
-		}
+		_archRoot.Print();
 	}
 
 	public unsafe void Query

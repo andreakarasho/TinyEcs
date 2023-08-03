@@ -19,6 +19,8 @@ public readonly ref struct Iterator
 	public readonly float DeltaTime => World.DeltaTime;
 	public object? UserData { get; }
 
+	internal Archetype Archetype => _archetype;
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Span<T>() where T : unmanaged

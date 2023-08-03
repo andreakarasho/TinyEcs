@@ -131,7 +131,7 @@ unsafe
 		.With<Position>()
 		.With<Velocity>()
 		.Without<float>()
-		.Without<Likes, Dogs>());
+		.With<Likes, Dogs>());
 }
 
 var sw = Stopwatch.StartNew();
@@ -179,6 +179,9 @@ static void Setup(ref Iterator it)
 
 static void ParseQuery(ref Iterator it)
 {
+	// it.World.PrintGraph();
+	// it.Archetype.Print();
+
 	var posA = it.Field<Position>();
 	var velA = it.Field<Velocity>();
 

@@ -19,6 +19,7 @@ sealed class Table
 
 		for (var i = 0; i < components.Length; i++)
 		{
+			EcsAssert.Assert(components[i].Size > 0);
 			_lookup.Add(components[i].ID, i);
 		}
 

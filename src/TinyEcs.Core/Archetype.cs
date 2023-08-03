@@ -41,8 +41,13 @@ public sealed unsafe class Archetype
 
 
 
-	internal int GetComponentIndex(EntityID component)
+	internal int GetComponentIndex(EntityID component, int size)
 	{
+		if (size <= 0)
+		{
+			return Array.IndexOf(_components, component);
+		}
+
 		return _table.GetComponentIndex(component);
 	}
 
@@ -82,20 +87,20 @@ public sealed unsafe class Archetype
 		return vertex;
 	}
 
-	internal static (int, int) MoveEntity(Archetype from, Archetype to, int fromRow, int fromTableRow, int size)
+	internal (int, int) MoveEntity(Archetype to, int fromRow, int fromTableRow, int size)
 	{
-		var removed = from._entityIDs[fromRow];
-		from._entityIDs[fromRow] = from._entityIDs[from._count - 1];
+		var removed = _entityIDs[fromRow];
+		_entityIDs[fromRow] = _entityIDs[_count - 1];
 
 		var toRow = to.Add(removed);
-
 		var toTableRow = fromTableRow;
+
 		if (size > 0)
 		{
-			toTableRow = from._table.MoveTo(fromTableRow, to._table);
+			toTableRow = _table.MoveTo(fromTableRow, to._table);
 		}
 
-		--from._count;
+		--_count;
 
 		return (toRow, toTableRow);
 	}
@@ -201,7 +206,7 @@ public sealed unsafe class Archetype
 
 				other.Advance();
 			}
-			else if (other.Value.Op != TermOp.With)
+			else if (thisComps.Value > other.Value.ID && other.Value.Op != TermOp.With)
 			{
 				other.Advance();
 				continue;
@@ -233,7 +238,7 @@ public sealed unsafe class Archetype
 	public bool Has<T>() where T : unmanaged
 	{
 		var id = World.Component<T>();
-		var column = GetComponentIndex(id);
+		var column = GetComponentIndex(id, TypeInfo<T>.Size);
 
 		return column >= 0;
 	}
@@ -241,6 +246,22 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public EntityView Entity(int row)
 		=> new (World, Entities[row]);
+
+
+	public void Print()
+	{
+		PrintRec(this, 0, 0);
+
+		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
+		{
+			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
+
+			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
+			{
+				PrintRec(edge.Archetype, depth + 1, edge.ComponentID);
+			}
+		}
+	}
 }
 
 struct EcsEdge
