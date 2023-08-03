@@ -9,7 +9,6 @@ public sealed unsafe class Archetype
 	private readonly World _world;
 	private int _capacity, _count;
 	private EntityID[] _entityIDs;
-	private readonly EntityID[] _components;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
 	private readonly Table _table;
 
@@ -23,12 +22,7 @@ public sealed unsafe class Archetype
 		_entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
-		_components = new EntityID[components.Length];
 		ComponentInfo = components.ToArray();
-		for (int i = 0; i < components.Length; ++i)
-		{
-			_components[i] = components[i].ID;
-		}
 	}
 
 	internal EntityID[] Entities => _entityIDs;
@@ -37,18 +31,17 @@ public sealed unsafe class Archetype
 	internal Table Table => _table;
 
 	public readonly EcsComponent[] ComponentInfo;
-	public EntityID[] Components => _components;
 
 
 
-	internal int GetComponentIndex(EntityID component, int size)
+	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
-		if (size <= 0)
+		if (cmp.Size <= 0)
 		{
-			return Array.BinarySearch(_components, component);
+			return Array.BinarySearch(ComponentInfo, cmp);
 		}
 
-		return _table.GetComponentIndex(component);
+		return _table.GetComponentIndex(ref cmp);
 	}
 
 	internal int Add(EntityID entityID)
@@ -79,10 +72,10 @@ public sealed unsafe class Archetype
 		return removed;
 	}
 
-	internal Archetype InsertVertex(Archetype left, Table newType, ReadOnlySpan<EcsComponent> components, EntityID component)
+	internal Archetype InsertVertex(Archetype left, Table newType, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
 	{
 		var vertex = new Archetype(left._world, newType, components);
-		MakeEdges(left, vertex, component);
+		MakeEdges(left, vertex, component.ID);
 		InsertVertex(vertex);
 		return vertex;
 	}
@@ -105,12 +98,12 @@ public sealed unsafe class Archetype
 		return (toRow, toTableRow);
 	}
 
-	internal Span<byte> GetComponentRaw(EntityID component, int size, int row, int count)
+	internal Span<byte> GetComponentRaw(ref EcsComponent cmp, int row, int count)
 	{
-		if (size <= 0 && GetComponentIndex(component, size) >= 0)
+		if (cmp.Size <= 0 && GetComponentIndex(ref cmp) >= 0)
 			return Span<byte>.Empty;
 
-		return _table.GetComponentRaw(component, row, count);
+		return _table.GetComponentRaw(ref cmp, row, count);
 	}
 
 	internal void Clear()
@@ -141,8 +134,8 @@ public sealed unsafe class Archetype
 
 	private void InsertVertex(Archetype newNode)
 	{
-		var nodeTypeLen = _components.Length;
-		var newTypeLen = newNode._components.Length;
+		var nodeTypeLen = ComponentInfo.Length;
+		var newTypeLen = newNode.ComponentInfo.Length;
 
 		if (nodeTypeLen > newTypeLen - 1)
 		{
@@ -163,26 +156,26 @@ public sealed unsafe class Archetype
 			return;
 		}
 
-		if (!IsSuperset(newNode._components))
+		if (!IsSuperset(newNode.ComponentInfo))
 		{
 			return;
 		}
 
 		var i = 0;
-		var newNodeTypeLen = newNode._components.Length;
-		for (; i < newNodeTypeLen && _components[i] == newNode._components[i]; ++i) { }
+		var newNodeTypeLen = newNode.ComponentInfo.Length;
+		for (; i < newNodeTypeLen && ComponentInfo[i].ID == newNode.ComponentInfo[i].ID; ++i) { }
 
-		MakeEdges(newNode, this, _components[i]);
+		MakeEdges(newNode, this, ComponentInfo[i].ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal bool IsSuperset(UnsafeSpan<EntityID> other)
+	internal bool IsSuperset(UnsafeSpan<EcsComponent> other)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_components);
+		var thisComps = new UnsafeSpan<EcsComponent>(ComponentInfo);
 
 		while (thisComps.CanAdvance() && other.CanAdvance())
 		{
-			if (thisComps.Value == other.Value)
+			if (thisComps.Value.ID == other.Value.ID)
 			{
 				other.Advance();
 			}
@@ -196,11 +189,11 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int FindMatch(UnsafeSpan<Term> searching)
 	{
-		var currents = new UnsafeSpan<EntityID>(_components);
+		var currents = new UnsafeSpan<EcsComponent>(ComponentInfo);
 
 		while (currents.CanAdvance() && searching.CanAdvance())
 		{
-			if (currents.Value == searching.Value.ID)
+			if (currents.Value.ID == searching.Value.ID)
 			{
 				if (searching.Value.Op != TermOp.With)
 				{
@@ -209,7 +202,7 @@ public sealed unsafe class Archetype
 
 				searching.Advance();
 			}
-			else if (currents.Value > searching.Value.ID && searching.Value.Op != TermOp.With)
+			else if (currents.Value.ID > searching.Value.ID && searching.Value.Op != TermOp.With)
 			{
 				searching.Advance();
 				continue;
@@ -228,9 +221,10 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public UnsafeSpan<T> Field<T>() where T : unmanaged
 	{
-		var id = World.Component<T>();
+		ref var cmp = ref World.Component<T>();
+		ref var firstRecord = ref _world._entities.Get(_entityIDs[0]);
 
-		var span = GetComponentRaw(id, TypeInfo<T>.Size, 0, _count);
+		var span = GetComponentRaw(ref cmp, firstRecord.TableRow, _count);
 		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		ref var end = ref Unsafe.Add(ref start, _count);
 
@@ -240,9 +234,8 @@ public sealed unsafe class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool Has<T>() where T : unmanaged
 	{
-		var id = World.Component<T>();
-		var column = GetComponentIndex(id, TypeInfo<T>.Size);
-
+		ref var cmp = ref World.Component<T>();
+		var column = GetComponentIndex(ref cmp);
 		return column >= 0;
 	}
 
@@ -257,7 +250,7 @@ public sealed unsafe class Archetype
 
 		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
 		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
+			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent);
 
 			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
 			{

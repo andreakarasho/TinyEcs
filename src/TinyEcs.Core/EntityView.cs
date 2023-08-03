@@ -40,7 +40,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Add(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		World.Set(ID, id, stackalloc byte[1]);
+		var cmp = new EcsComponent(id, 0);
+		World.Set(ID, ref cmp, ReadOnlySpan<byte>.Empty);
 		return this;
 	}
 
@@ -79,9 +80,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TTarget : unmanaged
 	{
 		var world = World;
-		var id = IDOp.Pair(world.Component<TKind>(), world.Component<TTarget>());
-
-		return world.Has(ID, id, 0);
+		var id = world.Component<TKind, TTarget>();
+		var cmp = new EcsComponent(id, 0);
+		return world.Has(ID, ref cmp);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -118,9 +119,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		ref var record = ref World._entities.Get(ID);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		for (int i = 0; i < record.Archetype.Components.Length; ++i)
+		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
 		{
-			action(new EntityView(World, record.Archetype.Components[i]));
+			action(new EntityView(World, record.Archetype.ComponentInfo[i].ID));
 		}
 	}
 

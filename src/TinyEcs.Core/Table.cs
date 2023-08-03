@@ -6,24 +6,32 @@ sealed class Table
 
 	private readonly byte[][] _componentsData;
 	private readonly EcsComponent[] _componentInfo;
-	private readonly EntityID[] _components;
-	private readonly Dictionary<EntityID, int> _lookup = new();
 	private int _capacity;
 	private int _count;
+
 
 	internal Table(ReadOnlySpan<EcsComponent> components)
 	{
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
-		_componentsData = new byte[components.Length][];
-		_componentInfo = components.ToArray();
-		_components = new EntityID[components.Length];
 
-		for (var i = 0; i < components.Length; i++)
+		int valid = 0;
+		foreach (ref readonly var cmp in components)
 		{
-			_components[i] = components[i].ID;
-			EcsAssert.Assert(components[i].Size > 0);
-			_lookup.Add(components[i].ID, i);
+			if (cmp.Size > 0)
+				++valid;
+		}
+
+		_componentsData = new byte[valid][];
+		_componentInfo = new EcsComponent[valid];
+
+		valid = 0;
+		foreach (ref readonly var cmp in components)
+		{
+			if (cmp.Size <= 0)
+				continue;
+
+			_componentInfo[valid++] = cmp;
 		}
 
 		ResizeComponentArray(_capacity);
@@ -44,22 +52,16 @@ sealed class Table
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal int GetComponentIndex(EntityID component)
+	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
-		return Array.BinarySearch(_components, component);
-
-		// ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
-		// //ref var idx = ref _lookup.Get(component);
-
-		// return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
+		return Array.BinarySearch(_componentInfo, cmp);
 	}
 
-	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)
+	internal Span<byte> GetComponentRaw(ref EcsComponent component, int row, int count)
 	{
-		var column = GetComponentIndex(component);
+		var column = GetComponentIndex(ref component);
 		if (column < 0)
 		{
-			// FIXME: this will be valid for empty custom components
 			return Span<byte>.Empty;
 		}
 

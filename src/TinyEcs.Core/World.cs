@@ -6,7 +6,7 @@ public sealed class World : IDisposable
 	internal readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
-	private readonly Dictionary<int, EntityID> _components = new();
+	private readonly Dictionary<int, EcsComponent> _components = new();
 
 
 	public World()
@@ -45,24 +45,23 @@ public sealed class World : IDisposable
 	// 	}
 	// }
 
-	public EntityID Component<T>() where T : unmanaged
+
+	public ref EcsComponent Component<T>() where T : unmanaged
 	{
-		//ref var cmpID = ref _components.Get((EntityID)TypeInfo<T>.Hash);
-		ref var cmpID = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
-		if (/*Unsafe.IsNullRef(ref cmpID)*/ !exists || !IsAlive(cmpID))
+		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
+		if (!exists || !IsAlive(cmp.ID))
 		{
 			var ent = SpawnEmpty();
-			cmpID = ent.ID;
-			//cmpID = ref _components.Add((EntityID)TypeInfo<T>.Hash, ent.ID);
-			Set(cmpID, new EcsComponent(cmpID, TypeInfo<T>.Size));
-			Set<EcsEnabled>(cmpID);
+			cmp = new EcsComponent(ent.ID, TypeInfo<T>.Size);
+			Set(cmp.ID, cmp);
+			Set<EcsEnabled>(cmp.ID);
 		}
 
-		return cmpID;
+		return ref cmp;
 	}
 
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Component<TKind>(), Component<TTarget>());
+		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
 	public QueryBuilder Query()
 	{
@@ -102,26 +101,26 @@ public sealed class World : IDisposable
 	public bool IsAlive(EntityID entity)
 		=> _entities.Contains(entity);
 
-	private void AttachComponent(EntityID entity, EntityID component, int size)
+	private void AttachComponent(EntityID entity, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, component, size, true);
+		InternalAttachDetach(entity, ref cmp, true);
 	}
 
-	internal void DetachComponent(EntityID entity, EntityID component, int size)
+	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, component, size, false);
+		InternalAttachDetach(entity, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, EntityID component, int size, bool add)
+	private bool InternalAttachDetach(EntityID entity, ref EcsComponent cmp, bool add)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, component, size, add);
+		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
 
-		(var newRow, var newTableRow) = record.Archetype.MoveEntity(arch!, record.ArchetypeRow, record.TableRow, size);
+		(var newRow, var newTableRow) = record.Archetype.MoveEntity(arch!, record.ArchetypeRow, record.TableRow, cmp.Size);
 		record.ArchetypeRow = newRow;
 		record.TableRow = newTableRow;
 		record.Archetype = arch!;
@@ -130,9 +129,9 @@ public sealed class World : IDisposable
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size, bool add)
+	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
 	{
-		var column = root.GetComponentIndex(component, size);
+		var column = root.GetComponentIndex(ref cmp);
 		if (add && column >= 0)
 		{
 			return null;
@@ -158,7 +157,7 @@ public sealed class World : IDisposable
 		{
 			for (int i = 0, j = 0; i < initType.Length; ++i)
 			{
-				if (initType[i].ID != component)
+				if (initType[i].ID != cmp.ID)
 				{
 					span[j++] = initType[i];
 				}
@@ -167,19 +166,20 @@ public sealed class World : IDisposable
 		else if (!span.IsEmpty)
 		{
 			initType.CopyTo(span);
-			span[^1] = new EcsComponent(component, size);
+			span[^1] = cmp;
 		}
 
 		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
-		var hash = Hash(span);
+		var hash = Hash(span, false);
 
 		Table? table;
-		if (size != 0)
+		if (cmp.Size != 0)
 		{
-			if (!_tableIndex.TryGetValue(hash, out table))
+			var tableHash = Hash(span, true);
+			if (!_tableIndex.TryGetValue(tableHash, out table))
 			{
 				table = new Table(span);
-				_tableIndex[hash] = table;
+				_tableIndex[tableHash] = table;
 			}
 		}
 		else
@@ -190,11 +190,11 @@ public sealed class World : IDisposable
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			arch = _archRoot.InsertVertex(root, table, span, component);
+			arch = _archRoot.InsertVertex(root, table, span, ref cmp);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static EntityID Hash(UnsafeSpan<EcsComponent> components)
+		static EntityID Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
 		{
 			unchecked
 			{
@@ -202,7 +202,8 @@ public sealed class World : IDisposable
 
 				while (components.CanAdvance())
 				{
-					hash = ((hash << 5) + hash) + components.Value.ID;
+					if (!checkSize || components.Value.Size > 0)
+						hash = ((hash << 5) + hash) + components.Value.ID;
 
 					components.Advance();
 				}
@@ -244,67 +245,74 @@ public sealed class World : IDisposable
 		return arch;
 	}
 
-	internal void Set(EntityID entity, EntityID component, ReadOnlySpan<byte> data)
+	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var column = record.Archetype.GetComponentIndex(component, data.Length);
+		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			AttachComponent(entity, component, data.Length);
+			AttachComponent(entity, ref cmp);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(component, data.Length, record.TableRow, 1);
+		var buf = record.Archetype.GetComponentRaw(ref cmp, record.TableRow, 1);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
 	}
 
-	internal bool Has(EntityID entity, EntityID component, int size)
+	internal bool Has(EntityID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentIndex(component, size) >= 0;
+		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	private Span<byte> Get(EntityID entity, EntityID component, int size)
+	private Span<byte> Get(EntityID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentRaw(component, size, record.TableRow, 1);
+		return record.Archetype.GetComponentRaw(ref cmp, record.TableRow, 1);
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
-		=> Set(
-				entity,
-				Component<T>(),
-				new ReadOnlySpan<byte>(&component, TypeInfo<T>.Size)
+	{
+		ref var cmp = ref Component<T>();
+
+		Set(
+			entity,
+			ref cmp,
+			new ReadOnlySpan<byte>(&component, cmp.Size)
 			);
+	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	   => DetachComponent(entity, Component<T>(), TypeInfo<T>.Size);
+	{
+		 DetachComponent(entity, ref Component<T>());
+	}
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, Component<T>(), TypeInfo<T>.Size);
+		=> Has(entity, ref Component<T>());
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		var raw = Get(entity, Component<T>(), TypeInfo<T>.Size);
+		ref var cmp = ref Component<T>();
+		var raw = Get(entity, ref cmp);
 
 		EcsAssert.Assert(!raw.IsEmpty);
-		EcsAssert.Assert(TypeInfo<T>.Size == raw.Length);
+		EcsAssert.Assert(cmp.Size == raw.Length);
 
 		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
 	}
 
-	public void SetSingleton<T>(T cmp = default) where T : unmanaged
-		=> Set(Component<T>(), cmp);
+	public void SetSingleton<T>(T component = default) where T : unmanaged
+		=> Set(Component<T>().ID, component);
 
 	public ref T GetSingleton<T>() where T : unmanaged
-		=> ref Get<T>(Component<T>());
+		=> ref Get<T>(Component<T>().ID);
 
 
 	public void PrintGraph()
@@ -341,6 +349,7 @@ public sealed class World : IDisposable
 
 			if (result == 0 && root.Count > 0)
 			{
+				//root.Print();
 				var it = new Iterator(commands, root, userData);
 				action(ref it);
 			}

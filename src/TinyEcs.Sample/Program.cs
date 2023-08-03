@@ -11,6 +11,23 @@ using TinyEcs;
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 
+Unsafe.SkipInit<TestStr>(out var likes1);
+var size = Unsafe.SizeOf<TestStr>();
+ref var start1 = ref Unsafe.As<TestStr, Likes>(ref likes1);
+ref var end2 = ref Unsafe.Add(ref start1, size);
+ref var bb = ref Unsafe.As<Likes, byte>(ref start1);
+ref var bbEnd = ref Unsafe.As<Likes, byte>(ref end2);
+
+var tt = typeof(Likes);
+var tt2 = typeof(TestStr);
+
+bb = 0x7F;
+bbEnd = 0x7F;
+
+var less = Unsafe.IsAddressLessThan(ref start1, ref end2);
+var equals = Unsafe.AreSame(ref start1, ref end2);
+
+
 var world = new World();
 
 for (int i = 0; i < 100; ++i)
@@ -227,6 +244,9 @@ struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
 struct PlayerTag { public ulong ID; }
 
-struct Likes { }
+
+struct Likes;
 struct Dogs { }
 struct Apples { }
+
+struct TestStr { public bool v; }
