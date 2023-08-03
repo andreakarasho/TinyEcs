@@ -8,11 +8,13 @@ sealed class Table
 	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
+	private EntityID[] _entities;
 
 
 	internal Table(ReadOnlySpan<EcsComponent> components)
 	{
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
+		_entities = new EntityID[_capacity];
 		_count = 0;
 
 		int valid = 0;
@@ -37,15 +39,20 @@ sealed class Table
 		ResizeComponentArray(_capacity);
 	}
 
+	public int Count => _count;
+	public EntityID[] Entities => _entities;
 
-	internal int Increase()
+	internal int Add(EntityID id)
 	{
 		if (_capacity == _count)
 		{
 			_capacity *= 2;
 
 			ResizeComponentArray(_capacity);
+			Array.Resize(ref _entities, _capacity);
 		}
+
+		_entities[_count] = id;
 
 		return _count++;
 	}
@@ -65,19 +72,20 @@ sealed class Table
 			return Span<byte>.Empty;
 		}
 
-		ref readonly var meta = ref _componentInfo[column];
-
-		return _componentsData[column].AsSpan(meta.Size * row, meta.Size * count);
+		return _componentsData[column].AsSpan(component.Size * row, component.Size * count);
 	}
 
-	internal void Remove(ref EcsRecord record)
+	internal void Remove(int row)
 	{
+		var removed = _entities[row];
+		_entities[row] = _entities[_count - 1];
+
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
 			var leftArray = _componentsData[i].AsSpan();
 
-			var removeComponent = leftArray.Slice(meta.Size * record.TableRow, meta.Size);
+			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
 			var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
 
 			swapComponent.CopyTo(removeComponent);
@@ -87,8 +95,17 @@ sealed class Table
 	}
 
 	[SkipLocalsInit]
-	internal int MoveTo(int fromRow, Table to)
+	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
+		if (_count == 0)
+			return;
+
+		if (fromRow < _entities.Length)
+		{
+			var removed = _entities[fromRow];
+			_entities[fromRow] = _entities[_count - 1];
+		}
+
 		var isLeft = to._componentInfo.Length < _componentInfo.Length;
 		int i = 0, j = 0;
 		var count = isLeft ? to._componentInfo.Length : _componentInfo.Length;
@@ -97,7 +114,6 @@ sealed class Table
 		ref var y = ref (!isLeft ? ref j : ref i);
 
 		var fromCount = _count - 1;
-		var toRow = to.Increase();
 
 		for (; x < count; ++x, ++y)
 		{
@@ -142,7 +158,6 @@ sealed class Table
 		}
 
 		_count = fromCount;
-		return toRow;
 	}
 
 	private void ResizeComponentArray(int capacity)

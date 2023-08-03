@@ -79,8 +79,7 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
-		record.ArchetypeRow = _archRoot.Add(id);
-		record.TableRow = _archRoot.Table.Increase();
+		record.Row = _archRoot.Add(id).Item1;
 
 		return new EntityView(this, id);
 	}
@@ -93,8 +92,8 @@ public sealed class World : IDisposable
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.ArchetypeRow];
-		_entities.Get(last) = record;
+		var last = record.Archetype.Entities[record.Row];
+		_entities.Get(last.Entity) = record;
 		_entities.Remove(removedId);
 	}
 
@@ -116,22 +115,22 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, ref cmp, add);
+		var arch = CreateArchetype(record.Archetype, ref cmp, add, out var keepTable);
 		if (arch == null)
 			return false;
 
-		(var newRow, var newTableRow) = record.Archetype.MoveEntity(arch!, record.ArchetypeRow, record.TableRow, cmp.Size);
-		record.ArchetypeRow = newRow;
-		record.TableRow = newTableRow;
+		record.Row = record.Archetype.MoveEntity(arch!, record.Row, keepTable);
 		record.Archetype = arch!;
 
 		return true;
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
+	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add, out bool keepTable)
 	{
 		var column = root.GetComponentIndex(ref cmp);
+		keepTable = true;
+
 		if (add && column >= 0)
 		{
 			return null;
@@ -175,6 +174,7 @@ public sealed class World : IDisposable
 		Table? table;
 		if (cmp.Size != 0)
 		{
+			keepTable = false;
 			var tableHash = Hash(span, true);
 			if (!_tableIndex.TryGetValue(tableHash, out table))
 			{
@@ -256,7 +256,7 @@ public sealed class World : IDisposable
 			AttachComponent(entity, ref cmp);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(ref cmp, record.TableRow, 1);
+		var buf = record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
@@ -275,7 +275,7 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentRaw(ref cmp, record.TableRow, 1);
+		return record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
@@ -377,6 +377,5 @@ public sealed class World : IDisposable
 struct EcsRecord
 {
 	public Archetype Archetype;
-	public int ArchetypeRow;
-	public int TableRow;
+	public int Row;
 }

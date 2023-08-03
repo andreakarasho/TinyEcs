@@ -8,7 +8,7 @@ public sealed unsafe class Archetype
 
 	private readonly World _world;
 	private int _capacity, _count;
-	private EntityID[] _entityIDs;
+	private ArchetypeEntity[] _entities;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
 	private readonly Table _table;
 
@@ -19,13 +19,13 @@ public sealed unsafe class Archetype
 		_table = table;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
-		_entityIDs = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
+		_entities = new ArchetypeEntity[ARCHETYPE_INITIAL_CAPACITY];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
 		ComponentInfo = components.ToArray();
 	}
 
-	internal EntityID[] Entities => _entityIDs;
+	internal ArchetypeEntity[] Entities => _entities;
 	public World World => _world;
 	public int Count => _count;
 	internal Table Table => _table;
@@ -44,32 +44,35 @@ public sealed unsafe class Archetype
 		return _table.GetComponentIndex(ref cmp);
 	}
 
-	internal int Add(EntityID entityID)
+	internal (int, int) Add(EntityID entityID, int tableRow = -1)
 	{
 		if (_capacity == _count)
 		{
 			_capacity *= 2;
 
-			Array.Resize(ref _entityIDs, _capacity);
+			Array.Resize(ref _entities, _capacity);
 		}
 
+		ref var archEnt = ref _entities[_count];
+		archEnt.Entity = entityID;
+		archEnt.TableRow = tableRow < 0 ? _table.Add(entityID) : tableRow;
 
-		//Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_entityIDs), _count) = entityID;
-		_entityIDs[_count] = entityID;
+		if (archEnt.TableRow < _table.Entities.Length)
+			EcsAssert.Assert(_table.Entities[archEnt.TableRow] == entityID);
 
-		return _count++;
+		return (_count++, archEnt.TableRow);
 	}
 
 	internal EntityID Remove(ref EcsRecord record)
 	{
-		var removed = _entityIDs[record.ArchetypeRow];
-		_entityIDs[record.ArchetypeRow] = _entityIDs[_count - 1];
+		var removed = _entities[record.Row];
+		_entities[record.Row] = _entities[_count - 1];
 
-		_table.Remove(ref record);
+		_table.Remove(removed.TableRow);
 
 		--_count;
 
-		return removed;
+		return removed.Entity;
 	}
 
 	internal Archetype InsertVertex(Archetype left, Table newType, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
@@ -80,22 +83,24 @@ public sealed unsafe class Archetype
 		return vertex;
 	}
 
-	internal (int, int) MoveEntity(Archetype to, int fromRow, int fromTableRow, int size)
+	internal int MoveEntity(Archetype to, int fromRow, bool keepTable)
 	{
-		var removed = _entityIDs[fromRow];
-		_entityIDs[fromRow] = _entityIDs[_count - 1];
+		var removed = _entities[fromRow];
+		_entities[fromRow] = _entities[_count - 1];
 
-		var toRow = to.Add(removed);
-		var toTableRow = fromTableRow;
-
-		if (size != 0)
+		if (removed.Entity == 23)
 		{
-			toTableRow = _table.MoveTo(fromTableRow, to._table);
+
 		}
+
+		(var toRow, var toTableRow) = to.Add(removed.Entity, keepTable ? removed.TableRow : -1);
+
+		if (!keepTable)
+			_table.MoveTo(removed.TableRow, to._table, toTableRow);
 
 		--_count;
 
-		return (toRow, toTableRow);
+		return toRow;
 	}
 
 	internal Span<byte> GetComponentRaw(ref EcsComponent cmp, int row, int count)
@@ -103,14 +108,14 @@ public sealed unsafe class Archetype
 		if (cmp.Size <= 0 && GetComponentIndex(ref cmp) >= 0)
 			return Span<byte>.Empty;
 
-		return _table.GetComponentRaw(ref cmp, row, count);
+		return _table.GetComponentRaw(ref cmp, _entities[row].TableRow, count);
 	}
 
 	internal void Clear()
 	{
 		_count = 0;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
-		Array.Resize(ref _entityIDs, _capacity);
+		Array.Resize(ref _entities, _capacity);
 	}
 
 	internal void Optimize()
@@ -222,9 +227,7 @@ public sealed unsafe class Archetype
 	public UnsafeSpan<T> Field<T>() where T : unmanaged
 	{
 		ref var cmp = ref World.Component<T>();
-		ref var firstRecord = ref _world._entities.Get(_entityIDs[0]);
-
-		var span = GetComponentRaw(ref cmp, firstRecord.TableRow, _count);
+		var span = GetComponentRaw(ref cmp, 0, _count);
 		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		ref var end = ref Unsafe.Add(ref start, _count);
 
@@ -241,7 +244,7 @@ public sealed unsafe class Archetype
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public EntityView Entity(int row)
-		=> new (World, Entities[row]);
+		=> new (World, Entities[row].Entity);
 
 
 	public void Print()
@@ -258,10 +261,18 @@ public sealed unsafe class Archetype
 			}
 		}
 	}
+
+
 }
 
 struct EcsEdge
 {
 	public EntityID ComponentID;
 	public Archetype Archetype;
+}
+
+struct ArchetypeEntity
+{
+	public EntityID Entity;
+	public int TableRow;
 }
