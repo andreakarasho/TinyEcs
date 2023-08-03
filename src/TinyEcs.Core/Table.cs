@@ -6,6 +6,7 @@ sealed class Table
 
 	private readonly byte[][] _componentsData;
 	private readonly EcsComponent[] _componentInfo;
+	private readonly EntityID[] _components;
 	private readonly Dictionary<EntityID, int> _lookup = new();
 	private int _capacity;
 	private int _count;
@@ -16,9 +17,11 @@ sealed class Table
 		_count = 0;
 		_componentsData = new byte[components.Length][];
 		_componentInfo = components.ToArray();
+		_components = new EntityID[components.Length];
 
 		for (var i = 0; i < components.Length; i++)
 		{
+			_components[i] = components[i].ID;
 			EcsAssert.Assert(components[i].Size > 0);
 			_lookup.Add(components[i].ID, i);
 		}
@@ -39,13 +42,16 @@ sealed class Table
 		return _count++;
 	}
 
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EntityID component)
 	{
-		ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
-		//ref var idx = ref _lookup.Get(component);
+		return Array.BinarySearch(_components, component);
 
-		return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
+		// ref var idx = ref CollectionsMarshal.GetValueRefOrNullRef(_lookup, component);
+		// //ref var idx = ref _lookup.Get(component);
+
+		// return Unsafe.IsNullRef(ref idx) ? -1 : (int)idx;
 	}
 
 	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)

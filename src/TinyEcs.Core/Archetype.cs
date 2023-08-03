@@ -45,7 +45,7 @@ public sealed unsafe class Archetype
 	{
 		if (size <= 0)
 		{
-			return Array.IndexOf(_components, component);
+			return Array.BinarySearch(_components, component);
 		}
 
 		return _table.GetComponentIndex(component);
@@ -105,8 +105,11 @@ public sealed unsafe class Archetype
 		return (toRow, toTableRow);
 	}
 
-	internal Span<byte> GetComponentRaw(EntityID component, int row, int count)
+	internal Span<byte> GetComponentRaw(EntityID component, int size, int row, int count)
 	{
+		if (size <= 0 && GetComponentIndex(component, size) >= 0)
+			return Span<byte>.Empty;
+
 		return _table.GetComponentRaw(component, row, count);
 	}
 
@@ -191,34 +194,34 @@ public sealed unsafe class Archetype
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal int FindMatch(UnsafeSpan<Term> other)
+	internal int FindMatch(UnsafeSpan<Term> searching)
 	{
-		var thisComps = new UnsafeSpan<EntityID>(_components);
+		var currents = new UnsafeSpan<EntityID>(_components);
 
-		while (thisComps.CanAdvance() && other.CanAdvance())
+		while (currents.CanAdvance() && searching.CanAdvance())
 		{
-			if (thisComps.Value == other.Value.ID)
+			if (currents.Value == searching.Value.ID)
 			{
-				if (other.Value.Op != TermOp.With)
+				if (searching.Value.Op != TermOp.With)
 				{
 					return -1;
 				}
 
-				other.Advance();
+				searching.Advance();
 			}
-			else if (thisComps.Value > other.Value.ID && other.Value.Op != TermOp.With)
+			else if (currents.Value > searching.Value.ID && searching.Value.Op != TermOp.With)
 			{
-				other.Advance();
+				searching.Advance();
 				continue;
 			}
 
-			thisComps.Advance();
+			currents.Advance();
 		}
 
-		while (other.CanAdvance() && other.Value.Op != TermOp.With)
-			other.Advance();
+		while (searching.CanAdvance() && searching.Value.Op != TermOp.With)
+			searching.Advance();
 
-		return Unsafe.AreSame(ref other.Value, ref other.End) ? 0 : 1;
+		return Unsafe.AreSame(ref searching.Value, ref searching.End) ? 0 : 1;
 	}
 
 
@@ -227,7 +230,7 @@ public sealed unsafe class Archetype
 	{
 		var id = World.Component<T>();
 
-		var span = _table.GetComponentRaw(id, 0, _count);
+		var span = GetComponentRaw(id, TypeInfo<T>.Size, 0, _count);
 		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
 		ref var end = ref Unsafe.Add(ref start, _count);
 

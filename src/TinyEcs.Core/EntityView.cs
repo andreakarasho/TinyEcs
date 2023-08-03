@@ -81,7 +81,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		var world = World;
 		var id = IDOp.Pair(world.Component<TKind>(), world.Component<TTarget>());
 
-		return world.Has(ID, id);
+		return world.Has(ID, id, 0);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

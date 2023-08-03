@@ -257,21 +257,26 @@ public sealed class World : IDisposable
 			AttachComponent(entity, component, data.Length);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(component, record.TableRow, 1);
+		var buf = record.Archetype.GetComponentRaw(component, data.Length, record.TableRow, 1);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
 	}
 
-	internal bool Has(EntityID entity, EntityID component)
-		=> !Get(entity, component).IsEmpty;
-
-	private Span<byte> Get(EntityID entity, EntityID component)
+	internal bool Has(EntityID entity, EntityID component, int size)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		return record.Archetype.GetComponentRaw(component, record.TableRow, 1);
+		return record.Archetype.GetComponentIndex(component, size) >= 0;
+	}
+
+	private Span<byte> Get(EntityID entity, EntityID component, int size)
+	{
+		ref var record = ref _entities.Get(entity);
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+
+		return record.Archetype.GetComponentRaw(component, size, record.TableRow, 1);
 	}
 
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
@@ -285,11 +290,11 @@ public sealed class World : IDisposable
 	   => DetachComponent(entity, Component<T>());
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, Component<T>());
+		=> Has(entity, Component<T>(), TypeInfo<T>.Size);
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		var raw = Get(entity, Component<T>());
+		var raw = Get(entity, Component<T>(), TypeInfo<T>.Size);
 
 		EcsAssert.Assert(!raw.IsEmpty);
 		EcsAssert.Assert(TypeInfo<T>.Size == raw.Length);

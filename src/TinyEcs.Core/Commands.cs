@@ -49,7 +49,7 @@ public sealed class Commands
 		EcsAssert.Assert(_main.IsAlive(id));
 
 		var cmpID = _main.Component<T>();
-		if (_main.Has(id, cmpID))
+		if (_main.Has(id, cmpID, TypeInfo<T>.Size))
 		{
 			ref var value = ref _main.Get<T>(id);
 			value = cmp;
@@ -74,11 +74,11 @@ public sealed class Commands
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public unsafe void Add(EntityID id, EntityID cmp)
+	public unsafe void Add(EntityID id, EntityID cmp, int size)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		if (_main.Has(id, cmp))
+		if (_main.Has(id, cmp, size))
 		{
 			return;
 		}
@@ -86,7 +86,7 @@ public sealed class Commands
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
 		set.ComponentID = cmp;
-		set.Size = 0;
+		set.Size = size;
 
 		if (set.Data.Length < set.Size)
 		{
@@ -96,7 +96,7 @@ public sealed class Commands
 
 	public unsafe void Add(EntityID id, EntityID first, EntityID second)
 	{
-		Add(id, IDOp.Pair(first, second));
+		Add(id, IDOp.Pair(first, second), 0);
 	}
 
 	public unsafe void Add<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
@@ -205,7 +205,7 @@ public readonly ref struct CommandEntityView
 
 	public readonly CommandEntityView Add(EntityID id)
 	{
-		_cmds.Add(_id, id);
+		_cmds.Add(_id, id, 0);
 		return this;
 	}
 
