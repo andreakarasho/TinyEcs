@@ -92,8 +92,7 @@ public sealed unsafe class Archetype
 		var toTableRow = fromTableRow;
 		if (size > 0)
 		{
-			toTableRow = to._table.Increase();
-			from._table.MoveTo(fromTableRow, to._table, toTableRow);
+			toTableRow = from._table.MoveTo(fromTableRow, to._table);
 		}
 
 		--from._count;

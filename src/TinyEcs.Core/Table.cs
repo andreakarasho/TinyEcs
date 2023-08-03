@@ -5,7 +5,6 @@ sealed class Table
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
 	private readonly byte[][] _componentsData;
-	private readonly EntityID[] _components;
 	private readonly EcsComponent[] _componentInfo;
 	private readonly Dictionary<EntityID, int> _lookup = new();
 	private int _capacity;
@@ -16,12 +15,10 @@ sealed class Table
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
 		_componentsData = new byte[components.Length][];
-		_components = new EntityID[components.Length];
 		_componentInfo = components.ToArray();
 
 		for (var i = 0; i < components.Length; i++)
 		{
-			_components[i] = components[i].ID;
 			_lookup.Add(components[i].ID, i);
 		}
 
@@ -81,20 +78,21 @@ sealed class Table
 	}
 
 	[SkipLocalsInit]
-	internal void MoveTo(int fromRow, Table to, int toRow)
+	internal int MoveTo(int fromRow, Table to)
 	{
-		var isLeft = to._components.Length < _components.Length;
+		var isLeft = to._componentInfo.Length < _componentInfo.Length;
 		int i = 0, j = 0;
-		var count = isLeft ? to._components.Length : _components.Length;
+		var count = isLeft ? to._componentInfo.Length : _componentInfo.Length;
 
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
 
 		var fromCount = _count - 1;
+		var toRow = to.Increase();
 
 		for (; x < count; ++x, ++y)
 		{
-			while (_components[i] != to._components[j])
+			while (_componentInfo[i].ID != to._componentInfo[j].ID)
 			{
 				// advance the sign with less components!
 				++y;
@@ -135,11 +133,12 @@ sealed class Table
 		}
 
 		_count = fromCount;
+		return toRow;
 	}
 
 	private void ResizeComponentArray(int capacity)
 	{
-		for (int i = 0; i < _components.Length; ++i)
+		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
 			Array.Resize(ref _componentsData[i], meta.Size * capacity);
