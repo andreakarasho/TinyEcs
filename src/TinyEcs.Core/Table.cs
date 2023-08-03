@@ -92,9 +92,6 @@ sealed class Table
 	[SkipLocalsInit]
 	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
-		if (_count == 0)
-			return;
-
 		var isLeft = to._componentInfo.Length < _componentInfo.Length;
 		int i = 0, j = 0;
 		var count = isLeft ? to._componentInfo.Length : _componentInfo.Length;

@@ -92,8 +92,8 @@ public sealed class World : IDisposable
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.Row];
-		_entities.Get(last.Entity) = record;
+		var last = record.Archetype.Entities[record.Row].Entity;
+		_entities.Get(last) = record;
 		_entities.Remove(removedId);
 	}
 
