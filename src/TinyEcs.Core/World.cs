@@ -11,7 +11,7 @@ public sealed class World : IDisposable
 
 	public World()
 	{
-		_archRoot = new Archetype(this, new (ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
+		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
 	}
 
 
@@ -115,21 +115,20 @@ public sealed class World : IDisposable
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, ref cmp, add, out var keepTable);
+		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
 
-		record.Row = record.Archetype.MoveEntity(arch!, record.Row, keepTable);
+		record.Row = record.Archetype.MoveEntity(arch, record.Row);
 		record.Archetype = arch!;
 
 		return true;
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add, out bool keepTable)
+	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
 	{
 		var column = root.GetComponentIndex(ref cmp);
-		keepTable = true;
 
 		if (add && column >= 0)
 		{
@@ -174,11 +173,10 @@ public sealed class World : IDisposable
 		Table? table;
 		if (cmp.Size != 0)
 		{
-			keepTable = false;
 			var tableHash = Hash(span, true);
 			if (!_tableIndex.TryGetValue(tableHash, out table))
 			{
-				table = new Table(span);
+				table = new Table(tableHash, span);
 				_tableIndex[tableHash] = table;
 			}
 		}

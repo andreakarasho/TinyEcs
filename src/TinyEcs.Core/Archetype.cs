@@ -57,9 +57,6 @@ public sealed unsafe class Archetype
 		archEnt.Entity = entityID;
 		archEnt.TableRow = tableRow < 0 ? _table.Add(entityID) : tableRow;
 
-		if (archEnt.TableRow < _table.Entities.Length)
-			EcsAssert.Assert(_table.Entities[archEnt.TableRow] == entityID);
-
 		return (_count++, archEnt.TableRow);
 	}
 
@@ -83,16 +80,12 @@ public sealed unsafe class Archetype
 		return vertex;
 	}
 
-	internal int MoveEntity(Archetype to, int fromRow, bool keepTable)
+	internal int MoveEntity(Archetype to, int fromRow)
 	{
 		var removed = _entities[fromRow];
 		_entities[fromRow] = _entities[_count - 1];
 
-		if (removed.Entity == 23)
-		{
-
-		}
-
+		var keepTable = _table.Hash == to.Table.Hash;
 		(var toRow, var toTableRow) = to.Add(removed.Entity, keepTable ? removed.TableRow : -1);
 
 		if (!keepTable)

@@ -8,13 +8,12 @@ sealed class Table
 	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
-	private EntityID[] _entities;
 
 
-	internal Table(ReadOnlySpan<EcsComponent> components)
+	internal Table(ulong hash, ReadOnlySpan<EcsComponent> components)
 	{
+		Hash = hash;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
-		_entities = new EntityID[_capacity];
 		_count = 0;
 
 		int valid = 0;
@@ -39,8 +38,10 @@ sealed class Table
 		ResizeComponentArray(_capacity);
 	}
 
+
+	public ulong Hash { get; }
 	public int Count => _count;
-	public EntityID[] Entities => _entities;
+
 
 	internal int Add(EntityID id)
 	{
@@ -49,10 +50,7 @@ sealed class Table
 			_capacity *= 2;
 
 			ResizeComponentArray(_capacity);
-			Array.Resize(ref _entities, _capacity);
 		}
-
-		_entities[_count] = id;
 
 		return _count++;
 	}
@@ -77,9 +75,6 @@ sealed class Table
 
 	internal void Remove(int row)
 	{
-		var removed = _entities[row];
-		_entities[row] = _entities[_count - 1];
-
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
@@ -99,12 +94,6 @@ sealed class Table
 	{
 		if (_count == 0)
 			return;
-
-		if (fromRow < _entities.Length)
-		{
-			var removed = _entities[fromRow];
-			_entities[fromRow] = _entities[_count - 1];
-		}
 
 		var isLeft = to._componentInfo.Length < _componentInfo.Length;
 		int i = 0, j = 0;
