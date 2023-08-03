@@ -60,7 +60,7 @@ public sealed class Commands
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
 		set.ComponentID = cmpID;
-		set.Size = sizeof(T);
+		set.Size = TypeInfo<T>.Size;
 
 		if (set.Data.Length < set.Size)
 		{
@@ -113,6 +113,7 @@ public sealed class Commands
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;
 		unset.ComponentID = cmpID;
+		unset.Size = TypeInfo<T>.Size;
 	}
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
@@ -155,7 +156,7 @@ public sealed class Commands
 		{
 			EcsAssert.Assert(_main.IsAlive(unset.Entity));
 
-			_main.DetachComponent(unset.Entity, unset.ComponentID);
+			_main.DetachComponent(unset.Entity, unset.ComponentID, unset.Size);
 		}
 
 		foreach (ref readonly var despawn in _despawn)
@@ -181,6 +182,7 @@ public sealed class Commands
 	{
 		public EntityID Entity;
 		public EntityID ComponentID;
+		public int Size;
 	}
 }
 

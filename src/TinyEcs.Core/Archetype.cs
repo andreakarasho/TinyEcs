@@ -95,7 +95,7 @@ public sealed unsafe class Archetype
 		var toRow = to.Add(removed);
 		var toTableRow = fromTableRow;
 
-		if (size > 0)
+		if (size != 0)
 		{
 			toTableRow = _table.MoveTo(fromTableRow, to._table);
 		}

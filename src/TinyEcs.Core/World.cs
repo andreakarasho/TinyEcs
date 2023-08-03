@@ -103,21 +103,20 @@ public sealed class World : IDisposable
 
 	private void AttachComponent(EntityID entity, EntityID component, int size)
 	{
-		InternalAttachDetach(entity, component, size);
+		InternalAttachDetach(entity, component, size, true);
 	}
 
-	internal void DetachComponent(EntityID entity, EntityID component)
+	internal void DetachComponent(EntityID entity, EntityID component, int size)
 	{
-		// FIXME: handle component with size == 0
-		InternalAttachDetach(entity, component, -1);
+		InternalAttachDetach(entity, component, size, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, EntityID component, int size)
+	private bool InternalAttachDetach(EntityID entity, EntityID component, int size, bool add)
 	{
 		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, component, size);
+		var arch = CreateArchetype(record.Archetype, component, size, add);
 		if (arch == null)
 			return false;
 
@@ -130,11 +129,9 @@ public sealed class World : IDisposable
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size)
+	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size, bool add)
 	{
 		var column = root.GetComponentIndex(component, size);
-		var add = size >= 0;
-
 		if (add && column >= 0)
 		{
 			return null;
@@ -287,7 +284,7 @@ public sealed class World : IDisposable
 			);
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	   => DetachComponent(entity, Component<T>());
+	   => DetachComponent(entity, Component<T>(), TypeInfo<T>.Size);
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, Component<T>(), TypeInfo<T>.Size);
