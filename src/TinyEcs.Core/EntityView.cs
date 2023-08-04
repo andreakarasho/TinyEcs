@@ -37,6 +37,12 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Add<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Add(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
