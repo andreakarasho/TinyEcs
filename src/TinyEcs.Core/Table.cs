@@ -40,7 +40,8 @@ sealed class Table
 
 
 	public ulong Hash { get; }
-	public int Count => _count;
+	public int Rows => _count;
+	public int Columns => _componentInfo.Length;
 
 
 	internal int Add(EntityID id)
@@ -56,7 +57,6 @@ sealed class Table
 	}
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
 		return Array.BinarySearch(_componentInfo, cmp);
@@ -71,6 +71,11 @@ sealed class Table
 		}
 
 		return _componentsData[column].AsSpan(component.Size * row, component.Size * count);
+	}
+
+	internal Span<byte> GetComponentRaw(int column, int row, int count, int size)
+	{
+		return _componentsData[column].AsSpan(size * row, size * count);
 	}
 
 	internal void Remove(int row)
@@ -89,7 +94,6 @@ sealed class Table
 		--_count;
 	}
 
-	[SkipLocalsInit]
 	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
 		var isLeft = to._componentInfo.Length < _componentInfo.Length;

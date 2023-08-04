@@ -85,10 +85,10 @@ public sealed unsafe class Archetype
 		var removed = _entities[fromRow];
 		_entities[fromRow] = _entities[_count - 1];
 
-		var keepTable = _table.Hash == to.Table.Hash;
-		(var toRow, var toTableRow) = to.Add(removed.Entity, keepTable ? removed.TableRow : -1);
+		var sameTable = _table.Hash == to.Table.Hash;
+		(var toRow, var toTableRow) = to.Add(removed.Entity, sameTable ? removed.TableRow : -1);
 
-		if (!keepTable)
+		if (!sameTable)
 			_table.MoveTo(removed.TableRow, to._table, toTableRow);
 
 		--_count;
@@ -98,10 +98,16 @@ public sealed unsafe class Archetype
 
 	internal Span<byte> GetComponentRaw(ref EcsComponent cmp, int row, int count)
 	{
-		if (cmp.Size <= 0 && GetComponentIndex(ref cmp) >= 0)
+		EcsAssert.Assert(row >= 0);
+		EcsAssert.Assert(row < _entities.Length);
+
+		var column = GetComponentIndex(ref cmp);
+		EcsAssert.Assert(column >= 0);
+
+		if (cmp.Size <= 0)
 			return Span<byte>.Empty;
 
-		return _table.GetComponentRaw(ref cmp, _entities[row].TableRow, count);
+		return _table.GetComponentRaw(column, _entities[row].TableRow, count, cmp.Size);
 	}
 
 	internal void Clear()
