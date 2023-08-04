@@ -163,7 +163,7 @@ while (true)
 	{
 		ecs.Step(cur);
 
-		ecs.Print();
+		//ecs.Print();
 	}
 
 	last = start;

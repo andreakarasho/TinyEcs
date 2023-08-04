@@ -84,10 +84,16 @@ public sealed class World : IDisposable
 		return new EntityView(this, id);
 	}
 
+	internal ref EcsRecord GetRecord(EntityID id)
+	{
+		ref var record = ref _entities.Get(id);
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		return ref record;
+	}
+
 	public void Despawn(EntityID entity)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref GetRecord(entity);
 
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
@@ -100,19 +106,19 @@ public sealed class World : IDisposable
 	public bool IsAlive(EntityID entity)
 		=> _entities.Contains(entity);
 
-	private void AttachComponent(EntityID entity, ref EcsComponent cmp)
+	private void AttachComponent(ref EcsRecord record, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, ref cmp, true);
+		InternalAttachDetach(ref record, ref cmp, true);
 	}
 
 	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, ref cmp, false);
+		ref var record = ref GetRecord(entity);
+		InternalAttachDetach(ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, ref EcsComponent cmp, bool add)
+	private bool InternalAttachDetach(ref EcsRecord record, ref EcsComponent cmp, bool add)
 	{
-		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
 		var arch = CreateArchetype(record.Archetype, ref cmp, add);
@@ -246,13 +252,12 @@ public sealed class World : IDisposable
 
 	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref GetRecord(entity);
 
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			AttachComponent(entity, ref cmp);
+			AttachComponent(ref record, ref cmp);
 		}
 
 		var buf = record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
@@ -263,16 +268,13 @@ public sealed class World : IDisposable
 
 	internal bool Has(EntityID entity, ref EcsComponent cmp)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
-
+		ref var record = ref GetRecord(entity);
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
 	private Span<byte> Get(EntityID entity, ref EcsComponent cmp)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref GetRecord(entity);
 
 		return record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
 	}
@@ -289,9 +291,7 @@ public sealed class World : IDisposable
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	{
-		 DetachComponent(entity, ref Component<T>());
-	}
+		=> DetachComponent(entity, ref Component<T>());
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, ref Component<T>());
