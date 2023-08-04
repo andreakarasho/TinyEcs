@@ -43,6 +43,8 @@ sealed class Table
 	public int Rows => _count;
 	public int Columns => _componentInfo.Length;
 
+	public EcsComponent[] Components => _componentInfo;
+
 
 	internal int Add(EntityID id)
 	{

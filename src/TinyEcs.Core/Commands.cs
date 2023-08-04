@@ -156,7 +156,7 @@ public sealed class Commands
 		{
 			EcsAssert.Assert(_main.IsAlive(set.Entity));
 
-			_main.Set(set.Entity, ref set.Component, set.Data.Span.Slice(0, set.Component.Size));
+			_main.Set(set.Entity, ref set.Component, set.Component.Size <= 0 ? ReadOnlySpan<byte>.Empty : set.Data.Span.Slice(0, set.Component.Size));
 		}
 
 		foreach (ref var unset in _unset)

@@ -252,7 +252,7 @@ public sealed unsafe class Archetype
 
 		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
 		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent);
+			Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
 
 			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
 			{

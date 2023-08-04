@@ -19,6 +19,8 @@ sealed unsafe class Ecs
 		return new EntityView(_world, id);
 	}
 
+	public void Print() => _world.PrintGraph();
+
 	public CommandEntityView Spawn()
 		=> _cmds.Spawn();
 

@@ -162,6 +162,8 @@ while (true)
 	for (int i = 0; i < 3600; ++i)
 	{
 		ecs.Step(cur);
+
+		ecs.Print();
 	}
 
 	last = start;

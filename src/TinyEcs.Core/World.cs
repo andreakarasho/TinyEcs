@@ -167,27 +167,28 @@ public sealed class World : IDisposable
 			span[^1] = cmp;
 		}
 
-		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
+		span.Sort();
 		var hash = Hash(span, false);
-
-		Table? table;
-		if (cmp.Size != 0)
-		{
-			var tableHash = Hash(span, true);
-			if (!_tableIndex.TryGetValue(tableHash, out table))
-			{
-				table = new Table(tableHash, span);
-				_tableIndex[tableHash] = table;
-			}
-		}
-		else
-		{
-			table = root.Table;
-		}
 
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
+			ref var table = ref Unsafe.NullRef<Table>();
+
+			if (cmp.Size != 0)
+			{
+				var tableHash = Hash(span, true);
+				table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out exists)!;
+				if (!exists)
+				{
+					table = new Table(tableHash, span);
+				}
+			}
+			else
+			{
+				table = ref Unsafe.AsRef(root.Table)!;
+			}
+
 			arch = _archRoot.InsertVertex(root, table, span, ref cmp);
 		}
 
