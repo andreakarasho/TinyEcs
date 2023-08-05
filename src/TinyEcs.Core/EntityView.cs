@@ -137,8 +137,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Each(Action<EntityView> action)
 	{
-		ref var record = ref World._entities.Get(ID);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref World.GetRecord(ID);
 
 		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
 		{
