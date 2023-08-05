@@ -26,7 +26,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Equals(EntityView other)
 	{
-		return ID == other.ID /*&& World?.ID == other.World?.ID*/;
+		return ID == other.ID;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
