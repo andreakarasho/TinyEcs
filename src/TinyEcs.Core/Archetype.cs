@@ -94,6 +94,17 @@ public sealed unsafe class Archetype
 		return toRow;
 	}
 
+	internal Span<byte> GetWholeComponentBuffer(ref EcsComponent cmp)
+	{
+		var column = GetComponentIndex(ref cmp);
+		EcsAssert.Assert(column >= 0);
+
+		if (cmp.Size <= 0)
+			return Span<byte>.Empty;
+
+		return _table.GetComponentRaw(column, 0, Table.Rows, cmp.Size);
+	}
+
 	internal Span<byte> GetComponentRaw(ref EcsComponent cmp, int row, int count)
 	{
 		EcsAssert.Assert(row >= 0);
