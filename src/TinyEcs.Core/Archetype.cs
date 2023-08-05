@@ -219,30 +219,6 @@ public sealed unsafe class Archetype
 		return Unsafe.AreSame(ref searching.Value, ref searching.End) ? 0 : 1;
 	}
 
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public UnsafeSpan<T> Field<T>() where T : unmanaged
-	{
-		ref var cmp = ref World.Component<T>();
-		var span = GetComponentRaw(ref cmp, 0, _count);
-		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
-		ref var end = ref Unsafe.Add(ref start, _count);
-
-		return new UnsafeSpan<T>(ref start, ref end);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool Has<T>() where T : unmanaged
-	{
-		ref var cmp = ref World.Component<T>();
-		var column = GetComponentIndex(ref cmp);
-		return column >= 0;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public EntityView Entity(int row)
-		=> new (World, Entities[row].Entity);
-
 	public void Print()
 	{
 		PrintRec(this, 0, 0);

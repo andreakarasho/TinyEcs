@@ -27,14 +27,25 @@ public readonly ref struct Iterator
 		=> Field<T>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<T>() where T : unmanaged
-		=> _archetype.Has<T>();
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Entity(int i)
-		=> _archetype.Entity(i);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly UnsafeSpan<T> Field<T>() where T : unmanaged
-		=> _archetype.Field<T>();
+	{
+		ref var cmp = ref World.Component<T>();
+		var span = _archetype.GetComponentRaw(ref cmp, 0, Count);
+		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
+		ref var end = ref Unsafe.Add(ref start, Count);
+
+		return new UnsafeSpan<T>(ref start, ref end);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly bool Has<T>() where T : unmanaged
+	{
+		ref var cmp = ref World.Component<T>();
+		var column = _archetype.GetComponentIndex(ref cmp);
+		return column >= 0;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Entity(int row)
+		=> new (World, _archetype.Entities[row].Entity);
 }

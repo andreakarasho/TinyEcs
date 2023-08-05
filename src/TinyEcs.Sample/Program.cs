@@ -26,10 +26,9 @@ cmds.Merge();
 
 ref var floatt3 = ref e.Get<float>();
 
-var e0 = world.Spawn().Set<float>().Set<byte>().Set<int>();
-var e1 = world.Spawn().Set<float>().Set<byte>().Set<int>().Add<int, byte>();
-e1.Unset<int, byte>().Unset<float>();
-var e2 = world.Spawn().Set<float>().Set<byte>().Set<int>();
+var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>();
+var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>().Add<int, byte>();
+var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>();
 
 world.PrintGraph();
 
@@ -43,13 +42,12 @@ world.Query()
 		for (int i = 0; i < a.Count; ++i)
 		{
 			var ent = a.Entity(i);
-			Console.WriteLine("ent: {0}", ent.ID);
 			if (ent.Has<int, byte>())
 			{
 
 			}
 			ref var ff = ref floatA[i];
-
+			Console.WriteLine("ent {0} - float {1}", ent.ID, ff);
 		}
 });
 
