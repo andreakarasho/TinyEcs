@@ -84,6 +84,7 @@ public sealed class World : IDisposable
 		return new EntityView(this, id);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal ref EcsRecord GetRecord(EntityID id)
 	{
 		ref var record = ref _entities.Get(id);
