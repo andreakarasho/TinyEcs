@@ -42,7 +42,6 @@ sealed class Table
 	public ulong Hash { get; }
 	public int Rows => _count;
 	public int Columns => _componentInfo.Length;
-
 	public EcsComponent[] Components => _componentInfo;
 
 
@@ -58,7 +57,6 @@ sealed class Table
 		return _count++;
 	}
 
-
 	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
 		return Array.BinarySearch(_componentInfo, cmp);
@@ -72,7 +70,7 @@ sealed class Table
 			return Span<byte>.Empty;
 		}
 
-		return _componentsData[column].AsSpan(component.Size * row, component.Size * count);
+		return GetComponentRaw(column, row, count, component.Size);
 	}
 
 	internal Span<byte> GetComponentRaw(int column, int row, int count, int size)
@@ -124,29 +122,6 @@ sealed class Table
 			var swapComponent = leftArray.Slice(meta.Size * fromCount, meta.Size);
 			removeComponent.CopyTo(insertComponent);
 			swapComponent.CopyTo(removeComponent);
-
-			// var uLeft = new UnsafeSpan<byte>(_componentsData[i]);
-			// var uRight = new UnsafeSpan<byte>(to._componentsData[j]);
-
-			// var toIndex = meta.Size * toRow;
-			// var fromIndex = meta.Size * fromRow;
-			// ref var left = ref Unsafe.Add(ref uLeft.Value, fromIndex);
-
-			// // remove -> insert
-			// Unsafe.CopyBlockUnaligned
-			// (
-			// 	ref Unsafe.Add(ref uRight.Value, toIndex),
-			// 	ref left,
-			// 	(uint) meta.Size
-			// );
-
-			// // swap -> remove
-			// Unsafe.CopyBlockUnaligned
-			// (
-			// 	ref left,
-			// 	ref Unsafe.Add(ref uLeft.Value, meta.Size * fromCount),
-			// 	(uint) meta.Size
-			// );
 		}
 
 		_count = fromCount;

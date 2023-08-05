@@ -1,5 +1,3 @@
-using System.Numerics;
-
 namespace TinyEcs;
 
 public sealed unsafe class Archetype
@@ -72,9 +70,9 @@ public sealed unsafe class Archetype
 		return removed.Entity;
 	}
 
-	internal Archetype InsertVertex(Archetype left, Table newType, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
+	internal Archetype InsertVertex(Archetype left, Table table, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
 	{
-		var vertex = new Archetype(left._world, newType, components);
+		var vertex = new Archetype(left._world, table, components);
 		MakeEdges(left, vertex, component.ID);
 		InsertVertex(vertex);
 		return vertex;
@@ -245,7 +243,6 @@ public sealed unsafe class Archetype
 	public EntityView Entity(int row)
 		=> new (World, Entities[row].Entity);
 
-
 	public void Print()
 	{
 		PrintRec(this, 0, 0);
@@ -260,8 +257,6 @@ public sealed unsafe class Archetype
 			}
 		}
 	}
-
-
 }
 
 struct EcsEdge

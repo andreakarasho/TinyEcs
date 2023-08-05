@@ -171,9 +171,9 @@ public sealed class World : IDisposable
 		{
 			initType.CopyTo(span);
 			span[^1] = cmp;
+			span.Sort();
 		}
 
-		span.Sort();
 		var hash = Hash(span, false);
 
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
@@ -216,31 +216,6 @@ public sealed class World : IDisposable
 				return hash;
 			}
 		}
-
-		// var arch = FetchArchetype(record.Archetype, add, span);
-
-        // static Archetype? FetchArchetype(Archetype root, bool add, ReadOnlySpan<EcsComponent> cmp)
-        // {
-		// 	if (cmp.SequenceEqual(root.ComponentInfo))
-		// 	{
-		// 		return root;
-		// 	}
-
-        //     var edges = add ? root._edgesRight : root._edgesLeft;
-        //     foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
-        //     {
-        //         var sub = FetchArchetype(edge.Archetype, add, cmp);
-        //         if (sub != null)
-        //             return sub;
-        //     }
-
-        //     return null;
-        // }
-
-		// if (arch == null)
-		// {
-		// 	arch = _archRoot.InsertVertex(record.Archetype, span, component);
-		// }
 
 		if (buffer != null)
 		{

@@ -10,7 +10,7 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-var world = new World();
+using var world = new World();
 
 for (int i = 0; i < 100; ++i)
 	world.Spawn();
