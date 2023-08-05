@@ -3,7 +3,7 @@ namespace TinyEcs;
 public sealed class World : IDisposable
 {
 	private readonly Archetype _archRoot;
-	internal readonly EntitySparseSet<EcsRecord> _entities = new();
+	private readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<int, EcsComponent> _components = new();
@@ -279,6 +279,7 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
 	}
 
+	[SkipLocalsInit]
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>();
@@ -307,6 +308,7 @@ public sealed class World : IDisposable
 		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
 	}
 
+	[SkipLocalsInit]
 	public void SetSingleton<T>(T component = default) where T : unmanaged
 		=> Set(Component<T>().ID, component);
 
@@ -348,7 +350,6 @@ public sealed class World : IDisposable
 
 			if (result == 0 && root.Count > 0)
 			{
-				//root.Print();
 				var it = new Iterator(commands, root, userData);
 				action(ref it);
 			}

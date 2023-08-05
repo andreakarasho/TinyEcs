@@ -59,6 +59,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Unset<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Unset(EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		var cmp = new EcsComponent(id, 0);
+		World.DetachComponent(ID, ref cmp);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{
 		World.Set<EcsEnabled>(ID);

@@ -10,24 +10,6 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-
-Unsafe.SkipInit<TestStr>(out var likes1);
-var size = Unsafe.SizeOf<TestStr>();
-ref var start1 = ref Unsafe.As<TestStr, Likes>(ref likes1);
-ref var end2 = ref Unsafe.Add(ref start1, size);
-ref var bb = ref Unsafe.As<Likes, byte>(ref start1);
-ref var bbEnd = ref Unsafe.As<Likes, byte>(ref end2);
-
-var tt = typeof(Likes);
-var tt2 = typeof(TestStr);
-
-bb = 0x7F;
-bbEnd = 0x7F;
-
-var less = Unsafe.IsAddressLessThan(ref start1, ref end2);
-var equals = Unsafe.AreSame(ref start1, ref end2);
-
-
 var world = new World();
 
 for (int i = 0; i < 100; ++i)
@@ -44,21 +26,31 @@ cmds.Merge();
 
 ref var floatt3 = ref e.Get<float>();
 
-world.Spawn().Set<float>().Set<byte>().Set<int>();
-world.Spawn().Set<float>().Set<float>().Set<int>();
-world.Spawn().Set<int>().Set<double>().Set<int>();
+var e0 = world.Spawn().Set<float>().Set<byte>().Set<int>();
+var e1 = world.Spawn().Set<float>().Set<byte>().Set<int>().Add<int, byte>();
+e1.Unset<int, byte>().Unset<float>();
+var e2 = world.Spawn().Set<float>().Set<byte>().Set<int>();
 
 world.PrintGraph();
 
-world.Query().With<float>().With<int>().Iterate(static (ref Iterator a) => {
-	var floatA = a.Field<float>();
-	var intA = a.Field<int>();
+world.Query()
+	.With<float>().With<int>()
+	//.Without<int, byte>()
+	.Iterate(static (ref Iterator a) => {
+		var floatA = a.Field<float>();
+		var intA = a.Field<int>();
 
-	for (int i = 0; i < a.Count; ++i)
-	{
-		ref var ff = ref floatA[i];
+		for (int i = 0; i < a.Count; ++i)
+		{
+			var ent = a.Entity(i);
+			Console.WriteLine("ent: {0}", ent.ID);
+			if (ent.Has<int, byte>())
+			{
 
-	}
+			}
+			ref var ff = ref floatA[i];
+
+		}
 });
 
 
@@ -251,4 +243,4 @@ struct Likes;
 struct Dogs { }
 struct Apples { }
 
-struct TestStr { public bool v; }
+struct TestStr { public byte v; }
