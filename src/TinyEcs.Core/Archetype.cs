@@ -98,9 +98,7 @@ public sealed unsafe class Archetype
 	{
 		var column = GetComponentIndex(ref cmp);
 		EcsAssert.Assert(column >= 0);
-
-		if (cmp.Size <= 0)
-			return Span<byte>.Empty;
+		EcsAssert.Assert(cmp.Size > 0);
 
 		return _table.GetComponentRaw(column, 0, Table.Rows, cmp.Size);
 	}

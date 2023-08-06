@@ -28,10 +28,7 @@ public readonly ref struct Iterator
 		ref var cmp = ref World.Component<T>();
 		var span = _archetype.GetWholeComponentBuffer(ref cmp);
 		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
-		ref var end = ref Unsafe.Add(ref start, Count);
-		var unsafeSpan = new UnsafeSpan<T>(ref start, ref end);
-
-		return new FieldIterator<T>(unsafeSpan, _archetype.Entities);
+		return new FieldIterator<T>(ref start, _archetype.Entities);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -48,21 +45,21 @@ public readonly ref struct Iterator
 }
 
 [SkipLocalsInit]
-public readonly ref struct FieldIterator<T>  where T : unmanaged
+public readonly ref struct FieldIterator<T> where T : unmanaged
 {
-	private readonly UnsafeSpan<T> _span;
+	private readonly ref T _firstElement;
 	private readonly ref ArchetypeEntity _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal FieldIterator(UnsafeSpan<T> span, ArchetypeEntity[] entities)
+	internal FieldIterator(ref T firstElement, ArchetypeEntity[] entities)
 	{
-		_span = span;
+		_firstElement = ref firstElement;
 		_firstEntity = ref MemoryMarshal.GetArrayDataReference(entities);
 	}
 
 	public readonly ref T this[int index]
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref Unsafe.Add(ref _span.Value, Unsafe.Add(ref _firstEntity, index).TableRow);
+		get => ref Unsafe.Add(ref _firstElement, Unsafe.Add(ref _firstEntity, index).TableRow);
 	}
 }
