@@ -228,6 +228,8 @@ public sealed class World : IDisposable
 
 	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
+		EcsAssert.Assert(cmp.Size == data.Length);
+
 		ref var record = ref GetRecord(entity);
 
 		var column = record.Archetype.GetComponentIndex(ref cmp);
@@ -271,6 +273,14 @@ public sealed class World : IDisposable
 
 	public void Tag(EntityID entity, EntityID tag)
 	{
+		if (Has<EcsComponent>(tag))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(tag);
+			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+
+			return;
+		}
+
 		var cmp = new EcsComponent(tag, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
@@ -279,6 +289,8 @@ public sealed class World : IDisposable
 	{
 		ref var cmp = ref Component<T>(true);
 
+		EcsAssert.Assert(cmp.Size <= 0);
+
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
@@ -286,6 +298,8 @@ public sealed class World : IDisposable
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>(false);
+
+		EcsAssert.Assert(cmp.Size > 0);
 
 		Set
 		(

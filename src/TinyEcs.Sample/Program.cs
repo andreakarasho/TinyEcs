@@ -74,7 +74,7 @@ var id = ecs.Spawn()
 	.Pair(childOf.ID, root)
 	.ID;
 
-var posID = ecs.Component<Position>();
+ref var posID = ref ecs.Component<Position>();
 var pairLikesDogID = ecs.Component<Likes, Dogs>();
 
 var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9 });

@@ -47,6 +47,7 @@ public sealed class Commands
 	private unsafe void Tag(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(cmp.Size <= 0);
 
 		if (_main.Has(id, ref cmp))
 		{
@@ -65,6 +66,13 @@ public sealed class Commands
 
 	public unsafe void Tag(EntityID id, EntityID tag)
 	{
+		if (Has<EcsComponent>(tag))
+		{
+			ref var cmp2 = ref _main.Component<EcsComponent>();
+			Tag(id, ref cmp2);
+			return;
+		}
+
 		var cmp = new EcsComponent(tag, 0);
 		Tag(id, ref cmp);
 	}
@@ -80,6 +88,8 @@ public sealed class Commands
 		EcsAssert.Assert(_main.IsAlive(id));
 
 		ref var cmp = ref _main.Component<T>();
+		EcsAssert.Assert(cmp.Size > 0);
+
 		if (_main.Has(id, ref cmp))
 		{
 			ref var value = ref _main.Get<T>(id);
