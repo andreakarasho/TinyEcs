@@ -11,7 +11,7 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Create_Entity_Buffered()
 		// {
-		// 	var world = new World();
+		// 	using var world = new World();
 		// 	var cmd = new Commands(world);
 
 		// 	var e = cmd.Spawn();
@@ -23,7 +23,7 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Destroy_Entity_Buffered()
 		// {
-		// 	var world = new World();
+		// 	using var world = new World();
 		// 	var cmd = new Commands(world);
 
 		// 	var e = cmd.Spawn();
@@ -35,7 +35,7 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_Create_Entity()
 		{
-			var world = new World();
+			using var world = new World();
 			var cmd = new Commands(world);
 
 			var e = cmd.Spawn();
@@ -49,7 +49,7 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_Destroy_Entity()
 		{
-			var world = new World();
+			using var world = new World();
 			var cmd = new Commands(world);
 
 			var e = cmd.Spawn();
@@ -62,7 +62,7 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_SetComponent_Entity()
 		{
-			var world = new World();
+			using var world = new World();
 			var cmd = new Commands(world);
 
 			var e = world.Spawn();
@@ -78,7 +78,7 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_UnsetComponent_Entity()
 		{
-			var world = new World();
+			using var world = new World();
 			var cmd = new Commands(world);
 
 			const float VAL = 0.012344f;

@@ -8,7 +8,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachOneComponent_WithOneComponent(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
                 world.Set<float>(world.Spawn());
@@ -28,7 +28,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
@@ -53,7 +53,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithThreeComponents(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
@@ -80,7 +80,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
@@ -107,7 +107,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
@@ -133,7 +133,7 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent(int amount)
         {
-            var world = new World();
+            using var world = new World();
 
             for (int i = 0; i < amount; i++)
             {
@@ -156,7 +156,7 @@
         [Fact]
         public void Query_EdgeValidation()
         {
-            var world = new World();
+            using var world = new World();
 
             var good = 0;
 

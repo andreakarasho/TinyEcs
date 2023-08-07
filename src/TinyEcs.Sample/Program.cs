@@ -10,38 +10,46 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-
-var world = new World();
+using var world = new World();
 
 for (int i = 0; i < 100; ++i)
 	world.Spawn();
-var cmds = new Commands(world);
-var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
-//ref var floatt = ref e.Get<float>();
-cmds.Merge();
+// var cmds = new Commands(world);
+// var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
+// //ref var floatt = ref e.Get<float>();
+// cmds.Merge();
 
-e.Set<int>(55);
-e.Set<double>(2.0);
+// e.Set<int>(55);
+// e.Set<double>(2.0);
 
-cmds.Merge();
+// cmds.Merge();
 
-ref var floatt3 = ref e.Get<float>();
+//ref var floatt3 = ref e.Get<float>();
 
-world.Spawn().Set<float>().Set<byte>().Set<int>();
-world.Spawn().Set<float>().Set<float>().Set<int>();
-world.Spawn().Set<int>().Set<double>().Set<int>();
-
+var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>(11);
+var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>(22).Add<int, byte>();
+var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>(33);
+ref var fff = ref e0.Get<int>();
 world.PrintGraph();
 
-world.Query().With<float>().With<int>().Iterate(static (ref Iterator a) => {
-	var floatA = a.Field<float>();
-	var intA = a.Field<int>();
+world.Query()
+	.With<float>().With<int>()
+	//.Without<int, byte>()
+	.Iterate(static (ref Iterator a) => {
+		var floatA = a.Field<float>();
+		var intA = a.Field<int>();
 
-	for (int i = 0; i < a.Count; ++i)
-	{
-		ref var ff = ref floatA[i];
+		for (int i = 0; i < a.Count; ++i)
+		{
+			var ent = a.Entity(i);
+			if (ent.Has<int, byte>())
+			{
 
-	}
+			}
+			ref var ff = ref floatA[i];
+			ref var ii = ref intA[i];
+			Console.WriteLine("ent {0} - float {1} - int {2}", ent.ID, ff,  ii);
+		}
 });
 
 
@@ -127,7 +135,11 @@ unsafe
 
 	ecs.StartupSystem(&Setup);
 	//ecs.System(&PrintSystem, 1f);
-	ecs.System(&ParseQuery, ecs.Query().With<Position>().With<Velocity>().Without<float>());
+	ecs.System(&ParseQuery, ecs.Query()
+		.With<Position>()
+		.With<Velocity>()
+		.Without<float>()
+		.With<Likes, Dogs>());
 }
 
 var sw = Stopwatch.StartNew();
@@ -141,6 +153,8 @@ while (true)
 	for (int i = 0; i < 3600; ++i)
 	{
 		ecs.Step(cur);
+
+		//ecs.Print();
 	}
 
 	last = start;
@@ -164,6 +178,7 @@ static void Setup(ref Iterator it)
 			.Set<decimal>()
 			.Set<uint>()
 			.Set<ushort>()
+			.Add<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()
@@ -174,6 +189,9 @@ static void Setup(ref Iterator it)
 
 static void ParseQuery(ref Iterator it)
 {
+	// it.World.PrintGraph();
+	// it.Archetype.Print();
+
 	var posA = it.Field<Position>();
 	var velA = it.Field<Velocity>();
 
@@ -219,6 +237,9 @@ struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
 struct PlayerTag { public ulong ID; }
 
-struct Likes { }
+
+struct Likes;
 struct Dogs { }
 struct Apples { }
+
+struct TestStr { public byte v; }

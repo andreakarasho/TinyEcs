@@ -30,6 +30,7 @@ public ref struct UnsafeSpan<T> where T : unmanaged
 
 	public ref T Value => ref _start;
 	public readonly ref T End => ref _end;
+	public readonly Span<T> Span => this;
 
 
 	public readonly ref T this[int index]

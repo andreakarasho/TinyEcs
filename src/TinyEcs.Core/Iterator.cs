@@ -6,6 +6,7 @@ public readonly ref struct Iterator
 {
 	private readonly Archetype _archetype;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal Iterator(Commands? commands, Archetype archetype, object? userData)
 	{
 		Commands = commands;
@@ -18,21 +19,53 @@ public readonly ref struct Iterator
 	public readonly int Count => _archetype.Count;
 	public readonly float DeltaTime => World.DeltaTime;
 	public object? UserData { get; }
+	internal Archetype Archetype => _archetype;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly Span<T> Span<T>() where T : unmanaged
-		=> Field<T>();
+	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
+	{
+		ref var cmp = ref World.Component<T>();
+
+		var column = _archetype.GetComponentIndex(ref cmp);
+		EcsAssert.Assert(column >= 0);
+		EcsAssert.Assert(cmp.Size > 0);
+		EcsAssert.Assert(cmp.Size == sizeof(T));
+
+		var span = _archetype.Table.ComponentData<T>(column, 0, _archetype.Table.Rows);
+		ref var start = ref MemoryMarshal.GetReference(span);
+		return new FieldIterator<T>(ref start, _archetype.Entities);
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged
-		=> _archetype.Has<T>();
+	{
+		ref var cmp = ref World.Component<T>();
+		var column = _archetype.GetComponentIndex(ref cmp);
+		return column >= 0;
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Entity(int i)
-		=> _archetype.Entity(i);
+	public readonly EntityView Entity(int row)
+		=> new (World, _archetype.Entities[row].Entity);
+}
+
+[SkipLocalsInit]
+public readonly ref struct FieldIterator<T> where T : unmanaged
+{
+	private readonly ref T _firstElement;
+	private readonly ref ArchetypeEntity _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly UnsafeSpan<T> Field<T>() where T : unmanaged
-		=> _archetype.Field<T>();
+	internal FieldIterator(ref T firstElement, ArchetypeEntity[] entities)
+	{
+		_firstElement = ref firstElement;
+		_firstEntity = ref MemoryMarshal.GetArrayDataReference(entities);
+	}
+
+	public readonly ref T this[int index]
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref Unsafe.Add(ref _firstElement, Unsafe.Add(ref _firstEntity, index).TableRow);
+	}
 }

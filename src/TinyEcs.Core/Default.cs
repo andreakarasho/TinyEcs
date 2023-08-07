@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public readonly struct EcsComponent : IEquatable<EcsComponent>
+public readonly struct EcsComponent : IEquatable<EcsComponent>, IComparable<EcsComponent>
 {
 	public readonly EntityID ID;
 	public readonly int Size;
@@ -9,6 +9,11 @@ public readonly struct EcsComponent : IEquatable<EcsComponent>
 	{
 		ID = id;
 		Size = size;
+	}
+
+	public int CompareTo(EcsComponent other)
+	{
+		return (ID, Size).CompareTo((other.ID, other.Size));
 	}
 
 	public override readonly bool Equals(object? other)
@@ -69,7 +74,7 @@ public struct EcsChild
 	public EntityID Prev, Next;
 }
 
-public readonly struct EcsEnabled { }
+public struct EcsEnabled { }
 public struct EcsSystemPhaseOnUpdate { }
 public struct EcsSystemPhasePreUpdate { }
 public struct EcsSystemPhasePostUpdate { }

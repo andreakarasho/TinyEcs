@@ -19,11 +19,13 @@ sealed unsafe class Ecs
 		return new EntityView(_world, id);
 	}
 
+	public void Print() => _world.PrintGraph();
+
 	public CommandEntityView Spawn()
 		=> _cmds.Spawn();
 
-	public EntityID Component<T>() where T : unmanaged
-		=> _world.Component<T>();
+	public ref EcsComponent Component<T>() where T : unmanaged
+		=> ref _world.Component<T>();
 
 	public EntityID Component<TKind, TTarget>()
 	where TKind : unmanaged
@@ -70,8 +72,8 @@ sealed unsafe class Ecs
 		_cmds.Merge();
 
 		Span<Term> terms = stackalloc Term[] {
-			new () { ID = _world.Component<EcsEnabled>(), Op = TermOp.With },
-			new () { ID = _world.Component<EcsSystem>(), Op = TermOp.With },
+			new () { ID = _world.Component<EcsEnabled>().ID, Op = TermOp.With },
+			new () { ID = _world.Component<EcsSystem>().ID, Op = TermOp.With },
 			new () { ID = 0, Op = TermOp.With}
 		};
 
@@ -79,9 +81,9 @@ sealed unsafe class Ecs
 
 		if (_frame == 0)
 		{
-			sequence[0] = _world.Component<EcsSystemPhasePreStartup>();
-			sequence[1] = _world.Component<EcsSystemPhaseOnStartup>();
-			sequence[2] = _world.Component<EcsSystemPhasePostStartup>();
+			sequence[0] = _world.Component<EcsSystemPhasePreStartup>().ID;
+			sequence[1] = _world.Component<EcsSystemPhaseOnStartup>().ID;
+			sequence[2] = _world.Component<EcsSystemPhasePostStartup>().ID;
 
 			for (int i = 0; i < 3; ++i)
 			{
@@ -90,9 +92,9 @@ sealed unsafe class Ecs
 			}
 		}
 
-		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>();
-		sequence[1] = _world.Component<EcsSystemPhaseOnUpdate>();
-		sequence[2] = _world.Component<EcsSystemPhasePostUpdate>();
+		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>().ID;
+		sequence[1] = _world.Component<EcsSystemPhaseOnUpdate>().ID;
+		sequence[2] = _world.Component<EcsSystemPhasePostUpdate>().ID;
 
 		for (int i = 0; i < 3; ++i)
 		{

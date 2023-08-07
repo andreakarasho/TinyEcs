@@ -26,7 +26,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Equals(EntityView other)
 	{
-		return ID == other.ID /*&& World?.ID == other.World?.ID*/;
+		return ID == other.ID;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -37,10 +37,17 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Add<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Add(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		World.Set(ID, id, stackalloc byte[1]);
+		var cmp = new EcsComponent(id, 0);
+		World.Set(ID, ref cmp, ReadOnlySpan<byte>.Empty);
 		return this;
 	}
 
@@ -48,6 +55,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Unset<T>() where T : unmanaged
 	{
 		World.Unset<T>(ID);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Unset<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Unset(EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		var cmp = new EcsComponent(id, 0);
+		World.DetachComponent(ID, ref cmp);
 		return this;
 	}
 
@@ -79,9 +101,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TTarget : unmanaged
 	{
 		var world = World;
-		var id = IDOp.Pair(world.Component<TKind>(), world.Component<TTarget>());
-
-		return world.Has(ID, id);
+		var id = world.Component<TKind, TTarget>();
+		var cmp = new EcsComponent(id, 0);
+		return world.Has(ID, ref cmp);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -115,12 +137,11 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Each(Action<EntityView> action)
 	{
-		ref var record = ref World._entities.Get(ID);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref World.GetRecord(ID);
 
-		for (int i = 0; i < record.Archetype.Components.Length; ++i)
+		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
 		{
-			action(new EntityView(World, record.Archetype.Components[i]));
+			action(new EntityView(World, record.Archetype.ComponentInfo[i].ID));
 		}
 	}
 

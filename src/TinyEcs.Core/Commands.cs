@@ -44,75 +44,83 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe ref T Set<T>(EntityID id, T cmp = default) where T : unmanaged
+	public unsafe ref T Set<T>(EntityID id, T component = default) where T : unmanaged
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		var cmpID = _main.Component<T>();
-		if (_main.Has(id, cmpID))
+		ref var cmp = ref _main.Component<T>();
+		if (_main.Has(id, ref cmp))
 		{
 			ref var value = ref _main.Get<T>(id);
-			value = cmp;
+			value = component;
 
 			return ref value;
 		}
 
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
-		set.ComponentID = cmpID;
-		set.Size = sizeof(T);
+		set.Component = cmp;
 
-		if (set.Data.Length < set.Size)
+		if (set.Data.Length < set.Component.Size)
 		{
-			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
 		}
 
-		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Size));
-		fixed (byte* ptr = &reference)
-			Unsafe.Copy(ptr, ref cmp);
+		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Component.Size));
+
+		if (Unsafe.IsNullRef(ref component))
+		{
+
+		}
+
+		if (!Unsafe.IsNullRef(ref reference))
+		{
+			fixed (byte* ptr = &reference)
+				Unsafe.Copy(ptr, ref component);
+		}
 
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public unsafe void Add(EntityID id, EntityID cmp)
+	public unsafe void Add(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		if (_main.Has(id, cmp))
+		if (_main.Has(id, ref cmp))
 		{
 			return;
 		}
 
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
-		set.ComponentID = cmp;
-		set.Size = 1;
+		set.Component = cmp;
 
-		if (set.Data.Length < set.Size)
+		if (set.Data.Length < set.Component.Size)
 		{
-			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Size))];
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
 		}
 	}
 
 	public unsafe void Add(EntityID id, EntityID first, EntityID second)
 	{
-		Add(id, IDOp.Pair(first, second));
+		var cmp = new EcsComponent(IDOp.Pair(first, second), 0);
+		Add(id, ref cmp);
 	}
 
 	public unsafe void Add<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Add(id, _main.Component<TKind>(),  _main.Component<TTarget>());
+		Add(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		var cmpID = _main.Component<T>();
+		ref var cmp = ref _main.Component<T>();
 
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;
-		unset.ComponentID = cmpID;
+		unset.Component = cmp;
 	}
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
@@ -144,21 +152,21 @@ public sealed class Commands
 			return;
 		}
 
-		foreach (ref readonly var set in _set)
+		foreach (ref var set in _set)
 		{
 			EcsAssert.Assert(_main.IsAlive(set.Entity));
 
-			_main.Set(set.Entity, set.ComponentID, set.Data.Span.Slice(0, set.Size));
+			_main.Set(set.Entity, ref set.Component, set.Component.Size <= 0 ? ReadOnlySpan<byte>.Empty : set.Data.Span.Slice(0, set.Component.Size));
 		}
 
-		foreach (ref readonly var unset in _unset)
+		foreach (ref var unset in _unset)
 		{
 			EcsAssert.Assert(_main.IsAlive(unset.Entity));
 
-			_main.DetachComponent(unset.Entity, unset.ComponentID);
+			_main.DetachComponent(unset.Entity, ref unset.Component);
 		}
 
-		foreach (ref readonly var despawn in _despawn)
+		foreach (ref var despawn in _despawn)
 		{
 			_main.Despawn(despawn);
 		}
@@ -172,15 +180,14 @@ public sealed class Commands
 	private struct SetComponent
 	{
 		public EntityID Entity;
-		public EntityID ComponentID;
-		public int Size;
+		public EcsComponent Component;
 		public Memory<byte> Data;
 	}
 
 	private struct UnsetComponent
 	{
 		public EntityID Entity;
-		public EntityID ComponentID;
+		public EcsComponent Component;
 	}
 }
 
@@ -205,7 +212,7 @@ public readonly ref struct CommandEntityView
 
 	public readonly CommandEntityView Add(EntityID id)
 	{
-		_cmds.Add(_id, id);
+		_cmds.Add(_id, id, 0);
 		return this;
 	}
 

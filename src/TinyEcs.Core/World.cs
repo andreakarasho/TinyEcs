@@ -3,16 +3,16 @@ namespace TinyEcs;
 public sealed class World : IDisposable
 {
 	private readonly Archetype _archRoot;
-	internal readonly EntitySparseSet<EcsRecord> _entities = new();
+	private readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
-	private readonly Dictionary<int, EntityID> _components = new();
+	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
+	private readonly Dictionary<int, EcsComponent> _components = new();
 
 
 	public World()
 	{
-		_archRoot = new Archetype(this, ReadOnlySpan<EcsComponent>.Empty);
+		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
 	}
-
 
 
 	public int EntityCount => _entities.Length;
@@ -27,6 +27,7 @@ public sealed class World : IDisposable
 		_archRoot.Clear();
 		_typeIndex.Clear();
 		_components.Clear();
+		_tableIndex.Clear();
 	}
 
 	// public void Optimize()
@@ -44,29 +45,26 @@ public sealed class World : IDisposable
 	// 	}
 	// }
 
-	public EntityID Component<T>() where T : unmanaged
+
+	public ref EcsComponent Component<T>() where T : unmanaged
 	{
-		//ref var cmpID = ref _components.Get((EntityID)TypeInfo<T>.Hash);
-		ref var cmpID = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
-		if (/*Unsafe.IsNullRef(ref cmpID)*/ !exists || !IsAlive(cmpID))
+		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
+		if (!exists || !IsAlive(cmp.ID))
 		{
 			var ent = SpawnEmpty();
-			cmpID = ent.ID;
-			//cmpID = ref _components.Add((EntityID)TypeInfo<T>.Hash, ent.ID);
-			Set(cmpID, new EcsComponent(cmpID, TypeInfo<T>.Size));
-			Set<EcsEnabled>(cmpID);
+			cmp = new EcsComponent(ent.ID, TypeInfo<T>.Size);
+			Set(cmp.ID, cmp);
+			Set<EcsEnabled>(cmp.ID);
 		}
 
-		return cmpID;
+		return ref cmp;
 	}
 
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Component<TKind>(), Component<TTarget>());
+		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
 	public QueryBuilder Query()
-	{
-		return new QueryBuilder(this);
-	}
+		=> new (this);
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
@@ -79,20 +77,27 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
-		record.Row = _archRoot.Add(id);
+		record.Row = _archRoot.Add(id).Item1;
 
 		return new EntityView(this, id);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal ref EcsRecord GetRecord(EntityID id)
+	{
+		ref var record = ref _entities.Get(id);
+		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		return ref record;
+	}
+
 	public void Despawn(EntityID entity)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref GetRecord(entity);
 
-		var removedId = record.Archetype.Remove(record.Row);
+		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.Row];
+		var last = record.Archetype.Entities[record.Row].Entity;
 		_entities.Get(last) = record;
 		_entities.Remove(removedId);
 	}
@@ -100,37 +105,35 @@ public sealed class World : IDisposable
 	public bool IsAlive(EntityID entity)
 		=> _entities.Contains(entity);
 
-	private void AttachComponent(EntityID entity, EntityID component, int size)
+	private void AttachComponent(ref EcsRecord record, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, component, size);
+		InternalAttachDetach(ref record, ref cmp, true);
 	}
 
-	internal void DetachComponent(EntityID entity, EntityID component)
+	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
-		InternalAttachDetach(entity, component, -1);
+		ref var record = ref GetRecord(entity);
+		InternalAttachDetach(ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, EntityID component, int size)
+	private bool InternalAttachDetach(ref EcsRecord record, ref EcsComponent cmp, bool add)
 	{
-		ref var record = ref _entities.Get(entity);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, component, size);
+		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
 
-		var newRow = Archetype.MoveEntity(record.Archetype, arch!, record.Row);
-		record.Row = newRow;
+		record.Row = record.Archetype.MoveEntity(arch, record.Row);
 		record.Archetype = arch!;
 
 		return true;
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, EntityID component, int size)
+	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
 	{
-		var column = root.GetComponentIndex(component);
-		var add = size > 0;
+		var column = root.GetComponentIndex(ref cmp);
 
 		if (add && column >= 0)
 		{
@@ -157,7 +160,7 @@ public sealed class World : IDisposable
 		{
 			for (int i = 0, j = 0; i < initType.Length; ++i)
 			{
-				if (initType[i].ID != component)
+				if (initType[i].ID != cmp.ID)
 				{
 					span[j++] = initType[i];
 				}
@@ -166,19 +169,36 @@ public sealed class World : IDisposable
 		else if (!span.IsEmpty)
 		{
 			initType.CopyTo(span);
-			span[^1] = new EcsComponent(component, size);
+			span[^1] = cmp;
+			span.Sort();
 		}
 
-		span.Sort(static (s, k) => s.ID.CompareTo(k.ID));
+		var hash = Hash(span, false);
 
-		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, Hash(span), out var exists);
+		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			arch = _archRoot.InsertVertex(root, span, component);
+			ref var table = ref Unsafe.NullRef<Table>();
+
+			if (cmp.Size != 0)
+			{
+				var tableHash = Hash(span, true);
+				table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out exists)!;
+				if (!exists)
+				{
+					table = new Table(tableHash, span);
+				}
+			}
+			else
+			{
+				table = ref Unsafe.AsRef(root.Table)!;
+			}
+
+			arch = _archRoot.InsertVertex(root, table, span, ref cmp);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static EntityID Hash(UnsafeSpan<EcsComponent> components)
+		static EntityID Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
 		{
 			unchecked
 			{
@@ -186,7 +206,8 @@ public sealed class World : IDisposable
 
 				while (components.CanAdvance())
 				{
-					hash = ((hash << 5) + hash) + components.Value.ID;
+					if (!checkSize || components.Value.Size > 0)
+						hash = ((hash << 5) + hash) + components.Value.ID;
 
 					components.Advance();
 				}
@@ -194,31 +215,6 @@ public sealed class World : IDisposable
 				return hash;
 			}
 		}
-
-		// var arch = FetchArchetype(record.Archetype, add, span);
-
-        // static Archetype? FetchArchetype(Archetype root, bool add, ReadOnlySpan<EcsComponent> cmp)
-        // {
-		// 	if (cmp.SequenceEqual(root.ComponentInfo))
-		// 	{
-		// 		return root;
-		// 	}
-
-        //     var edges = add ? root._edgesRight : root._edgesLeft;
-        //     foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
-        //     {
-        //         var sub = FetchArchetype(edge.Archetype, add, cmp);
-        //         if (sub != null)
-        //             return sub;
-        //     }
-
-        //     return null;
-        // }
-
-		// if (arch == null)
-		// {
-		// 	arch = _archRoot.InsertVertex(record.Archetype, span, component);
-		// }
 
 		if (buffer != null)
 		{
@@ -228,77 +224,78 @@ public sealed class World : IDisposable
 		return arch;
 	}
 
-	internal void Set(EntityID entity, EntityID component, ReadOnlySpan<byte> data)
+	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		ref var record = ref GetRecord(entity);
 
-		var column = record.Archetype.GetComponentIndex(component);
+		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			AttachComponent(entity, component, data.Length);
+			AttachComponent(ref record, ref cmp);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(component, record.Row, 1);
+		if (cmp.Size <= 0)
+			return;
+
+		column = record.Archetype.GetComponentIndex(ref cmp);
+		var buf = record.Archetype.Table.ComponentData<byte>
+		(
+			column,
+			record.Archetype.Entities[record.Row].TableRow * cmp.Size,
+			cmp.Size
+		);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
 	}
 
-	internal bool Has(EntityID entity, EntityID component)
-		=> !Get(entity, component).IsEmpty;
-
-	private Span<byte> Get(EntityID entity, EntityID component)
+	internal bool Has(EntityID entity, ref EcsComponent cmp)
 	{
-		ref var record = ref _entities.Get(entity);
-		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
-
-		return record.Archetype.GetComponentRaw(component, record.Row, 1);
+		ref var record = ref GetRecord(entity);
+		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
+	[SkipLocalsInit]
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
-		=> Set(
-				entity,
-				Component<T>(),
-				new ReadOnlySpan<byte>(&component, TypeInfo<T>.Size)
-			);
+	{
+		ref var cmp = ref Component<T>();
+
+		Set
+		(
+			entity,
+			ref cmp,
+			new ReadOnlySpan<byte>(&component, cmp.Size)
+		);
+	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
-	   => DetachComponent(entity, Component<T>());
+		=> DetachComponent(entity, ref Component<T>());
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, Component<T>());
+		=> Has(entity, ref Component<T>());
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		var raw = Get(entity, Component<T>());
+		ref var cmp = ref Component<T>();
+		ref var record = ref GetRecord(entity);
+		var raw = record.Archetype.GetComponentRaw<T>(ref cmp, record.Row, 1);
 
 		EcsAssert.Assert(!raw.IsEmpty);
-		EcsAssert.Assert(TypeInfo<T>.Size == raw.Length);
 
-		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
+		return ref MemoryMarshal.GetReference(raw);
 	}
 
-	public void SetSingleton<T>(T cmp = default) where T : unmanaged
-		=> Set(Component<T>(), cmp);
+	[SkipLocalsInit]
+	public void SetSingleton<T>(T component = default) where T : unmanaged
+		=> Set(Component<T>().ID, component);
 
 	public ref T GetSingleton<T>() where T : unmanaged
-		=> ref Get<T>(Component<T>());
+		=> ref Get<T>(Component<T>().ID);
 
 
 	public void PrintGraph()
 	{
-		PrintRec(_archRoot, 0, 0);
-
-		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
-		{
-			Console.WriteLine("{0}[{1}] |{2}|", new string('.', depth), string.Join(", ", root.Components), rootComponent);
-
-			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
-			{
-				PrintRec(edge.Archetype, depth + 1, edge.ComponentID);
-			}
-		}
+		_archRoot.Print();
 	}
 
 	public unsafe void Query
