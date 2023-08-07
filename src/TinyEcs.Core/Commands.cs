@@ -230,15 +230,16 @@ public readonly ref struct CommandEntityView
 
 	public readonly EntityID ID => _id;
 
-	public readonly CommandEntityView Tag<T>() where T : unmanaged
-	{
-		_cmds.Tag<T>(_id);
-		return this;
-	}
 
 	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged
 	{
 		_cmds.Set(_id, cmp);
+		return this;
+	}
+
+	public readonly CommandEntityView Tag<T>() where T : unmanaged
+	{
+		_cmds.Tag<T>(_id);
 		return this;
 	}
 
