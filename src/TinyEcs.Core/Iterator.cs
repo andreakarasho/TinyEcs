@@ -23,11 +23,17 @@ public readonly ref struct Iterator
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly FieldIterator<T> Field<T>() where T : unmanaged
+	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
 	{
 		ref var cmp = ref World.Component<T>();
-		var span = _archetype.GetWholeComponentBuffer(ref cmp);
-		ref var start = ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(span));
+
+		var column = _archetype.GetComponentIndex(ref cmp);
+		EcsAssert.Assert(column >= 0);
+		EcsAssert.Assert(cmp.Size > 0);
+		EcsAssert.Assert(cmp.Size == sizeof(T));
+
+		var span = _archetype.Table.ComponentData<T>(column, 0, _archetype.Table.Rows);
+		ref var start = ref MemoryMarshal.GetReference(span);
 		return new FieldIterator<T>(ref start, _archetype.Entities);
 	}
 

@@ -1,10 +1,10 @@
 using TinyEcs;
 
-sealed class Table
+sealed unsafe class Table
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
-	private readonly byte[][] _componentsData;
+	private readonly void*[] _componentsData;
 	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
@@ -23,7 +23,7 @@ sealed class Table
 				++valid;
 		}
 
-		_componentsData = new byte[valid][];
+		_componentsData = new void*[valid];
 		_componentInfo = new EcsComponent[valid];
 
 		valid = 0;
@@ -62,20 +62,11 @@ sealed class Table
 		return Array.BinarySearch(_componentInfo, cmp);
 	}
 
-	internal Span<byte> GetComponentRaw(ref EcsComponent component, int row, int count)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Span<T> ComponentData<T>(int column, int row, int count) where T : unmanaged
 	{
-		var column = GetComponentIndex(ref component);
-		if (column < 0)
-		{
-			return Span<byte>.Empty;
-		}
-
-		return GetComponentRaw(column, row, count, component.Size);
-	}
-
-	internal Span<byte> GetComponentRaw(int column, int row, int count, int size)
-	{
-		return _componentsData[column].AsSpan(size * row, size * count);
+		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+		return new Span<T>((T*)_componentsData[column] + row, count);
 	}
 
 	internal void Remove(int row)
@@ -83,7 +74,8 @@ sealed class Table
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
-			var leftArray = _componentsData[i].AsSpan();
+			//var leftArray = _componentsData[i].AsSpan();
+			var leftArray = ComponentData<byte>(i, 0, meta.Size * _count);
 
 			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
 			var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
@@ -114,9 +106,11 @@ sealed class Table
 			}
 
 			ref readonly var meta = ref _componentInfo[i];
+			var leftArray = ComponentData<byte>(i, 0, meta.Size * _count);
+			var rightArray = to.ComponentData<byte>(j, 0, meta.Size * to._count);
 
-			var leftArray = _componentsData[i].AsSpan();
-			var rightArray = to._componentsData[j].AsSpan();
+			//var leftArray = _componentsData[i].AsSpan();
+			//var rightArray = to._componentsData[j].AsSpan();
 			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
 			var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
 			var swapComponent = leftArray.Slice(meta.Size * fromCount, meta.Size);
@@ -132,7 +126,15 @@ sealed class Table
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
-			Array.Resize(ref _componentsData[i], meta.Size * capacity);
+			var newSize = (nuint) (meta.Size * capacity);
+			var newPtr = (byte*)NativeMemory.Alloc(newSize);
+			if (_componentsData[i] != null)
+			{
+				NativeMemory.Copy(_componentsData[i], newPtr, (nuint) (meta.Size * _count));
+			}
+
+			_componentsData[i] = newPtr;
+			//Array.Resize(ref _componentsData[i], meta.Size * capacity);
 			_capacity = capacity;
 		}
 	}

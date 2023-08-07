@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public sealed unsafe class Archetype
+public sealed class Archetype
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
@@ -94,16 +94,7 @@ public sealed unsafe class Archetype
 		return toRow;
 	}
 
-	internal Span<byte> GetWholeComponentBuffer(ref EcsComponent cmp)
-	{
-		var column = GetComponentIndex(ref cmp);
-		EcsAssert.Assert(column >= 0);
-		EcsAssert.Assert(cmp.Size > 0);
-
-		return _table.GetComponentRaw(column, 0, Table.Rows, cmp.Size);
-	}
-
-	internal Span<byte> GetComponentRaw(ref EcsComponent cmp, int row, int count)
+	internal Span<T> GetComponentRaw<T>(ref EcsComponent cmp, int row, int count) where T : unmanaged
 	{
 		EcsAssert.Assert(row >= 0);
 		EcsAssert.Assert(row < _entities.Length);
@@ -112,9 +103,9 @@ public sealed unsafe class Archetype
 		EcsAssert.Assert(column >= 0);
 
 		if (cmp.Size <= 0)
-			return Span<byte>.Empty;
+			return Span<T>.Empty;
 
-		return _table.GetComponentRaw(column, _entities[row].TableRow, count, cmp.Size);
+		return _table.ComponentData<T>(column, _entities[row].TableRow, count);
 	}
 
 	internal void Clear()

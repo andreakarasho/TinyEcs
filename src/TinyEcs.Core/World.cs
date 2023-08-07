@@ -64,9 +64,7 @@ public sealed class World : IDisposable
 		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
 	public QueryBuilder Query()
-	{
-		return new QueryBuilder(this);
-	}
+		=> new (this);
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
@@ -236,7 +234,16 @@ public sealed class World : IDisposable
 			AttachComponent(ref record, ref cmp);
 		}
 
-		var buf = record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
+		if (cmp.Size <= 0)
+			return;
+
+		column = record.Archetype.GetComponentIndex(ref cmp);
+		var buf = record.Archetype.Table.ComponentData<byte>
+		(
+			column,
+			record.Archetype.Entities[record.Row].TableRow * cmp.Size,
+			cmp.Size
+		);
 
 		EcsAssert.Assert(data.Length == buf.Length);
 		data.CopyTo(buf);
@@ -248,23 +255,17 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	private Span<byte> Get(EntityID entity, ref EcsComponent cmp)
-	{
-		ref var record = ref GetRecord(entity);
-
-		return record.Archetype.GetComponentRaw(ref cmp, record.Row, 1);
-	}
-
 	[SkipLocalsInit]
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>();
 
-		Set(
+		Set
+		(
 			entity,
 			ref cmp,
 			new ReadOnlySpan<byte>(&component, cmp.Size)
-			);
+		);
 	}
 
 	public void Unset<T>(EntityID entity) where T : unmanaged
@@ -276,12 +277,12 @@ public sealed class World : IDisposable
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>();
-		var raw = Get(entity, ref cmp);
+		ref var record = ref GetRecord(entity);
+		var raw = record.Archetype.GetComponentRaw<T>(ref cmp, record.Row, 1);
 
 		EcsAssert.Assert(!raw.IsEmpty);
-		EcsAssert.Assert(cmp.Size == raw.Length);
 
-		return ref Unsafe.As<byte, T>(ref MemoryMarshal.GetReference(raw));
+		return ref MemoryMarshal.GetReference(raw);
 	}
 
 	[SkipLocalsInit]

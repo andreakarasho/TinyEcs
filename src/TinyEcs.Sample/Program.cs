@@ -14,22 +14,22 @@ using var world = new World();
 
 for (int i = 0; i < 100; ++i)
 	world.Spawn();
-var cmds = new Commands(world);
-var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
-//ref var floatt = ref e.Get<float>();
-cmds.Merge();
+// var cmds = new Commands(world);
+// var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
+// //ref var floatt = ref e.Get<float>();
+// cmds.Merge();
 
-e.Set<int>(55);
-e.Set<double>(2.0);
+// e.Set<int>(55);
+// e.Set<double>(2.0);
 
-cmds.Merge();
+// cmds.Merge();
 
-ref var floatt3 = ref e.Get<float>();
+//ref var floatt3 = ref e.Get<float>();
 
-var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>();
-var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>().Add<int, byte>();
-var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>();
-
+var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>(11);
+var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>(22).Add<int, byte>();
+var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>(33);
+ref var fff = ref e0.Get<int>();
 world.PrintGraph();
 
 world.Query()
@@ -47,7 +47,8 @@ world.Query()
 
 			}
 			ref var ff = ref floatA[i];
-			Console.WriteLine("ent {0} - float {1}", ent.ID, ff);
+			ref var ii = ref intA[i];
+			Console.WriteLine("ent {0} - float {1} - int {2}", ent.ID, ff,  ii);
 		}
 });
 
