@@ -129,7 +129,7 @@ public sealed class Commands
 
 	public unsafe void Pair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Pair(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
+		Pair(id, _main.Component<TKind>(false).ID,  _main.Component<TTarget>(false).ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged

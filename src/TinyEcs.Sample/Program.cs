@@ -116,8 +116,6 @@ ecs.Entity(id).Each(static s =>
 
 unsafe
 {
-	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
-
 	ecs.Query()
 		.With<EcsComponent>()
 		.Iterate(static (ref Iterator it) => {
@@ -135,6 +133,7 @@ unsafe
 
 	ecs.StartupSystem(&Setup);
 	//ecs.System(&PrintSystem, 1f);
+	//ecs.System(&PrintComponents, ecs.Query().With<EcsComponent>(), 1f);
 	ecs.System(&ParseQuery, ecs.Query()
 		.With<Position>()
 		.With<Velocity>()
@@ -185,6 +184,17 @@ static void Setup(ref Iterator it)
 		.Set(new Serial() { Value = 0xDEAD_BEEF });
 
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
+}
+
+static void PrintComponents(ref Iterator it)
+{
+	var cmpA = it.Field<EcsComponent>();
+
+	for (int i = 0; i < it.Count; ++i)
+	{
+		ref var cmp = ref cmpA[i];
+		Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", cmp.ID, cmp.Size, cmp.ID);
+	}
 }
 
 static void ParseQuery(ref Iterator it)

@@ -56,14 +56,14 @@ public sealed class World : IDisposable
 			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
-			Set<EcsEnabled>(cmp.ID);
+			Tag<EcsEnabled>(cmp.ID);
 		}
 
 		return ref cmp;
 	}
 
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
+		=> IDOp.Pair(Component<TKind>(true).ID, Component<TTarget>(true).ID);
 
 	public QueryBuilder Query()
 		=> new (this);
@@ -266,7 +266,7 @@ public sealed class World : IDisposable
 
 	public void Pair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Pair(entity, Component<TKind>().ID, Component<TTarget>().ID);
+		Pair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
 	}
 
 	public void Tag(EntityID entity, EntityID tag)
@@ -282,15 +282,8 @@ public sealed class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void Set<T>(EntityID entity) where T : unmanaged
-	{
-		ref var cmp = ref Component<T>(true);
-
-		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
-	}
-
 	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component) where T : unmanaged
+	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>(false);
 
