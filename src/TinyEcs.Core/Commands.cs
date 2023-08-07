@@ -44,16 +44,10 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe void Tag(EntityID iD, EntityID tag)
-	{
-
-	}
-
-	public unsafe void Tag<T>(EntityID id) where T : unmanaged
+	private unsafe void Tag(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
-		ref var cmp = ref _main.Component<T>(true);
 		if (_main.Has(id, ref cmp))
 		{
 			return;
@@ -67,6 +61,18 @@ public sealed class Commands
 		{
 			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
 		}
+	}
+
+	public unsafe void Tag(EntityID id, EntityID tag)
+	{
+		var cmp = new EcsComponent(tag, 0);
+		Tag(id, ref cmp);
+	}
+
+	public unsafe void Tag<T>(EntityID id) where T : unmanaged
+	{
+		ref var cmp = ref _main.Component<T>(true);
+		Tag(id, ref cmp);
 	}
 
 	public unsafe ref T Set<T>(EntityID id, T component) where T : unmanaged
@@ -102,7 +108,7 @@ public sealed class Commands
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public unsafe void Pair(EntityID id, ref EcsComponent cmp)
+	private unsafe void Pair(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 

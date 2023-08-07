@@ -62,18 +62,8 @@ public unsafe struct EcsSystem
 	}
 }
 
-public struct EcsParent
-{
-	public int ChildrenCount;
-	public EntityID FirstChild;
-}
-
-public struct EcsChild
-{
-	public EntityID Parent;
-	public EntityID Prev, Next;
-}
-
+public struct EcsParent { }
+public struct EcsChild { }
 public struct EcsEnabled { }
 public struct EcsSystemPhaseOnUpdate { }
 public struct EcsSystemPhasePreUpdate { }
