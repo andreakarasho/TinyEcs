@@ -73,7 +73,7 @@ public sealed class World : IDisposable
 			.Set(new EcsSystem(system, query, terms, tick));
 
 	public EntityView Spawn()
-		=> SpawnEmpty().Set<EcsEnabled>();
+		=> SpawnEmpty().Tag<EcsEnabled>();
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -257,6 +257,31 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
+	public void Pair(EntityID entity, EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		var cmp = new EcsComponent(id, 0);
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
+	public void Pair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	{
+		Pair(entity, Component<TKind>().ID, Component<TTarget>().ID);
+	}
+
+	public void Tag(EntityID entity, EntityID tag)
+	{
+		var cmp = new EcsComponent(tag, 0);
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
+	public void Tag<T>(EntityID entity) where T : unmanaged
+	{
+		ref var cmp = ref Component<T>(true);
+
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
 	public void Set<T>(EntityID entity) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>(true);
@@ -283,11 +308,23 @@ public sealed class World : IDisposable
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, ref Component<T>());
 
+	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Has(entity, Component<TKind>().ID, Component<TTarget>().ID);
+	}
+
+	public bool Has(EntityID entity, EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		var cmp = new EcsComponent(id, 0);
+		return Has(entity, ref cmp);
+	}
+
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>();
 		ref var record = ref GetRecord(entity);
-		var raw = record.Archetype.GetComponentRaw<T>(ref cmp, record.Row, 1);
+		var raw = record.Archetype.ComponentData<T>(ref cmp, record.Row, 1);
 
 		EcsAssert.Assert(!raw.IsEmpty);
 

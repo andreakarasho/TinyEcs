@@ -30,7 +30,7 @@ public sealed class Commands
 		var ent = _main.SpawnEmpty();
 
 		return new CommandEntityView(this, ent.ID)
-			.Set<EcsEnabled>();
+			.Tag<EcsEnabled>();
 	}
 
 	public void Despawn(EntityID id)
@@ -44,7 +44,12 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe void Set<T>(EntityID id) where T : unmanaged
+	public unsafe void Tag(EntityID iD, EntityID tag)
+	{
+
+	}
+
+	public unsafe void Tag<T>(EntityID id) where T : unmanaged
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
@@ -97,7 +102,7 @@ public sealed class Commands
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public unsafe void Add(EntityID id, ref EcsComponent cmp)
+	public unsafe void Pair(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
@@ -116,15 +121,15 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe void Add(EntityID id, EntityID first, EntityID second)
+	public unsafe void Pair(EntityID id, EntityID first, EntityID second)
 	{
 		var cmp = new EcsComponent(IDOp.Pair(first, second), 0);
-		Add(id, ref cmp);
+		Pair(id, ref cmp);
 	}
 
-	public unsafe void Add<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
+	public unsafe void Pair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Add(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
+		Pair(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged
@@ -219,35 +224,35 @@ public readonly ref struct CommandEntityView
 
 	public readonly EntityID ID => _id;
 
-	public readonly CommandEntityView Set<T>() where T : unmanaged
+	public readonly CommandEntityView Tag<T>() where T : unmanaged
 	{
-		_cmds.Set<T>(_id);
+		_cmds.Tag<T>(_id);
 		return this;
 	}
 
-	public readonly CommandEntityView Set<T>(T cmp) where T : unmanaged
+	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged
 	{
 		_cmds.Set(_id, cmp);
 		return this;
 	}
 
-	public readonly CommandEntityView Add(EntityID id)
+	public readonly CommandEntityView Tag(EntityID id)
 	{
-		_cmds.Add(_id, id, 0);
+		_cmds.Tag(_id, id);
 		return this;
 	}
 
-	public readonly CommandEntityView Add(EntityID first, EntityID second)
+	public readonly CommandEntityView Pair(EntityID first, EntityID second)
 	{
-		_cmds.Add(_id, first, second);
+		_cmds.Pair(_id, first, second);
 		return this;
 	}
 
-	public readonly CommandEntityView Add<TKind, TTarget>()
+	public readonly CommandEntityView Pair<TKind, TTarget>()
 		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
-		_cmds.Add<TKind, TTarget>(_id);
+		_cmds.Pair<TKind, TTarget>(_id);
 		return this;
 	}
 

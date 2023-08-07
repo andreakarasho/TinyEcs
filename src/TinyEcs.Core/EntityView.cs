@@ -30,9 +30,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>() where T : unmanaged
+	public readonly EntityView Tag<T>() where T : unmanaged
 	{
-		World.Set<T>(ID);
+		World.Tag<T>(ID);
 		return this;
 	}
 
@@ -44,17 +44,15 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Add<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public readonly EntityView Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 	{
-		return Add(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+		return Pair(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Add(EntityID first, EntityID second)
+	public readonly EntityView Pair(EntityID first, EntityID second)
 	{
-		var id = IDOp.Pair(first, second);
-		var cmp = new EcsComponent(id, 0);
-		World.Set(ID, ref cmp, ReadOnlySpan<byte>.Empty);
+		World.Pair(ID, first, second);
 		return this;
 	}
 

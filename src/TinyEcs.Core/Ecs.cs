@@ -40,23 +40,23 @@ sealed unsafe class Ecs
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
 		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.Set<EcsSystemPhaseOnStartup>();
+			.Tag<EcsSystemPhaseOnStartup>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system)
 		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.Set<EcsSystemPhaseOnUpdate>();
+			.Tag<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
 		=> _world.System(system, 0, ReadOnlySpan<Term>.Empty, tick)
-			.Set<EcsSystemPhaseOnUpdate>();
+			.Tag<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
 		=> _world.System(system, query.Build(), query.Terms, float.NaN)
-			.Set<EcsSystemPhaseOnUpdate>();
+			.Tag<EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
 		=> _world.System(system, query.Build(), query.Terms, tick)
-			.Set<EcsSystemPhaseOnUpdate>();
+			.Tag<EcsSystemPhaseOnUpdate>();
 
 	public void SetSingleton<T>(T cmp = default) where T : unmanaged
 		=> _world.SetSingleton(cmp);

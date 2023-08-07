@@ -27,7 +27,7 @@ for (int i = 0; i < 100; ++i)
 //ref var floatt3 = ref e.Get<float>();
 
 var e0 = world.Spawn().Set<float>(1f).Set<byte>(default).Set<int>(11);
-var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).Add<int, byte>();
+var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).Pair<int, byte>();
 var e2 = world.Spawn().Set<float>(3f).Set<byte>(default).Set<int>(33);
 ref var fff = ref e0.Get<int>();
 world.PrintGraph();
@@ -66,12 +66,12 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.Add<Likes, Dogs>()
-	.Add<Likes, Apples>()
-	.Add(pos.ID)
-	.Add(likes.ID, cats.ID)
-	.Add(likes.ID, flowers.ID)
-	.Add(childOf.ID, root)
+	.Pair<Likes, Dogs>()
+	.Pair<Likes, Apples>()
+	.Tag(pos.ID)
+	.Pair(likes.ID, cats.ID)
+	.Pair(likes.ID, flowers.ID)
+	.Pair(childOf.ID, root)
 	.ID;
 
 var posID = ecs.Component<Position>();
@@ -172,13 +172,13 @@ static void Setup(ref Iterator it)
 		it.Commands!.Spawn()
 			.Set<Position>()
 			.Set<Velocity>()
-			.Set<int>()
-			.Set<short>()
-			.Set<byte>()
-			.Set<decimal>()
-			.Set<uint>()
-			.Set<ushort>()
-			.Add<Likes, Dogs>()
+			.Tag<int>()
+			.Tag<short>()
+			.Tag<byte>()
+			.Tag<decimal>()
+			.Tag<uint>()
+			.Tag<ushort>()
+			.Pair<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()
