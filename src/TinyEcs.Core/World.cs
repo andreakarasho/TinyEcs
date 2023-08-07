@@ -46,13 +46,15 @@ public sealed class World : IDisposable
 	// }
 
 
-	public ref EcsComponent Component<T>() where T : unmanaged
+	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
 		if (!exists || !IsAlive(cmp.ID))
 		{
 			var ent = SpawnEmpty();
-			cmp = new EcsComponent(ent.ID, TypeInfo<T>.Size);
+			var size = asTag ? 0 : sizeof(T);
+			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
+			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
 			Set<EcsEnabled>(cmp.ID);
 		}
@@ -255,10 +257,17 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
+	public void Set<T>(EntityID entity) where T : unmanaged
 	{
-		ref var cmp = ref Component<T>();
+		ref var cmp = ref Component<T>(true);
+
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
+	[SkipLocalsInit]
+	public unsafe void Set<T>(EntityID entity, T component) where T : unmanaged
+	{
+		ref var cmp = ref Component<T>(false);
 
 		Set
 		(

@@ -30,7 +30,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component = default) where T : unmanaged
+	public readonly EntityView Set<T>() where T : unmanaged
+	{
+		World.Set<T>(ID);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set<T>(T component) where T : unmanaged
 	{
 		World.Set(ID, component);
 		return this;

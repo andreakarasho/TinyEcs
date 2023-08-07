@@ -26,9 +26,9 @@ for (int i = 0; i < 100; ++i)
 
 //ref var floatt3 = ref e.Get<float>();
 
-var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>(11);
-var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>(22).Add<int, byte>();
-var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>(33);
+var e0 = world.Spawn().Set<float>(1f).Set<byte>(default).Set<int>(11);
+var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).Add<int, byte>();
+var e2 = world.Spawn().Set<float>(3f).Set<byte>(default).Set<int>(33);
 ref var fff = ref e0.Get<int>();
 world.PrintGraph();
 
@@ -128,7 +128,7 @@ unsafe
 				ref var cmp = ref cmpA[i];
 				var entity = it.Entity(i);
 
-				Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity.ID, cmp.Size, cmp.ID);
+				Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size, cmp.ID);
 			}
 		});
 

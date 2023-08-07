@@ -44,7 +44,27 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe ref T Set<T>(EntityID id, T component = default) where T : unmanaged
+	public unsafe void Set<T>(EntityID id) where T : unmanaged
+	{
+		EcsAssert.Assert(_main.IsAlive(id));
+
+		ref var cmp = ref _main.Component<T>(true);
+		if (_main.Has(id, ref cmp))
+		{
+			return;
+		}
+
+		ref var set = ref _set.CreateNew(out _);
+		set.Entity = id;
+		set.Component = cmp;
+
+		if (set.Data.Length < set.Component.Size)
+		{
+			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
+		}
+	}
+
+	public unsafe ref T Set<T>(EntityID id, T component) where T : unmanaged
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
@@ -67,11 +87,6 @@ public sealed class Commands
 		}
 
 		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Component.Size));
-
-		if (Unsafe.IsNullRef(ref component))
-		{
-
-		}
 
 		if (!Unsafe.IsNullRef(ref reference))
 		{
@@ -204,7 +219,13 @@ public readonly ref struct CommandEntityView
 
 	public readonly EntityID ID => _id;
 
-	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged
+	public readonly CommandEntityView Set<T>() where T : unmanaged
+	{
+		_cmds.Set<T>(_id);
+		return this;
+	}
+
+	public readonly CommandEntityView Set<T>(T cmp) where T : unmanaged
 	{
 		_cmds.Set(_id, cmp);
 		return this;
