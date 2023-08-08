@@ -262,6 +262,13 @@ public sealed class World : IDisposable
 	public void Pair(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
+		// if (Has<EcsComponent>(id))
+		// {
+		// 	ref var cmp2 = ref Get<EcsComponent>(id);
+		// 	Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+		// 	return;
+		// }
+
 		var cmp = new EcsComponent(id, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
@@ -323,6 +330,12 @@ public sealed class World : IDisposable
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
+		if (Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(id);
+			return Has(entity, ref cmp2);
+		}
+
 		var cmp = new EcsComponent(id, 0);
 		return Has(entity, ref cmp);
 	}

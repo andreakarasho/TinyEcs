@@ -73,6 +73,13 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Unset(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
+		// if (World.Has<EcsComponent>(id))
+		// {
+		// 	ref var cmp2 = ref World.Get<EcsComponent>(id);
+		// 	World.DetachComponent(ID, ref cmp2);
+		// 	return this;
+		// }
+
 		var cmp = new EcsComponent(id, 0);
 		World.DetachComponent(ID, ref cmp);
 		return this;
@@ -81,7 +88,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{
-		World.Set<EcsEnabled>(ID);
+		World.Tag<EcsEnabled>(ID);
 		return this;
 	}
 
@@ -107,6 +114,12 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	{
 		var world = World;
 		var id = world.Component<TKind, TTarget>();
+		// if (world.Has<EcsComponent>(id))
+		// {
+		// 	ref var cmp2 = ref world.Get<EcsComponent>(id);
+		// 	return world.Has(id, ref cmp2);
+		// }
+
 		var cmp = new EcsComponent(id, 0);
 		return world.Has(ID, ref cmp);
 	}

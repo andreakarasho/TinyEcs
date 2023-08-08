@@ -145,7 +145,7 @@ public sealed class Commands
 
 	public unsafe void Pair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Pair(id, _main.Component<TKind>(false).ID,  _main.Component<TTarget>(false).ID);
+		Pair(id, _main.Component<TKind>(true).ID,  _main.Component<TTarget>(true).ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged
@@ -154,6 +154,17 @@ public sealed class Commands
 
 		ref var cmp = ref _main.Component<T>();
 
+		ref var unset = ref _unset.CreateNew(out _);
+		unset.Entity = id;
+		unset.Component = cmp;
+	}
+
+	public void Unset<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
+	{
+		EcsAssert.Assert(_main.IsAlive(id));
+
+		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, _main.Component<TTarget>(true).ID);
+		var cmp = new EcsComponent(cmpID, 0);
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;
 		unset.Component = cmp;
@@ -179,7 +190,6 @@ public sealed class Commands
 
 		return _main.Has<T>(entity);
 	}
-
 
 	public void Merge()
 	{
@@ -276,6 +286,14 @@ public readonly ref struct CommandEntityView
 	public readonly CommandEntityView Unset<T>() where T : unmanaged
 	{
 		_cmds.Unset<T>(_id);
+		return this;
+	}
+
+	public readonly CommandEntityView Unset<TKind, TTarget>()
+		where TKind : unmanaged
+		where TTarget : unmanaged
+	{
+		_cmds.Unset<TKind, TTarget>(_id);
 		return this;
 	}
 
