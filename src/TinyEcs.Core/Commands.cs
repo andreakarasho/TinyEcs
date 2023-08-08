@@ -66,7 +66,7 @@ public sealed class Commands
 
 	public unsafe void Tag(EntityID id, EntityID tag)
 	{
-		if (Has<EcsComponent>(tag))
+		if (_main.IsAlive(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref _main.Component<EcsComponent>();
 			Tag(id, ref cmp2);
@@ -139,7 +139,15 @@ public sealed class Commands
 
 	public unsafe void Pair(EntityID id, EntityID first, EntityID second)
 	{
-		var cmp = new EcsComponent(IDOp.Pair(first, second), 0);
+		var cmpID = IDOp.Pair(first, second);
+		if (_main.IsAlive(cmpID) && Has<EcsComponent>(cmpID))
+		{
+			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
+			Pair(id, ref cmp2);
+			return;
+		}
+
+		var cmp = new EcsComponent(cmpID, 0);
 		Pair(id, ref cmp);
 	}
 
@@ -171,6 +179,16 @@ public sealed class Commands
 		EcsAssert.Assert(_main.IsAlive(id));
 
 		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, _main.Component<TTarget>(true).ID);
+
+		if (_main.IsAlive(cmpID) && _main.Has<EcsComponent>(cmpID))
+		{
+			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
+			ref var unset2 = ref _unset.CreateNew(out _);
+			unset2.Entity = id;
+			unset2.Component = cmp2;
+			return;
+		}
+
 		var cmp = new EcsComponent(cmpID, 0);
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;

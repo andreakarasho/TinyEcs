@@ -69,16 +69,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		return Unset(World.Component<TKind>(true).ID, World.Component<TTarget>(true).ID);
 	}
 
+	public readonly EntityView Unset<TKind>(EntityID target) where TKind : unmanaged
+	{
+		return Unset(World.Component<TKind>(true).ID, target);
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		// if (World.Has<EcsComponent>(id))
-		// {
-		// 	ref var cmp2 = ref World.Get<EcsComponent>(id);
-		// 	World.DetachComponent(ID, ref cmp2);
-		// 	return this;
-		// }
+		if (World.IsAlive(id) && World.Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref World.Get<EcsComponent>(id);
+			World.DetachComponent(ID, ref cmp2);
+			return this;
+		}
 
 		var cmp = new EcsComponent(id, 0);
 		World.DetachComponent(ID, ref cmp);
@@ -114,11 +119,11 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	{
 		var world = World;
 		var id = world.Component<TKind, TTarget>();
-		// if (world.Has<EcsComponent>(id))
-		// {
-		// 	ref var cmp2 = ref world.Get<EcsComponent>(id);
-		// 	return world.Has(id, ref cmp2);
-		// }
+		if (world.IsAlive(id) && world.Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref world.Get<EcsComponent>(id);
+			return world.Has(id, ref cmp2);
+		}
 
 		var cmp = new EcsComponent(id, 0);
 		return world.Has(ID, ref cmp);

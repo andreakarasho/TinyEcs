@@ -275,12 +275,12 @@ public sealed class World : IDisposable
 	public void Pair(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		// if (Has<EcsComponent>(id))
-		// {
-		// 	ref var cmp2 = ref Get<EcsComponent>(id);
-		// 	Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
-		// 	return;
-		// }
+		if (IsAlive(id) && Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(id);
+			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+			return;
+		}
 
 		var cmp = new EcsComponent(id, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
@@ -293,7 +293,7 @@ public sealed class World : IDisposable
 
 	public void Tag(EntityID entity, EntityID tag)
 	{
-		if (Has<EcsComponent>(tag))
+		if (IsAlive(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(tag);
 			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
@@ -335,6 +335,11 @@ public sealed class World : IDisposable
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, ref Component<T>());
 
+	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
+	{
+		return Has(entity, Component<TKind>().ID, target);
+	}
+
 	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
 	{
 		return Has(entity, Component<TKind>().ID, Component<TTarget>().ID);
@@ -343,7 +348,7 @@ public sealed class World : IDisposable
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (Has<EcsComponent>(id))
+		if (IsAlive(id) && Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(id);
 			return Has(entity, ref cmp2);
