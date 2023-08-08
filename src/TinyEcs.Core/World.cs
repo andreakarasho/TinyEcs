@@ -96,6 +96,19 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
+		if (Has<EcsParent>(entity))
+		{
+			Query()
+				.With<EcsChild>(entity)
+				.Iterate((ref Iterator it) => {
+					var childCmp = it.World.Component<EcsChild>(true).ID;
+					for (int i = it.Count - 1; i >= 0; i--)
+					{
+						it.Entity(i).Unset(childCmp, entity);
+					}
+				});
+		}
+
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 

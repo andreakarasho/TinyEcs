@@ -124,6 +124,33 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		return world.Has(ID, ref cmp);
 	}
 
+	public readonly EntityView ChildOf(EntityID parent)
+	{
+		World.Pair(ID, World.Component<EcsChild>(true).ID, parent);
+		World.Tag<EcsParent>(parent);
+		return this;
+	}
+
+	public readonly void EachChildren(Action<EntityView> action)
+	{
+		EcsAssert.Assert(World.Has<EcsParent>(ID));
+
+		World.Query()
+			.With<EcsChild>(ID)
+			.Iterate((ref Iterator it) => {
+				for (int i = 0, count = it.Count; i < count; ++i)
+					action(it.Entity(i));
+			});
+	}
+
+	public readonly void ClearChildren()
+	{
+		var id = World.Component<EcsChild>().ID;
+		var myID = ID; // lol
+		EachChildren(v => v.Unset(id, myID));
+		World.Unset<EcsParent>(ID);
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Despawn()
 		=> World.Despawn(ID);

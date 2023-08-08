@@ -143,6 +143,13 @@ public sealed class Commands
 		Pair(id, ref cmp);
 	}
 
+	public unsafe void Pair<TKind>(EntityID id, EntityID target) where TKind : unmanaged
+	{
+		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, target);
+		var cmp = new EcsComponent(cmpID, 0);
+		Pair(id, ref cmp);
+	}
+
 	public unsafe void Pair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
 		Pair(id, _main.Component<TKind>(true).ID,  _main.Component<TTarget>(true).ID);
@@ -275,6 +282,12 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
+	public readonly CommandEntityView Pair<TKind>(EntityID target) where TKind : unmanaged
+	{
+		_cmds.Pair<TKind>(_id, target);
+		return this;
+	}
+
 	public readonly CommandEntityView Pair<TKind, TTarget>()
 		where TKind : unmanaged
 		where TTarget : unmanaged
@@ -311,5 +324,12 @@ public readonly ref struct CommandEntityView
 	public readonly bool Has<T>() where T : unmanaged
 	{
 		return _cmds.Has<T>(_id);
+	}
+
+	public readonly CommandEntityView ChildOf(EntityID parent)
+	{
+		Pair<EcsChild>(parent);
+		_cmds.Tag<EcsParent>(parent);
+		return this;
 	}
 }

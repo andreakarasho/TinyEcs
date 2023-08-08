@@ -12,8 +12,22 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = new World();
 
-for (int i = 0; i < 100; ++i)
-	world.Spawn();
+var main = world.Spawn();
+
+for (int i = 0; i < 10; ++i)
+	world.Spawn().ChildOf(main);
+
+main.EachChildren(s => {
+	Console.WriteLine("child id {0}", s.ID);
+});
+
+
+//main.Despawn();
+main.ClearChildren();
+
+world.Query().With<EcsChild>(main.ID).Iterate(static (ref Iterator it) => {
+	Console.WriteLine("found children");
+});
 // var cmds = new Commands(world);
 // var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
 // //ref var floatt = ref e.Get<float>();
