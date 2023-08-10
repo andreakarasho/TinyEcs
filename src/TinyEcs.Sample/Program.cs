@@ -13,12 +13,18 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 using var world = new World();
 
 var main = world.Spawn();
-
+var secondMain = world.Spawn();
 for (int i = 0; i < 10; ++i)
-	world.Spawn().ChildOf(main);
+	world.Spawn().ChildOf(main).ChildOf(secondMain);
 
-main.EachChildren(s => {
+main.Children(s => {
+	var p = s.Parent();
 	Console.WriteLine("child id {0}", s.ID);
+});
+
+secondMain.Children(s => {
+	var p = s.Parent();
+	Console.WriteLine("secondMain child id {0}", s.ID);
 });
 
 

@@ -7,11 +7,12 @@ public sealed class World : IDisposable
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<int, EcsComponent> _components = new();
-
+	private readonly IComparer<EcsComponent> _comparer;
 
 	public World()
 	{
-		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
+		_comparer = new ComponentComparer(this);
+		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 	}
 
 
@@ -57,6 +58,10 @@ public sealed class World : IDisposable
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
 			Tag<EcsEnabled>(cmp.ID);
+			if (asTag)
+			{
+				Tag<EcsTag>(ent.ID);
+			}
 		}
 
 		return ref cmp;
@@ -96,7 +101,7 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
-		if (Has<EcsParent>(entity))
+		if (GetParent(entity) != EntityView.Invalid)
 		{
 			Query()
 				.With<EcsChild>(entity)
@@ -185,7 +190,7 @@ public sealed class World : IDisposable
 		{
 			initType.CopyTo(span);
 			span[^1] = cmp;
-			span.Sort();
+			span.Sort(_comparer);
 		}
 
 		var hash = Hash(span, false);
@@ -201,7 +206,7 @@ public sealed class World : IDisposable
 				table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out exists)!;
 				if (!exists)
 				{
-					table = new Table(tableHash, span);
+					table = new Table(tableHash, span, _comparer);
 				}
 			}
 			else
@@ -367,6 +372,40 @@ public sealed class World : IDisposable
 		EcsAssert.Assert(!raw.IsEmpty);
 
 		return ref MemoryMarshal.GetReference(raw);
+	}
+
+	public EntityView GetParent(EntityID id)
+	{
+		ref var record = ref GetRecord(id);
+
+		var pair = IDOp.Pair(Component<EcsChild>().ID, Component<EcsAny>().ID);
+		var cmp = new EcsComponent(pair, 0);
+		var column = record.Archetype.GetComponentIndex(ref cmp);
+
+		if (column >= 0)
+		{
+			ref var meta = ref record.Archetype.ComponentInfo[column];
+
+			return new EntityView(this, IDOp.GetPairSecond(meta.ID));
+		}
+
+		// for (var i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
+		// {
+		// 	ref var meta = ref record.Archetype.ComponentInfo[i];
+
+		// 	if (IDOp.IsPair(meta.ID))
+		// 	{
+		// 		var first = IDOp.GetPairFirst(meta.ID);
+		// 		var second = IDOp.GetPairSecond(meta.ID);
+
+		// 		if (first == cmpID)
+		// 		{
+		// 			return new EntityView(this, second);
+		// 		}
+		// 	}
+		// }
+
+		return EntityView.Invalid;
 	}
 
 	[SkipLocalsInit]

@@ -347,7 +347,6 @@ public readonly ref struct CommandEntityView
 	public readonly CommandEntityView ChildOf(EntityID parent)
 	{
 		Pair<EcsChild>(parent);
-		_cmds.Tag<EcsParent>(parent);
 		return this;
 	}
 }
