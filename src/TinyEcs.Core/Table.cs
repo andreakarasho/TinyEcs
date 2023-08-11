@@ -4,15 +4,17 @@ sealed unsafe class Table
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
+	private readonly IComparer<EcsComponent> _comparer;
 	private readonly void*[] _componentsData;
 	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
 
 
-	internal Table(ulong hash, ReadOnlySpan<EcsComponent> components)
+	internal Table(ulong hash, ReadOnlySpan<EcsComponent> components, IComparer<EcsComponent> comparer)
 	{
 		Hash = hash;
+		_comparer = comparer;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
 
@@ -59,7 +61,7 @@ sealed unsafe class Table
 
 	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
-		return Array.BinarySearch(_componentInfo, cmp);
+		return Array.BinarySearch(_componentInfo, cmp, _comparer);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

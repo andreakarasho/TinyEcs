@@ -12,8 +12,32 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = new World();
 
-for (int i = 0; i < 100; ++i)
-	world.Spawn();
+var main = world.Spawn();
+var secondMain = world.Spawn();
+for (int i = 0; i < 10; ++i)
+	world.Spawn().ChildOf(main).ChildOf(secondMain);
+
+main.Children(s => {
+	var p = s.Parent();
+	Console.WriteLine("child id {0}", s.ID);
+});
+
+secondMain.Children(s => {
+	var p = s.Parent();
+	Console.WriteLine("secondMain child id {0}", s.ID);
+});
+
+
+//main.Despawn();
+//main.ClearChildren();
+
+world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
+	Console.WriteLine("found children");
+});
+
+world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
+	Console.WriteLine("found children for any");
+});
 // var cmds = new Commands(world);
 // var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
 // //ref var floatt = ref e.Get<float>();
@@ -26,9 +50,9 @@ for (int i = 0; i < 100; ++i)
 
 //ref var floatt3 = ref e.Get<float>();
 
-var e0 = world.Spawn().Set<float>(1f).Set<byte>().Set<int>(11);
-var e1 = world.Spawn().Set<float>(2f).Set<byte>().Set<int>(22).Add<int, byte>();
-var e2 = world.Spawn().Set<float>(3f).Set<byte>().Set<int>(33);
+var e0 = world.Spawn().Set<float>(1f).Set<byte>(default).Set<int>(11);
+var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).SetPair<int, byte>();
+var e2 = world.Spawn().Set<float>(3f).Set<byte>(default).Set<int>(33);
 ref var fff = ref e0.Get<int>();
 world.PrintGraph();
 
@@ -66,15 +90,15 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.Add<Likes, Dogs>()
-	.Add<Likes, Apples>()
-	.Add(pos.ID)
-	.Add(likes.ID, cats.ID)
-	.Add(likes.ID, flowers.ID)
-	.Add(childOf.ID, root)
+	.SetPair<Likes, Dogs>()
+	.SetPair<Likes, Apples>()
+	.SetTag(pos.ID)
+	.SetPair(likes.ID, cats.ID)
+	.SetPair(likes.ID, flowers.ID)
+	.SetPair(childOf.ID, root)
 	.ID;
 
-var posID = ecs.Component<Position>();
+ref var posID = ref ecs.Component<Position>();
 var pairLikesDogID = ecs.Component<Likes, Dogs>();
 
 var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9 });
@@ -116,8 +140,6 @@ ecs.Entity(id).Each(static s =>
 
 unsafe
 {
-	var query = ecs.Query().With<Position>().With<Velocity>().Without<float>();
-
 	ecs.Query()
 		.With<EcsComponent>()
 		.Iterate(static (ref Iterator it) => {
@@ -128,13 +150,14 @@ unsafe
 				ref var cmp = ref cmpA[i];
 				var entity = it.Entity(i);
 
-				Console.WriteLine("component --> ID: {0} - SIZE: {1} - CMP ID: {2}", entity.ID, cmp.Size, cmp.ID);
+				Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size, cmp.ID);
 			}
 		});
 
 
 	ecs.StartupSystem(&Setup);
 	//ecs.System(&PrintSystem, 1f);
+	//ecs.System(&PrintComponents, ecs.Query().With<EcsComponent>(), 1f);
 	ecs.System(&ParseQuery, ecs.Query()
 		.With<Position>()
 		.With<Velocity>()
@@ -172,19 +195,30 @@ static void Setup(ref Iterator it)
 		it.Commands!.Spawn()
 			.Set<Position>()
 			.Set<Velocity>()
-			.Set<int>()
-			.Set<short>()
-			.Set<byte>()
-			.Set<decimal>()
-			.Set<uint>()
-			.Set<ushort>()
-			.Add<Likes, Dogs>()
+			.SetTag<int>()
+			.SetTag<short>()
+			.SetTag<byte>()
+			.SetTag<decimal>()
+			.SetTag<uint>()
+			.SetTag<ushort>()
+			.SetPair<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()
 		.Set(new Serial() { Value = 0xDEAD_BEEF });
 
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
+}
+
+static void PrintComponents(ref Iterator it)
+{
+	var cmpA = it.Field<EcsComponent>();
+
+	for (int i = 0; i < it.Count; ++i)
+	{
+		ref var cmp = ref cmpA[i];
+		Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", cmp.ID, cmp.Size, cmp.ID);
+	}
 }
 
 static void ParseQuery(ref Iterator it)

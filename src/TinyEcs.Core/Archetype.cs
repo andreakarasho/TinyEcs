@@ -5,14 +5,16 @@ public sealed class Archetype
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
 	private readonly World _world;
+	private readonly IComparer<EcsComponent> _comparer;
 	private int _capacity, _count;
 	private ArchetypeEntity[] _entities;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
 	private readonly Table _table;
 
 
-	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components)
+	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components, IComparer<EcsComponent> comparer)
 	{
+		_comparer = comparer;
 		_world = world;
 		_table = table;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
@@ -36,7 +38,7 @@ public sealed class Archetype
 	{
 		if (cmp.Size <= 0)
 		{
-			return Array.BinarySearch(ComponentInfo, cmp);
+			return Array.BinarySearch(ComponentInfo, cmp, _comparer);
 		}
 
 		return _table.GetComponentIndex(ref cmp);
@@ -72,7 +74,7 @@ public sealed class Archetype
 
 	internal Archetype InsertVertex(Archetype left, Table table, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
 	{
-		var vertex = new Archetype(left._world, table, components);
+		var vertex = new Archetype(left._world, table, components, _comparer);
 		MakeEdges(left, vertex, component.ID);
 		InsertVertex(vertex);
 		return vertex;
@@ -94,7 +96,7 @@ public sealed class Archetype
 		return toRow;
 	}
 
-	internal Span<T> GetComponentRaw<T>(ref EcsComponent cmp, int row, int count) where T : unmanaged
+	internal Span<T> ComponentData<T>(ref EcsComponent cmp, int row, int count) where T : unmanaged
 	{
 		EcsAssert.Assert(row >= 0);
 		EcsAssert.Assert(row < _entities.Length);

@@ -7,11 +7,16 @@ public sealed class World : IDisposable
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<int, EcsComponent> _components = new();
-
+	private readonly IComparer<EcsComponent> _comparer;
 
 	public World()
 	{
-		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty), ReadOnlySpan<EcsComponent>.Empty);
+		_comparer = new ComponentComparer(this);
+		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
+
+
+		var id = Component<EcsChildOf>().ID;
+		SetTag<EcsExclusive>(id);
 	}
 
 
@@ -46,22 +51,28 @@ public sealed class World : IDisposable
 	// }
 
 
-	public ref EcsComponent Component<T>() where T : unmanaged
+	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
 		if (!exists || !IsAlive(cmp.ID))
 		{
 			var ent = SpawnEmpty();
-			cmp = new EcsComponent(ent.ID, TypeInfo<T>.Size);
+			var size = asTag ? 0 : sizeof(T);
+			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
+			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
-			Set<EcsEnabled>(cmp.ID);
+			SetTag<EcsEnabled>(cmp.ID);
+			if (asTag)
+			{
+				SetTag<EcsTag>(ent.ID);
+			}
 		}
 
 		return ref cmp;
 	}
 
 	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
+		=> IDOp.Pair(Component<TKind>(true).ID, Component<TTarget>(true).ID);
 
 	public QueryBuilder Query()
 		=> new (this);
@@ -71,7 +82,7 @@ public sealed class World : IDisposable
 			.Set(new EcsSystem(system, query, terms, tick));
 
 	public EntityView Spawn()
-		=> SpawnEmpty().Set<EcsEnabled>();
+		=> SpawnEmpty().SetTag<EcsEnabled>();
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -93,6 +104,18 @@ public sealed class World : IDisposable
 	public void Despawn(EntityID entity)
 	{
 		ref var record = ref GetRecord(entity);
+
+		//if (GetParent(entity) != 0)
+		{
+			Query()
+				.With<EcsChildOf>(entity)
+				.Iterate(static (ref Iterator it) => {
+					for (int i = it.Count - 1; i >= 0; i--)
+					{
+						it.Entity(i).Despawn();
+					}
+				});
+		}
 
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
@@ -170,7 +193,7 @@ public sealed class World : IDisposable
 		{
 			initType.CopyTo(span);
 			span[^1] = cmp;
-			span.Sort();
+			span.Sort(_comparer);
 		}
 
 		var hash = Hash(span, false);
@@ -186,7 +209,7 @@ public sealed class World : IDisposable
 				table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out exists)!;
 				if (!exists)
 				{
-					table = new Table(tableHash, span);
+					table = new Table(tableHash, span, _comparer);
 				}
 			}
 			else
@@ -226,6 +249,8 @@ public sealed class World : IDisposable
 
 	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
+		EcsAssert.Assert(cmp.Size == data.Length);
+
 		ref var record = ref GetRecord(entity);
 
 		var column = record.Archetype.GetComponentIndex(ref cmp);
@@ -255,10 +280,67 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
+	public void SetPair(EntityID entity, EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		if (IsAlive(id) && Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(id);
+			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+			return;
+		}
+
+		if (Has<EcsExclusive>(first))
+		{
+			ref var record = ref GetRecord(entity);
+			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
+			var cmp3 = new EcsComponent(id2, 0);
+			var column = record.Archetype.GetComponentIndex(ref cmp3);
+
+			if (column >= 0)
+			{
+				DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
+			}
+		}
+
+		var cmp = new EcsComponent(id, 0);
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
+	public void SetPair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	{
+		SetPair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
+	}
+
+	public void SetTag(EntityID entity, EntityID tag)
+	{
+		if (IsAlive(tag) && Has<EcsComponent>(tag))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(tag);
+			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+
+			return;
+		}
+
+		var cmp = new EcsComponent(tag, 0);
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
+	public void SetTag<T>(EntityID entity) where T : unmanaged
+	{
+		ref var cmp = ref Component<T>(true);
+
+		EcsAssert.Assert(cmp.Size <= 0);
+
+		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+	}
+
 	[SkipLocalsInit]
 	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
 	{
-		ref var cmp = ref Component<T>();
+		ref var cmp = ref Component<T>(false);
+
+		EcsAssert.Assert(cmp.Size > 0);
 
 		Set
 		(
@@ -274,15 +356,72 @@ public sealed class World : IDisposable
 	public bool Has<T>(EntityID entity) where T : unmanaged
 		=> Has(entity, ref Component<T>());
 
+	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
+	{
+		return Has(entity, Component<TKind>().ID, target);
+	}
+
+	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	{
+		return Has(entity, Component<TKind>().ID, Component<TTarget>().ID);
+	}
+
+	public bool Has(EntityID entity, EntityID first, EntityID second)
+	{
+		var id = IDOp.Pair(first, second);
+		if (IsAlive(id) && Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref Get<EcsComponent>(id);
+			return Has(entity, ref cmp2);
+		}
+
+		var cmp = new EcsComponent(id, 0);
+		return Has(entity, ref cmp);
+	}
+
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>();
 		ref var record = ref GetRecord(entity);
-		var raw = record.Archetype.GetComponentRaw<T>(ref cmp, record.Row, 1);
+		var raw = record.Archetype.ComponentData<T>(ref cmp, record.Row, 1);
 
 		EcsAssert.Assert(!raw.IsEmpty);
 
 		return ref MemoryMarshal.GetReference(raw);
+	}
+
+	public EntityID GetParent(EntityID id)
+	{
+		ref var record = ref GetRecord(id);
+
+		var pair = IDOp.Pair(Component<EcsChildOf>().ID, Component<EcsAny>().ID);
+		var cmp = new EcsComponent(pair, 0);
+		var column = record.Archetype.GetComponentIndex(ref cmp);
+
+		if (column >= 0)
+		{
+			ref var meta = ref record.Archetype.ComponentInfo[column];
+
+			return IDOp.GetPairSecond(meta.ID);
+		}
+
+		// for (var i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
+		// {
+		// 	ref var meta = ref record.Archetype.ComponentInfo[i];
+
+		// 	if (IDOp.IsPair(meta.ID))
+		// 	{
+		// 		var first = IDOp.GetPairFirst(meta.ID);
+		// 		var second = IDOp.GetPairSecond(meta.ID);
+
+		// 		if (first == cmpID)
+		// 		{
+		// 			return new EntityView(this, second);
+		// 		}
+		// 	}
+		// }
+
+		return 0;
 	}
 
 	[SkipLocalsInit]

@@ -2,66 +2,85 @@
 {
     public class Relation
     {
-        // [Fact]
-        // public void Relation_Child_Attach_To_Parent()
-        // {
-        //     using var world = new World();
+		[Fact]
+		public void Attach_ChildOf()
+		{
+			using var world = new World();
 
-        //     var parent = world.Spawn();
-        //     var child = world.Spawn();
+			var root = world.Spawn();
+			var child = world.Spawn();
 
-        //     child.AttachTo(parent);
+			child.ChildOf(root);
 
-        //     Assert.Equal(child.Get<EcsChild>().Parent, parent);
-        // }
+			Assert.True(world.Has<EcsChildOf>(child, root));
+		}
 
-        // [Fact]
-        // public void Relation_Child_Detach_From_Parent()
-        // {
-        //     using var world = new World();
+		[Fact]
+		public void Detach_ChildOf()
+		{
+			using var world = new World();
 
-        //     var parent = world.Spawn();
-        //     var child = world.Spawn();
+			var root = world.Spawn();
+			var child = world.Spawn();
 
-        //     child.AttachTo(parent);
-        //     child.Detach();
+			child.ChildOf(root);
+			child.Unset<EcsChildOf>(root);
 
-        //     Assert.False(child.Has<EcsChild>());
-        // }
+			Assert.False(world.Has<EcsChildOf>(child, root));
+		}
 
-        // [Fact]
-        // public void Relation_Child_Switch_Parent()
-        // {
-        //     using var world = new World();
+		[Fact]
+		public void Count_Children()
+		{
+			using var world = new World();
 
-        //     var parent1 = world.Spawn();
-        //     var parent2 = world.Spawn();
-        //     var child = world.Spawn();
+			var root = world.Spawn();
 
-        //     child.AttachTo(parent1);
-        //     child.AttachTo(parent2);
+			var count = 100;
+			for (int i = 0; i < count; ++i)
+				world.Spawn().ChildOf(root);
 
-        //     Assert.False(parent1.Has<EcsParent>());
-        //     Assert.True(parent2.Has<EcsParent>());
-        //     Assert.Equal(parent2.Get<EcsParent>().FirstChild, child);
-        // }
+			var done = 0;
+			root.Children(s => done += 1);
 
-        // [Fact]
-        // public void Relation_Attach_Multiple_Child_To_A_Parent_Then_Cleanup()
-        // {
-        //     using var world = new World();
+			Assert.Equal(count, done);
+		}
 
-        //     var parent = world.Spawn();
-        //     var count = 1000;
+		[Fact]
+		public void Clear_Children()
+		{
+			using var world = new World();
 
-        //     for (int i = 0; i < count; ++i)
-        //         world.Spawn().AttachTo(parent);
+			var root = world.Spawn();
 
-        //     Assert.Equal(parent.Get<EcsParent>().ChildrenCount, count);
+			var count = 100;
+			for (int i = 0; i < count; ++i)
+				world.Spawn().ChildOf(root);
 
-        //     parent.RemoveChildren();
+			root.ClearChildren();
+			var done = 0;
+			root.Children(s => done += 1);
 
-        //     Assert.False(parent.Has<EcsParent>());
-        // }
+			Assert.Equal(0, done);
+		}
+
+		[Fact]
+		public void Exclusive_Relation()
+		{
+			using var world = new World();
+
+			var root = world.Spawn();
+			var platoonCmp = world.Spawn().SetTag<EcsExclusive>();
+			var platoon1 = world.Spawn();
+			var platoon2 = world.Spawn();
+			var unit = world.Spawn();
+
+			unit.SetPair(platoonCmp, platoon1);
+			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+
+			unit.SetPair(platoonCmp, platoon2);
+			Assert.False(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon2.ID));
+		}
     }
 }

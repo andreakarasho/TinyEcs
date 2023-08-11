@@ -30,6 +30,13 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView SetTag<T>() where T : unmanaged
+	{
+		World.SetTag<T>(ID);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Set<T>(T component = default) where T : unmanaged
 	{
 		World.Set(ID, component);
@@ -37,17 +44,15 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Add<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public readonly EntityView SetPair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 	{
-		return Add(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+		return SetPair(World.Component<TKind>(true).ID, World.Component<TTarget>(true).ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Add(EntityID first, EntityID second)
+	public readonly EntityView SetPair(EntityID first, EntityID second)
 	{
-		var id = IDOp.Pair(first, second);
-		var cmp = new EcsComponent(id, 0);
-		World.Set(ID, ref cmp, ReadOnlySpan<byte>.Empty);
+		World.SetPair(ID, first, second);
 		return this;
 	}
 
@@ -61,13 +66,25 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 	{
-		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+		return Unset(World.Component<TKind>(true).ID, World.Component<TTarget>(true).ID);
+	}
+
+	public readonly EntityView Unset<TKind>(EntityID target) where TKind : unmanaged
+	{
+		return Unset(World.Component<TKind>(true).ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
+		if (World.IsAlive(id) && World.Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref World.Get<EcsComponent>(id);
+			World.DetachComponent(ID, ref cmp2);
+			return this;
+		}
+
 		var cmp = new EcsComponent(id, 0);
 		World.DetachComponent(ID, ref cmp);
 		return this;
@@ -76,7 +93,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{
-		World.Set<EcsEnabled>(ID);
+		World.SetTag<EcsEnabled>(ID);
 		return this;
 	}
 
@@ -102,8 +119,42 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	{
 		var world = World;
 		var id = world.Component<TKind, TTarget>();
+		if (world.IsAlive(id) && world.Has<EcsComponent>(id))
+		{
+			ref var cmp2 = ref world.Get<EcsComponent>(id);
+			return world.Has(id, ref cmp2);
+		}
+
 		var cmp = new EcsComponent(id, 0);
 		return world.Has(ID, ref cmp);
+	}
+
+	public readonly EntityView ChildOf(EntityID parent)
+	{
+		World.SetPair(ID, World.Component<EcsChildOf>(true).ID, parent);
+		return this;
+	}
+
+	public readonly void Children(Action<EntityView> action)
+	{
+		World.Query()
+			.With<EcsChildOf>(ID)
+			.Iterate((ref Iterator it) => {
+				for (int i = 0, count = it.Count; i < count; ++i)
+					action(it.Entity(i));
+			});
+	}
+
+	public readonly void ClearChildren()
+	{
+		var id = World.Component<EcsChildOf>().ID;
+		var myID = ID; // lol
+		Children(v => v.Unset(id, myID));
+	}
+
+	public readonly EntityView Parent()
+	{
+		return new (World, World.GetParent(ID));
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
