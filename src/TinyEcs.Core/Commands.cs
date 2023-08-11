@@ -30,7 +30,7 @@ public sealed class Commands
 		var ent = _main.SpawnEmpty();
 
 		return new CommandEntityView(this, ent.ID)
-			.Tag<EcsEnabled>();
+			.SetTag<EcsEnabled>();
 	}
 
 	public void Despawn(EntityID id)
@@ -44,7 +44,7 @@ public sealed class Commands
 		}
 	}
 
-	private unsafe void Tag(EntityID id, ref EcsComponent cmp)
+	private unsafe void SetTag(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 		EcsAssert.Assert(cmp.Size <= 0);
@@ -64,23 +64,23 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe void Tag(EntityID id, EntityID tag)
+	public unsafe void SetTag(EntityID id, EntityID tag)
 	{
 		if (_main.IsAlive(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref _main.Component<EcsComponent>();
-			Tag(id, ref cmp2);
+			SetTag(id, ref cmp2);
 			return;
 		}
 
 		var cmp = new EcsComponent(tag, 0);
-		Tag(id, ref cmp);
+		SetTag(id, ref cmp);
 	}
 
-	public unsafe void Tag<T>(EntityID id) where T : unmanaged
+	public unsafe void SetTag<T>(EntityID id) where T : unmanaged
 	{
 		ref var cmp = ref _main.Component<T>(true);
-		Tag(id, ref cmp);
+		SetTag(id, ref cmp);
 	}
 
 	public unsafe ref T Set<T>(EntityID id, T component) where T : unmanaged
@@ -118,7 +118,7 @@ public sealed class Commands
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	private unsafe void Pair(EntityID id, ref EcsComponent cmp)
+	private unsafe void SetPair(EntityID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.IsAlive(id));
 
@@ -137,30 +137,30 @@ public sealed class Commands
 		}
 	}
 
-	public unsafe void Pair(EntityID id, EntityID first, EntityID second)
+	public unsafe void SetPair(EntityID id, EntityID first, EntityID second)
 	{
 		var cmpID = IDOp.Pair(first, second);
 		if (_main.IsAlive(cmpID) && Has<EcsComponent>(cmpID))
 		{
 			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
-			Pair(id, ref cmp2);
+			SetPair(id, ref cmp2);
 			return;
 		}
 
 		var cmp = new EcsComponent(cmpID, 0);
-		Pair(id, ref cmp);
+		SetPair(id, ref cmp);
 	}
 
-	public unsafe void Pair<TKind>(EntityID id, EntityID target) where TKind : unmanaged
+	public unsafe void SetPair<TKind>(EntityID id, EntityID target) where TKind : unmanaged
 	{
 		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, target);
 		var cmp = new EcsComponent(cmpID, 0);
-		Pair(id, ref cmp);
+		SetPair(id, ref cmp);
 	}
 
-	public unsafe void Pair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
+	public unsafe void SetPair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Pair(id, _main.Component<TKind>(true).ID,  _main.Component<TTarget>(true).ID);
+		SetPair(id, _main.Component<TKind>(true).ID,  _main.Component<TTarget>(true).ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged
@@ -282,35 +282,35 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Tag<T>() where T : unmanaged
+	public readonly CommandEntityView SetTag<T>() where T : unmanaged
 	{
-		_cmds.Tag<T>(_id);
+		_cmds.SetTag<T>(_id);
 		return this;
 	}
 
-	public readonly CommandEntityView Tag(EntityID id)
+	public readonly CommandEntityView SetTag(EntityID id)
 	{
-		_cmds.Tag(_id, id);
+		_cmds.SetTag(_id, id);
 		return this;
 	}
 
-	public readonly CommandEntityView Pair(EntityID first, EntityID second)
+	public readonly CommandEntityView SetPair(EntityID first, EntityID second)
 	{
-		_cmds.Pair(_id, first, second);
+		_cmds.SetPair(_id, first, second);
 		return this;
 	}
 
-	public readonly CommandEntityView Pair<TKind>(EntityID target) where TKind : unmanaged
+	public readonly CommandEntityView SetPair<TKind>(EntityID target) where TKind : unmanaged
 	{
-		_cmds.Pair<TKind>(_id, target);
+		_cmds.SetPair<TKind>(_id, target);
 		return this;
 	}
 
-	public readonly CommandEntityView Pair<TKind, TTarget>()
+	public readonly CommandEntityView SetPair<TKind, TTarget>()
 		where TKind : unmanaged
 		where TTarget : unmanaged
 	{
-		_cmds.Pair<TKind, TTarget>(_id);
+		_cmds.SetPair<TKind, TTarget>(_id);
 		return this;
 	}
 
@@ -346,7 +346,7 @@ public readonly ref struct CommandEntityView
 
 	public readonly CommandEntityView ChildOf(EntityID parent)
 	{
-		Pair<EcsChildOf>(parent);
+		SetPair<EcsChildOf>(parent);
 		return this;
 	}
 }

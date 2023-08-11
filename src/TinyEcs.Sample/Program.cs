@@ -51,7 +51,7 @@ world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
 //ref var floatt3 = ref e.Get<float>();
 
 var e0 = world.Spawn().Set<float>(1f).Set<byte>(default).Set<int>(11);
-var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).Pair<int, byte>();
+var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).SetPair<int, byte>();
 var e2 = world.Spawn().Set<float>(3f).Set<byte>(default).Set<int>(33);
 ref var fff = ref e0.Get<int>();
 world.PrintGraph();
@@ -90,12 +90,12 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.Pair<Likes, Dogs>()
-	.Pair<Likes, Apples>()
-	.Tag(pos.ID)
-	.Pair(likes.ID, cats.ID)
-	.Pair(likes.ID, flowers.ID)
-	.Pair(childOf.ID, root)
+	.SetPair<Likes, Dogs>()
+	.SetPair<Likes, Apples>()
+	.SetTag(pos.ID)
+	.SetPair(likes.ID, cats.ID)
+	.SetPair(likes.ID, flowers.ID)
+	.SetPair(childOf.ID, root)
 	.ID;
 
 ref var posID = ref ecs.Component<Position>();
@@ -195,13 +195,13 @@ static void Setup(ref Iterator it)
 		it.Commands!.Spawn()
 			.Set<Position>()
 			.Set<Velocity>()
-			.Tag<int>()
-			.Tag<short>()
-			.Tag<byte>()
-			.Tag<decimal>()
-			.Tag<uint>()
-			.Tag<ushort>()
-			.Pair<Likes, Dogs>()
+			.SetTag<int>()
+			.SetTag<short>()
+			.SetTag<byte>()
+			.SetTag<decimal>()
+			.SetTag<uint>()
+			.SetTag<ushort>()
+			.SetPair<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()

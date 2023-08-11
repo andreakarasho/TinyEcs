@@ -16,7 +16,7 @@ public sealed class World : IDisposable
 
 
 		var id = Component<EcsChildOf>().ID;
-		Tag<EcsExclusive>(id);
+		SetTag<EcsExclusive>(id);
 	}
 
 
@@ -61,10 +61,10 @@ public sealed class World : IDisposable
 			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
-			Tag<EcsEnabled>(cmp.ID);
+			SetTag<EcsEnabled>(cmp.ID);
 			if (asTag)
 			{
-				Tag<EcsTag>(ent.ID);
+				SetTag<EcsTag>(ent.ID);
 			}
 		}
 
@@ -82,7 +82,7 @@ public sealed class World : IDisposable
 			.Set(new EcsSystem(system, query, terms, tick));
 
 	public EntityView Spawn()
-		=> SpawnEmpty().Tag<EcsEnabled>();
+		=> SpawnEmpty().SetTag<EcsEnabled>();
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -280,7 +280,7 @@ public sealed class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	public void Pair(EntityID entity, EntityID first, EntityID second)
+	public void SetPair(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
 		if (IsAlive(id) && Has<EcsComponent>(id))
@@ -307,12 +307,12 @@ public sealed class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void Pair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	public void SetPair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
 	{
-		Pair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
+		SetPair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
 	}
 
-	public void Tag(EntityID entity, EntityID tag)
+	public void SetTag(EntityID entity, EntityID tag)
 	{
 		if (IsAlive(tag) && Has<EcsComponent>(tag))
 		{
@@ -326,7 +326,7 @@ public sealed class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void Tag<T>(EntityID entity) where T : unmanaged
+	public void SetTag<T>(EntityID entity) where T : unmanaged
 	{
 		ref var cmp = ref Component<T>(true);
 

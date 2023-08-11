@@ -93,7 +93,7 @@ public unsafe ref struct QueryBuilder
 			return new EntityView(_world, _id);
 
 		var ent = _world.Spawn()
-			.Tag<EcsQueryBuilder>();
+			.SetTag<EcsQueryBuilder>();
 
 		_id = ent.ID;
 
