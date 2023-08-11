@@ -41,10 +41,10 @@ public unsafe ref struct QueryBuilder
 		=> With(_world.Component<T>().ID);
 
 	public QueryBuilder With<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> With(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
+		=> With(_world.Component<TKind>(true).ID, _world.Component<TTarget>(true).ID);
 
 	public QueryBuilder With<TKind>(EntityID target) where TKind : unmanaged
-		=> With(IDOp.Pair(_world.Component<TKind>().ID, target));
+		=> With(IDOp.Pair(_world.Component<TKind>(true).ID, target));
 
 	public QueryBuilder With(EntityID first, EntityID second)
 		=> With(IDOp.Pair(first, second));

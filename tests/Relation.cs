@@ -12,7 +12,7 @@
 
 			child.ChildOf(root);
 
-			Assert.True(world.Has<EcsChild>(child, root));
+			Assert.True(world.Has<EcsChildOf>(child, root));
 		}
 
 		[Fact]
@@ -24,9 +24,9 @@
 			var child = world.Spawn();
 
 			child.ChildOf(root);
-			child.Unset<EcsChild>(root);
+			child.Unset<EcsChildOf>(root);
 
-			Assert.False(world.Has<EcsChild>(child, root));
+			Assert.False(world.Has<EcsChildOf>(child, root));
 		}
 
 		[Fact]
@@ -62,6 +62,25 @@
 			root.Children(s => done += 1);
 
 			Assert.Equal(0, done);
+		}
+
+		[Fact]
+		public void Exclusive_Relation()
+		{
+			using var world = new World();
+
+			var root = world.Spawn();
+			var platoonCmp = world.Spawn().Tag<EcsExclusive>();
+			var platoon1 = world.Spawn();
+			var platoon2 = world.Spawn();
+			var unit = world.Spawn();
+
+			unit.Pair(platoonCmp, platoon1);
+			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+
+			unit.Pair(platoonCmp, platoon2);
+			Assert.False(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon2.ID));
 		}
     }
 }

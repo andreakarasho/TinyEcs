@@ -29,10 +29,14 @@ secondMain.Children(s => {
 
 
 //main.Despawn();
-main.ClearChildren();
+//main.ClearChildren();
 
-world.Query().With<EcsChild>(main.ID).Iterate(static (ref Iterator it) => {
+world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
 	Console.WriteLine("found children");
+});
+
+world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
+	Console.WriteLine("found children for any");
 });
 // var cmds = new Commands(world);
 // var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();

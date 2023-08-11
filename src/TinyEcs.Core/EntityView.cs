@@ -131,14 +131,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	public readonly EntityView ChildOf(EntityID parent)
 	{
-		World.Pair(ID, World.Component<EcsChild>(true).ID, parent);
+		World.Pair(ID, World.Component<EcsChildOf>(true).ID, parent);
 		return this;
 	}
 
 	public readonly void Children(Action<EntityView> action)
 	{
 		World.Query()
-			.With<EcsChild>(ID)
+			.With<EcsChildOf>(ID)
 			.Iterate((ref Iterator it) => {
 				for (int i = 0, count = it.Count; i < count; ++i)
 					action(it.Entity(i));
@@ -147,14 +147,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	public readonly void ClearChildren()
 	{
-		var id = World.Component<EcsChild>().ID;
+		var id = World.Component<EcsChildOf>().ID;
 		var myID = ID; // lol
 		Children(v => v.Unset(id, myID));
 	}
 
 	public readonly EntityView Parent()
 	{
-		return World.GetParent(ID);
+		return new (World, World.GetParent(ID));
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -13,6 +13,10 @@ public sealed class World : IDisposable
 	{
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
+
+
+		var id = Component<EcsChildOf>().ID;
+		Tag<EcsExclusive>(id);
 	}
 
 
@@ -101,10 +105,10 @@ public sealed class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
-		if (GetParent(entity) != EntityView.Invalid)
+		//if (GetParent(entity) != 0)
 		{
 			Query()
-				.With<EcsChild>(entity)
+				.With<EcsChildOf>(entity)
 				.Iterate(static (ref Iterator it) => {
 					for (int i = it.Count - 1; i >= 0; i--)
 					{
@@ -286,6 +290,19 @@ public sealed class World : IDisposable
 			return;
 		}
 
+		if (Has<EcsExclusive>(first))
+		{
+			ref var record = ref GetRecord(entity);
+			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
+			var cmp3 = new EcsComponent(id2, 0);
+			var column = record.Archetype.GetComponentIndex(ref cmp3);
+
+			if (column >= 0)
+			{
+				DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
+			}
+		}
+
 		var cmp = new EcsComponent(id, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
@@ -373,11 +390,11 @@ public sealed class World : IDisposable
 		return ref MemoryMarshal.GetReference(raw);
 	}
 
-	public EntityView GetParent(EntityID id)
+	public EntityID GetParent(EntityID id)
 	{
 		ref var record = ref GetRecord(id);
 
-		var pair = IDOp.Pair(Component<EcsChild>().ID, Component<EcsAny>().ID);
+		var pair = IDOp.Pair(Component<EcsChildOf>().ID, Component<EcsAny>().ID);
 		var cmp = new EcsComponent(pair, 0);
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 
@@ -385,7 +402,7 @@ public sealed class World : IDisposable
 		{
 			ref var meta = ref record.Archetype.ComponentInfo[column];
 
-			return new EntityView(this, IDOp.GetPairSecond(meta.ID));
+			return IDOp.GetPairSecond(meta.ID);
 		}
 
 		// for (var i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
@@ -404,7 +421,7 @@ public sealed class World : IDisposable
 		// 	}
 		// }
 
-		return EntityView.Invalid;
+		return 0;
 	}
 
 	[SkipLocalsInit]

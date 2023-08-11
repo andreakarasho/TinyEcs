@@ -47,9 +47,10 @@ public unsafe struct EcsSystem
 	}
 }
 
+public struct EcsExclusive { }
 public struct EcsAny { }
 public struct EcsTag { }
-public struct EcsChild { }
+public struct EcsChildOf { }
 public struct EcsEnabled { }
 public struct EcsSystemPhaseOnUpdate { }
 public struct EcsSystemPhasePreUpdate { }
