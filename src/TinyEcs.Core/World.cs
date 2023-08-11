@@ -14,9 +14,7 @@ public sealed partial class World : IDisposable
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 
-
-		var id = Component<EcsChildOf>().ID;
-		SetTag<EcsExclusive>(id);
+		SetTag<EcsExclusive>(Component<EcsChildOf>().ID);
 	}
 
 

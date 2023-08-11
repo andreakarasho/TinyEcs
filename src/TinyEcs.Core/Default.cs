@@ -50,7 +50,6 @@ public unsafe struct EcsSystem
 public struct EcsExclusive { }
 public struct EcsAny { }
 public struct EcsTag { }
-public struct EcsObserver { }
 public struct EcsChildOf { }
 public struct EcsEnabled { }
 public struct EcsSystemPhaseOnUpdate { }
