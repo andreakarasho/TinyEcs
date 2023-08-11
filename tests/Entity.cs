@@ -11,7 +11,7 @@ namespace TinyEcs.Tests
             using var world = new World();
             var entity = world.Spawn();
 
-            Assert.True(entity.IsAlive());
+            Assert.True(entity.Exists());
         }
 
         [Fact]
@@ -33,10 +33,10 @@ namespace TinyEcs.Tests
             e2.Despawn();
             e2 = world.Spawn();
 
-            Assert.True(e1.IsAlive());
-            Assert.True(e2.IsAlive());
-            Assert.True(e3.IsAlive());
-            Assert.True(e4.IsAlive());
+            Assert.True(e1.Exists());
+            Assert.True(e2.Exists());
+            Assert.True(e3.Exists());
+            Assert.True(e4.Exists());
         }
 
         [Fact]

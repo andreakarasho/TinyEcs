@@ -14,7 +14,7 @@ sealed unsafe class Ecs
 
 	public EntityView Entity(EntityID id)
 	{
-		EcsAssert.Assert(_world.IsAlive(id));
+		EcsAssert.Assert(_world.Exists(id));
 
 		return new EntityView(_world, id);
 	}

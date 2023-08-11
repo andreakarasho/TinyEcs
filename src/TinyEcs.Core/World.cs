@@ -54,7 +54,7 @@ public sealed class World : IDisposable
 	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
-		if (!exists || !IsAlive(cmp.ID))
+		if (!exists || !Exists(cmp.ID))
 		{
 			var ent = SpawnEmpty();
 			var size = asTag ? 0 : sizeof(T);
@@ -125,7 +125,7 @@ public sealed class World : IDisposable
 		_entities.Remove(removedId);
 	}
 
-	public bool IsAlive(EntityID entity)
+	public bool Exists(EntityID entity)
 		=> _entities.Contains(entity);
 
 	private void AttachComponent(ref EcsRecord record, ref EcsComponent cmp)
@@ -283,7 +283,7 @@ public sealed class World : IDisposable
 	public void SetPair(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (IsAlive(id) && Has<EcsComponent>(id))
+		if (Exists(id) && Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(id);
 			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
@@ -314,7 +314,7 @@ public sealed class World : IDisposable
 
 	public void SetTag(EntityID entity, EntityID tag)
 	{
-		if (IsAlive(tag) && Has<EcsComponent>(tag))
+		if (Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(tag);
 			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
@@ -369,7 +369,7 @@ public sealed class World : IDisposable
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (IsAlive(id) && Has<EcsComponent>(id))
+		if (Exists(id) && Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(id);
 			return Has(entity, ref cmp2);

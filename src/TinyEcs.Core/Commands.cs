@@ -20,7 +20,7 @@ public sealed class Commands
 
 	public CommandEntityView Entity(EntityID id)
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		return new CommandEntityView(this, id);
 	}
@@ -35,7 +35,7 @@ public sealed class Commands
 
 	public void Despawn(EntityID id)
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		ref var entity = ref _despawn.Get(id);
 		if (Unsafe.IsNullRef(ref entity))
@@ -46,7 +46,7 @@ public sealed class Commands
 
 	private unsafe void SetTag(EntityID id, ref EcsComponent cmp)
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 		EcsAssert.Assert(cmp.Size <= 0);
 
 		if (_main.Has(id, ref cmp))
@@ -66,7 +66,7 @@ public sealed class Commands
 
 	public unsafe void SetTag(EntityID id, EntityID tag)
 	{
-		if (_main.IsAlive(tag) && Has<EcsComponent>(tag))
+		if (_main.Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref _main.Component<EcsComponent>();
 			SetTag(id, ref cmp2);
@@ -85,7 +85,7 @@ public sealed class Commands
 
 	public unsafe ref T Set<T>(EntityID id, T component) where T : unmanaged
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		ref var cmp = ref _main.Component<T>();
 		EcsAssert.Assert(cmp.Size > 0);
@@ -120,7 +120,7 @@ public sealed class Commands
 
 	private unsafe void SetPair(EntityID id, ref EcsComponent cmp)
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		if (_main.Has(id, ref cmp))
 		{
@@ -140,7 +140,7 @@ public sealed class Commands
 	public unsafe void SetPair(EntityID id, EntityID first, EntityID second)
 	{
 		var cmpID = IDOp.Pair(first, second);
-		if (_main.IsAlive(cmpID) && Has<EcsComponent>(cmpID))
+		if (_main.Exists(cmpID) && Has<EcsComponent>(cmpID))
 		{
 			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
 			SetPair(id, ref cmp2);
@@ -165,7 +165,7 @@ public sealed class Commands
 
 	public void Unset<T>(EntityID id) where T : unmanaged
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		ref var cmp = ref _main.Component<T>();
 
@@ -176,11 +176,11 @@ public sealed class Commands
 
 	public void Unset<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		EcsAssert.Assert(_main.IsAlive(id));
+		EcsAssert.Assert(_main.Exists(id));
 
 		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, _main.Component<TTarget>(true).ID);
 
-		if (_main.IsAlive(cmpID) && _main.Has<EcsComponent>(cmpID))
+		if (_main.Exists(cmpID) && _main.Has<EcsComponent>(cmpID))
 		{
 			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
 			ref var unset2 = ref _unset.CreateNew(out _);
@@ -197,7 +197,7 @@ public sealed class Commands
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
-		EcsAssert.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.Exists(entity));
 
 		if (_main.Has<T>(entity))
 		{
@@ -211,7 +211,7 @@ public sealed class Commands
 
 	public bool Has<T>(EntityID entity) where T : unmanaged
 	{
-		EcsAssert.Assert(_main.IsAlive(entity));
+		EcsAssert.Assert(_main.Exists(entity));
 
 		return _main.Has<T>(entity);
 	}
@@ -225,14 +225,14 @@ public sealed class Commands
 
 		foreach (ref var set in _set)
 		{
-			EcsAssert.Assert(_main.IsAlive(set.Entity));
+			EcsAssert.Assert(_main.Exists(set.Entity));
 
 			_main.Set(set.Entity, ref set.Component, set.Component.Size <= 0 ? ReadOnlySpan<byte>.Empty : set.Data.Span.Slice(0, set.Component.Size));
 		}
 
 		foreach (ref var unset in _unset)
 		{
-			EcsAssert.Assert(_main.IsAlive(unset.Entity));
+			EcsAssert.Assert(_main.Exists(unset.Entity));
 
 			_main.DetachComponent(unset.Entity, ref unset.Component);
 		}

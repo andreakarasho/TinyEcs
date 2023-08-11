@@ -78,7 +78,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	public readonly EntityView Unset(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (World.IsAlive(id) && World.Has<EcsComponent>(id))
+		if (World.Exists(id) && World.Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref World.Get<EcsComponent>(id);
 			World.DetachComponent(ID, ref cmp2);
@@ -119,7 +119,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	{
 		var world = World;
 		var id = world.Component<TKind, TTarget>();
-		if (world.IsAlive(id) && world.Has<EcsComponent>(id))
+		if (world.Exists(id) && world.Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref world.Get<EcsComponent>(id);
 			return world.Has(id, ref cmp2);
@@ -162,8 +162,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		=> World.Despawn(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsAlive()
-		=> World.IsAlive(ID);
+	public readonly bool Exists()
+		=> World.Exists(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsEnabled()
