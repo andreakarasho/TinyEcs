@@ -105,11 +105,10 @@ public sealed class World : IDisposable
 		{
 			Query()
 				.With<EcsChild>(entity)
-				.Iterate((ref Iterator it) => {
-					var childCmp = it.World.Component<EcsChild>(true).ID;
+				.Iterate(static (ref Iterator it) => {
 					for (int i = it.Count - 1; i >= 0; i--)
 					{
-						it.Entity(i).Unset(childCmp, entity);
+						it.Entity(i).Despawn();
 					}
 				});
 		}
