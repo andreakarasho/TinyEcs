@@ -96,11 +96,12 @@ public sealed class Archetype
 		return toRow;
 	}
 
-	internal Span<T> ComponentData<T>(ref EcsComponent cmp, int row, int count) where T : unmanaged
+	internal Span<T> ComponentData<T>(int row, int count) where T : unmanaged
 	{
 		EcsAssert.Assert(row >= 0);
 		EcsAssert.Assert(row < _entities.Length);
 
+		ref var cmp = ref _world.Component<T>();
 		var column = GetComponentIndex(ref cmp);
 		EcsAssert.Assert(column >= 0);
 

@@ -131,7 +131,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	public readonly EntityView ChildOf(EntityID parent)
 	{
-		World.SetPair(ID, World.Component<EcsChildOf>(true).ID, parent);
+		World.SetPair<EcsChildOf>(ID, parent);
 		return this;
 	}
 

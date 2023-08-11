@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public sealed class World : IDisposable
+public sealed partial class World : IDisposable
 {
 	private readonly Archetype _archRoot;
 	private readonly EntitySparseSet<EcsRecord> _entities = new();
@@ -307,11 +307,6 @@ public sealed class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void SetPair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
-	{
-		SetPair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
-	}
-
 	public void SetTag(EntityID entity, EntityID tag)
 	{
 		if (Exists(tag) && Has<EcsComponent>(tag))
@@ -326,46 +321,6 @@ public sealed class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void SetTag<T>(EntityID entity) where T : unmanaged
-	{
-		ref var cmp = ref Component<T>(true);
-
-		EcsAssert.Assert(cmp.Size <= 0);
-
-		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
-	}
-
-	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
-	{
-		ref var cmp = ref Component<T>(false);
-
-		EcsAssert.Assert(cmp.Size > 0);
-
-		Set
-		(
-			entity,
-			ref cmp,
-			new ReadOnlySpan<byte>(&component, cmp.Size)
-		);
-	}
-
-	public void Unset<T>(EntityID entity) where T : unmanaged
-		=> DetachComponent(entity, ref Component<T>());
-
-	public bool Has<T>(EntityID entity) where T : unmanaged
-		=> Has(entity, ref Component<T>());
-
-	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
-	{
-		return Has(entity, Component<TKind>().ID, target);
-	}
-
-	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
-	{
-		return Has(entity, Component<TKind>().ID, Component<TTarget>().ID);
-	}
-
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
@@ -377,17 +332,6 @@ public sealed class World : IDisposable
 
 		var cmp = new EcsComponent(id, 0);
 		return Has(entity, ref cmp);
-	}
-
-	public ref T Get<T>(EntityID entity) where T : unmanaged
-	{
-		ref var cmp = ref Component<T>();
-		ref var record = ref GetRecord(entity);
-		var raw = record.Archetype.ComponentData<T>(ref cmp, record.Row, 1);
-
-		EcsAssert.Assert(!raw.IsEmpty);
-
-		return ref MemoryMarshal.GetReference(raw);
 	}
 
 	public EntityID GetParent(EntityID id)
@@ -423,14 +367,6 @@ public sealed class World : IDisposable
 
 		return 0;
 	}
-
-	[SkipLocalsInit]
-	public void SetSingleton<T>(T component = default) where T : unmanaged
-		=> Set(Component<T>().ID, component);
-
-	public ref T GetSingleton<T>() where T : unmanaged
-		=> ref Get<T>(Component<T>().ID);
-
 
 	public void PrintGraph()
 	{
