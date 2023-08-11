@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class ComponentComparer : IComparer<EcsComponent>
+sealed class ComponentComparer : IComparer<EntityID>, IComparer<EcsComponent>
 {
 	private readonly World _world;
 
@@ -11,12 +11,17 @@ sealed class ComponentComparer : IComparer<EcsComponent>
 
 	public int Compare(EcsComponent x, EcsComponent y)
 	{
-		if (IDOp.IsPair(x.ID) && IDOp.IsPair(y.ID))
+		return Compare(x.ID, y.ID);
+	}
+
+	public int Compare(EntityID x, EntityID y)
+	{
+		if (IDOp.IsPair(x) && IDOp.IsPair(y))
 		{
-			if (IDOp.GetPairFirst(x.ID) == IDOp.GetPairFirst(y.ID))
+			if (IDOp.GetPairFirst(x) == IDOp.GetPairFirst(y))
 			{
 				var any = _world.Component<EcsAny>(true).ID;
-				var secondY = IDOp.GetPairSecond(y.ID);
+				var secondY = IDOp.GetPairSecond(y);
 
 				if (secondY == any)
 				{
@@ -25,6 +30,6 @@ sealed class ComponentComparer : IComparer<EcsComponent>
 			}
 		}
 
-		return (x.ID, x.Size).CompareTo((y.ID, y.Size));
+		return x.CompareTo(y);
 	}
 }

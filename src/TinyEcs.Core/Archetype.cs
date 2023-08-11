@@ -5,14 +5,14 @@ public sealed class Archetype
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
 	private readonly World _world;
-	private readonly IComparer<EcsComponent> _comparer;
+	private readonly ComponentComparer _comparer;
 	private int _capacity, _count;
 	private ArchetypeEntity[] _entities;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
 	private readonly Table _table;
 
 
-	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components, IComparer<EcsComponent> comparer)
+	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components, ComponentComparer comparer)
 	{
 		_comparer = comparer;
 		_world = world;

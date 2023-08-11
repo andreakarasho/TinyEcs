@@ -7,7 +7,7 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<int, EcsComponent> _components = new();
-	private readonly IComparer<EcsComponent> _comparer;
+	private readonly ComponentComparer _comparer;
 
 	public World()
 	{
