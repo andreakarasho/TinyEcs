@@ -6,7 +6,7 @@ public sealed partial class World : IDisposable
 	private readonly EntitySparseSet<EcsRecord> _entities = new();
 	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
-	private readonly Dictionary<int, EcsComponent> _components = new();
+	private readonly Dictionary<nint, EcsComponent> _components = new();
 	private readonly ComponentComparer _comparer;
 
 	public World()
@@ -51,7 +51,7 @@ public sealed partial class World : IDisposable
 
 	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
 	{
-		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, TypeInfo<T>.Hash, out var exists);
+		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, typeof(T).TypeHandle.Value, out var exists);
 		if (!exists || !Exists(cmp.ID))
 		{
 			var ent = SpawnEmpty();
