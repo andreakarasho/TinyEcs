@@ -60,6 +60,7 @@ public sealed partial class World : IDisposable
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
 			SetTag<EcsEnabled>(cmp.ID);
+			SetPair<EcsPanic, EcsDelete>(cmp.ID);
 			if (asTag)
 			{
 				SetTag<EcsTag>(ent.ID);
@@ -102,6 +103,8 @@ public sealed partial class World : IDisposable
 	public void Despawn(EntityID entity)
 	{
 		ref var record = ref GetRecord(entity);
+
+		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity}");
 
 		//if (GetParent(entity) != 0)
 		{

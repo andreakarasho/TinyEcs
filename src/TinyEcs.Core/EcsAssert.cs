@@ -8,4 +8,10 @@ internal static class EcsAssert
 		if (!condition)
 			throw new Exception(message);
 	}
+
+	public static void Panic(bool condition, string? message = null)
+	{
+		if (!condition)
+			throw new Exception($"Panic! {message}");
+	}
 }

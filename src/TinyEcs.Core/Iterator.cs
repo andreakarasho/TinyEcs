@@ -29,12 +29,10 @@ public readonly ref struct Iterator
 
 		var column = _archetype.GetComponentIndex(ref cmp);
 		EcsAssert.Assert(column >= 0);
-		EcsAssert.Assert(cmp.Size > 0);
 		EcsAssert.Assert(cmp.Size == sizeof(T));
 
 		var span = _archetype.Table.ComponentData<T>(column, 0, _archetype.Table.Rows);
-		ref var start = ref MemoryMarshal.GetReference(span);
-		return new FieldIterator<T>(ref start, _archetype.Entities);
+		return new FieldIterator<T>(span, _archetype.Entities);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -57,9 +55,9 @@ public readonly ref struct FieldIterator<T> where T : unmanaged
 	private readonly ref ArchetypeEntity _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal FieldIterator(ref T firstElement, ArchetypeEntity[] entities)
+	internal FieldIterator(Span<T> elements, ArchetypeEntity[] entities)
 	{
-		_firstElement = ref firstElement;
+		_firstElement = ref MemoryMarshal.GetReference(elements);
 		_firstEntity = ref MemoryMarshal.GetArrayDataReference(entities);
 	}
 
