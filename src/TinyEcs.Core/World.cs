@@ -14,9 +14,9 @@ public sealed partial class World : IDisposable
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 
-		Component<EcsExclusive>(true);
-		var id = Component<EcsChildOf>(true).ID;
-		SetTag<EcsExclusive>(id);
+		_ = ref Tag<EcsExclusive>();
+
+		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
 	}
 
 
@@ -50,11 +50,17 @@ public sealed partial class World : IDisposable
 	// 	}
 	// }
 
+	public unsafe ref EcsComponent Tag<T>() where T : unmanaged
+	{
+		ref var cmp = ref Component<T>(true);
+		EcsAssert.Assert(cmp.Size <= 0);
+		return ref cmp;
+	}
 
 	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, typeof(T).TypeHandle.Value, out var exists);
-		if (!exists || !Exists(cmp.ID))
+		if (!exists)
 		{
 			var ent = SpawnEmpty();
 			var size = asTag ? 0 : sizeof(T);
@@ -72,7 +78,7 @@ public sealed partial class World : IDisposable
 		return ref cmp;
 	}
 
-	public EntityID Component<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public EntityID Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 		=> IDOp.Pair(Component<TKind>(true).ID, Component<TTarget>(true).ID);
 
 	public QueryBuilder Query()
@@ -369,6 +375,12 @@ public sealed partial class World : IDisposable
 		// }
 
 		return 0;
+	}
+
+	public ReadOnlySpan<EcsComponent> GetType(EntityID id)
+	{
+		ref var record = ref GetRecord(id);
+		return record.Archetype.ComponentInfo;
 	}
 
 	public void PrintGraph()

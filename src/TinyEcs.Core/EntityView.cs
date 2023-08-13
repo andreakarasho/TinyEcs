@@ -118,7 +118,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		where TTarget : unmanaged
 	{
 		var world = World;
-		var id = world.Component<TKind, TTarget>();
+		var id = world.Pair<TKind, TTarget>();
 		if (world.Exists(id) && world.Has<EcsComponent>(id))
 		{
 			ref var cmp2 = ref world.Get<EcsComponent>(id);
@@ -195,6 +195,9 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 			action(new EntityView(World, record.Archetype.ComponentInfo[i].ID));
 		}
 	}
+
+	public readonly ReadOnlySpan<EcsComponent> Type()
+		=> World.GetType(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static implicit operator EntityID(in EntityView d) => d.ID;

@@ -30,7 +30,7 @@ sealed unsafe class Ecs
 	public EntityID Component<TKind, TTarget>()
 	where TKind : unmanaged
 	where TTarget : unmanaged
-		=> _world.Component<TKind, TTarget>();
+		=> _world.Pair<TKind, TTarget>();
 
 	public void Despawn(EntityID entity)
 		=> _cmds.Despawn(entity);
