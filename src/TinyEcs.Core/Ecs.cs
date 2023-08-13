@@ -64,78 +64,24 @@ sealed unsafe class Ecs
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref _world.GetSingleton<T>();
 
-	[SkipLocalsInit]
 	public unsafe void Step(float delta = 0.0f)
 	{
 		_world.DeltaTime = delta;
 
 		_cmds.Merge();
 
-		Span<Term> terms = stackalloc Term[] {
-			new () { ID = _world.Component<EcsEnabled>().ID, Op = TermOp.With },
-			new () { ID = _world.Component<EcsSystem>().ID, Op = TermOp.With },
-			new () { ID = 0, Op = TermOp.With}
-		};
-
-		Span<EntityID> sequence = stackalloc EntityID[3];
-
 		if (_frame == 0)
 		{
-			sequence[0] = _world.Component<EcsSystemPhasePreStartup>().ID;
-			sequence[1] = _world.Component<EcsSystemPhaseOnStartup>().ID;
-			sequence[2] = _world.Component<EcsSystemPhasePostStartup>().ID;
-
-			for (int i = 0; i < 3; ++i)
-			{
-				terms[^1].ID = sequence[i];
-				_world.Query(terms, _cmds, &RunSystems);
-			}
+			_world.RunPhase(_world.Tag<EcsSystemPhasePreStartup>().ID, _cmds);
+			_world.RunPhase(_world.Tag<EcsSystemPhaseOnStartup>().ID, _cmds);
+			_world.RunPhase(_world.Tag<EcsSystemPhasePostStartup>().ID, _cmds);
 		}
 
-		sequence[0] = _world.Component<EcsSystemPhasePreUpdate>().ID;
-		sequence[1] = _world.Component<EcsSystemPhaseOnUpdate>().ID;
-		sequence[2] = _world.Component<EcsSystemPhasePostUpdate>().ID;
-
-		for (int i = 0; i < 3; ++i)
-		{
-			terms[^1].ID = sequence[i];
-			_world.Query(terms, _cmds, &RunSystems);
-		}
+		_world.RunPhase(_world.Tag<EcsSystemPhasePreUpdate>().ID, _cmds);
+		_world.RunPhase(_world.Tag<EcsSystemPhaseOnUpdate>().ID, _cmds);
+		_world.RunPhase(_world.Tag<EcsSystemPhasePostUpdate>().ID, _cmds);
 
 		_cmds.Merge();
 		_frame += 1;
-	}
-
-
-	static unsafe void RunSystems(ref Iterator it)
-	{
-		var sysA = it.Field<EcsSystem>();
-
-		for (int i = 0; i < it.Count; ++i)
-		{
-			ref var sys = ref sysA[i];
-
-			if (!float.IsNaN(sys.Tick))
-			{
-				// TODO: check for it.DeltaTime > 0?
-				sys.TickCurrent += it.DeltaTime;
-
-				if (sys.TickCurrent < sys.Tick)
-				{
-					continue;
-				}
-
-				sys.TickCurrent = 0;
-			}
-
-			if (sys.Query != 0)
-			{
-				it.World.Query(sys.Terms, it.Commands!, sys.Func);
-			}
-			else
-			{
-				sys.Func(ref it);
-			}
-		}
 	}
 }

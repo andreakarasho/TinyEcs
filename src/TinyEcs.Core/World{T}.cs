@@ -14,7 +14,7 @@ public sealed partial class World
 
 	public void SetTag<T>(EntityID entity) where T : unmanaged
 	{
-		ref var cmp = ref Component<T>(true);
+		ref var cmp = ref Tag<T>();
 
 		EcsAssert.Assert(cmp.Size <= 0);
 

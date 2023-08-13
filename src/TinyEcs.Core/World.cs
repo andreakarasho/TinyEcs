@@ -14,7 +14,19 @@ public sealed partial class World : IDisposable
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 
-		_ = ref Tag<EcsExclusive>();
+		 _ = ref Tag<EcsExclusive>();
+		 _ = ref Tag<EcsTag>();
+		 _ = ref Tag<EcsAny>();
+		 _ = ref Tag<EcsPanic>();
+		 _ = ref Tag<EcsDelete>();
+		 _ = ref Tag<EcsChildOf>();
+		 _ = ref Tag<EcsEnabled>();
+		 _ = ref Tag<EcsSystemPhasePreStartup>();
+		 _ = ref Tag<EcsSystemPhaseOnStartup>();
+		 _ = ref Tag<EcsSystemPhasePostStartup>();
+		 _ = ref Tag<EcsSystemPhasePreUpdate>();
+		 _ = ref Tag<EcsSystemPhaseOnUpdate>();
+		 _ = ref Tag<EcsSystemPhasePostUpdate>();
 
 		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
 	}
@@ -79,7 +91,7 @@ public sealed partial class World : IDisposable
 	}
 
 	public EntityID Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Component<TKind>(true).ID, Component<TTarget>(true).ID);
+		=> IDOp.Pair(Tag<TKind>().ID, Tag<TTarget>().ID);
 
 	public QueryBuilder Query()
 		=> new (this);
@@ -175,6 +187,9 @@ public sealed partial class World : IDisposable
 		{
 			return null;
 		}
+
+		// if (!add && root.GetComponentIndex(ref cmp) < 0)
+		// 	return null;
 
 		var initType = root.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
@@ -302,7 +317,7 @@ public sealed partial class World : IDisposable
 		if (Has<EcsExclusive>(first))
 		{
 			ref var record = ref GetRecord(entity);
-			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
+			var id2 = IDOp.Pair(first, Tag<EcsAny>().ID);
 			var cmp3 = new EcsComponent(id2, 0);
 			var column = record.Archetype.GetComponentIndex(ref cmp3);
 
@@ -347,7 +362,7 @@ public sealed partial class World : IDisposable
 	{
 		ref var record = ref GetRecord(id);
 
-		var pair = IDOp.Pair(Component<EcsChildOf>().ID, Component<EcsAny>().ID);
+		var pair = Pair<EcsChildOf, EcsAny>();
 		var cmp = new EcsComponent(pair, 0);
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 
@@ -357,22 +372,6 @@ public sealed partial class World : IDisposable
 
 			return IDOp.GetPairSecond(meta.ID);
 		}
-
-		// for (var i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
-		// {
-		// 	ref var meta = ref record.Archetype.ComponentInfo[i];
-
-		// 	if (IDOp.IsPair(meta.ID))
-		// 	{
-		// 		var first = IDOp.GetPairFirst(meta.ID);
-		// 		var second = IDOp.GetPairSecond(meta.ID);
-
-		// 		if (first == cmpID)
-		// 		{
-		// 			return new EntityView(this, second);
-		// 		}
-		// 	}
-		// }
 
 		return 0;
 	}
@@ -386,6 +385,50 @@ public sealed partial class World : IDisposable
 	public void PrintGraph()
 	{
 		_archRoot.Print();
+	}
+
+	[SkipLocalsInit]
+	public unsafe void RunPhase(EntityID phase, Commands cmds)
+	{
+		Span<Term> terms = stackalloc Term[] {
+			new () { ID = Tag<EcsEnabled>().ID, Op = TermOp.With },
+			new () { ID = Component<EcsSystem>().ID, Op = TermOp.With },
+			new () { ID = phase, Op = TermOp.With}
+		};
+
+		Query(terms, cmds, &RunSystems);
+	}
+
+	static unsafe void RunSystems(ref Iterator it)
+	{
+		var sysA = it.Field<EcsSystem>();
+
+		for (int i = 0; i < it.Count; ++i)
+		{
+			ref var sys = ref sysA[i];
+
+			if (!float.IsNaN(sys.Tick))
+			{
+				// TODO: check for it.DeltaTime > 0?
+				sys.TickCurrent += it.DeltaTime;
+
+				if (sys.TickCurrent < sys.Tick)
+				{
+					continue;
+				}
+
+				sys.TickCurrent = 0;
+			}
+
+			if (sys.Query != 0)
+			{
+				it.World.Query(sys.Terms, it.Commands!, sys.Func);
+			}
+			else
+			{
+				sys.Func(ref it);
+			}
+		}
 	}
 
 	public unsafe void Query

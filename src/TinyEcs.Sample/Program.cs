@@ -41,44 +41,6 @@ world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
 world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
 	Console.WriteLine("found children for any");
 });
-// var cmds = new Commands(world);
-// var e = cmds.Spawn().Set<float>(22.0f).Set<byte>();
-// //ref var floatt = ref e.Get<float>();
-// cmds.Merge();
-
-// e.Set<int>(55);
-// e.Set<double>(2.0);
-
-// cmds.Merge();
-
-//ref var floatt3 = ref e.Get<float>();
-
-var e0 = world.Spawn().Set<float>(1f).Set<byte>(default).Set<int>(11);
-var e1 = world.Spawn().Set<float>(2f).Set<byte>(default).Set<int>(22).SetPair<int, byte>();
-var e2 = world.Spawn().Set<float>(3f).Set<byte>(default).Set<int>(33);
-ref var fff = ref e0.Get<int>();
-world.PrintGraph();
-
-world.Query()
-	.With<float>().With<int>()
-	//.Without<int, byte>()
-	.Iterate(static (ref Iterator a) => {
-		var floatA = a.Field<float>();
-		var intA = a.Field<int>();
-
-		for (int i = 0; i < a.Count; ++i)
-		{
-			var ent = a.Entity(i);
-			if (ent.Has<int, byte>())
-			{
-
-			}
-			ref var ff = ref floatA[i];
-			ref var ii = ref intA[i];
-			Console.WriteLine("ent {0} - float {1} - int {2}", ent.ID, ff,  ii);
-		}
-});
-
 
 var ecs = new Ecs();
 
