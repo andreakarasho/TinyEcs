@@ -129,7 +129,7 @@ public sealed partial class World : IDisposable
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.Row].Entity;
+		var last = record.Archetype.Entities[record.Row];
 		_entities.Get(last) = record;
 		_entities.Remove(removedId);
 	}
@@ -275,7 +275,7 @@ public sealed partial class World : IDisposable
 		var buf = record.Archetype.Table.ComponentData<byte>
 		(
 			column,
-			record.Archetype.Entities[record.Row].TableRow * cmp.Size,
+			record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
 			cmp.Size
 		);
 

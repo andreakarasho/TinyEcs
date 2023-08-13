@@ -16,12 +16,17 @@ sealed class ComponentComparer : IComparer<EntityID>, IComparer<EcsComponent>
 
 	public int Compare(EntityID x, EntityID y)
 	{
-		if (IDOp.IsPair(x) && IDOp.IsPair(y))
+		return CompareTerms(_world, x, y);
+	}
+
+	public static int CompareTerms(World world, EntityID a, EntityID b)
+	{
+		if (IDOp.IsPair(a) && IDOp.IsPair(b))
 		{
-			if (IDOp.GetPairFirst(x) == IDOp.GetPairFirst(y))
+			if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
 			{
-				var any = _world.Component<EcsAny>(true).ID;
-				var secondY = IDOp.GetPairSecond(y);
+				var any = world.Tag<EcsAny>().ID;
+				var secondY = IDOp.GetPairSecond(b);
 
 				if (secondY == any)
 				{
@@ -30,6 +35,6 @@ sealed class ComponentComparer : IComparer<EntityID>, IComparer<EcsComponent>
 			}
 		}
 
-		return x.CompareTo(y);
+		return a.CompareTo(b);
 	}
 }

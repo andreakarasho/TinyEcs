@@ -32,7 +32,7 @@ public readonly ref struct Iterator
 		EcsAssert.Assert(cmp.Size == sizeof(T));
 
 		var span = _archetype.Table.ComponentData<T>(column, 0, _archetype.Table.Rows);
-		return new FieldIterator<T>(span, _archetype.Entities);
+		return new FieldIterator<T>(span, _archetype.EntitiesTableRows);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -45,17 +45,17 @@ public readonly ref struct Iterator
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Entity(int row)
-		=> new (World, _archetype.Entities[row].Entity);
+		=> new (World, _archetype.Entities[row]);
 }
 
 [SkipLocalsInit]
 public readonly ref struct FieldIterator<T> where T : unmanaged
 {
 	private readonly ref T _firstElement;
-	private readonly ref ArchetypeEntity _firstEntity;
+	private readonly ref int _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal FieldIterator(Span<T> elements, ArchetypeEntity[] entities)
+	internal FieldIterator(Span<T> elements, int[] entities)
 	{
 		_firstElement = ref MemoryMarshal.GetReference(elements);
 		_firstEntity = ref MemoryMarshal.GetArrayDataReference(entities);
@@ -64,6 +64,6 @@ public readonly ref struct FieldIterator<T> where T : unmanaged
 	public readonly ref T this[int index]
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref Unsafe.Add(ref _firstElement, Unsafe.Add(ref _firstEntity, index).TableRow);
+		get => ref Unsafe.Add(ref _firstElement, Unsafe.Add(ref _firstEntity, index));
 	}
 }

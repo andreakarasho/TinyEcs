@@ -7,7 +7,8 @@ public sealed class Archetype
 	private readonly World _world;
 	private readonly ComponentComparer _comparer;
 	private int _capacity, _count;
-	private ArchetypeEntity[] _entities;
+	private EntityID[] _entities;
+	private int[] _entitiesTableRows;
 	internal List<EcsEdge> _edgesLeft, _edgesRight;
 	private readonly Table _table;
 
@@ -19,13 +20,15 @@ public sealed class Archetype
 		_table = table;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
-		_entities = new ArchetypeEntity[ARCHETYPE_INITIAL_CAPACITY];
+		_entities = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
+		_entitiesTableRows = new int[ARCHETYPE_INITIAL_CAPACITY];
 		_edgesLeft = new List<EcsEdge>();
 		_edgesRight = new List<EcsEdge>();
 		ComponentInfo = components.ToArray();
 	}
 
-	internal ArchetypeEntity[] Entities => _entities;
+	internal EntityID[] Entities => _entities;
+	internal int[] EntitiesTableRows => _entitiesTableRows;
 	public World World => _world;
 	public int Count => _count;
 	internal Table Table => _table;
@@ -51,25 +54,25 @@ public sealed class Archetype
 			_capacity *= 2;
 
 			Array.Resize(ref _entities, _capacity);
+			Array.Resize(ref _entitiesTableRows, _capacity);
 		}
 
-		ref var archEnt = ref _entities[_count];
-		archEnt.Entity = entityID;
-		archEnt.TableRow = tableRow < 0 ? _table.Add(entityID) : tableRow;
+		_entities[_count] = entityID;
+		var row = tableRow < 0 ? _table.Add(entityID) : tableRow;
+		_entitiesTableRows[_count] = row;
 
-		return (_count++, archEnt.TableRow);
+		return (_count++, row);
 	}
 
 	internal EntityID Remove(ref EcsRecord record)
 	{
-		var removed = _entities[record.Row];
-		_entities[record.Row] = _entities[_count - 1];
+		(var removed, var removedRow) = SwapWithLast(record.Row);
 
-		_table.Remove(removed.TableRow);
+		_table.Remove(removedRow);
 
 		--_count;
 
-		return removed.Entity;
+		return removed;
 	}
 
 	internal Archetype InsertVertex(Archetype left, Table table, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
@@ -82,14 +85,13 @@ public sealed class Archetype
 
 	internal int MoveEntity(Archetype to, int fromRow)
 	{
-		var removed = _entities[fromRow];
-		_entities[fromRow] = _entities[_count - 1];
+		(var removed, var removedRow) = SwapWithLast(fromRow);
 
 		var sameTable = _table.Hash == to.Table.Hash;
-		(var toRow, var toTableRow) = to.Add(removed.Entity, sameTable ? removed.TableRow : -1);
+		(var toRow, var toTableRow) = to.Add(removed, sameTable ? removedRow : -1);
 
 		if (!sameTable)
-			_table.MoveTo(removed.TableRow, to._table, toTableRow);
+			_table.MoveTo(removedRow, to._table, toTableRow);
 
 		--_count;
 
@@ -108,7 +110,7 @@ public sealed class Archetype
 		if (cmp.Size <= 0)
 			return Span<T>.Empty;
 
-		return _table.ComponentData<T>(column, _entities[row].TableRow, count);
+		return _table.ComponentData<T>(column, _entitiesTableRows[row], count);
 	}
 
 	internal void Clear()
@@ -130,6 +132,16 @@ public sealed class Archetype
 		// }
 	}
 
+	private (EntityID, int) SwapWithLast(int fromRow)
+	{
+		var removed = _entities[fromRow];
+		_entities[fromRow] = _entities[_count - 1];
+
+		var removedRow = _entitiesTableRows[fromRow];
+		_entitiesTableRows[fromRow] = _entitiesTableRows[_count - 1];
+
+		return (removed, removedRow);
+	}
 
 	private static void MakeEdges(Archetype left, Archetype right, EntityID id)
 	{
@@ -198,7 +210,7 @@ public sealed class Archetype
 
 		while (currents.CanAdvance() && searching.CanAdvance())
 		{
-			if (currents.Value.ID == searching.Value.ID)
+			if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
 			{
 				if (searching.Value.Op != TermOp.With)
 				{
@@ -244,8 +256,3 @@ struct EcsEdge
 	public Archetype Archetype;
 }
 
-struct ArchetypeEntity
-{
-	public EntityID Entity;
-	public int TableRow;
-}
