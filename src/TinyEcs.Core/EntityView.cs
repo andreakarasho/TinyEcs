@@ -57,6 +57,12 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView SetPair<TKind>(EntityID target) where TKind : unmanaged
+	{
+		return SetPair(World.Tag<TKind>().ID, target);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView SetPair(EntityID first, EntityID second)
 	{
 		World.SetPair(ID, first, second);

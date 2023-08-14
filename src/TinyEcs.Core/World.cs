@@ -23,7 +23,7 @@ public sealed partial class World : IDisposable
 
 	public int EntityCount => _entities.Length;
 
-	public float DeltaTime { get; internal set; }
+	public float DeltaTime { get; private set; }
 
 
 
@@ -46,6 +46,8 @@ public sealed partial class World : IDisposable
 		_ = ref Tag<EcsDelete>();
 		_ = ref Tag<EcsChildOf>();
 		_ = ref Tag<EcsEnabled>();
+		_ = ref Tag<EcsPhase>();
+
 		_ = ref Tag<EcsSystemPhasePreStartup>();
 		_ = ref Tag<EcsSystemPhaseOnStartup>();
 		_ = ref Tag<EcsSystemPhasePostStartup>();
@@ -54,6 +56,7 @@ public sealed partial class World : IDisposable
 		_ = ref Tag<EcsSystemPhasePostUpdate>();
 
 		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
+		SetTag<EcsExclusive>(Tag<EcsPhase>().ID);
 	}
 
 	// public void Optimize()
@@ -101,6 +104,9 @@ public sealed partial class World : IDisposable
 
 	public EntityID Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 		=> IDOp.Pair(Tag<TKind>().ID, Tag<TTarget>().ID);
+
+	public EntityID Pair<TKind>(EntityID target) where TKind : unmanaged
+		=> IDOp.Pair(Tag<TKind>().ID, target);
 
 	public QueryBuilder Query()
 		=> new (this);
@@ -422,14 +428,14 @@ public sealed partial class World : IDisposable
 
 		if (_frame == 0)
 		{
-			RunPhase(Tag<EcsSystemPhasePreStartup>().ID);
-			RunPhase(Tag<EcsSystemPhaseOnStartup>().ID);
-			RunPhase(Tag<EcsSystemPhasePostStartup>().ID);
+			RunPhase(Pair<EcsPhase, EcsSystemPhasePreStartup>());
+			RunPhase(Pair<EcsPhase, EcsSystemPhaseOnStartup>());
+			RunPhase(Pair<EcsPhase, EcsSystemPhasePostStartup>());
 		}
 
-		RunPhase(Tag<EcsSystemPhasePreUpdate>().ID);
-		RunPhase(Tag<EcsSystemPhaseOnUpdate>().ID);
-		RunPhase(Tag<EcsSystemPhasePostUpdate>().ID);
+		RunPhase(Pair<EcsPhase, EcsSystemPhasePreUpdate>());
+		RunPhase(Pair<EcsPhase, EcsSystemPhaseOnUpdate>());
+		RunPhase(Pair<EcsPhase, EcsSystemPhasePostUpdate>());
 
 		_commands.Merge();
 		_frame += 1;

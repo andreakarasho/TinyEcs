@@ -47,6 +47,7 @@ public unsafe struct EcsSystem
 	}
 }
 
+public struct EcsPhase { }
 public struct EcsPanic { }
 public struct EcsDelete { }
 public struct EcsExclusive { }

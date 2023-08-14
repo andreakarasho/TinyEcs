@@ -68,21 +68,24 @@ public sealed partial class World
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.SetTag<EcsSystemPhaseOnStartup>();
+			.SetPair<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.SetTag<EcsSystemPhaseOnUpdate>();
+			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, tick)
-			.SetTag<EcsSystemPhaseOnUpdate>();
+			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
 		=> System(system, query.Build(), query.Terms, float.NaN)
-			.SetTag<EcsSystemPhaseOnUpdate>();
+			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
 		=> System(system, query.Build(), query.Terms, tick)
-			.SetTag<EcsSystemPhaseOnUpdate>();
+			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+	public void RunPhase<TPhase>() where TPhase : unmanaged
+		=> RunPhase(Pair<EcsPhase, TPhase>());
 }
