@@ -42,7 +42,7 @@ world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
 	Console.WriteLine("found children for any");
 });
 
-var ecs = new Ecs();
+var ecs = new World();
 
 
 var pos = ecs.Spawn();
@@ -64,7 +64,7 @@ var id = ecs.Spawn()
 	.ID;
 
 ref var posID = ref ecs.Component<Position>();
-var pairLikesDogID = ecs.Component<Likes, Dogs>();
+var pairLikesDogID = ecs.Pair<Likes, Dogs>();
 
 var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9 });
 

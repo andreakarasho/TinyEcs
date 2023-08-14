@@ -8,27 +8,16 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
 	private readonly Dictionary<nint, EcsComponent> _components = new();
 	private readonly ComponentComparer _comparer;
+	private readonly Commands _commands;
+	private int _frame;
 
 	public World()
 	{
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
+		_commands = new (this);
 
-		 _ = ref Tag<EcsExclusive>();
-		 _ = ref Tag<EcsTag>();
-		 _ = ref Tag<EcsAny>();
-		 _ = ref Tag<EcsPanic>();
-		 _ = ref Tag<EcsDelete>();
-		 _ = ref Tag<EcsChildOf>();
-		 _ = ref Tag<EcsEnabled>();
-		 _ = ref Tag<EcsSystemPhasePreStartup>();
-		 _ = ref Tag<EcsSystemPhaseOnStartup>();
-		 _ = ref Tag<EcsSystemPhasePostStartup>();
-		 _ = ref Tag<EcsSystemPhasePreUpdate>();
-		 _ = ref Tag<EcsSystemPhaseOnUpdate>();
-		 _ = ref Tag<EcsSystemPhasePostUpdate>();
-
-		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
+		RegisterDefaults();
 	}
 
 
@@ -45,6 +34,26 @@ public sealed partial class World : IDisposable
 		_typeIndex.Clear();
 		_components.Clear();
 		_tableIndex.Clear();
+		_commands.Clear();
+	}
+
+	private void RegisterDefaults()
+	{
+		_ = ref Tag<EcsExclusive>();
+		_ = ref Tag<EcsTag>();
+		_ = ref Tag<EcsAny>();
+		_ = ref Tag<EcsPanic>();
+		_ = ref Tag<EcsDelete>();
+		_ = ref Tag<EcsChildOf>();
+		_ = ref Tag<EcsEnabled>();
+		_ = ref Tag<EcsSystemPhasePreStartup>();
+		_ = ref Tag<EcsSystemPhaseOnStartup>();
+		_ = ref Tag<EcsSystemPhasePostStartup>();
+		_ = ref Tag<EcsSystemPhasePreUpdate>();
+		_ = ref Tag<EcsSystemPhaseOnUpdate>();
+		_ = ref Tag<EcsSystemPhasePostUpdate>();
+
+		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
 	}
 
 	// public void Optimize()
@@ -99,6 +108,12 @@ public sealed partial class World : IDisposable
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
 			.Set(new EcsSystem(system, query, terms, tick));
+
+	public EntityView Entity(EntityID id)
+	{
+		EcsAssert.Assert(Exists(id));
+		return new(this, id);
+	}
 
 	public EntityView Spawn()
 		=> SpawnEmpty().SetTag<EcsEnabled>();
@@ -388,7 +403,7 @@ public sealed partial class World : IDisposable
 	}
 
 	[SkipLocalsInit]
-	public unsafe void RunPhase(EntityID phase, Commands cmds)
+	public unsafe void RunPhase(EntityID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
 			new () { ID = Tag<EcsEnabled>().ID, Op = TermOp.With },
@@ -396,7 +411,28 @@ public sealed partial class World : IDisposable
 			new () { ID = phase, Op = TermOp.With}
 		};
 
-		Query(terms, cmds, &RunSystems);
+		Query(terms, &RunSystems);
+	}
+
+	public void Step(float deltaTime = 0.0f)
+	{
+		DeltaTime = deltaTime;
+
+		_commands.Merge();
+
+		if (_frame == 0)
+		{
+			RunPhase(Tag<EcsSystemPhasePreStartup>().ID);
+			RunPhase(Tag<EcsSystemPhaseOnStartup>().ID);
+			RunPhase(Tag<EcsSystemPhasePostStartup>().ID);
+		}
+
+		RunPhase(Tag<EcsSystemPhasePreUpdate>().ID);
+		RunPhase(Tag<EcsSystemPhaseOnUpdate>().ID);
+		RunPhase(Tag<EcsSystemPhasePostUpdate>().ID);
+
+		_commands.Merge();
+		_frame += 1;
 	}
 
 	static unsafe void RunSystems(ref Iterator it)
@@ -422,7 +458,7 @@ public sealed partial class World : IDisposable
 
 			if (sys.Query != 0)
 			{
-				it.World.Query(sys.Terms, it.Commands!, sys.Func);
+				it.World.Query(sys.Terms, sys.Func);
 			}
 			else
 			{
@@ -434,14 +470,13 @@ public sealed partial class World : IDisposable
 	public unsafe void Query
 	(
 		Span<Term> terms,
-		Commands? commands,
 		delegate* <ref Iterator, void> action,
 		object? userData = null
 	)
 	{
 		terms.Sort(static (a, b) => a.ID.CompareTo(b.ID));
 
-		QueryRec(_archRoot, terms, commands, action, userData);
+		QueryRec(_archRoot, terms, _commands, action, userData);
 
 		static void QueryRec
 		(

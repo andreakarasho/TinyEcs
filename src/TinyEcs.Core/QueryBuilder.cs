@@ -41,10 +41,10 @@ public unsafe ref struct QueryBuilder
 		=> With(_world.Component<T>().ID);
 
 	public QueryBuilder With<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> With(_world.Component<TKind>(true).ID, _world.Component<TTarget>(true).ID);
+		=> With(_world.Tag<TKind>().ID, _world.Tag<TTarget>().ID);
 
 	public QueryBuilder With<TKind>(EntityID target) where TKind : unmanaged
-		=> With(IDOp.Pair(_world.Component<TKind>(true).ID, target));
+		=> With(IDOp.Pair(_world.Tag<TKind>().ID, target));
 
 	public QueryBuilder With(EntityID first, EntityID second)
 		=> With(IDOp.Pair(first, second));
@@ -100,9 +100,9 @@ public unsafe ref struct QueryBuilder
 		return ent;
 	}
 
-	public unsafe void Iterate(IteratorDelegate action, Commands? commands = null)
+	public unsafe void Iterate(IteratorDelegate action)
 	{
-		_world.Query(Terms, commands, &IterateSys, action);
+		_world.Query(Terms, &IterateSys, action);
 	}
 
 	static void IterateSys(ref Iterator it)

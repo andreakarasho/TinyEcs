@@ -37,6 +37,13 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView SetTag(EntityID id)
+	{
+		World.SetTag(ID, id);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Set<T>(T component = default) where T : unmanaged
 	{
 		World.Set(ID, component);
@@ -46,7 +53,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView SetPair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 	{
-		return SetPair(World.Component<TKind>(true).ID, World.Component<TTarget>(true).ID);
+		return SetPair(World.Tag<TKind>().ID, World.Tag<TTarget>().ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,12 +73,12 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Unset<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
 	{
-		return Unset(World.Component<TKind>(true).ID, World.Component<TTarget>(true).ID);
+		return Unset(World.Tag<TKind>().ID, World.Tag<TTarget>().ID);
 	}
 
 	public readonly EntityView Unset<TKind>(EntityID target) where TKind : unmanaged
 	{
-		return Unset(World.Component<TKind>(true).ID, target);
+		return Unset(World.Tag<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

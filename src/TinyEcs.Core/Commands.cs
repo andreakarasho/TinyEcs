@@ -79,7 +79,7 @@ public sealed class Commands
 
 	public unsafe void SetTag<T>(EntityID id) where T : unmanaged
 	{
-		ref var cmp = ref _main.Component<T>(true);
+		ref var cmp = ref _main.Tag<T>();
 		SetTag(id, ref cmp);
 	}
 
@@ -153,14 +153,14 @@ public sealed class Commands
 
 	public unsafe void SetPair<TKind>(EntityID id, EntityID target) where TKind : unmanaged
 	{
-		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, target);
+		var cmpID = IDOp.Pair(_main.Tag<TKind>().ID, target);
 		var cmp = new EcsComponent(cmpID, 0);
 		SetPair(id, ref cmp);
 	}
 
 	public unsafe void SetPair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
 	{
-		SetPair(id, _main.Component<TKind>(true).ID,  _main.Component<TTarget>(true).ID);
+		SetPair(id, _main.Tag<TKind>().ID,  _main.Tag<TTarget>().ID);
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged
@@ -178,7 +178,7 @@ public sealed class Commands
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
-		var cmpID = IDOp.Pair(_main.Component<TKind>(true).ID, _main.Component<TTarget>(true).ID);
+		var cmpID = _main.Pair<TKind, TTarget>();
 
 		if (_main.Exists(cmpID) && _main.Has<EcsComponent>(cmpID))
 		{
@@ -242,7 +242,11 @@ public sealed class Commands
 			_main.Despawn(despawn);
 		}
 
+		Clear();
+	}
 
+	public void Clear()
+	{
 		_set.Clear();
 		_unset.Clear();
 		_despawn.Clear();

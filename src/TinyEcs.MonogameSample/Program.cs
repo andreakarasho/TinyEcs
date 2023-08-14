@@ -19,7 +19,7 @@ sealed unsafe class TinyGame : Game
 
 	private readonly GraphicsDeviceManager _graphicsDeviceManager;
 	private SpriteBatch? _spriteBatch;
-	private Ecs _ecs;
+	private World _ecs;
 
 	public TinyGame()
 	{
@@ -40,7 +40,7 @@ sealed unsafe class TinyGame : Game
 		_graphicsDeviceManager.PreferredBackBufferHeight = WINDOW_HEIGHT;
 		_graphicsDeviceManager.ApplyChanges();
 
-		_ecs = new Ecs();
+		_ecs = new World();
 
 		_ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);

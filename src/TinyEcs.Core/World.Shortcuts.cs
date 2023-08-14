@@ -4,12 +4,12 @@ public sealed partial class World
 {
 	public void SetPair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
 	{
-		SetPair(entity, Component<TKind>(true).ID, Component<TTarget>(true).ID);
+		SetPair(entity, Tag<TKind>().ID, Tag<TKind>().ID);
 	}
 
 	public void SetPair<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
 	{
-		SetPair(entity, Component<TKind>(true).ID, target);
+		SetPair(entity, Tag<TKind>().ID, target);
 	}
 
 	public void SetTag<T>(EntityID entity) where T : unmanaged
@@ -43,10 +43,10 @@ public sealed partial class World
 		=> Has(entity, ref Component<T>());
 
 	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
-		=> Has(entity, Component<TKind>().ID, target);
+		=> Has(entity, Tag<TKind>().ID, target);
 
 	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
-		=> Has(entity, Component<TKind>().ID, Component<TTarget>().ID);
+		=> Has(entity, Tag<TKind>().ID, Tag<TKind>().ID);
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged
 	{
@@ -64,4 +64,25 @@ public sealed partial class World
 
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref Get<T>(Component<T>().ID);
+
+
+	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
+		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
+			.SetTag<EcsSystemPhaseOnStartup>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system)
+		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
+			.SetTag<EcsSystemPhaseOnUpdate>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
+		=> System(system, 0, ReadOnlySpan<Term>.Empty, tick)
+			.SetTag<EcsSystemPhaseOnUpdate>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
+		=> System(system, query.Build(), query.Terms, float.NaN)
+			.SetTag<EcsSystemPhaseOnUpdate>();
+
+	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
+		=> System(system, query.Build(), query.Terms, tick)
+			.SetTag<EcsSystemPhaseOnUpdate>();
 }
