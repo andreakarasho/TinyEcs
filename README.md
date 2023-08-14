@@ -16,7 +16,7 @@ dotnet run -c Release
 
 # Basic sample
 ```csharp
-var ecs = new Ecs();
+var ecs = new World();
 
 // Create a run-once system which will run the first time
 // the app calls "ecs.Step(deltaTime)" method
