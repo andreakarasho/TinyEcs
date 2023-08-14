@@ -56,17 +56,22 @@ sealed unsafe class TinyGame : Game
 
 		_ecs.System(&MoveSystem, qry);
 		_ecs.System(&CheckBorderSystem, qry);
+		_ecs.System(&PrintMessage, 1f);
 
-		_ecs.System(&BeginRender);
+
+		_ecs.System(&BeginRender)
+			.SetPair<EcsPhase, RenderingPhase>();
+
 		_ecs.System(&Render,
 			_ecs.Query()
 				.With<Position>()
 				.With<Rotation>()
 				.With<Sprite>()
-		);
+			)
+			.SetPair<EcsPhase, RenderingPhase>();
 
-		_ecs.System(&EndRender);
-		_ecs.System(&PrintMessage, 1f);
+		_ecs.System(&EndRender)
+			.SetPair<EcsPhase, RenderingPhase>();
 	}
 
 
@@ -80,6 +85,8 @@ sealed unsafe class TinyGame : Game
 
 	protected override void Draw(GameTime gameTime)
 	{
+		_ecs!.RunPhase<RenderingPhase>();
+
 		base.Draw(gameTime);
 	}
 
@@ -233,7 +240,7 @@ struct Position { public Vector2 Value; }
 struct Velocity { public Vector2 Value; }
 struct Sprite { public Color Color; public float Scale; public Handle<Texture2D> Texture; }
 struct Rotation { public float Value; public float Acceleration; }
-
+struct RenderingPhase { }
 
 readonly struct GameState
 {
