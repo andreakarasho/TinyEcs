@@ -12,8 +12,6 @@ public readonly struct EcsComponent
 	}
 }
 
-public struct EcsQueryBuilder { }
-
 public unsafe struct EcsSystem
 {
 	const int TERMS_COUNT = 32;

@@ -66,10 +66,10 @@ public unsafe ref struct QueryBuilder
 		=> Without(_world.Component<T>().ID);
 
 	public QueryBuilder Without<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> Without(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
+		=> Without(_world.Tag<TKind>().ID, _world.Tag<TTarget>().ID);
 
 	public QueryBuilder Without<TKind>(EntityID target) where TKind : unmanaged
-		=> Without(IDOp.Pair(_world.Component<TKind>().ID, target));
+		=> Without(IDOp.Pair(_world.Tag<TKind>().ID, target));
 
 	public QueryBuilder Without(EntityID first, EntityID second)
 		=> Without(IDOp.Pair(first, second));
@@ -90,10 +90,9 @@ public unsafe ref struct QueryBuilder
 	public EntityView Build()
 	{
 		if (_id != 0)
-			return new EntityView(_world, _id);
+			return _world.Entity(_id);
 
-		var ent = _world.Spawn()
-			.SetTag<EcsQueryBuilder>();
+		var ent = _world.Spawn();
 
 		_id = ent.ID;
 
