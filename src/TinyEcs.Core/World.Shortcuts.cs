@@ -65,7 +65,6 @@ public sealed partial class World
 	public ref T GetSingleton<T>() where T : unmanaged
 		=> ref Get<T>(Component<T>().ID);
 
-
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
 			.SetPair<EcsPhase, EcsSystemPhaseOnStartup>();

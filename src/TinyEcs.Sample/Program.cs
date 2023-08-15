@@ -157,7 +157,7 @@ static void Setup(ref Iterator it)
 	var sw = Stopwatch.StartNew();
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.Commands!.Spawn()
+		it.Commands.Spawn()
 			.Set<Position>()
 			.Set<Velocity>()
 			.SetTag<int>()

@@ -7,14 +7,14 @@ public readonly ref struct Iterator
 	private readonly Archetype _archetype;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands? commands, Archetype archetype, object? userData)
+	internal Iterator(Commands commands, Archetype archetype, object? userData)
 	{
 		Commands = commands;
 		_archetype = archetype;
 		UserData = userData;
 	}
 
-	public Commands? Commands { get; }
+	public Commands Commands { get; }
 	public readonly World World => _archetype.World;
 	public readonly int Count => _archetype.Count;
 	public readonly float DeltaTime => World.DeltaTime;
@@ -46,6 +46,10 @@ public readonly ref struct Iterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Entity(int row)
 		=> new (World, _archetype.Entities[row]);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly CommandEntityView EntityDefer(int row)
+		=> Commands.Entity(Entity(row));
 }
 
 [SkipLocalsInit]

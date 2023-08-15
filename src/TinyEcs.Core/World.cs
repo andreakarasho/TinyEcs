@@ -170,11 +170,6 @@ public sealed partial class World : IDisposable
 	public bool Exists(EntityID entity)
 		=> _entities.Contains(entity);
 
-	private void AttachComponent(ref EcsRecord record, ref EcsComponent cmp)
-	{
-		InternalAttachDetach(ref record, ref cmp, true);
-	}
-
 	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref GetRecord(entity);
@@ -198,19 +193,19 @@ public sealed partial class World : IDisposable
 	[SkipLocalsInit]
 	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
 	{
-		var column = root.GetComponentIndex(ref cmp);
+		// var column = root.GetComponentIndex(ref cmp);
 
-		if (add && column >= 0)
-		{
-			return null;
-		}
-		else if (!add && column < 0)
-		{
-			return null;
-		}
-
-		// if (!add && root.GetComponentIndex(ref cmp) < 0)
+		// if (add && column >= 0)
+		// {
 		// 	return null;
+		// }
+		// else if (!add && column < 0)
+		// {
+		// 	return null;
+		// }
+
+		if (!add && root.GetComponentIndex(ref cmp) < 0)
+			return null;
 
 		var initType = root.ComponentInfo;
 		var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
@@ -301,7 +296,7 @@ public sealed partial class World : IDisposable
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			AttachComponent(ref record, ref cmp);
+			InternalAttachDetach(ref record, ref cmp, true);
 		}
 
 		if (cmp.Size <= 0)
