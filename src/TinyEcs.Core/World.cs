@@ -39,21 +39,21 @@ public sealed partial class World : IDisposable
 
 	private void RegisterDefaults()
 	{
-		_ = ref Tag<EcsExclusive>();
-		_ = ref Tag<EcsTag>();
-		_ = ref Tag<EcsAny>();
-		_ = ref Tag<EcsPanic>();
-		_ = ref Tag<EcsDelete>();
-		_ = ref Tag<EcsChildOf>();
-		_ = ref Tag<EcsEnabled>();
-		_ = ref Tag<EcsPhase>();
+		// _ = ref Tag<EcsExclusive>();
+		// _ = ref Tag<EcsTag>();
+		// _ = ref Tag<EcsAny>();
+		// _ = ref Tag<EcsPanic>();
+		// _ = ref Tag<EcsDelete>();
+		// _ = ref Tag<EcsChildOf>();
+		// _ = ref Tag<EcsEnabled>();
+		// _ = ref Tag<EcsPhase>();
 
-		_ = ref Tag<EcsSystemPhasePreStartup>();
-		_ = ref Tag<EcsSystemPhaseOnStartup>();
-		_ = ref Tag<EcsSystemPhasePostStartup>();
-		_ = ref Tag<EcsSystemPhasePreUpdate>();
-		_ = ref Tag<EcsSystemPhaseOnUpdate>();
-		_ = ref Tag<EcsSystemPhasePostUpdate>();
+		// _ = ref Tag<EcsSystemPhasePreStartup>();
+		// _ = ref Tag<EcsSystemPhaseOnStartup>();
+		// _ = ref Tag<EcsSystemPhasePostStartup>();
+		// _ = ref Tag<EcsSystemPhasePreUpdate>();
+		// _ = ref Tag<EcsSystemPhaseOnUpdate>();
+		// _ = ref Tag<EcsSystemPhasePostUpdate>();
 
 		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
 		SetTag<EcsExclusive>(Tag<EcsPhase>().ID);
@@ -74,38 +74,42 @@ public sealed partial class World : IDisposable
 	// 	}
 	// }
 
-	public unsafe ref EcsComponent Tag<T>() where T : unmanaged
+	public unsafe ref EcsComponent Tag<T>() where T : unmanaged, IComponentStub
 	{
-		ref var cmp = ref Component<T>(true);
+		ref var cmp = ref Component<T>();
 		EcsAssert.Assert(cmp.Size <= 0);
 		return ref cmp;
 	}
 
-	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
+	public unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, typeof(T).TypeHandle.Value, out var exists);
 		if (!exists)
 		{
 			var ent = SpawnEmpty();
-			var size = asTag ? 0 : sizeof(T);
-			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
+			Unsafe.SkipInit<T>(out var obj);
+			var size = obj is ITag ? 0 : sizeof(T);
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
 			SetTag<EcsEnabled>(cmp.ID);
 			SetPair<EcsPanic, EcsDelete>(cmp.ID);
-			if (asTag)
+
+			if (size == 0)
 			{
-				SetTag<EcsTag>(ent.ID);
+				SetTag<EcsTag>(cmp.ID);
 			}
 		}
 
 		return ref cmp;
 	}
 
-	public EntityID Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public EntityID Pair<TKind, TTarget>()
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 		=> IDOp.Pair(Tag<TKind>().ID, Tag<TTarget>().ID);
 
-	public EntityID Pair<TKind>(EntityID target) where TKind : unmanaged
+	public EntityID Pair<TKind>(EntityID target)
+	where TKind : unmanaged, IComponentStub
 		=> IDOp.Pair(Tag<TKind>().ID, target);
 
 	public QueryBuilder Query()

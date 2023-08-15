@@ -77,13 +77,14 @@ public sealed class Commands
 		SetTag(id, ref cmp);
 	}
 
-	public unsafe void SetTag<T>(EntityID id) where T : unmanaged
+	public unsafe void SetTag<T>(EntityID id) where T : unmanaged, ITag
 	{
 		ref var cmp = ref _main.Tag<T>();
 		SetTag(id, ref cmp);
 	}
 
-	public unsafe ref T Set<T>(EntityID id, T component) where T : unmanaged
+	public unsafe ref T Set<T>(EntityID id, T component)
+	where T : unmanaged, IComponent
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -151,19 +152,21 @@ public sealed class Commands
 		SetPair(id, ref cmp);
 	}
 
-	public unsafe void SetPair<TKind>(EntityID id, EntityID target) where TKind : unmanaged
+	public unsafe void SetPair<TKind>(EntityID id, EntityID target) where TKind : unmanaged, IComponentStub
 	{
 		var cmpID = IDOp.Pair(_main.Tag<TKind>().ID, target);
 		var cmp = new EcsComponent(cmpID, 0);
 		SetPair(id, ref cmp);
 	}
 
-	public unsafe void SetPair<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
+	public unsafe void SetPair<TKind, TTarget>(EntityID id)
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 	{
 		SetPair(id, _main.Tag<TKind>().ID,  _main.Tag<TTarget>().ID);
 	}
 
-	public void Unset<T>(EntityID id) where T : unmanaged
+	public void Unset<T>(EntityID id) where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -174,7 +177,9 @@ public sealed class Commands
 		unset.Component = cmp;
 	}
 
-	public void Unset<TKind, TTarget>(EntityID id) where TKind : unmanaged where TTarget : unmanaged
+	public void Unset<TKind, TTarget>(EntityID id)
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -195,7 +200,8 @@ public sealed class Commands
 		unset.Component = cmp;
 	}
 
-	public ref T Get<T>(EntityID entity) where T : unmanaged
+	public ref T Get<T>(EntityID entity)
+	where T : unmanaged, IComponent
 	{
 		EcsAssert.Assert(_main.Exists(entity));
 
@@ -209,7 +215,7 @@ public sealed class Commands
 		return ref Set(entity, cmp);
 	}
 
-	public bool Has<T>(EntityID entity) where T : unmanaged
+	public bool Has<T>(EntityID entity) where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(entity));
 
@@ -280,13 +286,13 @@ public readonly ref struct CommandEntityView
 	public readonly EntityID ID => _id;
 
 
-	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged
+	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged, IComponent
 	{
 		_cmds.Set(_id, cmp);
 		return this;
 	}
 
-	public readonly CommandEntityView SetTag<T>() where T : unmanaged
+	public readonly CommandEntityView SetTag<T>() where T : unmanaged, ITag
 	{
 		_cmds.SetTag<T>(_id);
 		return this;
@@ -304,29 +310,29 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView SetPair<TKind>(EntityID target) where TKind : unmanaged
+	public readonly CommandEntityView SetPair<TKind>(EntityID target) where TKind : unmanaged, IComponentStub
 	{
 		_cmds.SetPair<TKind>(_id, target);
 		return this;
 	}
 
 	public readonly CommandEntityView SetPair<TKind, TTarget>()
-		where TKind : unmanaged
-		where TTarget : unmanaged
+		where TKind : unmanaged, IComponentStub
+		where TTarget : unmanaged, IComponentStub
 	{
 		_cmds.SetPair<TKind, TTarget>(_id);
 		return this;
 	}
 
-	public readonly CommandEntityView Unset<T>() where T : unmanaged
+	public readonly CommandEntityView Unset<T>() where T : unmanaged, IComponentStub
 	{
 		_cmds.Unset<T>(_id);
 		return this;
 	}
 
 	public readonly CommandEntityView Unset<TKind, TTarget>()
-		where TKind : unmanaged
-		where TTarget : unmanaged
+		where TKind : unmanaged, IComponentStub
+		where TTarget : unmanaged, IComponentStub
 	{
 		_cmds.Unset<TKind, TTarget>(_id);
 		return this;
@@ -338,12 +344,12 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly ref T Get<T>() where T : unmanaged
+	public readonly ref T Get<T>() where T : unmanaged, IComponent
 	{
 		return ref _cmds.Get<T>(_id);
 	}
 
-	public readonly bool Has<T>() where T : unmanaged
+	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 	{
 		return _cmds.Has<T>(_id);
 	}

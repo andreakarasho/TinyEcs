@@ -98,7 +98,7 @@ public sealed class Archetype
 		return toRow;
 	}
 
-	internal Span<T> ComponentData<T>(int row, int count) where T : unmanaged
+	internal Span<T> ComponentData<T>(int row, int count) where T : unmanaged, IComponent
 	{
 		EcsAssert.Assert(row >= 0);
 		EcsAssert.Assert(row < _entities.Length);

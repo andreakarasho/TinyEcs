@@ -37,13 +37,16 @@ public unsafe ref struct QueryBuilder
 		_world = world;
 	}
 
-	public QueryBuilder With<T>() where T : unmanaged
+	public QueryBuilder With<T>() where T : unmanaged, IComponentStub
 		=> With(_world.Component<T>().ID);
 
-	public QueryBuilder With<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public QueryBuilder With<TKind, TTarget>()
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 		=> With(_world.Tag<TKind>().ID, _world.Tag<TTarget>().ID);
 
-	public QueryBuilder With<TKind>(EntityID target) where TKind : unmanaged
+	public QueryBuilder With<TKind>(EntityID target)
+	where TKind : unmanaged, IComponentStub
 		=> With(IDOp.Pair(_world.Tag<TKind>().ID, target));
 
 	public QueryBuilder With(EntityID first, EntityID second)
@@ -62,13 +65,16 @@ public unsafe ref struct QueryBuilder
 		return this;
 	}
 
-	public QueryBuilder Without<T>() where T : unmanaged
+	public QueryBuilder Without<T>() where T : unmanaged, IComponentStub
 		=> Without(_world.Component<T>().ID);
 
-	public QueryBuilder Without<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public QueryBuilder Without<TKind, TTarget>()
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 		=> Without(_world.Tag<TKind>().ID, _world.Tag<TTarget>().ID);
 
-	public QueryBuilder Without<TKind>(EntityID target) where TKind : unmanaged
+	public QueryBuilder Without<TKind>(EntityID target)
+	where TKind : unmanaged, IComponentStub
 		=> Without(IDOp.Pair(_world.Tag<TKind>().ID, target));
 
 	public QueryBuilder Without(EntityID first, EntityID second)

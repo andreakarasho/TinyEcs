@@ -1,6 +1,13 @@
 namespace TinyEcs;
 
-public readonly struct EcsComponent
+
+public interface IComponentStub;
+public interface IComponent : IComponentStub;
+public interface ITag : IComponentStub;
+
+
+
+public readonly struct EcsComponent : IComponent
 {
 	public readonly EntityID ID;
 	public readonly int Size;
@@ -12,7 +19,7 @@ public readonly struct EcsComponent
 	}
 }
 
-public unsafe struct EcsSystem
+public unsafe struct EcsSystem : IComponent
 {
 	const int TERMS_COUNT = 32;
 
@@ -45,17 +52,17 @@ public unsafe struct EcsSystem
 	}
 }
 
-public struct EcsPhase { }
-public struct EcsPanic { }
-public struct EcsDelete { }
-public struct EcsExclusive { }
-public struct EcsAny { }
-public struct EcsTag { }
-public struct EcsChildOf { }
-public struct EcsEnabled { }
-public struct EcsSystemPhaseOnUpdate { }
-public struct EcsSystemPhasePreUpdate { }
-public struct EcsSystemPhasePostUpdate { }
-public struct EcsSystemPhaseOnStartup { }
-public struct EcsSystemPhasePreStartup { }
-public struct EcsSystemPhasePostStartup { }
+public struct EcsPhase : ITag { }
+public struct EcsPanic : ITag { }
+public struct EcsDelete : ITag { }
+public struct EcsExclusive : ITag { }
+public struct EcsAny : ITag  { }
+public struct EcsTag : ITag  { }
+public struct EcsChildOf : ITag  { }
+public struct EcsEnabled : ITag  { }
+public struct EcsSystemPhaseOnUpdate : ITag  { }
+public struct EcsSystemPhasePreUpdate : ITag  { }
+public struct EcsSystemPhasePostUpdate : ITag  { }
+public struct EcsSystemPhaseOnStartup : ITag  { }
+public struct EcsSystemPhasePreStartup : ITag  { }
+public struct EcsSystemPhasePostStartup : ITag  { }

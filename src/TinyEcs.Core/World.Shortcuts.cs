@@ -2,17 +2,19 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-	public void SetPair<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	public void SetPair<TKind, TTarget>(EntityID entity)
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 	{
 		SetPair(entity, Tag<TKind>().ID, Tag<TKind>().ID);
 	}
 
-	public void SetPair<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
+	public void SetPair<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
 	{
 		SetPair(entity, Tag<TKind>().ID, target);
 	}
 
-	public void SetTag<T>(EntityID entity) where T : unmanaged
+	public void SetTag<T>(EntityID entity) where T : unmanaged, ITag
 	{
 		ref var cmp = ref Tag<T>();
 
@@ -22,9 +24,9 @@ public sealed partial class World
 	}
 
 	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged
+	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged, IComponent
 	{
-		ref var cmp = ref Component<T>(false);
+		ref var cmp = ref Component<T>();
 
 		EcsAssert.Assert(cmp.Size > 0);
 
@@ -36,19 +38,21 @@ public sealed partial class World
 		);
 	}
 
-	public void Unset<T>(EntityID entity) where T : unmanaged
+	public void Unset<T>(EntityID entity) where T : unmanaged, IComponentStub
 		=> DetachComponent(entity, ref Component<T>());
 
-	public bool Has<T>(EntityID entity) where T : unmanaged
+	public bool Has<T>(EntityID entity) where T : unmanaged, IComponentStub
 		=> Has(entity, ref Component<T>());
 
-	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged
+	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
 		=> Has(entity, Tag<TKind>().ID, target);
 
-	public bool Has<TKind, TTarget>(EntityID entity) where TKind : unmanaged where TTarget : unmanaged
+	public bool Has<TKind, TTarget>(EntityID entity)
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
 		=> Has(entity, Tag<TKind>().ID, Tag<TKind>().ID);
 
-	public ref T Get<T>(EntityID entity) where T : unmanaged
+	public ref T Get<T>(EntityID entity) where T : unmanaged, IComponent
 	{
 		ref var record = ref GetRecord(entity);
 		var raw = record.Archetype.ComponentData<T>(record.Row, 1);
@@ -59,10 +63,10 @@ public sealed partial class World
 	}
 
 	[SkipLocalsInit]
-	public void SetSingleton<T>(T component = default) where T : unmanaged
+	public void SetSingleton<T>(T component = default) where T : unmanaged, IComponent
 		=> Set(Component<T>().ID, component);
 
-	public ref T GetSingleton<T>() where T : unmanaged
+	public ref T GetSingleton<T>() where T : unmanaged, IComponent
 		=> ref Get<T>(Component<T>().ID);
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
@@ -85,6 +89,6 @@ public sealed partial class World
 		=> System(system, query.Build(), query.Terms, tick)
 			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-	public void RunPhase<TPhase>() where TPhase : unmanaged
+	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
 }
