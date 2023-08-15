@@ -1,9 +1,9 @@
 namespace TinyEcs;
 
 
-public interface IComponentStub;
-public interface IComponent : IComponentStub;
-public interface ITag : IComponentStub;
+public interface IComponentStub { }
+public interface IComponent : IComponentStub { }
+public interface ITag : IComponentStub { }
 
 
 

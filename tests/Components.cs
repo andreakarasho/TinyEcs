@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace TinyEcs.Tests;
 
-unsafe struct LargeComponent 
+unsafe struct LargeComponent : IComponent
 {
     const int SIZE = 1024;
     private fixed float _array[SIZE];
@@ -19,8 +19,24 @@ unsafe struct LargeComponent
             fixed (float* ptr = _array)
             {
                 return new Span<float>(ptr, SIZE);
-            }            
+            }
         }
     }
 }
 
+struct FloatComponent : IComponent
+{
+	public float Value;
+}
+
+struct IntComponent : IComponent
+{
+	public int Value;
+}
+
+struct BoolComponent : IComponent
+{
+	public bool Value;
+}
+
+struct NormalTag : ITag { }

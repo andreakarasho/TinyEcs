@@ -2,21 +2,21 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-	public void SetPair<TKind, TTarget>(EntityID entity)
+	public void Set<TKind, TTarget>(EntityID entity)
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
 	{
-		SetPair(entity, Tag<TKind>().ID, Tag<TKind>().ID);
+		Set(entity, Component<TKind>().ID, Component<TKind>().ID);
 	}
 
-	public void SetPair<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
+	public void Set<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
 	{
-		SetPair(entity, Tag<TKind>().ID, target);
+		Set(entity, Component<TKind>().ID, target);
 	}
 
-	public void SetTag<T>(EntityID entity) where T : unmanaged, ITag
+	public void Set<T>(EntityID entity) where T : unmanaged, ITag
 	{
-		ref var cmp = ref Tag<T>();
+		ref var cmp = ref Component<T>();
 
 		EcsAssert.Assert(cmp.Size <= 0);
 
@@ -45,12 +45,12 @@ public sealed partial class World
 		=> Has(entity, ref Component<T>());
 
 	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
-		=> Has(entity, Tag<TKind>().ID, target);
+		=> Has(entity, Component<TKind>().ID, target);
 
 	public bool Has<TKind, TTarget>(EntityID entity)
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
-		=> Has(entity, Tag<TKind>().ID, Tag<TKind>().ID);
+		=> Has(entity, Component<TKind>().ID, Component<TKind>().ID);
 
 	public ref T Get<T>(EntityID entity) where T : unmanaged, IComponent
 	{
@@ -71,23 +71,23 @@ public sealed partial class World
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.SetPair<EcsPhase, EcsSystemPhaseOnStartup>();
+			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, tick)
-			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
 		=> System(system, query.Build(), query.Terms, float.NaN)
-			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
 		=> System(system, query.Build(), query.Terms, tick)
-			.SetPair<EcsPhase, EcsSystemPhaseOnUpdate>();
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());

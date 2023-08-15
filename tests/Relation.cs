@@ -70,15 +70,15 @@
 			using var world = new World();
 
 			var root = world.Spawn();
-			var platoonCmp = world.Spawn().SetTag<EcsExclusive>();
+			var platoonCmp = world.Spawn().Set<EcsExclusive>();
 			var platoon1 = world.Spawn();
 			var platoon2 = world.Spawn();
 			var unit = world.Spawn();
 
-			unit.SetPair(platoonCmp, platoon1);
+			unit.Set(platoonCmp, platoon1);
 			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
 
-			unit.SetPair(platoonCmp, platoon2);
+			unit.Set(platoonCmp, platoon2);
 			Assert.False(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
 			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon2.ID));
 		}

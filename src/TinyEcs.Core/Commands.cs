@@ -30,7 +30,7 @@ public sealed class Commands
 		var ent = _main.SpawnEmpty();
 
 		return new CommandEntityView(this, ent.ID)
-			.SetTag<EcsEnabled>();
+			.Set<EcsEnabled>();
 	}
 
 	public void Despawn(EntityID id)
@@ -44,43 +44,23 @@ public sealed class Commands
 		}
 	}
 
-	private unsafe void SetTag(EntityID id, ref EcsComponent cmp)
-	{
-		EcsAssert.Assert(_main.Exists(id));
-		EcsAssert.Assert(cmp.Size <= 0);
-
-		if (_main.Has(id, ref cmp))
-		{
-			return;
-		}
-
-		ref var set = ref _set.CreateNew(out _);
-		set.Entity = id;
-		set.Component = cmp;
-
-		if (set.Data.Length < set.Component.Size)
-		{
-			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
-		}
-	}
-
 	public unsafe void SetTag(EntityID id, EntityID tag)
 	{
 		if (_main.Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref _main.Component<EcsComponent>();
-			SetTag(id, ref cmp2);
+			Set(id, ref cmp2);
 			return;
 		}
 
 		var cmp = new EcsComponent(tag, 0);
-		SetTag(id, ref cmp);
+		Set(id, ref cmp);
 	}
 
-	public unsafe void SetTag<T>(EntityID id) where T : unmanaged, ITag
+	public unsafe void Set<T>(EntityID id) where T : unmanaged, ITag
 	{
-		ref var cmp = ref _main.Tag<T>();
-		SetTag(id, ref cmp);
+		ref var cmp = ref _main.Component<T>();
+		Set(id, ref cmp);
 	}
 
 	public unsafe ref T Set<T>(EntityID id, T component)
@@ -99,6 +79,49 @@ public sealed class Commands
 			return ref value;
 		}
 
+		ref var reference = ref Set(id, ref cmp);
+
+		if (!Unsafe.IsNullRef(ref reference))
+		{
+			fixed (byte* ptr = &reference)
+				Unsafe.Copy(ptr, ref component);
+		}
+
+		return ref Unsafe.As<byte, T>(ref reference);
+	}
+
+	public unsafe void Set(EntityID id, EntityID first, EntityID second)
+	{
+		var cmpID = IDOp.Pair(first, second);
+		if (_main.Exists(cmpID) && Has<EcsComponent>(cmpID))
+		{
+			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
+			Set(id, ref cmp2);
+			return;
+		}
+
+		var cmp = new EcsComponent(cmpID, 0);
+		Set(id, ref cmp);
+	}
+
+	public unsafe void Set<TKind>(EntityID id, EntityID target) where TKind : unmanaged, IComponentStub
+	{
+		var cmpID = IDOp.Pair(_main.Component<TKind>().ID, target);
+		var cmp = new EcsComponent(cmpID, 0);
+		Set(id, ref cmp);
+	}
+
+	public unsafe void Set<TKind, TTarget>(EntityID id)
+	where TKind : unmanaged, IComponentStub
+	where TTarget : unmanaged, IComponentStub
+	{
+		Set(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
+	}
+
+	private unsafe ref byte Set(EntityID id, ref EcsComponent cmp)
+	{
+		EcsAssert.Assert(_main.Exists(id));
+
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
 		set.Component = cmp;
@@ -110,60 +133,7 @@ public sealed class Commands
 
 		ref var reference = ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Component.Size));
 
-		if (!Unsafe.IsNullRef(ref reference))
-		{
-			fixed (byte* ptr = &reference)
-				Unsafe.Copy(ptr, ref component);
-		}
-
-		return ref Unsafe.As<byte, T>(ref reference);
-	}
-
-	private unsafe void SetPair(EntityID id, ref EcsComponent cmp)
-	{
-		EcsAssert.Assert(_main.Exists(id));
-
-		if (_main.Has(id, ref cmp))
-		{
-			return;
-		}
-
-		ref var set = ref _set.CreateNew(out _);
-		set.Entity = id;
-		set.Component = cmp;
-
-		if (set.Data.Length < set.Component.Size)
-		{
-			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
-		}
-	}
-
-	public unsafe void SetPair(EntityID id, EntityID first, EntityID second)
-	{
-		var cmpID = IDOp.Pair(first, second);
-		if (_main.Exists(cmpID) && Has<EcsComponent>(cmpID))
-		{
-			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
-			SetPair(id, ref cmp2);
-			return;
-		}
-
-		var cmp = new EcsComponent(cmpID, 0);
-		SetPair(id, ref cmp);
-	}
-
-	public unsafe void SetPair<TKind>(EntityID id, EntityID target) where TKind : unmanaged, IComponentStub
-	{
-		var cmpID = IDOp.Pair(_main.Tag<TKind>().ID, target);
-		var cmp = new EcsComponent(cmpID, 0);
-		SetPair(id, ref cmp);
-	}
-
-	public unsafe void SetPair<TKind, TTarget>(EntityID id)
-	where TKind : unmanaged, IComponentStub
-	where TTarget : unmanaged, IComponentStub
-	{
-		SetPair(id, _main.Tag<TKind>().ID,  _main.Tag<TTarget>().ID);
+		return ref reference;
 	}
 
 	public void Unset<T>(EntityID id) where T : unmanaged, IComponentStub
@@ -292,9 +262,9 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView SetTag<T>() where T : unmanaged, ITag
+	public readonly CommandEntityView Set<T>() where T : unmanaged, ITag
 	{
-		_cmds.SetTag<T>(_id);
+		_cmds.Set<T>(_id);
 		return this;
 	}
 
@@ -306,13 +276,13 @@ public readonly ref struct CommandEntityView
 
 	public readonly CommandEntityView SetPair(EntityID first, EntityID second)
 	{
-		_cmds.SetPair(_id, first, second);
+		_cmds.Set(_id, first, second);
 		return this;
 	}
 
 	public readonly CommandEntityView SetPair<TKind>(EntityID target) where TKind : unmanaged, IComponentStub
 	{
-		_cmds.SetPair<TKind>(_id, target);
+		_cmds.Set<TKind>(_id, target);
 		return this;
 	}
 
@@ -320,7 +290,7 @@ public readonly ref struct CommandEntityView
 		where TKind : unmanaged, IComponentStub
 		where TTarget : unmanaged, IComponentStub
 	{
-		_cmds.SetPair<TKind, TTarget>(_id);
+		_cmds.Set<TKind, TTarget>(_id);
 		return this;
 	}
 

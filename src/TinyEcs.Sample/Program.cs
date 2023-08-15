@@ -56,12 +56,12 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.SetPair<Likes, Dogs>()
-	.SetPair<Likes, Apples>()
+	.Set<Likes, Dogs>()
+	.Set<Likes, Apples>()
 	.SetTag(pos.ID)
-	.SetPair(likes.ID, cats.ID)
-	.SetPair(likes.ID, flowers.ID)
-	.SetPair(childOf.ID, root)
+	.Set(likes.ID, cats.ID)
+	.Set(likes.ID, flowers.ID)
+	.Set(childOf.ID, root)
 	.ID;
 
 ref var posID = ref ecs.Component<Position>();

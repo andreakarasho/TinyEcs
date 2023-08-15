@@ -60,7 +60,7 @@ sealed unsafe class TinyGame : Game
 
 
 		_ecs.System(&BeginRender)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 
 		_ecs.System(&Render,
 			_ecs.Query()
@@ -68,10 +68,10 @@ sealed unsafe class TinyGame : Game
 				.With<Rotation>()
 				.With<Sprite>()
 			)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 
 		_ecs.System(&EndRender)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 	}
 
 

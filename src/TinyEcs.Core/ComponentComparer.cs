@@ -25,7 +25,7 @@ sealed class ComponentComparer : IComparer<EntityID>, IComparer<EcsComponent>
 		{
 			if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
 			{
-				var any = world.Tag<EcsAny>().ID;
+				var any = world.Component<EcsAny>().ID;
 				var secondY = IDOp.GetPairSecond(b);
 
 				if (secondY == any)
