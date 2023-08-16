@@ -80,8 +80,7 @@ public sealed partial class World : IDisposable
 		if (!exists)
 		{
 			var ent = SpawnEmpty();
-			Unsafe.SkipInit<T>(out var obj);
-			var size = obj is ITag ? 0 : sizeof(T);
+			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
 			Set<EcsEnabled>(cmp.ID);
@@ -97,12 +96,12 @@ public sealed partial class World : IDisposable
 	}
 
 	public EntityID Pair<TKind, TTarget>()
-	where TKind : unmanaged, IComponentStub
+	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
 	public EntityID Pair<TKind>(EntityID target)
-	where TKind : unmanaged, IComponentStub
+	where TKind : unmanaged, ITag
 		=> IDOp.Pair(Component<TKind>().ID, target);
 
 	public QueryBuilder Query()

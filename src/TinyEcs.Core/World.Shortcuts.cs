@@ -9,12 +9,14 @@ public sealed partial class World
 		Set(entity, Component<TKind>().ID, Component<TKind>().ID);
 	}
 
-	public void Set<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
+	public void Set<TKind>(EntityID entity, EntityID target)
+	where TKind : unmanaged, ITag
 	{
 		Set(entity, Component<TKind>().ID, target);
 	}
 
-	public void Set<T>(EntityID entity) where T : unmanaged, ITag
+	public void Set<T>(EntityID entity)
+	where T : unmanaged, ITag
 	{
 		ref var cmp = ref Component<T>();
 
@@ -24,7 +26,8 @@ public sealed partial class World
 	}
 
 	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component = default) where T : unmanaged, IComponent
+	public unsafe void Set<T>(EntityID entity, T component = default)
+	where T : unmanaged, IComponent
 	{
 		ref var cmp = ref Component<T>();
 
@@ -38,21 +41,25 @@ public sealed partial class World
 		);
 	}
 
-	public void Unset<T>(EntityID entity) where T : unmanaged, IComponentStub
+	public void Unset<T>(EntityID entity)
+	where T : unmanaged, IComponentStub
 		=> DetachComponent(entity, ref Component<T>());
 
-	public bool Has<T>(EntityID entity) where T : unmanaged, IComponentStub
+	public bool Has<T>(EntityID entity)
+	where T : unmanaged, IComponentStub
 		=> Has(entity, ref Component<T>());
 
-	public bool Has<TKind>(EntityID entity, EntityID target) where TKind : unmanaged, IComponentStub
+	public bool Has<TKind>(EntityID entity, EntityID target)
+	where TKind : unmanaged, ITag
 		=> Has(entity, Component<TKind>().ID, target);
 
 	public bool Has<TKind, TTarget>(EntityID entity)
-	where TKind : unmanaged, IComponentStub
+	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 		=> Has(entity, Component<TKind>().ID, Component<TKind>().ID);
 
-	public ref T Get<T>(EntityID entity) where T : unmanaged, IComponent
+	public ref T Get<T>(EntityID entity)
+	where T : unmanaged, IComponent
 	{
 		ref var record = ref GetRecord(entity);
 		var raw = record.Archetype.ComponentData<T>(record.Row, 1);

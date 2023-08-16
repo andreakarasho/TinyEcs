@@ -40,3 +40,37 @@ struct BoolComponent : IComponent
 }
 
 struct NormalTag : ITag { }
+
+
+public class ComponentTest
+{
+	[Fact]
+	public void Check_Validate_Tag()
+	{
+		using var world = new World();
+		ref var cmp = ref world.Component<NormalTag>();
+
+		Assert.Equal(0, cmp.Size);
+		Assert.True(world.Has<EcsTag>(cmp.ID));
+	}
+
+	[Fact]
+	public unsafe void Check_Validate_Component()
+	{
+		using var world = new World();
+		ref var cmp = ref world.Component<FloatComponent>();
+
+		Assert.Equal(sizeof(FloatComponent), cmp.Size);
+		Assert.False(world.Has<EcsTag>(cmp.ID));
+	}
+
+	[Fact]
+	public unsafe void Check_Validate_Pair()
+	{
+		using var world = new World();
+		var id = world.Pair<NormalTag, FloatComponent>();
+
+		Assert.Equal(0, world.Component<NormalTag>().Size);
+		Assert.Equal(sizeof(FloatComponent), world.Component<FloatComponent>().Size);
+	}
+}
