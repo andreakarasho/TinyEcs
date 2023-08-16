@@ -11,10 +11,10 @@
             using var world = new World();
 
             for (int i = 0; i < amount; i++)
-                world.Set<float>(world.Spawn());
+                world.Set<FloatComponent>(world.Spawn());
 
             var query = world.Query()
-                .With<float>();
+                .With<FloatComponent>();
 
             int done = 0;
 			query.Iterate((ref Iterator it) => done += it.Count);
@@ -33,13 +33,13 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.Spawn();
-                world.Set<float>(e);
-                world.Set<int>(e);
+                world.Set<FloatComponent>(e);
+                world.Set<IntComponent>(e);
             }
 
             var query = world.Query()
-                .With<float>()
-                .With<int>();
+                .With<FloatComponent>()
+                .With<IntComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -58,15 +58,15 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.Spawn();
-                world.Set<float>(e);
-                world.Set<int>(e);
-                world.Set<bool>(e);
+                world.Set<FloatComponent>(e);
+                world.Set<IntComponent>(e);
+                world.Set<BoolComponent>(e);
             }
 
             var query = world.Query()
-                .With<float>()
-                .With<int>()
-                .With<bool>();
+                .With<FloatComponent>()
+                .With<IntComponent>()
+                .With<BoolComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -85,15 +85,15 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.Spawn();
-                world.Set<float>(e);
-                world.Set<int>(e);
-                world.Set<bool>(e);
+                world.Set<FloatComponent>(e);
+                world.Set<IntComponent>(e);
+                world.Set<BoolComponent>(e);
             }
 
             var query = world.Query()
-                .With<float>()
-                .With<int>()
-                .Without<bool>();
+                .With<FloatComponent>()
+                .With<IntComponent>()
+                .Without<BoolComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -112,14 +112,14 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.Spawn();
-                world.Set<float>(e);
-                world.Set<int>(e);
+                world.Set<FloatComponent>(e);
+                world.Set<IntComponent>(e);
             }
 
             var query = world.Query()
-                .With<float>()
-                .With<int>()
-                .Without<bool>();
+                .With<FloatComponent>()
+                .With<IntComponent>()
+                .Without<BoolComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -138,14 +138,14 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = world.Spawn();
-                world.Set<float>(e);
-                world.Set<int>(e);
+                world.Set<FloatComponent>(e);
+                world.Set<IntComponent>(e);
             }
 
             var query = world.Query()
-                .With<float>()
-                .Without<int>()
-                .Without<bool>();
+                .With<FloatComponent>()
+                .Without<IntComponent>()
+                .Without<BoolComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -161,31 +161,31 @@
             var good = 0;
 
             var e = world.Spawn();
-            world.Set<float>(e);
-            world.Set<int>(e);
+            world.Set<FloatComponent>(e);
+            world.Set<IntComponent>(e);
 
             var e2 = world.Spawn();
-            world.Set<float>(e2);
-            world.Set<int>(e2);
-            world.Set<bool>(e2);
+            world.Set<FloatComponent>(e2);
+            world.Set<IntComponent>(e2);
+            world.Set<BoolComponent>(e2);
 
             var e3 = world.Spawn();
-            world.Set<float>(e3);
-            world.Set<int>(e3);
-            world.Set<byte>(e3);
+            world.Set<FloatComponent>(e3);
+            world.Set<IntComponent>(e3);
+            world.Set<BoolComponent>(e3);
             good++;
 
             var e4 = world.Spawn();
-            world.Set<float>(e4);
-            world.Set<int>(e4);
-            world.Set<byte>(e4);
-            world.Set<decimal>(e4);
+            world.Set<FloatComponent>(e4);
+            world.Set<IntComponent>(e4);
+            world.Set<BoolComponent>(e4);
+            world.Set<NormalTag>(e4);
 
             var query = world.Query()
-                .With<float>()
-                .With<byte>()
-                .Without<bool>()
-                .Without<decimal>();
+                .With<FloatComponent>()
+                .With<IntComponent>()
+                .Without<BoolComponent>()
+                .Without<NormalTag>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);

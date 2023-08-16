@@ -39,24 +39,24 @@ public sealed partial class World : IDisposable
 
 	private void RegisterDefaults()
 	{
-		_ = ref Tag<EcsExclusive>();
-		_ = ref Tag<EcsTag>();
-		_ = ref Tag<EcsAny>();
-		_ = ref Tag<EcsPanic>();
-		_ = ref Tag<EcsDelete>();
-		_ = ref Tag<EcsChildOf>();
-		_ = ref Tag<EcsEnabled>();
-		_ = ref Tag<EcsPhase>();
+		// _ = ref Tag<EcsExclusive>();
+		// _ = ref Tag<EcsTag>();
+		// _ = ref Tag<EcsAny>();
+		// _ = ref Tag<EcsPanic>();
+		// _ = ref Tag<EcsDelete>();
+		// _ = ref Tag<EcsChildOf>();
+		// _ = ref Tag<EcsEnabled>();
+		// _ = ref Tag<EcsPhase>();
 
-		_ = ref Tag<EcsSystemPhasePreStartup>();
-		_ = ref Tag<EcsSystemPhaseOnStartup>();
-		_ = ref Tag<EcsSystemPhasePostStartup>();
-		_ = ref Tag<EcsSystemPhasePreUpdate>();
-		_ = ref Tag<EcsSystemPhaseOnUpdate>();
-		_ = ref Tag<EcsSystemPhasePostUpdate>();
+		// _ = ref Tag<EcsSystemPhasePreStartup>();
+		// _ = ref Tag<EcsSystemPhaseOnStartup>();
+		// _ = ref Tag<EcsSystemPhasePostStartup>();
+		// _ = ref Tag<EcsSystemPhasePreUpdate>();
+		// _ = ref Tag<EcsSystemPhaseOnUpdate>();
+		// _ = ref Tag<EcsSystemPhasePostUpdate>();
 
-		SetTag<EcsExclusive>(Tag<EcsChildOf>().ID);
-		SetTag<EcsExclusive>(Tag<EcsPhase>().ID);
+		Set<EcsExclusive>(Component<EcsChildOf>().ID);
+		Set<EcsExclusive>(Component<EcsPhase>().ID);
 	}
 
 	// public void Optimize()
@@ -74,39 +74,35 @@ public sealed partial class World : IDisposable
 	// 	}
 	// }
 
-	public unsafe ref EcsComponent Tag<T>() where T : unmanaged
-	{
-		ref var cmp = ref Component<T>(true);
-		EcsAssert.Assert(cmp.Size <= 0);
-		return ref cmp;
-	}
-
-	public unsafe ref EcsComponent Component<T>(bool asTag = false) where T : unmanaged
+	public unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, typeof(T).TypeHandle.Value, out var exists);
 		if (!exists)
 		{
 			var ent = SpawnEmpty();
-			var size = asTag ? 0 : sizeof(T);
-			EcsAssert.Assert((asTag && size <= 0) || (!asTag && size > 0));
+			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
 			cmp = new EcsComponent(ent.ID, size);
 			Set(cmp.ID, cmp);
-			SetTag<EcsEnabled>(cmp.ID);
-			SetPair<EcsPanic, EcsDelete>(cmp.ID);
-			if (asTag)
+			Set<EcsEnabled>(cmp.ID);
+			Set<EcsPanic, EcsDelete>(cmp.ID);
+
+			if (size == 0)
 			{
-				SetTag<EcsTag>(ent.ID);
+				Set<EcsTag>(cmp.ID);
 			}
 		}
 
 		return ref cmp;
 	}
 
-	public EntityID Pair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
-		=> IDOp.Pair(Tag<TKind>().ID, Tag<TTarget>().ID);
+	public EntityID Pair<TKind, TTarget>()
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
+		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
-	public EntityID Pair<TKind>(EntityID target) where TKind : unmanaged
-		=> IDOp.Pair(Tag<TKind>().ID, target);
+	public EntityID Pair<TKind>(EntityID target)
+	where TKind : unmanaged, ITag
+		=> IDOp.Pair(Component<TKind>().ID, target);
 
 	public QueryBuilder Query()
 		=> new (this);
@@ -122,7 +118,7 @@ public sealed partial class World : IDisposable
 	}
 
 	public EntityView Spawn()
-		=> SpawnEmpty().SetTag<EcsEnabled>();
+		=> SpawnEmpty().Set<EcsEnabled>();
 
 	internal EntityView SpawnEmpty(EntityID id = 0)
 	{
@@ -320,7 +316,7 @@ public sealed partial class World : IDisposable
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	public void SetPair(EntityID entity, EntityID first, EntityID second)
+	public void Set(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
 		if (Exists(id) && Has<EcsComponent>(id))
@@ -333,7 +329,7 @@ public sealed partial class World : IDisposable
 		if (Has<EcsExclusive>(first))
 		{
 			ref var record = ref GetRecord(entity);
-			var id2 = IDOp.Pair(first, Tag<EcsAny>().ID);
+			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
 			var cmp3 = new EcsComponent(id2, 0);
 			var column = record.Archetype.GetComponentIndex(ref cmp3);
 
@@ -347,7 +343,7 @@ public sealed partial class World : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void SetTag(EntityID entity, EntityID tag)
+	public void Set(EntityID entity, EntityID tag)
 	{
 		if (Exists(tag) && Has<EcsComponent>(tag))
 		{
@@ -407,9 +403,9 @@ public sealed partial class World : IDisposable
 	public unsafe void RunPhase(EntityID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
-			new () { ID = Tag<EcsEnabled>().ID, Op = TermOp.With },
+			new () { ID = Component<EcsEnabled>().ID, Op = TermOp.With },
 			new () { ID = Component<EcsSystem>().ID, Op = TermOp.With },
-			new () { ID = phase, Op = TermOp.With}
+			new () { ID = phase, Op = TermOp.With }
 		};
 
 		Query(terms, &RunSystems);
@@ -483,7 +479,7 @@ public sealed partial class World : IDisposable
 		(
 			Archetype root,
 			UnsafeSpan<Term> terms,
-			Commands? commands,
+			Commands commands,
 			delegate* <ref Iterator, void> action,
 			object? userData
 		)

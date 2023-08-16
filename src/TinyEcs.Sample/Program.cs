@@ -12,6 +12,7 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = new World();
 
+
 var main = world.Spawn();
 var secondMain = world.Spawn();
 for (int i = 0; i < 10; ++i)
@@ -55,12 +56,12 @@ var root = ecs.Spawn().ID;
 
 var id = ecs.Spawn()
 	.Set(new Position() { X = 10, Y = 29 })
-	.SetPair<Likes, Dogs>()
-	.SetPair<Likes, Apples>()
-	.SetTag(pos.ID)
-	.SetPair(likes.ID, cats.ID)
-	.SetPair(likes.ID, flowers.ID)
-	.SetPair(childOf.ID, root)
+	.Set<Likes, Dogs>()
+	.Set<Likes, Apples>()
+	.Set(pos.ID)
+	.Set(likes.ID, cats.ID)
+	.Set(likes.ID, flowers.ID)
+	.Set(childOf.ID, root)
 	.ID;
 
 ref var posID = ref ecs.Component<Position>();
@@ -126,7 +127,6 @@ unsafe
 	ecs.System(&ParseQuery, ecs.Query()
 		.With<Position>()
 		.With<Velocity>()
-		.Without<float>()
 		.With<Likes, Dogs>());
 }
 
@@ -160,13 +160,13 @@ static void Setup(ref Iterator it)
 		it.Commands.Spawn()
 			.Set<Position>()
 			.Set<Velocity>()
-			.SetTag<int>()
-			.SetTag<short>()
-			.SetTag<byte>()
-			.SetTag<decimal>()
-			.SetTag<uint>()
-			.SetTag<ushort>()
-			.SetPair<Likes, Dogs>()
+			// .SetTag<int>()
+			// .SetTag<short>()
+			// .SetTag<byte>()
+			// .SetTag<decimal>()
+			// .SetTag<uint>()
+			// .SetTag<ushort>()
+			.Set<Likes, Dogs>()
 			;
 
 	var character = it.Commands!.Spawn()
@@ -222,14 +222,14 @@ enum TileType
 }
 
 
-struct Serial { public uint Value; }
-struct Position { public float X, Y, Z; }
-struct Velocity { public float X, Y; }
-struct PlayerTag { public ulong ID; }
+struct Serial : IComponent { public uint Value; }
+struct Position : IComponent { public float X, Y, Z; }
+struct Velocity : IComponent { public float X, Y; }
+struct PlayerTag : IComponent { public ulong ID; }
 
 
-struct Likes;
-struct Dogs { }
-struct Apples { }
+struct Likes : ITag;
+struct Dogs : ITag { }
+struct Apples : ITag { }
 
 struct TestStr { public byte v; }

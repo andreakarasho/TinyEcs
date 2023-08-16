@@ -68,11 +68,11 @@ namespace TinyEcs.Tests
 			var e = world.Spawn();
 
 			const float VAL = 0.012344f;
-			cmd.Set<float>(e, VAL);
+			cmd.Set<FloatComponent>(e, new FloatComponent() { Value = VAL });
 			cmd.Merge();
 
-			Assert.True(e.Has<float>());
-			Assert.Equal(VAL, e.Get<float>());
+			Assert.True(e.Has<FloatComponent>());
+			Assert.Equal(VAL, e.Get<FloatComponent>().Value);
 		}
 
 		[Fact]
@@ -84,12 +84,12 @@ namespace TinyEcs.Tests
 			const float VAL = 0.012344f;
 
 			var e = world.Spawn();
-			e.Set<float>(VAL);
+			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
 
-			cmd.Unset<float>(e);
+			cmd.Unset<FloatComponent>(e);
 			cmd.Merge();
 
-			Assert.False(e.Has<float>());
+			Assert.False(e.Has<FloatComponent>());
 		}
 	}
 }

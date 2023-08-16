@@ -30,61 +30,69 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetTag<T>() where T : unmanaged
+	public readonly EntityView Set<T>() where T : unmanaged, ITag
 	{
-		World.SetTag<T>(ID);
+		World.Set<T>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetTag(EntityID id)
+	public readonly EntityView Set(EntityID id)
 	{
-		World.SetTag(ID, id);
+		World.Set(ID, id);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component = default) where T : unmanaged
+	public readonly EntityView Set<T>(T component = default)
+	where T : unmanaged, IComponent
 	{
 		World.Set(ID, component);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetPair<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public readonly EntityView Set<TKind, TTarget>()
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
 	{
-		return SetPair(World.Tag<TKind>().ID, World.Tag<TTarget>().ID);
+		return Set(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetPair<TKind>(EntityID target) where TKind : unmanaged
+	public readonly EntityView Set<TKind>(EntityID target)
+	where TKind : unmanaged, ITag
 	{
-		return SetPair(World.Tag<TKind>().ID, target);
+		return Set(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView SetPair(EntityID first, EntityID second)
+	public readonly EntityView Set(EntityID first, EntityID second)
 	{
-		World.SetPair(ID, first, second);
+		World.Set(ID, first, second);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<T>() where T : unmanaged
+	public readonly EntityView Unset<T>()
+	where T : unmanaged, IComponentStub
 	{
 		World.Unset<T>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<TKind, TTarget>() where TKind : unmanaged where TTarget : unmanaged
+	public readonly EntityView Unset<TKind, TTarget>()
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
 	{
-		return Unset(World.Tag<TKind>().ID, World.Tag<TTarget>().ID);
+		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	public readonly EntityView Unset<TKind>(EntityID target) where TKind : unmanaged
+	public readonly EntityView Unset<TKind>(EntityID target)
+	where TKind : unmanaged, ITag
 	{
-		return Unset(World.Tag<TKind>().ID, target);
+		return Unset(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -106,7 +114,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Enable()
 	{
-		World.SetTag<EcsEnabled>(ID);
+		World.Set<EcsEnabled>(ID);
 		return this;
 	}
 
@@ -118,17 +126,17 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T Get<T>() where T : unmanaged
+	public readonly ref T Get<T>() where T : unmanaged, IComponent
 		=> ref World.Get<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<T>() where T : unmanaged
+	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 		=> World.Has<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<TKind, TTarget>()
-		where TKind : unmanaged
-		where TTarget : unmanaged
+		where TKind : unmanaged, ITag
+		where TTarget : unmanaged, IComponentStub
 	{
 		var world = World;
 		var id = world.Pair<TKind, TTarget>();
@@ -144,7 +152,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 
 	public readonly EntityView ChildOf(EntityID parent)
 	{
-		World.SetPair<EcsChildOf>(ID, parent);
+		World.Set<EcsChildOf>(ID, parent);
 		return this;
 	}
 

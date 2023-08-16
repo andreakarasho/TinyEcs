@@ -60,7 +60,7 @@ sealed unsafe class TinyGame : Game
 
 
 		_ecs.System(&BeginRender)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 
 		_ecs.System(&Render,
 			_ecs.Query()
@@ -68,10 +68,10 @@ sealed unsafe class TinyGame : Game
 				.With<Rotation>()
 				.With<Sprite>()
 			)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 
 		_ecs.System(&EndRender)
-			.SetPair<EcsPhase, RenderingPhase>();
+			.Set<EcsPhase, RenderingPhase>();
 	}
 
 
@@ -236,13 +236,13 @@ sealed unsafe class TinyGame : Game
 	}
 }
 
-struct Position { public Vector2 Value; }
-struct Velocity { public Vector2 Value; }
-struct Sprite { public Color Color; public float Scale; public Handle<Texture2D> Texture; }
-struct Rotation { public float Value; public float Acceleration; }
-struct RenderingPhase { }
+struct Position : IComponent { public Vector2 Value; }
+struct Velocity : IComponent { public Vector2 Value; }
+struct Sprite : IComponent { public Color Color; public float Scale; public Handle<Texture2D> Texture; }
+struct Rotation : IComponent { public float Value; public float Acceleration; }
+struct RenderingPhase : ITag { }
 
-readonly struct GameState
+readonly struct GameState : IComponent
 {
 	public readonly Handle<GraphicsDevice> Device;
 	public readonly Handle<SpriteBatch> Batch;
@@ -291,7 +291,7 @@ public static class Assets<T>
 	internal static bool Has(string identifier) => identifierToSlot.ContainsKey(identifier);
 }
 
-public readonly struct Handle<T>
+public readonly struct Handle<T> : IComponent
 {
 	private readonly int slot;
 

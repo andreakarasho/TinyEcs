@@ -23,7 +23,7 @@ public readonly ref struct Iterator
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
+	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged, IComponent
 	{
 		ref var cmp = ref World.Component<T>();
 
@@ -36,7 +36,7 @@ public readonly ref struct Iterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<T>() where T : unmanaged
+	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref World.Component<T>();
 		var column = _archetype.GetComponentIndex(ref cmp);
