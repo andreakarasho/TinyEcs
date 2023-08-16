@@ -67,8 +67,8 @@ static void MessageEverySecond(ref Iterator it)
 }
 
 
-struct Position { float X, Y, Z; }
-struct Player { }
+struct Position : IComponent { public float X, Y, Z; }
+struct Player : ITag { }
 ```
 
 # Credits
