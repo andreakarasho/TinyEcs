@@ -405,7 +405,7 @@ public sealed partial class World : IDisposable
 		Span<Term> terms = stackalloc Term[] {
 			new () { ID = Component<EcsEnabled>().ID, Op = TermOp.With },
 			new () { ID = Component<EcsSystem>().ID, Op = TermOp.With },
-			new () { ID = phase, Op = TermOp.With}
+			new () { ID = phase, Op = TermOp.With }
 		};
 
 		Query(terms, &RunSystems);
@@ -479,7 +479,7 @@ public sealed partial class World : IDisposable
 		(
 			Archetype root,
 			UnsafeSpan<Term> terms,
-			Commands? commands,
+			Commands commands,
 			delegate* <ref Iterator, void> action,
 			object? userData
 		)

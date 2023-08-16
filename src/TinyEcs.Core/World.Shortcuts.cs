@@ -70,10 +70,12 @@ public sealed partial class World
 	}
 
 	[SkipLocalsInit]
-	public void SetSingleton<T>(T component = default) where T : unmanaged, IComponent
+	public void SetSingleton<T>(T component = default)
+	where T : unmanaged, IComponent
 		=> Set(Component<T>().ID, component);
 
-	public ref T GetSingleton<T>() where T : unmanaged, IComponent
+	public ref T GetSingleton<T>()
+	where T : unmanaged, IComponent
 		=> ref Get<T>(Component<T>().ID);
 
 	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
