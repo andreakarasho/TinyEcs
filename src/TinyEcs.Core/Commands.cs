@@ -136,7 +136,8 @@ public sealed class Commands
 		return ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Component.Size));
 	}
 
-	public void Unset<T>(EntityID id) where T : unmanaged, IComponentStub
+	public void Unset<T>(EntityID id)
+	where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -185,7 +186,8 @@ public sealed class Commands
 		return ref Set(entity, cmp);
 	}
 
-	public bool Has<T>(EntityID entity) where T : unmanaged, IComponentStub
+	public bool Has<T>(EntityID entity)
+	where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(entity));
 
@@ -258,13 +260,15 @@ public readonly ref struct CommandEntityView
 	public readonly EntityID ID => _id;
 
 
-	public readonly CommandEntityView Set<T>(T cmp = default) where T : unmanaged, IComponent
+	public readonly CommandEntityView Set<T>(T cmp = default)
+	where T : unmanaged, IComponent
 	{
 		_cmds.Set(_id, cmp);
 		return this;
 	}
 
-	public readonly CommandEntityView Set<T>() where T : unmanaged, ITag
+	public readonly CommandEntityView Set<T>()
+	where T : unmanaged, ITag
 	{
 		_cmds.Set<T>(_id);
 		return this;
@@ -297,15 +301,16 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly CommandEntityView Unset<T>() where T : unmanaged, IComponentStub
+	public readonly CommandEntityView Unset<T>()
+	where T : unmanaged, IComponentStub
 	{
 		_cmds.Unset<T>(_id);
 		return this;
 	}
 
 	public readonly CommandEntityView Unset<TKind, TTarget>()
-		where TKind : unmanaged, ITag
-		where TTarget : unmanaged, IComponentStub
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
 	{
 		_cmds.Unset<TKind, TTarget>(_id);
 		return this;
@@ -317,19 +322,18 @@ public readonly ref struct CommandEntityView
 		return this;
 	}
 
-	public readonly ref T Get<T>() where T : unmanaged, IComponent
+	public readonly ref T Get<T>()
+	 where T : unmanaged, IComponent
 	{
 		return ref _cmds.Get<T>(_id);
 	}
 
-	public readonly bool Has<T>() where T : unmanaged, IComponentStub
+	public readonly bool Has<T>()
+	where T : unmanaged, IComponentStub
 	{
 		return _cmds.Has<T>(_id);
 	}
 
 	public readonly CommandEntityView ChildOf(EntityID parent)
-	{
-		Set<EcsChildOf>(parent);
-		return this;
-	}
+		=> Set<EcsChildOf>(parent);
 }
