@@ -215,6 +215,8 @@ public sealed class Commands
 
 		foreach (ref var despawn in _despawn)
 		{
+			EcsAssert.Assert(_main.Exists(despawn));
+
 			_main.Despawn(despawn);
 		}
 
