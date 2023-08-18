@@ -107,9 +107,15 @@ public sealed partial class World : IDisposable
 	public QueryBuilder Query()
 		=> new (this);
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public unsafe EntityView System(delegate*<ref Iterator, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
-			.Set(new EcsSystem(system, query, terms, tick));
+			.Set(new EcsSystem(callback, query, terms, tick));
+
+	public unsafe EntityView Observer(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
+	{
+		return Spawn()
+			.Set(new EcsObserver(callback, terms));
+	}
 
 	public EntityView Entity(EntityID id)
 	{
@@ -169,16 +175,21 @@ public sealed partial class World : IDisposable
 	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref GetRecord(entity);
-		InternalAttachDetach(ref record, ref cmp, false);
+		InternalAttachDetach(entity, ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(ref EcsRecord record, ref EcsComponent cmp, bool add)
+	private bool InternalAttachDetach(EntityID entity, ref EcsRecord record, ref EcsComponent cmp, bool add)
 	{
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
 		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
+
+		if (!add)
+		{
+			EmitObserver<EcsObserverOnUnset>(entity, cmp.ID);
+		}
 
 		record.Row = record.Archetype.MoveEntity(arch, record.Row);
 		record.Archetype = arch!;
@@ -289,25 +300,88 @@ public sealed partial class World : IDisposable
 
 		ref var record = ref GetRecord(entity);
 
+		var emit = false;
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			InternalAttachDetach(ref record, ref cmp, true);
+			emit = InternalAttachDetach(entity, ref record, ref cmp, true);
+			column = record.Archetype.GetComponentIndex(ref cmp);
 		}
 
-		if (cmp.Size <= 0)
-			return;
+		if (cmp.Size > 0)
+		{
+			var buf = record.Archetype.Table.ComponentData<byte>
+			(
+				column,
+				record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
+				cmp.Size
+			);
 
-		column = record.Archetype.GetComponentIndex(ref cmp);
-		var buf = record.Archetype.Table.ComponentData<byte>
+			EcsAssert.Assert(data.Length == buf.Length);
+			data.CopyTo(buf);
+		}
+
+		if (emit)
+		{
+			EmitObserver<EcsObserverOnSet>(entity, cmp.ID);
+		}
+	}
+
+	[SkipLocalsInit]
+	private unsafe void EmitObserver<T>(EntityID entity, EntityID component)
+	where T : unmanaged, IObserverComponent
+	{
+		var eventID = Component<T>().ID;
+
+		Query
 		(
-			column,
-			record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-			cmp.Size
+			stackalloc Term[] {
+				Term.With(Component<EcsObserver>().ID),
+				Term.With(eventID),
+			},
+			&RunObserver,
+			new ObserverInfo() {
+				Entity = entity,
+				Event = eventID,
+				LastComponent = Term.With(component)
+			}
+		);
+	}
+
+	private struct ObserverInfo
+	{
+		public EntityID Entity;
+		public EntityID Event;
+		public Term LastComponent;
+	}
+
+	static unsafe void RunObserver(ref Iterator it)
+	{
+		ref var observerInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
+		ref var record = ref it.World.GetRecord(observerInfo.Entity);
+		var iterator = new Iterator
+		(
+			it.Commands,
+			1,
+			record.Archetype.Table,
+			stackalloc EntityID[1] { observerInfo.Entity },
+			stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
+			null,
+			observerInfo.Event
 		);
 
-		EcsAssert.Assert(data.Length == buf.Length);
-		data.CopyTo(buf);
+		var obsA = it.Field<EcsObserver>();
+
+		for (int i = 0; i < it.Count; ++i)
+		{
+			ref var obs = ref obsA[i];
+
+			if (record.Archetype.FindMatch(obs.Terms) == 0 &&
+			    obs.Terms.BinarySearch(observerInfo.LastComponent, it.World._comparer) >= 0)
+			{
+				obs.Callback(ref iterator);
+			}
+		}
 	}
 
 	internal bool Has(EntityID entity, ref EcsComponent cmp)
@@ -403,9 +477,9 @@ public sealed partial class World : IDisposable
 	public unsafe void RunPhase(EntityID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
-			new () { ID = Component<EcsEnabled>().ID, Op = TermOp.With },
-			new () { ID = Component<EcsSystem>().ID, Op = TermOp.With },
-			new () { ID = phase, Op = TermOp.With }
+			Term.With(Component<EcsEnabled>().ID),
+			Term.With(Component<EcsSystem>().ID),
+			Term.With(phase),
 		};
 
 		Query(terms, &RunSystems);
@@ -434,6 +508,7 @@ public sealed partial class World : IDisposable
 
 	static unsafe void RunSystems(ref Iterator it)
 	{
+		var emptyIt = new Iterator(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<ulong>.Empty, ReadOnlySpan<int>.Empty, null, 0);
 		var sysA = it.Field<EcsSystem>();
 
 		for (int i = 0; i < it.Count; ++i)
@@ -455,11 +530,11 @@ public sealed partial class World : IDisposable
 
 			if (sys.Query != 0)
 			{
-				it.World.Query(sys.Terms, sys.Func);
+				it.World.Query(sys.Terms, sys.Callback);
 			}
 			else
 			{
-				sys.Func(ref it);
+				sys.Callback(ref emptyIt);
 			}
 		}
 	}

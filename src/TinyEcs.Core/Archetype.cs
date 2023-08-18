@@ -255,4 +255,3 @@ struct EcsEdge
 	public EntityID ComponentID;
 	public Archetype Archetype;
 }
-

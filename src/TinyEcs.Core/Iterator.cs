@@ -4,22 +4,39 @@ public delegate void IteratorDelegate(ref Iterator it);
 
 public readonly ref struct Iterator
 {
-	private readonly Archetype _archetype;
+	private readonly ReadOnlySpan<EntityID> _entities;
+	private readonly ReadOnlySpan<int> _entitiesToTableRows;
+	private readonly Table _table;
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, Archetype archetype, object? userData)
+	internal Iterator(Commands commands, Archetype archetype, object? userData, EntityID eventID = 0)
+	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID)
 	{
-		Commands = commands;
-		_archetype = archetype;
-		UserData = userData;
+
 	}
 
-	public Commands Commands { get; }
-	public readonly World World => _archetype.World;
-	public readonly int Count => _archetype.Count;
-	public readonly float DeltaTime => World.DeltaTime;
-	public object? UserData { get; }
-	internal Archetype Archetype => _archetype;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EntityID> entities, ReadOnlySpan<int> toRows, object? userData, EntityID eventID = 0)
+	{
+		Commands = commands;
+		World = commands.World;
+		UserData = userData;
+		EventID = eventID;
+		_table = table;
+		_entities = entities;
+		_entitiesToTableRows = toRows;
+		Count = count;
+		DeltaTime = commands.World.DeltaTime;
+	}
+
+
+	public readonly Commands Commands { get; }
+	public readonly World World { get; }
+	public readonly int Count { get; }
+	public readonly float DeltaTime { get; }
+	public readonly object? UserData { get; }
+	public readonly EntityID EventID { get; }
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -27,42 +44,42 @@ public readonly ref struct Iterator
 	{
 		ref var cmp = ref World.Component<T>();
 
-		var column = _archetype.GetComponentIndex(ref cmp);
+		var column = _table.GetComponentIndex(ref cmp);
 		EcsAssert.Assert(column >= 0);
 		EcsAssert.Assert(cmp.Size == sizeof(T));
 
-		var span = _archetype.Table.ComponentData<T>(column, 0, _archetype.Table.Rows);
-		return new FieldIterator<T>(span, _archetype.EntitiesTableRows);
+		var span = _table.ComponentData<T>(column, 0, _table.Rows);
+		return new FieldIterator<T>(span, _entitiesToTableRows);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref World.Component<T>();
-		var column = _archetype.GetComponentIndex(ref cmp);
+		var column = _table.GetComponentIndex(ref cmp);
 		return column >= 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Entity(int row)
-		=> new (World, _archetype.Entities[row]);
+		=> new (World, _entities[row]);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly CommandEntityView EntityDefer(int row)
+	public readonly CommandEntityView EntityDeferred(int row)
 		=> Commands.Entity(Entity(row));
 }
 
 [SkipLocalsInit]
-public readonly ref struct FieldIterator<T> where T : unmanaged
+public readonly ref struct FieldIterator<T> where T : unmanaged, IComponent
 {
 	private readonly ref T _firstElement;
 	private readonly ref int _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal FieldIterator(Span<T> elements, int[] entities)
+	internal FieldIterator(Span<T> elements, ReadOnlySpan<int> entities)
 	{
 		_firstElement = ref MemoryMarshal.GetReference(elements);
-		_firstEntity = ref MemoryMarshal.GetArrayDataReference(entities);
+		_firstEntity = ref MemoryMarshal.GetReference(entities);
 	}
 
 	public readonly ref T this[int index]

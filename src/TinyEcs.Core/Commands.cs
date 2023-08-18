@@ -17,6 +17,8 @@ public sealed class Commands
 		_unset = new();
 	}
 
+	internal World World => _main;
+
 
 	public CommandEntityView Entity(EntityID id)
 	{
