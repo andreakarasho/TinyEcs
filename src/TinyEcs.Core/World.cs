@@ -111,10 +111,15 @@ public sealed partial class World : IDisposable
 		=> Spawn()
 			.Set(new EcsSystem(callback, query, terms, tick));
 
-	public unsafe EntityView Observer(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
+	public unsafe EntityView Event(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
 	{
-		return Spawn()
-			.Set(new EcsObserver(callback, terms));
+		var obs = Spawn()
+			.Set(new EcsEvent(callback, terms));
+
+		foreach (ref readonly var id in events)
+			obs.Set(id);
+
+		return obs;
 	}
 
 	public EntityView Entity(EntityID id)
@@ -147,19 +152,16 @@ public sealed partial class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
-		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity}");
+		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
 
-		//if (GetParent(entity) != 0)
-		{
-			Query()
-				.With<EcsChildOf>(entity)
-				.Iterate(static (ref Iterator it) => {
-					for (int i = it.Count - 1; i >= 0; i--)
-					{
-						it.Entity(i).Despawn();
-					}
-				});
-		}
+		Query()
+			.With<EcsChildOf>(entity)
+			.Iterate(static (ref Iterator it) => {
+				for (int i = 0; i < it.Count; ++i)
+				{
+					it.Entity(0).Despawn();
+				}
+			});
 
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
@@ -188,7 +190,7 @@ public sealed partial class World : IDisposable
 
 		if (!add)
 		{
-			EmitObserver<EcsObserverOnUnset>(entity, cmp.ID);
+			EmitEvent<EcsEventOnUnset>(entity, cmp.ID);
 		}
 
 		record.Row = record.Archetype.MoveEntity(arch, record.Row);
@@ -323,23 +325,20 @@ public sealed partial class World : IDisposable
 
 		if (emit)
 		{
-			EmitObserver<EcsObserverOnSet>(entity, cmp.ID);
+			EmitEvent<EcsEventOnSet>(entity, cmp.ID);
 		}
 	}
 
 	[SkipLocalsInit]
-	private unsafe void EmitObserver<T>(EntityID entity, EntityID component)
-	where T : unmanaged, IObserverComponent
+	public unsafe void EmitEvent(EntityID eventID, EntityID entity, EntityID component)
 	{
-		var eventID = Component<T>().ID;
-
 		Query
 		(
 			stackalloc Term[] {
-				Term.With(Component<EcsObserver>().ID),
+				Term.With(Component<EcsEvent>().ID),
 				Term.With(eventID),
 			},
-			&RunObserver,
+			&OnEvent,
 			new ObserverInfo() {
 				Entity = entity,
 				Event = eventID,
@@ -355,31 +354,31 @@ public sealed partial class World : IDisposable
 		public Term LastComponent;
 	}
 
-	static unsafe void RunObserver(ref Iterator it)
+	static unsafe void OnEvent(ref Iterator it)
 	{
-		ref var observerInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
-		ref var record = ref it.World.GetRecord(observerInfo.Entity);
+		ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
+		ref var record = ref it.World.GetRecord(eventInfo.Entity);
 		var iterator = new Iterator
 		(
 			it.Commands,
 			1,
 			record.Archetype.Table,
-			stackalloc EntityID[1] { observerInfo.Entity },
+			stackalloc EntityID[1] { eventInfo.Entity },
 			stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
 			null,
-			observerInfo.Event
+			eventInfo.Event
 		);
 
-		var obsA = it.Field<EcsObserver>();
+		var evA = it.Field<EcsEvent>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
-			ref var obs = ref obsA[i];
+			ref var ev = ref evA[i];
 
-			if (record.Archetype.FindMatch(obs.Terms) == 0 &&
-			    obs.Terms.BinarySearch(observerInfo.LastComponent, it.World._comparer) >= 0)
+			if (record.Archetype.FindMatch(ev.Terms) == 0 &&
+			    ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0)
 			{
-				obs.Callback(ref iterator);
+				ev.Callback(ref iterator);
 			}
 		}
 	}

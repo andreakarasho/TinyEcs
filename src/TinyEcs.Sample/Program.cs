@@ -17,24 +17,36 @@ var secondMain = world.Spawn();
 
 unsafe
 {
-	ReadOnlySpan<Term> terms = stackalloc Term[] {
+	ReadOnlySpan<Term> a = [Term.With(world.Component<Position>().ID)];
 
-		// new () { ID = world.Component<Likes>().ID, Op = TermOp.With },
-		// new () { ID = world.Component<Dogs>().ID, Op = TermOp.With },
-		 new () { ID = world.Component<Position>().ID, Op = TermOp.With },
-		 new () { ID = world.Component<Velocity>().ID, Op = TermOp.With },
-		 new () { ID = world.Pair<EcsChildOf>(main.ID), Op = TermOp.With }
-	};
+	world.Event
+	(
+		&ObserveThings,
+		stackalloc Term[] {
+			Term.With(world.Component<Position>().ID),
+			//Term.With(world.Component<Velocity>().ID),
+			//Term.With(world.Pair<EcsChildOf>(main.ID))
+		},
+		stackalloc EntityID[] {
+			world.Component<CustomEvent>().ID
+			//world.Component<EcsObserverOnSet>().ID,
+			//world.Component<EcsObserverOnUnset>().ID
+		}
+	);
 
-	world.Observer(&ObserveThings, terms)
-		.Set<EcsObserverOnSet>()
-		.Set<EcsObserverOnUnset>();
+	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
+
+	//world.Despawn(world.Component<Position>().ID);
+	main.Set<Velocity>();
+	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
+	world.EmitEvent<CustomEvent, Position>(main);
+
+		// .With<Position>()
+		// .With<Velocity>()
+		// .With<EcsChildOf>(main.ID)
+		// .OnEvent<EcsObserverOnSet>()
+		// .OnEvent<EcsObserverOnUnset>();
 }
-
-
-
-
-
 
 
 for (int i = 0; i < 10; ++i)
@@ -50,18 +62,18 @@ main.Unset<Velocity>();
 for (int i = 0; i < 10; ++i)
 	world.Spawn().ChildOf(main);
 
-main.Children(s => {
+main.Children(static s => {
 	var p = s.Parent();
 	Console.WriteLine("child id {0}", s.ID);
 });
 
-secondMain.Children(s => {
+secondMain.Children(static s => {
 	var p = s.Parent();
 	Console.WriteLine("secondMain child id {0}", s.ID);
 });
 
 
-//main.Despawn();
+main.Despawn();
 //main.ClearChildren();
 
 world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
@@ -249,7 +261,7 @@ static void ObserveThings(ref Iterator it)
 	var posA = it.Field<Position>();
 	var velA = it.Field<Velocity>();
 
-	var isAdded = it.EventID == it.World.Component<EcsObserverOnSet>().ID;
+	var isAdded = it.EventID == it.World.Component<EcsEventOnSet>().ID;
 	var first = isAdded ? "added" : "removed";
 	var sec = isAdded ? "to" : "from";
 
@@ -280,6 +292,7 @@ struct Position : IComponent { public float X, Y, Z; }
 struct Velocity : IComponent { public float X, Y; }
 struct PlayerTag : IComponent { public ulong ID; }
 
+struct CustomEvent : IEvent { }
 
 struct Likes : ITag;
 struct Dogs : ITag { }

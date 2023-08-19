@@ -4,8 +4,8 @@ namespace TinyEcs;
 public interface IComponentStub { }
 public interface IComponent : IComponentStub { }
 public interface ITag : IComponentStub { }
+public interface IEvent : ITag { }
 
-internal interface IObserverComponent : ITag { }
 
 public readonly struct EcsComponent : IComponent
 {
@@ -53,7 +53,7 @@ public unsafe struct EcsSystem : IComponent
 }
 
 
-public unsafe struct EcsObserver : IComponent
+public unsafe struct EcsEvent : IComponent
 {
 	const int TERMS_COUNT = 32;
 
@@ -73,7 +73,7 @@ public unsafe struct EcsObserver : IComponent
 		}
 	}
 
-	public EcsObserver(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
+	public EcsEvent(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
 	{
 		Callback = callback;
 		_termsCount = terms.Length;
@@ -81,8 +81,8 @@ public unsafe struct EcsObserver : IComponent
 	}
 }
 
-public struct EcsObserverOnSet : IObserverComponent { }
-public struct EcsObserverOnUnset : IObserverComponent { }
+public struct EcsEventOnSet : IEvent { }
+public struct EcsEventOnUnset : IEvent { }
 public struct EcsPhase : ITag { }
 public struct EcsPanic : ITag { }
 public struct EcsDelete : ITag { }

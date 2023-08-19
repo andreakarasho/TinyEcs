@@ -77,7 +77,7 @@ sealed unsafe class Table
 		{
 			ref readonly var meta = ref _componentInfo[i];
 			//var leftArray = _componentsData[i].AsSpan();
-			var leftArray = ComponentData<byte>(i, 0, meta.Size * _count);
+			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
 
 			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
 			var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
@@ -108,8 +108,8 @@ sealed unsafe class Table
 			}
 
 			ref readonly var meta = ref _componentInfo[i];
-			var leftArray = ComponentData<byte>(i, 0, meta.Size * _count);
-			var rightArray = to.ComponentData<byte>(j, 0, meta.Size * to._count);
+			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
+			var rightArray = to.ComponentData<byte>(j, 0, meta.Size * to._capacity);
 
 			//var leftArray = _componentsData[i].AsSpan();
 			//var rightArray = to._componentsData[j].AsSpan();
