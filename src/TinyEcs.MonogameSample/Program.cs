@@ -272,8 +272,7 @@ sealed unsafe class TinyGame : Game
 		size = font32.MeasureString(rotatingText);
 		size.X = batch.GraphicsDevice.Viewport.Width / 2f - size.X / 2f;
 		size.Y = batch.GraphicsDevice.Viewport.Height / 2f - size.Y / 2f;
-		var scale = Vector2.One; // new Vector2(2, 2);
-		batch.DrawString(font32, rotatingText, size, Color.Yellow, effect: FontSystemEffect.Stroked, effectAmount: 1, scale: scale);
+		batch.DrawString(font32, rotatingText, size, Color.Yellow, effect: FontSystemEffect.Stroked, effectAmount: 1);
 	}
 }
 
