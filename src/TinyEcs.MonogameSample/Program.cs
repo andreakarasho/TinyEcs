@@ -5,6 +5,7 @@ using FontStashSharp;
 using FontStashSharp.RichText;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using TinyEcs;
 
 using var game = new TinyGame();
@@ -83,8 +84,10 @@ sealed unsafe class TinyGame : Game
 	protected override void LoadContent()
 	{
 		_fontSystem = new FontSystem();
-		var path = Path.Combine(AppContext.BaseDirectory, "Content", "fonts", "Roboto-Regular.ttf");
-        _fontSystem.AddFont(File.ReadAllBytes(path));
+
+		var path = Path.Combine(AppContext.BaseDirectory, "Content", "fonts");
+		foreach (var file in Directory.GetFiles(path, "*.ttf"))
+        	_fontSystem.AddFont(File.ReadAllBytes(file));
 
 		_ = Assets<FontSystem>.Register("fontSys", _fontSystem);
 	}
@@ -265,7 +268,6 @@ sealed unsafe class TinyGame : Game
 		size.X = batch.GraphicsDevice.Viewport.Width - size.X - 15;
 		size.Y = 15;
 		batch.DrawString(font18, dbgText, size, Color.White, effect: FontSystemEffect.Stroked, effectAmount: 1);
-
 
 		var rotatingText = "Hello from TinyEcs!";
 		var font32 = fontSys.GetFont(32);

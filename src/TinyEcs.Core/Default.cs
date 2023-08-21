@@ -55,11 +55,11 @@ public unsafe struct EcsSystem : IComponent
 
 public unsafe struct EcsEvent : IComponent
 {
-	const int TERMS_COUNT = 32;
+	const int TERMS_COUNT = 16;
 
 	public readonly delegate*<ref Iterator, void> Callback;
 
-	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(byte))];
+	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(TermOp))];
 	private readonly int _termsCount;
 
 	public Span<Term> Terms
@@ -77,7 +77,9 @@ public unsafe struct EcsEvent : IComponent
 	{
 		Callback = callback;
 		_termsCount = terms.Length;
-		terms.CopyTo(Terms);
+		var currentTerms = Terms;
+		terms.CopyTo(currentTerms);
+		currentTerms.Sort(static (a, b) => a.ID.CompareTo(b.ID));
 	}
 }
 

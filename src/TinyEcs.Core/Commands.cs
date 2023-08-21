@@ -48,6 +48,8 @@ public sealed class Commands
 
 	public unsafe void Set(EntityID id, EntityID tag)
 	{
+		EcsAssert.Assert(!IDOp.IsPair(tag));
+
 		if (_main.Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref _main.Component<EcsComponent>();
@@ -96,13 +98,6 @@ public sealed class Commands
 	public unsafe void Set(EntityID id, EntityID first, EntityID second)
 	{
 		var cmpID = IDOp.Pair(first, second);
-		if (_main.Exists(cmpID) && Has<EcsComponent>(cmpID))
-		{
-			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
-			Set(id, ref cmp2);
-			return;
-		}
-
 		var cmp = new EcsComponent(cmpID, 0);
 		Set(id, ref cmp);
 	}
@@ -110,7 +105,7 @@ public sealed class Commands
 	public unsafe void Set<TKind>(EntityID id, EntityID target)
 	where TKind : unmanaged, ITag
 	{
-		var cmpID = IDOp.Pair(_main.Component<TKind>().ID, target);
+		var cmpID = _main.Pair<TKind>(target);
 		var cmp = new EcsComponent(cmpID, 0);
 		Set(id, ref cmp);
 	}

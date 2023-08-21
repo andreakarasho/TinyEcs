@@ -172,7 +172,16 @@ public sealed partial class World : IDisposable
 	}
 
 	public bool Exists(EntityID entity)
-		=> _entities.Contains(entity);
+	{
+		if (IDOp.IsPair(entity))
+		{
+			var first = IDOp.GetPairFirst(entity);
+			var second = IDOp.GetPairSecond(entity);
+			return _entities.Contains(first) && _entities.Contains(second);
+		}
+
+		return _entities.Contains(entity);
+	}
 
 	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
@@ -332,6 +341,10 @@ public sealed partial class World : IDisposable
 	[SkipLocalsInit]
 	public unsafe void EmitEvent(EntityID eventID, EntityID entity, EntityID component)
 	{
+		EcsAssert.Assert(Exists(eventID));
+		EcsAssert.Assert(Exists(entity));
+		EcsAssert.Assert(Exists(component));
+
 		Query
 		(
 			stackalloc Term[] {
@@ -392,12 +405,6 @@ public sealed partial class World : IDisposable
 	public void Set(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (Exists(id) && Has<EcsComponent>(id))
-		{
-			ref var cmp2 = ref Get<EcsComponent>(id);
-			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
-			return;
-		}
 
 		if (Has<EcsExclusive>(first))
 		{
@@ -418,6 +425,8 @@ public sealed partial class World : IDisposable
 
 	public void Set(EntityID entity, EntityID tag)
 	{
+		EcsAssert.Assert(!IDOp.IsPair(tag));
+
 		if (Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(tag);
@@ -433,12 +442,6 @@ public sealed partial class World : IDisposable
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (Exists(id) && Has<EcsComponent>(id))
-		{
-			ref var cmp2 = ref Get<EcsComponent>(id);
-			return Has(entity, ref cmp2);
-		}
-
 		var cmp = new EcsComponent(id, 0);
 		return Has(entity, ref cmp);
 	}
