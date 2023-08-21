@@ -19,11 +19,11 @@ public readonly struct EcsComponent : IComponent
 	}
 }
 
-public unsafe struct EcsSystem : IComponent
+public unsafe struct EcsSystem<TContext> : IComponent
 {
 	const int TERMS_COUNT = 32;
 
-	public readonly delegate*<ref Iterator, void> Callback;
+	public readonly delegate*<ref Iterator<TContext>, void> Callback;
 	public readonly EntityID Query;
 	public readonly float Tick;
 	public float TickCurrent;
@@ -41,7 +41,7 @@ public unsafe struct EcsSystem : IComponent
 		}
 	}
 
-	public EcsSystem(delegate*<ref Iterator, void> func, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public EcsSystem(delegate*<ref Iterator<TContext>, void> func, EntityID query, ReadOnlySpan<Term> terms, float tick)
 	{
 		Callback = func;
 		Query = query;
@@ -53,11 +53,11 @@ public unsafe struct EcsSystem : IComponent
 }
 
 
-public unsafe struct EcsEvent : IComponent
+public unsafe struct EcsEvent<TContext> : IComponent
 {
 	const int TERMS_COUNT = 16;
 
-	public readonly delegate*<ref Iterator, void> Callback;
+	public readonly delegate*<ref Iterator<TContext>, void> Callback;
 
 	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(TermOp))];
 	private readonly int _termsCount;
@@ -73,7 +73,7 @@ public unsafe struct EcsEvent : IComponent
 		}
 	}
 
-	public EcsEvent(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
+	public EcsEvent(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms)
 	{
 		Callback = callback;
 		_termsCount = terms.Length;

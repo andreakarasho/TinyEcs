@@ -1,19 +1,19 @@
 namespace TinyEcs;
 
-public sealed class Archetype
+public sealed class Archetype<TContext>
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
-	private readonly World _world;
-	private readonly ComponentComparer _comparer;
+	private readonly World<TContext> _world;
+	private readonly ComponentComparer<TContext> _comparer;
 	private int _capacity, _count;
 	private EntityID[] _entities;
 	private int[] _entitiesTableRows;
-	internal List<EcsEdge> _edgesLeft, _edgesRight;
-	private readonly Table _table;
+	internal List<EcsEdge<TContext>> _edgesLeft, _edgesRight;
+	private readonly Table<TContext> _table;
 
 
-	internal Archetype(World world, Table table, ReadOnlySpan<EcsComponent> components, ComponentComparer comparer)
+	internal Archetype(World<TContext> world, Table<TContext> table, ReadOnlySpan<EcsComponent> components, ComponentComparer<TContext> comparer)
 	{
 		_comparer = comparer;
 		_world = world;
@@ -22,16 +22,16 @@ public sealed class Archetype
 		_count = 0;
 		_entities = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
 		_entitiesTableRows = new int[ARCHETYPE_INITIAL_CAPACITY];
-		_edgesLeft = new List<EcsEdge>();
-		_edgesRight = new List<EcsEdge>();
+		_edgesLeft = new List<EcsEdge<TContext>>();
+		_edgesRight = new List<EcsEdge<TContext>>();
 		ComponentInfo = components.ToArray();
 	}
 
 	internal EntityID[] Entities => _entities;
 	internal int[] EntitiesTableRows => _entitiesTableRows;
-	public World World => _world;
+	public World<TContext> World => _world;
 	public int Count => _count;
-	internal Table Table => _table;
+	internal Table<TContext> Table => _table;
 
 	public readonly EcsComponent[] ComponentInfo;
 
@@ -64,7 +64,7 @@ public sealed class Archetype
 		return (_count++, row);
 	}
 
-	internal EntityID Remove(ref EcsRecord record)
+	internal EntityID Remove(ref EcsRecord<TContext> record)
 	{
 		(var removed, var removedRow) = SwapWithLast(record.Row);
 
@@ -75,15 +75,15 @@ public sealed class Archetype
 		return removed;
 	}
 
-	internal Archetype InsertVertex(Archetype left, Table table, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
+	internal Archetype<TContext> InsertVertex(Archetype<TContext> left, Table<TContext> table, ReadOnlySpan<EcsComponent> components, ref EcsComponent component)
 	{
-		var vertex = new Archetype(left._world, table, components, _comparer);
+		var vertex = new Archetype<TContext>(left._world, table, components, _comparer);
 		MakeEdges(left, vertex, component.ID);
 		InsertVertex(vertex);
 		return vertex;
 	}
 
-	internal int MoveEntity(Archetype to, int fromRow)
+	internal int MoveEntity(Archetype<TContext> to, int fromRow)
 	{
 		(var removed, var removedRow) = SwapWithLast(fromRow);
 
@@ -143,13 +143,13 @@ public sealed class Archetype
 		return (removed, removedRow);
 	}
 
-	private static void MakeEdges(Archetype left, Archetype right, EntityID id)
+	private static void MakeEdges(Archetype<TContext> left, Archetype<TContext> right, EntityID id)
 	{
-		left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = id });
-		right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = id });
+		left._edgesRight.Add(new EcsEdge<TContext>() { Archetype = right, ComponentID = id });
+		right._edgesLeft.Add(new EcsEdge<TContext>() { Archetype = left, ComponentID = id });
 	}
 
-	private void InsertVertex(Archetype newNode)
+	private void InsertVertex(Archetype<TContext> newNode)
 	{
 		var nodeTypeLen = ComponentInfo.Length;
 		var newTypeLen = newNode.ComponentInfo.Length;
@@ -210,7 +210,7 @@ public sealed class Archetype
 
 		while (currents.CanAdvance() && searching.CanAdvance())
 		{
-			if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
+			if (ComponentComparer<TContext>.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
 			{
 				if (searching.Value.Op != TermOp.With)
 				{
@@ -238,7 +238,7 @@ public sealed class Archetype
 	{
 		PrintRec(this, 0, 0);
 
-		static void PrintRec(Archetype root, int depth, EntityID rootComponent)
+		static void PrintRec(Archetype<TContext> root, int depth, EntityID rootComponent)
 		{
 			Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
 
@@ -250,8 +250,8 @@ public sealed class Archetype
 	}
 }
 
-struct EcsEdge
+struct EcsEdge<TContext>
 {
 	public EntityID ComponentID;
-	public Archetype Archetype;
+	public Archetype<TContext> Archetype;
 }

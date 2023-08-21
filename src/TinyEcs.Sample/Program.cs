@@ -10,7 +10,7 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-using var world = new World();
+using var world = new World<Context1>();
 
 var main = world.Spawn();
 var secondMain = world.Spawn();
@@ -76,15 +76,15 @@ secondMain.Children(static s => {
 main.Despawn();
 //main.ClearChildren();
 
-world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
+world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator<Context1> it) => {
 	Console.WriteLine("found children");
 });
 
-world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
+world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator<Context1> it) => {
 	Console.WriteLine("found children for any");
 });
 
-var ecs = new World();
+var ecs = new World<Context2>();
 
 
 var pos = ecs.Spawn();
@@ -149,7 +149,7 @@ unsafe
 {
 	ecs.Query()
 		.With<EcsComponent>()
-		.Iterate(static (ref Iterator it) => {
+		.Iterate(static (ref Iterator<Context2> it) => {
 			var cmpA = it.Field<EcsComponent>();
 
 			for (int i = 0; i < it.Count; ++i)
@@ -193,7 +193,7 @@ while (true)
 }
 
 
-static void Setup(ref Iterator it)
+static void Setup(ref Iterator<Context2> it)
 {
 	var sw = Stopwatch.StartNew();
 
@@ -216,7 +216,7 @@ static void Setup(ref Iterator it)
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
-static void PrintComponents(ref Iterator it)
+static void PrintComponents(ref Iterator<Context2> it)
 {
 	var cmpA = it.Field<EcsComponent>();
 
@@ -227,7 +227,7 @@ static void PrintComponents(ref Iterator it)
 	}
 }
 
-static void ParseQuery(ref Iterator it)
+static void ParseQuery(ref Iterator<Context2> it)
 {
 	// it.World.PrintGraph();
 	// it.Archetype.Print();
@@ -245,18 +245,18 @@ static void ParseQuery(ref Iterator it)
 	}
 }
 
-static void PrintSystem(ref Iterator it)
+static void PrintSystem(ref Iterator<Context2> it)
 {
 	Console.WriteLine("1");
 }
 
-static void PrintWarnSystem(ref Iterator it)
+static void PrintWarnSystem(ref Iterator<Context2> it)
 {
 	//Console.WriteLine("3");
 }
 
 
-static void ObserveThings(ref Iterator it)
+static void ObserveThings(ref Iterator<Context1> it)
 {
 	var posA = it.Field<Position>();
 	var velA = it.Field<Velocity>();
@@ -299,3 +299,8 @@ struct Dogs : ITag { }
 struct Apples : ITag { }
 
 struct TestStr { public byte v; }
+
+
+
+struct Context1 {}
+struct Context2 {}

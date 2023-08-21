@@ -1,20 +1,19 @@
 namespace TinyEcs;
 
-public sealed partial class World : IDisposable
+public sealed partial class World<TContext> : IDisposable
 {
-	private readonly Archetype _archRoot;
-	private readonly EntitySparseSet<EcsRecord> _entities = new();
-	private readonly Dictionary<EntityID, Archetype> _typeIndex = new ();
-	private readonly Dictionary<EntityID, Table> _tableIndex = new ();
-	private readonly Dictionary<nint, EcsComponent> _components = new();
-	private readonly ComponentComparer _comparer;
-	private readonly Commands _commands;
+	private readonly Archetype<TContext> _archRoot;
+	private readonly EntitySparseSet<EcsRecord<TContext>> _entities = new();
+	private readonly Dictionary<EntityID, Archetype<TContext>> _typeIndex = new ();
+	private readonly Dictionary<EntityID, Table<TContext>> _tableIndex = new ();
+	private readonly ComponentComparer<TContext> _comparer;
+	private readonly Commands<TContext> _commands;
 	private int _frame;
 
 	public World()
 	{
-		_comparer = new ComponentComparer(this);
-		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
+		_comparer = new ComponentComparer<TContext>(this);
+		_archRoot = new Archetype<TContext>(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 		_commands = new (this);
 
 		RegisterDefaults();
@@ -32,7 +31,6 @@ public sealed partial class World : IDisposable
 		_entities.Clear();
 		_archRoot.Clear();
 		_typeIndex.Clear();
-		_components.Clear();
 		_tableIndex.Clear();
 		_commands.Clear();
 	}
@@ -76,23 +74,23 @@ public sealed partial class World : IDisposable
 
 	public unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
-		ref var cmp = ref CollectionsMarshal.GetValueRefOrAddDefault(_components, typeof(T).TypeHandle.Value, out var exists);
-		if (!exists)
+		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
+
+		if (lookup.ID == 0)
 		{
 			var ent = SpawnEmpty();
 			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
-			cmp = new EcsComponent(ent.ID, size);
+			var cmp = new EcsComponent(ent.ID, size);
+			lookup = cmp;
+
 			Set(cmp.ID, cmp);
 			Set<EcsEnabled>(cmp.ID);
 			Set<EcsPanic, EcsDelete>(cmp.ID);
-
 			if (size == 0)
-			{
 				Set<EcsTag>(cmp.ID);
-			}
 		}
 
-		return ref cmp;
+		return ref lookup;
 	}
 
 	public EntityID Pair<TKind, TTarget>()
@@ -104,17 +102,17 @@ public sealed partial class World : IDisposable
 	where TKind : unmanaged, ITag
 		=> IDOp.Pair(Component<TKind>().ID, target);
 
-	public QueryBuilder Query()
+	public QueryBuilder<TContext> Query()
 		=> new (this);
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
-			.Set(new EcsSystem(callback, query, terms, tick));
+			.Set(new EcsSystem<TContext>(callback, query, terms, tick));
 
-	public unsafe EntityView Event(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
+	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
 	{
 		var obs = Spawn()
-			.Set(new EcsEvent(callback, terms));
+			.Set(new EcsEvent<TContext>(callback, terms));
 
 		foreach (ref readonly var id in events)
 			obs.Set(id);
@@ -122,26 +120,26 @@ public sealed partial class World : IDisposable
 		return obs;
 	}
 
-	public EntityView Entity(EntityID id)
+	public EntityView<TContext> Entity(EntityID id)
 	{
 		EcsAssert.Assert(Exists(id));
 		return new(this, id);
 	}
 
-	public EntityView Spawn()
+	public EntityView<TContext> Spawn()
 		=> SpawnEmpty().Set<EcsEnabled>();
 
-	internal EntityView SpawnEmpty(EntityID id = 0)
+	internal EntityView<TContext> SpawnEmpty(EntityID id = 0)
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
 		record.Row = _archRoot.Add(id).Item1;
 
-		return new EntityView(this, id);
+		return new EntityView<TContext>(this, id);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ref EcsRecord GetRecord(EntityID id)
+	internal ref EcsRecord<TContext> GetRecord(EntityID id)
 	{
 		ref var record = ref _entities.Get(id);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
@@ -156,7 +154,7 @@ public sealed partial class World : IDisposable
 
 		Query()
 			.With<EcsChildOf>(entity)
-			.Iterate(static (ref Iterator it) => {
+			.Iterate(static (ref Iterator<TContext> it) => {
 				for (int i = 0; i < it.Count; ++i)
 				{
 					it.Entity(0).Despawn();
@@ -189,7 +187,7 @@ public sealed partial class World : IDisposable
 		InternalAttachDetach(entity, ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, ref EcsRecord record, ref EcsComponent cmp, bool add)
+	private bool InternalAttachDetach(EntityID entity, ref EcsRecord<TContext> record, ref EcsComponent cmp, bool add)
 	{
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
@@ -209,7 +207,7 @@ public sealed partial class World : IDisposable
 	}
 
 	[SkipLocalsInit]
-	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
+	internal Archetype<TContext>? CreateArchetype(Archetype<TContext> root, ref EcsComponent cmp, bool add)
 	{
 		// var column = root.GetComponentIndex(ref cmp);
 
@@ -259,7 +257,7 @@ public sealed partial class World : IDisposable
 		ref var arch = ref CollectionsMarshal.GetValueRefOrAddDefault(_typeIndex, hash, out var exists);
 		if (!exists)
 		{
-			ref var table = ref Unsafe.NullRef<Table>();
+			ref var table = ref Unsafe.NullRef<Table<TContext>>();
 
 			if (cmp.Size != 0)
 			{
@@ -267,7 +265,7 @@ public sealed partial class World : IDisposable
 				table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out exists)!;
 				if (!exists)
 				{
-					table = new Table(tableHash, span, _comparer);
+					table = new (tableHash, span, _comparer);
 				}
 			}
 			else
@@ -348,7 +346,7 @@ public sealed partial class World : IDisposable
 		Query
 		(
 			stackalloc Term[] {
-				Term.With(Component<EcsEvent>().ID),
+				Term.With(Component<EcsEvent<TContext>>().ID),
 				Term.With(eventID),
 			},
 			&OnEvent,
@@ -367,11 +365,11 @@ public sealed partial class World : IDisposable
 		public Term LastComponent;
 	}
 
-	static unsafe void OnEvent(ref Iterator it)
+	static unsafe void OnEvent(ref Iterator<TContext> it)
 	{
 		ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
 		ref var record = ref it.World.GetRecord(eventInfo.Entity);
-		var iterator = new Iterator
+		var iterator = new Iterator<TContext>
 		(
 			it.Commands,
 			1,
@@ -382,7 +380,7 @@ public sealed partial class World : IDisposable
 			eventInfo.Event
 		);
 
-		var evA = it.Field<EcsEvent>();
+		var evA = it.Field<EcsEvent<TContext>>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -480,7 +478,7 @@ public sealed partial class World : IDisposable
 	{
 		Span<Term> terms = stackalloc Term[] {
 			Term.With(Component<EcsEnabled>().ID),
-			Term.With(Component<EcsSystem>().ID),
+			Term.With(Component<EcsSystem<TContext>>().ID),
 			Term.With(phase),
 		};
 
@@ -508,10 +506,10 @@ public sealed partial class World : IDisposable
 		_frame += 1;
 	}
 
-	static unsafe void RunSystems(ref Iterator it)
+	static unsafe void RunSystems(ref Iterator<TContext> it)
 	{
-		var emptyIt = new Iterator(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<ulong>.Empty, ReadOnlySpan<int>.Empty, null, 0);
-		var sysA = it.Field<EcsSystem>();
+		var emptyIt = new Iterator<TContext>(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<ulong>.Empty, ReadOnlySpan<int>.Empty, null, 0);
+		var sysA = it.Field<EcsSystem<TContext>>();
 
 		for (int i = 0; i < it.Count; ++i)
 		{
@@ -544,7 +542,7 @@ public sealed partial class World : IDisposable
 	public unsafe void Query
 	(
 		Span<Term> terms,
-		delegate* <ref Iterator, void> action,
+		delegate* <ref Iterator<TContext>, void> action,
 		object? userData = null
 	)
 	{
@@ -554,10 +552,10 @@ public sealed partial class World : IDisposable
 
 		static void QueryRec
 		(
-			Archetype root,
+			Archetype<TContext> root,
 			UnsafeSpan<Term> terms,
-			Commands commands,
-			delegate* <ref Iterator, void> action,
+			Commands<TContext> commands,
+			delegate* <ref Iterator<TContext>, void> action,
 			object? userData
 		)
 		{
@@ -569,7 +567,7 @@ public sealed partial class World : IDisposable
 
 			if (result == 0 && root.Count > 0)
 			{
-				var it = new Iterator(commands, root, userData);
+				var it = new Iterator<TContext>(commands, root, userData);
 				action(ref it);
 			}
 
@@ -593,8 +591,17 @@ public sealed partial class World : IDisposable
 }
 
 
-struct EcsRecord
+struct EcsRecord<TContext>
 {
-	public Archetype Archetype;
+	public Archetype<TContext> Archetype;
 	public int Row;
+}
+
+
+internal static class Lookup<TContext>
+{
+	internal static class Entity<T>
+	{
+		public static EcsComponent Component;
+	}
 }

@@ -1,23 +1,23 @@
 namespace TinyEcs;
 
-public delegate void IteratorDelegate(ref Iterator it);
+public delegate void IteratorDelegate<TContext>(ref Iterator<TContext> it);
 
-public readonly ref struct Iterator
+public readonly ref struct Iterator<TContext>
 {
 	private readonly ReadOnlySpan<EntityID> _entities;
 	private readonly ReadOnlySpan<int> _entitiesToTableRows;
-	private readonly Table _table;
+	private readonly Table<TContext> _table;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, Archetype archetype, object? userData, EntityID eventID = 0)
+	internal Iterator(Commands<TContext> commands, Archetype<TContext> archetype, object? userData, EntityID eventID = 0)
 	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID)
 	{
 
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EntityID> entities, ReadOnlySpan<int> toRows, object? userData, EntityID eventID = 0)
+	internal Iterator(Commands<TContext> commands, int count, Table<TContext> table, ReadOnlySpan<EntityID> entities, ReadOnlySpan<int> toRows, object? userData, EntityID eventID = 0)
 	{
 		Commands = commands;
 		World = commands.World;
@@ -31,8 +31,8 @@ public readonly ref struct Iterator
 	}
 
 
-	public readonly Commands Commands { get; }
-	public readonly World World { get; }
+	public readonly Commands<TContext> Commands { get; }
+	public readonly World<TContext> World { get; }
 	public readonly int Count { get; }
 	public readonly float DeltaTime { get; }
 	public readonly object? UserData { get; }
@@ -61,11 +61,11 @@ public readonly ref struct Iterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Entity(int row)
+	public readonly EntityView<TContext> Entity(int row)
 		=> new (World, _entities[row]);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly CommandEntityView EntityDeferred(int row)
+	public readonly CommandEntityView<TContext> EntityDeferred(int row)
 		=> Commands.Entity(Entity(row));
 }
 

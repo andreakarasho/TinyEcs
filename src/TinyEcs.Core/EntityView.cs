@@ -4,13 +4,13 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
+public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<EntityView<TContext>>
 {
 	public readonly EntityID ID;
-	public readonly World World;
+	public readonly World<TContext> World;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal EntityView(World world, EntityID id)
+	internal EntityView(World<TContext> world, EntityID id)
 	{
 		World = world;
 		ID = id;
@@ -24,27 +24,27 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(EntityView other)
+	public readonly bool Equals(EntityView<TContext> other)
 	{
 		return ID == other.ID;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>() where T : unmanaged, ITag
+	public readonly EntityView<TContext> Set<T>() where T : unmanaged, ITag
 	{
 		World.Set<T>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set(EntityID id)
+	public readonly EntityView<TContext> Set(EntityID id)
 	{
 		World.Set(ID, id);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component = default)
+	public readonly EntityView<TContext> Set<T>(T component = default)
 	where T : unmanaged, IComponent
 	{
 		World.Set(ID, component);
@@ -52,7 +52,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TKind, TTarget>()
+	public readonly EntityView<TContext> Set<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
@@ -60,21 +60,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TKind>(EntityID target)
+	public readonly EntityView<TContext> Set<TKind>(EntityID target)
 	where TKind : unmanaged, ITag
 	{
 		return Set(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set(EntityID first, EntityID second)
+	public readonly EntityView<TContext> Set(EntityID first, EntityID second)
 	{
 		World.Set(ID, first, second);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<T>()
+	public readonly EntityView<TContext> Unset<T>()
 	where T : unmanaged, IComponentStub
 	{
 		World.Unset<T>(ID);
@@ -82,21 +82,21 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<TKind, TTarget>()
+	public readonly EntityView<TContext> Unset<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
 		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	public readonly EntityView Unset<TKind>(EntityID target)
+	public readonly EntityView<TContext> Unset<TKind>(EntityID target)
 	where TKind : unmanaged, ITag
 	{
 		return Unset(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset(EntityID first, EntityID second)
+	public readonly EntityView<TContext> Unset(EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
 		var cmp = new EcsComponent(id, 0);
@@ -105,14 +105,14 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Enable()
+	public readonly EntityView<TContext> Enable()
 	{
 		World.Set<EcsEnabled>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Disable()
+	public readonly EntityView<TContext> Disable()
 	{
 		World.Unset<EcsEnabled>(ID);
 		return this;
@@ -137,17 +137,17 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		return world.Has(ID, ref cmp);
 	}
 
-	public readonly EntityView ChildOf(EntityID parent)
+	public readonly EntityView<TContext> ChildOf(EntityID parent)
 	{
 		World.Set<EcsChildOf>(ID, parent);
 		return this;
 	}
 
-	public readonly void Children(Action<EntityView> action)
+	public readonly void Children(Action<EntityView<TContext>> action)
 	{
 		World.Query()
 			.With<EcsChildOf>(ID)
-			.Iterate((ref Iterator it) => {
+			.Iterate((ref Iterator<TContext> it) => {
 				for (int i = 0, count = it.Count; i < count; ++i)
 					action(it.Entity(i));
 			});
@@ -160,7 +160,7 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		Children(v => v.Unset(id, myID));
 	}
 
-	public readonly EntityView Parent()
+	public readonly EntityView<TContext> Parent()
 	{
 		return new (World, World.GetParent(ID));
 	}
@@ -194,13 +194,13 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		=> IDOp.GetPairSecond(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly void Each(Action<EntityView> action)
+	public readonly void Each(Action<EntityView<TContext>> action)
 	{
 		ref var record = ref World.GetRecord(ID);
 
 		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
 		{
-			action(new EntityView(World, record.Archetype.ComponentInfo[i].ID));
+			action(new EntityView<TContext>(World, record.Archetype.ComponentInfo[i].ID));
 		}
 	}
 
@@ -208,8 +208,8 @@ public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
 		=> World.GetType(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static implicit operator EntityID(in EntityView d) => d.ID;
+	public static implicit operator EntityID(in EntityView<TContext> d) => d.ID;
 
 
-	public static readonly EntityView Invalid = new(null, 0);
+	public static readonly EntityView<TContext> Invalid = new(null, 0);
 }

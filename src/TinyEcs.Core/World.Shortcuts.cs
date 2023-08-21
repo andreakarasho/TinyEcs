@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public sealed partial class World
+public sealed partial class World<TContext>
 {
 	public void Set<TKind, TTarget>(EntityID entity)
 	where TKind : unmanaged, IComponentStub
@@ -78,23 +78,23 @@ public sealed partial class World
 	where T : unmanaged, IComponent
 		=> ref Get<T>(Component<T>().ID);
 
-	public unsafe EntityView StartupSystem(delegate*<ref Iterator, void> system)
+	public unsafe EntityView<TContext> StartupSystem(delegate*<ref Iterator<TContext>, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
 			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system, float tick)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, float tick)
 		=> System(system, 0, ReadOnlySpan<Term>.Empty, tick)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, in QueryBuilder<TContext> query)
 		=> System(system, query.Build(), query.Terms, float.NaN)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system, in QueryBuilder query, float tick)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, in QueryBuilder<TContext> query, float tick)
 		=> System(system, query.Build(), query.Terms, tick)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
