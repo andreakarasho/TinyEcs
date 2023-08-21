@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
+using FontStashSharp;
+using FontStashSharp.RichText;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using TinyEcs;
 
 using var game = new TinyGame();
@@ -20,6 +23,7 @@ sealed unsafe class TinyGame : Game
 	private readonly GraphicsDeviceManager _graphicsDeviceManager;
 	private SpriteBatch? _spriteBatch;
 	private World _ecs;
+	private FontSystem _fontSystem;
 
 	public TinyGame()
 	{
@@ -70,10 +74,23 @@ sealed unsafe class TinyGame : Game
 			)
 			.Set<EcsPhase, RenderingPhase>();
 
+		_ecs.System(&RenderText)
+			.Set<EcsPhase, RenderingPhase>();
+
 		_ecs.System(&EndRender)
 			.Set<EcsPhase, RenderingPhase>();
 	}
 
+	protected override void LoadContent()
+	{
+		_fontSystem = new FontSystem();
+
+		var path = Path.Combine(AppContext.BaseDirectory, "Content", "fonts");
+		foreach (var file in Directory.GetFiles(path, "*.ttf"))
+        	_fontSystem.AddFont(File.ReadAllBytes(file));
+
+		_ = Assets<FontSystem>.Register("fontSys", _fontSystem);
+	}
 
 
 	protected override void Update(GameTime gameTime)
@@ -99,8 +116,9 @@ sealed unsafe class TinyGame : Game
     {
         var deviceHandle = Assets<GraphicsDevice>.Get("device");
         var batcherHandle = Assets<SpriteBatch>.Get("batcher");
+		var fontSysHandle = Assets<FontSystem>.Get("fontSys");
 
-        it.World.SetSingleton(new GameState(deviceHandle, batcherHandle));
+        it.World.SetSingleton(new GameState(deviceHandle, batcherHandle, fontSysHandle));
     }
 
 	static void SpawnEntities(ref Iterator it)
@@ -234,6 +252,30 @@ sealed unsafe class TinyGame : Game
 			);
 		}
 	}
+
+	static void RenderText(ref Iterator it)
+	{
+		ref var gameState = ref it.World.GetSingleton<GameState>();
+		var batch = gameState.Batch.GetValue();
+		var fontSys = gameState.FontSystem.GetValue();
+
+
+		var dbgText = $@"[Debug]
+					Entities: {it.World.EntityCount}
+					DeltaTime: {it.DeltaTime}";
+		var font18 = fontSys.GetFont(18);
+		var size = font18.MeasureString(dbgText);
+		size.X = batch.GraphicsDevice.Viewport.Width - size.X - 15;
+		size.Y = 15;
+		batch.DrawString(font18, dbgText, size, Color.White, effect: FontSystemEffect.Stroked, effectAmount: 1);
+
+		var rotatingText = "Hello from TinyEcs!";
+		var font32 = fontSys.GetFont(32);
+		size = font32.MeasureString(rotatingText);
+		size.X = batch.GraphicsDevice.Viewport.Width / 2f - size.X / 2f;
+		size.Y = batch.GraphicsDevice.Viewport.Height / 2f - size.Y / 2f;
+		batch.DrawString(font32, rotatingText, size, Color.Yellow, effect: FontSystemEffect.Stroked, effectAmount: 1);
+	}
 }
 
 struct Position : IComponent { public Vector2 Value; }
@@ -246,11 +288,13 @@ readonly struct GameState : IComponent
 {
 	public readonly Handle<GraphicsDevice> Device;
 	public readonly Handle<SpriteBatch> Batch;
+	public readonly Handle<FontSystem> FontSystem;
 
-	public GameState(Handle<GraphicsDevice> device, Handle<SpriteBatch> batch)
+	public GameState(Handle<GraphicsDevice> device, Handle<SpriteBatch> batch, Handle<FontSystem> fontSystem)
 	{
 		Device = device;
 		Batch = batch;
+		FontSystem = fontSystem;
 	}
 }
 

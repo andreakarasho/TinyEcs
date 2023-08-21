@@ -100,4 +100,32 @@ public sealed partial class World
 
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
+
+	public void EmitEvent<TEvent>(EntityID entity, EntityID component)
+	where TEvent : unmanaged, IEvent
+	{
+		EmitEvent(Component<TEvent>().ID, entity, component);
+	}
+
+	public void EmitEvent<TEvent, TComponent>(EntityID entity)
+	where TEvent : unmanaged, IEvent
+	where TComponent : unmanaged, IComponentStub
+	{
+		EmitEvent(Component<TEvent>().ID, entity, Component<TComponent>().ID);
+	}
+
+	public void EmitEvent<TEvent, TKind, TTarget>(EntityID entity)
+	where TEvent : unmanaged, IEvent
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
+	{
+		EmitEvent(Component<TEvent>().ID, entity, Pair<TKind, TTarget>());
+	}
+
+	public void EmitEvent<TEvent, TKind>(EntityID entity, EntityID target)
+	where TEvent : unmanaged, IEvent
+	where TKind : unmanaged, ITag
+	{
+		EmitEvent(Component<TEvent>().ID, entity, Pair<TKind>(target));
+	}
 }

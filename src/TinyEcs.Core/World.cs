@@ -107,9 +107,20 @@ public sealed partial class World : IDisposable
 	public QueryBuilder Query()
 		=> new (this);
 
-	public unsafe EntityView System(delegate*<ref Iterator, void> system, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public unsafe EntityView System(delegate*<ref Iterator, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
 		=> Spawn()
-			.Set(new EcsSystem(system, query, terms, tick));
+			.Set(new EcsSystem(callback, query, terms, tick));
+
+	public unsafe EntityView Event(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
+	{
+		var obs = Spawn()
+			.Set(new EcsEvent(callback, terms));
+
+		foreach (ref readonly var id in events)
+			obs.Set(id);
+
+		return obs;
+	}
 
 	public EntityView Entity(EntityID id)
 	{
@@ -141,19 +152,16 @@ public sealed partial class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
-		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity}");
+		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
 
-		//if (GetParent(entity) != 0)
-		{
-			Query()
-				.With<EcsChildOf>(entity)
-				.Iterate(static (ref Iterator it) => {
-					for (int i = it.Count - 1; i >= 0; i--)
-					{
-						it.Entity(i).Despawn();
-					}
-				});
-		}
+		Query()
+			.With<EcsChildOf>(entity)
+			.Iterate(static (ref Iterator it) => {
+				for (int i = 0; i < it.Count; ++i)
+				{
+					it.Entity(0).Despawn();
+				}
+			});
 
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
@@ -164,21 +172,35 @@ public sealed partial class World : IDisposable
 	}
 
 	public bool Exists(EntityID entity)
-		=> _entities.Contains(entity);
+	{
+		if (IDOp.IsPair(entity))
+		{
+			var first = IDOp.GetPairFirst(entity);
+			var second = IDOp.GetPairSecond(entity);
+			return _entities.Contains(first) && _entities.Contains(second);
+		}
+
+		return _entities.Contains(entity);
+	}
 
 	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref GetRecord(entity);
-		InternalAttachDetach(ref record, ref cmp, false);
+		InternalAttachDetach(entity, ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(ref EcsRecord record, ref EcsComponent cmp, bool add)
+	private bool InternalAttachDetach(EntityID entity, ref EcsRecord record, ref EcsComponent cmp, bool add)
 	{
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
 		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
+
+		if (!add)
+		{
+			EmitEvent<EcsEventOnUnset>(entity, cmp.ID);
+		}
 
 		record.Row = record.Archetype.MoveEntity(arch, record.Row);
 		record.Archetype = arch!;
@@ -289,25 +311,89 @@ public sealed partial class World : IDisposable
 
 		ref var record = ref GetRecord(entity);
 
+		var emit = false;
 		var column = record.Archetype.GetComponentIndex(ref cmp);
 		if (column < 0)
 		{
-			InternalAttachDetach(ref record, ref cmp, true);
+			emit = InternalAttachDetach(entity, ref record, ref cmp, true);
+			column = record.Archetype.GetComponentIndex(ref cmp);
 		}
 
-		if (cmp.Size <= 0)
-			return;
+		if (cmp.Size > 0)
+		{
+			var buf = record.Archetype.Table.ComponentData<byte>
+			(
+				column,
+				record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
+				cmp.Size
+			);
 
-		column = record.Archetype.GetComponentIndex(ref cmp);
-		var buf = record.Archetype.Table.ComponentData<byte>
+			EcsAssert.Assert(data.Length == buf.Length);
+			data.CopyTo(buf);
+		}
+
+		if (emit)
+		{
+			EmitEvent<EcsEventOnSet>(entity, cmp.ID);
+		}
+	}
+
+	[SkipLocalsInit]
+	public unsafe void EmitEvent(EntityID eventID, EntityID entity, EntityID component)
+	{
+		EcsAssert.Assert(Exists(eventID));
+		EcsAssert.Assert(Exists(entity));
+		EcsAssert.Assert(Exists(component));
+
+		Query
 		(
-			column,
-			record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-			cmp.Size
+			stackalloc Term[] {
+				Term.With(Component<EcsEvent>().ID),
+				Term.With(eventID),
+			},
+			&OnEvent,
+			new ObserverInfo() {
+				Entity = entity,
+				Event = eventID,
+				LastComponent = Term.With(component)
+			}
+		);
+	}
+
+	private struct ObserverInfo
+	{
+		public EntityID Entity;
+		public EntityID Event;
+		public Term LastComponent;
+	}
+
+	static unsafe void OnEvent(ref Iterator it)
+	{
+		ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
+		ref var record = ref it.World.GetRecord(eventInfo.Entity);
+		var iterator = new Iterator
+		(
+			it.Commands,
+			1,
+			record.Archetype.Table,
+			stackalloc EntityID[1] { eventInfo.Entity },
+			stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
+			null,
+			eventInfo.Event
 		);
 
-		EcsAssert.Assert(data.Length == buf.Length);
-		data.CopyTo(buf);
+		var evA = it.Field<EcsEvent>();
+
+		for (int i = 0; i < it.Count; ++i)
+		{
+			ref var ev = ref evA[i];
+
+			if (record.Archetype.FindMatch(ev.Terms) == 0 &&
+			    ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0)
+			{
+				ev.Callback(ref iterator);
+			}
+		}
 	}
 
 	internal bool Has(EntityID entity, ref EcsComponent cmp)
@@ -319,12 +405,6 @@ public sealed partial class World : IDisposable
 	public void Set(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (Exists(id) && Has<EcsComponent>(id))
-		{
-			ref var cmp2 = ref Get<EcsComponent>(id);
-			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
-			return;
-		}
 
 		if (Has<EcsExclusive>(first))
 		{
@@ -345,6 +425,8 @@ public sealed partial class World : IDisposable
 
 	public void Set(EntityID entity, EntityID tag)
 	{
+		EcsAssert.Assert(!IDOp.IsPair(tag));
+
 		if (Exists(tag) && Has<EcsComponent>(tag))
 		{
 			ref var cmp2 = ref Get<EcsComponent>(tag);
@@ -360,12 +442,6 @@ public sealed partial class World : IDisposable
 	public bool Has(EntityID entity, EntityID first, EntityID second)
 	{
 		var id = IDOp.Pair(first, second);
-		if (Exists(id) && Has<EcsComponent>(id))
-		{
-			ref var cmp2 = ref Get<EcsComponent>(id);
-			return Has(entity, ref cmp2);
-		}
-
 		var cmp = new EcsComponent(id, 0);
 		return Has(entity, ref cmp);
 	}
@@ -403,9 +479,9 @@ public sealed partial class World : IDisposable
 	public unsafe void RunPhase(EntityID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
-			new () { ID = Component<EcsEnabled>().ID, Op = TermOp.With },
-			new () { ID = Component<EcsSystem>().ID, Op = TermOp.With },
-			new () { ID = phase, Op = TermOp.With }
+			Term.With(Component<EcsEnabled>().ID),
+			Term.With(Component<EcsSystem>().ID),
+			Term.With(phase),
 		};
 
 		Query(terms, &RunSystems);
@@ -434,6 +510,7 @@ public sealed partial class World : IDisposable
 
 	static unsafe void RunSystems(ref Iterator it)
 	{
+		var emptyIt = new Iterator(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<ulong>.Empty, ReadOnlySpan<int>.Empty, null, 0);
 		var sysA = it.Field<EcsSystem>();
 
 		for (int i = 0; i < it.Count; ++i)
@@ -455,11 +532,11 @@ public sealed partial class World : IDisposable
 
 			if (sys.Query != 0)
 			{
-				it.World.Query(sys.Terms, sys.Func);
+				it.World.Query(sys.Terms, sys.Callback);
 			}
 			else
 			{
-				sys.Func(ref it);
+				sys.Callback(ref emptyIt);
 			}
 		}
 	}

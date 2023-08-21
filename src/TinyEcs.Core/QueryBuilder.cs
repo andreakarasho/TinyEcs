@@ -32,6 +32,17 @@ public unsafe ref struct QueryBuilder
 		}
 	}
 
+	internal Span<Term> AllTerms
+	{
+		get
+		{
+			fixed (byte* termPtr = &_terms[0])
+			{
+				return new Span<Term>(termPtr, TERMS_COUNT);
+			}
+		}
+	}
+
 	internal QueryBuilder(World world)
 	{
 		_world = world;
@@ -121,6 +132,12 @@ public struct Term
 {
 	public EntityID ID;
 	public TermOp Op;
+
+	public static Term With(EntityID id)
+		=> new () { ID = id, Op = TermOp.With };
+
+	public static Term Without(EntityID id)
+		=> new () { ID = id, Op = TermOp.Without };
 }
 
 public enum TermOp : byte
