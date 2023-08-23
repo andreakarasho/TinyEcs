@@ -104,11 +104,10 @@ public sealed class Archetype<TContext>
 		EcsAssert.Assert(row < _entities.Length);
 
 		ref var cmp = ref _world.Component<T>();
+		EcsAssert.Assert(cmp.Size > 0);
+
 		var column = GetComponentIndex(ref cmp);
 		EcsAssert.Assert(column >= 0);
-
-		if (cmp.Size <= 0)
-			return Span<T>.Empty;
 
 		return _table.ComponentData<T>(column, _entitiesTableRows[row], count);
 	}
@@ -118,18 +117,19 @@ public sealed class Archetype<TContext>
 		_count = 0;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		Array.Resize(ref _entities, _capacity);
+		Array.Resize(ref _entitiesTableRows, _capacity);
 	}
 
 	internal void Optimize()
 	{
-		// var pow = (int) BitOperations.RoundUpToPowerOf2((uint) _count);
-		// var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
-		// if (newCapacity < _capacity)
-		// {
-		// 	_capacity = newCapacity;
-		// 	Array.Resize(ref _entityIDs, _capacity);
-		// 	ResizeComponentArray(_capacity);
-		// }
+		var pow = (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint) _count);
+		var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
+		if (newCapacity < _capacity)
+		{
+			_capacity = newCapacity;
+			Array.Resize(ref _entities, _capacity);
+			Array.Resize(ref _entitiesTableRows, _capacity);
+		}
 	}
 
 	private (EntityID, int) SwapWithLast(int fromRow)

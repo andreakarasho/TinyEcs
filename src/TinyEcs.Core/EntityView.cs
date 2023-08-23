@@ -212,4 +212,58 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 
 
 	public static readonly EntityView<TContext> Invalid = new(null, 0);
+
+
+
+
+	public unsafe readonly EntityView<TContext> System
+	(
+		delegate*<ref Iterator<TContext>, void> callback,
+		params Term[] terms
+	)
+	{
+		var query = World.Spawn()
+			.Set<EcsPanic, EcsDelete>();
+
+		return Set(new EcsSystem<TContext>
+		(
+			callback,
+			query,
+			terms,
+			float.NaN
+		)).Set<EcsPanic, EcsDelete>();
+	}
+
+	public readonly EntityView<TContext> Event()
+	{
+
+		return this;
+	}
+
+	public readonly EntityView<TContext> Component<T>()
+	where T : unmanaged, IComponentStub
+	{
+		World.Component<T>(ID);
+		return this;
+	}
+
+	// public static implicit operator Term(EntityView<TContext> entity)
+	// 	=> new() { ID = entity.ID, Op = TermOp.With };
+
+	public static implicit operator Term(EntityView<TContext> entity)
+		=> new() { ID = entity.ID, Op = TermOp.With };
 }
+
+
+// public readonly ref struct Without
+// {
+// 	private readonly EntityID _id;
+
+// 	public Without(EntityID id)
+// 	{
+// 		_id = id;
+// 	}
+
+// 	public static implicit operator Term(Without entity)
+// 		=> new() { ID = entity._id, Op = TermOp.Without };
+// }

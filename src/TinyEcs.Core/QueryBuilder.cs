@@ -109,7 +109,8 @@ public unsafe ref struct QueryBuilder<TContext>
 		if (_id != 0)
 			return _world.Entity(_id);
 
-		var ent = _world.Spawn();
+		var ent = _world.Spawn()
+			.Set<EcsPanic, EcsDelete>();
 
 		_id = ent.ID;
 
@@ -138,6 +139,15 @@ public struct Term
 
 	public static Term Without(EntityID id)
 		=> new () { ID = id, Op = TermOp.Without };
+}
+
+public static class TermExt
+{
+	public static Term Not(this Term term)
+	{
+		term.Op = TermOp.Without;
+		return term;
+	}
 }
 
 public enum TermOp : byte

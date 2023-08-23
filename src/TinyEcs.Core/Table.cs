@@ -76,7 +76,7 @@ sealed unsafe class Table<TContext>
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
-			//var leftArray = _componentsData[i].AsSpan();
+
 			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
 
 			var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
@@ -108,11 +108,10 @@ sealed unsafe class Table<TContext>
 			}
 
 			ref readonly var meta = ref _componentInfo[i];
+
 			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
 			var rightArray = to.ComponentData<byte>(j, 0, meta.Size * to._capacity);
 
-			//var leftArray = _componentsData[i].AsSpan();
-			//var rightArray = to._componentsData[j].AsSpan();
 			var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
 			var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
 			var swapComponent = leftArray.Slice(meta.Size * fromCount, meta.Size);
@@ -128,15 +127,9 @@ sealed unsafe class Table<TContext>
 		for (int i = 0; i < _componentInfo.Length; ++i)
 		{
 			ref readonly var meta = ref _componentInfo[i];
-			var newSize = (nuint) (meta.Size * capacity);
-			var newPtr = (byte*)NativeMemory.Alloc(newSize);
-			if (_componentsData[i] != null)
-			{
-				NativeMemory.Copy(_componentsData[i], newPtr, (nuint) (meta.Size * _count));
-			}
 
-			_componentsData[i] = newPtr;
-			//Array.Resize(ref _componentsData[i], meta.Size * capacity);
+			_componentsData[i] = (byte*) NativeMemory.Realloc(_componentsData[i], (nuint)capacity * (nuint) meta.Size);
+
 			_capacity = capacity;
 		}
 	}

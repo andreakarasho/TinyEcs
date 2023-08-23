@@ -123,14 +123,15 @@ public sealed class Commands<TContext>
 
 		ref var set = ref _set.CreateNew(out _);
 		set.Entity = id;
-		set.Component = cmp;
+		set.Component = cmp.ID;
 
-		if (set.Data.Length < set.Component.Size)
+		if (set.DataLength < cmp.Size)
 		{
-			set.Data = new byte[Math.Max(sizeof(ulong), (int) BitOperations.RoundUpToPowerOf2((uint) set.Component.Size))];
+			set.Data = (byte*) NativeMemory.Realloc(set.Data, (nuint) cmp.Size);
+			set.DataLength = cmp.Size;
 		}
 
-		return ref MemoryMarshal.GetReference(set.Data.Span.Slice(0, set.Component.Size));
+		return ref (cmp.Size <= 0 ? ref Unsafe.NullRef<byte>() : ref set.Data[0]);
 	}
 
 	public void Unset<T>(EntityID id)
@@ -139,10 +140,10 @@ public sealed class Commands<TContext>
 		EcsAssert.Assert(_main.Exists(id));
 
 		ref var cmp = ref _main.Component<T>();
-
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;
-		unset.Component = cmp;
+		unset.Component = cmp.ID;
+		unset.ComponentSize = cmp.Size;
 	}
 
 	public void Unset<TKind, TTarget>(EntityID id)
@@ -153,19 +154,11 @@ public sealed class Commands<TContext>
 
 		var cmpID = _main.Pair<TKind, TTarget>();
 
-		if (_main.Exists(cmpID) && _main.Has<EcsComponent>(cmpID))
-		{
-			ref var cmp2 = ref _main.Get<EcsComponent>(cmpID);
-			ref var unset2 = ref _unset.CreateNew(out _);
-			unset2.Entity = id;
-			unset2.Component = cmp2;
-			return;
-		}
-
 		var cmp = new EcsComponent(cmpID, 0);
 		ref var unset = ref _unset.CreateNew(out _);
 		unset.Entity = id;
-		unset.Component = cmp;
+		unset.Component = cmp.ID;
+		unset.ComponentSize = cmp.Size;
 	}
 
 	public ref T Get<T>(EntityID entity)
@@ -191,7 +184,7 @@ public sealed class Commands<TContext>
 		return _main.Has<T>(entity);
 	}
 
-	public void Merge()
+	public unsafe void Merge()
 	{
 		if (_despawn.Length == 0 && _set.Length == 0 && _unset.Length == 0)
 		{
@@ -202,14 +195,20 @@ public sealed class Commands<TContext>
 		{
 			EcsAssert.Assert(_main.Exists(set.Entity));
 
-			_main.Set(set.Entity, ref set.Component, set.Component.Size <= 0 ? ReadOnlySpan<byte>.Empty : set.Data.Span.Slice(0, set.Component.Size));
+			var cmp = new EcsComponent(set.Component, set.DataLength);
+			_main.Set(set.Entity, ref cmp, set.DataLength <= 0 ? ReadOnlySpan<byte>.Empty : new ReadOnlySpan<byte>(set.Data, set.DataLength));
+
+			NativeMemory.Free(set.Data);
+			set.Data = null;
+			set.DataLength = 0;
 		}
 
 		foreach (ref var unset in _unset)
 		{
 			EcsAssert.Assert(_main.Exists(unset.Entity));
 
-			_main.DetachComponent(unset.Entity, ref unset.Component);
+			var cmp = new EcsComponent(unset.Component, unset.ComponentSize);
+			_main.DetachComponent(unset.Entity, ref cmp);
 		}
 
 		foreach (ref var despawn in _despawn)
@@ -229,17 +228,19 @@ public sealed class Commands<TContext>
 		_despawn.Clear();
 	}
 
-	private struct SetComponent
+	private unsafe struct SetComponent
 	{
 		public EntityID Entity;
-		public EcsComponent Component;
-		public Memory<byte> Data;
+		public EntityID Component;
+		public byte* Data;
+		public int DataLength;
 	}
 
 	private struct UnsetComponent
 	{
 		public EntityID Entity;
-		public EcsComponent Component;
+		public EntityID Component;
+		public int ComponentSize;
 	}
 }
 

@@ -45,9 +45,9 @@ struct NormalTag : ITag { }
 public class ComponentTest
 {
 	[Fact]
-	public void Check_Validate_Tag()
+	public void Check_Validate_Tag<TContext>()
 	{
-		using var world = new World();
+		using var world = new World<TContext>();
 		ref var cmp = ref world.Component<NormalTag>();
 
 		Assert.Equal(0, cmp.Size);
@@ -55,9 +55,9 @@ public class ComponentTest
 	}
 
 	[Fact]
-	public unsafe void Check_Validate_Component()
+	public unsafe void Check_Validate_Component<TContext>()
 	{
-		using var world = new World();
+		using var world = new World<TContext>();
 		ref var cmp = ref world.Component<FloatComponent>();
 
 		Assert.Equal(sizeof(FloatComponent), cmp.Size);
@@ -65,9 +65,9 @@ public class ComponentTest
 	}
 
 	[Fact]
-	public unsafe void Check_Validate_Pair()
+	public unsafe void Check_Validate_Pair<TContext>()
 	{
-		using var world = new World();
+		using var world = new World<TContext>();
 		var id = world.Pair<NormalTag, FloatComponent>();
 
 		Assert.Equal(0, world.Component<NormalTag>().Size);

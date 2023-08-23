@@ -6,9 +6,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachOneComponent_WithOneComponent(int amount)
+        public void Query_AttachOneComponent_WithOneComponent<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
                 world.Set<FloatComponent>(world.Spawn());
@@ -17,7 +17,7 @@
                 .With<FloatComponent>();
 
             int done = 0;
-			query.Iterate((ref Iterator it) => done += it.Count);
+			query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -26,9 +26,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachTwoComponents_WithTwoComponents(int amount)
+        public void Query_AttachTwoComponents_WithTwoComponents<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
             {
@@ -42,7 +42,7 @@
                 .With<IntComponent>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -51,9 +51,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachThreeComponents_WithThreeComponents(int amount)
+        public void Query_AttachThreeComponents_WithThreeComponents<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
             {
@@ -69,7 +69,7 @@
                 .With<BoolComponent>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -78,9 +78,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent(int amount)
+        public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
             {
@@ -96,7 +96,7 @@
                 .Without<BoolComponent>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
@@ -105,9 +105,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent(int amount)
+        public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
             {
@@ -122,7 +122,7 @@
                 .Without<BoolComponent>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -131,9 +131,9 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(1_000_000)]
-        public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent(int amount)
+        public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent<TContext>(int amount)
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
             {
@@ -148,15 +148,15 @@
                 .Without<BoolComponent>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(0, done);
         }
 
         [Fact]
-        public void Query_EdgeValidation()
+        public void Query_EdgeValidation<TContext>()
         {
-            using var world = new World();
+            using var world = new World<TContext>();
 
             var good = 0;
 
@@ -188,7 +188,7 @@
                 .Without<NormalTag>();
 
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator<TContext> it) => done += it.Count);
 
             Assert.Equal(good, done);
         }

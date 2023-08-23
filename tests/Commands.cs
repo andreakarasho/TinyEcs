@@ -11,8 +11,8 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Create_Entity_Buffered()
 		// {
-		// 	using var world = new World();
-		// 	var cmd = new Commands(world);
+		// 	using var world = new World<TContext>();
+		// 	var cmd = new Commands<TContext>(world);
 
 		// 	var e = cmd.Spawn();
 
@@ -23,8 +23,8 @@ namespace TinyEcs.Tests
 		// [Fact]
 		// public void Destroy_Entity_Buffered()
 		// {
-		// 	using var world = new World();
-		// 	var cmd = new Commands(world);
+		// 	using var world = new World<TContext>();
+		// 	var cmd = new Commands<TContext>(world);
 
 		// 	var e = cmd.Spawn();
 		// 	e.Despawn();
@@ -33,10 +33,10 @@ namespace TinyEcs.Tests
 		// }
 
 		[Fact]
-		public void Merge_Create_Entity()
+		public void Merge_Create_Entity<TContext>()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var world = new World<TContext>();
+			var cmd = new Commands<TContext>(world);
 
 			var e = cmd.Spawn();
 
@@ -47,10 +47,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_Destroy_Entity()
+		public void Merge_Destroy_Entity<TContext>()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var world = new World<TContext>();
+			var cmd = new Commands<TContext>(world);
 
 			var e = cmd.Spawn();
 			e.Despawn();
@@ -60,10 +60,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_SetComponent_Entity()
+		public void Merge_SetComponent_Entity<TContext>()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var world = new World<TContext>();
+			var cmd = new Commands<TContext>(world);
 
 			var e = world.Spawn();
 
@@ -76,10 +76,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_UnsetComponent_Entity()
+		public void Merge_UnsetComponent_Entity<TContext>()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var world = new World<TContext>();
+			var cmd = new Commands<TContext>(world);
 
 			const float VAL = 0.012344f;
 

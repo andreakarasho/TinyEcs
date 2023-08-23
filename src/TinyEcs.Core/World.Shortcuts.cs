@@ -98,6 +98,30 @@ public sealed partial class World<TContext>
 		=> System(system, query.Build(), query.Terms, tick)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params EntityID[] components)
+	{
+		Span<Term> terms = stackalloc Term[components.Length];
+		for (int i = 0; i < components.Length; ++i)
+			terms[i] = Term.With(components[i]);
+
+		var query = Spawn()
+			.Set<EcsPanic, EcsDelete>();
+
+		return System(system, query, terms, float.NaN)
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();;
+	}
+
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params Term[] terms)
+	{
+		var query = Spawn()
+			.Set<EcsPanic, EcsDelete>();
+
+		var sys = System(system, query, terms, float.NaN)
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+		return sys;
+	}
+
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
 

@@ -57,30 +57,30 @@ public sealed partial class World<TContext> : IDisposable
 		Set<EcsExclusive>(Component<EcsPhase>().ID);
 	}
 
-	// public void Optimize()
-	// {
-	// 	InternalOptimize(_archRoot);
+	public void Optimize()
+	{
+		InternalOptimize(_archRoot);
 
-	// 	static void InternalOptimize(Archetype root)
-	// 	{
-	// 		root.Optimize();
+		static void InternalOptimize(Archetype<TContext> root)
+		{
+			root.Optimize();
 
-	// 		foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
-	// 		{
-	// 			InternalOptimize(edge.Archetype);
-	// 		}
-	// 	}
-	// }
+			foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
+			{
+				InternalOptimize(edge.Archetype);
+			}
+		}
+	}
 
-	public unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
+	public unsafe ref EcsComponent Component<T>(EntityID id = 0) where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
 
 		if (lookup.ID == 0)
 		{
-			var ent = SpawnEmpty();
+			var ent = id == 0 ? SpawnEmpty() : id;
 			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
-			var cmp = new EcsComponent(ent.ID, size);
+			var cmp = new EcsComponent(ent, size);
 			lookup = cmp;
 
 			Set(cmp.ID, cmp);
@@ -125,6 +125,10 @@ public sealed partial class World<TContext> : IDisposable
 		EcsAssert.Assert(Exists(id));
 		return new(this, id);
 	}
+
+	public EntityView<TContext> Entity<T>()
+	where T : unmanaged, IComponentStub
+		=> Entity(Component<T>().ID);
 
 	public EntityView<TContext> Spawn()
 		=> SpawnEmpty().Set<EcsEnabled>();
@@ -504,6 +508,11 @@ public sealed partial class World<TContext> : IDisposable
 
 		_commands.Merge();
 		_frame += 1;
+
+		if (_frame % 10 == 0)
+		{
+			Optimize();
+		}
 	}
 
 	static unsafe void RunSystems(ref Iterator<TContext> it)

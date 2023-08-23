@@ -17,7 +17,7 @@ sealed class EntitySparseSet<T>
 
 	public EntitySparseSet()
 	{
-		_dense = new Vec<EntityID>();
+		_dense = Vec<EntityID>.Init();
 		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
 		_count = 1;
 		_maxID = EntityID.MinValue;
@@ -189,13 +189,14 @@ sealed class EntitySparseSet<T>
 			return;
 
 		_maxID = uint.MinValue;
+
 		for (int i = 0; i < _chunks.Length; ++i)
 		{
 			ref var chunk = ref _chunks[i];
-			if (chunk.Sparse != null)
-				Array.Clear(chunk.Sparse, 0, chunk.Sparse.Length);
+			chunk = ref Unsafe.NullRef<Chunk>();
 		}
 
+		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
 		_dense.Clear();
 		_dense.Add(0);
 
@@ -289,47 +290,90 @@ sealed class EntitySparseSet<T>
 
 
 
-sealed class Vec<T0> where T0 : unmanaged
+public unsafe sealed class Vec<T> : IDisposable where T : unmanaged
 {
-	private T0[] _array;
-	private int _count;
+	private T* _data;
 
-	public Vec(int initialSize = 2)
+	public int Capacity { get; private set; }
+	public int Count { get; private set; }
+
+	public Span<T> Span => new Span<T>(_data, Count);
+
+	private const int DefaultCapacity = 4;
+
+	public static Vec<T> Init(int capacity = 0)
 	{
-		_array = new T0[initialSize];
-		_count = 0;
+		if (capacity == 0)
+			capacity = DefaultCapacity;
+
+		return new Vec<T>
+		{
+			_data = (T*) NativeMemory.Alloc((nuint)capacity, (nuint)sizeof(T)),
+			Capacity = capacity,
+			Count = 0
+		};
 	}
 
-	public int Count => _count;
-	public ref T0 this[int index] => ref _array[index];
-	public ReadOnlySpan<T0> Span => _count <= 0 ? ReadOnlySpan<T0>.Empty : MemoryMarshal.CreateReadOnlySpan(ref _array[0], _count);
-
-	public void Add(in T0 elem)
+	public static Vec<T> InitZero(int capacity = 0)
 	{
-		GrowIfNecessary(_count + 1);
+		if (capacity == 0)
+			capacity = DefaultCapacity;
 
-		this[_count] = elem;
-
-		++_count;
+		return new Vec<T>
+		{
+			_data = (T*) NativeMemory.AllocZeroed((nuint)capacity, (nuint)sizeof(T)),
+			Capacity = capacity,
+			Count = 0
+		};
 	}
+
+	public ref T this[int i] => ref _data[i];
 
 	public void Clear()
 	{
-		_count = 0;
+		Capacity = DefaultCapacity;
+		Count = 0;
+		_data = (T*) NativeMemory.Realloc(_data, (nuint)Capacity * (nuint)sizeof(T));
 	}
 
-	public void Sort() => Array.Sort(_array, 0, _count);
-
-	public int IndexOf(T0 item) => Array.IndexOf(_array, item, 0, _count);
-
-	private void GrowIfNecessary(int length)
+	public void Dispose()
 	{
-		if (length >= _array.Length)
-		{
-			var newLength = _array.Length > 0 ? _array.Length * 2 : 2;
-			while (length >= newLength)
-				newLength *= 2;
-			Array.Resize(ref _array, newLength);
-		}
+		if (_data == null)
+			return;
+
+		NativeMemory.Free(_data);
+
+		_data = null;
+	}
+
+	public void Add(T item)
+	{
+		if (Count >= Capacity)
+			EnsureCapacity(Capacity * 2);
+
+		_data[Count++] = item;
+	}
+
+	public void EnsureCapacity(int newCapacity, bool initZero = false)
+	{
+		if (newCapacity <= Capacity)
+			return;
+
+		T* ptr = (T*) NativeMemory.Realloc(_data, (nuint) newCapacity * (nuint) sizeof(T));
+
+		if (initZero)
+			Unsafe.InitBlock(&ptr[Count], 0, (uint)((newCapacity - Count) * (uint)sizeof(T)));
+
+		_data = ptr;
+		Capacity = newCapacity;
+	}
+
+	public void SetMinCount(int minCount, bool initZero = false)
+	{
+		if (Count > minCount)
+			return;
+
+		EnsureCapacity(minCount, initZero);
+		Count = minCount;
 	}
 }
