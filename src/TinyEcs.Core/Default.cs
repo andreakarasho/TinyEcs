@@ -11,10 +11,10 @@ public interface IEvent : ITag { }
 
 public readonly struct EcsComponent : IComponent
 {
-	public readonly EntityID ID;
+	public readonly ulong ID;
 	public readonly int Size;
 
-	public EcsComponent(EntityID id, int size)
+	public EcsComponent(EcsID id, int size)
 	{
 		ID = id;
 		Size = size;
@@ -26,10 +26,10 @@ public unsafe struct EcsSystem<TContext> : IComponent
 	const int TERMS_COUNT = 32;
 
 	public readonly delegate*<ref Iterator<TContext>, void> Callback;
-	public readonly EntityID Query;
+	public readonly EcsID Query;
 	public readonly float Tick;
 	public float TickCurrent;
-	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(byte))];
+	private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(byte))];
 	private readonly int _termsCount;
 
 	public Span<Term> Terms
@@ -43,7 +43,7 @@ public unsafe struct EcsSystem<TContext> : IComponent
 		}
 	}
 
-	public EcsSystem(delegate*<ref Iterator<TContext>, void> func, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public EcsSystem(delegate*<ref Iterator<TContext>, void> func, EcsID query, ReadOnlySpan<Term> terms, float tick)
 	{
 		Callback = func;
 		Query = query;
@@ -62,7 +62,7 @@ public unsafe struct EcsEvent<TContext> : IComponent
 
 	public readonly delegate*<ref Iterator<TContext>, void> Callback;
 
-	private fixed byte _terms[TERMS_COUNT * (sizeof(EntityID) + sizeof(TermOp))];
+	private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(TermOp))];
 	private readonly int _termsCount;
 
 	public Span<Term> Terms
@@ -105,20 +105,43 @@ public struct EcsSystemPhasePreStartup : ITag { }
 public struct EcsSystemPhasePostStartup : ITag { }
 
 
-// [StructLayout(LayoutKind.Explicit)]
-// public readonly struct EntityID : IEquatable<ulong>, IComparable<ulong>
-// {
-// 	[FieldOffset(0)]
-// 	public readonly ulong Value;
+[StructLayout(LayoutKind.Explicit)]
+public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable<EcsID>, IComparable<EcsID>
+{
+	[FieldOffset(0)]
+	public readonly ulong Value;
 
-// 	public EntityID(ulong value) => Value = value;
-
-
-// 	public int CompareTo(ulong other) => Value.CompareTo(other);
-// 	public bool Equals(ulong other) => Value == other;
+	public EcsID(ulong value) => Value = value;
 
 
-// 	public static implicit operator ulong(EntityID id) => id.Value;
-// 	public static implicit operator EntityID(ulong value) => new (value);
+	public readonly int CompareTo(ulong other) => Value.CompareTo(other);
+	public readonly bool Equals(ulong other) => Value == other;
+	public readonly int CompareTo(EcsID other) => Value.CompareTo(other.Value);
+	public readonly bool Equals(EcsID other) => Value == other.Value;
 
-// }
+
+	public static implicit operator ulong(EcsID id) => id.Value;
+	public static implicit operator EcsID(ulong value) => new (value);
+
+	public static bool operator ==(EcsID id, EcsID other) => id.Value.Equals(other.Value);
+	public static bool operator !=(EcsID id, EcsID other) => !id.Value.Equals(other.Value);
+
+	public static Term operator !(EcsID id) => Term.Without(id.Value);
+	public static Term operator -(EcsID id) => Term.Without(id.Value);
+	public static Term operator +(EcsID id) => Term.With(id.Value);
+
+	public readonly override bool Equals(object? obj)
+	{
+		return obj is EcsID ent && Equals(ent);
+	}
+
+	public readonly override int GetHashCode()
+	{
+		return Value.GetHashCode();
+	}
+
+	public override string ToString()
+	{
+		return Value.ToString();
+	}
+}

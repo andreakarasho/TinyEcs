@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class ComponentComparer<TContext> : IComparer<EntityID>, IComparer<Term>, IComparer<EcsComponent>
+sealed class ComponentComparer<TContext> : IComparer<EcsID>, IComparer<Term>, IComparer<EcsComponent>
 {
 	private readonly World<TContext> _world;
 
@@ -12,10 +12,10 @@ sealed class ComponentComparer<TContext> : IComparer<EntityID>, IComparer<Term>,
 
 	public int Compare(EcsComponent x, EcsComponent y)
 	{
-		return Compare(x.ID, y.ID);
+		return CompareTerms(_world, x.ID, y.ID);
 	}
 
-	public int Compare(EntityID x, EntityID y)
+	public int Compare(EcsID x, EcsID y)
 	{
 		return CompareTerms(_world, x, y);
 	}
@@ -25,7 +25,7 @@ sealed class ComponentComparer<TContext> : IComparer<EntityID>, IComparer<Term>,
 		return CompareTerms(_world, x.ID, y.ID);
 	}
 
-	public static int CompareTerms(World<TContext> world, EntityID a, EntityID b)
+	public static int CompareTerms(World<TContext> world, ulong a, ulong b)
 	{
 		if (IDOp.IsPair(a) && IDOp.IsPair(b))
 		{

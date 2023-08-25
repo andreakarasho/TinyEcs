@@ -47,7 +47,7 @@ sealed unsafe class Table<TContext>
 	public EcsComponent[] Components => _componentInfo;
 
 
-	internal int Add(EntityID id)
+	internal int Add(EcsID id)
 	{
 		if (_capacity == _count)
 		{

@@ -5,7 +5,7 @@ namespace TinyEcs;
 public sealed class Commands<TContext>
 {
 	private readonly World<TContext> _main;
-	private readonly EntitySparseSet<EntityID> _despawn;
+	private readonly EntitySparseSet<EcsID> _despawn;
 	private readonly EntitySparseSet<SetComponent> _set;
 	private readonly EntitySparseSet<UnsetComponent> _unset;
 
@@ -20,7 +20,7 @@ public sealed class Commands<TContext>
 	internal World<TContext> World => _main;
 
 
-	public CommandEntityView<TContext> Entity(EntityID id)
+	public CommandEntityView<TContext> Entity(EcsID id)
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -35,7 +35,7 @@ public sealed class Commands<TContext>
 			.Set<EcsEnabled>();
 	}
 
-	public void Delete(EntityID id)
+	public void Delete(EcsID id)
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -46,7 +46,7 @@ public sealed class Commands<TContext>
 		}
 	}
 
-	public unsafe void Set(EntityID id, EntityID tag)
+	public unsafe void Set(EcsID id, EcsID tag)
 	{
 		EcsAssert.Assert(!IDOp.IsPair(tag));
 
@@ -61,14 +61,14 @@ public sealed class Commands<TContext>
 		Set(id, ref cmp);
 	}
 
-	public unsafe void Set<T>(EntityID id)
+	public unsafe void Set<T>(EcsID id)
 	where T : unmanaged, ITag
 	{
 		ref var cmp = ref _main.Component<T>();
 		Set(id, ref cmp);
 	}
 
-	public unsafe ref T Set<T>(EntityID id, T component)
+	public unsafe ref T Set<T>(EcsID id, T component)
 	where T : unmanaged, IComponent
 	{
 		EcsAssert.Assert(_main.Exists(id));
@@ -95,14 +95,14 @@ public sealed class Commands<TContext>
 		return ref Unsafe.As<byte, T>(ref reference);
 	}
 
-	public unsafe void Set(EntityID id, EntityID first, EntityID second)
+	public unsafe void Set(EcsID id, EcsID first, EcsID second)
 	{
 		var cmpID = IDOp.Pair(first, second);
 		var cmp = new EcsComponent(cmpID, 0);
 		Set(id, ref cmp);
 	}
 
-	public unsafe void Set<TKind>(EntityID id, EntityID target)
+	public unsafe void Set<TKind>(EcsID id, EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		var cmpID = _main.Pair<TKind>(target);
@@ -110,14 +110,14 @@ public sealed class Commands<TContext>
 		Set(id, ref cmp);
 	}
 
-	public unsafe void Set<TKind, TTarget>(EntityID id)
+	public unsafe void Set<TKind, TTarget>(EcsID id)
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
 		Set(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
 	}
 
-	private unsafe ref byte Set(EntityID id, ref EcsComponent cmp)
+	private unsafe ref byte Set(EcsID id, ref EcsComponent cmp)
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -134,7 +134,7 @@ public sealed class Commands<TContext>
 		return ref (cmp.Size <= 0 ? ref Unsafe.NullRef<byte>() : ref set.Data[0]);
 	}
 
-	public void Unset<T>(EntityID id)
+	public void Unset<T>(EcsID id)
 	where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(id));
@@ -146,7 +146,7 @@ public sealed class Commands<TContext>
 		unset.ComponentSize = cmp.Size;
 	}
 
-	public void Unset<TKind, TTarget>(EntityID id)
+	public void Unset<TKind, TTarget>(EcsID id)
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
@@ -161,7 +161,7 @@ public sealed class Commands<TContext>
 		unset.ComponentSize = cmp.Size;
 	}
 
-	public ref T Get<T>(EntityID entity)
+	public ref T Get<T>(EcsID entity)
 	where T : unmanaged, IComponent
 	{
 		EcsAssert.Assert(_main.Exists(entity));
@@ -176,7 +176,7 @@ public sealed class Commands<TContext>
 		return ref Set(entity, cmp);
 	}
 
-	public bool Has<T>(EntityID entity)
+	public bool Has<T>(EcsID entity)
 	where T : unmanaged, IComponentStub
 	{
 		EcsAssert.Assert(_main.Exists(entity));
@@ -230,32 +230,32 @@ public sealed class Commands<TContext>
 
 	private unsafe struct SetComponent
 	{
-		public EntityID Entity;
-		public EntityID Component;
+		public EcsID Entity;
+		public EcsID Component;
 		public byte* Data;
 		public int DataLength;
 	}
 
 	private struct UnsetComponent
 	{
-		public EntityID Entity;
-		public EntityID Component;
+		public EcsID Entity;
+		public EcsID Component;
 		public int ComponentSize;
 	}
 }
 
 public readonly ref struct CommandEntityView<TContext>
 {
-	private readonly EntityID _id;
+	private readonly EcsID _id;
 	private readonly Commands<TContext> _cmds;
 
-	internal CommandEntityView(Commands<TContext> cmds, EntityID id)
+	internal CommandEntityView(Commands<TContext> cmds, EcsID id)
 	{
 		_cmds = cmds;
 		_id = id;
 	}
 
-	public readonly EntityID ID => _id;
+	public readonly EcsID ID => _id;
 
 
 	public readonly CommandEntityView<TContext> Set<T>(T cmp = default)
@@ -272,19 +272,19 @@ public readonly ref struct CommandEntityView<TContext>
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set(EntityID id)
+	public readonly CommandEntityView<TContext> Set(EcsID id)
 	{
 		_cmds.Set(_id, id);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set(EntityID first, EntityID second)
+	public readonly CommandEntityView<TContext> Set(EcsID first, EcsID second)
 	{
 		_cmds.Set(_id, first, second);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set<TKind>(EntityID target)
+	public readonly CommandEntityView<TContext> Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		_cmds.Set<TKind>(_id, target);
@@ -332,6 +332,6 @@ public readonly ref struct CommandEntityView<TContext>
 		return _cmds.Has<T>(_id);
 	}
 
-	public readonly CommandEntityView<TContext> ChildOf(EntityID parent)
+	public readonly CommandEntityView<TContext> ChildOf(EcsID parent)
 		=> Set<EcsChildOf>(parent);
 }

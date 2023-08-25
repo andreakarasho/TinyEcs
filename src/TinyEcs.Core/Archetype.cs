@@ -7,7 +7,7 @@ public sealed class Archetype<TContext>
 	private readonly World<TContext> _world;
 	private readonly ComponentComparer<TContext> _comparer;
 	private int _capacity, _count;
-	private EntityID[] _entities;
+	private EcsID[] _entities;
 	private int[] _entitiesTableRows;
 	internal List<EcsEdge<TContext>> _edgesLeft, _edgesRight;
 	private readonly Table<TContext> _table;
@@ -20,14 +20,14 @@ public sealed class Archetype<TContext>
 		_table = table;
 		_capacity = ARCHETYPE_INITIAL_CAPACITY;
 		_count = 0;
-		_entities = new EntityID[ARCHETYPE_INITIAL_CAPACITY];
+		_entities = new EcsID[ARCHETYPE_INITIAL_CAPACITY];
 		_entitiesTableRows = new int[ARCHETYPE_INITIAL_CAPACITY];
 		_edgesLeft = new List<EcsEdge<TContext>>();
 		_edgesRight = new List<EcsEdge<TContext>>();
 		ComponentInfo = components.ToArray();
 	}
 
-	internal EntityID[] Entities => _entities;
+	internal EcsID[] Entities => _entities;
 	internal int[] EntitiesTableRows => _entitiesTableRows;
 	public World<TContext> World => _world;
 	public int Count => _count;
@@ -47,7 +47,7 @@ public sealed class Archetype<TContext>
 		return _table.GetComponentIndex(ref cmp);
 	}
 
-	internal (int, int) Add(EntityID entityID, int tableRow = -1)
+	internal (int, int) Add(EcsID id, int tableRow = -1)
 	{
 		if (_capacity == _count)
 		{
@@ -57,14 +57,14 @@ public sealed class Archetype<TContext>
 			Array.Resize(ref _entitiesTableRows, _capacity);
 		}
 
-		_entities[_count] = entityID;
-		var row = tableRow < 0 ? _table.Add(entityID) : tableRow;
+		_entities[_count] = id;
+		var row = tableRow < 0 ? _table.Add(id) : tableRow;
 		_entitiesTableRows[_count] = row;
 
 		return (_count++, row);
 	}
 
-	internal EntityID Remove(ref EcsRecord<TContext> record)
+	internal EcsID Remove(ref EcsRecord<TContext> record)
 	{
 		(var removed, var removedRow) = SwapWithLast(record.Row);
 
@@ -132,7 +132,7 @@ public sealed class Archetype<TContext>
 		}
 	}
 
-	private (EntityID, int) SwapWithLast(int fromRow)
+	private (EcsID, int) SwapWithLast(int fromRow)
 	{
 		var removed = _entities[fromRow];
 		_entities[fromRow] = _entities[_count - 1];
@@ -143,7 +143,7 @@ public sealed class Archetype<TContext>
 		return (removed, removedRow);
 	}
 
-	private static void MakeEdges(Archetype<TContext> left, Archetype<TContext> right, EntityID id)
+	private static void MakeEdges(Archetype<TContext> left, Archetype<TContext> right, EcsID id)
 	{
 		left._edgesRight.Add(new EcsEdge<TContext>() { Archetype = right, ComponentID = id });
 		right._edgesLeft.Add(new EcsEdge<TContext>() { Archetype = left, ComponentID = id });
@@ -238,7 +238,7 @@ public sealed class Archetype<TContext>
 	{
 		PrintRec(this, 0, 0);
 
-		static void PrintRec(Archetype<TContext> root, int depth, EntityID rootComponent)
+		static void PrintRec(Archetype<TContext> root, int depth, EcsID rootComponent)
 		{
 			Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
 
@@ -252,6 +252,6 @@ public sealed class Archetype<TContext>
 
 struct EcsEdge<TContext>
 {
-	public EntityID ComponentID;
+	public EcsID ComponentID;
 	public Archetype<TContext> Archetype;
 }

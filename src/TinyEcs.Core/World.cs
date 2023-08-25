@@ -5,8 +5,8 @@ public sealed partial class World<TContext> : IDisposable
 {
 	private readonly Archetype<TContext> _archRoot;
 	private readonly EntitySparseSet<EcsRecord<TContext>> _entities = new();
-	private readonly Dictionary<EntityID, Archetype<TContext>> _typeIndex = new ();
-	private readonly Dictionary<EntityID, Table<TContext>> _tableIndex = new ();
+	private readonly Dictionary<EcsID, Archetype<TContext>> _typeIndex = new ();
+	private readonly Dictionary<EcsID, Table<TContext>> _tableIndex = new ();
 	private readonly ComponentComparer<TContext> _comparer;
 	private readonly Commands<TContext> _commands;
 	private int _frame;
@@ -73,7 +73,7 @@ public sealed partial class World<TContext> : IDisposable
 		}
 	}
 
-	public unsafe ref EcsComponent Component<T>(EntityID id = 0) where T : unmanaged, IComponentStub
+	public unsafe ref EcsComponent Component<T>(EcsID id = default) where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
 
@@ -97,23 +97,23 @@ public sealed partial class World<TContext> : IDisposable
 		return ref lookup;
 	}
 
-	public EntityID Pair<TKind, TTarget>()
+	public EcsID Pair<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
 
-	public EntityID Pair<TKind>(EntityID target)
+	public EcsID Pair<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 		=> IDOp.Pair(Component<TKind>().ID, target);
 
 	public QueryBuilder<TContext> Query()
 		=> new (this);
 
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> callback, EcsID query, ReadOnlySpan<Term> terms, float tick)
 		=> New()
 			.Set(new EcsSystem<TContext>(callback, query, terms, tick));
 
-	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
+	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EcsID> events)
 	{
 		var obs = New()
 			.Set(new EcsEvent<TContext>(callback, terms));
@@ -124,7 +124,7 @@ public sealed partial class World<TContext> : IDisposable
 		return obs;
 	}
 
-	public EntityView<TContext> Entity(EntityID id)
+	public EntityView<TContext> Entity(EcsID id)
 	{
 		EcsAssert.Assert(Exists(id));
 		return new(this, id);
@@ -137,7 +137,7 @@ public sealed partial class World<TContext> : IDisposable
 	public EntityView<TContext> New()
 		=> NewEmpty().Set<EcsEnabled>();
 
-	internal EntityView<TContext> NewEmpty(EntityID id = 0)
+	internal EntityView<TContext> NewEmpty(ulong id = 0)
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
@@ -147,14 +147,14 @@ public sealed partial class World<TContext> : IDisposable
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ref EcsRecord<TContext> GetRecord(EntityID id)
+	internal ref EcsRecord<TContext> GetRecord(EcsID id)
 	{
 		ref var record = ref _entities.Get(id);
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 		return ref record;
 	}
 
-	public void Delete(EntityID entity)
+	public void Delete(EcsID entity)
 	{
 		ref var record = ref GetRecord(entity);
 
@@ -177,7 +177,7 @@ public sealed partial class World<TContext> : IDisposable
 		_entities.Remove(removedId);
 	}
 
-	public bool Exists(EntityID entity)
+	public bool Exists(EcsID entity)
 	{
 		if (IDOp.IsPair(entity))
 		{
@@ -189,13 +189,13 @@ public sealed partial class World<TContext> : IDisposable
 		return _entities.Contains(entity);
 	}
 
-	internal void DetachComponent(EntityID entity, ref EcsComponent cmp)
+	internal void DetachComponent(EcsID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref GetRecord(entity);
 		InternalAttachDetach(entity, ref record, ref cmp, false);
 	}
 
-	private bool InternalAttachDetach(EntityID entity, ref EcsRecord<TContext> record, ref EcsComponent cmp, bool add)
+	private bool InternalAttachDetach(EcsID entity, ref EcsRecord<TContext> record, ref EcsComponent cmp, bool add)
 	{
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
@@ -285,11 +285,11 @@ public sealed partial class World<TContext> : IDisposable
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static EntityID Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
+		static EcsID Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
 		{
 			unchecked
 			{
-				EntityID hash = 5381;
+				EcsID hash = 5381;
 
 				while (components.CanAdvance())
 				{
@@ -311,7 +311,7 @@ public sealed partial class World<TContext> : IDisposable
 		return arch;
 	}
 
-	internal void Set(EntityID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
+	internal void Set(EcsID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
 	{
 		EcsAssert.Assert(cmp.Size == data.Length);
 
@@ -345,7 +345,7 @@ public sealed partial class World<TContext> : IDisposable
 	}
 
 	[SkipLocalsInit]
-	public unsafe void EmitEvent(EntityID eventID, EntityID entity, EntityID component)
+	public unsafe void EmitEvent(EcsID eventID, EcsID entity, EcsID component)
 	{
 		EcsAssert.Assert(Exists(eventID));
 		EcsAssert.Assert(Exists(entity));
@@ -368,8 +368,8 @@ public sealed partial class World<TContext> : IDisposable
 
 	private struct ObserverInfo
 	{
-		public EntityID Entity;
-		public EntityID Event;
+		public EcsID Entity;
+		public EcsID Event;
 		public Term LastComponent;
 	}
 
@@ -382,7 +382,7 @@ public sealed partial class World<TContext> : IDisposable
 			it.Commands,
 			1,
 			record.Archetype.Table,
-			stackalloc EntityID[1] { eventInfo.Entity },
+			stackalloc EcsID[1] { eventInfo.Entity },
 			stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
 			null,
 			eventInfo.Event
@@ -402,13 +402,13 @@ public sealed partial class World<TContext> : IDisposable
 		}
 	}
 
-	internal bool Has(EntityID entity, ref EcsComponent cmp)
+	internal bool Has(EcsID entity, ref EcsComponent cmp)
 	{
 		ref var record = ref GetRecord(entity);
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
 	}
 
-	public void Set(EntityID entity, EntityID first, EntityID second)
+	public void Set(EcsID entity, EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
 
@@ -429,7 +429,7 @@ public sealed partial class World<TContext> : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public void Set(EntityID entity, EntityID tag)
+	public void Set(EcsID entity, EcsID tag)
 	{
 		EcsAssert.Assert(!IDOp.IsPair(tag));
 
@@ -445,14 +445,14 @@ public sealed partial class World<TContext> : IDisposable
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}
 
-	public bool Has(EntityID entity, EntityID first, EntityID second)
+	public bool Has(EcsID entity, EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
 		var cmp = new EcsComponent(id, 0);
 		return Has(entity, ref cmp);
 	}
 
-	public EntityID GetParent(EntityID id)
+	public EcsID GetParent(EcsID id)
 	{
 		ref var record = ref GetRecord(id);
 
@@ -470,7 +470,7 @@ public sealed partial class World<TContext> : IDisposable
 		return 0;
 	}
 
-	public ReadOnlySpan<EcsComponent> GetType(EntityID id)
+	public ReadOnlySpan<EcsComponent> GetType(EcsID id)
 	{
 		ref var record = ref GetRecord(id);
 		return record.Archetype.ComponentInfo;
@@ -482,7 +482,7 @@ public sealed partial class World<TContext> : IDisposable
 	}
 
 	[SkipLocalsInit]
-	public unsafe void RunPhase(EntityID phase)
+	public unsafe void RunPhase(EcsID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
 			Term.With(Component<EcsEnabled>().ID),
@@ -521,7 +521,7 @@ public sealed partial class World<TContext> : IDisposable
 
 	static unsafe void RunSystems(ref Iterator<TContext> it)
 	{
-		var emptyIt = new Iterator<TContext>(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<ulong>.Empty, ReadOnlySpan<int>.Empty, null, 0);
+		var emptyIt = new Iterator<TContext>(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<EcsID>.Empty, ReadOnlySpan<int>.Empty, null, 0);
 		var sysA = it.Field<EcsSystem<TContext>>();
 
 		for (int i = 0; i < it.Count; ++i)

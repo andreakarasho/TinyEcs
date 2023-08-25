@@ -4,13 +4,13 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<EntityView<TContext>>
+public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<EntityView<TContext>>
 {
-	public readonly EntityID ID;
+	public readonly EcsID ID;
 	public readonly World<TContext> World;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal EntityView(World<TContext> world, EntityID id)
+	internal EntityView(World<TContext> world, EcsID id)
 	{
 		World = world;
 		ID = id;
@@ -18,7 +18,7 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(ulong other)
+	public readonly bool Equals(EcsID other)
 	{
 		return ID == other;
 	}
@@ -37,7 +37,7 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView<TContext> Set(EntityID id)
+	public readonly EntityView<TContext> Set(EcsID id)
 	{
 		World.Set(ID, id);
 		return this;
@@ -60,14 +60,14 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView<TContext> Set<TKind>(EntityID target)
+	public readonly EntityView<TContext> Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		return Set(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView<TContext> Set(EntityID first, EntityID second)
+	public readonly EntityView<TContext> Set(EcsID first, EcsID second)
 	{
 		World.Set(ID, first, second);
 		return this;
@@ -89,14 +89,14 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	public readonly EntityView<TContext> Unset<TKind>(EntityID target)
+	public readonly EntityView<TContext> Unset<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		return Unset(World.Component<TKind>().ID, target);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView<TContext> Unset(EntityID first, EntityID second)
+	public readonly EntityView<TContext> Unset(EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
 		var cmp = new EcsComponent(id, 0);
@@ -137,7 +137,7 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 		return world.Has(ID, ref cmp);
 	}
 
-	public readonly EntityView<TContext> ChildOf(EntityID parent)
+	public readonly EntityView<TContext> ChildOf(EcsID parent)
 	{
 		World.Set<EcsChildOf>(ID, parent);
 		return this;
@@ -186,11 +186,11 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 		=> IDOp.IsPair(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID First()
+	public readonly EcsID First()
 		=> IDOp.GetPairFirst(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID Second()
+	public readonly EcsID Second()
 		=> IDOp.GetPairSecond(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -207,11 +207,46 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 	public readonly ReadOnlySpan<EcsComponent> Type()
 		=> World.GetType(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static implicit operator EntityID(in EntityView<TContext> d) => d.ID;
+
+	public static implicit operator EcsID(EntityView<TContext> d) => d.ID;
+	public static implicit operator Term(EntityView<TContext> d) => Term.With(d.ID);
+
+	public static Term operator !(EntityView<TContext> id) => Term.Without(id.ID);
+	public static Term operator -(EntityView<TContext> id) => Term.Without(id.ID);
+	public static Term operator +(EntityView<TContext> id) => Term.With(id.ID);
 
 
 	public static readonly EntityView<TContext> Invalid = new(null, 0);
+
+
+	public unsafe readonly EntityView<TContext> System
+	(
+		delegate*<ref Iterator<TContext>, void> callback,
+		params Term[] terms
+	) => System(callback, float.NaN, terms);
+
+	public unsafe readonly EntityView<TContext> System
+	(
+		delegate*<ref Iterator<TContext>, void> callback,
+		float tick,
+		params Term[] terms
+	)
+	{
+		var query = World.New()
+				.Set<EcsPanic, EcsDelete>();
+
+		Array.Sort(terms);
+
+		Set(new EcsSystem<TContext>
+		(
+			callback,
+			query,
+			terms,
+			tick
+		));
+
+		return Set<EcsPanic, EcsDelete>();
+	}
 
 	public unsafe readonly EntityView<TContext> System
 	(
@@ -241,8 +276,8 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 	public unsafe readonly EntityView<TContext> System
 	(
 		delegate*<ref Iterator<TContext>, void> callback,
-		Span<EntityID> with,
-		Span<EntityID> without,
+		Span<EcsID> with,
+		Span<EcsID> without,
 		float tick
 	)
 	{
@@ -294,8 +329,8 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 	// public static implicit operator Term(EntityView<TContext> entity)
 	// 	=> new() { ID = entity.ID, Op = TermOp.With };
 
-	public static implicit operator Term(in EntityView<TContext> entity)
-		=> new() { ID = entity.ID, Op = TermOp.With };
+	// public static implicit operator Term(in EntityView<TContext> entity)
+	// 	=> new() { ID = entity.ID, Op = TermOp.With };
 }
 
 
@@ -318,7 +353,7 @@ public unsafe ref struct SystemDescription<TContext>
 	public SystemDescription() => this = default;
 	public SystemDescription(params Term[] terms) { this = default; Terms = terms; }
 
-	public EntityID Query = 0;
+	public EcsID Query = 0;
 	public Span<Term> Terms = Span<Term>.Empty;
 	public float Tick = float.NaN;
 }

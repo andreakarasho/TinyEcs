@@ -2,20 +2,20 @@ namespace TinyEcs;
 
 public sealed partial class World<TContext>
 {
-	public void Set<TKind, TTarget>(EntityID entity)
+	public void Set<TKind, TTarget>(EcsID entity)
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
 	{
 		Set(entity, Component<TKind>().ID, Component<TKind>().ID);
 	}
 
-	public void Set<TKind>(EntityID entity, EntityID target)
+	public void Set<TKind>(EcsID entity, EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		Set(entity, Component<TKind>().ID, target);
 	}
 
-	public void Set<T>(EntityID entity)
+	public void Set<T>(EcsID entity)
 	where T : unmanaged, ITag
 	{
 		ref var cmp = ref Component<T>();
@@ -26,7 +26,7 @@ public sealed partial class World<TContext>
 	}
 
 	[SkipLocalsInit]
-	public unsafe void Set<T>(EntityID entity, T component = default)
+	public unsafe void Set<T>(EcsID entity, T component = default)
 	where T : unmanaged, IComponent
 	{
 		ref var cmp = ref Component<T>();
@@ -41,24 +41,24 @@ public sealed partial class World<TContext>
 		);
 	}
 
-	public void Unset<T>(EntityID entity)
+	public void Unset<T>(EcsID entity)
 	where T : unmanaged, IComponentStub
 		=> DetachComponent(entity, ref Component<T>());
 
-	public bool Has<T>(EntityID entity)
+	public bool Has<T>(EcsID entity)
 	where T : unmanaged, IComponentStub
 		=> Has(entity, ref Component<T>());
 
-	public bool Has<TKind>(EntityID entity, EntityID target)
+	public bool Has<TKind>(EcsID entity, EcsID target)
 	where TKind : unmanaged, ITag
 		=> Has(entity, Component<TKind>().ID, target);
 
-	public bool Has<TKind, TTarget>(EntityID entity)
+	public bool Has<TKind, TTarget>(EcsID entity)
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 		=> Has(entity, Component<TKind>().ID, Component<TKind>().ID);
 
-	public ref T Get<T>(EntityID entity)
+	public ref T Get<T>(EcsID entity)
 	where T : unmanaged, IComponent
 	{
 		ref var record = ref GetRecord(entity);
@@ -98,7 +98,7 @@ public sealed partial class World<TContext>
 		=> System(system, query.Build(), query.Terms, tick)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params EntityID[] components)
+	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params EcsID[] components)
 	{
 		Span<Term> terms = stackalloc Term[components.Length];
 		for (int i = 0; i < components.Length; ++i)
@@ -125,20 +125,20 @@ public sealed partial class World<TContext>
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
 
-	public void EmitEvent<TEvent>(EntityID entity, EntityID component)
+	public void EmitEvent<TEvent>(EcsID entity, EcsID component)
 	where TEvent : unmanaged, IEvent
 	{
 		EmitEvent(Component<TEvent>().ID, entity, component);
 	}
 
-	public void EmitEvent<TEvent, TComponent>(EntityID entity)
+	public void EmitEvent<TEvent, TComponent>(EcsID entity)
 	where TEvent : unmanaged, IEvent
 	where TComponent : unmanaged, IComponentStub
 	{
 		EmitEvent(Component<TEvent>().ID, entity, Component<TComponent>().ID);
 	}
 
-	public void EmitEvent<TEvent, TKind, TTarget>(EntityID entity)
+	public void EmitEvent<TEvent, TKind, TTarget>(EcsID entity)
 	where TEvent : unmanaged, IEvent
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
@@ -146,7 +146,7 @@ public sealed partial class World<TContext>
 		EmitEvent(Component<TEvent>().ID, entity, Pair<TKind, TTarget>());
 	}
 
-	public void EmitEvent<TEvent, TKind>(EntityID entity, EntityID target)
+	public void EmitEvent<TEvent, TKind>(EcsID entity, EcsID target)
 	where TEvent : unmanaged, IEvent
 	where TKind : unmanaged, ITag
 	{

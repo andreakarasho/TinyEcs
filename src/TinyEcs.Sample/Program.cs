@@ -25,22 +25,19 @@ var secondMain = world.New();
 
 unsafe
 {
-	var q = world.Query()
-		.With<Position>();
-
 	world.New()
-		.System
-		(&SystemCtx1, new (+positionID, +velocityID, pairID));
-
-	world.New()
-		.System
-		(
-			&SystemCtx1,
-			[positionID, velocityID],
-			[pairID],
-			float.NaN
-		)
+		.System(&SystemCtx1, +positionID, +velocityID, -pairID)
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+	// world.New()
+	// 	.System
+	// 	(
+	// 		&SystemCtx1,
+	// 		[positionID, velocityID],
+	// 		[pairID],
+	// 		float.NaN
+	// 	)
+	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	// world.New()
 	// 	.System
@@ -66,7 +63,7 @@ unsafe
 	// 		//Term.With(world.Component<Velocity>().ID),
 	// 		//Term.With(world.Pair<EcsChildOf>(main.ID))
 	// 	},
-	// 	stackalloc EntityID[] {
+	// 	stackalloc EcsID[] {
 	// 		world.Component<CustomEvent>().ID
 	// 		//world.Component<EcsObserverOnSet>().ID,
 	// 		//world.Component<EcsObserverOnUnset>().ID

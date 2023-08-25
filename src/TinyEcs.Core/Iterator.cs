@@ -4,20 +4,20 @@ public delegate void IteratorDelegate<TContext>(ref Iterator<TContext> it);
 
 public readonly ref struct Iterator<TContext>
 {
-	private readonly ReadOnlySpan<EntityID> _entities;
+	private readonly ReadOnlySpan<EcsID> _entities;
 	private readonly ReadOnlySpan<int> _entitiesToTableRows;
 	private readonly Table<TContext> _table;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands<TContext> commands, Archetype<TContext> archetype, object? userData, EntityID eventID = 0)
+	internal Iterator(Commands<TContext> commands, Archetype<TContext> archetype, object? userData, EcsID eventID = default)
 	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID)
 	{
 
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands<TContext> commands, int count, Table<TContext> table, ReadOnlySpan<EntityID> entities, ReadOnlySpan<int> toRows, object? userData, EntityID eventID = 0)
+	internal Iterator(Commands<TContext> commands, int count, Table<TContext> table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default)
 	{
 		Commands = commands;
 		World = commands.World;
@@ -36,7 +36,7 @@ public readonly ref struct Iterator<TContext>
 	public readonly int Count { get; }
 	public readonly float DeltaTime { get; }
 	public readonly object? UserData { get; }
-	public readonly EntityID EventID { get; }
+	public readonly EcsID EventID { get; }
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

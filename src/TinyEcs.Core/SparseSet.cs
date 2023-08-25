@@ -12,15 +12,15 @@ sealed class EntitySparseSet<T>
 
 	private Chunk[] _chunks;
 	private int _count;
-	private EntityID _maxID;
-	private readonly Vec<EntityID> _dense;
+	private ulong _maxID;
+	private readonly Vec<ulong> _dense;
 
 	public EntitySparseSet()
 	{
-		_dense = Vec<EntityID>.Init();
+		_dense = Vec<ulong>.Init();
 		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
 		_count = 1;
-		_maxID = EntityID.MinValue;
+		_maxID = ulong.MinValue;
 
 		_dense.Add(0);
 	}
@@ -30,7 +30,7 @@ sealed class EntitySparseSet<T>
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ref T CreateNew(out EntityID id)
+	public ref T CreateNew(out ulong id)
 	{
 		var count = _count++;
 		var denseCount = _dense.Count;
@@ -55,7 +55,7 @@ sealed class EntitySparseSet<T>
 		return ref chunk.Values[(int)id & 0xFFF];
 	}
 
-	private EntityID NewID(int dense)
+	private ulong NewID(int dense)
 	{
 		var index = ++_maxID;
 		_dense.Add(0);
@@ -69,7 +69,7 @@ sealed class EntitySparseSet<T>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ref T Get(EntityID outerIdx)
+	public ref T Get(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunk((int)outerIdx >> 12);
 		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
@@ -90,10 +90,10 @@ sealed class EntitySparseSet<T>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool Contains(EntityID outerIdx)
+	public bool Contains(ulong outerIdx)
 		=> !Unsafe.IsNullRef(ref Get(outerIdx));
 
-	public ref T Add(EntityID outerIdx, T value)
+	public ref T Add(ulong outerIdx, T value)
 	{
 		var gen = SplitGeneration(ref outerIdx);
 		var realID = (int)outerIdx & 0xFFF;
@@ -143,7 +143,7 @@ sealed class EntitySparseSet<T>
 		return ref chunk.Values[realID];
 	}
 
-	public void Remove(EntityID outerIdx)
+	public void Remove(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunk((int)outerIdx >> 12);
 		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
@@ -216,14 +216,14 @@ sealed class EntitySparseSet<T>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private void SparseAssignIndex(ref Chunk chunk, EntityID index, int dense)
+	private void SparseAssignIndex(ref Chunk chunk, ulong index, int dense)
 	{
 		chunk.Sparse[(int)index & 0xFFF] = dense;
 		_dense[dense] = index;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static EntityID SplitGeneration(ref EntityID index)
+	private static ulong SplitGeneration(ref ulong index)
 	{
 		if (IDOp.IsPair(index))
 		{

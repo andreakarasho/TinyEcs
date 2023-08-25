@@ -6,7 +6,7 @@ public unsafe ref struct QueryBuilder<TContext>
 	const int TERMS_COUNT = 16;
 
 	private readonly World<TContext> _world;
-	private EntityID _id;
+	private EcsID _id;
 	private int _termIndex;
 	private unsafe fixed byte _terms[TERMS_COUNT * (sizeof(uint) + sizeof(byte))];
 
@@ -56,14 +56,14 @@ public unsafe ref struct QueryBuilder<TContext>
 	where TTarget : unmanaged, IComponentStub
 		=> With(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
 
-	public QueryBuilder<TContext> With<TKind>(EntityID target)
+	public QueryBuilder<TContext> With<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
 		=> With(IDOp.Pair(_world.Component<TKind>().ID, target));
 
-	public QueryBuilder<TContext> With(EntityID first, EntityID second)
+	public QueryBuilder<TContext> With(EcsID first, EcsID second)
 		=> With(IDOp.Pair(first, second));
 
-	public QueryBuilder<TContext> With(EntityID id)
+	public QueryBuilder<TContext> With(EcsID id)
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
@@ -84,14 +84,14 @@ public unsafe ref struct QueryBuilder<TContext>
 	where TTarget : unmanaged, IComponentStub
 		=> Without(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
 
-	public QueryBuilder<TContext> Without<TKind>(EntityID target)
+	public QueryBuilder<TContext> Without<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
 		=> Without(IDOp.Pair(_world.Component<TKind>().ID, target));
 
-	public QueryBuilder<TContext> Without(EntityID first, EntityID second)
+	public QueryBuilder<TContext> Without(EcsID first, EcsID second)
 		=> Without(IDOp.Pair(first, second));
 
-	public QueryBuilder<TContext> Without(EntityID id)
+	public QueryBuilder<TContext> Without(EcsID id)
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
@@ -131,16 +131,16 @@ public unsafe ref struct QueryBuilder<TContext>
 
 public struct Term : IComparable<Term>
 {
-	public EntityID ID;
+	public ulong ID;
 	public TermOp Op;
 
 	public Term With2 { get { Op = TermOp.With; return this; } }
 	public Term Without2 { get { Op = TermOp.With; return this; } }
 
-	public static Term With(EntityID id)
+	public static Term With(EcsID id)
 		=> new () { ID = id, Op = TermOp.With };
 
-	public static Term Without(EntityID id)
+	public static Term Without(EcsID id)
 		=> new () { ID = id, Op = TermOp.Without };
 
 	public int CompareTo(Term other)
@@ -148,8 +148,8 @@ public struct Term : IComparable<Term>
 		return ID.CompareTo(other.ID);
 	}
 
-	public static implicit operator EntityID(Term id) => id.ID;
-	public static implicit operator Term(EntityID id) => With(id);
+	public static implicit operator EcsID(Term id) => id.ID;
+	public static implicit operator Term(EcsID id) => With(id);
 
 	public static Term operator !(Term id) => id.Not();
 	public static Term operator -(Term id) => id.Not();
