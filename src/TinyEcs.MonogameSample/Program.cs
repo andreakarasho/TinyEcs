@@ -49,8 +49,11 @@ sealed unsafe class TinyGame : Game
 		_ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
 
+		_ecs.New()
+			.System(&Setup, [], [], float.NaN)
+			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
-        _ecs.StartupSystem(&Setup);
+        //_ecs.StartupSystem(&Setup);
 		_ecs.StartupSystem(&SpawnEntities);
 
 		var qry = _ecs.Query()
@@ -130,7 +133,7 @@ sealed unsafe class TinyGame : Game
 
 		for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
 		{
-			it.Commands!.Spawn()
+			it.Commands!.New()
 				.Set(new Position()
 				{
 					Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))

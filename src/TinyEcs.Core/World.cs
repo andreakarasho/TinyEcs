@@ -1,5 +1,6 @@
 namespace TinyEcs;
 
+
 public sealed partial class World<TContext> : IDisposable
 {
 	private readonly Archetype<TContext> _archRoot;
@@ -53,8 +54,8 @@ public sealed partial class World<TContext> : IDisposable
 		// _ = ref Tag<EcsSystemPhaseOnUpdate>();
 		// _ = ref Tag<EcsSystemPhasePostUpdate>();
 
-		Set<EcsExclusive>(Component<EcsChildOf>().ID);
-		Set<EcsExclusive>(Component<EcsPhase>().ID);
+		Set<EcsExclusive>(Entity<EcsChildOf>());
+		Set<EcsExclusive>(Entity<EcsPhase>());
 	}
 
 	public void Optimize()
@@ -78,7 +79,7 @@ public sealed partial class World<TContext> : IDisposable
 
 		if (lookup.ID == 0)
 		{
-			var ent = id == 0 ? SpawnEmpty() : id;
+			var ent = id == 0 ? NewEmpty() : id;
 			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
 			var cmp = new EcsComponent(ent, size);
 			lookup = cmp;
@@ -89,6 +90,9 @@ public sealed partial class World<TContext> : IDisposable
 			if (size == 0)
 				Set<EcsTag>(cmp.ID);
 		}
+
+		if (id > 0)
+			EcsAssert.Assert(lookup.ID == id);
 
 		return ref lookup;
 	}
@@ -106,12 +110,12 @@ public sealed partial class World<TContext> : IDisposable
 		=> new (this);
 
 	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> callback, EntityID query, ReadOnlySpan<Term> terms, float tick)
-		=> Spawn()
+		=> New()
 			.Set(new EcsSystem<TContext>(callback, query, terms, tick));
 
 	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EntityID> events)
 	{
-		var obs = Spawn()
+		var obs = New()
 			.Set(new EcsEvent<TContext>(callback, terms));
 
 		foreach (ref readonly var id in events)
@@ -130,16 +134,16 @@ public sealed partial class World<TContext> : IDisposable
 	where T : unmanaged, IComponentStub
 		=> Entity(Component<T>().ID);
 
-	public EntityView<TContext> Spawn()
-		=> SpawnEmpty().Set<EcsEnabled>();
+	public EntityView<TContext> New()
+		=> NewEmpty().Set<EcsEnabled>();
 
-	internal EntityView<TContext> SpawnEmpty(EntityID id = 0)
+	internal EntityView<TContext> NewEmpty(EntityID id = 0)
 	{
 		ref var record = ref (id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id));
 		record.Archetype = _archRoot;
 		record.Row = _archRoot.Add(id).Item1;
 
-		return new EntityView<TContext>(this, id);
+		return new (this, id);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -150,7 +154,7 @@ public sealed partial class World<TContext> : IDisposable
 		return ref record;
 	}
 
-	public void Despawn(EntityID entity)
+	public void Delete(EntityID entity)
 	{
 		ref var record = ref GetRecord(entity);
 
@@ -161,7 +165,7 @@ public sealed partial class World<TContext> : IDisposable
 			.Iterate(static (ref Iterator<TContext> it) => {
 				for (int i = 0; i < it.Count; ++i)
 				{
-					it.Entity(0).Despawn();
+					it.Entity(0).Delete();
 				}
 			});
 

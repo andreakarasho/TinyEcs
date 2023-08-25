@@ -62,11 +62,11 @@ public readonly ref struct Iterator<TContext>
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Entity(int row)
-		=> new (World, _entities[row]);
+		=> World.Entity(_entities[row]);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly CommandEntityView<TContext> EntityDeferred(int row)
-		=> Commands.Entity(Entity(row));
+		=> Commands.Entity(_entities[row]);
 }
 
 [SkipLocalsInit]

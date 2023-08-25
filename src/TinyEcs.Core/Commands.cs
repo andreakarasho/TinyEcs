@@ -27,15 +27,15 @@ public sealed class Commands<TContext>
 		return new CommandEntityView<TContext>(this, id);
 	}
 
-	public CommandEntityView<TContext> Spawn()
+	public CommandEntityView<TContext> New()
 	{
-		var ent = _main.SpawnEmpty();
+		var ent = _main.NewEmpty();
 
 		return new CommandEntityView<TContext>(this, ent.ID)
 			.Set<EcsEnabled>();
 	}
 
-	public void Despawn(EntityID id)
+	public void Delete(EntityID id)
 	{
 		EcsAssert.Assert(_main.Exists(id));
 
@@ -215,7 +215,7 @@ public sealed class Commands<TContext>
 		{
 			EcsAssert.Assert(_main.Exists(despawn));
 
-			_main.Despawn(despawn);
+			_main.Delete(despawn);
 		}
 
 		Clear();
@@ -316,7 +316,7 @@ public readonly ref struct CommandEntityView<TContext>
 
 	public readonly CommandEntityView<TContext> Despawn()
 	{
-		_cmds.Despawn(_id);
+		_cmds.Delete(_id);
 		return this;
 	}
 

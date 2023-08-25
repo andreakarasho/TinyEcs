@@ -14,7 +14,7 @@ namespace TinyEcs.Tests
 		// 	using var world = new World<TContext>();
 		// 	var cmd = new Commands<TContext>(world);
 
-		// 	var e = cmd.Spawn();
+		// 	var e = cmd.New();
 
 		// 	Assert.True(e.IsAlive());
 		// 	Assert.True(e.IsEnabled());
@@ -26,8 +26,8 @@ namespace TinyEcs.Tests
 		// 	using var world = new World<TContext>();
 		// 	var cmd = new Commands<TContext>(world);
 
-		// 	var e = cmd.Spawn();
-		// 	e.Despawn();
+		// 	var e = cmd.New();
+		// 	e.Delete();
 
 		// 	Assert.False(e.IsAlive());
 		// }
@@ -38,7 +38,7 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = cmd.Spawn();
+			var e = cmd.New();
 
 			cmd.Merge();
 
@@ -52,8 +52,8 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = cmd.Spawn();
-			e.Despawn();
+			var e = cmd.New();
+			e.Delete();
 			cmd.Merge();
 
 			Assert.False(world.Exists(e.ID));
@@ -65,7 +65,7 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = world.Spawn();
+			var e = world.New();
 
 			const float VAL = 0.012344f;
 			cmd.Set<FloatComponent>(e, new FloatComponent() { Value = VAL });
@@ -83,7 +83,7 @@ namespace TinyEcs.Tests
 
 			const float VAL = 0.012344f;
 
-			var e = world.Spawn();
+			var e = world.New();
 			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
 
 			cmd.Unset<FloatComponent>(e);

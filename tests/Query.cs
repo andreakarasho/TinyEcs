@@ -11,7 +11,7 @@
             using var world = new World<TContext>();
 
             for (int i = 0; i < amount; i++)
-                world.Set<FloatComponent>(world.Spawn());
+                world.Set<FloatComponent>(world.New());
 
             var query = world.Query()
                 .With<FloatComponent>();
@@ -32,7 +32,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Spawn();
+                var e = world.New();
                 world.Set<FloatComponent>(e);
                 world.Set<IntComponent>(e);
             }
@@ -57,7 +57,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Spawn();
+                var e = world.New();
                 world.Set<FloatComponent>(e);
                 world.Set<IntComponent>(e);
                 world.Set<BoolComponent>(e);
@@ -84,7 +84,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Spawn();
+                var e = world.New();
                 world.Set<FloatComponent>(e);
                 world.Set<IntComponent>(e);
                 world.Set<BoolComponent>(e);
@@ -111,7 +111,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Spawn();
+                var e = world.New();
                 world.Set<FloatComponent>(e);
                 world.Set<IntComponent>(e);
             }
@@ -137,7 +137,7 @@
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Spawn();
+                var e = world.New();
                 world.Set<FloatComponent>(e);
                 world.Set<IntComponent>(e);
             }
@@ -160,22 +160,22 @@
 
             var good = 0;
 
-            var e = world.Spawn();
+            var e = world.New();
             world.Set<FloatComponent>(e);
             world.Set<IntComponent>(e);
 
-            var e2 = world.Spawn();
+            var e2 = world.New();
             world.Set<FloatComponent>(e2);
             world.Set<IntComponent>(e2);
             world.Set<BoolComponent>(e2);
 
-            var e3 = world.Spawn();
+            var e3 = world.New();
             world.Set<FloatComponent>(e3);
             world.Set<IntComponent>(e3);
             world.Set<BoolComponent>(e3);
             good++;
 
-            var e4 = world.Spawn();
+            var e4 = world.New();
             world.Set<FloatComponent>(e4);
             world.Set<IntComponent>(e4);
             world.Set<BoolComponent>(e4);

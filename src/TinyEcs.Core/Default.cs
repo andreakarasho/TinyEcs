@@ -1,3 +1,5 @@
+using System.Drawing;
+
 namespace TinyEcs;
 
 
@@ -47,6 +49,7 @@ public unsafe struct EcsSystem<TContext> : IComponent
 		Query = query;
 		_termsCount = terms.Length;
 		terms.CopyTo(Terms);
+		Terms.Sort();
 		Tick = tick;
 		TickCurrent = 0f;
 	}
@@ -79,9 +82,10 @@ public unsafe struct EcsEvent<TContext> : IComponent
 		_termsCount = terms.Length;
 		var currentTerms = Terms;
 		terms.CopyTo(currentTerms);
-		currentTerms.Sort(static (a, b) => a.ID.CompareTo(b.ID));
+		currentTerms.Sort();
 	}
 }
+
 
 public struct EcsEventOnSet : IEvent { }
 public struct EcsEventOnUnset : IEvent { }
@@ -99,3 +103,22 @@ public struct EcsSystemPhasePostUpdate : ITag { }
 public struct EcsSystemPhaseOnStartup : ITag { }
 public struct EcsSystemPhasePreStartup : ITag { }
 public struct EcsSystemPhasePostStartup : ITag { }
+
+
+// [StructLayout(LayoutKind.Explicit)]
+// public readonly struct EntityID : IEquatable<ulong>, IComparable<ulong>
+// {
+// 	[FieldOffset(0)]
+// 	public readonly ulong Value;
+
+// 	public EntityID(ulong value) => Value = value;
+
+
+// 	public int CompareTo(ulong other) => Value.CompareTo(other);
+// 	public bool Equals(ulong other) => Value == other;
+
+
+// 	public static implicit operator ulong(EntityID id) => id.Value;
+// 	public static implicit operator EntityID(ulong value) => new (value);
+
+// }

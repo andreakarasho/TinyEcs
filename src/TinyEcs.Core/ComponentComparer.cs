@@ -31,7 +31,7 @@ sealed class ComponentComparer<TContext> : IComparer<EntityID>, IComparer<Term>,
 		{
 			if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
 			{
-				var any = world.Component<EcsAny>().ID;
+				var any = world.Entity<EcsAny>();
 				var secondY = IDOp.GetPairSecond(b);
 
 				if (secondY == any)

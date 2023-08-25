@@ -162,12 +162,12 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 
 	public readonly EntityView<TContext> Parent()
 	{
-		return new (World, World.GetParent(ID));
+		return World.Entity(World.GetParent(ID));
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly void Despawn()
-		=> World.Despawn(ID);
+	public readonly void Delete()
+		=> World.Delete(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Exists()
@@ -200,7 +200,7 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 
 		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
 		{
-			action(new EntityView<TContext>(World, record.Archetype.ComponentInfo[i].ID));
+			action(World.Entity(record.Archetype.ComponentInfo[i].ID));
 		}
 	}
 
@@ -213,28 +213,67 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 
 	public static readonly EntityView<TContext> Invalid = new(null, 0);
 
-
-
-
 	public unsafe readonly EntityView<TContext> System
 	(
 		delegate*<ref Iterator<TContext>, void> callback,
-		params Term[] terms
+		SystemDescription<TContext> description
 	)
 	{
-		var query = World.Spawn()
+		if (description.Query == 0)
+			description.Query = World.New()
+				.Set<EcsPanic, EcsDelete>();
+
+		description.Terms.Sort();
+
+		Set(new EcsSystem<TContext>
+		(
+			callback,
+			description.Query,
+			description.Terms,
+			description.Tick
+		));
+
+		return Set<EcsPanic, EcsDelete>();
+	}
+
+
+	[SkipLocalsInit]
+	public unsafe readonly EntityView<TContext> System
+	(
+		delegate*<ref Iterator<TContext>, void> callback,
+		Span<EntityID> with,
+		Span<EntityID> without,
+		float tick
+	)
+	{
+		var query = World.New()
 			.Set<EcsPanic, EcsDelete>();
+
+		Span<Term> terms = stackalloc Term[with.Length + without.Length];
+		var termsWith = terms.Slice(0, with.Length);
+		var termsWithout = terms.Slice(with.Length);
+
+		for (int i = 0; i < with.Length; ++i)
+			termsWith[i] = Term.With(with[i]);
+
+		for (int i = 0; i < without.Length; ++i)
+			termsWithout[i] = Term.Without(without[i]);
+
+		terms.Sort();
 
 		return Set(new EcsSystem<TContext>
 		(
 			callback,
 			query,
 			terms,
-			float.NaN
+			tick
 		)).Set<EcsPanic, EcsDelete>();
 	}
 
-	public readonly EntityView<TContext> Event()
+	public unsafe readonly EntityView<TContext> Event
+	(
+		delegate*<ref Iterator<TContext>, void> callback
+	)
 	{
 
 		return this;
@@ -247,10 +286,15 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 		return this;
 	}
 
+	public override int GetHashCode()
+	{
+		return ID.GetHashCode();
+	}
+
 	// public static implicit operator Term(EntityView<TContext> entity)
 	// 	=> new() { ID = entity.ID, Op = TermOp.With };
 
-	public static implicit operator Term(EntityView<TContext> entity)
+	public static implicit operator Term(in EntityView<TContext> entity)
 		=> new() { ID = entity.ID, Op = TermOp.With };
 }
 
@@ -267,3 +311,14 @@ public readonly struct EntityView<TContext> : IEquatable<EntityID>, IEquatable<E
 // 	public static implicit operator Term(Without entity)
 // 		=> new() { ID = entity._id, Op = TermOp.Without };
 // }
+
+
+public unsafe ref struct SystemDescription<TContext>
+{
+	public SystemDescription() => this = default;
+	public SystemDescription(params Term[] terms) { this = default; Terms = terms; }
+
+	public EntityID Query = 0;
+	public Span<Term> Terms = Span<Term>.Empty;
+	public float Tick = float.NaN;
+}

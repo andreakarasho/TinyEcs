@@ -109,7 +109,7 @@ public unsafe ref struct QueryBuilder<TContext>
 		if (_id != 0)
 			return _world.Entity(_id);
 
-		var ent = _world.Spawn()
+		var ent = _world.New()
 			.Set<EcsPanic, EcsDelete>();
 
 		_id = ent.ID;
@@ -120,25 +120,40 @@ public unsafe ref struct QueryBuilder<TContext>
 	public unsafe void Iterate(IteratorDelegate<TContext> action)
 	{
 		_world.Query(Terms, &IterateSys, action);
-	}
 
-	static void IterateSys(ref Iterator<TContext> it)
-	{
-		if (it.UserData is IteratorDelegate<TContext> del)
-			del.Invoke(ref it);
+		static void IterateSys(ref Iterator<TContext> it)
+		{
+			if (it.UserData is IteratorDelegate<TContext> del)
+				del.Invoke(ref it);
+		}
 	}
 }
 
-public struct Term
+public struct Term : IComparable<Term>
 {
 	public EntityID ID;
 	public TermOp Op;
+
+	public Term With2 { get { Op = TermOp.With; return this; } }
+	public Term Without2 { get { Op = TermOp.With; return this; } }
 
 	public static Term With(EntityID id)
 		=> new () { ID = id, Op = TermOp.With };
 
 	public static Term Without(EntityID id)
 		=> new () { ID = id, Op = TermOp.Without };
+
+	public int CompareTo(Term other)
+	{
+		return ID.CompareTo(other.ID);
+	}
+
+	public static implicit operator EntityID(Term id) => id.ID;
+	public static implicit operator Term(EntityID id) => With(id);
+
+	public static Term operator !(Term id) => id.Not();
+	public static Term operator -(Term id) => id.Not();
+	public static Term operator +(Term id) => With(id);
 }
 
 public static class TermExt

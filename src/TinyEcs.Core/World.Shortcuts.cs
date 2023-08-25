@@ -104,7 +104,7 @@ public sealed partial class World<TContext>
 		for (int i = 0; i < components.Length; ++i)
 			terms[i] = Term.With(components[i]);
 
-		var query = Spawn()
+		var query = New()
 			.Set<EcsPanic, EcsDelete>();
 
 		return System(system, query, terms, float.NaN)
@@ -113,7 +113,7 @@ public sealed partial class World<TContext>
 
 	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params Term[] terms)
 	{
-		var query = Spawn()
+		var query = New()
 			.Set<EcsPanic, EcsDelete>();
 
 		var sys = System(system, query, terms, float.NaN)
