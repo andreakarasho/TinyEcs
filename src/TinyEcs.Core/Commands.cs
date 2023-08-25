@@ -31,8 +31,7 @@ public sealed class Commands<TContext>
 	{
 		var ent = _main.NewEmpty();
 
-		return new CommandEntityView<TContext>(this, ent.ID)
-			.Set<EcsEnabled>();
+		return new CommandEntityView<TContext>(this, ent.ID);
 	}
 
 	public void Delete(EcsID id)
@@ -314,7 +313,7 @@ public readonly ref struct CommandEntityView<TContext>
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Despawn()
+	public readonly CommandEntityView<TContext> Delete()
 	{
 		_cmds.Delete(_id);
 		return this;

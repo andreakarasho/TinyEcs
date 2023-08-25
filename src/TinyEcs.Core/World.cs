@@ -85,7 +85,6 @@ public sealed partial class World<TContext> : IDisposable
 			lookup = cmp;
 
 			Set(cmp.ID, cmp);
-			Set<EcsEnabled>(cmp.ID);
 			Set<EcsPanic, EcsDelete>(cmp.ID);
 			if (size == 0)
 				Set<EcsTag>(cmp.ID);
@@ -131,10 +130,10 @@ public sealed partial class World<TContext> : IDisposable
 		=> Entity(Component<T>().ID);
 
 	public EntityView<TContext> New()
-		=> NewEmpty().Set<EcsEnabled>();
+		=> NewEmpty();
 
 	public EntityView<TContext> New(ReadOnlySpan<char> name)
-		=> NewEmpty().Set<EcsEnabled>();
+		=> NewEmpty();
 
 	internal EntityView<TContext> NewEmpty(ulong id = 0)
 	{
@@ -484,7 +483,6 @@ public sealed partial class World<TContext> : IDisposable
 	public unsafe void RunPhase(EcsID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
-			Term.With(Component<EcsEnabled>().ID),
 			Term.With(Component<EcsSystem<TContext>>().ID),
 			Term.With(phase),
 		};

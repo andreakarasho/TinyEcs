@@ -107,14 +107,14 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Enable()
 	{
-		World.Set<EcsEnabled>(ID);
+		World.Unset<EcsDisabled>(ID);
 		return this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Disable()
 	{
-		World.Unset<EcsEnabled>(ID);
+		World.Set<EcsDisabled>(ID);
 		return this;
 	}
 
@@ -175,7 +175,7 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsEnabled()
-		=> Has<EcsEnabled>();
+		=> !Has<EcsDisabled>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsEntity()

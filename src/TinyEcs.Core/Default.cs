@@ -96,7 +96,7 @@ public struct EcsExclusive : ITag { }
 public struct EcsAny : ITag { }
 public struct EcsTag : ITag { }
 public struct EcsChildOf : ITag { }
-public struct EcsEnabled : ITag { }
+public struct EcsDisabled : ITag { }
 public struct EcsSystemPhaseOnUpdate : ITag { }
 public struct EcsSystemPhasePreUpdate : ITag { }
 public struct EcsSystemPhasePostUpdate : ITag { }
