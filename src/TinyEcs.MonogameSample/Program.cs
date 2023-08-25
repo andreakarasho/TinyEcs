@@ -49,39 +49,81 @@ sealed unsafe class TinyGame : Game
 		_ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
 
+
+		var pos = _ecs.New().Component<Position>();
+		var vel = _ecs.New().Component<Velocity>();
+		var rot = _ecs.New().Component<Rotation>();
+		var spr = _ecs.New().Component<Sprite>();
+
 		_ecs.New()
-			.System(&Setup, [], [], float.NaN)
+			.System(&Setup)
 			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
-        //_ecs.StartupSystem(&Setup);
-		_ecs.StartupSystem(&SpawnEntities);
-
-		var qry = _ecs.Query()
-			.With<Position>()
-			.With<Velocity>()
-			.With<Rotation>();
-
-		_ecs.System(&MoveSystem, qry);
-		_ecs.System(&CheckBorderSystem, qry);
-		_ecs.System(&PrintMessage, 1f);
+		_ecs.New()
+			.System(&SpawnEntities)
+			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 
-		_ecs.System(&BeginRender)
+		_ecs.New()
+			.System(&MoveSystem, pos, vel, rot)
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+		_ecs.New()
+			.System(&CheckBorderSystem, pos, vel, rot)
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+		_ecs.New()
+			.System(&PrintMessage, 1f)
+			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+
+		_ecs.New("BeginRenderer")
+			.System(&BeginRender)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.System(&Render,
-			_ecs.Query()
-				.With<Position>()
-				.With<Rotation>()
-				.With<Sprite>()
-			)
+		_ecs.New("RenderObjects")
+			.System(&Render, pos, rot, spr)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.System(&RenderText)
+		_ecs.New("RenderText")
+			.System(&RenderText)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.System(&EndRender)
+		_ecs.New("EndRenderer")
+			.System(&EndRender)
 			.Set<EcsPhase, RenderingPhase>();
+
+
+
+		//_ecs.StartupSystem(&Setup);
+		//_ecs.StartupSystem(&SpawnEntities);
+
+		// var qry = _ecs.Query()
+		// 	.With<Position>()
+		// 	.With<Velocity>()
+		// 	.With<Rotation>();
+
+		//_ecs.System(&MoveSystem, qry);
+		//_ecs.System(&CheckBorderSystem, qry);
+		//_ecs.System(&PrintMessage, 1f);
+
+
+		// _ecs.System(&BeginRender)
+		// 	.Set<EcsPhase, RenderingPhase>();
+
+		// _ecs.System(&Render,
+		// 	_ecs.Query()
+		// 		.With<Position>()
+		// 		.With<Rotation>()
+		// 		.With<Sprite>()
+		// 	)
+		// 	.Set<EcsPhase, RenderingPhase>();
+
+		// _ecs.System(&RenderText)
+		// 	.Set<EcsPhase, RenderingPhase>();
+
+		// _ecs.System(&EndRender)
+		// 	.Set<EcsPhase, RenderingPhase>();
 	}
 
 	protected override void LoadContent()

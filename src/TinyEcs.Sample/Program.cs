@@ -25,8 +25,12 @@ var secondMain = world.New();
 
 unsafe
 {
+	Term t = Term.With(positionID.ID);
+	t.Not();
+	t = !t;
+
 	world.New()
-		.System(&SystemCtx1, +positionID, +velocityID, -pairID)
+		.System(&SystemCtx1, positionID, +velocityID, -pairID)
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	// world.New()
@@ -143,13 +147,16 @@ unsafe
 			}
 		});
 
+	var posID = ecs.New().Component<Position>();
+	var velID = ecs.New().Component<Velocity>();
 
-	ecs.StartupSystem(&Setup);
-	//ecs.System(&PrintSystem, 1f);
-	//ecs.System(&PrintComponents, ecs.Query().With<EcsComponent>(), 1f);
-	ecs.System(&ParseQuery, ecs.Query()
-		.With<Position>()
-		.With<Velocity>());
+	ecs.New()
+		.System(&Setup)
+		.Set<EcsPhase, EcsSystemPhaseOnStartup>();
+
+	ecs.New()
+		.System(&ParseQuery, posID, velID)
+		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 }
 
 var sw = Stopwatch.StartNew();

@@ -106,12 +106,8 @@ public sealed partial class World<TContext> : IDisposable
 	where TKind : unmanaged, ITag
 		=> IDOp.Pair(Component<TKind>().ID, target);
 
-	public QueryBuilder<TContext> Query()
+	public Query<TContext> Query()
 		=> new (this);
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> callback, EcsID query, ReadOnlySpan<Term> terms, float tick)
-		=> New()
-			.Set(new EcsSystem<TContext>(callback, query, terms, tick));
 
 	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EcsID> events)
 	{
@@ -135,6 +131,9 @@ public sealed partial class World<TContext> : IDisposable
 		=> Entity(Component<T>().ID);
 
 	public EntityView<TContext> New()
+		=> NewEmpty().Set<EcsEnabled>();
+
+	public EntityView<TContext> New(ReadOnlySpan<char> name)
 		=> NewEmpty().Set<EcsEnabled>();
 
 	internal EntityView<TContext> NewEmpty(ulong id = 0)

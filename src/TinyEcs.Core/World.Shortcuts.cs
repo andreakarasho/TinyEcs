@@ -78,50 +78,6 @@ public sealed partial class World<TContext>
 	where T : unmanaged, IComponent
 		=> ref Get<T>(Component<T>().ID);
 
-	public unsafe EntityView<TContext> StartupSystem(delegate*<ref Iterator<TContext>, void> system)
-		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system)
-		=> System(system, 0, ReadOnlySpan<Term>.Empty, float.NaN)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, float tick)
-		=> System(system, 0, ReadOnlySpan<Term>.Empty, tick)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, in QueryBuilder<TContext> query)
-		=> System(system, query.Build(), query.Terms, float.NaN)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, in QueryBuilder<TContext> query, float tick)
-		=> System(system, query.Build(), query.Terms, tick)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params EcsID[] components)
-	{
-		Span<Term> terms = stackalloc Term[components.Length];
-		for (int i = 0; i < components.Length; ++i)
-			terms[i] = Term.With(components[i]);
-
-		var query = New()
-			.Set<EcsPanic, EcsDelete>();
-
-		return System(system, query, terms, float.NaN)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();;
-	}
-
-	public unsafe EntityView<TContext> System(delegate*<ref Iterator<TContext>, void> system, params Term[] terms)
-	{
-		var query = New()
-			.Set<EcsPanic, EcsDelete>();
-
-		var sys = System(system, query, terms, float.NaN)
-			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-		return sys;
-	}
-
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
 
