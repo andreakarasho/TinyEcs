@@ -5,8 +5,6 @@ public struct Term : IComparable<Term>
 	public ulong ID;
 	public TermOp Op;
 
-	public Term With2 { get { Op = TermOp.With; return this; } }
-	public Term Without2 { get { Op = TermOp.With; return this; } }
 
 	public static Term With(EcsID id)
 		=> new () { ID = id, Op = TermOp.With };

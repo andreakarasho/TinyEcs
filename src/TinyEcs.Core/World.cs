@@ -1,8 +1,20 @@
 namespace TinyEcs;
 
-
 public sealed partial class World<TContext> : IDisposable
 {
+	private static World<TContext>? _world;
+
+	//public static World<TContext> Instance { get; } = new ();
+
+	public static World<TContext> Get()
+	{
+		if (_world != null)
+			return _world;
+
+		_world = new World<TContext>();
+		return _world;
+	}
+
 	private readonly Archetype<TContext> _archRoot;
 	private readonly EntitySparseSet<EcsRecord<TContext>> _entities = new();
 	private readonly Dictionary<EcsID, Archetype<TContext>> _typeIndex = new ();
@@ -11,7 +23,8 @@ public sealed partial class World<TContext> : IDisposable
 	private readonly Commands<TContext> _commands;
 	private int _frame;
 
-	public World()
+
+	internal World()
 	{
 		_comparer = new ComponentComparer<TContext>(this);
 		_archRoot = new Archetype<TContext>(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
@@ -85,9 +98,10 @@ public sealed partial class World<TContext> : IDisposable
 			lookup = cmp;
 
 			Set(cmp.ID, cmp);
-			Set<EcsPanic, EcsDelete>(cmp.ID);
+			Set<EcsPanic, EcsDelete>(ent);
+
 			if (size == 0)
-				Set<EcsTag>(cmp.ID);
+				Set<EcsTag>(ent);
 		}
 
 		if (id > 0)
@@ -129,11 +143,15 @@ public sealed partial class World<TContext> : IDisposable
 	where T : unmanaged, IComponentStub
 		=> Entity(Component<T>().ID);
 
-	public EntityView<TContext> New()
-		=> NewEmpty();
+	public EntityView<TContext> New(ReadOnlySpan<char> name = default)
+	{
+		if (!name.IsEmpty)
+		{
+			// TODO
+		}
 
-	public EntityView<TContext> New(ReadOnlySpan<char> name)
-		=> NewEmpty();
+		return NewEmpty();
+	}
 
 	internal EntityView<TContext> NewEmpty(ulong id = 0)
 	{
@@ -404,6 +422,12 @@ public sealed partial class World<TContext> : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 		return record.Archetype.GetComponentIndex(ref cmp) >= 0;
+	}
+
+	public bool Has(EcsID entity, EcsID tag)
+	{
+		var cmp = new EcsComponent(tag, 0);
+		return Has(entity, ref cmp);
 	}
 
 	public void Set(EcsID entity, EcsID first, EcsID second)

@@ -39,7 +39,6 @@ public readonly ref struct Iterator<TContext>
 	public readonly EcsID EventID { get; }
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged, IComponent
 	{
 		ref var cmp = ref World.Component<T>();
@@ -52,7 +51,6 @@ public readonly ref struct Iterator<TContext>
 		return new FieldIterator<T>(span, _entitiesToTableRows);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref World.Component<T>();
@@ -60,14 +58,13 @@ public readonly ref struct Iterator<TContext>
 		return column >= 0;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Entity(int row)
 		=> World.Entity(_entities[row]);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly CommandEntityView<TContext> EntityDeferred(int row)
 		=> Commands.Entity(_entities[row]);
 }
+
 
 [SkipLocalsInit]
 public readonly ref struct FieldIterator<T> where T : unmanaged, IComponent

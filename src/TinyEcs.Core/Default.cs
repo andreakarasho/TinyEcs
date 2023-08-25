@@ -105,43 +105,72 @@ public struct EcsSystemPhasePreStartup : ITag { }
 public struct EcsSystemPhasePostStartup : ITag { }
 
 
-[StructLayout(LayoutKind.Explicit)]
-public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable<EcsID>, IComparable<EcsID>
-{
-	[FieldOffset(0)]
-	public readonly ulong Value;
+// public static class BuiltIn<TContext>
+// {
+// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	static unsafe EntityView<TContext> Register<T>(ReadOnlySpan<char> name)
+// 	where T : unmanaged, IComponentStub
+// 	{
+// 		Console.WriteLine("registering: {0}", name.ToString());
+// 		//return World<TContext>.Get().New(name).Component<T>();
 
-	public EcsID(ulong value) => Value = value;
+// 		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
+// 		EcsAssert.Assert(lookup.ID == 0);
+
+// 		var world = World<TContext>.Get();
+
+// 		var ent = world.NewEmpty();
+// 		var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
+// 		var cmp = new EcsComponent(ent, size);
+
+// 		world.Set(cmp.ID, cmp);
+// 		world.Set(ent, BuiltIn<TContext>.EcsPanic, BuiltIn<TContext>.EcsDelete);
+
+// 		if (size == 0)
+// 			world.Set(ent, BuiltIn<TContext>.EcsTag);
+
+// 		return ent;
+// 	}
+
+// 	static BuiltIn()
+// 	{
+// 		// EcsComponent = World<TContext>.Get()
+// 		// 	.Entity<EcsComponent>();
+
+// 		//EcsComponent = Register<EcsComponent>(nameof(EcsComponent));
+// 	}
+
+// 	const ulong DEFAULT_START = 0;
+
+// 	public static readonly EcsID EcsTest = DEFAULT_START + 1;
 
 
-	public readonly int CompareTo(ulong other) => Value.CompareTo(other);
-	public readonly bool Equals(ulong other) => Value == other;
-	public readonly int CompareTo(EcsID other) => Value.CompareTo(other.Value);
-	public readonly bool Equals(EcsID other) => Value == other.Value;
+// 	//public static readonly EcsID EcsComponent = Register<EcsComponent>(nameof(EcsComponent));
+
+// 	public static readonly EcsID EcsPanic = Register<EcsPanic>(nameof(EcsPanic));
+// 	public static readonly EcsID EcsDelete = Register<EcsDelete>(nameof(EcsDelete));
+// 	public static readonly EcsID EcsTag = Register<EcsTag>(nameof(EcsTag));
 
 
-	public static implicit operator ulong(EcsID id) => id.Value;
-	public static implicit operator EcsID(ulong value) => new (value);
+// 	public static readonly EcsID EcsExclusive = Register<EcsExclusive>(nameof(EcsExclusive));
+// 	public static readonly EcsID EcsChildOf = Register<EcsChildOf>(nameof(EcsChildOf)).Set<EcsExclusive>();
+// 	public static readonly EcsID EcsPhase = Register<EcsPhase>(nameof(EcsPhase)).Set<EcsExclusive>();
 
-	public static bool operator ==(EcsID id, EcsID other) => id.Value.Equals(other.Value);
-	public static bool operator !=(EcsID id, EcsID other) => !id.Value.Equals(other.Value);
 
-	public static Term operator !(EcsID id) => Term.Without(id.Value);
-	public static Term operator -(EcsID id) => Term.Without(id.Value);
-	public static Term operator +(EcsID id) => Term.With(id.Value);
+// 	public static readonly EcsID EcsEventOnSet = Register<EcsEventOnSet>(nameof(EcsEventOnSet));
+// 	public static readonly EcsID EcsEventOnUnset = Register<EcsEventOnUnset>(nameof(EcsEventOnUnset));
 
-	public readonly override bool Equals(object? obj)
-	{
-		return obj is EcsID ent && Equals(ent);
-	}
 
-	public readonly override int GetHashCode()
-	{
-		return Value.GetHashCode();
-	}
 
-	public override string ToString()
-	{
-		return Value.ToString();
-	}
-}
+
+// 	public static readonly EcsID EcsDisabled = Register<EcsDisabled>(nameof(EcsDisabled));
+// 	public static readonly EcsID EcsAny = Register<EcsAny>(nameof(EcsAny));
+
+
+// 	public static readonly EcsID EcsSystemPhaseOnUpdate = Register<EcsSystemPhaseOnUpdate>(nameof(EcsSystemPhaseOnUpdate));
+// 	public static readonly EcsID EcsSystemPhasePreUpdate = Register<EcsSystemPhasePreUpdate>(nameof(EcsSystemPhasePreUpdate));
+// 	public static readonly EcsID EcsSystemPhasePostUpdate = Register<EcsSystemPhasePostUpdate>(nameof(EcsSystemPhasePostUpdate));
+// 	public static readonly EcsID EcsSystemPhaseOnStartup = Register<EcsSystemPhaseOnStartup>(nameof(EcsSystemPhaseOnStartup));
+// 	public static readonly EcsID EcsSystemPhasePreStartup = Register<EcsSystemPhasePreStartup>(nameof(EcsSystemPhasePreStartup));
+// 	public static readonly EcsID EcsSystemPhasePostStartup = Register<EcsSystemPhasePostStartup>(nameof(EcsSystemPhasePostStartup));
+// }

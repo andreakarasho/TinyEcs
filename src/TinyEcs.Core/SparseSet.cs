@@ -29,7 +29,6 @@ sealed class EntitySparseSet<T>
 
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ref T CreateNew(out ulong id)
 	{
 		var count = _count++;
@@ -68,7 +67,6 @@ sealed class EntitySparseSet<T>
 		return index;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ref T Get(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunk((int)outerIdx >> 12);
@@ -89,7 +87,6 @@ sealed class EntitySparseSet<T>
 		return ref chunk.Values[realID];
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool Contains(ulong outerIdx)
 		=> !Unsafe.IsNullRef(ref Get(outerIdx));
 
@@ -182,7 +179,6 @@ sealed class EntitySparseSet<T>
 		chunk.Values[realID] = default!;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Clear()
 	{
 		if (_count <= 1)

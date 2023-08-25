@@ -29,21 +29,18 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return ID == other.ID;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set<T>() where T : unmanaged, ITag
 	{
 		World.Set<T>(ID);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set(EcsID id)
 	{
 		World.Set(ID, id);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set<T>(T component = default)
 	where T : unmanaged, IComponent
 	{
@@ -51,7 +48,6 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
@@ -59,21 +55,18 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return Set(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		return Set(World.Component<TKind>().ID, target);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Set(EcsID first, EcsID second)
 	{
 		World.Set(ID, first, second);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Unset<T>()
 	where T : unmanaged, IComponentStub
 	{
@@ -81,7 +74,6 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Unset<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
@@ -95,7 +87,6 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return Unset(World.Component<TKind>().ID, target);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Unset(EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
@@ -104,29 +95,24 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Enable()
 	{
 		World.Unset<EcsDisabled>(ID);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView<TContext> Disable()
 	{
 		World.Set<EcsDisabled>(ID);
 		return this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T Get<T>() where T : unmanaged, IComponent
 		=> ref World.Get<T>(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<T>() where T : unmanaged, IComponentStub
 		=> World.Has<T>(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Has<TKind, TTarget>()
 		where TKind : unmanaged, ITag
 		where TTarget : unmanaged, IComponentStub
@@ -165,15 +151,12 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return World.Entity(World.GetParent(ID));
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Delete()
 		=> World.Delete(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool Exists()
 		=> World.Exists(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly bool IsEnabled()
 		=> !Has<EcsDisabled>();
 
@@ -193,7 +176,6 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	public readonly EcsID Second()
 		=> IDOp.GetPairSecond(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Each(Action<EntityView<TContext>> action)
 	{
 		ref var record = ref World.GetRecord(ID);
@@ -227,9 +209,9 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		params Term[] terms
 	)
 	{
-		var query = terms.Length > 0 ?
+		EcsID query = terms.Length > 0 ?
 			World.New()
-				.Set<EcsPanic, EcsDelete>().ID : 0;
+				.Set<EcsPanic, EcsDelete>() : 0;
 
 		Array.Sort(terms);
 

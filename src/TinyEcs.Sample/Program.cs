@@ -10,13 +10,16 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-using var world = new World<Context1>();
+using var world = World<Context1>.Get();
 
-var positionID = world.New()
+var positionID = world
+	.New()
 	.Component<Position>();
 
-var velocityID = world.New()
+var velocityID = world
+	.New()
 	.Component<Velocity>();
+
 
 var pairID = world.Pair<Likes, Dogs>();
 
@@ -91,7 +94,7 @@ unsafe
 
 
 for (int i = 0; i < 10; ++i)
-	world.New().Set<Position>().Set<Velocity>().ChildOf(main);
+	world.New().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
 
 // main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
 // main.Set<Dogs>();
@@ -100,8 +103,8 @@ for (int i = 0; i < 10; ++i)
 // main.Unset<Velocity>();
 // main.Unset<Velocity>();
 
-for (int i = 0; i < 10; ++i)
-	world.New().ChildOf(main);
+// for (int i = 0; i < 10; ++i)
+// 	world.New().ChildOf(main);
 
 main.Children(static s => {
 	var p = s.Parent();
@@ -128,11 +131,21 @@ world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator<Context1> 
 	Console.WriteLine("found children for any");
 });
 
-var ecs = new World<Context2>();
-
+var ecs = World<Context2>.Get();
 
 unsafe
 {
+	var posID = ecs.New().Component<Position>();
+	var velID = ecs.New().Component<Velocity>();
+
+	ecs.New()
+		.System(&Setup)
+		.Set<EcsPhase, EcsSystemPhaseOnStartup>();
+
+	ecs.New()
+		.System(&ParseQuery, posID, velID)
+		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
 	ecs.Query()
 		.With<EcsComponent>()
 		.Iterate(static (ref Iterator<Context2> it) => {
@@ -146,17 +159,6 @@ unsafe
 				Console.WriteLine("{0} --> ID: {1} - SIZE: {2}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size);
 			}
 		});
-
-	var posID = ecs.New().Component<Position>();
-	var velID = ecs.New().Component<Velocity>();
-
-	ecs.New()
-		.System(&Setup)
-		.Set<EcsPhase, EcsSystemPhaseOnStartup>();
-
-	ecs.New()
-		.System(&ParseQuery, posID, velID)
-		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 }
 
 var sw = Stopwatch.StartNew();

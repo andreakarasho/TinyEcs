@@ -185,7 +185,6 @@ public sealed class Archetype<TContext>
 		MakeEdges(newNode, this, ComponentInfo[i].ID);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal bool IsSuperset(UnsafeSpan<EcsComponent> other)
 	{
 		var thisComps = new UnsafeSpan<EcsComponent>(ComponentInfo);
@@ -203,7 +202,6 @@ public sealed class Archetype<TContext>
 		return Unsafe.AreSame(ref other.Value, ref other.End);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int FindMatch(UnsafeSpan<Term> searching)
 	{
 		var currents = new UnsafeSpan<EcsComponent>(ComponentInfo);
