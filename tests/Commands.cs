@@ -38,7 +38,7 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = cmd.New();
+			var e = cmd.Entity();
 
 			cmd.Merge();
 
@@ -52,7 +52,7 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = cmd.New();
+			var e = cmd.Entity();
 			e.Delete();
 			cmd.Merge();
 

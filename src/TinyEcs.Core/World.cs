@@ -139,17 +139,12 @@ public sealed partial class World<TContext> : IDisposable
 		return Entity(id);
 	}
 
-	public EntityView<TContext> Entity(EcsID id = default) => id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
+	public EntityView<TContext> Entity(EcsID id = default)
+		=> id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
 
 	public EntityView<TContext> Entity<T>(EcsID id = default)
 	where T : unmanaged, IComponentStub
 	{
-		// ref var cmp = ref Lookup<TContext>.Entity<T>.Component;
-		// if (cmp.ID == 0)
-		// {
-
-		// }
-
 		return Entity(Component<T>().ID);
 	}
 

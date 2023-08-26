@@ -16,7 +16,7 @@ dotnet run -c Release
 
 # Basic sample
 ```csharp
-var ecs = new World();
+var ecs = new World<TContext>();
 
 // Create a run-once system which will run the first time
 // the app calls "ecs.Step(deltaTime)" method
@@ -45,7 +45,7 @@ static void Setup(ref Iterator it)
     // Create an empty entity into the main world.
     // All changes to the entity are done without modifing the world.
     // Commands will get merged at the end of the frame.
-    var ent = it.Commands.Spawn()
+    var ent = it.Commands.Entity()
         .Set(new Position() { X = -12f, Y = 0f, Z = 75f })
         .Set<Player>();
 }

@@ -12,7 +12,6 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = World<Context1>.Get();
 
-
 var positionID = world.Entity<Position>();
 var velocityID = world.Entity<Velocity>();
 var pairID = world.Pair<Likes, Dogs>();
@@ -182,7 +181,7 @@ static void Setup(ref Iterator<Context2> it)
 	var sw = Stopwatch.StartNew();
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.World.Entity()
+		it.Commands.Entity()
 			.Set<Position>()
 			.Set<Velocity>()
 			;

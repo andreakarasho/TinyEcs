@@ -175,7 +175,7 @@ sealed unsafe class TinyGame : Game
 
 		for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
 		{
-			it.Commands!.New()
+			it.Commands!.Entity()
 				.Set(new Position()
 				{
 					Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))

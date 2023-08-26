@@ -20,18 +20,12 @@ public sealed class Commands<TContext>
 	internal World<TContext> World => _main;
 
 
-	public CommandEntityView<TContext> Entity(EcsID id)
+	public CommandEntityView<TContext> Entity(EcsID id = default)
 	{
-		EcsAssert.Assert(_main.Exists(id));
+		if (id == 0 || !_main.Exists(id))
+			id = _main.NewEmpty(id);
 
 		return new CommandEntityView<TContext>(this, id);
-	}
-
-	public CommandEntityView<TContext> New()
-	{
-		var ent = _main.NewEmpty();
-
-		return new CommandEntityView<TContext>(this, ent.ID);
 	}
 
 	public void Delete(EcsID id)
