@@ -4,13 +4,13 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<EntityView<TContext>>
+public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
 	public readonly EcsID ID;
-	public readonly World<TContext> World;
+	public readonly World World;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal EntityView(World<TContext> world, EcsID id)
+	internal EntityView(World world, EcsID id)
 	{
 		World = world;
 		ID = id;
@@ -24,70 +24,70 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(EntityView<TContext> other)
+	public readonly bool Equals(EntityView other)
 	{
 		return ID == other.ID;
 	}
 
-	public readonly EntityView<TContext> Set<T>() where T : unmanaged, ITag
+	public readonly EntityView Set<T>() where T : unmanaged, ITag
 	{
 		World.Set<T>(ID);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Set(EcsID id)
+	public readonly EntityView Set(EcsID id)
 	{
 		World.Set(ID, id);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Set<T>(T component = default)
+	public readonly EntityView Set<T>(T component = default)
 	where T : unmanaged, IComponent
 	{
 		World.Set(ID, component);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Set<TKind, TTarget>()
+	public readonly EntityView Set<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
 		return Set(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	public readonly EntityView<TContext> Set<TKind>(EcsID target)
+	public readonly EntityView Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		return Set(World.Component<TKind>().ID, target);
 	}
 
-	public readonly EntityView<TContext> Set(EcsID first, EcsID second)
+	public readonly EntityView Set(EcsID first, EcsID second)
 	{
 		World.Set(ID, first, second);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Unset<T>()
+	public readonly EntityView Unset<T>()
 	where T : unmanaged, IComponentStub
 	{
 		World.Unset<T>(ID);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Unset<TKind, TTarget>()
+	public readonly EntityView Unset<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
 		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
 	}
 
-	public readonly EntityView<TContext> Unset<TKind>(EcsID target)
+	public readonly EntityView Unset<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		return Unset(World.Component<TKind>().ID, target);
 	}
 
-	public readonly EntityView<TContext> Unset(EcsID first, EcsID second)
+	public readonly EntityView Unset(EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
 		var cmp = new EcsComponent(id, 0);
@@ -95,13 +95,13 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return this;
 	}
 
-	public readonly EntityView<TContext> Enable()
+	public readonly EntityView Enable()
 	{
 		World.Unset<EcsDisabled>(ID);
 		return this;
 	}
 
-	public readonly EntityView<TContext> Disable()
+	public readonly EntityView Disable()
 	{
 		World.Set<EcsDisabled>(ID);
 		return this;
@@ -123,17 +123,17 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return world.Has(ID, ref cmp);
 	}
 
-	public readonly EntityView<TContext> ChildOf(EcsID parent)
+	public readonly EntityView ChildOf(EcsID parent)
 	{
 		World.Set<EcsChildOf>(ID, parent);
 		return this;
 	}
 
-	public readonly void Children(Action<EntityView<TContext>> action)
+	public readonly void Children(Action<EntityView> action)
 	{
 		World.Query()
 			.With<EcsChildOf>(ID)
-			.Iterate((ref Iterator<TContext> it) => {
+			.Iterate((ref Iterator it) => {
 				for (int i = 0, count = it.Count; i < count; ++i)
 					action(it.Entity(i));
 			});
@@ -146,7 +146,7 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		Children(v => v.Unset(id, myID));
 	}
 
-	public readonly EntityView<TContext> Parent()
+	public readonly EntityView Parent()
 	{
 		return World.Entity(World.GetParent(ID));
 	}
@@ -176,7 +176,7 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	public readonly EcsID Second()
 		=> IDOp.GetPairSecond(ID);
 
-	public readonly void Each(Action<EntityView<TContext>> action)
+	public readonly void Each(Action<EntityView> action)
 	{
 		ref var record = ref World.GetRecord(ID);
 
@@ -193,9 +193,9 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 
 
 
-	public static readonly EntityView<TContext> Invalid = new(null, 0);
+	public static readonly EntityView Invalid = new(null, 0);
 
-	public unsafe readonly EntityView<TContext> Component<T>()
+	public unsafe readonly EntityView Component<T>()
 	where T : unmanaged, IComponentStub
 	{
 		ref var cmp = ref World.Component<T>(ID);
@@ -204,15 +204,15 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	}
 
 
-	public unsafe readonly EntityView<TContext> System
+	public unsafe readonly EntityView System
 	(
-		delegate*<ref Iterator<TContext>, void> callback,
+		delegate*<ref Iterator, void> callback,
 		params Term[] terms
 	) => System(callback, float.NaN, terms);
 
-	public unsafe readonly EntityView<TContext> System
+	public unsafe readonly EntityView System
 	(
-		delegate*<ref Iterator<TContext>, void> callback,
+		delegate*<ref Iterator, void> callback,
 		float tick,
 		params Term[] terms
 	)
@@ -223,7 +223,7 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 
 		Array.Sort(terms);
 
-		Set(new EcsSystem<TContext>
+		Set(new EcsSystem
 		(
 			callback,
 			query,
@@ -235,9 +235,9 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	}
 
 
-	public unsafe readonly EntityView<TContext> Event
+	public unsafe readonly EntityView Event
 	(
-		delegate*<ref Iterator<TContext>, void> callback
+		delegate*<ref Iterator, void> callback
 	)
 	{
 
@@ -250,28 +250,28 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return ID.GetHashCode();
 	}
 
-	public static implicit operator EcsID(EntityView<TContext> d) => d.ID;
-	public static implicit operator Term(EntityView<TContext> d) => Term.With(d.ID);
+	public static implicit operator EcsID(EntityView d) => d.ID;
+	public static implicit operator Term(EntityView d) => Term.With(d.ID);
 
-	public static Term operator !(EntityView<TContext> id) => Term.Without(id.ID);
-	public static Term operator -(EntityView<TContext> id) => Term.Without(id.ID);
-	public static Term operator +(EntityView<TContext> id) => Term.With(id.ID);
+	public static Term operator !(EntityView id) => Term.Without(id.ID);
+	public static Term operator -(EntityView id) => Term.Without(id.ID);
+	public static Term operator +(EntityView id) => Term.With(id.ID);
 }
 
 
-public ref struct SystemView<TContext>
+public ref struct SystemView
 {
-	private readonly World<TContext> _world;
+	private readonly World _world;
 	private readonly EcsID _id;
 
-	internal SystemView(World<TContext> world, EcsID id) { _world = world; _id = id; }
+	internal SystemView(World world, EcsID id) { _world = world; _id = id; }
 
 
-	public SystemView<TContext> With(Term term)
+	public SystemView With(Term term)
 	{
-		if (_world.Has<EcsSystem<TContext>>(_id))
+		if (_world.Has<EcsSystem>(_id))
 		{
-			ref var sys = ref _world.Get<EcsSystem<TContext>>(_id);
+			ref var sys = ref _world.Get<EcsSystem>(_id);
 		}
 
 		return this;

@@ -34,7 +34,7 @@ static class IDOp
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static bool IsComponent(EcsID id)
 	{
-		return (id & EcsConst.ECS_COMPONENT_MASK) != 0;
+		return (id & ~EcsConst.ECS_COMPONENT_MASK) != 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

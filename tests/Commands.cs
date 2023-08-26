@@ -9,10 +9,10 @@ namespace TinyEcs.Tests
 	public class CommandsTest
 	{
 		[Fact]
-		public void Merge_Create_Entity<TContext>()
+		public void Merge_Create_Entity()
 		{
-			using var world = new World<TContext>();
-			var cmd = new Commands<TContext>(world);
+			using var world = new World();
+			var cmd = new Commands(world);
 
 			var e = cmd.Entity();
 
@@ -23,10 +23,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_Destroy_Entity<TContext>()
+		public void Merge_Destroy_Entity()
 		{
-			using var world = new World<TContext>();
-			var cmd = new Commands<TContext>(world);
+			using var world = new World();
+			var cmd = new Commands(world);
 
 			var e = cmd.Entity();
 			e.Delete();
@@ -36,10 +36,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_SetComponent_Entity<TContext>()
+		public void Merge_SetComponent_Entity()
 		{
-			using var world = new World<TContext>();
-			var cmd = new Commands<TContext>(world);
+			using var world = new World();
+			var cmd = new Commands(world);
 
 			var e = world.Entity();
 
@@ -52,10 +52,10 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Merge_UnsetComponent_Entity<TContext>()
+		public void Merge_UnsetComponent_Entity()
 		{
-			using var world = new World<TContext>();
-			var cmd = new Commands<TContext>(world);
+			using var world = new World();
+			var cmd = new Commands(world);
 
 			const float VAL = 0.012344f;
 

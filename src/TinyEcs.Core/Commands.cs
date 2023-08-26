@@ -2,14 +2,14 @@ using System.Numerics;
 
 namespace TinyEcs;
 
-public sealed class Commands<TContext>
+public sealed class Commands
 {
-	private readonly World<TContext> _main;
+	private readonly World _main;
 	private readonly EntitySparseSet<EcsID> _despawn;
 	private readonly EntitySparseSet<SetComponent> _set;
 	private readonly EntitySparseSet<UnsetComponent> _unset;
 
-	public Commands(World<TContext> main)
+	public Commands(World main)
 	{
 		_main = main;
 		_despawn = new();
@@ -17,15 +17,15 @@ public sealed class Commands<TContext>
 		_unset = new();
 	}
 
-	internal World<TContext> World => _main;
+	internal World World => _main;
 
 
-	public CommandEntityView<TContext> Entity(EcsID id = default)
+	public CommandEntityView Entity(EcsID id = default)
 	{
 		if (id == 0 || !_main.Exists(id))
 			id = _main.NewEmpty(id);
 
-		return new CommandEntityView<TContext>(this, id);
+		return new CommandEntityView(this, id);
 	}
 
 	public void Delete(EcsID id)
@@ -237,12 +237,12 @@ public sealed class Commands<TContext>
 	}
 }
 
-public readonly ref struct CommandEntityView<TContext>
+public readonly ref struct CommandEntityView
 {
 	private readonly EcsID _id;
-	private readonly Commands<TContext> _cmds;
+	private readonly Commands _cmds;
 
-	internal CommandEntityView(Commands<TContext> cmds, EcsID id)
+	internal CommandEntityView(Commands cmds, EcsID id)
 	{
 		_cmds = cmds;
 		_id = id;
@@ -251,40 +251,40 @@ public readonly ref struct CommandEntityView<TContext>
 	public readonly EcsID ID => _id;
 
 
-	public readonly CommandEntityView<TContext> Set<T>(T cmp = default)
+	public readonly CommandEntityView Set<T>(T cmp = default)
 	where T : unmanaged, IComponent
 	{
 		_cmds.Set(_id, cmp);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set<T>()
+	public readonly CommandEntityView Set<T>()
 	where T : unmanaged, ITag
 	{
 		_cmds.Set<T>(_id);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set(EcsID id)
+	public readonly CommandEntityView Set(EcsID id)
 	{
 		_cmds.Set(_id, id);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set(EcsID first, EcsID second)
+	public readonly CommandEntityView Set(EcsID first, EcsID second)
 	{
 		_cmds.Set(_id, first, second);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set<TKind>(EcsID target)
+	public readonly CommandEntityView Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
 		_cmds.Set<TKind>(_id, target);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Set<TKind, TTarget>()
+	public readonly CommandEntityView Set<TKind, TTarget>()
 		where TKind : unmanaged, ITag
 		where TTarget : unmanaged, IComponentStub
 	{
@@ -292,14 +292,14 @@ public readonly ref struct CommandEntityView<TContext>
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Unset<T>()
+	public readonly CommandEntityView Unset<T>()
 	where T : unmanaged, IComponentStub
 	{
 		_cmds.Unset<T>(_id);
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Unset<TKind, TTarget>()
+	public readonly CommandEntityView Unset<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
@@ -307,7 +307,7 @@ public readonly ref struct CommandEntityView<TContext>
 		return this;
 	}
 
-	public readonly CommandEntityView<TContext> Delete()
+	public readonly CommandEntityView Delete()
 	{
 		_cmds.Delete(_id);
 		return this;
@@ -325,6 +325,6 @@ public readonly ref struct CommandEntityView<TContext>
 		return _cmds.Has<T>(_id);
 	}
 
-	public readonly CommandEntityView<TContext> ChildOf(EcsID parent)
+	public readonly CommandEntityView ChildOf(EcsID parent)
 		=> Set<EcsChildOf>(parent);
 }

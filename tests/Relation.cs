@@ -3,9 +3,9 @@
     public class Relation
     {
 		[Fact]
-		public void Attach_ChildOf<TContext>()
+		public void Attach_ChildOf()
 		{
-			using var world = new World<TContext>();
+			using var world = new World();
 
 			var root = world.Entity();
 			var child = world.Entity();
@@ -16,9 +16,9 @@
 		}
 
 		[Fact]
-		public void Detach_ChildOf<TContext>()
+		public void Detach_ChildOf()
 		{
-			using var world = new World<TContext>();
+			using var world = new World();
 
 			var root = world.Entity();
 			var child = world.Entity();
@@ -30,9 +30,9 @@
 		}
 
 		[Fact]
-		public void Count_Children<TContext>()
+		public void Count_Children()
 		{
-			using var world = new World<TContext>();
+			using var world = new World();
 
 			var root = world.Entity();
 
@@ -47,9 +47,9 @@
 		}
 
 		[Fact]
-		public void Clear_Children<TContext>()
+		public void Clear_Children()
 		{
-			using var world = new World<TContext>();
+			using var world = new World();
 
 			var root = world.Entity();
 
@@ -65,9 +65,9 @@
 		}
 
 		[Fact]
-		public void Exclusive_Relation<TContext>()
+		public void Exclusive_Relation()
 		{
-			using var world = new World<TContext>();
+			using var world = new World();
 
 			var root = world.Entity();
 			var platoonCmp = world.Entity().Set<EcsExclusive>();

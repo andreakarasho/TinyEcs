@@ -21,11 +21,11 @@ public readonly struct EcsComponent : IComponent
 	}
 }
 
-public unsafe struct EcsSystem<TContext> : IComponent
+public unsafe struct EcsSystem : IComponent
 {
 	const int TERMS_COUNT = 32;
 
-	public readonly delegate*<ref Iterator<TContext>, void> Callback;
+	public readonly delegate*<ref Iterator, void> Callback;
 	public readonly EcsID Query;
 	public readonly float Tick;
 	public float TickCurrent;
@@ -43,7 +43,7 @@ public unsafe struct EcsSystem<TContext> : IComponent
 		}
 	}
 
-	public EcsSystem(delegate*<ref Iterator<TContext>, void> func, EcsID query, ReadOnlySpan<Term> terms, float tick)
+	public EcsSystem(delegate*<ref Iterator, void> func, EcsID query, ReadOnlySpan<Term> terms, float tick)
 	{
 		Callback = func;
 		Query = query;
@@ -56,11 +56,11 @@ public unsafe struct EcsSystem<TContext> : IComponent
 }
 
 
-public unsafe struct EcsEvent<TContext> : IComponent
+public unsafe struct EcsEvent : IComponent
 {
 	const int TERMS_COUNT = 16;
 
-	public readonly delegate*<ref Iterator<TContext>, void> Callback;
+	public readonly delegate*<ref Iterator, void> Callback;
 
 	private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(TermOp))];
 	private readonly int _termsCount;
@@ -76,7 +76,7 @@ public unsafe struct EcsEvent<TContext> : IComponent
 		}
 	}
 
-	public EcsEvent(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms)
+	public EcsEvent(delegate*<ref Iterator, void> callback, ReadOnlySpan<Term> terms)
 	{
 		Callback = callback;
 		_termsCount = terms.Length;
@@ -106,7 +106,7 @@ public struct EcsSystemPhasePostStartup : ITag { }
 
 
 
-public partial class World<TContext>
+public partial class World
 {
 	public const ulong EcsComponent = 1;
 
@@ -127,6 +127,8 @@ public partial class World<TContext>
 	public const ulong EcsPhaseOnPreUpdate = 12;
 	public const ulong EcsPhaseOnUpdate = 13;
 	public const ulong EcsPhaseOnPostUpdate = 14;
+
+	public const ulong EcsAny = 15;
 
 
 
@@ -152,12 +154,14 @@ public partial class World<TContext>
 		var ecsUpdate = CreateWithLookup<EcsSystemPhaseOnUpdate>(EcsPhaseOnUpdate);
 		var ecsPostUpdate = CreateWithLookup<EcsSystemPhasePostUpdate>(EcsPhaseOnPostUpdate);
 
+		var ecsAny = CreateWithLookup<EcsAny>(EcsAny);
+
 
 		ecsChildOf.Set(EcsExclusive);
 		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
 
 
-		var cmp2 = Lookup<TContext>.Entity<EcsComponent>.Component = new (ecsComponent, GetSize<EcsComponent>());
+		var cmp2 = Lookup.Entity<EcsComponent>.Component = new (ecsComponent, GetSize<EcsComponent>());
 		Set(ecsComponent.ID, ref cmp2, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref cmp2), cmp2.Size));
 		ecsComponent.Set(EcsPanic, EcsDelete);
 
@@ -180,15 +184,17 @@ public partial class World<TContext>
 		SetBaseTags<EcsSystemPhaseOnUpdate>(ecsUpdate);
 		SetBaseTags<EcsSystemPhasePostUpdate>(ecsPostUpdate);
 
+		SetBaseTags<EcsAny>(ecsAny);
 
-		EntityView<TContext> CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub
+
+		EntityView CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub
 		{
 			var view = Entity(id);
-			Lookup<TContext>.Entity<T>.Component = new (view, GetSize<T>());
+			Lookup.Entity<T>.Component = new (view, GetSize<T>());
 			return view;
 		}
 
-		EntityView<TContext> SetBaseTags<T>(EntityView<TContext> view) where T : unmanaged, IComponentStub
-			=> view.Set(Lookup<TContext>.Entity<T>.Component).Set(EcsPanic, EcsDelete).Set(EcsTag);
+		EntityView SetBaseTags<T>(EntityView view) where T : unmanaged, IComponentStub
+			=> view.Set(Lookup.Entity<T>.Component).Set(EcsPanic, EcsDelete).Set(EcsTag);
 	}
 }

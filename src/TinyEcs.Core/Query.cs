@@ -1,11 +1,11 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public unsafe ref struct Query<TContext>
+public unsafe ref struct Query
 {
 	const int TERMS_COUNT = 16;
 
-	private readonly World<TContext> _world;
+	private readonly World _world;
 	private int _termIndex;
 	private unsafe fixed byte _terms[TERMS_COUNT * (sizeof(uint) + sizeof(byte))];
 
@@ -42,27 +42,27 @@ public unsafe ref struct Query<TContext>
 		}
 	}
 
-	internal Query(World<TContext> world)
+	internal Query(World world)
 	{
 		_world = world;
 	}
 
-	public Query<TContext> With<T>() where T : unmanaged, IComponentStub
+	public Query With<T>() where T : unmanaged, IComponentStub
 		=> With(_world.Component<T>().ID);
 
-	public Query<TContext> With<TKind, TTarget>()
+	public Query With<TKind, TTarget>()
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
 		=> With(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
 
-	public Query<TContext> With<TKind>(EcsID target)
+	public Query With<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
 		=> With(IDOp.Pair(_world.Component<TKind>().ID, target));
 
-	public Query<TContext> With(EcsID first, EcsID second)
+	public Query With(EcsID first, EcsID second)
 		=> With(IDOp.Pair(first, second));
 
-	public Query<TContext> With(EcsID id)
+	public Query With(EcsID id)
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
@@ -75,22 +75,22 @@ public unsafe ref struct Query<TContext>
 		return this;
 	}
 
-	public Query<TContext> Without<T>() where T : unmanaged, IComponentStub
+	public Query Without<T>() where T : unmanaged, IComponentStub
 		=> Without(_world.Component<T>().ID);
 
-	public Query<TContext> Without<TKind, TTarget>()
+	public Query Without<TKind, TTarget>()
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
 		=> Without(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
 
-	public Query<TContext> Without<TKind>(EcsID target)
+	public Query Without<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
 		=> Without(IDOp.Pair(_world.Component<TKind>().ID, target));
 
-	public Query<TContext> Without(EcsID first, EcsID second)
+	public Query Without(EcsID first, EcsID second)
 		=> Without(IDOp.Pair(first, second));
 
-	public Query<TContext> Without(EcsID id)
+	public Query Without(EcsID id)
 	{
 		EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
 
@@ -103,14 +103,26 @@ public unsafe ref struct Query<TContext>
 		return this;
 	}
 
-	public unsafe void Iterate(IteratorDelegate<TContext> action)
+	public unsafe void Iterate(IteratorDelegate action)
 	{
+		// var ptr = (Callback*)NativeMemory.Alloc(1, (nuint) sizeof(Callback));
+		// ptr->GCHandle = (nint) GCHandle.Alloc(action);
+		// ptr->Func = Marshal.GetFunctionPointerForDelegate(action);
+
+		// _world.Query(Terms, (delegate* <ref Iterator, void>)ptr->Func, action);
+
 		_world.Query(Terms, &IterateSys, action);
 
-		static void IterateSys(ref Iterator<TContext> it)
+		static void IterateSys(ref Iterator it)
 		{
-			if (it.UserData is IteratorDelegate<TContext> del)
+			if (it.UserData is IteratorDelegate del)
 				del.Invoke(ref it);
 		}
 	}
+}
+
+struct Callback
+{
+	public nint Func;
+	public nint GCHandle;
 }

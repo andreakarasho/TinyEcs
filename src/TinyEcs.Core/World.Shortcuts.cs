@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public sealed partial class World<TContext>
+public sealed partial class World
 {
 	public void Set<TKind, TTarget>(EcsID entity)
 	where TKind : unmanaged, IComponentStub

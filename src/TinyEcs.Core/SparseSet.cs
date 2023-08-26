@@ -27,6 +27,7 @@ sealed class EntitySparseSet<T>
 
 	public int Length => _count - 1;
 
+	public ref ulong MaxID => ref _maxID;
 
 
 	public ref T CreateNew(out ulong id)

@@ -22,7 +22,7 @@ sealed unsafe class TinyGame : Game
 
 	private readonly GraphicsDeviceManager _graphicsDeviceManager;
 	private SpriteBatch? _spriteBatch;
-	private World<TinyGame> _ecs;
+	private World _ecs;
 	private FontSystem _fontSystem;
 
 	public TinyGame()
@@ -44,7 +44,7 @@ sealed unsafe class TinyGame : Game
 		_graphicsDeviceManager.PreferredBackBufferHeight = WINDOW_HEIGHT;
 		_graphicsDeviceManager.ApplyChanges();
 
-		_ecs = World<TinyGame>.Get();
+		_ecs = new World();
 
 		_ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
@@ -152,12 +152,12 @@ sealed unsafe class TinyGame : Game
 		base.Draw(gameTime);
 	}
 
-	static void PrintMessage(ref Iterator<TinyGame> it)
+	static void PrintMessage(ref Iterator it)
 	{
 		Console.WriteLine("print!");
 	}
 
-    static void Setup(ref Iterator<TinyGame> it)
+    static void Setup(ref Iterator it)
     {
         var deviceHandle = Assets<GraphicsDevice>.Get("device");
         var batcherHandle = Assets<SpriteBatch>.Get("batcher");
@@ -166,7 +166,7 @@ sealed unsafe class TinyGame : Game
         it.World.SetSingleton(new GameState(deviceHandle, batcherHandle, fontSysHandle));
     }
 
-	static void SpawnEntities(ref Iterator<TinyGame> it)
+	static void SpawnEntities(ref Iterator it)
 	{
 		var rnd = new Random();
 		ref var gameState = ref it.World.GetSingleton<GameState>();
@@ -198,7 +198,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void MoveSystem(ref Iterator<TinyGame> it)
+	static void MoveSystem(ref Iterator it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -217,7 +217,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void CheckBorderSystem(ref Iterator<TinyGame> it)
+	static void CheckBorderSystem(ref Iterator it)
 	{
 		var p = it.Field<Position>();
 		var v = it.Field<Velocity>();
@@ -251,7 +251,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void BeginRender(ref Iterator<TinyGame> it)
+	static void BeginRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -260,7 +260,7 @@ sealed unsafe class TinyGame : Game
 		batch.Begin();
 	}
 
-	static void EndRender(ref Iterator<TinyGame> it)
+	static void EndRender(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -268,7 +268,7 @@ sealed unsafe class TinyGame : Game
 		batch.End();
 	}
 
-	static void Render(ref Iterator<TinyGame> it)
+	static void Render(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();
@@ -298,7 +298,7 @@ sealed unsafe class TinyGame : Game
 		}
 	}
 
-	static void RenderText(ref Iterator<TinyGame> it)
+	static void RenderText(ref Iterator it)
 	{
 		ref var gameState = ref it.World.GetSingleton<GameState>();
 		var batch = gameState.Batch.GetValue();

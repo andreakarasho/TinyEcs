@@ -1,23 +1,23 @@
 namespace TinyEcs;
 
-public delegate void IteratorDelegate<TContext>(ref Iterator<TContext> it);
+public delegate void IteratorDelegate(ref Iterator it);
 
-public readonly ref struct Iterator<TContext>
+public readonly ref struct Iterator
 {
 	private readonly ReadOnlySpan<EcsID> _entities;
 	private readonly ReadOnlySpan<int> _entitiesToTableRows;
-	private readonly Table<TContext> _table;
+	private readonly Table _table;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands<TContext> commands, Archetype<TContext> archetype, object? userData, EcsID eventID = default)
+	internal Iterator(Commands commands, Archetype archetype, object? userData, EcsID eventID = default)
 	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID)
 	{
 
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands<TContext> commands, int count, Table<TContext> table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default)
+	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default)
 	{
 		Commands = commands;
 		World = commands.World;
@@ -31,8 +31,8 @@ public readonly ref struct Iterator<TContext>
 	}
 
 
-	public readonly Commands<TContext> Commands { get; }
-	public readonly World<TContext> World { get; }
+	public readonly Commands Commands { get; }
+	public readonly World World { get; }
 	public readonly int Count { get; }
 	public readonly float DeltaTime { get; }
 	public readonly object? UserData { get; }
@@ -58,10 +58,10 @@ public readonly ref struct Iterator<TContext>
 		return column >= 0;
 	}
 
-	public readonly EntityView<TContext> Entity(int row)
+	public readonly EntityView Entity(int row)
 		=> World.Entity(_entities[row]);
 
-	public readonly CommandEntityView<TContext> EntityDeferred(int row)
+	public readonly CommandEntityView EntityDeferred(int row)
 		=> Commands.Entity(_entities[row]);
 }
 

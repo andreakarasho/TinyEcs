@@ -1,17 +1,17 @@
 using TinyEcs;
 
-sealed unsafe class Table<TContext>
+sealed unsafe class Table
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
-	private readonly ComponentComparer<TContext> _comparer;
+	private readonly ComponentComparer _comparer;
 	private readonly void*[] _componentsData;
 	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
 
 
-	internal Table(ulong hash, ReadOnlySpan<EcsComponent> components, ComponentComparer<TContext> comparer)
+	internal Table(ulong hash, ReadOnlySpan<EcsComponent> components, ComponentComparer comparer)
 	{
 		Hash = hash;
 		_comparer = comparer;
@@ -88,7 +88,7 @@ sealed unsafe class Table<TContext>
 		--_count;
 	}
 
-	internal void MoveTo(int fromRow, Table<TContext> to, int toRow)
+	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
 		var isLeft = to._componentInfo.Length < _componentInfo.Length;
 		int i = 0, j = 0;
