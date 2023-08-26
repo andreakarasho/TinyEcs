@@ -132,75 +132,63 @@ public partial class World<TContext>
 
 	internal unsafe void InitializeDefaults()
 	{
-		var ecsComponent = Entity(EcsComponent);
-		var ecsPanic = Entity(EcsPanic);
-		var ecsDelete = Entity(EcsDelete);
-		var ecsTag = Entity(EcsTag);
+		var ecsComponent = CreateWithLookup<EcsComponent>(EcsComponent);
 
-		var ecsExclusive = Entity(EcsExclusive);
-		var ecsChildOf = Entity(EcsChildOf);
-		var ecsPhase = Entity(EcsPhase);
+		var ecsPanic = CreateWithLookup<EcsPanic>(EcsPanic);
+		var ecsDelete = CreateWithLookup<EcsDelete>(EcsDelete);
+		var ecsTag = CreateWithLookup<EcsTag>(EcsTag);
 
-		var ecsEventOnSet = Entity(EcsEventOnSet);
-		var ecsEventOnUnset = Entity(EcsEventOnUnset);
+		var ecsExclusive = CreateWithLookup<EcsExclusive>(EcsExclusive);
+		var ecsChildOf = CreateWithLookup<EcsChildOf>(EcsChildOf);
+		var ecsPhase = CreateWithLookup<EcsPhase>(EcsPhase);
 
-		var ecsPreStartup = Entity(EcsPhaseOnPreStartup);
-		var ecsStartup = Entity(EcsPhaseOnStartup);
-		var ecsPostStartup = Entity(EcsPhaseOnPostStartup);
-		var ecsPreUpdate = Entity(EcsPhaseOnPreUpdate);
-		var ecsUpdate = Entity(EcsPhaseOnUpdate);
-		var ecsPostUpdate = Entity(EcsPhaseOnPostUpdate);
+		var ecsEventOnSet = CreateWithLookup<EcsEventOnSet>(EcsEventOnSet);
+		var ecsEventOnUnset = CreateWithLookup<EcsEventOnUnset>(EcsEventOnUnset);
 
-
-		LinkLookup<EcsComponent>(ecsComponent);
-
-		LinkLookup<EcsPanic>(ecsPanic);
-		LinkLookup<EcsDelete>(ecsDelete);
-		LinkLookup<EcsTag>(ecsTag);
-
-		LinkLookup<EcsExclusive>(ecsExclusive);
-		LinkLookup<EcsChildOf>(ecsChildOf);
-		LinkLookup<EcsPhase>(ecsPhase);
-
-		LinkLookup<EcsEventOnSet>(ecsEventOnSet);
-		LinkLookup<EcsEventOnUnset>(ecsEventOnUnset);
-
-		LinkLookup<EcsSystemPhasePreStartup>(ecsPreStartup);
-		LinkLookup<EcsSystemPhaseOnStartup>(ecsStartup);
-		LinkLookup<EcsSystemPhasePostStartup>(ecsPostStartup);
-		LinkLookup<EcsSystemPhasePreUpdate>(ecsPreUpdate);
-		LinkLookup<EcsSystemPhaseOnUpdate>(ecsUpdate);
-		LinkLookup<EcsSystemPhasePostUpdate>(ecsPostUpdate);
+		var ecsPreStartup = CreateWithLookup<EcsSystemPhasePreStartup>(EcsPhaseOnPreStartup);
+		var ecsStartup = CreateWithLookup<EcsSystemPhaseOnStartup>(EcsPhaseOnStartup);
+		var ecsPostStartup = CreateWithLookup<EcsSystemPhasePostStartup>(EcsPhaseOnPostStartup);
+		var ecsPreUpdate = CreateWithLookup<EcsSystemPhasePreUpdate>(EcsPhaseOnPreUpdate);
+		var ecsUpdate = CreateWithLookup<EcsSystemPhaseOnUpdate>(EcsPhaseOnUpdate);
+		var ecsPostUpdate = CreateWithLookup<EcsSystemPhasePostUpdate>(EcsPhaseOnPostUpdate);
 
 
-		SetBaseTags(ecsExclusive);
-		SetBaseTags(ecsChildOf);
-		SetBaseTags(ecsPhase);
-
-		SetBaseTags(ecsPanic);
-		SetBaseTags(ecsDelete);
-		SetBaseTags(ecsTag);
-
-		SetBaseTags(ecsEventOnSet);
-		SetBaseTags(ecsEventOnUnset);
-
-		SetBaseTags(ecsPreStartup);
-		SetBaseTags(ecsStartup);
-		SetBaseTags(ecsPostStartup);
-		SetBaseTags(ecsPreUpdate);
-		SetBaseTags(ecsUpdate);
-		SetBaseTags(ecsPostUpdate);
-
-
-		ecsChildOf.Set(ecsExclusive);
+		ecsChildOf.Set(EcsExclusive);
 		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
 
 
+		var cmp2 = Lookup<TContext>.Entity<EcsComponent>.Component = new (ecsComponent, GetSize<EcsComponent>());
+		Set(ecsComponent.ID, ref cmp2, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref cmp2), cmp2.Size));
+		ecsComponent.Set(EcsPanic, EcsDelete);
 
-		void LinkLookup<T>(EntityView<TContext> view) where T : unmanaged, IComponentStub
-			=> Lookup<TContext>.Entity<T>.Component = new (view, GetSize<T>());
 
-		EntityView<TContext> SetBaseTags(EntityView<TContext> view)
-			=> view.Set(EcsPanic, EcsDelete).Set(EcsTag);
+		SetBaseTags<EcsPanic>(ecsExclusive);
+		SetBaseTags<EcsDelete>(ecsChildOf);
+		SetBaseTags<EcsTag>(ecsPhase);
+
+		SetBaseTags<EcsExclusive>(ecsPanic);
+		SetBaseTags<EcsChildOf>(ecsDelete);
+		SetBaseTags<EcsPhase>(ecsTag);
+
+		SetBaseTags<EcsEventOnSet>(ecsEventOnSet);
+		SetBaseTags<EcsEventOnUnset>(ecsEventOnUnset);
+
+		SetBaseTags<EcsSystemPhasePreStartup>(ecsPreStartup);
+		SetBaseTags<EcsSystemPhaseOnStartup>(ecsStartup);
+		SetBaseTags<EcsSystemPhasePostStartup>(ecsPostStartup);
+		SetBaseTags<EcsSystemPhasePreUpdate>(ecsPreUpdate);
+		SetBaseTags<EcsSystemPhaseOnUpdate>(ecsUpdate);
+		SetBaseTags<EcsSystemPhasePostUpdate>(ecsPostUpdate);
+
+
+		EntityView<TContext> CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub
+		{
+			var view = Entity(id);
+			Lookup<TContext>.Entity<T>.Component = new (view, GetSize<T>());
+			return view;
+		}
+
+		EntityView<TContext> SetBaseTags<T>(EntityView<TContext> view) where T : unmanaged, IComponentStub
+			=> view.Set(Lookup<TContext>.Entity<T>.Component).Set(EcsPanic, EcsDelete).Set(EcsTag);
 	}
 }

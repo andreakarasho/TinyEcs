@@ -79,7 +79,8 @@ public sealed partial class World<TContext> : IDisposable
 
 		size = Math.Max(size, 0);
 		var cmp2 = new EcsComponent(id, size);
-		Set(id, ref cmp2, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref cmp2), size));
+		Set(id, cmp2);
+		//Set(id, ref cmp2, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref cmp2), size));
 
 		Set(id, EcsPanic, EcsDelete);
 		if (size == 0)
@@ -88,8 +89,9 @@ public sealed partial class World<TContext> : IDisposable
 		return Entity(id);
 	}
 
-	internal unsafe int GetSize<T>() where T : unmanaged, IComponentStub
+	private unsafe int GetSize<T>() where T : unmanaged, IComponentStub
 		 => typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
+
 
 	internal unsafe ref EcsComponent Component<T>(EcsID id = default) where T : unmanaged, IComponentStub
 	{
