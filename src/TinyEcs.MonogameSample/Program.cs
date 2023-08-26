@@ -44,52 +44,52 @@ sealed unsafe class TinyGame : Game
 		_graphicsDeviceManager.PreferredBackBufferHeight = WINDOW_HEIGHT;
 		_graphicsDeviceManager.ApplyChanges();
 
-		_ecs = new World<TinyGame>();
+		_ecs = World<TinyGame>.Get();
 
 		_ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
 		_ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
 
 
-		var pos = _ecs.New().Component<Position>();
-		var vel = _ecs.New().Component<Velocity>();
-		var rot = _ecs.New().Component<Rotation>();
-		var spr = _ecs.New().Component<Sprite>();
+		var pos = _ecs.Entity<Position>();
+		var vel = _ecs.Entity<Velocity>();
+		var rot = _ecs.Entity<Rotation>();
+		var spr = _ecs.Entity<Sprite>();
 
-		_ecs.New()
+		_ecs.Entity()
 			.System(&Setup)
 			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
-		_ecs.New()
+		_ecs.Entity()
 			.System(&SpawnEntities)
 			.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 
-		_ecs.New()
+		_ecs.Entity()
 			.System(&MoveSystem, pos, vel, rot)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-		_ecs.New()
+		_ecs.Entity()
 			.System(&CheckBorderSystem, pos, vel, rot)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-		_ecs.New()
+		_ecs.Entity()
 			.System(&PrintMessage, 1f)
 			.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 
-		_ecs.New("BeginRenderer")
+		_ecs.Entity("BeginRenderer")
 			.System(&BeginRender)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.New("RenderObjects")
+		_ecs.Entity("RenderObjects")
 			.System(&Render, pos, rot, spr)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.New("RenderText")
+		_ecs.Entity("RenderText")
 			.System(&RenderText)
 			.Set<EcsPhase, RenderingPhase>();
 
-		_ecs.New("EndRenderer")
+		_ecs.Entity("EndRenderer")
 			.System(&EndRender)
 			.Set<EcsPhase, RenderingPhase>();
 

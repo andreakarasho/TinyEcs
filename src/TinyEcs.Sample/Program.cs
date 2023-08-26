@@ -12,19 +12,14 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
 using var world = World<Context1>.Get();
 
-var positionID = world
-	.New()
-	.Component<Position>();
 
-var velocityID = world
-	.New()
-	.Component<Velocity>();
-
-
+var positionID = world.Entity<Position>();
+var velocityID = world.Entity<Velocity>();
 var pairID = world.Pair<Likes, Dogs>();
 
-var main = world.New();
-var secondMain = world.New();
+var main = world.Entity();
+var secondMain = world.Entity();
+
 
 unsafe
 {
@@ -32,7 +27,8 @@ unsafe
 	t.Not();
 	t = !t;
 
-	world.New()
+
+	world.Entity()
 		.System(&SystemCtx1, positionID, +velocityID, -pairID)
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
@@ -94,7 +90,7 @@ unsafe
 
 
 for (int i = 0; i < 10; ++i)
-	world.New().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
+	world.Entity().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
 
 // main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
 // main.Set<Dogs>();
@@ -135,14 +131,14 @@ var ecs = World<Context2>.Get();
 
 unsafe
 {
-	var posID = ecs.New().Component<Position>();
-	var velID = ecs.New().Component<Velocity>();
+	var posID = ecs.Entity<Position>();
+	var velID = ecs.Entity<Velocity>();
 
-	ecs.New()
+	ecs.Entity()
 		.System(&Setup)
 		.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
-	ecs.New()
+	ecs.Entity()
 		.System(&ParseQuery, posID, velID)
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
@@ -186,7 +182,7 @@ static void Setup(ref Iterator<Context2> it)
 	var sw = Stopwatch.StartNew();
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.World.New()
+		it.World.Entity()
 			.Set<Position>()
 			.Set<Velocity>()
 			;

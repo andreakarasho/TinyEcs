@@ -195,6 +195,14 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 
 	public static readonly EntityView<TContext> Invalid = new(null, 0);
 
+	public unsafe readonly EntityView<TContext> Component<T>()
+	where T : unmanaged, IComponentStub
+	{
+		ref var cmp = ref World.Component<T>(ID);
+		EcsAssert.Assert(cmp.ID == ID);
+		return this;
+	}
+
 
 	public unsafe readonly EntityView<TContext> System
 	(
@@ -210,7 +218,7 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	)
 	{
 		EcsID query = terms.Length > 0 ?
-			World.New()
+			World.Entity()
 				.Set<EcsPanic, EcsDelete>() : 0;
 
 		Array.Sort(terms);
@@ -236,12 +244,6 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 		return this;
 	}
 
-	public readonly EntityView<TContext> Component<T>()
-	where T : unmanaged, IComponentStub
-	{
-		World.Component<T>(ID);
-		return this;
-	}
 
 	public override int GetHashCode()
 	{
@@ -254,4 +256,24 @@ public readonly struct EntityView<TContext> : IEquatable<EcsID>, IEquatable<Enti
 	public static Term operator !(EntityView<TContext> id) => Term.Without(id.ID);
 	public static Term operator -(EntityView<TContext> id) => Term.Without(id.ID);
 	public static Term operator +(EntityView<TContext> id) => Term.With(id.ID);
+}
+
+
+public ref struct SystemView<TContext>
+{
+	private readonly World<TContext> _world;
+	private readonly EcsID _id;
+
+	internal SystemView(World<TContext> world, EcsID id) { _world = world; _id = id; }
+
+
+	public SystemView<TContext> With(Term term)
+	{
+		if (_world.Has<EcsSystem<TContext>>(_id))
+		{
+			ref var sys = ref _world.Get<EcsSystem<TContext>>(_id);
+		}
+
+		return this;
+	}
 }

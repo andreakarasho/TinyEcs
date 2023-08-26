@@ -6,7 +6,7 @@
         public void World_Create_Destroy<TContext>()
         {
             using var world = new World<TContext>();
-            world.New();
+            world.Entity();
             world.Dispose();
 
             Assert.Equal(0, world.EntityCount);

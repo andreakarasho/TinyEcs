@@ -105,72 +105,102 @@ public struct EcsSystemPhasePreStartup : ITag { }
 public struct EcsSystemPhasePostStartup : ITag { }
 
 
-// public static class BuiltIn<TContext>
-// {
-// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	static unsafe EntityView<TContext> Register<T>(ReadOnlySpan<char> name)
-// 	where T : unmanaged, IComponentStub
-// 	{
-// 		Console.WriteLine("registering: {0}", name.ToString());
-// 		//return World<TContext>.Get().New(name).Component<T>();
 
-// 		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
-// 		EcsAssert.Assert(lookup.ID == 0);
+public partial class World<TContext>
+{
+	public const ulong EcsComponent = 1;
 
-// 		var world = World<TContext>.Get();
+	public const ulong EcsPanic = 2;
+	public const ulong EcsDelete = 3;
+	public const ulong EcsTag = 4;
 
-// 		var ent = world.NewEmpty();
-// 		var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
-// 		var cmp = new EcsComponent(ent, size);
+	public const ulong EcsExclusive = 5;
+	public const ulong EcsChildOf = 6;
+	public const ulong EcsPhase = 7;
 
-// 		world.Set(cmp.ID, cmp);
-// 		world.Set(ent, BuiltIn<TContext>.EcsPanic, BuiltIn<TContext>.EcsDelete);
+	public const ulong EcsEventOnSet = 8;
+	public const ulong EcsEventOnUnset = 9;
 
-// 		if (size == 0)
-// 			world.Set(ent, BuiltIn<TContext>.EcsTag);
-
-// 		return ent;
-// 	}
-
-// 	static BuiltIn()
-// 	{
-// 		// EcsComponent = World<TContext>.Get()
-// 		// 	.Entity<EcsComponent>();
-
-// 		//EcsComponent = Register<EcsComponent>(nameof(EcsComponent));
-// 	}
-
-// 	const ulong DEFAULT_START = 0;
-
-// 	public static readonly EcsID EcsTest = DEFAULT_START + 1;
-
-
-// 	//public static readonly EcsID EcsComponent = Register<EcsComponent>(nameof(EcsComponent));
-
-// 	public static readonly EcsID EcsPanic = Register<EcsPanic>(nameof(EcsPanic));
-// 	public static readonly EcsID EcsDelete = Register<EcsDelete>(nameof(EcsDelete));
-// 	public static readonly EcsID EcsTag = Register<EcsTag>(nameof(EcsTag));
-
-
-// 	public static readonly EcsID EcsExclusive = Register<EcsExclusive>(nameof(EcsExclusive));
-// 	public static readonly EcsID EcsChildOf = Register<EcsChildOf>(nameof(EcsChildOf)).Set<EcsExclusive>();
-// 	public static readonly EcsID EcsPhase = Register<EcsPhase>(nameof(EcsPhase)).Set<EcsExclusive>();
-
-
-// 	public static readonly EcsID EcsEventOnSet = Register<EcsEventOnSet>(nameof(EcsEventOnSet));
-// 	public static readonly EcsID EcsEventOnUnset = Register<EcsEventOnUnset>(nameof(EcsEventOnUnset));
+	public const ulong EcsPhaseOnPreStartup = 9;
+	public const ulong EcsPhaseOnStartup = 10;
+	public const ulong EcsPhaseOnPostStartup = 11;
+	public const ulong EcsPhaseOnPreUpdate = 12;
+	public const ulong EcsPhaseOnUpdate = 13;
+	public const ulong EcsPhaseOnPostUpdate = 14;
 
 
 
+	internal unsafe void InitializeDefaults()
+	{
+		var ecsComponent = Entity(EcsComponent);
+		var ecsPanic = Entity(EcsPanic);
+		var ecsDelete = Entity(EcsDelete);
+		var ecsTag = Entity(EcsTag);
 
-// 	public static readonly EcsID EcsDisabled = Register<EcsDisabled>(nameof(EcsDisabled));
-// 	public static readonly EcsID EcsAny = Register<EcsAny>(nameof(EcsAny));
+		var ecsExclusive = Entity(EcsExclusive);
+		var ecsChildOf = Entity(EcsChildOf);
+		var ecsPhase = Entity(EcsPhase);
+
+		var ecsEventOnSet = Entity(EcsEventOnSet);
+		var ecsEventOnUnset = Entity(EcsEventOnUnset);
+
+		var ecsPreStartup = Entity(EcsPhaseOnPreStartup);
+		var ecsStartup = Entity(EcsPhaseOnStartup);
+		var ecsPostStartup = Entity(EcsPhaseOnPostStartup);
+		var ecsPreUpdate = Entity(EcsPhaseOnPreUpdate);
+		var ecsUpdate = Entity(EcsPhaseOnUpdate);
+		var ecsPostUpdate = Entity(EcsPhaseOnPostUpdate);
 
 
-// 	public static readonly EcsID EcsSystemPhaseOnUpdate = Register<EcsSystemPhaseOnUpdate>(nameof(EcsSystemPhaseOnUpdate));
-// 	public static readonly EcsID EcsSystemPhasePreUpdate = Register<EcsSystemPhasePreUpdate>(nameof(EcsSystemPhasePreUpdate));
-// 	public static readonly EcsID EcsSystemPhasePostUpdate = Register<EcsSystemPhasePostUpdate>(nameof(EcsSystemPhasePostUpdate));
-// 	public static readonly EcsID EcsSystemPhaseOnStartup = Register<EcsSystemPhaseOnStartup>(nameof(EcsSystemPhaseOnStartup));
-// 	public static readonly EcsID EcsSystemPhasePreStartup = Register<EcsSystemPhasePreStartup>(nameof(EcsSystemPhasePreStartup));
-// 	public static readonly EcsID EcsSystemPhasePostStartup = Register<EcsSystemPhasePostStartup>(nameof(EcsSystemPhasePostStartup));
-// }
+		LinkLookup<EcsComponent>(ecsComponent);
+
+		LinkLookup<EcsPanic>(ecsPanic);
+		LinkLookup<EcsDelete>(ecsDelete);
+		LinkLookup<EcsTag>(ecsTag);
+
+		LinkLookup<EcsExclusive>(ecsExclusive);
+		LinkLookup<EcsChildOf>(ecsChildOf);
+		LinkLookup<EcsPhase>(ecsPhase);
+
+		LinkLookup<EcsEventOnSet>(ecsEventOnSet);
+		LinkLookup<EcsEventOnUnset>(ecsEventOnUnset);
+
+		LinkLookup<EcsSystemPhasePreStartup>(ecsPreStartup);
+		LinkLookup<EcsSystemPhaseOnStartup>(ecsStartup);
+		LinkLookup<EcsSystemPhasePostStartup>(ecsPostStartup);
+		LinkLookup<EcsSystemPhasePreUpdate>(ecsPreUpdate);
+		LinkLookup<EcsSystemPhaseOnUpdate>(ecsUpdate);
+		LinkLookup<EcsSystemPhasePostUpdate>(ecsPostUpdate);
+
+
+		SetBaseTags(ecsExclusive);
+		SetBaseTags(ecsChildOf);
+		SetBaseTags(ecsPhase);
+
+		SetBaseTags(ecsPanic);
+		SetBaseTags(ecsDelete);
+		SetBaseTags(ecsTag);
+
+		SetBaseTags(ecsEventOnSet);
+		SetBaseTags(ecsEventOnUnset);
+
+		SetBaseTags(ecsPreStartup);
+		SetBaseTags(ecsStartup);
+		SetBaseTags(ecsPostStartup);
+		SetBaseTags(ecsPreUpdate);
+		SetBaseTags(ecsUpdate);
+		SetBaseTags(ecsPostUpdate);
+
+
+		ecsChildOf.Set(ecsExclusive);
+		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
+
+
+
+		void LinkLookup<T>(EntityView<TContext> view) where T : unmanaged, IComponentStub
+			=> Lookup<TContext>.Entity<T>.Component = new (view, GetSize<T>());
+
+		EntityView<TContext> SetBaseTags(EntityView<TContext> view)
+			=> view.Set(EcsPanic, EcsDelete).Set(EcsTag);
+	}
+}

@@ -65,7 +65,7 @@ namespace TinyEcs.Tests
 			using var world = new World<TContext>();
 			var cmd = new Commands<TContext>(world);
 
-			var e = world.New();
+			var e = world.Entity();
 
 			const float VAL = 0.012344f;
 			cmd.Set<FloatComponent>(e, new FloatComponent() { Value = VAL });
@@ -83,7 +83,7 @@ namespace TinyEcs.Tests
 
 			const float VAL = 0.012344f;
 
-			var e = world.New();
+			var e = world.Entity();
 			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
 
 			cmd.Unset<FloatComponent>(e);

@@ -7,8 +7,8 @@
 		{
 			using var world = new World<TContext>();
 
-			var root = world.New();
-			var child = world.New();
+			var root = world.Entity();
+			var child = world.Entity();
 
 			child.ChildOf(root);
 
@@ -20,8 +20,8 @@
 		{
 			using var world = new World<TContext>();
 
-			var root = world.New();
-			var child = world.New();
+			var root = world.Entity();
+			var child = world.Entity();
 
 			child.ChildOf(root);
 			child.Unset<EcsChildOf>(root);
@@ -34,11 +34,11 @@
 		{
 			using var world = new World<TContext>();
 
-			var root = world.New();
+			var root = world.Entity();
 
 			var count = 100;
 			for (int i = 0; i < count; ++i)
-				world.New().ChildOf(root);
+				world.Entity().ChildOf(root);
 
 			var done = 0;
 			root.Children(s => done += 1);
@@ -51,11 +51,11 @@
 		{
 			using var world = new World<TContext>();
 
-			var root = world.New();
+			var root = world.Entity();
 
 			var count = 100;
 			for (int i = 0; i < count; ++i)
-				world.New().ChildOf(root);
+				world.Entity().ChildOf(root);
 
 			root.ClearChildren();
 			var done = 0;
@@ -69,11 +69,11 @@
 		{
 			using var world = new World<TContext>();
 
-			var root = world.New();
-			var platoonCmp = world.New().Set<EcsExclusive>();
-			var platoon1 = world.New();
-			var platoon2 = world.New();
-			var unit = world.New();
+			var root = world.Entity();
+			var platoonCmp = world.Entity().Set<EcsExclusive>();
+			var platoon1 = world.Entity();
+			var platoon2 = world.Entity();
+			var unit = world.Entity();
 
 			unit.Set(platoonCmp, platoon1);
 			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));

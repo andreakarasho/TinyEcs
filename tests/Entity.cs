@@ -9,7 +9,7 @@ namespace TinyEcs.Tests
         public void Entity_Creation<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             Assert.True(entity.Exists());
         }
@@ -19,19 +19,19 @@ namespace TinyEcs.Tests
         {
             using var world = new World<TContext>();
 
-            var e1 = world.New();
-            var e2 = world.New();
-            var e3 = world.New();
-            var e4 = world.New();
+            var e1 = world.Entity();
+            var e2 = world.Entity();
+            var e3 = world.Entity();
+            var e4 = world.Entity();
 
             e2.Delete();
-            e2 = world.New();
+            e2 = world.Entity();
 
             e3.Delete();
-            e3 = world.New();
+            e3 = world.Entity();
 
             e2.Delete();
-            e2 = world.New();
+            e2 = world.Entity();
 
             Assert.True(e1.Exists());
             Assert.True(e2.Exists());
@@ -44,7 +44,7 @@ namespace TinyEcs.Tests
         {
             using var world = new World<TContext>();
 
-            var entity = world.New();
+            var entity = world.Entity();
             entity.Enable();
 
             Assert.True(entity.IsEnabled());
@@ -55,7 +55,7 @@ namespace TinyEcs.Tests
         {
             using var world = new World<TContext>();
 
-            var entity = world.New();
+            var entity = world.Entity();
             entity.Disable();
 
             Assert.False(entity.IsEnabled());
@@ -65,7 +65,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_TwoSameComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<FloatComponent>(entity);
@@ -78,7 +78,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_OneComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
 
@@ -89,7 +89,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_TwoComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<NormalTag>(entity);
@@ -102,7 +102,7 @@ namespace TinyEcs.Tests
         public void Entity_Attach_ThreeComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<NormalTag>(entity);
@@ -117,7 +117,7 @@ namespace TinyEcs.Tests
         public void Entity_Detach_OneComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Unset<FloatComponent>(entity);
@@ -129,7 +129,7 @@ namespace TinyEcs.Tests
         public void Entity_Detach_TwoComponent<TContext>()
         {
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<NormalTag>(entity);
@@ -154,7 +154,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<IntComponent>(entity);
@@ -199,7 +199,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             world.Set<FloatComponent>(entity);
             world.Set<IntComponent>(entity);
@@ -247,7 +247,7 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
             using var world = new World<TContext>();
-            var entity = world.New();
+            var entity = world.Entity();
 
             for (int i = 0; i < times; i++)
             {
@@ -292,8 +292,8 @@ namespace TinyEcs.Tests
 		{
 			using var world = new World<TContext>();
 
-			var e0 = world.New();
-			var e1 = world.New();
+			var e0 = world.Entity();
+			var e1 = world.Entity();
 
 			e0.Set<IntComponent>();
 			e1.Set<IntComponent>();

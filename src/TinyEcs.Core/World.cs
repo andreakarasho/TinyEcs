@@ -4,16 +4,17 @@ public sealed partial class World<TContext> : IDisposable
 {
 	private static World<TContext>? _world;
 
-	//public static World<TContext> Instance { get; } = new ();
-
 	public static World<TContext> Get()
 	{
 		if (_world != null)
 			return _world;
 
 		_world = new World<TContext>();
+		_world.InitializeDefaults();
+
 		return _world;
 	}
+
 
 	private readonly Archetype<TContext> _archRoot;
 	private readonly EntitySparseSet<EcsRecord<TContext>> _entities = new();
@@ -29,8 +30,6 @@ public sealed partial class World<TContext> : IDisposable
 		_comparer = new ComponentComparer<TContext>(this);
 		_archRoot = new Archetype<TContext>(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
 		_commands = new (this);
-
-		RegisterDefaults();
 	}
 
 
@@ -49,28 +48,6 @@ public sealed partial class World<TContext> : IDisposable
 		_commands.Clear();
 	}
 
-	private void RegisterDefaults()
-	{
-		// _ = ref Tag<EcsExclusive>();
-		// _ = ref Tag<EcsTag>();
-		// _ = ref Tag<EcsAny>();
-		// _ = ref Tag<EcsPanic>();
-		// _ = ref Tag<EcsDelete>();
-		// _ = ref Tag<EcsChildOf>();
-		// _ = ref Tag<EcsEnabled>();
-		// _ = ref Tag<EcsPhase>();
-
-		// _ = ref Tag<EcsSystemPhasePreStartup>();
-		// _ = ref Tag<EcsSystemPhaseOnStartup>();
-		// _ = ref Tag<EcsSystemPhasePostStartup>();
-		// _ = ref Tag<EcsSystemPhasePreUpdate>();
-		// _ = ref Tag<EcsSystemPhaseOnUpdate>();
-		// _ = ref Tag<EcsSystemPhasePostUpdate>();
-
-		Set<EcsExclusive>(Entity<EcsChildOf>());
-		Set<EcsExclusive>(Entity<EcsPhase>());
-	}
-
 	public void Optimize()
 	{
 		InternalOptimize(_archRoot);
@@ -86,22 +63,43 @@ public sealed partial class World<TContext> : IDisposable
 		}
 	}
 
-	public unsafe ref EcsComponent Component<T>(EcsID id = default) where T : unmanaged, IComponentStub
+	internal unsafe EntityView<TContext> CreateComponent(EcsID id, int size)
+	{
+		if (id == 0)
+		{
+			id = NewEmpty();
+		}
+		else if (Exists(id) && Has<EcsComponent>(id))
+		{
+			ref var cmp = ref Get<EcsComponent>(id);
+			EcsAssert.Panic(cmp.Size == size);
+
+			return Entity(id);
+		}
+
+		size = Math.Max(size, 0);
+		var cmp2 = new EcsComponent(id, size);
+		Set(id, ref cmp2, new ReadOnlySpan<byte>(Unsafe.AsPointer(ref cmp2), size));
+
+		Set(id, EcsPanic, EcsDelete);
+		if (size == 0)
+			Set(id, EcsTag);
+
+		return Entity(id);
+	}
+
+	internal unsafe int GetSize<T>() where T : unmanaged, IComponentStub
+		 => typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
+
+	internal unsafe ref EcsComponent Component<T>(EcsID id = default) where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup<TContext>.Entity<T>.Component;
-
 		if (lookup.ID == 0)
 		{
-			var ent = id == 0 ? NewEmpty() : id;
-			var size = typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
-			var cmp = new EcsComponent(ent, size);
-			lookup = cmp;
-
-			Set(cmp.ID, cmp);
-			Set<EcsPanic, EcsDelete>(ent);
-
-			if (size == 0)
-				Set<EcsTag>(ent);
+			id = Entity(id);
+			var size = GetSize<T>();
+			lookup = new EcsComponent(id, size);
+			_ = CreateComponent(id, size);
 		}
 
 		if (id > 0)
@@ -124,7 +122,7 @@ public sealed partial class World<TContext> : IDisposable
 
 	public unsafe EntityView<TContext> Event(delegate*<ref Iterator<TContext>, void> callback, ReadOnlySpan<Term> terms, ReadOnlySpan<EcsID> events)
 	{
-		var obs = New()
+		var obs = Entity()
 			.Set(new EcsEvent<TContext>(callback, terms));
 
 		foreach (ref readonly var id in events)
@@ -133,25 +131,32 @@ public sealed partial class World<TContext> : IDisposable
 		return obs;
 	}
 
-	public EntityView<TContext> Entity(EcsID id)
+	public EntityView<TContext> Entity(ReadOnlySpan<char> name)
 	{
-		EcsAssert.Assert(Exists(id));
-		return new(this, id);
+		// TODO
+		EcsID id = 0;
+
+		return Entity(id);
 	}
 
-	public EntityView<TContext> Entity<T>()
+	public EntityView<TContext> Entity(EcsID id = default) => id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
+
+	public EntityView<TContext> Entity<T>(EcsID id = default)
 	where T : unmanaged, IComponentStub
-		=> Entity(Component<T>().ID);
-
-	public EntityView<TContext> New(ReadOnlySpan<char> name = default)
 	{
-		if (!name.IsEmpty)
-		{
-			// TODO
-		}
+		// ref var cmp = ref Lookup<TContext>.Entity<T>.Component;
+		// if (cmp.ID == 0)
+		// {
 
-		return NewEmpty();
+		// }
+
+		return Entity(Component<T>().ID);
 	}
+
+	public EntityView<TContext> Entity<TKind, TTarget>()
+	where TKind : unmanaged, ITag
+	where TTarget : unmanaged, IComponentStub
+		=> Entity(IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID));
 
 	internal EntityView<TContext> NewEmpty(ulong id = 0)
 	{
@@ -434,7 +439,7 @@ public sealed partial class World<TContext> : IDisposable
 	{
 		var id = IDOp.Pair(first, second);
 
-		if (Has<EcsExclusive>(first))
+		if (Has(first, EcsExclusive))
 		{
 			ref var record = ref GetRecord(entity);
 			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
@@ -624,18 +629,17 @@ public sealed partial class World<TContext> : IDisposable
 	}
 }
 
+internal static class Lookup<TContext>
+{
+	internal static class Entity<T> where T : unmanaged, IComponentStub
+	{
+		public static EcsComponent Component;
+	}
+}
+
 
 struct EcsRecord<TContext>
 {
 	public Archetype<TContext> Archetype;
 	public int Row;
-}
-
-
-internal static class Lookup<TContext>
-{
-	internal static class Entity<T>
-	{
-		public static EcsComponent Component;
-	}
 }
