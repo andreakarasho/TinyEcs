@@ -10,6 +10,7 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
+
 using var world = new World();
 
 var positionID = world.Entity<Position>();

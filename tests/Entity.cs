@@ -8,8 +8,8 @@ namespace TinyEcs.Tests
         [Fact]
         public void Entity_Creation()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
             Assert.True(entity.Exists());
         }
@@ -17,21 +17,21 @@ namespace TinyEcs.Tests
         [Fact]
         public void Entity_Deletion()
         {
-            using var world = new World();
+            using var ctx = new Context();
 
-            var e1 = world.Entity();
-            var e2 = world.Entity();
-            var e3 = world.Entity();
-            var e4 = world.Entity();
+            var e1 = ctx.World.Entity();
+            var e2 = ctx.World.Entity();
+            var e3 = ctx.World.Entity();
+            var e4 = ctx.World.Entity();
 
             e2.Delete();
-            e2 = world.Entity();
+            e2 = ctx.World.Entity();
 
             e3.Delete();
-            e3 = world.Entity();
+            e3 = ctx.World.Entity();
 
             e2.Delete();
-            e2 = world.Entity();
+            e2 = ctx.World.Entity();
 
             Assert.True(e1.Exists());
             Assert.True(e2.Exists());
@@ -42,9 +42,9 @@ namespace TinyEcs.Tests
         [Fact]
         public void Entity_Enable()
         {
-            using var world = new World();
+            using var ctx = new Context();
 
-            var entity = world.Entity();
+            var entity = ctx.World.Entity();
             entity.Enable();
 
             Assert.True(entity.IsEnabled());
@@ -53,9 +53,9 @@ namespace TinyEcs.Tests
         [Fact]
         public void Entity_Disabled()
         {
-            using var world = new World();
+            using var ctx = new Context();
 
-            var entity = world.Entity();
+            var entity = ctx.World.Entity();
             entity.Disable();
 
             Assert.False(entity.IsEnabled());
@@ -64,86 +64,86 @@ namespace TinyEcs.Tests
         [Fact]
         public void Entity_Attach_TwoSameComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<FloatComponent>(entity);
-            world.Unset<FloatComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Unset<FloatComponent>(entity);
 
-            Assert.False(world.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
         }
 
         [Fact]
         public void Entity_Attach_OneComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
 
-            Assert.True(world.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
         }
 
         [Fact]
         public void Entity_Attach_TwoComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<NormalTag>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<NormalTag>(entity);
 
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<NormalTag>(entity));
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<NormalTag>(entity));
         }
 
         [Fact]
         public void Entity_Attach_ThreeComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<NormalTag>(entity);
-            world.Set<LargeComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<NormalTag>(entity);
+            ctx.World.Set<LargeComponent>(entity);
 
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<NormalTag>(entity));
-            Assert.True(world.Has<LargeComponent>(entity));
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<NormalTag>(entity));
+            Assert.True(ctx.World.Has<LargeComponent>(entity));
         }
 
         [Fact]
         public void Entity_Detach_OneComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Unset<FloatComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Unset<FloatComponent>(entity);
 
-            Assert.True(!world.Has<FloatComponent>(entity));
+            Assert.True(!ctx.World.Has<FloatComponent>(entity));
         }
 
         [Fact]
         public void Entity_Detach_TwoComponent()
         {
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<NormalTag>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<NormalTag>(entity);
 
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<NormalTag>(entity));
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<NormalTag>(entity));
 
-            world.Unset<FloatComponent>(entity);
-            Assert.False(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<NormalTag>(entity));
+            ctx.World.Unset<FloatComponent>(entity);
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<NormalTag>(entity));
 
-            world.Unset<NormalTag>(entity);
-            Assert.False(world.Has<FloatComponent>(entity));
-            Assert.False(world.Has<NormalTag>(entity));
+            ctx.World.Unset<NormalTag>(entity);
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<NormalTag>(entity));
         }
 
         [Fact]
@@ -153,42 +153,42 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE = 120.66f;
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<IntComponent>(entity);
-            world.Set<LargeComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<IntComponent>(entity);
+            ctx.World.Set<LargeComponent>(entity);
 
-            world.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
-            world.Get<IntComponent>(entity).Value = INT_VALUE;
-            world.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
+            ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
+            ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
+            ctx.World.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
 
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<IntComponent>(entity));
-            Assert.True(world.Has<LargeComponent>(entity));
-            Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
-            Assert.Equal(FLOAT_VALUE, world.Get<FloatComponent>(entity).Value);
-            Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<IntComponent>(entity));
+            Assert.True(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
+            Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
+            Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
 
-            world.Unset<FloatComponent>(entity);
-            Assert.False(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<IntComponent>(entity));
-            Assert.True(world.Has<LargeComponent>(entity));
-            Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
-            Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+            ctx.World.Unset<FloatComponent>(entity);
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<IntComponent>(entity));
+            Assert.True(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
+            Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
-            world.Unset<IntComponent>(entity);
-            Assert.False(world.Has<FloatComponent>(entity));
-            Assert.False(world.Has<IntComponent>(entity));
-            Assert.True(world.Has<LargeComponent>(entity));
-            Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+            ctx.World.Unset<IntComponent>(entity);
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<IntComponent>(entity));
+            Assert.True(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
-            world.Unset<LargeComponent>(entity);
-            Assert.False(world.Has<FloatComponent>(entity));
-            Assert.False(world.Has<IntComponent>(entity));
-            Assert.False(world.Has<LargeComponent>(entity));
+            ctx.World.Unset<LargeComponent>(entity);
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<IntComponent>(entity));
+            Assert.False(ctx.World.Has<LargeComponent>(entity));
         }
 
         [Fact]
@@ -198,42 +198,42 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE = 120.66f;
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
-            world.Set<FloatComponent>(entity);
-            world.Set<IntComponent>(entity);
-            world.Set<LargeComponent>(entity);
+            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set<IntComponent>(entity);
+            ctx.World.Set<LargeComponent>(entity);
 
-            world.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
-            world.Get<IntComponent>(entity).Value = INT_VALUE;
-            world.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
+            ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
+            ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
+            ctx.World.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
 
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<IntComponent>(entity));
-            Assert.True(world.Has<LargeComponent>(entity));
-            Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
-            Assert.Equal(FLOAT_VALUE, world.Get<FloatComponent>(entity).Value);
-            Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<IntComponent>(entity));
+            Assert.True(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
+            Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
+            Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
 
-            world.Unset<LargeComponent>(entity);
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.True(world.Has<IntComponent>(entity));
-            Assert.False(world.Has<LargeComponent>(entity));
-            Assert.Equal(FLOAT_VALUE, world.Get<FloatComponent>(entity).Value);
-            Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
+            ctx.World.Unset<LargeComponent>(entity);
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.True(ctx.World.Has<IntComponent>(entity));
+            Assert.False(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
+            Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
 
-            world.Unset<IntComponent>(entity);
-            Assert.True(world.Has<FloatComponent>(entity));
-            Assert.False(world.Has<IntComponent>(entity));
-            Assert.False(world.Has<LargeComponent>(entity));
-            Assert.Equal(FLOAT_VALUE, world.Get<FloatComponent>(entity).Value);
+            ctx.World.Unset<IntComponent>(entity);
+            Assert.True(ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<IntComponent>(entity));
+            Assert.False(ctx.World.Has<LargeComponent>(entity));
+            Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
 
-            world.Unset<FloatComponent>(entity);
-            Assert.True(!world.Has<FloatComponent>(entity));
-            Assert.True(!world.Has<IntComponent>(entity));
-            Assert.True(!world.Has<LargeComponent>(entity));
+            ctx.World.Unset<FloatComponent>(entity);
+            Assert.True(!ctx.World.Has<FloatComponent>(entity));
+            Assert.True(!ctx.World.Has<IntComponent>(entity));
+            Assert.True(!ctx.World.Has<LargeComponent>(entity));
         }
 
         [Theory]
@@ -246,61 +246,61 @@ namespace TinyEcs.Tests
             const float FLOAT_VALUE = 120.66f;
             const float FLOAT_VALUE_ARR = 0.0003215f;
 
-            using var world = new World();
-            var entity = world.Entity();
+            using var ctx = new Context();
+            var entity = ctx.World.Entity();
 
             for (int i = 0; i < times; i++)
             {
-                world.Set<FloatComponent>(entity);
-                world.Set<IntComponent>(entity);
-                world.Set<LargeComponent>(entity);
+                ctx.World.Set<FloatComponent>(entity);
+                ctx.World.Set<IntComponent>(entity);
+                ctx.World.Set<LargeComponent>(entity);
 
-                world.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
-                world.Get<IntComponent>(entity).Value = INT_VALUE;
-                world.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
+                ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
+                ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
+                ctx.World.Get<LargeComponent>(entity).Span[346] = FLOAT_VALUE_ARR;
 
-                Assert.True(world.Has<FloatComponent>(entity));
-                Assert.True(world.Has<IntComponent>(entity));
-                Assert.True(world.Has<LargeComponent>(entity));
-                Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
-                Assert.Equal(FLOAT_VALUE, world.Get<FloatComponent>(entity).Value);
-                Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+                Assert.True(ctx.World.Has<FloatComponent>(entity));
+                Assert.True(ctx.World.Has<IntComponent>(entity));
+                Assert.True(ctx.World.Has<LargeComponent>(entity));
+                Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
+                Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
+                Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
 
-                world.Unset<FloatComponent>(entity);
-                Assert.False(world.Has<FloatComponent>(entity));
-                Assert.True(world.Has<IntComponent>(entity));
-                Assert.True(world.Has<LargeComponent>(entity));
-                Assert.Equal(INT_VALUE, world.Get<IntComponent>(entity).Value);
-                Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+                ctx.World.Unset<FloatComponent>(entity);
+                Assert.False(ctx.World.Has<FloatComponent>(entity));
+                Assert.True(ctx.World.Has<IntComponent>(entity));
+                Assert.True(ctx.World.Has<LargeComponent>(entity));
+                Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
+                Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
-                world.Unset<IntComponent>(entity);
-                Assert.False(world.Has<FloatComponent>(entity));
-                Assert.False(world.Has<IntComponent>(entity));
-                Assert.True(world.Has<LargeComponent>(entity));
-                Assert.Equal(FLOAT_VALUE_ARR, world.Get<LargeComponent>(entity).Span[346]);
+                ctx.World.Unset<IntComponent>(entity);
+                Assert.False(ctx.World.Has<FloatComponent>(entity));
+                Assert.False(ctx.World.Has<IntComponent>(entity));
+                Assert.True(ctx.World.Has<LargeComponent>(entity));
+                Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
 
-                world.Unset<LargeComponent>(entity);
-                Assert.False(world.Has<FloatComponent>(entity));
-                Assert.False(world.Has<IntComponent>(entity));
-                Assert.False(world.Has<LargeComponent>(entity));
+                ctx.World.Unset<LargeComponent>(entity);
+                Assert.False(ctx.World.Has<FloatComponent>(entity));
+                Assert.False(ctx.World.Has<IntComponent>(entity));
+                Assert.False(ctx.World.Has<LargeComponent>(entity));
             }
         }
 
 		[Fact]
 		public void Detach_Sequential_Components()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var e0 = world.Entity();
-			var e1 = world.Entity();
+			var e0 = ctx.World.Entity();
+			var e1 = ctx.World.Entity();
 
 			e0.Set<IntComponent>();
 			e1.Set<IntComponent>();
 			e0.Unset<IntComponent>();
 
-			Assert.True(world.Has<IntComponent>(e1));
-			Assert.False(world.Has<IntComponent>(e0));
+			Assert.True(ctx.World.Has<IntComponent>(e1));
+			Assert.False(ctx.World.Has<IntComponent>(e0));
 		}
     }
 }

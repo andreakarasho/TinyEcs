@@ -8,12 +8,12 @@
         [InlineData(1_000_000)]
         public void Query_AttachOneComponent_WithOneComponent(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
-                world.Set<FloatComponent>(world.Entity());
+                ctx.World.Set<FloatComponent>(ctx.World.Entity());
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>();
 
             int done = 0;
@@ -28,16 +28,16 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
-                world.Set<FloatComponent>(e);
-                world.Set<IntComponent>(e);
+                var e = ctx.World.Entity();
+                ctx.World.Set<FloatComponent>(e);
+                ctx.World.Set<IntComponent>(e);
             }
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .With<IntComponent>();
 
@@ -53,17 +53,17 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithThreeComponents(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
-                world.Set<FloatComponent>(e);
-                world.Set<IntComponent>(e);
-                world.Set<BoolComponent>(e);
+                var e = ctx.World.Entity();
+                ctx.World.Set<FloatComponent>(e);
+                ctx.World.Set<IntComponent>(e);
+                ctx.World.Set<BoolComponent>(e);
             }
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .With<BoolComponent>();
@@ -80,17 +80,17 @@
         [InlineData(1_000_000)]
         public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
-                world.Set<FloatComponent>(e);
-                world.Set<IntComponent>(e);
-                world.Set<BoolComponent>(e);
+                var e = ctx.World.Entity();
+                ctx.World.Set<FloatComponent>(e);
+                ctx.World.Set<IntComponent>(e);
+                ctx.World.Set<BoolComponent>(e);
             }
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>();
@@ -107,16 +107,16 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
-                world.Set<FloatComponent>(e);
-                world.Set<IntComponent>(e);
+                var e = ctx.World.Entity();
+                ctx.World.Set<FloatComponent>(e);
+                ctx.World.Set<IntComponent>(e);
             }
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>();
@@ -133,16 +133,16 @@
         [InlineData(1_000_000)]
         public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent(int amount)
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
             {
-                var e = world.Entity();
-                world.Set<FloatComponent>(e);
-                world.Set<IntComponent>(e);
+                var e = ctx.World.Entity();
+                ctx.World.Set<FloatComponent>(e);
+                ctx.World.Set<IntComponent>(e);
             }
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .Without<IntComponent>()
                 .Without<BoolComponent>();
@@ -156,32 +156,32 @@
         [Fact]
         public void Query_EdgeValidation()
         {
-            using var world = new World();
+            using var ctx = new Context();
 
             var good = 0;
 
-            var e = world.Entity();
-            world.Set<FloatComponent>(e);
-            world.Set<IntComponent>(e);
+            var e = ctx.World.Entity();
+            ctx.World.Set<FloatComponent>(e);
+            ctx.World.Set<IntComponent>(e);
 
-            var e2 = world.Entity();
-            world.Set<FloatComponent>(e2);
-            world.Set<IntComponent>(e2);
-            world.Set<BoolComponent>(e2);
+            var e2 = ctx.World.Entity();
+            ctx.World.Set<FloatComponent>(e2);
+            ctx.World.Set<IntComponent>(e2);
+            ctx.World.Set<BoolComponent>(e2);
 
-            var e3 = world.Entity();
-            world.Set<FloatComponent>(e3);
-            world.Set<IntComponent>(e3);
-            world.Set<BoolComponent>(e3);
+            var e3 = ctx.World.Entity();
+            ctx.World.Set<FloatComponent>(e3);
+            ctx.World.Set<IntComponent>(e3);
+            ctx.World.Set<BoolComponent>(e3);
             good++;
 
-            var e4 = world.Entity();
-            world.Set<FloatComponent>(e4);
-            world.Set<IntComponent>(e4);
-            world.Set<BoolComponent>(e4);
-            world.Set<NormalTag>(e4);
+            var e4 = ctx.World.Entity();
+            ctx.World.Set<FloatComponent>(e4);
+            ctx.World.Set<IntComponent>(e4);
+            ctx.World.Set<BoolComponent>(e4);
+            ctx.World.Set<NormalTag>(e4);
 
-            var query = world.Query()
+            var query = ctx.World.Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>()

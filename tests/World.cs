@@ -5,11 +5,11 @@
         [Fact]
         public void World_Create_Destroy()
         {
-            using var world = new World();
-            world.Entity();
-            world.Dispose();
+            using var ctx = new Context();
+            ctx.World.Entity();
+            ctx.World.Dispose();
 
-            Assert.Equal(0, world.EntityCount);
+            Assert.Equal(0, ctx.World.EntityCount);
         }
 
         //[Theory]
@@ -18,19 +18,19 @@
         //[InlineData(1_000_000)]
         //public async void World_Create_Destroy_Threading(int times)
         //{
-        //    using var world = new World();
+        //    using var ctx = new Context();
 
         //    var list = new List<Task>();
         //    for (var i = 0; i < times;i++)
         //    {
-        //        list.Add(Task.Run(world.CreateEntity));
+        //        list.Add(Task.Run(ctx.World.CreateEntity));
         //    }
 
         //    await Task.WhenAll(list.ToArray());
 
-        //    world.Dispose();
+        //    ctx.World.Dispose();
 
-        //    Assert.Equal(0, world.EntityCount);
+        //    Assert.Equal(0, ctx.World.EntityCount);
         //}
     }
 }

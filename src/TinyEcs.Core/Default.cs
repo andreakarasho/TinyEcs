@@ -162,8 +162,8 @@ public partial class World
 		var ecsEvent = CreateWithLookup<EcsEvent>(EcsEvent);
 
 
-		ecsChildOf.Set(EcsExclusive);
-		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
+		// ecsChildOf.Set(EcsExclusive);
+		// ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
 
 
 		var cmp2 = Lookup.Entity<EcsComponent>.Component = new (ecsComponent, GetSize<EcsComponent>());
@@ -193,6 +193,10 @@ public partial class World
 
 		AssignDefaults<EcsSystem>(ecsSystem);
 		AssignDefaults<EcsEvent>(ecsEvent);
+
+
+		ecsChildOf.Set(EcsExclusive);
+		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
 
 
 		EntityView CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub

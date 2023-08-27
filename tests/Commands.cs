@@ -11,37 +11,37 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_Create_Entity()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
 
 			var e = cmd.Entity();
 
 			cmd.Merge();
 
-			Assert.True(world.Exists(e.ID));
-			Assert.False(world.Has<EcsDisabled>(e.ID));
+			Assert.True(ctx.World.Exists(e.ID));
+			Assert.False(ctx.World.Has<EcsDisabled>(e.ID));
 		}
 
 		[Fact]
 		public void Merge_Destroy_Entity()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
 
 			var e = cmd.Entity();
 			e.Delete();
 			cmd.Merge();
 
-			Assert.False(world.Exists(e.ID));
+			Assert.False(ctx.World.Exists(e.ID));
 		}
 
 		[Fact]
 		public void Merge_SetComponent_Entity()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
 
-			var e = world.Entity();
+			var e = ctx.World.Entity();
 
 			const float VAL = 0.012344f;
 			cmd.Set<FloatComponent>(e, new FloatComponent() { Value = VAL });
@@ -54,12 +54,12 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void Merge_UnsetComponent_Entity()
 		{
-			using var world = new World();
-			var cmd = new Commands(world);
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
 
 			const float VAL = 0.012344f;
 
-			var e = world.Entity();
+			var e = ctx.World.Entity();
 			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
 
 			cmd.Unset<FloatComponent>(e);

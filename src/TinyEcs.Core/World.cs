@@ -16,7 +16,7 @@ public sealed partial class World : IDisposable
 	private EcsID _lastCompID = 1;
 
 
-	internal World()
+	public World()
 	{
 		_comparer = new ComponentComparer(this);
 		_archRoot = new Archetype(this, new (0, ReadOnlySpan<EcsComponent>.Empty, _comparer), ReadOnlySpan<EcsComponent>.Empty, _comparer);
@@ -89,9 +89,10 @@ public sealed partial class World : IDisposable
 	internal unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup.Entity<T>.Component;
-
+		var isNew = false;
 		if (lookup.ID == 0 || !Exists(lookup.ID))
 		{
+			isNew = true;
 			EcsID id = lookup.ID;
 			if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
 			{
@@ -107,11 +108,22 @@ public sealed partial class World : IDisposable
 
 			id = Entity(id);
 			var size = GetSize<T>();
+
 			lookup = new EcsComponent(id, size);
 			_ = CreateComponent(id, size);
 
 			//Console.WriteLine("created {0} - {1}", Lookup.Entity<T>.Name, id);
 		}
+
+		if (Exists(lookup.ID))
+		{
+			var name = Lookup.Entity<T>.Name;
+			ref var cmp2 = ref MemoryMarshal.GetReference(MemoryMarshal.Cast<byte, EcsComponent>(GetRaw(lookup.ID, EcsComponent, GetSize<EcsComponent>())));
+
+			EcsAssert.Panic(cmp2.Size == lookup.Size, $"invalid size for {Lookup.Entity<T>.Name}");
+		}
+
+		//EcsAssert.Panic(GetSize<T>() == lookup.Size, $"invalid size for {typeof(T)}");
 
 		// if (id > 0)
 		// 	EcsAssert.Assert(lookup.ID == id);
@@ -373,9 +385,30 @@ public sealed partial class World : IDisposable
 		}
 	}
 
+	internal Span<byte> GetRaw(EcsID entity, EcsID id, int size)
+	{
+		ref var record = ref GetRecord(entity);
+		var cmp = new EcsComponent(id, size);
+
+		var column = record.Archetype.GetComponentIndex(ref cmp);
+		var buf = record.Archetype.Table.ComponentData<byte>
+		(
+			column,
+			record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
+			cmp.Size
+		);
+
+		EcsAssert.Assert(!buf.IsEmpty);
+		EcsAssert.Assert(size == buf.Length);
+
+		return buf;
+	}
+
 	[SkipLocalsInit]
 	public unsafe void EmitEvent(EcsID eventID, EcsID entity, EcsID component)
 	{
+		return;
+
 		EcsAssert.Assert(Exists(eventID));
 		EcsAssert.Assert(Exists(entity));
 		EcsAssert.Assert(Exists(component));
@@ -468,13 +501,13 @@ public sealed partial class World : IDisposable
 	{
 		EcsAssert.Assert(!IDOp.IsPair(tag));
 
-		if (Exists(tag) && Has<EcsComponent>(tag))
-		{
-			ref var cmp2 = ref Get<EcsComponent>(tag);
-			Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
+		// if (Exists(tag) && Has<EcsComponent>(tag))
+		// {
+		// 	ref var cmp2 = ref Get<EcsComponent>(tag);
+		// 	Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
 
-			return;
-		}
+		// 	return;
+		// }
 
 		var cmp = new EcsComponent(tag, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);

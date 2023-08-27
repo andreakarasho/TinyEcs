@@ -47,30 +47,30 @@ public class ComponentTest
 	[Fact]
 	public void Check_Validate_Tag()
 	{
-		using var world = new World();
-		ref var cmp = ref world.Component<NormalTag>();
+		using var ctx = new Context();
+		ref var cmp = ref ctx.World.Component<NormalTag>();
 
 		Assert.Equal(0, cmp.Size);
-		Assert.True(world.Has<EcsTag>(cmp.ID));
+		Assert.True(ctx.World.Has<EcsTag>(cmp.ID));
 	}
 
 	[Fact]
 	public unsafe void Check_Validate_Component()
 	{
-		using var world = new World();
-		ref var cmp = ref world.Component<FloatComponent>();
+		using var ctx = new Context();
+		ref var cmp = ref ctx.World.Component<FloatComponent>();
 
 		Assert.Equal(sizeof(FloatComponent), cmp.Size);
-		Assert.False(world.Has<EcsTag>(cmp.ID));
+		Assert.False(ctx.World.Has<EcsTag>(cmp.ID));
 	}
 
 	[Fact]
 	public unsafe void Check_Validate_Pair()
 	{
-		using var world = new World();
-		var id = world.Pair<NormalTag, FloatComponent>();
+		using var ctx = new Context();
+		var id = ctx.World.Pair<NormalTag, FloatComponent>();
 
-		Assert.Equal(0, world.Component<NormalTag>().Size);
-		Assert.Equal(sizeof(FloatComponent), world.Component<FloatComponent>().Size);
+		Assert.Equal(0, ctx.World.Component<NormalTag>().Size);
+		Assert.Equal(sizeof(FloatComponent), ctx.World.Component<FloatComponent>().Size);
 	}
 }
