@@ -6,13 +6,13 @@ public sealed partial class World
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
 	{
-		Set(entity, Component<TKind>().ID, Component<TKind>().ID);
+		Set(entity, Entity<TKind>(), Entity<TKind>());
 	}
 
 	public void Set<TKind>(EcsID entity, EcsID target)
 	where TKind : unmanaged, ITag
 	{
-		Set(entity, Component<TKind>().ID, target);
+		Set(entity, Entity<TKind>(), target);
 	}
 
 	public void Set<T>(EcsID entity)
@@ -51,12 +51,12 @@ public sealed partial class World
 
 	public bool Has<TKind>(EcsID entity, EcsID target)
 	where TKind : unmanaged, ITag
-		=> Has(entity, Component<TKind>().ID, target);
+		=> Has(entity, Entity<TKind>(), target);
 
 	public bool Has<TKind, TTarget>(EcsID entity)
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
-		=> Has(entity, Component<TKind>().ID, Component<TKind>().ID);
+		=> Has(entity, Entity<TKind>(), Entity<TKind>());
 
 	public ref T Get<T>(EcsID entity)
 	where T : unmanaged, IComponent
@@ -72,11 +72,11 @@ public sealed partial class World
 	[SkipLocalsInit]
 	public void SetSingleton<T>(T component = default)
 	where T : unmanaged, IComponent
-		=> Set(Component<T>().ID, component);
+		=> Set(Entity<T>(), component);
 
 	public ref T GetSingleton<T>()
 	where T : unmanaged, IComponent
-		=> ref Get<T>(Component<T>().ID);
+		=> ref Get<T>(Entity<T>());
 
 	public void RunPhase<TPhase>() where TPhase : unmanaged, ITag
 		=> RunPhase(Pair<EcsPhase, TPhase>());
@@ -84,14 +84,14 @@ public sealed partial class World
 	public void EmitEvent<TEvent>(EcsID entity, EcsID component)
 	where TEvent : unmanaged, IEvent
 	{
-		EmitEvent(Component<TEvent>().ID, entity, component);
+		EmitEvent(Entity<TEvent>(), entity, component);
 	}
 
 	public void EmitEvent<TEvent, TComponent>(EcsID entity)
 	where TEvent : unmanaged, IEvent
 	where TComponent : unmanaged, IComponentStub
 	{
-		EmitEvent(Component<TEvent>().ID, entity, Component<TComponent>().ID);
+		EmitEvent(Entity<TEvent>(), entity, Entity<TComponent>());
 	}
 
 	public void EmitEvent<TEvent, TKind, TTarget>(EcsID entity)
@@ -99,13 +99,13 @@ public sealed partial class World
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
-		EmitEvent(Component<TEvent>().ID, entity, Pair<TKind, TTarget>());
+		EmitEvent(Entity<TEvent>(), entity, Pair<TKind, TTarget>());
 	}
 
 	public void EmitEvent<TEvent, TKind>(EcsID entity, EcsID target)
 	where TEvent : unmanaged, IEvent
 	where TKind : unmanaged, ITag
 	{
-		EmitEvent(Component<TEvent>().ID, entity, Pair<TKind>(target));
+		EmitEvent(Entity<TEvent>(), entity, Pair<TKind>(target));
 	}
 }

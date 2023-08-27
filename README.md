@@ -40,7 +40,7 @@ while (true)
     ecs.Step(deltaTime);
 
 
-static void Setup(ref Iterator it)
+static void Setup(Iterator it)
 {
     // Create an empty entity into the main world.
     // All changes to the entity are done without modifing the world.
@@ -50,7 +50,7 @@ static void Setup(ref Iterator it)
         .Set<Player>();
 }
 
-static void MovePlayer(ref Iterator it)
+static void MovePlayer(Iterator it)
 {
     var posSpan = it.Field<Position>();
     
@@ -61,7 +61,7 @@ static void MovePlayer(ref Iterator it)
     }
 }
 
-static void MessageEverySecond(ref Iterator it)
+static void MessageEverySecond(Iterator it)
 {
 	Console.WriteLine("message!");
 }

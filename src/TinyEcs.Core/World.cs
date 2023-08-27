@@ -86,13 +86,13 @@ public sealed partial class World : IDisposable
 	private unsafe int GetSize<T>() where T : unmanaged, IComponentStub
 		 => typeof(T).IsAssignableTo(typeof(ITag)) ? 0 : sizeof(T);
 
-
-	internal unsafe ref EcsComponent Component<T>(EcsID id = default) where T : unmanaged, IComponentStub
+	internal unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup.Entity<T>.Component;
+
 		if (lookup.ID == 0 || !Exists(lookup.ID))
 		{
-			id = lookup.ID;
+			EcsID id = lookup.ID;
 			if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
 			{
 				do {
@@ -105,11 +105,11 @@ public sealed partial class World : IDisposable
 			lookup = new EcsComponent(id, size);
 			_ = CreateComponent(id, size);
 
-			Console.WriteLine("created {0} - {1}", typeof(T).ToString(), id);
+			Console.WriteLine("created {0} - {1}", Lookup.Entity<T>.Name, id);
 		}
 
-		if (id > 0)
-			EcsAssert.Assert(lookup.ID == id);
+		// if (id > 0)
+		// 	EcsAssert.Assert(lookup.ID == id);
 
 		return ref lookup;
 	}
@@ -117,11 +117,11 @@ public sealed partial class World : IDisposable
 	public EcsID Pair<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
-		=> IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID);
+		=> IDOp.Pair(Entity<TKind>(), Entity<TTarget>());
 
 	public EcsID Pair<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
-		=> IDOp.Pair(Component<TKind>().ID, target);
+		=> IDOp.Pair(Entity<TKind>(), target);
 
 	public Query Query()
 		=> new (this);
@@ -159,7 +159,7 @@ public sealed partial class World : IDisposable
 	public EntityView Entity<TKind, TTarget>()
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
-		=> Entity(IDOp.Pair(Component<TKind>().ID, Component<TTarget>().ID));
+		=> Entity(IDOp.Pair(Entity<TKind>(), Entity<TTarget>()));
 
 	internal EntityView NewEmpty(ulong id = 0)
 	{
@@ -378,7 +378,7 @@ public sealed partial class World : IDisposable
 		Query
 		(
 			stackalloc Term[] {
-				Term.With(Component<EcsEvent>().ID),
+				Term.With(Entity<EcsEvent>()),
 				Term.With(eventID),
 			},
 			&OnEvent,
@@ -445,7 +445,7 @@ public sealed partial class World : IDisposable
 		if (Has(first, EcsExclusive))
 		{
 			ref var record = ref GetRecord(entity);
-			var id2 = IDOp.Pair(first, Component<EcsAny>().ID);
+			var id2 = IDOp.Pair(first, Entity<EcsAny>());
 			var cmp3 = new EcsComponent(id2, 0);
 			var column = record.Archetype.GetComponentIndex(ref cmp3);
 
@@ -515,7 +515,7 @@ public sealed partial class World : IDisposable
 	public unsafe void RunPhase(EcsID phase)
 	{
 		Span<Term> terms = stackalloc Term[] {
-			Term.With(Component<EcsSystem>().ID),
+			Term.With(Entity<EcsSystem>()),
 			Term.With(phase),
 		};
 
@@ -637,6 +637,7 @@ internal static class Lookup
 	internal static class Entity<T> where T : unmanaged, IComponentStub
 	{
 		public static EcsComponent Component;
+		public static readonly string Name = typeof(T).ToString();
 	}
 }
 

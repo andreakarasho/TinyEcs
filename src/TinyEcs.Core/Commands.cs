@@ -107,7 +107,7 @@ public sealed class Commands
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
-		Set(id, _main.Component<TKind>().ID,  _main.Component<TTarget>().ID);
+		Set(id, _main.Entity<TKind>(),  _main.Entity<TTarget>());
 	}
 
 	private unsafe ref byte Set(EcsID id, ref EcsComponent cmp)

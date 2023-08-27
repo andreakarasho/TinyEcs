@@ -4,7 +4,7 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
+public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
 	public readonly EcsID ID;
 	public readonly World World;
@@ -52,13 +52,13 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
-		return Set(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+		return Set(World.Entity<TKind>(), World.Entity<TTarget>());
 	}
 
 	public readonly EntityView Set<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
-		return Set(World.Component<TKind>().ID, target);
+		return Set(World.Entity<TKind>(), target);
 	}
 
 	public readonly EntityView Set(EcsID first, EcsID second)
@@ -78,13 +78,13 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 	where TKind : unmanaged, ITag
 	where TTarget : unmanaged, IComponentStub
 	{
-		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
+		return Unset(World.Entity<TKind>(), World.Entity<TTarget>());
 	}
 
 	public readonly EntityView Unset<TKind>(EcsID target)
 	where TKind : unmanaged, ITag
 	{
-		return Unset(World.Component<TKind>().ID, target);
+		return Unset(World.Entity<TKind>(), target);
 	}
 
 	public readonly EntityView Unset(EcsID first, EcsID second)
@@ -141,7 +141,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
 	public readonly void ClearChildren()
 	{
-		var id = World.Component<EcsChildOf>().ID;
+		var id = World.Entity<EcsChildOf>();
 		var myID = ID; // lol
 		Children(v => v.Unset(id, myID));
 	}
@@ -194,14 +194,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
 
 	public static readonly EntityView Invalid = new(null, 0);
-
-	public unsafe readonly EntityView Component<T>()
-	where T : unmanaged, IComponentStub
-	{
-		ref var cmp = ref World.Component<T>(ID);
-		EcsAssert.Assert(cmp.ID == ID);
-		return this;
-	}
 
 
 	public unsafe readonly EntityView System

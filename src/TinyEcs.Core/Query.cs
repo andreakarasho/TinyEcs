@@ -48,16 +48,16 @@ public unsafe ref struct Query
 	}
 
 	public Query With<T>() where T : unmanaged, IComponentStub
-		=> With(_world.Component<T>().ID);
+		=> With(_world.Entity<T>());
 
 	public Query With<TKind, TTarget>()
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
-		=> With(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
+		=> With(_world.Entity<TKind>(), _world.Entity<TTarget>());
 
 	public Query With<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
-		=> With(IDOp.Pair(_world.Component<TKind>().ID, target));
+		=> With(IDOp.Pair(_world.Entity<TKind>(), target));
 
 	public Query With(EcsID first, EcsID second)
 		=> With(IDOp.Pair(first, second));
@@ -76,16 +76,16 @@ public unsafe ref struct Query
 	}
 
 	public Query Without<T>() where T : unmanaged, IComponentStub
-		=> Without(_world.Component<T>().ID);
+		=> Without(_world.Entity<T>());
 
 	public Query Without<TKind, TTarget>()
 	where TKind : unmanaged, IComponentStub
 	where TTarget : unmanaged, IComponentStub
-		=> Without(_world.Component<TKind>().ID, _world.Component<TTarget>().ID);
+		=> Without(_world.Entity<TKind>(), _world.Entity<TTarget>());
 
 	public Query Without<TKind>(EcsID target)
 	where TKind : unmanaged, IComponentStub
-		=> Without(IDOp.Pair(_world.Component<TKind>().ID, target));
+		=> Without(IDOp.Pair(_world.Entity<TKind>(), target));
 
 	public Query Without(EcsID first, EcsID second)
 		=> Without(IDOp.Pair(first, second));
