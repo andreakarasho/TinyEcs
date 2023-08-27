@@ -100,12 +100,17 @@ public sealed partial class World : IDisposable
 				} while (Exists(id) && id <= ECS_MAX_COMPONENT_FAST_ID);
 			}
 
+			if (id >= ECS_MAX_COMPONENT_FAST_ID)
+			{
+				id = 0;
+			}
+
 			id = Entity(id);
 			var size = GetSize<T>();
 			lookup = new EcsComponent(id, size);
 			_ = CreateComponent(id, size);
 
-			Console.WriteLine("created {0} - {1}", Lookup.Entity<T>.Name, id);
+			//Console.WriteLine("created {0} - {1}", Lookup.Entity<T>.Name, id);
 		}
 
 		// if (id > 0)
@@ -229,7 +234,7 @@ public sealed partial class World : IDisposable
 
 		if (!add)
 		{
-			EmitEvent<EcsEventOnUnset>(entity, cmp.ID);
+			EmitEvent(EcsEventOnUnset, entity, cmp.ID);
 		}
 
 		record.Row = record.Archetype.MoveEntity(arch, record.Row);
@@ -364,7 +369,7 @@ public sealed partial class World : IDisposable
 
 		if (emit)
 		{
-			EmitEvent<EcsEventOnSet>(entity, cmp.ID);
+			EmitEvent(EcsEventOnSet, entity, cmp.ID);
 		}
 	}
 
@@ -588,7 +593,7 @@ public sealed partial class World : IDisposable
 		object? userData = null
 	)
 	{
-		terms.Sort(static (a, b) => a.ID.CompareTo(b.ID));
+		terms.Sort();
 
 		QueryRec(_archRoot, terms, _commands, action, userData);
 

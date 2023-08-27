@@ -130,6 +130,8 @@ public partial class World
 
 	public const ulong EcsAny = 15;
 
+	public const ulong EcsSystem = 16;
+	public const ulong EcsEvent = 17;
 
 
 	internal unsafe void InitializeDefaults()
@@ -156,6 +158,9 @@ public partial class World
 
 		var ecsAny = CreateWithLookup<EcsAny>(EcsAny);
 
+		var ecsSystem = CreateWithLookup<EcsSystem>(EcsSystem);
+		var ecsEvent = CreateWithLookup<EcsEvent>(EcsEvent);
+
 
 		ecsChildOf.Set(EcsExclusive);
 		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
@@ -166,25 +171,28 @@ public partial class World
 		ecsComponent.Set(EcsPanic, EcsDelete);
 
 
-		SetBaseTags<EcsPanic>(ecsExclusive);
-		SetBaseTags<EcsDelete>(ecsChildOf);
-		SetBaseTags<EcsTag>(ecsPhase);
+		AssignDefaults<EcsPanic>(ecsExclusive);
+		AssignDefaults<EcsDelete>(ecsChildOf);
+		AssignDefaults<EcsTag>(ecsPhase);
 
-		SetBaseTags<EcsExclusive>(ecsPanic);
-		SetBaseTags<EcsChildOf>(ecsDelete);
-		SetBaseTags<EcsPhase>(ecsTag);
+		AssignDefaults<EcsExclusive>(ecsPanic);
+		AssignDefaults<EcsChildOf>(ecsDelete);
+		AssignDefaults<EcsPhase>(ecsTag);
 
-		SetBaseTags<EcsEventOnSet>(ecsEventOnSet);
-		SetBaseTags<EcsEventOnUnset>(ecsEventOnUnset);
+		AssignDefaults<EcsEventOnSet>(ecsEventOnSet);
+		AssignDefaults<EcsEventOnUnset>(ecsEventOnUnset);
 
-		SetBaseTags<EcsSystemPhasePreStartup>(ecsPreStartup);
-		SetBaseTags<EcsSystemPhaseOnStartup>(ecsStartup);
-		SetBaseTags<EcsSystemPhasePostStartup>(ecsPostStartup);
-		SetBaseTags<EcsSystemPhasePreUpdate>(ecsPreUpdate);
-		SetBaseTags<EcsSystemPhaseOnUpdate>(ecsUpdate);
-		SetBaseTags<EcsSystemPhasePostUpdate>(ecsPostUpdate);
+		AssignDefaults<EcsSystemPhasePreStartup>(ecsPreStartup);
+		AssignDefaults<EcsSystemPhaseOnStartup>(ecsStartup);
+		AssignDefaults<EcsSystemPhasePostStartup>(ecsPostStartup);
+		AssignDefaults<EcsSystemPhasePreUpdate>(ecsPreUpdate);
+		AssignDefaults<EcsSystemPhaseOnUpdate>(ecsUpdate);
+		AssignDefaults<EcsSystemPhasePostUpdate>(ecsPostUpdate);
 
-		SetBaseTags<EcsAny>(ecsAny);
+		AssignDefaults<EcsAny>(ecsAny);
+
+		AssignDefaults<EcsSystem>(ecsSystem);
+		AssignDefaults<EcsEvent>(ecsEvent);
 
 
 		EntityView CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub
@@ -194,7 +202,14 @@ public partial class World
 			return view;
 		}
 
-		EntityView SetBaseTags<T>(EntityView view) where T : unmanaged, IComponentStub
-			=> view.Set(Lookup.Entity<T>.Component).Set(EcsPanic, EcsDelete).Set(EcsTag);
+		EntityView AssignDefaults<T>(EntityView view) where T : unmanaged, IComponentStub
+		{
+			view.Set(Lookup.Entity<T>.Component).Set(EcsPanic, EcsDelete);
+
+			if (GetSize<T>() == 0)
+				view.Set(EcsTag);
+
+			return view;
+		}
 	}
 }
