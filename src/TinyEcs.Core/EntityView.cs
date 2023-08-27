@@ -6,8 +6,12 @@ namespace TinyEcs;
 [StructLayout(LayoutKind.Sequential)]
 public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
+	public static readonly EntityView Invalid = new(null, 0);
+
+
 	public readonly EcsID ID;
 	public readonly World World;
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal EntityView(World world, EcsID id)
@@ -18,16 +22,16 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(EcsID other)
-	{
-		return ID == other;
-	}
+	public readonly bool Equals(EcsID other) => ID == other;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(EntityView other)
-	{
-		return ID == other.ID;
-	}
+	public readonly bool Equals(EntityView other) => ID == other.ID;
+
+	public readonly override int GetHashCode() => ID.GetHashCode();
+
+	public readonly override bool Equals(object? obj) => obj is EntityView ent && Equals(ent);
+
+
 
 	public readonly EntityView Set<T>() where T : unmanaged, ITag
 	{
@@ -107,20 +111,17 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 		return this;
 	}
 
-	public readonly ref T Get<T>() where T : unmanaged, IComponent
-		=> ref World.Get<T>(ID);
+	public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
 
-	public readonly bool Has<T>() where T : unmanaged, IComponentStub
-		=> World.Has<T>(ID);
+	public readonly ref T Get<T>() where T : unmanaged, IComponent => ref World.Get<T>(ID);
+
+	public readonly bool Has<T>() where T : unmanaged, IComponentStub => World.Has<T>(ID);
 
 	public readonly bool Has<TKind, TTarget>()
 		where TKind : unmanaged, ITag
 		where TTarget : unmanaged, IComponentStub
 	{
-		var world = World;
-		var id = world.Pair<TKind, TTarget>();
-		var cmp = new EcsComponent(id, 0);
-		return world.Has(ID, ref cmp);
+		return World.Has(ID, World.Entity<TKind>(), World.Entity<TTarget>());
 	}
 
 	public readonly EntityView ChildOf(EcsID parent)
@@ -146,35 +147,25 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 		Children(v => v.Unset(id, myID));
 	}
 
-	public readonly EntityView Parent()
-	{
-		return World.Entity(World.GetParent(ID));
-	}
+	public readonly EntityView Parent() => World.Entity(World.GetParent(ID));
 
-	public readonly void Delete()
-		=> World.Delete(ID);
+	public readonly void Delete() => World.Delete(ID);
 
-	public readonly bool Exists()
-		=> World.Exists(ID);
+	public readonly bool Exists() => World.Exists(ID);
 
-	public readonly bool IsEnabled()
-		=> !Has<EcsDisabled>();
+	public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsEntity()
-		=> (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
+	public readonly bool IsEntity() => (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsPair()
-		=> IDOp.IsPair(ID);
+	public readonly bool IsPair() => IDOp.IsPair(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EcsID First()
-		=> IDOp.GetPairFirst(ID);
+	public readonly EcsID First() => IDOp.GetPairFirst(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EcsID Second()
-		=> IDOp.GetPairSecond(ID);
+	public readonly EcsID Second() => IDOp.GetPairSecond(ID);
 
 	public readonly void Each(Action<EntityView> action)
 	{
@@ -185,15 +176,6 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 			action(World.Entity(record.Archetype.ComponentInfo[i].ID));
 		}
 	}
-
-	public readonly ReadOnlySpan<EcsComponent> Type()
-		=> World.GetType(ID);
-
-
-
-
-
-	public static readonly EntityView Invalid = new(null, 0);
 
 
 	public unsafe readonly EntityView System
@@ -237,35 +219,10 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 	}
 
 
-	public override int GetHashCode()
-	{
-		return ID.GetHashCode();
-	}
-
 	public static implicit operator EcsID(EntityView d) => d.ID;
 	public static implicit operator Term(EntityView d) => Term.With(d.ID);
 
 	public static Term operator !(EntityView id) => Term.Without(id.ID);
 	public static Term operator -(EntityView id) => Term.Without(id.ID);
 	public static Term operator +(EntityView id) => Term.With(id.ID);
-}
-
-
-public ref struct SystemView
-{
-	private readonly World _world;
-	private readonly EcsID _id;
-
-	internal SystemView(World world, EcsID id) { _world = world; _id = id; }
-
-
-	public SystemView With(Term term)
-	{
-		if (_world.Has<EcsSystem>(_id))
-		{
-			ref var sys = ref _world.Get<EcsSystem>(_id);
-		}
-
-		return this;
-	}
 }
