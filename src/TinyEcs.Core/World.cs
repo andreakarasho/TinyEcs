@@ -89,10 +89,9 @@ public sealed partial class World : IDisposable
 	internal unsafe ref EcsComponent Component<T>() where T : unmanaged, IComponentStub
 	{
 		ref var lookup = ref Lookup.Entity<T>.Component;
-		var isNew = false;
+
 		if (lookup.ID == 0 || !Exists(lookup.ID))
 		{
-			isNew = true;
 			EcsID id = lookup.ID;
 			if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
 			{
@@ -122,11 +121,6 @@ public sealed partial class World : IDisposable
 
 			EcsAssert.Panic(cmp2.Size == lookup.Size, $"invalid size for {Lookup.Entity<T>.Name}");
 		}
-
-		//EcsAssert.Panic(GetSize<T>() == lookup.Size, $"invalid size for {typeof(T)}");
-
-		// if (id > 0)
-		// 	EcsAssert.Assert(lookup.ID == id);
 
 		return ref lookup;
 	}
@@ -199,7 +193,8 @@ public sealed partial class World : IDisposable
 	{
 		ref var record = ref GetRecord(entity);
 
-		EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
+		//EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
+
 
 		Query()
 			.With<EcsChildOf>(entity)
@@ -213,8 +208,6 @@ public sealed partial class World : IDisposable
 		var removedId = record.Archetype.Remove(ref record);
 		EcsAssert.Assert(removedId == entity);
 
-		var last = record.Archetype.Entities[record.Row];
-		_entities.Get(last) = record;
 		_entities.Remove(removedId);
 	}
 
@@ -240,14 +233,35 @@ public sealed partial class World : IDisposable
 	{
 		EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-		var arch = CreateArchetype(record.Archetype, ref cmp, add);
-		if (arch == null)
-			return false;
+		if (add)
+		{
+			// TODO: Use Events to handle this case.
+			//		 The event must check for component with Exclusive tag
+			if (IDOp.IsPair(cmp.ID))
+			{
+				var first = IDOp.GetPairFirst(cmp.ID);
+				var second = IDOp.GetPairSecond(cmp.ID);
 
-		if (!add)
+				if (Has(first, EcsExclusive))
+				{
+					var cmp2 = new EcsComponent(IDOp.Pair(first, EcsAny), 0);
+					var column = record.Archetype.GetComponentIndex(ref cmp2);
+
+					if (column >= 0 && record.Archetype.ComponentInfo[column].ID != cmp.ID)
+					{
+						DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
+					}
+				}
+			}
+		}
+		else
 		{
 			EmitEvent(EcsEventOnUnset, entity, cmp.ID);
 		}
+
+		var arch = CreateArchetype(record.Archetype, ref cmp, add);
+		if (arch == null)
+			return false;
 
 		record.Row = record.Archetype.MoveEntity(arch, record.Row);
 		record.Archetype = arch!;
@@ -407,8 +421,6 @@ public sealed partial class World : IDisposable
 	[SkipLocalsInit]
 	public unsafe void EmitEvent(EcsID eventID, EcsID entity, EcsID component)
 	{
-		return;
-
 		EcsAssert.Assert(Exists(eventID));
 		EcsAssert.Assert(Exists(entity));
 		EcsAssert.Assert(Exists(component));
@@ -416,7 +428,7 @@ public sealed partial class World : IDisposable
 		Query
 		(
 			stackalloc Term[] {
-				Term.With(Entity<EcsEvent>()),
+				Term.With(EcsEvent),
 				Term.With(eventID),
 			},
 			&OnEvent,
@@ -437,6 +449,9 @@ public sealed partial class World : IDisposable
 
 	static unsafe void OnEvent(ref Iterator it)
 	{
+		if (it.Count == 0)
+			return;
+
 		ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
 		ref var record = ref it.World.GetRecord(eventInfo.Entity);
 		var iterator = new Iterator
@@ -447,7 +462,8 @@ public sealed partial class World : IDisposable
 			stackalloc EcsID[1] { eventInfo.Entity },
 			stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
 			null,
-			eventInfo.Event
+			eventInfo.Event,
+			eventInfo.LastComponent
 		);
 
 		var evA = it.Field<EcsEvent>();
@@ -479,20 +495,6 @@ public sealed partial class World : IDisposable
 	public void Set(EcsID entity, EcsID first, EcsID second)
 	{
 		var id = IDOp.Pair(first, second);
-
-		if (Has(first, EcsExclusive))
-		{
-			ref var record = ref GetRecord(entity);
-			var id2 = IDOp.Pair(first, Entity<EcsAny>());
-			var cmp3 = new EcsComponent(id2, 0);
-			var column = record.Archetype.GetComponentIndex(ref cmp3);
-
-			if (column >= 0)
-			{
-				DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
-			}
-		}
-
 		var cmp = new EcsComponent(id, 0);
 		Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
 	}

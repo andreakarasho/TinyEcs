@@ -89,6 +89,8 @@ public unsafe struct EcsEvent : IComponent
 
 public struct EcsEventOnSet : IEvent { }
 public struct EcsEventOnUnset : IEvent { }
+public struct EcsEventOnCreate : IEvent { }
+public struct EcsEventOnDelete : IEvent { }
 public struct EcsPhase : ITag { }
 public struct EcsPanic : ITag { }
 public struct EcsDelete : ITag { }
@@ -120,18 +122,20 @@ public partial class World
 
 	public const ulong EcsEventOnSet = 8;
 	public const ulong EcsEventOnUnset = 9;
+	public const ulong EcsEventOnCreate = 10;
+	public const ulong EcsEventOnDelete = 11;
 
-	public const ulong EcsPhaseOnPreStartup = 9;
-	public const ulong EcsPhaseOnStartup = 10;
-	public const ulong EcsPhaseOnPostStartup = 11;
-	public const ulong EcsPhaseOnPreUpdate = 12;
-	public const ulong EcsPhaseOnUpdate = 13;
-	public const ulong EcsPhaseOnPostUpdate = 14;
+	public const ulong EcsPhaseOnPreStartup = 12;
+	public const ulong EcsPhaseOnStartup = 13;
+	public const ulong EcsPhaseOnPostStartup = 14;
+	public const ulong EcsPhaseOnPreUpdate = 15;
+	public const ulong EcsPhaseOnUpdate = 16;
+	public const ulong EcsPhaseOnPostUpdate = 17;
 
-	public const ulong EcsAny = 15;
+	public const ulong EcsAny = 18;
 
-	public const ulong EcsSystem = 16;
-	public const ulong EcsEvent = 17;
+	public const ulong EcsSystem = 19;
+	public const ulong EcsEvent = 20;
 
 
 	internal unsafe void InitializeDefaults()
@@ -148,6 +152,8 @@ public partial class World
 
 		var ecsEventOnSet = CreateWithLookup<EcsEventOnSet>(EcsEventOnSet);
 		var ecsEventOnUnset = CreateWithLookup<EcsEventOnUnset>(EcsEventOnUnset);
+		var ecsEventOnCreate = CreateWithLookup<EcsEventOnCreate>(EcsEventOnCreate);
+		var ecsEventOnDelete = CreateWithLookup<EcsEventOnDelete>(EcsEventOnDelete);
 
 		var ecsPreStartup = CreateWithLookup<EcsSystemPhasePreStartup>(EcsPhaseOnPreStartup);
 		var ecsStartup = CreateWithLookup<EcsSystemPhaseOnStartup>(EcsPhaseOnStartup);
@@ -181,6 +187,8 @@ public partial class World
 
 		AssignDefaults<EcsEventOnSet>(ecsEventOnSet);
 		AssignDefaults<EcsEventOnUnset>(ecsEventOnUnset);
+		AssignDefaults<EcsEventOnCreate>(ecsEventOnCreate);
+		AssignDefaults<EcsEventOnDelete>(ecsEventOnDelete);
 
 		AssignDefaults<EcsSystemPhasePreStartup>(ecsPreStartup);
 		AssignDefaults<EcsSystemPhaseOnStartup>(ecsStartup);
@@ -196,7 +204,42 @@ public partial class World
 
 
 		ecsChildOf.Set(EcsExclusive);
-		ecsPhase.Set(ecsExclusive); // NOTE: do we want to make phase singletons?
+		ecsPhase.Set(EcsExclusive); // NOTE: do we want to make phase singletons?
+
+
+		Event
+		(
+			&EcsCheckChildOfExclusive,
+			stackalloc Term[] {
+				Term.With(EcsExclusive)
+				//IDOp.Pair(EcsChildOf, EcsAny)
+			},
+			stackalloc EcsID[] {
+				EcsEventOnSet
+			}
+		);
+
+		Event
+		(
+			&EcsDeleteAllChildrenOnParentDeletion,
+			stackalloc Term[] {
+				IDOp.Pair(EcsChildOf, EcsAny)
+			},
+			stackalloc EcsID[] {
+				EcsEventOnDelete
+			}
+		);
+
+		Event
+		(
+			&EcsPanicOnDelete,
+			stackalloc Term[] {
+				IDOp.Pair(EcsPanic, EcsDelete)
+			},
+			stackalloc EcsID[] {
+				EcsEventOnDelete
+			}
+		);
 
 
 		EntityView CreateWithLookup<T>(EcsID id) where T : unmanaged, IComponentStub
@@ -206,14 +249,51 @@ public partial class World
 			return view;
 		}
 
-		EntityView AssignDefaults<T>(EntityView view) where T : unmanaged, IComponentStub
+		static EntityView AssignDefaults<T>(EntityView view) where T : unmanaged, IComponentStub
 		{
 			view.Set(Lookup.Entity<T>.Component).Set(EcsPanic, EcsDelete);
 
-			if (GetSize<T>() == 0)
+			if (view.World.GetSize<T>() == 0)
 				view.Set(EcsTag);
 
 			return view;
+		}
+
+
+		static void EcsCheckChildOfExclusive(ref Iterator it)
+		{
+			var eventID = it.EventTriggeredComponent;
+			var eventFirst = IDOp.GetPairFirst(eventID);
+
+			for (int i = 0; i < it.Count; ++i)
+			{
+				var entity = it.Entity(i);
+				var type = entity.Type();
+
+				foreach (ref readonly var cmp in type)
+				{
+					if (!IDOp.IsPair(cmp.ID) || cmp.ID == eventID)
+						continue;
+
+					var first = IDOp.GetPairFirst(cmp.ID);
+					var second = IDOp.GetPairSecond(cmp.ID);
+
+					if (first != eventFirst)
+						continue;
+
+					entity.Unset(first, second);
+				}
+			}
+		}
+
+		static void EcsDeleteAllChildrenOnParentDeletion(ref Iterator it)
+		{
+
+		}
+
+		static void EcsPanicOnDelete(ref Iterator it)
+		{
+			EcsAssert.Panic(true, $"You cannot delete entity {it.Entity(0)} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
 		}
 	}
 }

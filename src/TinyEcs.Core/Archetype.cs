@@ -134,6 +134,10 @@ public sealed class Archetype
 
 	private (EcsID, int) SwapWithLast(int fromRow)
 	{
+		ref var fromRec = ref _world.GetRecord(_entities[fromRow]);
+		ref var lastRec = ref _world.GetRecord(_entities[_count - 1]);
+		lastRec.Row = fromRec.Row;
+
 		var removed = _entities[fromRow];
 		_entities[fromRow] = _entities[_count - 1];
 

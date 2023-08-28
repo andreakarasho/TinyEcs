@@ -10,19 +10,20 @@ public readonly ref struct Iterator
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, Archetype archetype, object? userData, EcsID eventID = default)
-	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID)
+	internal Iterator(Commands commands, Archetype archetype, object? userData, EcsID eventID = default, EcsID eventComponent = default)
+	 : this(commands, archetype.Count, archetype.Table, archetype.Entities, archetype.EntitiesTableRows, userData, eventID, eventComponent)
 	{
 
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default)
+	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default, EcsID eventComponent = default)
 	{
 		Commands = commands;
 		World = commands.World;
 		UserData = userData;
 		EventID = eventID;
+		EventTriggeredComponent = eventComponent;
 		_table = table;
 		_entities = entities;
 		_entitiesToTableRows = toRows;
@@ -37,6 +38,7 @@ public readonly ref struct Iterator
 	public readonly float DeltaTime { get; }
 	public readonly object? UserData { get; }
 	public readonly EcsID EventID { get; }
+	public readonly EcsID EventTriggeredComponent { get; }
 
 
 	public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged, IComponent

@@ -20,6 +20,11 @@ var pairID = world.Pair<Likes, Dogs>();
 var main = world.Entity();
 var secondMain = world.Entity();
 
+ref var rec = ref world.GetRecord(secondMain);
+
+ var ooo = world.Entity();
+ ooo.ChildOf(main);
+ ooo.ChildOf(secondMain);
 
 unsafe
 {
@@ -116,7 +121,7 @@ secondMain.Children(static s => {
 // 	world.Step();
 world.Step();
 
-main.Delete();
+secondMain.Delete();
 //main.ClearChildren();
 
 world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
@@ -183,7 +188,7 @@ static void Setup(ref Iterator it)
 	var sw = Stopwatch.StartNew();
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.Commands.Entity()
+		it.World.Entity()
 			.Set<Position>()
 			.Set<Velocity>()
 			;
