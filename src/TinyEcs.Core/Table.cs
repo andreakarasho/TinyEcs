@@ -6,7 +6,6 @@ sealed unsafe class Table
 
 	private readonly ComponentComparer _comparer;
 	private readonly void*[] _componentsData;
-	private readonly EcsComponent[] _componentInfo;
 	private int _capacity;
 	private int _count;
 
@@ -26,7 +25,7 @@ sealed unsafe class Table
 		}
 
 		_componentsData = new void*[valid];
-		_componentInfo = new EcsComponent[valid];
+		Components = new EcsComponent[valid];
 
 		valid = 0;
 		foreach (ref readonly var cmp in components)
@@ -34,7 +33,7 @@ sealed unsafe class Table
 			if (cmp.Size <= 0)
 				continue;
 
-			_componentInfo[valid++] = cmp;
+			Components[valid++] = cmp;
 		}
 
 		ResizeComponentArray(_capacity);
@@ -43,9 +42,12 @@ sealed unsafe class Table
 
 	public ulong Hash { get; }
 	public int Rows => _count;
-	public int Columns => _componentInfo.Length;
-	public EcsComponent[] Components => _componentInfo;
+	public int Columns => Components.Length;
+	public readonly EcsComponent[] Components;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public T* GetData<T>(int column, int row) where T : unmanaged
+		=> (T*)_componentsData[column] + row;
 
 	internal int Add(EcsID id)
 	{
@@ -61,7 +63,7 @@ sealed unsafe class Table
 
 	internal int GetComponentIndex(ref EcsComponent cmp)
 	{
-		return Array.BinarySearch(_componentInfo, cmp, _comparer);
+		return Array.BinarySearch(Components, cmp, _comparer);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -73,9 +75,9 @@ sealed unsafe class Table
 
 	internal void Remove(int row)
 	{
-		for (int i = 0; i < _componentInfo.Length; ++i)
+		for (int i = 0; i < Components.Length; ++i)
 		{
-			ref readonly var meta = ref _componentInfo[i];
+			ref readonly var meta = ref Components[i];
 
 			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
 
@@ -90,9 +92,9 @@ sealed unsafe class Table
 
 	internal void MoveTo(int fromRow, Table to, int toRow)
 	{
-		var isLeft = to._componentInfo.Length < _componentInfo.Length;
+		var isLeft = to.Components.Length < Components.Length;
 		int i = 0, j = 0;
-		var count = isLeft ? to._componentInfo.Length : _componentInfo.Length;
+		var count = isLeft ? to.Components.Length : Components.Length;
 
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
@@ -101,13 +103,13 @@ sealed unsafe class Table
 
 		for (; x < count; ++x, ++y)
 		{
-			while (_componentInfo[i].ID != to._componentInfo[j].ID)
+			while (Components[i].ID != to.Components[j].ID)
 			{
 				// advance the sign with less components!
 				++y;
 			}
 
-			ref readonly var meta = ref _componentInfo[i];
+			ref readonly var meta = ref Components[i];
 
 			var leftArray = ComponentData<byte>(i, 0, meta.Size * _capacity);
 			var rightArray = to.ComponentData<byte>(j, 0, meta.Size * to._capacity);
@@ -124,9 +126,9 @@ sealed unsafe class Table
 
 	private void ResizeComponentArray(int capacity)
 	{
-		for (int i = 0; i < _componentInfo.Length; ++i)
+		for (int i = 0; i < Components.Length; ++i)
 		{
-			ref readonly var meta = ref _componentInfo[i];
+			ref readonly var meta = ref Components[i];
 
 			_componentsData[i] = (byte*) NativeMemory.Realloc(_componentsData[i], (nuint)capacity * (nuint) meta.Size);
 

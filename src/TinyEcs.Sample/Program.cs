@@ -10,127 +10,131 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
+// using var world = new World();
+// var tttt = world.Entity(1).Type();
+// world.Entity(1).Set(2);
 
-using var world = new World();
-
-var positionID = world.Entity<Position>();
-var velocityID = world.Entity<Velocity>();
-var pairID = world.Pair<Likes, Dogs>();
-
-var main = world.Entity();
-var secondMain = world.Entity();
-
-ref var rec = ref world.GetRecord(secondMain);
-
- var ooo = world.Entity();
- ooo.ChildOf(main);
- ooo.ChildOf(secondMain);
-
-unsafe
-{
-	Term t = Term.With(positionID.ID);
-	t.Not();
-	t = !t;
+// world.PrintGraph();
 
 
-	world.Entity()
-		.System(&SystemCtx1, positionID, +velocityID, -pairID)
-		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+// var positionID = world.Entity<Position>();
+// var velocityID = world.Entity<Velocity>();
+// var pairID = world.Pair<Likes, Dogs>();
 
-	// world.New()
-	// 	.System
-	// 	(
-	// 		&SystemCtx1,
-	// 		[positionID, velocityID],
-	// 		[pairID],
-	// 		float.NaN
-	// 	)
-	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+// var main = world.Entity();
+// var secondMain = world.Entity();
 
-	// world.New()
-	// 	.System
-	// 	(
-	// 		&SystemCtx1,
-	// 		positionID,
-	// 		velocityID
-	// 	)
-	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+// ref var rec = ref world.GetRecord(secondMain);
 
-	// world.System
-	// (
-	// 	&SystemCtx1,
-	// 	positionID,
-	// 	velocityID
-	// );
+//  var ooo = world.Entity();
+//  ooo.ChildOf(main);
+//  ooo.ChildOf(secondMain);
 
-	// world.Event
-	// (
-	// 	&ObserveThings,
-	// 	stackalloc Term[] {
-	// 		Term.With(world.Component<Position>().ID),
-	// 		//Term.With(world.Component<Velocity>().ID),
-	// 		//Term.With(world.Pair<EcsChildOf>(main.ID))
-	// 	},
-	// 	stackalloc EcsID[] {
-	// 		world.Component<CustomEvent>().ID
-	// 		//world.Component<EcsObserverOnSet>().ID,
-	// 		//world.Component<EcsObserverOnUnset>().ID
-	// 	}
-	// );
-
-	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
-
-	//world.Despawn(world.Component<Position>().ID);
-	main.Set<Velocity>();
-	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
-	//main.Set<Likes,Dogs>();
-	//world.EmitEvent<CustomEvent, Position>(main);
-
-		// .With<Position>()
-		// .With<Velocity>()
-		// .With<EcsChildOf>(main.ID)
-		// .OnEvent<EcsObserverOnSet>()
-		// .OnEvent<EcsObserverOnUnset>();
-}
+// unsafe
+// {
+// 	Term t = Term.With(positionID.ID);
+// 	t.Not();
+// 	t = !t;
 
 
-for (int i = 0; i < 10; ++i)
-	world.Entity().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
+// 	world.Entity()
+// 		.System(&SystemCtx1, positionID, +velocityID, -pairID)
+// 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-// main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
-// main.Set<Dogs>();
-// main.Set<Likes>();
-// main.Set<Velocity>(new Velocity() { X = 345f, Y = 0.23f});
-// main.Unset<Velocity>();
-// main.Unset<Velocity>();
+// 	// world.New()
+// 	// 	.System
+// 	// 	(
+// 	// 		&SystemCtx1,
+// 	// 		[positionID, velocityID],
+// 	// 		[pairID],
+// 	// 		float.NaN
+// 	// 	)
+// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+// 	// world.New()
+// 	// 	.System
+// 	// 	(
+// 	// 		&SystemCtx1,
+// 	// 		positionID,
+// 	// 		velocityID
+// 	// 	)
+// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+// 	// world.System
+// 	// (
+// 	// 	&SystemCtx1,
+// 	// 	positionID,
+// 	// 	velocityID
+// 	// );
+
+// 	// world.Event
+// 	// (
+// 	// 	&ObserveThings,
+// 	// 	stackalloc Term[] {
+// 	// 		Term.With(world.Component<Position>().ID),
+// 	// 		//Term.With(world.Component<Velocity>().ID),
+// 	// 		//Term.With(world.Pair<EcsChildOf>(main.ID))
+// 	// 	},
+// 	// 	stackalloc EcsID[] {
+// 	// 		world.Component<CustomEvent>().ID
+// 	// 		//world.Component<EcsObserverOnSet>().ID,
+// 	// 		//world.Component<EcsObserverOnUnset>().ID
+// 	// 	}
+// 	// );
+
+// 	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
+
+// 	//world.Despawn(world.Component<Position>().ID);
+// 	main.Set<Velocity>();
+// 	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
+// 	//main.Set<Likes,Dogs>();
+// 	//world.EmitEvent<CustomEvent, Position>(main);
+
+// 		// .With<Position>()
+// 		// .With<Velocity>()
+// 		// .With<EcsChildOf>(main.ID)
+// 		// .OnEvent<EcsObserverOnSet>()
+// 		// .OnEvent<EcsObserverOnUnset>();
+// }
+
 
 // for (int i = 0; i < 10; ++i)
-// 	world.New().ChildOf(main);
+// 	world.Entity().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
 
-main.Children(static s => {
-	var p = s.Parent();
-	Console.WriteLine("child id {0}", s.ID);
-});
+// // main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
+// // main.Set<Dogs>();
+// // main.Set<Likes>();
+// // main.Set<Velocity>(new Velocity() { X = 345f, Y = 0.23f});
+// // main.Unset<Velocity>();
+// // main.Unset<Velocity>();
 
-secondMain.Children(static s => {
-	var p = s.Parent();
-	Console.WriteLine("secondMain child id {0}", s.ID);
-});
+// // for (int i = 0; i < 10; ++i)
+// // 	world.New().ChildOf(main);
 
-// while (true)
-// 	world.Step();
-world.Step();
+// main.Children(static s => {
+// 	var p = s.Parent();
+// 	Console.WriteLine("child id {0}", s.ID);
+// });
 
-secondMain.Delete();
-//main.ClearChildren();
+// secondMain.Children(static s => {
+// 	var p = s.Parent();
+// 	Console.WriteLine("secondMain child id {0}", s.ID);
+// });
 
-world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
-	Console.WriteLine("found children");
-});
+// // while (true)
+// // 	world.Step();
+// world.Step();
 
-world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
-	Console.WriteLine("found children for any");
-});
+// secondMain.Delete();
+// //main.ClearChildren();
+
+// world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
+// 	Console.WriteLine("found children");
+// });
+
+// world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
+// 	Console.WriteLine("found children for any");
+// });
 
 using var ecs = new World();
 
@@ -138,11 +142,16 @@ unsafe
 {
 	var posID = ecs.Entity<Position>();
 	var velID = ecs.Entity<Velocity>();
-	ecs.Entity<Serial>();
 
-	ecs.Entity()
-		.System(&Setup)
-		.Set<EcsPhase, EcsSystemPhaseOnStartup>();
+	for (int i = 0; i < ENTITIES_COUNT; i++)
+		ecs.Entity()
+			.Set<Position>()
+			.Set<Velocity>()
+			;
+
+	// ecs.Entity()
+	// 	.System(&Setup)
+	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	ecs.Entity()
 		.System(&ParseQuery, posID, velID)
@@ -187,11 +196,7 @@ static void Setup(ref Iterator it)
 {
 	var sw = Stopwatch.StartNew();
 
-	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.World.Entity()
-			.Set<Position>()
-			.Set<Velocity>()
-			;
+
 
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }

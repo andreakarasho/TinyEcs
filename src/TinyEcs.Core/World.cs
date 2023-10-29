@@ -259,6 +259,8 @@ public sealed partial class World : IDisposable
 			EmitEvent(EcsEventOnUnset, entity, cmp.ID);
 		}
 
+		//var arch = MakeArchetype(record.Archetype, ref cmp, add);
+
 		var arch = CreateArchetype(record.Archetype, ref cmp, add);
 		if (arch == null)
 			return false;
@@ -268,6 +270,86 @@ public sealed partial class World : IDisposable
 
 		return true;
 	}
+
+	private Archetype? MakeArchetype(Archetype root, ref EcsComponent cmp, bool add)
+	{
+		// ignore if the entity doesn't have the component
+		if (!add && root.GetComponentIndex(ref cmp) < 0)
+			return null;
+
+		var edges = add ? root._edgesRight : root._edgesLeft;
+
+		foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
+		{
+			if (edge.ComponentID == cmp.ID)
+			{
+				var super = add ? edge.Archetype : root;
+				var sub = !add ? edge.Archetype : root;
+				if (super.IsSuperset(sub.ComponentInfo))
+				{
+					return edge.Archetype;
+				}
+			}
+		}
+
+		var newSign = new EcsComponent[root.ComponentInfo.Length + (add ? 1 : -1)];
+		if (add)
+		{
+			root.ComponentInfo.CopyTo(newSign, 0);
+			newSign[^1] = cmp;
+			Array.Sort(newSign, _comparer);
+		}
+		else
+		{
+			for (int i = 0, j = 0; i < root.ComponentInfo.Length; ++i)
+			{
+				if (root.ComponentInfo[i].ID != cmp.ID)
+				{
+					newSign[j++] = root.ComponentInfo[i];
+				}
+			}
+		}
+
+		ref var table = ref Unsafe.NullRef<Table>();
+
+		if (cmp.Size != 0)
+		{
+			var tableHash = Hash(newSign, true);
+			table = ref CollectionsMarshal.GetValueRefOrAddDefault(_tableIndex, tableHash, out var exists)!;
+			if (!exists)
+			{
+				table = new (tableHash, newSign, _comparer);
+			}
+		}
+		else
+		{
+			table = ref Unsafe.AsRef(root.Table)!;
+		}
+
+		var arch = _archRoot.InsertVertex(root, table, newSign, ref cmp);
+
+		return arch;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		static EcsID Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
+		{
+			unchecked
+			{
+				EcsID hash = 5381;
+
+				while (components.CanAdvance())
+				{
+					if (!checkSize || components.Value.Size > 0)
+						hash = ((hash << 5) + hash) + components.Value.ID;
+
+					components.Advance();
+				}
+
+				return hash;
+			}
+		}
+	}
+
 
 	[SkipLocalsInit]
 	internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
@@ -590,7 +672,7 @@ public sealed partial class World : IDisposable
 
 	static unsafe void RunSystems(ref Iterator it)
 	{
-		var emptyIt = new Iterator(it.Commands, 0, it.World._archRoot.Table, ReadOnlySpan<EcsID>.Empty, ReadOnlySpan<int>.Empty, null, 0);
+		var emptyIt = new Iterator(it.Commands, 0, it.World._archRoot.Table, Span<EcsID>.Empty, Span<int>.Empty, null, 0);
 		var sysA = it.Field<EcsSystem>();
 
 		for (int i = 0; i < it.Count; ++i)
@@ -649,6 +731,19 @@ public sealed partial class World : IDisposable
 
 			if (result == 0 && root.Count > 0)
 			{
+				// var cmps = root.Table.Components;
+				// for (int i = 0; i < cmps.Length; ++i)
+				// {
+				// 	ref var cmp = ref cmps[i];
+
+				// 	var buf = root.Table.ComponentData<byte>
+				// 	(
+				// 		i,
+				// 		root.EntitiesTableRows[0] * cmp.Size,
+				// 		cmp.Size
+				// 	);
+				// }
+
 				var it = new Iterator(commands, root, userData);
 				action(ref it);
 			}

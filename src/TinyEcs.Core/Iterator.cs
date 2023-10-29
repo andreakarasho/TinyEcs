@@ -4,8 +4,8 @@ public delegate void IteratorDelegate(ref Iterator it);
 
 public readonly ref struct Iterator
 {
-	private readonly ReadOnlySpan<EcsID> _entities;
-	private readonly ReadOnlySpan<int> _entitiesToTableRows;
+	private readonly Span<EcsID> _entities;
+	private readonly Span<int> _entitiesToTableRows;
 	private readonly Table _table;
 
 
@@ -17,7 +17,7 @@ public readonly ref struct Iterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Iterator(Commands commands, int count, Table table, ReadOnlySpan<EcsID> entities, ReadOnlySpan<int> toRows, object? userData, EcsID eventID = default, EcsID eventComponent = default)
+	internal Iterator(Commands commands, int count, Table table, Span<EcsID> entities, Span<int> toRows, object? userData, EcsID eventID = default, EcsID eventComponent = default)
 	{
 		Commands = commands;
 		World = commands.World;
@@ -49,8 +49,9 @@ public readonly ref struct Iterator
 		EcsAssert.Assert(column >= 0);
 		EcsAssert.Assert(cmp.Size == sizeof(T));
 
-		var span = _table.ComponentData<T>(column, 0, _table.Rows);
-		return new FieldIterator<T>(span, _entitiesToTableRows);
+		var data = _table.GetData<T>(column, 0);
+		//var span = _table.ComponentData<T>(column, 0, _table.Rows);
+		return new FieldIterator<T>(data, _entitiesToTableRows);
 	}
 
 	public readonly bool Has<T>() where T : unmanaged, IComponentStub
@@ -69,15 +70,22 @@ public readonly ref struct Iterator
 
 
 [SkipLocalsInit]
-public readonly ref struct FieldIterator<T> where T : unmanaged, IComponent
+public unsafe readonly ref struct FieldIterator<T> where T : unmanaged, IComponent
 {
 	private readonly ref T _firstElement;
 	private readonly ref int _firstEntity;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal FieldIterator(Span<T> elements, ReadOnlySpan<int> entities)
+	internal FieldIterator(Span<T> elements, Span<int> entities)
 	{
 		_firstElement = ref MemoryMarshal.GetReference(elements);
+		_firstEntity = ref MemoryMarshal.GetReference(entities);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal FieldIterator(T* elements, Span<int> entities)
+	{
+		_firstElement = ref Unsafe.AsRef<T>(elements);
 		_firstEntity = ref MemoryMarshal.GetReference(entities);
 	}
 

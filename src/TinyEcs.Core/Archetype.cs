@@ -242,7 +242,12 @@ public sealed class Archetype
 
 		static void PrintRec(Archetype root, int depth, EcsID rootComponent)
 		{
-			Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
+			Console.WriteLine("{0}Parent [{1}] common ID: {2}", new string('\t', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent);
+
+			if (root._edgesRight.Count > 0)
+				Console.WriteLine("{0}Children: ", new string('\t', depth));
+
+			//Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
 
 			foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
 			{
