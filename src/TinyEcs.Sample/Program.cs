@@ -145,8 +145,8 @@ unsafe
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()
-			.Set<Position>()
-			.Set<Velocity>()
+			.Set<Position>(new Position())
+			.Set<Velocity>(new Velocity())
 			;
 
 	// ecs.Entity()
@@ -274,16 +274,16 @@ enum TileType
 }
 
 
-struct Serial : IComponent { public uint Value; }
-struct Position : IComponent { public float X, Y, Z; }
-struct Velocity : IComponent { public float X, Y; }
-struct PlayerTag : IComponent { public ulong ID; }
+struct Serial { public uint Value; }
+struct Position { public float X, Y, Z; }
+struct Velocity { public float X, Y; }
+struct PlayerTag { public ulong ID; }
 
-struct CustomEvent : IEvent { }
+struct CustomEvent { }
 
-struct Likes : ITag;
-struct Dogs : ITag { }
-struct Apples : ITag { }
+struct Likes;
+struct Dogs { }
+struct Apples { }
 
 struct TestStr { public byte v; }
 
