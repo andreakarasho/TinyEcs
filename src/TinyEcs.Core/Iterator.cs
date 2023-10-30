@@ -67,8 +67,12 @@ public readonly ref struct Iterator
         EcsAssert.Assert(column >= 0);
         EcsAssert.Assert(cmp.Size == sizeof(T));
 
-        var data = _table.GetData<T>(column, 0);
-        //var span = _table.ComponentData<T>(column, 0, _table.Rows);
+        return Field<T>(column);
+    }
+
+    public unsafe readonly FieldIterator<T> Field<T>(int index) where T : unmanaged
+    {
+        var data = _table.GetData<T>(index, 0);
         return new FieldIterator<T>(data, _entitiesToTableRows);
     }
 

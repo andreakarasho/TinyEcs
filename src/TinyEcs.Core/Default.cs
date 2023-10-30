@@ -248,9 +248,10 @@ public partial class World
 
         static EntityView AssignDefaults<T>(EntityView view) where T : unmanaged
         {
-            view.Set(Lookup.Entity<T>.Component).Set(EcsPanic, EcsDelete);
+            ref var cmp = ref Lookup.Entity<T>.Component;
+            view.Set(cmp).Set(EcsPanic, EcsDelete);
 
-            if (view.World.GetSize<T>() == 0)
+            if (cmp.Size == 0)
                 view.Set(EcsTag);
 
             return view;

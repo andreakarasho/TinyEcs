@@ -214,8 +214,8 @@ static void PrintComponents(ref Iterator it)
 
 static void ParseQuery(ref Iterator it)
 {
-	var posA = it.Field<Position>();
-	var velA = it.Field<Velocity>();
+	var posA = it.Field<Position>(0);
+	var velA = it.Field<Velocity>(1);
 
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{

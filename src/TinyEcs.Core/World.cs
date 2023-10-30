@@ -781,6 +781,8 @@ public sealed partial class World : IDisposable
                 // 	);
                 // }
 
+                //root.Table.GetComponentIndex(terms[0].ID);
+
                 var it = new Iterator(commands, root, userData);
                 action(ref it);
             }
