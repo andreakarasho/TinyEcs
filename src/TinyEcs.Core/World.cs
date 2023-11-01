@@ -567,6 +567,7 @@ public sealed partial class World : IDisposable
         if (it.Count == 0)
             return;
 
+        var columns = Span<nuint>.Empty;
         ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
         ref var record = ref it.World.GetRecord(eventInfo.Entity);
         var iterator = new Iterator(
@@ -576,11 +577,12 @@ public sealed partial class World : IDisposable
             stackalloc EcsID[1] { eventInfo.Entity },
             stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
             null,
+            columns,
             eventInfo.Event,
             eventInfo.LastComponent
         );
 
-        var evA = it.Field<EcsEvent>();
+        var evA = it.Field<EcsEvent>(0);
 
         for (int i = 0; i < it.Count; ++i)
         {
@@ -710,9 +712,10 @@ public sealed partial class World : IDisposable
             Span<EcsID>.Empty,
             Span<int>.Empty,
             null,
+            Span<nuint>.Empty,
             0
         );
-        var sysA = it.Field<EcsSystem>();
+        var sysA = it.Field<EcsSystem>(0);
 
         for (int i = 0; i < it.Count; ++i)
         {
@@ -748,19 +751,42 @@ public sealed partial class World : IDisposable
         object? userData = null
     )
     {
-        terms.Sort();
+        Span<nuint> columns = stackalloc nuint[terms.Length];
+        Span<Term> sortedTerms = stackalloc Term[terms.Length];
+        terms.CopyTo(sortedTerms);
+        sortedTerms.Sort();
 
-        QueryRec(_archRoot, terms, _commands, action, userData);
+        for (int i = 0; i < sortedTerms.Length; ++i)
+        {
+            if (sortedTerms[i].Op == TermOp.Singleton)
+            {
+                // check if it's a singleton
+                if (!Has(sortedTerms[i].ID, sortedTerms[i].ID))
+                    return;
+
+                columns[i] = (nuint)(
+                    Unsafe.AsPointer(
+                        ref MemoryMarshal.GetReference(
+                            GetRaw(sortedTerms[i].ID, sortedTerms[i].ID, 1)
+                        )
+                    )
+                );
+            }
+        }
+
+        QueryRec(_archRoot, terms, sortedTerms, _commands, action, userData, columns);
 
         static void QueryRec(
             Archetype root,
             UnsafeSpan<Term> terms,
+            UnsafeSpan<Term> sortedTerms,
             Commands commands,
             delegate* <ref Iterator, void> action,
-            object? userData
+            object? userData,
+            Span<nuint> matchedColumns
         )
         {
-            var result = root.FindMatch(terms);
+            var result = root.FindMatch(sortedTerms);
             if (result < 0)
             {
                 return;
@@ -768,22 +794,24 @@ public sealed partial class World : IDisposable
 
             if (result == 0 && root.Count > 0)
             {
-                // var cmps = root.Table.Components;
-                // for (int i = 0; i < cmps.Length; ++i)
-                // {
-                // 	ref var cmp = ref cmps[i];
+                var matched = terms.Span;
+                for (int i = 0; i < matched.Length; ++i)
+                {
+                    if (matched[i].Op == TermOp.Singleton && matchedColumns[i] == 0)
+                    {
+                        // singleton must be considered!
+                        return;
+                    }
 
-                // 	var buf = root.Table.ComponentData<byte>
-                // 	(
-                // 		i,
-                // 		root.EntitiesTableRows[0] * cmp.Size,
-                // 		cmp.Size
-                // 	);
-                // }
+                    var columnIdx = root.Table.GetComponentIndex(matched[i].ID);
+                    if (columnIdx <= -1)
+                        continue;
 
-                //root.Table.GetComponentIndex(terms[0].ID);
+                    var data = root.Table.GetData(columnIdx, 0, 1);
+                    matchedColumns[i] = (nuint)(&data[0]);
+                }
 
-                var it = new Iterator(commands, root, userData);
+                var it = new Iterator(commands, root, userData, matchedColumns);
                 action(ref it);
             }
 
@@ -798,7 +826,15 @@ public sealed partial class World : IDisposable
 
             while (Unsafe.IsAddressLessThan(ref start, ref end))
             {
-                QueryRec(start.Archetype, terms, commands, action, userData);
+                QueryRec(
+                    start.Archetype,
+                    terms,
+                    sortedTerms,
+                    commands,
+                    action,
+                    userData,
+                    matchedColumns
+                );
 
                 start = ref Unsafe.Add(ref start, 1);
             }

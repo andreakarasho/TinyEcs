@@ -223,7 +223,7 @@ public sealed class Archetype
         {
             if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
             {
-                if (searching.Value.Op != TermOp.With)
+                if (searching.Value.Op == TermOp.Without)
                 {
                     return -1;
                 }

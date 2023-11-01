@@ -135,15 +135,17 @@ const int ENTITIES_COUNT = 524_288 * 2 * 1;
 // world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
 // 	Console.WriteLine("found children for any");
 // });
-
 using var ecs = new World();
 
 unsafe
 {
 	var posID = ecs.Entity<Position>();
 	var velID = ecs.Entity<Velocity>();
+	var serialID = ecs.Entity<Serial>();
 
-	for (int i = 0; i < ENTITIES_COUNT; i++)
+	ecs.SetSingleton(new Serial(){Value = 1});
+
+	for (int i = 0; i < 100; i++)
 		ecs.Entity()
 			.Set<Position>(new Position())
 			.Set<Velocity>(new Velocity())
@@ -154,13 +156,13 @@ unsafe
 	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	ecs.Entity()
-		.System(&ParseQuery, posID, velID)
+		.System(&ParseQuery, posID, velID, Term.Singleton(serialID))
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	ecs.Query()
 		.With<EcsComponent>()
 		.Iterate(static (ref Iterator it) => {
-			var cmpA = it.Field<EcsComponent>();
+			var cmpA = it.Field<EcsComponent>(0);
 
 			for (int i = 0; i < it.Count; ++i)
 			{
@@ -203,7 +205,7 @@ static void Setup(ref Iterator it)
 
 static void PrintComponents(ref Iterator it)
 {
-	var cmpA = it.Field<EcsComponent>();
+	var cmpA = it.Field<EcsComponent>(0);
 
 	for (int i = 0; i < it.Count; ++i)
 	{
@@ -216,6 +218,7 @@ static void ParseQuery(ref Iterator it)
 {
 	var posA = it.Field<Position>(0);
 	var velA = it.Field<Velocity>(1);
+	ref var singleton = ref it.Single<Serial>(2);
 
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{
@@ -240,8 +243,8 @@ static void PrintWarnSystem(ref Iterator it)
 
 static void ObserveThings(ref Iterator it)
 {
-	var posA = it.Field<Position>();
-	var velA = it.Field<Velocity>();
+	var posA = it.Field<Position>(0);
+	var velA = it.Field<Velocity>(1);
 
 	var isAdded = it.EventID == it.World.Entity<EcsEventOnSet>();
 	var first = isAdded ? "added" : "removed";

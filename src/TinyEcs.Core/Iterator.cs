@@ -7,12 +7,14 @@ public readonly ref struct Iterator
     private readonly Span<EcsID> _entities;
     private readonly Span<int> _entitiesToTableRows;
     private readonly Table _table;
+    private readonly Span<nuint> _columns;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Iterator(
         Commands commands,
         Archetype archetype,
         object? userData,
+        Span<nuint> columns,
         EcsID eventID = default,
         EcsID eventComponent = default
     )
@@ -23,6 +25,7 @@ public readonly ref struct Iterator
             archetype.Entities,
             archetype.EntitiesTableRows,
             userData,
+            columns,
             eventID,
             eventComponent
         ) { }
@@ -35,6 +38,7 @@ public readonly ref struct Iterator
         Span<EcsID> entities,
         Span<int> toRows,
         object? userData,
+        Span<nuint> columns,
         EcsID eventID = default,
         EcsID eventComponent = default
     )
@@ -49,6 +53,7 @@ public readonly ref struct Iterator
         _entitiesToTableRows = toRows;
         Count = count;
         DeltaTime = commands.World.DeltaTime;
+        _columns = columns;
     }
 
     public readonly Commands Commands { get; }
@@ -59,21 +64,26 @@ public readonly ref struct Iterator
     public readonly EcsID EventID { get; }
     public readonly EcsID EventTriggeredComponent { get; }
 
-    public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
-    {
-        ref var cmp = ref World.Component<T>();
+    // public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
+    // {
+    //     ref var cmp = ref World.Component<T>();
+    //     var column = _table.GetComponentIndex(ref cmp);
+    //     EcsAssert.Assert(column >= 0);
+    //     EcsAssert.Assert(cmp.Size == sizeof(T));
 
-        var column = _table.GetComponentIndex(ref cmp);
-        EcsAssert.Assert(column >= 0);
-        EcsAssert.Assert(cmp.Size == sizeof(T));
-
-        return Field<T>(column);
-    }
+    //     return Field<T>(column);
+    // }
 
     public unsafe readonly FieldIterator<T> Field<T>(int index) where T : unmanaged
     {
-        var data = _table.GetData<T>(index, 0);
+        var data = (T*)_columns[index];
         return new FieldIterator<T>(data, _entitiesToTableRows);
+    }
+
+    public unsafe ref T Single<T>(int index) where T : unmanaged
+    {
+        var data = (T*)_columns[index];
+        return ref data[_entitiesToTableRows[0]];
     }
 
     public readonly bool Has<T>() where T : unmanaged

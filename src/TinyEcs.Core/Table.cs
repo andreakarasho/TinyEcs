@@ -44,8 +44,8 @@ sealed unsafe class Table
     public readonly EcsComponent[] Components;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public T* GetData<T>(int column, int row) where T : unmanaged =>
-        (T*)_componentsData[column] + row;
+    public byte* GetData(int column, int row, int size) =>
+        (byte*)_componentsData[column] + row * size;
 
     internal int Add(EcsID id)
     {

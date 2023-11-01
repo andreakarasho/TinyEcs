@@ -95,6 +95,19 @@ public unsafe ref struct Query
         return this;
     }
 
+    public Query Singleton(EcsID id)
+    {
+        EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
+
+        ref var term = ref CurrentTerm;
+        term.ID = id;
+        term.Op = TermOp.Singleton;
+
+        _termIndex += 1;
+
+        return this;
+    }
+
     public unsafe void Iterate(IteratorDelegate action)
     {
         // var ptr = (Callback*)NativeMemory.Alloc(1, (nuint) sizeof(Callback));
