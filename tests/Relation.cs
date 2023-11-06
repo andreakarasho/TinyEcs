@@ -5,40 +5,40 @@
 		[Fact]
 		public void Attach_ChildOf()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var root = world.Spawn();
-			var child = world.Spawn();
+			var root = ctx.World.Entity();
+			var child = ctx.World.Entity();
 
 			child.ChildOf(root);
 
-			Assert.True(world.Has<EcsChildOf>(child, root));
+			Assert.True(ctx.World.Has<EcsChildOf>(child, root));
 		}
 
 		[Fact]
 		public void Detach_ChildOf()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var root = world.Spawn();
-			var child = world.Spawn();
+			var root = ctx.World.Entity();
+			var child = ctx.World.Entity();
 
 			child.ChildOf(root);
 			child.Unset<EcsChildOf>(root);
 
-			Assert.False(world.Has<EcsChildOf>(child, root));
+			Assert.False(ctx.World.Has<EcsChildOf>(child, root));
 		}
 
 		[Fact]
 		public void Count_Children()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var root = world.Spawn();
+			var root = ctx.World.Entity();
 
 			var count = 100;
 			for (int i = 0; i < count; ++i)
-				world.Spawn().ChildOf(root);
+				ctx.World.Entity().ChildOf(root);
 
 			var done = 0;
 			root.Children(s => done += 1);
@@ -49,13 +49,13 @@
 		[Fact]
 		public void Clear_Children()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var root = world.Spawn();
+			var root = ctx.World.Entity();
 
 			var count = 100;
 			for (int i = 0; i < count; ++i)
-				world.Spawn().ChildOf(root);
+				ctx.World.Entity().ChildOf(root);
 
 			root.ClearChildren();
 			var done = 0;
@@ -67,20 +67,20 @@
 		[Fact]
 		public void Exclusive_Relation()
 		{
-			using var world = new World();
+			using var ctx = new Context();
 
-			var root = world.Spawn();
-			var platoonCmp = world.Spawn().Set<EcsExclusive>();
-			var platoon1 = world.Spawn();
-			var platoon2 = world.Spawn();
-			var unit = world.Spawn();
+			var root = ctx.World.Entity();
+			var platoonCmp = ctx.World.Entity().Set<EcsExclusive>();
+			var platoon1 = ctx.World.Entity();
+			var platoon2 = ctx.World.Entity();
+			var unit = ctx.World.Entity();
 
 			unit.Set(platoonCmp, platoon1);
-			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+			Assert.True(ctx.World.Has(unit.ID, platoonCmp.ID, platoon1.ID));
 
 			unit.Set(platoonCmp, platoon2);
-			Assert.False(world.Has(unit.ID, platoonCmp.ID, platoon1.ID));
-			Assert.True(world.Has(unit.ID, platoonCmp.ID, platoon2.ID));
+			Assert.False(ctx.World.Has(unit.ID, platoonCmp.ID, platoon1.ID));
+			Assert.True(ctx.World.Has(unit.ID, platoonCmp.ID, platoon2.ID));
 		}
     }
 }

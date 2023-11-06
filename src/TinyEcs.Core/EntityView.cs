@@ -4,212 +4,206 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct EntityView : IEquatable<EntityID>, IEquatable<EntityView>
+public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
-	public readonly EntityID ID;
-	public readonly World World;
+    public static readonly EntityView Invalid = new(null, 0);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal EntityView(World world, EntityID id)
-	{
-		World = world;
-		ID = id;
-	}
+    public readonly EcsID ID;
+    public readonly World World;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal EntityView(World world, EcsID id)
+    {
+        World = world;
+        ID = id;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(ulong other)
-	{
-		return ID == other;
-	}
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Equals(EcsID other) => ID == other;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Equals(EntityView other)
-	{
-		return ID == other.ID;
-	}
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Equals(EntityView other) => ID == other.ID;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>() where T : unmanaged, ITag
-	{
-		World.Set<T>(ID);
-		return this;
-	}
+    public readonly override int GetHashCode() => ID.GetHashCode();
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set(EntityID id)
-	{
-		World.Set(ID, id);
-		return this;
-	}
+    public readonly override bool Equals(object? obj) => obj is EntityView ent && Equals(ent);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component = default)
-	where T : unmanaged, IComponent
-	{
-		World.Set(ID, component);
-		return this;
-	}
+    public readonly EntityView Set<T>() where T : unmanaged
+    {
+        World.Set<T>(ID);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TKind, TTarget>()
-	where TKind : unmanaged, ITag
-	where TTarget : unmanaged, IComponentStub
-	{
-		return Set(World.Component<TKind>().ID, World.Component<TTarget>().ID);
-	}
+    public readonly EntityView Set(EcsID id)
+    {
+        World.Set(ID, id);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<TKind>(EntityID target)
-	where TKind : unmanaged, ITag
-	{
-		return Set(World.Component<TKind>().ID, target);
-	}
+    public readonly EntityView Set<T>(T component) where T : unmanaged
+    {
+        World.Set(ID, component);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set(EntityID first, EntityID second)
-	{
-		World.Set(ID, first, second);
-		return this;
-	}
+    public readonly EntityView Set<TKind, TTarget>()
+        where TKind : unmanaged
+        where TTarget : unmanaged
+    {
+        return Set(World.Entity<TKind>(), World.Entity<TTarget>());
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<T>()
-	where T : unmanaged, IComponentStub
-	{
-		World.Unset<T>(ID);
-		return this;
-	}
+    public readonly EntityView Set<TKind>(EcsID target) where TKind : unmanaged
+    {
+        return Set(World.Entity<TKind>(), target);
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset<TKind, TTarget>()
-	where TKind : unmanaged, ITag
-	where TTarget : unmanaged, IComponentStub
-	{
-		return Unset(World.Component<TKind>().ID, World.Component<TTarget>().ID);
-	}
+    public readonly EntityView Set(EcsID first, EcsID second)
+    {
+        World.Set(ID, first, second);
+        return this;
+    }
 
-	public readonly EntityView Unset<TKind>(EntityID target)
-	where TKind : unmanaged, ITag
-	{
-		return Unset(World.Component<TKind>().ID, target);
-	}
+    public readonly EntityView Unset<T>() where T : unmanaged
+    {
+        World.Unset<T>(ID);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Unset(EntityID first, EntityID second)
-	{
-		var id = IDOp.Pair(first, second);
-		var cmp = new EcsComponent(id, 0);
-		World.DetachComponent(ID, ref cmp);
-		return this;
-	}
+    public readonly EntityView Unset<TKind, TTarget>()
+        where TKind : unmanaged
+        where TTarget : unmanaged
+    {
+        return Unset(World.Entity<TKind>(), World.Entity<TTarget>());
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Enable()
-	{
-		World.Set<EcsEnabled>(ID);
-		return this;
-	}
+    public readonly EntityView Unset<TKind>(EcsID target) where TKind : unmanaged
+    {
+        return Unset(World.Entity<TKind>(), target);
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Disable()
-	{
-		World.Unset<EcsEnabled>(ID);
-		return this;
-	}
+    public readonly EntityView Unset(EcsID first, EcsID second)
+    {
+        var id = IDOp.Pair(first, second);
+        var cmp = new EcsComponent(id, 0);
+        World.DetachComponent(ID, ref cmp);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T Get<T>() where T : unmanaged, IComponent
-		=> ref World.Get<T>(ID);
+    public readonly EntityView Enable()
+    {
+        World.Unset<EcsDisabled>(ID);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<T>() where T : unmanaged, IComponentStub
-		=> World.Has<T>(ID);
+    public readonly EntityView Disable()
+    {
+        World.Set<EcsDisabled>(ID);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Has<TKind, TTarget>()
-		where TKind : unmanaged, ITag
-		where TTarget : unmanaged, IComponentStub
-	{
-		var world = World;
-		var id = world.Pair<TKind, TTarget>();
-		var cmp = new EcsComponent(id, 0);
-		return world.Has(ID, ref cmp);
-	}
+    public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
 
-	public readonly EntityView ChildOf(EntityID parent)
-	{
-		World.Set<EcsChildOf>(ID, parent);
-		return this;
-	}
+    public readonly ref T Get<T>() where T : unmanaged => ref World.Get<T>(ID);
 
-	public readonly void Children(Action<EntityView> action)
-	{
-		World.Query()
-			.With<EcsChildOf>(ID)
-			.Iterate((ref Iterator it) => {
-				for (int i = 0, count = it.Count; i < count; ++i)
-					action(it.Entity(i));
-			});
-	}
+    public readonly bool Has<T>() where T : unmanaged => World.Has<T>(ID);
 
-	public readonly void ClearChildren()
-	{
-		var id = World.Component<EcsChildOf>().ID;
-		var myID = ID; // lol
-		Children(v => v.Unset(id, myID));
-	}
+    public readonly bool Has<TKind, TTarget>()
+        where TKind : unmanaged
+        where TTarget : unmanaged
+    {
+        return World.Has(ID, World.Entity<TKind>(), World.Entity<TTarget>());
+    }
 
-	public readonly EntityView Parent()
-	{
-		return new (World, World.GetParent(ID));
-	}
+    public readonly EntityView ChildOf(EcsID parent)
+    {
+        World.Set<EcsChildOf>(ID, parent);
+        return this;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly void Despawn()
-		=> World.Despawn(ID);
+    public readonly void Children(Action<EntityView> action)
+    {
+        World
+            .Query()
+            .With<EcsChildOf>(ID)
+            .Iterate(
+                (ref Iterator it) =>
+                {
+                    for (int i = 0, count = it.Count; i < count; ++i)
+                        action(it.Entity(i));
+                }
+            );
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool Exists()
-		=> World.Exists(ID);
+    public readonly void ClearChildren()
+    {
+        var id = World.Entity<EcsChildOf>();
+        var myID = ID; // lol
+        Children(v => v.Unset(id, myID));
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsEnabled()
-		=> Has<EcsEnabled>();
+    public readonly EntityView Parent() => World.Entity(World.GetParent(ID));
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsEntity()
-		=> (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
+    public readonly void Delete() => World.Delete(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly bool IsPair()
-		=> IDOp.IsPair(ID);
+    public readonly bool Exists() => World.Exists(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID First()
-		=> IDOp.GetPairFirst(ID);
+    public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityID Second()
-		=> IDOp.GetPairSecond(ID);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool IsEntity() => (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly void Each(Action<EntityView> action)
-	{
-		ref var record = ref World.GetRecord(ID);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool IsPair() => IDOp.IsPair(ID);
 
-		for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
-		{
-			action(new EntityView(World, record.Archetype.ComponentInfo[i].ID));
-		}
-	}
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EcsID First() => IDOp.GetPairFirst(ID);
 
-	public readonly ReadOnlySpan<EcsComponent> Type()
-		=> World.GetType(ID);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EcsID Second() => IDOp.GetPairSecond(ID);
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static implicit operator EntityID(in EntityView d) => d.ID;
+    public readonly void Each(Action<EntityView> action)
+    {
+        ref var record = ref World.GetRecord(ID);
 
+        for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
+        {
+            action(World.Entity(record.Archetype.ComponentInfo[i].ID));
+        }
+    }
 
-	public static readonly EntityView Invalid = new(null, 0);
+    public unsafe readonly EntityView System(
+        delegate* <ref Iterator, void> callback,
+        params Term[] terms
+    ) => System(callback, float.NaN, terms);
+
+    public unsafe readonly EntityView System(
+        delegate* <ref Iterator, void> callback,
+        float tick,
+        params Term[] terms
+    )
+    {
+        EcsID query = terms.Length > 0 ? World.Entity().Set<EcsPanic, EcsDelete>() : 0;
+
+        Array.Sort(terms);
+
+        Set(new EcsSystem(callback, query, terms, tick));
+
+        return Set<EcsPanic, EcsDelete>();
+    }
+
+    public unsafe readonly EntityView Event(delegate* <ref Iterator, void> callback)
+    {
+        return this;
+    }
+
+    public static implicit operator EcsID(EntityView d) => d.ID;
+
+    public static implicit operator Term(EntityView d) => Term.With(d.ID);
+
+    public static Term operator !(EntityView id) => Term.Without(id.ID);
+
+    public static Term operator -(EntityView id) => Term.Without(id.ID);
+
+    public static Term operator +(EntityView id) => Term.With(id.ID);
 }

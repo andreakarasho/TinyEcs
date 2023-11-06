@@ -38,7 +38,7 @@
                     ids.Add(id);
 
                     var curGen = IDOp.GetGeneration(id);
-                    Assert.Equal(gen, (int)curGen);
+                    Assert.Equal(gen, (int)(ulong)curGen);
                 }
 
                 foreach (var id in ids)
@@ -56,7 +56,7 @@
         public void SparseSet_CheckSequence(int amount)
         {
             //var set = new EntitySparseSet<EcsComponent>();
-          
+
             //var i = 0;
             //ulong last = 1;
 

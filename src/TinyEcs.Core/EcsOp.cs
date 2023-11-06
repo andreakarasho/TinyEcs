@@ -2,67 +2,67 @@ namespace TinyEcs;
 
 static class IDOp
 {
-	public static void Toggle(ref EntityID id)
+	public static void Toggle(ref EcsID id)
 	{
 		id ^= EcsConst.ECS_TOGGLE;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID GetGeneration(EntityID id)
+	public static EcsID GetGeneration(EcsID id)
 	{
 		return ((id & EcsConst.ECS_GENERATION_MASK) >> 32);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID IncreaseGeneration(EntityID id)
+	public static EcsID IncreaseGeneration(EcsID id)
 	{
 		return ((id & ~EcsConst.ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID RealID(EntityID id)
+	public static EcsID RealID(EcsID id)
 	{
 		return id &= EcsConst.ECS_ENTITY_MASK;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool HasFlag(EntityID id, byte flag)
+	public static bool HasFlag(EcsID id, byte flag)
 	{
 		return (id & flag) != 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsComponent(EntityID id)
+	public static bool IsComponent(EcsID id)
 	{
-		return (id & EcsConst.ECS_COMPONENT_MASK) != 0;
+		return (id & ~EcsConst.ECS_COMPONENT_MASK) != 0;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID SetAsComponent(EntityID id)
+	public static EcsID SetAsComponent(EcsID id)
 	{
 		return id |= EcsConst.ECS_ID_FLAGS_MASK;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID Pair(EntityID first, EntityID second)
+	public static EcsID Pair(EcsID first, EcsID second)
 	{
 		return EcsConst.ECS_PAIR | ((first << 32) + (uint)second);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool IsPair(EntityID id)
+	public static bool IsPair(EcsID id)
 	{
 		return ((id) & EcsConst.ECS_ID_FLAGS_MASK) == EcsConst.ECS_PAIR;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID GetPairFirst(EntityID id)
+	public static EcsID GetPairFirst(EcsID id)
 	{
 		return (uint)((id & EcsConst.ECS_COMPONENT_MASK) >> 32);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static EntityID GetPairSecond(EntityID id)
+	public static EcsID GetPairSecond(EcsID id)
 	{
 		return (uint)id;
 	}

@@ -10,165 +10,170 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-using var world = new World();
+// using var world = new World();
+// var tttt = world.Entity(1).Type();
+// world.Entity(1).Set(2);
 
-var main = world.Spawn();
-var secondMain = world.Spawn();
-
-unsafe
-{
-	ReadOnlySpan<Term> a = [Term.With(world.Component<Position>().ID)];
-
-	world.Event
-	(
-		&ObserveThings,
-		stackalloc Term[] {
-			Term.With(world.Component<Position>().ID),
-			//Term.With(world.Component<Velocity>().ID),
-			//Term.With(world.Pair<EcsChildOf>(main.ID))
-		},
-		stackalloc EntityID[] {
-			world.Component<CustomEvent>().ID
-			//world.Component<EcsObserverOnSet>().ID,
-			//world.Component<EcsObserverOnUnset>().ID
-		}
-	);
-
-	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
-
-	//world.Despawn(world.Component<Position>().ID);
-	main.Set<Velocity>();
-	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
-	world.EmitEvent<CustomEvent, Position>(main);
-
-		// .With<Position>()
-		// .With<Velocity>()
-		// .With<EcsChildOf>(main.ID)
-		// .OnEvent<EcsObserverOnSet>()
-		// .OnEvent<EcsObserverOnUnset>();
-}
+// world.PrintGraph();
 
 
-for (int i = 0; i < 10; ++i)
-	world.Spawn().Set<Position>().Set<Velocity>().ChildOf(main);
+// var positionID = world.Entity<Position>();
+// var velocityID = world.Entity<Velocity>();
+// var pairID = world.Pair<Likes, Dogs>();
 
-main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
-main.Set<Dogs>();
-main.Set<Likes>();
-main.Set<Velocity>(new Velocity() { X = 345f, Y = 0.23f});
-main.Unset<Velocity>();
-main.Unset<Velocity>();
+// var main = world.Entity();
+// var secondMain = world.Entity();
 
-for (int i = 0; i < 10; ++i)
-	world.Spawn().ChildOf(main);
+// ref var rec = ref world.GetRecord(secondMain);
 
-main.Children(static s => {
-	var p = s.Parent();
-	Console.WriteLine("child id {0}", s.ID);
-});
+//  var ooo = world.Entity();
+//  ooo.ChildOf(main);
+//  ooo.ChildOf(secondMain);
 
-secondMain.Children(static s => {
-	var p = s.Parent();
-	Console.WriteLine("secondMain child id {0}", s.ID);
-});
-
-
-main.Despawn();
-//main.ClearChildren();
-
-world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
-	Console.WriteLine("found children");
-});
-
-world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
-	Console.WriteLine("found children for any");
-});
-
-var ecs = new World();
-
-
-var pos = ecs.Spawn();
-var vel = ecs.Spawn();
-var likes = ecs.Spawn();
-var cats = ecs.Spawn();
-var flowers = ecs.Spawn();
-var childOf = ecs.Spawn();
-var root = ecs.Spawn().ID;
-
-var id = ecs.Spawn()
-	.Set(new Position() { X = 10, Y = 29 })
-	.Set<Likes, Dogs>()
-	.Set<Likes, Apples>()
-	.Set(pos.ID)
-	.Set(likes.ID, cats.ID)
-	.Set(likes.ID, flowers.ID)
-	.Set(childOf.ID, root)
-	.ID;
-
-ref var posID = ref ecs.Component<Position>();
-var pairLikesDogID = ecs.Pair<Likes, Dogs>();
-
-var ent = ecs.Spawn().Set(new Position() { X = 20, Y = 9 });
-
-ref var p = ref ent.Get<Position>();
-p.X = 9999;
-p.Y = 12;
-p.Z = 0.2f;
-
-//ecs.Step(0f);
-
-//ref var posp = ref ecs.Entity(ent.ID).Get<Position>();
-
-var ok = ecs.Entity(id)
-	.Has<Likes, Dogs>();
-
-var qry1 = ecs.Query().With(childOf.ID, root);
-
-// foreach (var it in qry1)
+// unsafe
 // {
+// 	Term t = Term.With(positionID.ID);
+// 	t.Not();
+// 	t = !t;
 
+
+// 	world.Entity()
+// 		.System(&SystemCtx1, positionID, +velocityID, -pairID)
+// 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+// 	// world.New()
+// 	// 	.System
+// 	// 	(
+// 	// 		&SystemCtx1,
+// 	// 		[positionID, velocityID],
+// 	// 		[pairID],
+// 	// 		float.NaN
+// 	// 	)
+// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+// 	// world.New()
+// 	// 	.System
+// 	// 	(
+// 	// 		&SystemCtx1,
+// 	// 		positionID,
+// 	// 		velocityID
+// 	// 	)
+// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
+// 	// world.System
+// 	// (
+// 	// 	&SystemCtx1,
+// 	// 	positionID,
+// 	// 	velocityID
+// 	// );
+
+// 	// world.Event
+// 	// (
+// 	// 	&ObserveThings,
+// 	// 	stackalloc Term[] {
+// 	// 		Term.With(world.Component<Position>().ID),
+// 	// 		//Term.With(world.Component<Velocity>().ID),
+// 	// 		//Term.With(world.Pair<EcsChildOf>(main.ID))
+// 	// 	},
+// 	// 	stackalloc EcsID[] {
+// 	// 		world.Component<CustomEvent>().ID
+// 	// 		//world.Component<EcsObserverOnSet>().ID,
+// 	// 		//world.Component<EcsObserverOnUnset>().ID
+// 	// 	}
+// 	// );
+
+// 	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
+
+// 	//world.Despawn(world.Component<Position>().ID);
+// 	main.Set<Velocity>();
+// 	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
+// 	//main.Set<Likes,Dogs>();
+// 	//world.EmitEvent<CustomEvent, Position>(main);
+
+// 		// .With<Position>()
+// 		// .With<Velocity>()
+// 		// .With<EcsChildOf>(main.ID)
+// 		// .OnEvent<EcsObserverOnSet>()
+// 		// .OnEvent<EcsObserverOnUnset>();
 // }
 
-ecs.Entity(id).Each(static s =>
-{
-	if (s.IsPair())
-	{
-		Console.WriteLine("pair: ({0}, {1})", s.First(), s.Second());
-	}
-	else if (s.IsEntity())
-	{
-		Console.WriteLine("entity: {0}", s.ID);
-	}
-	else
-	{
-		Console.WriteLine("unknown: {0}", s.ID);
-	}
-});
+
+// for (int i = 0; i < 10; ++i)
+// 	world.Entity().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
+
+// // main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
+// // main.Set<Dogs>();
+// // main.Set<Likes>();
+// // main.Set<Velocity>(new Velocity() { X = 345f, Y = 0.23f});
+// // main.Unset<Velocity>();
+// // main.Unset<Velocity>();
+
+// // for (int i = 0; i < 10; ++i)
+// // 	world.New().ChildOf(main);
+
+// main.Children(static s => {
+// 	var p = s.Parent();
+// 	Console.WriteLine("child id {0}", s.ID);
+// });
+
+// secondMain.Children(static s => {
+// 	var p = s.Parent();
+// 	Console.WriteLine("secondMain child id {0}", s.ID);
+// });
+
+// // while (true)
+// // 	world.Step();
+// world.Step();
+
+// secondMain.Delete();
+// //main.ClearChildren();
+
+// world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
+// 	Console.WriteLine("found children");
+// });
+
+// world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
+// 	Console.WriteLine("found children for any");
+// });
+using var ecs = new World();
 
 unsafe
 {
+	var posID = ecs.Entity<Position>();
+	var velID = ecs.Entity<Velocity>();
+	var serialID = ecs.Entity<Serial>();
+	var playerTagID = ecs.Entity<PlayerTag>();
+
+	ecs.SetSingleton(new Serial(){Value = 1});
+	ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
+
+	for (int i = 0; i < ENTITIES_COUNT; i++)
+		ecs.Entity()
+			.Set<Position>(new Position())
+			.Set<Velocity>(new Velocity())
+			;
+
+	// ecs.Entity()
+	// 	.System(&Setup)
+	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
+
+	ecs.Entity()
+		.System(&ParseQuery, posID, velID)
+		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+
 	ecs.Query()
 		.With<EcsComponent>()
 		.Iterate(static (ref Iterator it) => {
-			var cmpA = it.Field<EcsComponent>();
+			var cmpA = it.Field<EcsComponent>(0);
 
 			for (int i = 0; i < it.Count; ++i)
 			{
 				ref var cmp = ref cmpA[i];
 				var entity = it.Entity(i);
 
-				Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size, cmp.ID);
+				Console.WriteLine("{0} --> ID: {1} - SIZE: {2}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size);
 			}
 		});
-
-
-	ecs.StartupSystem(&Setup);
-	//ecs.System(&PrintSystem, 1f);
-	//ecs.System(&PrintComponents, ecs.Query().With<EcsComponent>(), 1f);
-	ecs.System(&ParseQuery, ecs.Query()
-		.With<Position>()
-		.With<Velocity>()
-		.With<Likes, Dogs>());
 }
 
 var sw = Stopwatch.StartNew();
@@ -182,8 +187,6 @@ while (true)
 	for (int i = 0; i < 3600; ++i)
 	{
 		ecs.Step(cur);
-
-		//ecs.Print();
 	}
 
 	last = start;
@@ -197,43 +200,26 @@ static void Setup(ref Iterator it)
 {
 	var sw = Stopwatch.StartNew();
 
-	for (int i = 0; i < ENTITIES_COUNT; i++)
-		it.Commands.Spawn()
-			.Set<Position>()
-			.Set<Velocity>()
-			// .SetTag<int>()
-			// .SetTag<short>()
-			// .SetTag<byte>()
-			// .SetTag<decimal>()
-			// .SetTag<uint>()
-			// .SetTag<ushort>()
-			.Set<Likes, Dogs>()
-			;
 
-	var character = it.Commands!.Spawn()
-		.Set(new Serial() { Value = 0xDEAD_BEEF });
 
 	Console.WriteLine("Setup done in {0} ms", sw.ElapsedMilliseconds);
 }
 
 static void PrintComponents(ref Iterator it)
 {
-	var cmpA = it.Field<EcsComponent>();
+	var cmpA = it.Field<EcsComponent>(0);
 
 	for (int i = 0; i < it.Count; ++i)
 	{
 		ref var cmp = ref cmpA[i];
-		Console.WriteLine("{0} --> ID: {1} - SIZE: {2} - CMP ID: {3}", cmp.Size <= 0 ? "tag      " : "component", cmp.ID, cmp.Size, cmp.ID);
+		Console.WriteLine("{0} --> ID: {1} - SIZE: {2}", cmp.Size <= 0 ? "tag      " : "component", cmp.ID, cmp.Size);
 	}
 }
 
 static void ParseQuery(ref Iterator it)
 {
-	// it.World.PrintGraph();
-	// it.Archetype.Print();
-
-	var posA = it.Field<Position>();
-	var velA = it.Field<Velocity>();
+	var posA = it.Field<Position>(0);
+	var velA = it.Field<Velocity>(1);
 
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{
@@ -258,10 +244,10 @@ static void PrintWarnSystem(ref Iterator it)
 
 static void ObserveThings(ref Iterator it)
 {
-	var posA = it.Field<Position>();
-	var velA = it.Field<Velocity>();
+	var posA = it.Field<Position>(0);
+	var velA = it.Field<Velocity>(1);
 
-	var isAdded = it.EventID == it.World.Component<EcsEventOnSet>().ID;
+	var isAdded = it.EventID == it.World.Entity<EcsEventOnSet>();
 	var first = isAdded ? "added" : "removed";
 	var sec = isAdded ? "to" : "from";
 
@@ -280,6 +266,11 @@ static void ObserveThings(ref Iterator it)
 	}
 }
 
+static void SystemCtx1(ref Iterator it)
+{
+	Console.WriteLine("ok");
+}
+
 enum TileType
 {
 	Land,
@@ -287,15 +278,20 @@ enum TileType
 }
 
 
-struct Serial : IComponent { public uint Value; }
-struct Position : IComponent { public float X, Y, Z; }
-struct Velocity : IComponent { public float X, Y; }
-struct PlayerTag : IComponent { public ulong ID; }
+struct Serial { public uint Value; }
+struct Position { public float X, Y, Z; }
+struct Velocity { public float X, Y; }
+struct PlayerTag { public ulong ID; }
 
-struct CustomEvent : IEvent { }
+struct CustomEvent { }
 
-struct Likes : ITag;
-struct Dogs : ITag { }
-struct Apples : ITag { }
+struct Likes;
+struct Dogs { }
+struct Apples { }
 
 struct TestStr { public byte v; }
+
+
+
+struct Context1 {}
+struct Context2 {}
