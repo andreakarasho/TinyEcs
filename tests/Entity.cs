@@ -67,8 +67,8 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
+            ctx.World.Set(entity, new FloatComponent());
             ctx.World.Unset<FloatComponent>(entity);
 
             Assert.False(ctx.World.Has<FloatComponent>(entity));
@@ -80,7 +80,7 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
         }
@@ -91,7 +91,7 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
             ctx.World.Set<NormalTag>(entity);
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
@@ -104,9 +104,9 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
             ctx.World.Set<NormalTag>(entity);
-            ctx.World.Set<LargeComponent>(entity);
+            ctx.World.Set(entity, new LargeComponent());
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
             Assert.True(ctx.World.Has<NormalTag>(entity));
@@ -119,7 +119,7 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
             ctx.World.Unset<FloatComponent>(entity);
 
             Assert.True(!ctx.World.Has<FloatComponent>(entity));
@@ -131,7 +131,7 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
             ctx.World.Set<NormalTag>(entity);
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
@@ -156,9 +156,9 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
-            ctx.World.Set<IntComponent>(entity);
-            ctx.World.Set<LargeComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
+            ctx.World.Set(entity, new IntComponent());
+            ctx.World.Set(entity, new LargeComponent());
 
             ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
             ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
@@ -170,7 +170,6 @@ namespace TinyEcs.Tests
             Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
             Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
             Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
-
 
             ctx.World.Unset<FloatComponent>(entity);
             Assert.False(ctx.World.Has<FloatComponent>(entity));
@@ -201,9 +200,9 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
-            ctx.World.Set<FloatComponent>(entity);
-            ctx.World.Set<IntComponent>(entity);
-            ctx.World.Set<LargeComponent>(entity);
+            ctx.World.Set(entity, new FloatComponent());
+            ctx.World.Set(entity, new IntComponent());
+            ctx.World.Set(entity, new LargeComponent());
 
             ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
             ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
@@ -215,7 +214,6 @@ namespace TinyEcs.Tests
             Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
             Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
             Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
-
 
             ctx.World.Unset<LargeComponent>(entity);
             Assert.True(ctx.World.Has<FloatComponent>(entity));
@@ -251,9 +249,9 @@ namespace TinyEcs.Tests
 
             for (int i = 0; i < times; i++)
             {
-                ctx.World.Set<FloatComponent>(entity);
-                ctx.World.Set<IntComponent>(entity);
-                ctx.World.Set<LargeComponent>(entity);
+                ctx.World.Set(entity, new FloatComponent());
+                ctx.World.Set(entity, new IntComponent());
+                ctx.World.Set(entity, new LargeComponent());
 
                 ctx.World.Get<FloatComponent>(entity).Value = FLOAT_VALUE;
                 ctx.World.Get<IntComponent>(entity).Value = INT_VALUE;
@@ -265,7 +263,6 @@ namespace TinyEcs.Tests
                 Assert.Equal(INT_VALUE, ctx.World.Get<IntComponent>(entity).Value);
                 Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
                 Assert.Equal(FLOAT_VALUE_ARR, ctx.World.Get<LargeComponent>(entity).Span[346]);
-
 
                 ctx.World.Unset<FloatComponent>(entity);
                 Assert.False(ctx.World.Has<FloatComponent>(entity));
@@ -287,20 +284,20 @@ namespace TinyEcs.Tests
             }
         }
 
-		[Fact]
-		public void Detach_Sequential_Components()
-		{
-			using var ctx = new Context();
+        [Fact]
+        public void Detach_Sequential_Components()
+        {
+            using var ctx = new Context();
 
-			var e0 = ctx.World.Entity();
-			var e1 = ctx.World.Entity();
+            var e0 = ctx.World.Entity();
+            var e1 = ctx.World.Entity();
 
-			e0.Set<IntComponent>();
-			e1.Set<IntComponent>();
-			e0.Unset<IntComponent>();
+            e0.Set(new IntComponent());
+            e1.Set(new IntComponent());
+            e0.Unset<IntComponent>();
 
-			Assert.True(ctx.World.Has<IntComponent>(e1));
-			Assert.False(ctx.World.Has<IntComponent>(e0));
-		}
+            Assert.True(ctx.World.Has<IntComponent>(e1));
+            Assert.False(ctx.World.Has<IntComponent>(e0));
+        }
     }
 }
