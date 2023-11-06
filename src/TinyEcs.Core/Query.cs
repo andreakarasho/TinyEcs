@@ -110,12 +110,6 @@ public unsafe ref struct Query
 
     public unsafe void Iterate(IteratorDelegate action)
     {
-        // var ptr = (Callback*)NativeMemory.Alloc(1, (nuint) sizeof(Callback));
-        // ptr->GCHandle = (nint) GCHandle.Alloc(action);
-        // ptr->Func = Marshal.GetFunctionPointerForDelegate(action);
-
-        // _world.Query(Terms, (delegate* <ref Iterator, void>)ptr->Func, action);
-
         _world.Query(Terms, &IterateSys, action);
 
         static void IterateSys(ref Iterator it)
@@ -124,10 +118,4 @@ public unsafe ref struct Query
                 del.Invoke(ref it);
         }
     }
-}
-
-struct Callback
-{
-    public nint Func;
-    public nint GCHandle;
 }

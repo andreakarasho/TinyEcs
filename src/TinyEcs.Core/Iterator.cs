@@ -64,33 +64,18 @@ public readonly ref struct Iterator
     public readonly EcsID EventID { get; }
     public readonly EcsID EventTriggeredComponent { get; }
 
-    // public unsafe readonly FieldIterator<T> Field<T>() where T : unmanaged
-    // {
-    //     ref var cmp = ref World.Component<T>();
-    //     var column = _table.GetComponentIndex(ref cmp);
-    //     EcsAssert.Assert(column >= 0);
-    //     EcsAssert.Assert(cmp.Size == sizeof(T));
-
-    //     return Field<T>(column);
-    // }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe readonly FieldIterator<T> Field<T>(int index) where T : unmanaged
     {
         var data = (T*)_columns[index];
         return new FieldIterator<T>(data, _entitiesToTableRows);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe ref T Single<T>(int index) where T : unmanaged
     {
         var data = (T*)_columns[index];
         return ref data[0];
-    }
-
-    public readonly bool Has<T>() where T : unmanaged
-    {
-        ref var cmp = ref World.Component<T>();
-        var column = _table.GetComponentIndex(ref cmp);
-        return column >= 0;
     }
 
     public readonly EntityView Entity(int row) => World.Entity(_entities[row]);

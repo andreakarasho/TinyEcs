@@ -158,7 +158,7 @@ unsafe
 	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	ecs.Entity()
-		.System(&ParseQuery, posID, velID, Term.Singleton(serialID), Term.Singleton(playerTagID))
+		.System(&ParseQuery, posID, velID)
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	ecs.Query()
@@ -220,13 +220,6 @@ static void ParseQuery(ref Iterator it)
 {
 	var posA = it.Field<Position>(0);
 	var velA = it.Field<Velocity>(1);
-	ref var singleton = ref it.Single<Serial>(2);
-	ref var singleton2 = ref it.Single<PlayerTag>(3);
-
-	if (singleton2.ID != 0xDEADBEEF)
-	{
-		throw new Exception("error");
-	}
 
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{

@@ -124,8 +124,6 @@ public sealed partial class World : IDisposable
 
             lookup = new EcsComponent(id, size);
             _ = CreateComponent(id, size);
-
-            //Console.WriteLine("created {0} - {1}", Lookup.Entity<T>.Name, id);
         }
 
         if (Exists(lookup.ID))
