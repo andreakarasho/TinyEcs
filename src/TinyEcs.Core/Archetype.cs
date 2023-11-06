@@ -221,12 +221,16 @@ public sealed class Archetype
 
         while (currents.CanAdvance() && searching.CanAdvance())
         {
+            if (searching.Value.Op == TermOp.Singleton)
+            {
+                searching.Advance();
+                continue;
+            }
+
             if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
             {
-                if (searching.Value.Op == TermOp.Without)
-                {
+                if (searching.Value.Op != TermOp.With)
                     return -1;
-                }
 
                 searching.Advance();
             }

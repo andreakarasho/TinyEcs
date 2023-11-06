@@ -756,30 +756,37 @@ public sealed partial class World : IDisposable
         terms.CopyTo(sortedTerms);
         sortedTerms.Sort();
 
-        for (int i = 0; i < sortedTerms.Length; ++i)
+        var allSingletons = 0;
+        for (var i = 0; i < terms.Length; ++i)
         {
-            if (sortedTerms[i].Op == TermOp.Singleton)
+            if (terms[i].Op == TermOp.Singleton)
             {
                 // check if it's a singleton
-                if (!Has(sortedTerms[i].ID, sortedTerms[i].ID))
+                if (!Has(terms[i].ID, terms[i].ID))
                     return;
 
+                allSingletons += 1;
                 columns[i] = (nuint)(
                     Unsafe.AsPointer(
-                        ref MemoryMarshal.GetReference(
-                            GetRaw(sortedTerms[i].ID, sortedTerms[i].ID, 1)
-                        )
+                        ref MemoryMarshal.GetReference(GetRaw(terms[i].ID, terms[i].ID, 1))
                     )
                 );
             }
+        }
+
+        if (allSingletons == terms.Length)
+        {
+            var it = new Iterator(_commands, _archRoot, userData, columns);
+            action(ref it);
+            return;
         }
 
         QueryRec(_archRoot, terms, sortedTerms, _commands, action, userData, columns);
 
         static void QueryRec(
             Archetype root,
-            UnsafeSpan<Term> terms,
-            UnsafeSpan<Term> sortedTerms,
+            Span<Term> terms,
+            Span<Term> sortedTerms,
             Commands commands,
             delegate* <ref Iterator, void> action,
             object? userData,
@@ -794,7 +801,7 @@ public sealed partial class World : IDisposable
 
             if (result == 0 && root.Count > 0)
             {
-                var matched = terms.Span;
+                var matched = terms;
                 for (int i = 0; i < matched.Length; ++i)
                 {
                     if (matched[i].Op == TermOp.Singleton && matchedColumns[i] == 0)

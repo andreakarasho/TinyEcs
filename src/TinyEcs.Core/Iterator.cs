@@ -83,7 +83,7 @@ public readonly ref struct Iterator
     public unsafe ref T Single<T>(int index) where T : unmanaged
     {
         var data = (T*)_columns[index];
-        return ref data[_entitiesToTableRows[0]];
+        return ref data[0];
     }
 
     public readonly bool Has<T>() where T : unmanaged

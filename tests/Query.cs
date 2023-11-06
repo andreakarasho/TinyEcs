@@ -11,13 +11,12 @@
             using var ctx = new Context();
 
             for (int i = 0; i < amount; i++)
-                ctx.World.Set<FloatComponent>(ctx.World.Entity());
+                ctx.World.Set(ctx.World.Entity(), new FloatComponent());
 
-            var query = ctx.World.Query()
-                .With<FloatComponent>();
+            var query = ctx.World.Query().With<FloatComponent>();
 
             int done = 0;
-			query.Iterate((ref Iterator it) => done += it.Count);
+            query.Iterate((ref Iterator it) => done += it.Count);
 
             Assert.Equal(amount, done);
         }
@@ -33,13 +32,11 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = ctx.World.Entity();
-                ctx.World.Set<FloatComponent>(e);
-                ctx.World.Set<IntComponent>(e);
+                ctx.World.Set(e, new FloatComponent());
+                ctx.World.Set(e, new IntComponent());
             }
 
-            var query = ctx.World.Query()
-                .With<FloatComponent>()
-                .With<IntComponent>();
+            var query = ctx.World.Query().With<FloatComponent>().With<IntComponent>();
 
             int done = 0;
             query.Iterate((ref Iterator it) => done += it.Count);
@@ -58,12 +55,13 @@
             for (int i = 0; i < amount; i++)
             {
                 var e = ctx.World.Entity();
-                ctx.World.Set<FloatComponent>(e);
-                ctx.World.Set<IntComponent>(e);
-                ctx.World.Set<BoolComponent>(e);
+                ctx.World.Set(e, new FloatComponent());
+                ctx.World.Set<IntComponent>(e, default);
+                ctx.World.Set<BoolComponent>(e, default);
             }
 
-            var query = ctx.World.Query()
+            var query = ctx.World
+                .Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .With<BoolComponent>();
@@ -90,7 +88,8 @@
                 ctx.World.Set<BoolComponent>(e);
             }
 
-            var query = ctx.World.Query()
+            var query = ctx.World
+                .Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>();
@@ -116,7 +115,8 @@
                 ctx.World.Set<IntComponent>(e);
             }
 
-            var query = ctx.World.Query()
+            var query = ctx.World
+                .Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>();
@@ -142,7 +142,8 @@
                 ctx.World.Set<IntComponent>(e);
             }
 
-            var query = ctx.World.Query()
+            var query = ctx.World
+                .Query()
                 .With<FloatComponent>()
                 .Without<IntComponent>()
                 .Without<BoolComponent>();
@@ -181,7 +182,8 @@
             ctx.World.Set<BoolComponent>(e4);
             ctx.World.Set<NormalTag>(e4);
 
-            var query = ctx.World.Query()
+            var query = ctx.World
+                .Query()
                 .With<FloatComponent>()
                 .With<IntComponent>()
                 .Without<BoolComponent>()

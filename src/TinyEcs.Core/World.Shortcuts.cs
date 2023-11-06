@@ -18,17 +18,17 @@ public sealed partial class World
     {
         ref var cmp = ref Component<T>();
 
-        EcsAssert.Assert(cmp.Size <= 0);
+        EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 
         Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
     }
 
     [SkipLocalsInit]
-    public unsafe void Set<T>(EcsID entity, T component = default) where T : unmanaged
+    public unsafe void Set<T>(EcsID entity, T component) where T : unmanaged
     {
         ref var cmp = ref Component<T>();
 
-        EcsAssert.Assert(cmp.Size > 0);
+        EcsAssert.Assert(cmp.Size > 0, "this is not a component");
 
         Set(entity, ref cmp, new ReadOnlySpan<byte>(&component, cmp.Size));
     }

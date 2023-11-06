@@ -52,26 +52,41 @@ sealed unsafe class TinyGame : Game
         var vel = _ecs.Entity<Velocity>();
         var rot = _ecs.Entity<Rotation>();
         var spr = _ecs.Entity<Sprite>();
+        var gameStateSingl = _ecs.Entity<GameState>();
 
-        _ecs.Entity().System(&Setup).Set<EcsPhase, EcsSystemPhaseOnStartup>();
+        var deviceHandle = Assets<GraphicsDevice>.Get("device");
+        var batcherHandle = Assets<SpriteBatch>.Get("batcher");
+        var fontSysHandle = Assets<FontSystem>.Get("fontSys");
 
-        _ecs.Entity().System(&SpawnEntities).Set<EcsPhase, EcsSystemPhaseOnStartup>();
+        _ecs.SetSingleton(new GameState(deviceHandle, batcherHandle, fontSysHandle));
+
+        // _ecs.Entity().System(&Setup).Set<EcsPhase, EcsSystemPhaseOnStartup>();
+
+        _ecs.Entity()
+            .System(&SpawnEntities, Term.Singleton(gameStateSingl))
+            .Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
         _ecs.Entity().System(&MoveSystem, pos, vel, rot).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-        _ecs.Entity()
-            .System(&CheckBorderSystem, pos, vel, rot)
-            .Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+        _ecs.Entity().System(&CheckBorderSystem, pos, vel).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
         _ecs.Entity().System(&PrintMessage, 1f).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
-        _ecs.Entity("BeginRenderer").System(&BeginRender).Set<EcsPhase, RenderingPhase>();
+        _ecs.Entity("BeginRenderer")
+            .System(&BeginRender, Term.Singleton(gameStateSingl))
+            .Set<EcsPhase, RenderingPhase>();
 
-        _ecs.Entity("RenderObjects").System(&Render, pos, rot, spr).Set<EcsPhase, RenderingPhase>();
+        _ecs.Entity("RenderObjects")
+            .System(&Render, pos, rot, spr, Term.Singleton(gameStateSingl))
+            .Set<EcsPhase, RenderingPhase>();
 
-        _ecs.Entity("RenderText").System(&RenderText).Set<EcsPhase, RenderingPhase>();
+        _ecs.Entity("RenderText")
+            .System(&RenderText, Term.Singleton(gameStateSingl))
+            .Set<EcsPhase, RenderingPhase>();
 
-        _ecs.Entity("EndRenderer").System(&EndRender).Set<EcsPhase, RenderingPhase>();
+        _ecs.Entity("EndRenderer")
+            .System(&EndRender, Term.Singleton(gameStateSingl))
+            .Set<EcsPhase, RenderingPhase>();
 
         //_ecs.StartupSystem(&Setup);
         //_ecs.StartupSystem(&SpawnEntities);
@@ -134,19 +149,12 @@ sealed unsafe class TinyGame : Game
         Console.WriteLine("print!");
     }
 
-    static void Setup(ref Iterator it)
-    {
-        var deviceHandle = Assets<GraphicsDevice>.Get("device");
-        var batcherHandle = Assets<SpriteBatch>.Get("batcher");
-        var fontSysHandle = Assets<FontSystem>.Get("fontSys");
-
-        it.World.SetSingleton(new GameState(deviceHandle, batcherHandle, fontSysHandle));
-    }
+    static void Setup(ref Iterator it) { }
 
     static void SpawnEntities(ref Iterator it)
     {
         var rnd = new Random();
-        ref var gameState = ref it.World.GetSingleton<GameState>();
+        ref var gameState = ref it.Single<GameState>(0);
         var texture = Texture2D.FromFile(
             gameState.Device.GetValue(),
             Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png")
@@ -192,9 +200,9 @@ sealed unsafe class TinyGame : Game
 
     static void MoveSystem(ref Iterator it)
     {
-        var p = it.Field<Position>();
-        var v = it.Field<Velocity>();
-        var r = it.Field<Rotation>();
+        var p = it.Field<Position>(0);
+        var v = it.Field<Velocity>(1);
+        var r = it.Field<Rotation>(2);
 
         for (int i = 0; i < it.Count; ++i)
         {
@@ -211,8 +219,8 @@ sealed unsafe class TinyGame : Game
 
     static void CheckBorderSystem(ref Iterator it)
     {
-        var p = it.Field<Position>();
-        var v = it.Field<Velocity>();
+        var p = it.Field<Position>(0);
+        var v = it.Field<Velocity>(1);
 
         for (int i = 0; i < it.Count; ++i)
         {
@@ -245,7 +253,7 @@ sealed unsafe class TinyGame : Game
 
     static void BeginRender(ref Iterator it)
     {
-        ref var gameState = ref it.World.GetSingleton<GameState>();
+        ref var gameState = ref it.Single<GameState>(0);
         var batch = gameState.Batch.GetValue();
 
         batch.GraphicsDevice.Clear(Color.Black);
@@ -254,7 +262,7 @@ sealed unsafe class TinyGame : Game
 
     static void EndRender(ref Iterator it)
     {
-        ref var gameState = ref it.World.GetSingleton<GameState>();
+        ref var gameState = ref it.Single<GameState>(0);
         var batch = gameState.Batch.GetValue();
 
         batch.End();
@@ -262,12 +270,12 @@ sealed unsafe class TinyGame : Game
 
     static void Render(ref Iterator it)
     {
-        ref var gameState = ref it.World.GetSingleton<GameState>();
-        var batch = gameState.Batch.GetValue();
+        var p = it.Field<Position>(0);
+        var r = it.Field<Rotation>(1);
+        var s = it.Field<Sprite>(2);
+        ref var gameState = ref it.Single<GameState>(3);
 
-        var p = it.Field<Position>();
-        var s = it.Field<Sprite>();
-        var r = it.Field<Rotation>();
+        var batch = gameState.Batch.GetValue();
         var origin = new Vector2(0.5f);
 
         for (int i = 0; i < it.Count; ++i)
@@ -292,7 +300,7 @@ sealed unsafe class TinyGame : Game
 
     static void RenderText(ref Iterator it)
     {
-        ref var gameState = ref it.World.GetSingleton<GameState>();
+        ref var gameState = ref it.Single<GameState>(0);
         var batch = gameState.Batch.GetValue();
         var fontSys = gameState.FontSystem.GetValue();
 

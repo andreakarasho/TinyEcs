@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace TinyEcs.Tests;
 
-unsafe struct LargeComponent : IComponent
+unsafe struct LargeComponent
 {
     const int SIZE = 1024;
     private fixed float _array[SIZE];
@@ -24,53 +24,52 @@ unsafe struct LargeComponent : IComponent
     }
 }
 
-struct FloatComponent : IComponent
+struct FloatComponent
 {
-	public float Value;
+    public float Value;
 }
 
-struct IntComponent : IComponent
+struct IntComponent
 {
-	public int Value;
+    public int Value;
 }
 
-struct BoolComponent : IComponent
+struct BoolComponent
 {
-	public bool Value;
+    public bool Value;
 }
 
-struct NormalTag : ITag { }
-
+struct NormalTag { }
 
 public class ComponentTest
 {
-	[Fact]
-	public void Check_Validate_Tag()
-	{
-		using var ctx = new Context();
-		ref var cmp = ref ctx.World.Component<NormalTag>();
+    [Fact]
+    public void Check_Validate_Tag()
+    {
+        using var ctx = new Context();
+        ref var cmp = ref ctx.World.Component<NormalTag>();
 
-		Assert.Equal(0, cmp.Size);
-		Assert.True(ctx.World.Has<EcsTag>(cmp.ID));
-	}
+        Assert.Equal(0, cmp.Size);
+        Assert.True(ctx.World.Has<EcsTag>(cmp.ID));
+    }
 
-	[Fact]
-	public unsafe void Check_Validate_Component()
-	{
-		using var ctx = new Context();
-		ref var cmp = ref ctx.World.Component<FloatComponent>();
+    [Fact]
+    public unsafe void Check_Validate_Component()
+    {
+        using var ctx = new Context();
+        ref var cmp = ref ctx.World.Component<FloatComponent>();
 
-		Assert.Equal(sizeof(FloatComponent), cmp.Size);
-		Assert.False(ctx.World.Has<EcsTag>(cmp.ID));
-	}
+        Assert.Equal(sizeof(FloatComponent), cmp.Size);
+        Assert.False(ctx.World.Has<EcsTag>(cmp.ID));
+    }
 
-	[Fact]
-	public unsafe void Check_Validate_Pair()
-	{
-		using var ctx = new Context();
-		var id = ctx.World.Pair<NormalTag, FloatComponent>();
+    [Fact]
+    public unsafe void Check_Validate_Pair()
+    {
+        using var ctx = new Context();
+        var id = ctx.World.Pair<NormalTag, FloatComponent>();
 
-		Assert.Equal(0, ctx.World.Component<NormalTag>().Size);
-		Assert.Equal(sizeof(FloatComponent), ctx.World.Component<FloatComponent>().Size);
-	}
+        Assert.Equal(0, ctx.World.Component<NormalTag>().Size);
+        Assert.Equal(sizeof(FloatComponent), ctx.World.Component<FloatComponent>().Size);
+    }
 }

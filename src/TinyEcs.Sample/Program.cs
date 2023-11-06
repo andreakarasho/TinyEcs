@@ -142,10 +142,12 @@ unsafe
 	var posID = ecs.Entity<Position>();
 	var velID = ecs.Entity<Velocity>();
 	var serialID = ecs.Entity<Serial>();
+	var playerTagID = ecs.Entity<PlayerTag>();
 
 	ecs.SetSingleton(new Serial(){Value = 1});
+	ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
 
-	for (int i = 0; i < 100; i++)
+	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()
 			.Set<Position>(new Position())
 			.Set<Velocity>(new Velocity())
@@ -156,7 +158,7 @@ unsafe
 	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	ecs.Entity()
-		.System(&ParseQuery, posID, velID, Term.Singleton(serialID))
+		.System(&ParseQuery, posID, velID, Term.Singleton(serialID), Term.Singleton(playerTagID))
 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
 
 	ecs.Query()
@@ -219,6 +221,12 @@ static void ParseQuery(ref Iterator it)
 	var posA = it.Field<Position>(0);
 	var velA = it.Field<Velocity>(1);
 	ref var singleton = ref it.Single<Serial>(2);
+	ref var singleton2 = ref it.Single<PlayerTag>(3);
+
+	if (singleton2.ID != 0xDEADBEEF)
+	{
+		throw new Exception("error");
+	}
 
 	for (int i = 0, count = it.Count; i < count; ++i)
 	{
