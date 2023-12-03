@@ -1,7 +1,7 @@
 # TinyEcs
 
 Small project born by the need of a reflection-free dotnet ECS library.<br>
-NativeAOT compatible.
+NativeAOT & bflat compatible.
 
 # Requirements
 
@@ -9,7 +9,7 @@ NativeAOT compatible.
 
 # Status
 
-<i>Semi-production ready.</i> `¯\_(ツ)_/¯`
+<i>This project is in an early development stage. Breaking changes are real :D</i> `¯\_(ツ)_/¯`
 
 # Run the pepe game!
 
