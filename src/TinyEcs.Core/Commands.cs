@@ -44,8 +44,8 @@ public sealed class Commands
 
         if (_main.Exists(tag) && Has<EcsComponent>(tag))
         {
-            ref var cmp2 = ref _main.Component<EcsComponent>();
-            Set(id, ref cmp2);
+            ref readonly var cmp2 = ref _main.Component<EcsComponent>();
+            Set(id, in cmp2);
             return;
         }
 
@@ -55,18 +55,19 @@ public sealed class Commands
 
     public unsafe void Set<T>(EcsID id) where T : unmanaged
     {
-        ref var cmp = ref _main.Component<T>();
-        Set(id, ref cmp);
+        ref readonly var cmp = ref _main.Component<T>();
+		Unsafe.SkipInit<T>(out var def);
+        Set(id, def);
     }
 
     public unsafe ref T Set<T>(EcsID id, T component) where T : unmanaged
     {
         EcsAssert.Assert(_main.Exists(id));
 
-        ref var cmp = ref _main.Component<T>();
+        ref readonly var cmp = ref _main.Component<T>();
         EcsAssert.Assert(cmp.Size > 0);
 
-        if (_main.Has(id, ref cmp))
+        if (_main.Has(id, in cmp))
         {
             ref var value = ref _main.Get<T>(id);
             value = component;
@@ -74,39 +75,47 @@ public sealed class Commands
             return ref value;
         }
 
-        ref var reference = ref Set(id, ref cmp);
+		ref var objRef = ref Set(id, in cmp);
+		if (!Unsafe.IsNullRef(ref objRef))
+		{
+			objRef = component;
+		}
 
-        if (!Unsafe.IsNullRef(ref reference))
-        {
-            fixed (byte* ptr = &reference)
-                Unsafe.Copy(ptr, ref component);
-        }
+		return ref Unsafe.As<object, T>(ref objRef);
 
-        return ref Unsafe.As<byte, T>(ref reference);
+        //ref var reference = ref Set(id, in cmp);
+
+        //if (!Unsafe.IsNullRef(ref reference))
+        //{
+        //    fixed (byte* ptr = &reference)
+        //        Unsafe.Copy(ptr, ref component);
+        //}
+
+        //return ref Unsafe.As<byte, T>(ref reference);
     }
 
-    public unsafe void Set(EcsID id, EcsID first, EcsID second)
-    {
-        var cmpID = IDOp.Pair(first, second);
-        var cmp = new EcsComponent(cmpID, 0);
-        Set(id, ref cmp);
-    }
+    //public unsafe void Set(EcsID id, EcsID first, EcsID second)
+    //{
+    //    var cmpID = IDOp.Pair(first, second);
+    //    var cmp = new EcsComponent(cmpID, 0);
+    //    Set(id, ref cmp);
+    //}
 
-    public unsafe void Set<TKind>(EcsID id, EcsID target) where TKind : unmanaged
-    {
-        var cmpID = _main.Pair<TKind>(target);
-        var cmp = new EcsComponent(cmpID, 0);
-        Set(id, ref cmp);
-    }
+    //public unsafe void Set<TKind>(EcsID id, EcsID target) where TKind : unmanaged
+    //{
+    //    var cmpID = _main.Pair<TKind>(target);
+    //    var cmp = new EcsComponent(cmpID, 0);
+    //    Set(id, ref cmp);
+    //}
 
-    public unsafe void Set<TKind, TTarget>(EcsID id)
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        Set(id, _main.Entity<TKind>(), _main.Entity<TTarget>());
-    }
+    //public unsafe void Set<TKind, TTarget>(EcsID id)
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged
+    //{
+    //    Set(id, _main.Entity<TKind>(), _main.Entity<TTarget>());
+    //}
 
-    private unsafe ref byte Set(EcsID id, ref EcsComponent cmp)
+    private unsafe ref object Set(EcsID id, ref readonly EcsComponent cmp)
     {
         EcsAssert.Assert(_main.Exists(id));
 
@@ -116,18 +125,19 @@ public sealed class Commands
 
         if (set.DataLength < cmp.Size)
         {
-            set.Data = (byte*)NativeMemory.Realloc(set.Data, (nuint)cmp.Size);
+			var array = Lookup.GetArray(cmp.ID, 1);
+			set.Data = array.GetValue(0); // (byte*)NativeMemory.Realloc(set.Data, (nuint)cmp.Size);
             set.DataLength = cmp.Size;
         }
 
-        return ref (cmp.Size <= 0 ? ref Unsafe.NullRef<byte>() : ref set.Data[0]);
+		return ref set.Data;
     }
 
     public void Unset<T>(EcsID id) where T : unmanaged
     {
         EcsAssert.Assert(_main.Exists(id));
 
-        ref var cmp = ref _main.Component<T>();
+        ref readonly var cmp = ref _main.Component<T>();
         ref var unset = ref _unset.CreateNew(out _);
         unset.Entity = id;
         unset.Component = cmp.ID;
@@ -184,13 +194,10 @@ public sealed class Commands
             var cmp = new EcsComponent(set.Component, set.DataLength);
             _main.Set(
                 set.Entity,
-                ref cmp,
-                set.DataLength <= 0
-                    ? ReadOnlySpan<byte>.Empty
-                    : new ReadOnlySpan<byte>(set.Data, set.DataLength)
+                in cmp,
+				in set.Data
             );
 
-            NativeMemory.Free(set.Data);
             set.Data = null;
             set.DataLength = 0;
         }
@@ -224,7 +231,7 @@ public sealed class Commands
     {
         public EcsID Entity;
         public EcsID Component;
-        public byte* Data;
+        public object Data;
         public int DataLength;
     }
 
@@ -267,25 +274,25 @@ public readonly ref struct CommandEntityView
         return this;
     }
 
-    public readonly CommandEntityView Set(EcsID first, EcsID second)
-    {
-        _cmds.Set(_id, first, second);
-        return this;
-    }
+    //public readonly CommandEntityView Set(EcsID first, EcsID second)
+    //{
+    //    _cmds.Set(_id, first, second);
+    //    return this;
+    //}
 
-    public readonly CommandEntityView Set<TKind>(EcsID target) where TKind : unmanaged
-    {
-        _cmds.Set<TKind>(_id, target);
-        return this;
-    }
+    //public readonly CommandEntityView Set<TKind>(EcsID target) where TKind : unmanaged
+    //{
+    //    _cmds.Set<TKind>(_id, target);
+    //    return this;
+    //}
 
-    public readonly CommandEntityView Set<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        _cmds.Set<TKind, TTarget>(_id);
-        return this;
-    }
+    //public readonly CommandEntityView Set<TKind, TTarget>()
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged
+    //{
+    //    _cmds.Set<TKind, TTarget>(_id);
+    //    return this;
+    //}
 
     public readonly CommandEntityView Unset<T>() where T : unmanaged
     {
@@ -317,5 +324,5 @@ public readonly ref struct CommandEntityView
         return _cmds.Has<T>(_id);
     }
 
-    public readonly CommandEntityView ChildOf(EcsID parent) => Set<EcsChildOf>(parent);
+    //public readonly CommandEntityView ChildOf(EcsID parent) => Set<EcsChildOf>(parent);
 }

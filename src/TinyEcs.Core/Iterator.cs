@@ -67,6 +67,7 @@ public readonly ref struct Iterator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe readonly FieldIterator<T> Field<T>(int index) where T : unmanaged
     {
+		return new FieldIterator<T>(_table.ComponentData<T>(index, 0, Count, sizeof(T)), _entitiesToTableRows);
         var data = (T*)_columns[index];
         return new FieldIterator<T>(data, _entitiesToTableRows);
     }

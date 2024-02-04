@@ -57,86 +57,86 @@ public sealed partial class World : IDisposable
         }
     }
 
-    internal unsafe EntityView CreateComponent(EcsID id, int size)
+    // internal unsafe EntityView CreateComponent(EcsID id, int size)
+    // {
+    //     if (id == 0)
+    //     {
+    //         id = NewEmpty();
+    //     }
+    //     else if (Exists(id) && Has<EcsComponent>(id))
+    //     {
+    //         ref var cmp = ref Get<EcsComponent>(id);
+    //         EcsAssert.Panic(cmp.Size == size);
+
+    //         return Entity(id);
+    //     }
+
+    //     size = Math.Max(size, 0);
+
+    //     var cmp2 = new EcsComponent(id, size);
+    //     Set(id, cmp2);
+    //     Set(id, EcsPanic, EcsDelete);
+
+    //     if (size == 0)
+    //         Set(id, EcsTag);
+
+    //     return Entity(id);
+    // }
+
+    // private unsafe int GetSize<T>() where T : unmanaged
+    // {
+    //     var size = sizeof(T);
+
+    //     if (size != 1)
+    //         return size;
+
+    //     // credit: BeanCheeseBurrito from Flecs.NET
+    //     Unsafe.SkipInit<T>(out var t1);
+    //     Unsafe.SkipInit<T>(out var t2);
+    //     Unsafe.As<T, byte>(ref t1) = 0x7F;
+    //     Unsafe.As<T, byte>(ref t2) = 0xFF;
+
+    //     return ValueType.Equals(t1, t2) ? 0 : size;
+    // }
+
+    internal unsafe ref readonly EcsComponent Component<T>() where T : unmanaged
     {
-        if (id == 0)
-        {
-            id = NewEmpty();
-        }
-        else if (Exists(id) && Has<EcsComponent>(id))
-        {
-            ref var cmp = ref Get<EcsComponent>(id);
-            EcsAssert.Panic(cmp.Size == size);
+        ref readonly var lookup = ref Lookup.Entity<T>.Component;
 
-            return Entity(id);
-        }
+        // if (lookup.ID == 0 || !Exists(lookup.ID))
+        // {
+        //     EcsID id = lookup.ID;
+        //     if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
+        //     {
+        //         do
+        //         {
+        //             id = _lastCompID++;
+        //         } while (Exists(id) && id <= ECS_MAX_COMPONENT_FAST_ID);
+        //     }
 
-        size = Math.Max(size, 0);
+        //     if (id >= ECS_MAX_COMPONENT_FAST_ID)
+        //     {
+        //         id = 0;
+        //     }
 
-        var cmp2 = new EcsComponent(id, size);
-        Set(id, cmp2);
-        Set(id, EcsPanic, EcsDelete);
+        //     id = Entity(id);
+        //     var size = GetSize<T>();
 
-        if (size == 0)
-            Set(id, EcsTag);
+        //     lookup = new EcsComponent(id, size);
+        //     _ = CreateComponent(id, size);
+        // }
 
-        return Entity(id);
-    }
+        // if (Exists(lookup.ID))
+        // {
+        //     var name = Lookup.Entity<T>.Name;
+        //     ref var cmp2 = ref MemoryMarshal.GetReference(
+        //         MemoryMarshal.Cast<byte, EcsComponent>(
+        //             GetRaw(lookup.ID, EcsComponent, GetSize<EcsComponent>())
+        //         )
+        //     );
 
-    private unsafe int GetSize<T>() where T : unmanaged
-    {
-        var size = sizeof(T);
-
-        if (size != 1)
-            return size;
-
-        // credit: BeanCheeseBurrito from Flecs.NET
-        Unsafe.SkipInit<T>(out var t1);
-        Unsafe.SkipInit<T>(out var t2);
-        Unsafe.As<T, byte>(ref t1) = 0x7F;
-        Unsafe.As<T, byte>(ref t2) = 0xFF;
-
-        return ValueType.Equals(t1, t2) ? 0 : size;
-    }
-
-    internal unsafe ref EcsComponent Component<T>() where T : unmanaged
-    {
-        ref var lookup = ref Lookup.Entity<T>.Component;
-
-        if (lookup.ID == 0 || !Exists(lookup.ID))
-        {
-            EcsID id = lookup.ID;
-            if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
-            {
-                do
-                {
-                    id = _lastCompID++;
-                } while (Exists(id) && id <= ECS_MAX_COMPONENT_FAST_ID);
-            }
-
-            if (id >= ECS_MAX_COMPONENT_FAST_ID)
-            {
-                id = 0;
-            }
-
-            id = Entity(id);
-            var size = GetSize<T>();
-
-            lookup = new EcsComponent(id, size);
-            _ = CreateComponent(id, size);
-        }
-
-        if (Exists(lookup.ID))
-        {
-            var name = Lookup.Entity<T>.Name;
-            ref var cmp2 = ref MemoryMarshal.GetReference(
-                MemoryMarshal.Cast<byte, EcsComponent>(
-                    GetRaw(lookup.ID, EcsComponent, GetSize<EcsComponent>())
-                )
-            );
-
-            EcsAssert.Panic(cmp2.Size == lookup.Size, $"invalid size for {Lookup.Entity<T>.Name}");
-        }
+        //     EcsAssert.Panic(cmp2.Size == lookup.Size, $"invalid size for {Lookup.Entity<T>.Name}");
+        // }
 
         return ref lookup;
     }
@@ -242,50 +242,50 @@ public sealed partial class World : IDisposable
         return _entities.Contains(entity);
     }
 
-    internal void DetachComponent(EcsID entity, ref EcsComponent cmp)
+    internal void DetachComponent(EcsID entity, ref readonly EcsComponent cmp)
     {
         ref var record = ref GetRecord(entity);
-        InternalAttachDetach(entity, ref record, ref cmp, false);
+        InternalAttachDetach(entity, ref record, in cmp, false);
     }
 
     private bool InternalAttachDetach(
         EcsID entity,
         ref EcsRecord record,
-        ref EcsComponent cmp,
+        ref readonly EcsComponent cmp,
         bool add
     )
     {
         EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-        if (add)
-        {
-            // TODO: Use Events to handle this case.
-            //		 The event must check for component with Exclusive tag
-            if (IDOp.IsPair(cmp.ID))
-            {
-                var first = IDOp.GetPairFirst(cmp.ID);
-                var second = IDOp.GetPairSecond(cmp.ID);
+        // if (add)
+        // {
+        //     // TODO: Use Events to handle this case.
+        //     //		 The event must check for component with Exclusive tag
+        //     if (IDOp.IsPair(cmp.ID))
+        //     {
+        //         var first = IDOp.GetPairFirst(cmp.ID);
+        //         var second = IDOp.GetPairSecond(cmp.ID);
 
-                if (Has(first, EcsExclusive))
-                {
-                    var cmp2 = new EcsComponent(IDOp.Pair(first, EcsAny), 0);
-                    var column = record.Archetype.GetComponentIndex(ref cmp2);
+        //         if (Has(first, EcsExclusive))
+        //         {
+        //             var cmp2 = new EcsComponent(IDOp.Pair(first, EcsAny), 0);
+        //             var column = record.Archetype.GetComponentIndex(ref cmp2);
 
-                    if (column >= 0 && record.Archetype.ComponentInfo[column].ID != cmp.ID)
-                    {
-                        DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
-                    }
-                }
-            }
-        }
-        else
-        {
-            EmitEvent(EcsEventOnUnset, entity, cmp.ID);
-        }
+        //             if (column >= 0 && record.Archetype.ComponentInfo[column].ID != cmp.ID)
+        //             {
+        //                 DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
+        //             }
+        //         }
+        //     }
+        // }
+        // else
+        // {
+        //     EmitEvent(EcsEventOnUnset, entity, cmp.ID);
+        // }
 
         //var arch = MakeArchetype(record.Archetype, ref cmp, add);
 
-        var arch = CreateArchetype(record.Archetype, ref cmp, add);
+        var arch = CreateArchetype(record.Archetype, in cmp, add);
         if (arch == null)
             return false;
 
@@ -379,7 +379,7 @@ public sealed partial class World : IDisposable
     }
 
     [SkipLocalsInit]
-    internal Archetype? CreateArchetype(Archetype root, ref EcsComponent cmp, bool add)
+    internal Archetype? CreateArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
     {
         // var column = root.GetComponentIndex(ref cmp);
 
@@ -392,7 +392,7 @@ public sealed partial class World : IDisposable
         // 	return null;
         // }
 
-        if (!add && root.GetComponentIndex(ref cmp) < 0)
+        if (!add && root.GetComponentIndex(in cmp) < 0)
             return null;
 
         var initType = root.ComponentInfo;
@@ -454,7 +454,7 @@ public sealed partial class World : IDisposable
                 table = ref Unsafe.AsRef(root.Table)!;
             }
 
-            arch = _archRoot.InsertVertex(root, table, span, ref cmp);
+            arch = _archRoot.InsertVertex(root, table, span, in cmp);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -484,35 +484,39 @@ public sealed partial class World : IDisposable
         return arch;
     }
 
-    internal void Set(EcsID entity, ref EcsComponent cmp, ReadOnlySpan<byte> data)
+    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : unmanaged
     {
-        EcsAssert.Assert(cmp.Size == data.Length);
+        //EcsAssert.Assert(cmp.Size == data.Length);
 
         ref var record = ref GetRecord(entity);
 
         var emit = false;
-        var column = record.Archetype.GetComponentIndex(ref cmp);
+        var column = record.Archetype.GetComponentIndex(in cmp);
         if (column < 0)
         {
-            emit = InternalAttachDetach(entity, ref record, ref cmp, true);
-            column = record.Archetype.GetComponentIndex(ref cmp);
+            emit = InternalAttachDetach(entity, ref record, in cmp, true);
+            column = record.Archetype.GetComponentIndex(in cmp);
         }
 
         if (cmp.Size > 0)
         {
-            var buf = record.Archetype.Table.ComponentData<byte>(
-                column,
-                record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-                cmp.Size
-            );
+			record.Archetype.Table
+				.ComponentData<T>(column, record.Archetype.EntitiesTableRows[record.Row], 1, cmp.Size)[0] = data;
 
-            EcsAssert.Assert(data.Length == buf.Length);
-            data.CopyTo(buf);
+    //        var buf = record.Archetype.Table.ComponentData<byte>(
+    //            column,
+    //            record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
+				//1,
+    //            cmp.Size
+    //        );
+
+    //        EcsAssert.Assert(data.Length == buf.Length);
+    //        data.CopyTo(buf);
         }
 
         if (emit)
         {
-            EmitEvent(EcsEventOnSet, entity, cmp.ID);
+            //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
     }
 
@@ -525,8 +529,9 @@ public sealed partial class World : IDisposable
         var buf = record.Archetype.Table.ComponentData<byte>(
             column,
             record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-            cmp.Size
-        );
+            1,
+			cmp.Size
+		);
 
         EcsAssert.Assert(!buf.IsEmpty);
         EcsAssert.Assert(size == buf.Length);
@@ -537,20 +542,20 @@ public sealed partial class World : IDisposable
     [SkipLocalsInit]
     public unsafe void EmitEvent(EcsID eventID, EcsID entity, EcsID component)
     {
-        EcsAssert.Assert(Exists(eventID));
-        EcsAssert.Assert(Exists(entity));
-        EcsAssert.Assert(Exists(component));
+        // EcsAssert.Assert(Exists(eventID));
+        // EcsAssert.Assert(Exists(entity));
+        // EcsAssert.Assert(Exists(component));
 
-        Query(
-            stackalloc Term[] { Term.With(EcsEvent), Term.With(eventID), },
-            &OnEvent,
-            new ObserverInfo()
-            {
-                Entity = entity,
-                Event = eventID,
-                LastComponent = Term.With(component)
-            }
-        );
+        // Query(
+        //     stackalloc Term[] { Term.With(EcsEvent), Term.With(eventID), },
+        //     &OnEvent,
+        //     new ObserverInfo()
+        //     {
+        //         Entity = entity,
+        //         Event = eventID,
+        //         LastComponent = Term.With(component)
+        //     }
+        // );
     }
 
     private struct ObserverInfo
@@ -596,65 +601,11 @@ public sealed partial class World : IDisposable
         }
     }
 
-    internal bool Has(EcsID entity, ref EcsComponent cmp)
+    internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
     {
         ref var record = ref GetRecord(entity);
-        return record.Archetype.GetComponentIndex(ref cmp) >= 0;
-    }
-
-    public bool Has(EcsID entity, EcsID tag)
-    {
-        var cmp = new EcsComponent(tag, 0);
-        return Has(entity, ref cmp);
-    }
-
-    public void Set(EcsID entity, EcsID first, EcsID second)
-    {
-        var id = IDOp.Pair(first, second);
-        var cmp = new EcsComponent(id, 0);
-        Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
-    }
-
-    public void Set(EcsID entity, EcsID tag)
-    {
-        EcsAssert.Assert(!IDOp.IsPair(tag));
-
-        // if (Exists(tag) && Has<EcsComponent>(tag))
-        // {
-        // 	ref var cmp2 = ref Get<EcsComponent>(tag);
-        // 	Set(entity, ref cmp2, ReadOnlySpan<byte>.Empty);
-
-        // 	return;
-        // }
-
-        var cmp = new EcsComponent(tag, 0);
-        Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
-    }
-
-    public bool Has(EcsID entity, EcsID first, EcsID second)
-    {
-        var id = IDOp.Pair(first, second);
-        var cmp = new EcsComponent(id, 0);
-        return Has(entity, ref cmp);
-    }
-
-    public EcsID GetParent(EcsID id)
-    {
-        ref var record = ref GetRecord(id);
-
-        var pair = Pair<EcsChildOf, EcsAny>();
-        var cmp = new EcsComponent(pair, 0);
-        var column = record.Archetype.GetComponentIndex(ref cmp);
-
-        if (column >= 0)
-        {
-            ref var meta = ref record.Archetype.ComponentInfo[column];
-
-            return IDOp.GetPairSecond(meta.ID);
-        }
-
-        return 0;
-    }
+        return record.Archetype.GetComponentIndex(in cmp) >= 0;
+    } 
 
     public ReadOnlySpan<EcsComponent> GetType(EcsID id)
     {
@@ -754,30 +705,30 @@ public sealed partial class World : IDisposable
         terms.CopyTo(sortedTerms);
         sortedTerms.Sort();
 
-        var allSingletons = 0;
-        for (var i = 0; i < terms.Length; ++i)
-        {
-            if (terms[i].Op == TermOp.Singleton)
-            {
-                // check if it's a singleton
-                if (!Has(terms[i].ID, terms[i].ID))
-                    return;
+        //var allSingletons = 0;
+        //for (var i = 0; i < terms.Length; ++i)
+        //{
+        //    if (terms[i].Op == TermOp.Singleton)
+        //    {
+        //        // check if it's a singleton
+        //        if (!Has(terms[i].ID, terms[i].ID))
+        //            return;
 
-                allSingletons += 1;
-                columns[i] = (nuint)(
-                    Unsafe.AsPointer(
-                        ref MemoryMarshal.GetReference(GetRaw(terms[i].ID, terms[i].ID, 1))
-                    )
-                );
-            }
-        }
+        //        allSingletons += 1;
+        //        columns[i] = (nuint)(
+        //            Unsafe.AsPointer(
+        //                ref MemoryMarshal.GetReference(GetRaw(terms[i].ID, terms[i].ID, 1))
+        //            )
+        //        );
+        //    }
+        //}
 
-        if (allSingletons == terms.Length)
-        {
-            var it = new Iterator(_commands, _archRoot, userData, columns);
-            action(ref it);
-            return;
-        }
+        //if (allSingletons == terms.Length)
+        //{
+        //    var it = new Iterator(_commands, _archRoot, userData, columns);
+        //    action(ref it);
+        //    return;
+        //}
 
         QueryRec(_archRoot, terms, sortedTerms, _commands, action, userData, columns);
 
@@ -849,10 +800,42 @@ public sealed partial class World : IDisposable
 
 internal static class Lookup
 {
-    internal static class Entity<T> where T : unmanaged
+	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new Dictionary<ulong, Func<int, Array>>();
+
+	public static Array? GetArray(ulong hashcode, int count)
+	{
+		_arrayCreator.TryGetValue(hashcode, out var fn);
+		return fn?.Invoke(count) ?? null;
+	}
+
+    internal static class Entity<T>
     {
-        public static EcsComponent Component;
+        public static unsafe readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
+		public static readonly int HashCode = typeof(T).GetHashCode();
+
+		public static readonly EcsComponent Component = new EcsComponent((ulong) HashCode, Size);
+
+		static Entity()
+		{
+			_arrayCreator.Add(Component.ID, count => new T[count]);
+		}
+
+		private static unsafe int GetSize()
+		{
+			var size = Unsafe.SizeOf<T>();
+
+			if (size != 1 || !typeof(T).IsValueType)
+				return size;
+
+			// credit: BeanCheeseBurrito from Flecs.NET
+			Unsafe.SkipInit<T>(out var t1);
+			Unsafe.SkipInit<T>(out var t2);
+			Unsafe.As<T, byte>(ref t1) = 0x7F;
+			Unsafe.As<T, byte>(ref t2) = 0xFF;
+
+			return ValueType.Equals(t1, t2) ? 0 : size;
+		}
     }
 }
 

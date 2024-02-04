@@ -144,8 +144,8 @@ unsafe
 	var serialID = ecs.Entity<Serial>();
 	var playerTagID = ecs.Entity<PlayerTag>();
 
-	ecs.SetSingleton(new Serial(){Value = 1});
-	ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
+	//ecs.SetSingleton(new Serial(){Value = 1});
+	//ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()

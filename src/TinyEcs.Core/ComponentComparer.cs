@@ -33,7 +33,7 @@ sealed class ComponentComparer : IComparer<EcsID>, IComparer<Term>, IComparer<Ec
 			{
 				var secondY = IDOp.GetPairSecond(b);
 
-				if (secondY == World.EcsAny)
+				if (secondY == Lookup.Entity<EcsAny>.Component.ID)
 				{
 					return 0;
 				}

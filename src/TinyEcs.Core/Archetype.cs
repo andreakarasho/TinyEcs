@@ -6,12 +6,10 @@ public sealed class Archetype
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    private int _capacity,
-        _count;
+    private int _capacity, _count;
     private EcsID[] _entities;
     private int[] _entitiesTableRows;
-    internal List<EcsEdge> _edgesLeft,
-        _edgesRight;
+    internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly Table _table;
 
     internal Archetype(
@@ -41,14 +39,14 @@ public sealed class Archetype
 
     public readonly EcsComponent[] ComponentInfo;
 
-    internal int GetComponentIndex(ref EcsComponent cmp)
+    internal int GetComponentIndex(ref readonly EcsComponent cmp)
     {
         if (cmp.Size <= 0)
         {
             return Array.BinarySearch(ComponentInfo, cmp, _comparer);
         }
 
-        return _table.GetComponentIndex(ref cmp);
+        return _table.GetComponentIndex(in cmp);
     }
 
     internal (int, int) Add(EcsID id, int tableRow = -1)
@@ -83,7 +81,7 @@ public sealed class Archetype
         Archetype left,
         Table table,
         ReadOnlySpan<EcsComponent> components,
-        ref EcsComponent component
+        ref readonly EcsComponent component
     )
     {
         var vertex = new Archetype(left._world, table, components, _comparer);
@@ -112,13 +110,13 @@ public sealed class Archetype
         EcsAssert.Assert(row >= 0);
         EcsAssert.Assert(row < _entities.Length);
 
-        ref var cmp = ref _world.Component<T>();
+        ref readonly var cmp = ref _world.Component<T>();
         EcsAssert.Assert(cmp.Size > 0);
 
-        var column = GetComponentIndex(ref cmp);
+        var column = GetComponentIndex(in cmp);
         EcsAssert.Assert(column >= 0);
 
-        return _table.ComponentData<T>(column, _entitiesTableRows[row], count);
+        return _table.ComponentData<T>(column, _entitiesTableRows[row], count, cmp.Size);
     }
 
     internal void Clear()

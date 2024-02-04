@@ -46,23 +46,23 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
         return this;
     }
 
-    public readonly EntityView Set<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        return Set(World.Entity<TKind>(), World.Entity<TTarget>());
-    }
+    //public readonly EntityView Set<TKind, TTarget>()
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged
+    //{
+    //    return Set(World.Entity<TKind>(), World.Entity<TTarget>());
+    //}
 
-    public readonly EntityView Set<TKind>(EcsID target) where TKind : unmanaged
-    {
-        return Set(World.Entity<TKind>(), target);
-    }
+    //public readonly EntityView Set<TKind>(EcsID target) where TKind : unmanaged
+    //{
+    //    return Set(World.Entity<TKind>(), target);
+    //}
 
-    public readonly EntityView Set(EcsID first, EcsID second)
-    {
-        World.Set(ID, first, second);
-        return this;
-    }
+    //public readonly EntityView Set(EcsID first, EcsID second)
+    //{
+    //    World.Set(ID, first, second);
+    //    return this;
+    //}
 
     public readonly EntityView Unset<T>() where T : unmanaged
     {

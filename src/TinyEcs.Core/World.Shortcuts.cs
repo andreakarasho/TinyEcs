@@ -2,48 +2,49 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-    public void Set<TKind, TTarget>(EcsID entity)
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        Set(entity, Entity<TKind>(), Entity<TKind>());
-    }
+    //public void Set<TKind, TTarget>(EcsID entity)
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged
+    //{
+    //    Set(entity, Entity<TKind>(), Entity<TKind>());
+    //}
 
-    public void Set<TKind>(EcsID entity, EcsID target) where TKind : unmanaged
-    {
-        Set(entity, Entity<TKind>(), target);
-    }
+    //public void Set<TKind>(EcsID entity, EcsID target) where TKind : unmanaged
+    //{
+    //    Set(entity, Entity<TKind>(), target);
+    //}
 
     public void Set<T>(EcsID entity) where T : unmanaged
     {
-        ref var cmp = ref Component<T>();
+        ref readonly var cmp = ref Component<T>();
 
         EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 
-        Set(entity, ref cmp, ReadOnlySpan<byte>.Empty);
+		Unsafe.SkipInit<T>(out var def);
+        Set(entity, in cmp, in def);
     }
 
     [SkipLocalsInit]
     public unsafe void Set<T>(EcsID entity, T component) where T : unmanaged
     {
-        ref var cmp = ref Component<T>();
+        ref readonly var cmp = ref Component<T>();
 
         EcsAssert.Assert(cmp.Size > 0, "this is not a component");
 
-        Set(entity, ref cmp, new ReadOnlySpan<byte>(&component, cmp.Size));
+        Set(entity, in cmp, in component);
     }
 
     public void Unset<T>(EcsID entity) where T : unmanaged =>
-        DetachComponent(entity, ref Component<T>());
+        DetachComponent(entity, in Component<T>());
 
-    public bool Has<T>(EcsID entity) where T : unmanaged => Has(entity, ref Component<T>());
+    public bool Has<T>(EcsID entity) where T : unmanaged => Has(entity, in Component<T>());
 
-    public bool Has<TKind>(EcsID entity, EcsID target) where TKind : unmanaged =>
-        Has(entity, Entity<TKind>(), target);
+    //public bool Has<TKind>(EcsID entity, EcsID target) where TKind : unmanaged =>
+    //    Has(entity, Entity<TKind>(), target);
 
-    public bool Has<TKind, TTarget>(EcsID entity)
-        where TKind : unmanaged
-        where TTarget : unmanaged => Has(entity, Entity<TKind>(), Entity<TKind>());
+    //public bool Has<TKind, TTarget>(EcsID entity)
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged => Has(entity, Entity<TKind>(), Entity<TKind>());
 
     public ref T Get<T>(EcsID entity) where T : unmanaged
     {
