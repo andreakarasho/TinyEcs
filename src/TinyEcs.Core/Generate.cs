@@ -14,11 +14,12 @@ namespace TinyEcs
 			var sbWiths = new StringBuilder(4096);
 			var sbFieldDecl = new StringBuilder(4096);
 			var sbFnCalls = new StringBuilder(4096);
+			var sbWhere = new StringBuilder(4096);
 
-			var delTemplate = $"public delegate void QueryTemplate{(queryForEntity ? "WithEntity" : "")}<{{0}}>({{1}});\n";
+			var delTemplate = $"public delegate void QueryTemplate{(queryForEntity ? "WithEntity" : "")}<{{0}}>({{1}}) {{2}};\n";
 			var fnTemplate = """
 
-		public void System<TPhase, {0}>(QueryTemplate{4}<{0}> fn)
+		public void System<TPhase, {0}>(QueryTemplate{4}<{0}> fn) where TPhase : struct {5}
 		{{
 			{1}
 			var terms = Terms;
@@ -40,7 +41,7 @@ namespace TinyEcs
 
 			var iteratorTemplate = """
 
-		public void Iterator<{0}>(QueryTemplate{4}<{0}> fn)
+		public void Iterator<{0}>(QueryTemplate{4}<{0}> fn) {5}
 		{{
 			{1}
 
@@ -61,6 +62,7 @@ namespace TinyEcs
 				sb0.Clear();
 				sb1.Clear();
 				sbFnCalls.Clear();
+				sbWhere.Clear();
 
 				sbWiths.AppendFormat("With<T{0}>();\n", i);
 				sbFieldDecl.AppendFormat("var t{0}A = it.Field<T{0}>({0});\n", i);
@@ -76,6 +78,7 @@ namespace TinyEcs
 					sb0.AppendFormat("T{0}", j);
 					sb1.AppendFormat("ref T{0} t{0}", j);
 					sbFnCalls.AppendFormat("ref t{0}A[i]", j);
+					sbWhere.AppendFormat("where T{0} : struct ", j);
 
 					if (j + 1 <= count)
 					{
@@ -85,11 +88,11 @@ namespace TinyEcs
 					}
 				}
 
-				sb.AppendFormat(delTemplate, sb0.ToString(), sb1.ToString());
+				sb.AppendFormat(delTemplate, sb0.ToString(), sb1.ToString(), sbWhere.ToString());
 
-				sbMethods.AppendFormat(fnTemplate, sb0.ToString(), sbWiths.ToString(), sbFieldDecl.ToString(), sbFnCalls.ToString(), queryForEntity ? "WithEntity" : "");
+				sbMethods.AppendFormat(fnTemplate, sb0.ToString(), sbWiths.ToString(), sbFieldDecl.ToString(), sbFnCalls.ToString(), queryForEntity ? "WithEntity" : "", sbWhere.ToString());
 
-				sbIterators.AppendFormat(iteratorTemplate, sb0.ToString(), sbWiths.ToString(), sbFieldDecl.ToString(), sbFnCalls.ToString(), queryForEntity ? "WithEntity" : "");
+				sbIterators.AppendFormat(iteratorTemplate, sb0.ToString(), sbWiths.ToString(), sbFieldDecl.ToString(), sbFnCalls.ToString(), queryForEntity ? "WithEntity" : "", sbWhere.ToString());
 			}
 
 

@@ -53,15 +53,15 @@ public sealed class Commands
         Set(id, ref cmp);
     }
 
-    public unsafe void Set<T>(EcsID id) 
-    {
+    public unsafe void Set<T>(EcsID id) where T : struct
+	{
         ref readonly var cmp = ref _main.Component<T>();
 		EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 		Set(id, in cmp);
 	}
 
-    public unsafe ref T Set<T>(EcsID id, T component) 
-    {
+    public unsafe ref T Set<T>(EcsID id, T component) where T : struct
+	{
         EcsAssert.Assert(_main.Exists(id));
 
         ref readonly var cmp = ref _main.Component<T>();
@@ -102,8 +102,8 @@ public sealed class Commands
 		return ref set.Data;
     }
 
-    public void Unset<T>(EcsID id) 
-    {
+    public void Unset<T>(EcsID id) where T : struct
+	{
         EcsAssert.Assert(_main.Exists(id));
 
         ref readonly var cmp = ref _main.Component<T>();
@@ -113,8 +113,8 @@ public sealed class Commands
         unset.ComponentSize = cmp.Size;
     }
 
-    public ref T Get<T>(EcsID entity) 
-    {
+    public ref T Get<T>(EcsID entity) where T : struct
+	{
         EcsAssert.Assert(_main.Exists(entity));
 
         if (_main.Has<T>(entity))
@@ -127,8 +127,8 @@ public sealed class Commands
         return ref Set(entity, cmp);
     }
 
-    public bool Has<T>(EcsID entity) 
-    {
+    public bool Has<T>(EcsID entity) where T : struct
+	{
         EcsAssert.Assert(_main.Exists(entity));
 
         return _main.Has<T>(entity);
@@ -146,11 +146,11 @@ public sealed class Commands
             EcsAssert.Assert(_main.Exists(set.Entity));
 
             var cmp = new EcsComponent(set.Component, set.DataLength, string.Empty);
-            _main.Set(
-                set.Entity,
-                in cmp,
-				in set.Data
-            );
+    //        _main.Set(
+    //            set.Entity,
+    //            in cmp,
+				//in set.Data
+    //        );
 
             set.Data = null;
             set.DataLength = 0;
@@ -210,14 +210,14 @@ public readonly ref struct CommandEntityView
 
     public readonly EcsID ID => _id;
 
-    public readonly CommandEntityView Set<T>(T cmp) 
-    {
+    public readonly CommandEntityView Set<T>(T cmp) where T : struct
+	{
         _cmds.Set(_id, cmp);
         return this;
     }
 
-    public readonly CommandEntityView Set<T>() 
-    {
+    public readonly CommandEntityView Set<T>() where T : struct
+	{
         _cmds.Set<T>(_id);
         return this;
     }
@@ -227,8 +227,8 @@ public readonly ref struct CommandEntityView
         _cmds.Set(_id, id);
         return this;
     }
-    public readonly CommandEntityView Unset<T>() 
-    {
+    public readonly CommandEntityView Unset<T>() where T : struct
+	{
         _cmds.Unset<T>(_id);
         return this;
     }
@@ -239,13 +239,13 @@ public readonly ref struct CommandEntityView
         return this;
     }
 
-    public readonly ref T Get<T>() 
-    {
+    public readonly ref T Get<T>() where T : struct
+	{
         return ref _cmds.Get<T>(_id);
     }
 
-    public readonly bool Has<T>() 
-    {
+    public readonly bool Has<T>() where T : struct
+	{
         return _cmds.Has<T>(_id);
     }
 }

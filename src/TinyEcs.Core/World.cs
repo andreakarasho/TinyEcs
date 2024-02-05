@@ -99,8 +99,8 @@ public sealed partial class World : IDisposable
     //     return ValueType.Equals(t1, t2) ? 0 : size;
     // }
 
-    internal unsafe ref readonly EcsComponent Component<T>()
-    {
+    internal unsafe ref readonly EcsComponent Component<T>() where T : struct
+	{
         ref readonly var lookup = ref Lookup.Entity<T>.Component;
 
         // if (lookup.ID == 0 || !Exists(lookup.ID))
@@ -170,8 +170,8 @@ public sealed partial class World : IDisposable
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
     }
 
-    public EntityView Entity<T>(EcsID id = default) 
-    {
+    public EntityView Entity<T>(EcsID id = default) where T : struct
+	{
         return Entity(Component<T>().ID);
     }
 
@@ -456,7 +456,7 @@ public sealed partial class World : IDisposable
         return arch;
     }
 
-    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data)
+    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : struct
     {
         EcsAssert.Assert(cmp.Size == Lookup.Entity<T>.Size);
 
@@ -732,8 +732,8 @@ internal static class Lookup
 	}
 
 	[SkipLocalsInit]
-    internal static class Entity<T>
-    {
+    internal static class Entity<T> where T : struct
+	{
         public static unsafe readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
 		public static readonly int HashCode = typeof(T).GetHashCode();
@@ -749,7 +749,7 @@ internal static class Lookup
 		{
 			var size = Unsafe.SizeOf<T>();
 
-			if (size != 1 || !typeof(T).IsValueType)
+			if (size != 1 || RuntimeHelpers.IsReferenceOrContainsReferences<T>())
 				return size;
 
 			// credit: BeanCheeseBurrito from Flecs.NET

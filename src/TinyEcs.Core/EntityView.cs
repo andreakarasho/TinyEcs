@@ -29,8 +29,8 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public readonly override bool Equals(object? obj) => obj is EntityView ent && Equals(ent);
 
-    public readonly EntityView Set<T>()
-    {
+    public readonly EntityView Set<T>() where T : struct
+	{
         World.Set<T>(ID);
         return this;
     }
@@ -41,8 +41,8 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
         return this;
     }
 
-    public readonly EntityView Set<T>(T component) 
-    {
+    public readonly EntityView Set<T>(T component) where T : struct
+	{
         World.Set(ID, component);
         return this;
     }
@@ -65,8 +65,8 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
     //    return this;
     //}
 
-    public readonly EntityView Unset<T>() 
-    {
+    public readonly EntityView Unset<T>() where T : struct
+	{
         World.Unset<T>(ID);
         return this;
     }
@@ -85,9 +85,9 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
 
-    public readonly ref T Get<T>() => ref World.Get<T>(ID);
+    public readonly ref T Get<T>() where T : struct => ref World.Get<T>(ID);
 
-    public readonly bool Has<T>() => World.Has<T>(ID);
+    public readonly bool Has<T>() where T : struct => World.Has<T>(ID);
 
     //public readonly bool Has<TKind, TTarget>()
     //    where TKind : unmanaged

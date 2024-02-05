@@ -40,12 +40,12 @@ public enum TermOp : byte
     Without
 }
 
-public readonly struct With<T>
+public readonly struct With<T> where T : struct
 {
 	public static implicit operator Term(With<T> _) => Term.With(Lookup.Entity<T>.Component.ID);
 }
 
-public readonly struct Without<T>
+public readonly struct Without<T> where T : struct
 {
 	public static implicit operator Term(Without<T> _) => Term.Without(Lookup.Entity<T>.Component.ID);
 }

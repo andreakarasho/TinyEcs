@@ -47,7 +47,7 @@ public unsafe ref partial struct Query
         _world = world;
     }
 
-    public Query With<T>() => With(_world.Component<T>().ID);
+    public Query With<T>() where T : struct => With(_world.Component<T>().ID);
 
     public Query With(EcsID id)
     {
@@ -62,7 +62,7 @@ public unsafe ref partial struct Query
         return this;
     }
 
-    public Query Without<T>() => Without(_world.Component<T>().ID);
+    public Query Without<T>() where T : struct => Without(_world.Component<T>().ID);
 
     public Query Without(EcsID id)
     {
@@ -81,7 +81,7 @@ public unsafe ref partial struct Query
 
 	public void System(IteratorDelegate fn) => System<EcsSystemPhaseOnUpdate>(fn);
 	
-	public void System<TPhase>(IteratorDelegate fn)
+	public void System<TPhase>(IteratorDelegate fn) where TPhase : struct
 	{
 		var terms = Terms;
 		EcsID query = terms.Length > 0 ? _world.Entity() : 0;

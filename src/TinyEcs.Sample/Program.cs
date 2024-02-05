@@ -15,11 +15,11 @@ using var ecs = new World();
 
 unsafe
 {
-	//var text0 = Generate.CreateQueries(false);
-	//var text1 = Generate.CreateQueries(true);
+	var text0 = Generate.CreateQueries(false);
+	var text1 = Generate.CreateQueries(true);
 
-	//File.WriteAllText("a.txt", text0);
-	//File.WriteAllText("b.txt", text1);
+	File.WriteAllText("a.txt", text0);
+	File.WriteAllText("b.txt", text1);
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()

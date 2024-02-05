@@ -93,8 +93,8 @@ sealed unsafe class Table
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<T> ComponentData<T>(int column, int row, int count)
-    {
+    internal Span<T> ComponentData<T>(int column, int row, int count) where T : struct
+	{
         EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
 
 		ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
