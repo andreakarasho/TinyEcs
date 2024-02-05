@@ -513,35 +513,35 @@ public sealed partial class World : IDisposable
         if (it.Count == 0)
             return;
 
-        var columns = Span<Array>.Empty;
-        ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
-        ref var record = ref it.World.GetRecord(eventInfo.Entity);
-        var iterator = new Iterator(
-            it.Commands,
-            1,
-            record.Archetype.Table,
-            stackalloc EcsID[1] { eventInfo.Entity },
-            stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
-            null,
-            columns,
-            eventInfo.Event,
-            eventInfo.LastComponent
-        );
+        //var columns = Span<Array>.Empty;
+        //ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
+        //ref var record = ref it.World.GetRecord(eventInfo.Entity);
+        //var iterator = new Iterator(
+        //    it.Commands,
+        //    1,
+        //    record.Archetype.Table,
+        //    stackalloc EcsID[1] { eventInfo.Entity },
+        //    stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
+        //    null,
+        //    columns,
+        //    eventInfo.Event,
+        //    eventInfo.LastComponent
+        //);
 
-        var evA = it.Field<EcsEvent>(0);
+        //var evA = it.Field<EcsEvent>(0);
 
-        for (int i = 0; i < it.Count; ++i)
-        {
-            ref var ev = ref evA[i];
+        //for (int i = 0; i < it.Count; ++i)
+        //{
+        //    ref var ev = ref evA[i];
 
-            if (
-                record.Archetype.FindMatch(ev.Terms) == 0
-                && ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0
-            )
-            {
-                ev.Callback(ref iterator);
-            }
-        }
+        //    if (
+        //        record.Archetype.FindMatch(ev.Terms) == 0
+        //        && ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0
+        //    )
+        //    {
+        //        ev.Callback(ref iterator);
+        //    }
+        //}
     }
 
     internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
@@ -601,7 +601,7 @@ public sealed partial class World : IDisposable
             it.Commands,
             0,
             it.World._archRoot.Table,
-            Span<EcsID>.Empty,
+            Span<EntityView>.Empty,
             Span<int>.Empty,
             null,
             Span<Array>.Empty,

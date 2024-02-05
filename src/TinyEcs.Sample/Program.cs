@@ -15,74 +15,11 @@ using var ecs = new World();
 
 unsafe
 {
-	//var posID = ecs.Component<Position>().ID;
-	//var velID = ecs.Component<Velocity>().ID;
-	//var serialID = ecs.Entity<Serial>();
-	//var playerTagID = ecs.Entity<PlayerTag>();
+	//var text0 = Generate.CreateQueries(false);
+	//var text1 = Generate.CreateQueries(true);
 
-	//ecs.SetSingleton(new Serial(){Value = 1});
-	//ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
-
-	var sb = new StringBuilder(4096);
-	var sb0 = new StringBuilder();
-	var sb1 = new StringBuilder();
-	var sbMethods = new StringBuilder(4096);
-	var sbWiths = new StringBuilder();
-	var sbFieldDecl = new StringBuilder();
-	var sbFnCalls = new StringBuilder();
-
-	var delTemplate = "public delegate void QueryTemplate<{0}>({1});\n";
-	var fnTemplate = """
-		public void System<TPhase, {0}>(QueryTemplate<{0}> fn)
-		{{
-			{1}
-			var terms = Terms;
-			EcsID query = terms.Length > 0 ? _world.Entity() : 0;
-
-			_world.Entity()
-				.Set(new EcsSystem((ref Iterator it) =>
-				{{
-					{2}
-					for (int i = 0; i < it.Count; ++i)
-					{{
-						fn({3});
-					}}
-				}}, query, terms, float.NaN))
-				.Set<TPhase>();
-		}}
-""";
-
-	for (int i = 0, max = Query.TERMS_COUNT; i < max; ++i)
-	{
-		sb0.Clear();
-		sb1.Clear();
-		sbFnCalls.Clear();
-
-		sbWiths.AppendFormat("With<T{0}>();\n", i);
-		sbFieldDecl.AppendFormat("var t{0}A = it.Field<T{0}>({0});\n", i);
-
-		for (int j = 0, count = i; j <= count; ++j)
-		{
-			sb0.AppendFormat("T{0}", j);
-			sb1.AppendFormat("ref T{0} t{0}", j);
-			sbFnCalls.AppendFormat("ref t{0}A[i]", j);
-
-			if (j + 1 <= count)
-			{
-				sb0.Append(", ");
-				sb1.Append(", ");
-				sbFnCalls.Append(", ");
-			}
-		}
-
-		sb.AppendFormat(delTemplate, sb0.ToString(), sb1.ToString());
-
-		sbMethods.AppendFormat(fnTemplate, sb0.ToString(), sbWiths.ToString(), sbFieldDecl.ToString(), sbFnCalls.ToString());
-	}
-
-
-	var text =$"namespace TinyEcs;\npartial struct Query\n{{\n{sb.ToString() + "\n\n" + sbMethods.ToString()}\n}}";
-	
+	//File.WriteAllText("a.txt", text0);
+	//File.WriteAllText("b.txt", text1);
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()
@@ -111,27 +48,27 @@ unsafe
 			}
 		});
 
-	ecs.Query()
-		.With<Position>()
-		.With<Velocity>()
-		//.With<ManagedData>()
-		.Without<PlayerTag>()
-		.System(static (ref Iterator it) =>
-		{
-			var posA = it.Field<Position>(0);
-			var velA = it.Field<Velocity>(1);
-			//var manA = it.Field<ManagedData>(2);
+	//ecs.Query()
+	//	.With<Position>()
+	//	.With<Velocity>()
+	//	//.With<ManagedData>()
+	//	//.Without<PlayerTag>()
+	//	.System(static (ref Iterator it) =>
+	//	{
+	//		var posA = it.Field<Position>(0);
+	//		var velA = it.Field<Velocity>(1);
+	//		//var manA = it.Field<ManagedData>(2);
 
-			for (int i = 0, count = it.Count; i < count; ++i)
-			{
-				ref var pos = ref posA[i];
-				ref var vel = ref velA[i];
-				//ref var man = ref manA[i];
+	//		for (int i = 0, count = it.Count; i < count; ++i)
+	//		{
+	//			ref var pos = ref posA[i];
+	//			ref var vel = ref velA[i];
+	//			//ref var man = ref manA[i];
 
-				pos.X *= vel.X;
-				pos.Y *= vel.Y;
-			}
-		});
+	//			pos.X *= vel.X;
+	//			pos.Y *= vel.Y;
+	//		}
+	//	});
 
 	//ecs.Query()
 	//	.With<Position>()
@@ -156,12 +93,19 @@ unsafe
 	//	});
 
 	ecs.Query()
-		//.Without<PlayerTag>()
-		.System<EcsSystemPhaseOnUpdate, Position, Velocity>((ref Position pos, ref Velocity vel) =>
+		.System<EcsSystemPhaseOnUpdate, Position, Velocity>(static (ref Position pos, ref Velocity vel) =>
 		{
 			pos.X *= vel.X;
 			pos.Y *= vel.Y;
 		});
+
+	//ecs.Query()
+	//	//.Without<PlayerTag>()
+	//	.System<EcsSystemPhaseOnUpdate, Position, Velocity>((ref readonly EntityView entity, ref Position pos, ref Velocity vel) =>
+	//	{
+	//		pos.X *= vel.X;
+	//		pos.Y *= vel.Y;
+	//	});
 }
 
 var sw = Stopwatch.StartNew();

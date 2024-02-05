@@ -7,7 +7,7 @@ public sealed class Archetype
     private readonly World _world;
     private readonly ComponentComparer _comparer;
     private int _capacity, _count;
-    private EcsID[] _entities;
+    private EntityView[] _entities;
     private int[] _entitiesTableRows;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
     private readonly Table _table;
@@ -24,14 +24,14 @@ public sealed class Archetype
         _table = table;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
-        _entities = new EcsID[ARCHETYPE_INITIAL_CAPACITY];
+        _entities = new EntityView[ARCHETYPE_INITIAL_CAPACITY];
         _entitiesTableRows = new int[ARCHETYPE_INITIAL_CAPACITY];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         ComponentInfo = components.ToArray();
     }
 
-    internal EcsID[] Entities => _entities;
+    internal EntityView[] Entities => _entities;
     internal int[] EntitiesTableRows => _entitiesTableRows;
     public World World => _world;
     public int Count => _count;
@@ -59,7 +59,7 @@ public sealed class Archetype
             Array.Resize(ref _entitiesTableRows, _capacity);
         }
 
-        _entities[_count] = id;
+        _entities[_count] = new(_world, id);
         var row = tableRow < 0 ? _table.Add(id) : tableRow;
         _entitiesTableRows[_count] = row;
 

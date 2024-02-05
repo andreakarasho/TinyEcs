@@ -4,6 +4,7 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [StructLayout(LayoutKind.Sequential)]
+[DebuggerDisplay("ID: {ID}")]
 public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
     public static readonly EntityView Invalid = new(null, 0);

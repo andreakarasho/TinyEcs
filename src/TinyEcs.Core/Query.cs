@@ -77,7 +77,7 @@ public unsafe ref partial struct Query
         return this;
     }
 
-    public unsafe void Iterate(IteratorDelegate action) => _world.Query(Terms, action);
+    public void Iterate(IteratorDelegate action) => _world.Query(Terms, action); 
 
 	public void System(IteratorDelegate fn) => System<EcsSystemPhaseOnUpdate>(fn);
 	

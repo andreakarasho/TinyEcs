@@ -4,7 +4,7 @@ public delegate void IteratorDelegate(ref Iterator it);
 
 public readonly ref struct Iterator
 {
-    private readonly Span<EcsID> _entities;
+    private readonly Span<EntityView> _entities;
     private readonly Span<int> _entitiesToTableRows;
     private readonly Table _table;
     private readonly Span<Array> _columns;
@@ -35,7 +35,7 @@ public readonly ref struct Iterator
         Commands commands,
         int count,
         Table table,
-        Span<EcsID> entities,
+        Span<EntityView> entities,
         Span<int> toRows,
         object? userData,
         Span<Array> columns,
@@ -71,13 +71,13 @@ public readonly ref struct Iterator
 		var span = new Span<T>((T[])_columns[index]);
 
 		return new FieldIterator<T>(span, _entitiesToTableRows);
-		//index = _table.GetComponentIndex(World.Component<T>().ID);
-		//return new FieldIterator<T>(_table.ComponentData<T>(index, 0, Count), _entitiesToTableRows);
     }
 
-    public readonly EntityView Entity(int row) => World.Entity(_entities[row]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref readonly EntityView Entity(int row) => ref _entities[row];
 
-    public readonly CommandEntityView EntityDeferred(int row) => Commands.Entity(_entities[row]);
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly CommandEntityView EntityDeferred(int row) => Commands.Entity(_entities[row]);
 }
 
 [SkipLocalsInit]

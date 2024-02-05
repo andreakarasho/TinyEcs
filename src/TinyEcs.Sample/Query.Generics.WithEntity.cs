@@ -1,35 +1,35 @@
 namespace TinyEcs;
 partial struct Query
 {
-	public delegate void QueryTemplate<T0>(ref T0 t0);
-	public delegate void QueryTemplate<T0, T1>(ref T0 t0, ref T1 t1);
-	public delegate void QueryTemplate<T0, T1, T2>(ref T0 t0, ref T1 t1, ref T2 t2);
-	public delegate void QueryTemplate<T0, T1, T2, T3>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22, ref T23 t23);
-	public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22, ref T23 t23, ref T24 t24);
+	public delegate void QueryTemplateWithEntity<T0>(ref readonly EntityView entity, ref T0 t0);
+	public delegate void QueryTemplateWithEntity<T0, T1>(ref readonly EntityView entity, ref T0 t0, ref T1 t1);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22, ref T23 t23);
+	public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(ref readonly EntityView entity, ref T0 t0, ref T1 t1, ref T2 t2, ref T3 t3, ref T4 t4, ref T5 t5, ref T6 t6, ref T7 t7, ref T8 t8, ref T9 t9, ref T10 t10, ref T11 t11, ref T12 t12, ref T13 t13, ref T14 t14, ref T15 t15, ref T16 t16, ref T17 t17, ref T18 t18, ref T19 t19, ref T20 t20, ref T21 t21, ref T22 t22, ref T23 t23, ref T24 t24);
 
 
 
-	public void System<TPhase, T0>(QueryTemplate<T0> fn)
+	public void System<TPhase, T0>(QueryTemplateWithEntity<T0> fn)
 	{
 		With<T0>();
 
@@ -43,13 +43,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i]);
+					fn(in it.Entity(i), ref t0A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1>(QueryTemplate<T0, T1> fn)
+	public void System<TPhase, T0, T1>(QueryTemplateWithEntity<T0, T1> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -65,13 +65,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2>(QueryTemplate<T0, T1, T2> fn)
+	public void System<TPhase, T0, T1, T2>(QueryTemplateWithEntity<T0, T1, T2> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -89,13 +89,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3>(QueryTemplate<T0, T1, T2, T3> fn)
+	public void System<TPhase, T0, T1, T2, T3>(QueryTemplateWithEntity<T0, T1, T2, T3> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -115,13 +115,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4>(QueryTemplate<T0, T1, T2, T3, T4> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4>(QueryTemplateWithEntity<T0, T1, T2, T3, T4> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -143,13 +143,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5>(QueryTemplate<T0, T1, T2, T3, T4, T5> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -173,13 +173,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -205,13 +205,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -239,13 +239,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -275,13 +275,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -313,13 +313,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -353,13 +353,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -395,13 +395,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -439,13 +439,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -485,13 +485,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -533,13 +533,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -583,13 +583,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -635,13 +635,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -689,13 +689,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -745,13 +745,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -803,13 +803,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -863,13 +863,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -925,13 +925,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -989,13 +989,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1055,13 +1055,13 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
 	}
 
-	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn)
+	public void System<TPhase, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1123,7 +1123,7 @@ partial struct Query
 
 				for (int i = 0; i < it.Count; ++i)
 				{
-					fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i], ref t24A[i]);
+					fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i], ref t24A[i]);
 				}
 			}, query, terms, float.NaN))
 			.Set<TPhase>();
@@ -1131,7 +1131,7 @@ partial struct Query
 
 
 
-	public void Iterator<T0>(QueryTemplate<T0> fn)
+	public void Iterator<T0>(QueryTemplateWithEntity<T0> fn)
 	{
 		With<T0>();
 
@@ -1142,12 +1142,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i]);
+				fn(in it.Entity(i), ref t0A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1>(QueryTemplate<T0, T1> fn)
+	public void Iterator<T0, T1>(QueryTemplateWithEntity<T0, T1> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1160,12 +1160,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2>(QueryTemplate<T0, T1, T2> fn)
+	public void Iterator<T0, T1, T2>(QueryTemplateWithEntity<T0, T1, T2> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1180,12 +1180,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3>(QueryTemplate<T0, T1, T2, T3> fn)
+	public void Iterator<T0, T1, T2, T3>(QueryTemplateWithEntity<T0, T1, T2, T3> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1202,12 +1202,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4>(QueryTemplate<T0, T1, T2, T3, T4> fn)
+	public void Iterator<T0, T1, T2, T3, T4>(QueryTemplateWithEntity<T0, T1, T2, T3, T4> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1226,12 +1226,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5>(QueryTemplate<T0, T1, T2, T3, T4, T5> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1252,12 +1252,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1280,12 +1280,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1310,12 +1310,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1342,12 +1342,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1376,12 +1376,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1412,12 +1412,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1450,12 +1450,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1490,12 +1490,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1532,12 +1532,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1576,12 +1576,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1622,12 +1622,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1670,12 +1670,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1720,12 +1720,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1772,12 +1772,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1826,12 +1826,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1882,12 +1882,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -1940,12 +1940,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -2000,12 +2000,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -2062,12 +2062,12 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i]);
 			}
 		});
 	}
 
-	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn)
+	public void Iterator<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn)
 	{
 		With<T0>();
 		With<T1>();
@@ -2126,7 +2126,7 @@ partial struct Query
 
 			for (int i = 0; i < it.Count; ++i)
 			{
-				fn(ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i], ref t24A[i]);
+				fn(in it.Entity(i), ref t0A[i], ref t1A[i], ref t2A[i], ref t3A[i], ref t4A[i], ref t5A[i], ref t6A[i], ref t7A[i], ref t8A[i], ref t9A[i], ref t10A[i], ref t11A[i], ref t12A[i], ref t13A[i], ref t14A[i], ref t15A[i], ref t16A[i], ref t17A[i], ref t18A[i], ref t19A[i], ref t20A[i], ref t21A[i], ref t22A[i], ref t23A[i], ref t24A[i]);
 			}
 		});
 	}
