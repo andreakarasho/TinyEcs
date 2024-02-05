@@ -152,30 +152,30 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
         }
     }
 
-    public unsafe readonly EntityView System(
-		IteratorDelegate callback,
-        params Term[] terms
-    ) => System(callback, float.NaN, terms);
+  //  public unsafe readonly EntityView System(
+		//IteratorDelegate callback,
+  //      params Term[] terms
+  //  ) => System(callback, float.NaN, terms);
 
-    public unsafe readonly EntityView System(
-        IteratorDelegate callback,
-        float tick,
-        params Term[] terms
-    )
-    {
-        EcsID query = terms.Length > 0 ? World.Entity() : 0;
+  //  public unsafe readonly EntityView System(
+  //      IteratorDelegate callback,
+  //      float tick,
+  //      params Term[] terms
+  //  )
+  //  {
+  //      EcsID query = terms.Length > 0 ? World.Entity() : 0;
 
-        Array.Sort(terms);
+  //      Array.Sort(terms);
 
-        Set(new EcsSystem(callback, query, terms, tick));
+  //      Set(new EcsSystem(callback, query, terms, tick));
 
-        return this;
-    }
+  //      return this;
+  //  }
 
-    public unsafe readonly EntityView Event(delegate* <ref Iterator, void> callback)
-    {
-        return this;
-    }
+  //  public unsafe readonly EntityView Event(delegate* <ref Iterator, void> callback)
+  //  {
+  //      return this;
+  //  }
 
     public static implicit operator EcsID(EntityView d) => d.ID;
 

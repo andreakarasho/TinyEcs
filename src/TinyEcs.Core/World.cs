@@ -141,13 +141,6 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
-    public EcsID Pair<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged => IDOp.Pair(Entity<TKind>(), Entity<TTarget>());
-
-    public EcsID Pair<TKind>(EcsID target) where TKind : unmanaged =>
-        IDOp.Pair(Entity<TKind>(), target);
-
     public Query Query() => new(this);
 
     public unsafe EntityView Event(
@@ -684,13 +677,16 @@ public sealed partial class World : IDisposable
             if (result == 0 && root.Count > 0)
             {
                 var matched = terms;
-                for (int i = 0; i < matched.Length; ++i)
+                for (int i = 0, j = 0; i < matched.Length; ++i)
                 {
+					if (matched[i].Op == TermOp.Without)
+						continue;
+
                     var columnIdx = root.Table.GetComponentIndex(matched[i].ID);
                     if (columnIdx <= -1)
                         continue;
 
-					matchedColumns[i] = root.Table.RawComponentData(columnIdx);
+					matchedColumns[j++] = root.Table.RawComponentData(columnIdx);
                 }
 
                 var it = new Iterator(commands, root, userData, matchedColumns);
@@ -730,7 +726,8 @@ internal static class Lookup
 
 	public static Array? GetArray(ulong hashcode, int count)
 	{
-		EcsAssert.Assert(_arrayCreator.TryGetValue(hashcode, out var fn), $"invalid hashcode {hashcode}");
+		var ok = _arrayCreator.TryGetValue(hashcode, out var fn);
+		EcsAssert.Assert(ok, $"invalid hashcode {hashcode}");
 		return fn?.Invoke(count) ?? null;
 	}
 

@@ -1,9 +1,9 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public unsafe ref struct Query
+public unsafe ref partial struct Query
 {
-    const int TERMS_COUNT = 16;
+    public const int TERMS_COUNT = 25;
 
     private readonly World _world;
     private int _termIndex;
