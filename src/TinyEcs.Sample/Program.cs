@@ -10,156 +10,51 @@ using TinyEcs;
 
 const int ENTITIES_COUNT = 524_288 * 2 * 1;
 
-// using var world = new World();
-// var tttt = world.Entity(1).Type();
-// world.Entity(1).Set(2);
-
-// world.PrintGraph();
-
-
-// var positionID = world.Entity<Position>();
-// var velocityID = world.Entity<Velocity>();
-// var pairID = world.Pair<Likes, Dogs>();
-
-// var main = world.Entity();
-// var secondMain = world.Entity();
-
-// ref var rec = ref world.GetRecord(secondMain);
-
-//  var ooo = world.Entity();
-//  ooo.ChildOf(main);
-//  ooo.ChildOf(secondMain);
-
-// unsafe
-// {
-// 	Term t = Term.With(positionID.ID);
-// 	t.Not();
-// 	t = !t;
-
-
-// 	world.Entity()
-// 		.System(&SystemCtx1, positionID, +velocityID, -pairID)
-// 		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-// 	// world.New()
-// 	// 	.System
-// 	// 	(
-// 	// 		&SystemCtx1,
-// 	// 		[positionID, velocityID],
-// 	// 		[pairID],
-// 	// 		float.NaN
-// 	// 	)
-// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-// 	// world.New()
-// 	// 	.System
-// 	// 	(
-// 	// 		&SystemCtx1,
-// 	// 		positionID,
-// 	// 		velocityID
-// 	// 	)
-// 	// 	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-// 	// world.System
-// 	// (
-// 	// 	&SystemCtx1,
-// 	// 	positionID,
-// 	// 	velocityID
-// 	// );
-
-// 	// world.Event
-// 	// (
-// 	// 	&ObserveThings,
-// 	// 	stackalloc Term[] {
-// 	// 		Term.With(world.Component<Position>().ID),
-// 	// 		//Term.With(world.Component<Velocity>().ID),
-// 	// 		//Term.With(world.Pair<EcsChildOf>(main.ID))
-// 	// 	},
-// 	// 	stackalloc EcsID[] {
-// 	// 		world.Component<CustomEvent>().ID
-// 	// 		//world.Component<EcsObserverOnSet>().ID,
-// 	// 		//world.Component<EcsObserverOnUnset>().ID
-// 	// 	}
-// 	// );
-
-// 	//world.Event(&ObserveThings, [ Position ], [ CustomEvent ]);
-
-// 	//world.Despawn(world.Component<Position>().ID);
-// 	main.Set<Velocity>();
-// 	main.Set<Position>(new Position() { X = -123, Y = 456, Z = 0.123388f });
-// 	//main.Set<Likes,Dogs>();
-// 	//world.EmitEvent<CustomEvent, Position>(main);
-
-// 		// .With<Position>()
-// 		// .With<Velocity>()
-// 		// .With<EcsChildOf>(main.ID)
-// 		// .OnEvent<EcsObserverOnSet>()
-// 		// .OnEvent<EcsObserverOnUnset>();
-// }
-
-
-// for (int i = 0; i < 10; ++i)
-// 	world.Entity().Set<Position>().Set<Velocity>().ChildOf(main).ChildOf(secondMain);
-
-// // main.Set<Position>(new Position() { X = 12, Y = -2, Z = 0.8f });
-// // main.Set<Dogs>();
-// // main.Set<Likes>();
-// // main.Set<Velocity>(new Velocity() { X = 345f, Y = 0.23f});
-// // main.Unset<Velocity>();
-// // main.Unset<Velocity>();
-
-// // for (int i = 0; i < 10; ++i)
-// // 	world.New().ChildOf(main);
-
-// main.Children(static s => {
-// 	var p = s.Parent();
-// 	Console.WriteLine("child id {0}", s.ID);
-// });
-
-// secondMain.Children(static s => {
-// 	var p = s.Parent();
-// 	Console.WriteLine("secondMain child id {0}", s.ID);
-// });
-
-// // while (true)
-// // 	world.Step();
-// world.Step();
-
-// secondMain.Delete();
-// //main.ClearChildren();
-
-// world.Query().With<EcsChildOf>(main.ID).Iterate(static (ref Iterator it) => {
-// 	Console.WriteLine("found children");
-// });
-
-// world.Query().With<EcsChildOf, EcsAny>().Iterate(static (ref Iterator it) => {
-// 	Console.WriteLine("found children for any");
-// });
 using var ecs = new World();
 
 unsafe
 {
-	var posID = ecs.Entity<Position>();
-	var velID = ecs.Entity<Velocity>();
-	var serialID = ecs.Entity<Serial>();
-	var playerTagID = ecs.Entity<PlayerTag>();
+	var posID = ecs.Component<Position>().ID;
+	var velID = ecs.Component<Velocity>().ID;
+	//var serialID = ecs.Entity<Serial>();
+	//var playerTagID = ecs.Entity<PlayerTag>();
 
 	//ecs.SetSingleton(new Serial(){Value = 1});
 	//ecs.SetSingleton(new PlayerTag() { ID = 0xDEADBEEF });
 
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()
-			.Set<Position>(new Position())
-			.Set<Velocity>(new Velocity())
+			.Set<Position>(new Position() { X = i })
+			.Set<Velocity>(new Velocity() { Y = i })
+			.Set<ManagedData>(new ManagedData() { Integer = i, Text = i.ToString() })
 			;
+
+	ecs.Entity()
+			.Set<PlayerTag>()
+			.Set<Position>(new Position() { X = 1 })
+			.Set<Velocity>(new Velocity() { Y = 1 })
+			.Set<ManagedData>(new ManagedData() { Integer = 1, Text = "PALLE" });
 
 	// ecs.Entity()
 	// 	.System(&Setup)
 	// 	.Set<EcsPhase, EcsSystemPhaseOnStartup>();
 
 	ecs.Entity()
-		.System(&ParseQuery, posID, velID)
-		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+		.System(static (ref Iterator it) =>
+		{
+			var posA = it.Field<Position>(0);
+			var velA = it.Field<Velocity>(1);
+
+			for (int i = 0, count = it.Count; i < count; ++i)
+			{
+				ref var pos = ref posA[i];
+				ref var vel = ref velA[i];
+
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			}
+		}, Term.With(posID), Term.With(velID))
+		.Set<EcsSystemPhaseOnUpdate>();
 
 	ecs.Query()
 		.With<EcsComponent>()
@@ -172,6 +67,50 @@ unsafe
 				var entity = it.Entity(i);
 
 				Console.WriteLine("{0} --> ID: {1} - SIZE: {2}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size);
+			}
+		});
+
+	ecs.Query()
+		.With<Position>()
+		.With<Velocity>()
+		.With<ManagedData>()
+		.Without<PlayerTag>()
+		.Iterate(static (ref Iterator it) =>
+		{
+			var posA = it.Field<Position>(0);
+			var velA = it.Field<Velocity>(1);
+			var manA = it.Field<ManagedData>(2);
+
+			for (int i = 0, count = it.Count; i < count; ++i)
+			{
+				ref var pos = ref posA[i];
+				ref var vel = ref velA[i];
+				ref var man = ref manA[i];
+
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			}
+		});
+
+	ecs.Query()
+		.With<Position>()
+		.With<Velocity>()
+		.With<ManagedData>()
+		.With<PlayerTag>()
+		.System(static (ref Iterator it) =>
+		{
+			var posA = it.Field<Position>(0);
+			var velA = it.Field<Velocity>(1);
+			var manA = it.Field<ManagedData>(2);
+
+			for (int i = 0, count = it.Count; i < count; ++i)
+			{
+				ref var pos = ref posA[i];
+				ref var vel = ref velA[i];
+				ref var man = ref manA[i];
+
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
 			}
 		});
 }
@@ -281,7 +220,7 @@ enum TileType
 struct Serial { public uint Value; }
 struct Position { public float X, Y, Z; }
 struct Velocity { public float X, Y; }
-struct PlayerTag { public ulong ID; }
+struct PlayerTag { }
 
 struct CustomEvent { }
 
@@ -291,7 +230,7 @@ struct Apples { }
 
 struct TestStr { public byte v; }
 
-
+struct ManagedData { public string Text; public int Integer; }
 
 struct Context1 {}
 struct Context2 {}

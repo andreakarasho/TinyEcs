@@ -4,11 +4,13 @@ public readonly struct EcsComponent
 {
     public readonly ulong ID;
     public readonly int Size;
+	public readonly string Name;
 
-    public EcsComponent(EcsID id, int size)
+    public EcsComponent(EcsID id, int size, string name)
     {
         ID = id;
         Size = size;
+		Name = name;
     }
 }
 
@@ -16,7 +18,7 @@ public unsafe struct EcsSystem
 {
     const int TERMS_COUNT = 32;
 
-    public readonly delegate* <ref Iterator, void> Callback;
+    public readonly IteratorDelegate Callback;
     public readonly EcsID Query;
     public readonly float Tick;
     public float TickCurrent;
@@ -35,7 +37,7 @@ public unsafe struct EcsSystem
     }
 
     public EcsSystem(
-        delegate* <ref Iterator, void> func,
+		IteratorDelegate func,
         EcsID query,
         ReadOnlySpan<Term> terms,
         float tick
@@ -45,7 +47,6 @@ public unsafe struct EcsSystem
         Query = query;
         _termsCount = terms.Length;
         terms.CopyTo(Terms);
-        Terms.Sort();
         Tick = tick;
         TickCurrent = 0f;
     }
@@ -239,14 +240,14 @@ public partial class World
         //     stackalloc EcsID[] { EcsEventOnDelete }
         // );
 
-        // EntityView CreateWithLookup<T>(EcsID id) where T : unmanaged
+        // EntityView CreateWithLookup<T>(EcsID id) 
         // {
         //     var view = Entity(id);
         //     Lookup.Entity<T>.Component = new(view, GetSize<T>());
         //     return view;
         // }
 
-        // static EntityView AssignDefaults<T>(EntityView view) where T : unmanaged
+        // static EntityView AssignDefaults<T>(EntityView view) 
         // {
         //     ref var cmp = ref Lookup.Entity<T>.Component;
         //     view.Set(cmp).Set(EcsPanic, EcsDelete);

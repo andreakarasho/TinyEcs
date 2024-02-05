@@ -9,8 +9,6 @@ public struct Term : IComparable<Term>
 
     public static Term Without(EcsID id) => new() { ID = id, Op = TermOp.Without };
 
-    public static Term Singleton(EcsID id) => new() { ID = id, Op = TermOp.Singleton };
-
     public readonly int CompareTo(Term other)
     {
         return ID.CompareTo(other.ID);
@@ -39,6 +37,5 @@ public static class TermExt
 public enum TermOp : byte
 {
     With,
-    Without,
-    Singleton,
+    Without
 }

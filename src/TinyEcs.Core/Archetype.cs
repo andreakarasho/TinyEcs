@@ -105,7 +105,7 @@ public sealed class Archetype
         return toRow;
     }
 
-    internal Span<T> ComponentData<T>(int row, int count) where T : unmanaged
+    internal Span<T> ComponentData<T>(int row, int count) 
     {
         EcsAssert.Assert(row >= 0);
         EcsAssert.Assert(row < _entities.Length);
@@ -116,7 +116,7 @@ public sealed class Archetype
         var column = GetComponentIndex(in cmp);
         EcsAssert.Assert(column >= 0);
 
-        return _table.ComponentData<T>(column, _entitiesTableRows[row], count, cmp.Size);
+        return _table.ComponentData<T>(column, _entitiesTableRows[row], count);
     }
 
     internal void Clear()
@@ -219,12 +219,6 @@ public sealed class Archetype
 
         while (currents.CanAdvance() && searching.CanAdvance())
         {
-            if (searching.Value.Op == TermOp.Singleton)
-            {
-                searching.Advance();
-                continue;
-            }
-
             if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
             {
                 if (searching.Value.Op != TermOp.With)

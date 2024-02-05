@@ -26,7 +26,7 @@ public sealed partial class World : IDisposable
         _commands = new(this);
 
         InitializeDefaults();
-        _entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
+        //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
     }
 
     public int EntityCount => _entities.Length;
@@ -83,7 +83,7 @@ public sealed partial class World : IDisposable
     //     return Entity(id);
     // }
 
-    // private unsafe int GetSize<T>() where T : unmanaged
+    // private unsafe int GetSize<T>() 
     // {
     //     var size = sizeof(T);
 
@@ -99,7 +99,7 @@ public sealed partial class World : IDisposable
     //     return ValueType.Equals(t1, t2) ? 0 : size;
     // }
 
-    internal unsafe ref readonly EcsComponent Component<T>() where T : unmanaged
+    internal unsafe ref readonly EcsComponent Component<T>()
     {
         ref readonly var lookup = ref Lookup.Entity<T>.Component;
 
@@ -177,14 +177,10 @@ public sealed partial class World : IDisposable
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
     }
 
-    public EntityView Entity<T>(EcsID id = default) where T : unmanaged
+    public EntityView Entity<T>(EcsID id = default) 
     {
         return Entity(Component<T>().ID);
     }
-
-    public EntityView Entity<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged => Entity(IDOp.Pair(Entity<TKind>(), Entity<TTarget>()));
 
     internal EntityView NewEmpty(ulong id = 0)
     {
@@ -208,21 +204,6 @@ public sealed partial class World : IDisposable
     public void Delete(EcsID entity)
     {
         ref var record = ref GetRecord(entity);
-
-        //EcsAssert.Panic(!Has<EcsPanic, EcsDelete>(entity), $"You cannot delete entity {entity} with ({nameof(EcsPanic)}, {nameof(EcsDelete)})");
-
-
-        Query()
-            .With<EcsChildOf>(entity)
-            .Iterate(
-                static (ref Iterator it) =>
-                {
-                    for (int i = 0; i < it.Count; ++i)
-                    {
-                        it.Entity(0).Delete();
-                    }
-                }
-            );
 
         var removedId = record.Archetype.Remove(ref record);
         EcsAssert.Assert(removedId == entity);
@@ -400,13 +381,11 @@ public sealed partial class World : IDisposable
 
         const int STACKALLOC_SIZE = 16;
 
-        EcsComponent[]? buffer = null;
-        Span<EcsComponent> span =
-            cmpCount <= STACKALLOC_SIZE
-                ? stackalloc EcsComponent[STACKALLOC_SIZE]
-                : (buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount));
+        EcsComponent[]? buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount);
+		Span<EcsComponent> span = buffer;
 
-        span = span[..cmpCount];
+
+		span = span[..cmpCount];
 
         if (!add)
         {
@@ -484,9 +463,9 @@ public sealed partial class World : IDisposable
         return arch;
     }
 
-    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : unmanaged
+    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data)
     {
-        //EcsAssert.Assert(cmp.Size == data.Length);
+        EcsAssert.Assert(cmp.Size == Lookup.Entity<T>.Size);
 
         ref var record = ref GetRecord(entity);
 
@@ -501,42 +480,13 @@ public sealed partial class World : IDisposable
         if (cmp.Size > 0)
         {
 			record.Archetype.Table
-				.ComponentData<T>(column, record.Archetype.EntitiesTableRows[record.Row], 1, cmp.Size)[0] = data;
-
-    //        var buf = record.Archetype.Table.ComponentData<byte>(
-    //            column,
-    //            record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-				//1,
-    //            cmp.Size
-    //        );
-
-    //        EcsAssert.Assert(data.Length == buf.Length);
-    //        data.CopyTo(buf);
+				.ComponentData<T>(column, record.Archetype.EntitiesTableRows[record.Row], 1)[0] = data;
         }
 
         if (emit)
         {
             //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
-    }
-
-    internal Span<byte> GetRaw(EcsID entity, EcsID id, int size)
-    {
-        ref var record = ref GetRecord(entity);
-        var cmp = new EcsComponent(id, size);
-
-        var column = record.Archetype.GetComponentIndex(ref cmp);
-        var buf = record.Archetype.Table.ComponentData<byte>(
-            column,
-            record.Archetype.EntitiesTableRows[record.Row] * cmp.Size,
-            1,
-			cmp.Size
-		);
-
-        EcsAssert.Assert(!buf.IsEmpty);
-        EcsAssert.Assert(size == buf.Length);
-
-        return buf;
     }
 
     [SkipLocalsInit]
@@ -570,7 +520,7 @@ public sealed partial class World : IDisposable
         if (it.Count == 0)
             return;
 
-        var columns = Span<nuint>.Empty;
+        var columns = Span<Array>.Empty;
         ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
         ref var record = ref it.World.GetRecord(eventInfo.Entity);
         var iterator = new Iterator(
@@ -623,7 +573,7 @@ public sealed partial class World : IDisposable
     {
         Span<Term> terms = stackalloc Term[] { Term.With(Entity<EcsSystem>()), Term.With(phase), };
 
-        Query(terms, &RunSystems);
+        Query(terms, RunSystems);
     }
 
     public void Step(float deltaTime = 0.0f)
@@ -634,14 +584,14 @@ public sealed partial class World : IDisposable
 
         if (_frame == 0)
         {
-            RunPhase(Pair<EcsPhase, EcsSystemPhasePreStartup>());
-            RunPhase(Pair<EcsPhase, EcsSystemPhaseOnStartup>());
-            RunPhase(Pair<EcsPhase, EcsSystemPhasePostStartup>());
+            RunPhase(Component<EcsSystemPhasePreStartup>().ID);
+            RunPhase(Component<EcsSystemPhaseOnStartup>().ID);
+            RunPhase(Component<EcsSystemPhasePostStartup>().ID);
         }
 
-        RunPhase(Pair<EcsPhase, EcsSystemPhasePreUpdate>());
-        RunPhase(Pair<EcsPhase, EcsSystemPhaseOnUpdate>());
-        RunPhase(Pair<EcsPhase, EcsSystemPhasePostUpdate>());
+        RunPhase(Component<EcsSystemPhasePreUpdate>().ID);
+        RunPhase(Component<EcsSystemPhaseOnUpdate>().ID);
+        RunPhase(Component<EcsSystemPhasePostUpdate>().ID);
 
         _commands.Merge();
         _frame += 1;
@@ -661,7 +611,7 @@ public sealed partial class World : IDisposable
             Span<EcsID>.Empty,
             Span<int>.Empty,
             null,
-            Span<nuint>.Empty,
+            Span<Array>.Empty,
             0
         );
         var sysA = it.Field<EcsSystem>(0);
@@ -696,50 +646,33 @@ public sealed partial class World : IDisposable
 
     public unsafe void Query(
         Span<Term> terms,
-        delegate* <ref Iterator, void> action,
+		IteratorDelegate action,
         object? userData = null
     )
     {
-        Span<nuint> columns = stackalloc nuint[terms.Length];
-        Span<Term> sortedTerms = stackalloc Term[terms.Length];
+		var arrayBuf = ArrayPool<Array>.Shared.Rent(terms.Length);
+		Span<Array> columns = arrayBuf.AsSpan(0, terms.Length);
+		Span<Term> sortedTerms = stackalloc Term[terms.Length];
         terms.CopyTo(sortedTerms);
         sortedTerms.Sort();
 
-        //var allSingletons = 0;
-        //for (var i = 0; i < terms.Length; ++i)
-        //{
-        //    if (terms[i].Op == TermOp.Singleton)
-        //    {
-        //        // check if it's a singleton
-        //        if (!Has(terms[i].ID, terms[i].ID))
-        //            return;
-
-        //        allSingletons += 1;
-        //        columns[i] = (nuint)(
-        //            Unsafe.AsPointer(
-        //                ref MemoryMarshal.GetReference(GetRaw(terms[i].ID, terms[i].ID, 1))
-        //            )
-        //        );
-        //    }
-        //}
-
-        //if (allSingletons == terms.Length)
-        //{
-        //    var it = new Iterator(_commands, _archRoot, userData, columns);
-        //    action(ref it);
-        //    return;
-        //}
-
-        QueryRec(_archRoot, terms, sortedTerms, _commands, action, userData, columns);
+		try
+		{
+			QueryRec(_archRoot, terms, sortedTerms, _commands, action, userData, columns);
+		}
+		finally
+		{
+			ArrayPool<Array>.Shared.Return(arrayBuf);
+		}
 
         static void QueryRec(
             Archetype root,
             Span<Term> terms,
             Span<Term> sortedTerms,
             Commands commands,
-            delegate* <ref Iterator, void> action,
+			IteratorDelegate action,
             object? userData,
-            Span<nuint> matchedColumns
+            Span<Array> matchedColumns
         )
         {
             var result = root.FindMatch(sortedTerms);
@@ -753,18 +686,11 @@ public sealed partial class World : IDisposable
                 var matched = terms;
                 for (int i = 0; i < matched.Length; ++i)
                 {
-                    if (matched[i].Op == TermOp.Singleton && matchedColumns[i] == 0)
-                    {
-                        // singleton must be considered!
-                        return;
-                    }
-
                     var columnIdx = root.Table.GetComponentIndex(matched[i].ID);
                     if (columnIdx <= -1)
                         continue;
 
-                    var data = root.Table.GetData(columnIdx, 0, 1);
-                    matchedColumns[i] = (nuint)(&data[0]);
+					matchedColumns[i] = root.Table.RawComponentData(columnIdx);
                 }
 
                 var it = new Iterator(commands, root, userData, matchedColumns);
@@ -804,17 +730,18 @@ internal static class Lookup
 
 	public static Array? GetArray(ulong hashcode, int count)
 	{
-		_arrayCreator.TryGetValue(hashcode, out var fn);
+		EcsAssert.Assert(_arrayCreator.TryGetValue(hashcode, out var fn), $"invalid hashcode {hashcode}");
 		return fn?.Invoke(count) ?? null;
 	}
 
+	[SkipLocalsInit]
     internal static class Entity<T>
     {
         public static unsafe readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
 		public static readonly int HashCode = typeof(T).GetHashCode();
 
-		public static readonly EcsComponent Component = new EcsComponent((ulong) HashCode, Size);
+		public static readonly EcsComponent Component = new EcsComponent((ulong) HashCode, Size, Name);
 
 		static Entity()
 		{

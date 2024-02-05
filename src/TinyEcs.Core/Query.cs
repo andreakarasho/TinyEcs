@@ -47,16 +47,7 @@ public unsafe ref struct Query
         _world = world;
     }
 
-    public Query With<T>() where T : unmanaged => With(_world.Entity<T>());
-
-    public Query With<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged => With(_world.Entity<TKind>(), _world.Entity<TTarget>());
-
-    public Query With<TKind>(EcsID target) where TKind : unmanaged =>
-        With(IDOp.Pair(_world.Entity<TKind>(), target));
-
-    public Query With(EcsID first, EcsID second) => With(IDOp.Pair(first, second));
+    public Query With<T>() => With(_world.Component<T>().ID);
 
     public Query With(EcsID id)
     {
@@ -71,16 +62,7 @@ public unsafe ref struct Query
         return this;
     }
 
-    public Query Without<T>() where T : unmanaged => Without(_world.Entity<T>());
-
-    public Query Without<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged => Without(_world.Entity<TKind>(), _world.Entity<TTarget>());
-
-    public Query Without<TKind>(EcsID target) where TKind : unmanaged =>
-        Without(IDOp.Pair(_world.Entity<TKind>(), target));
-
-    public Query Without(EcsID first, EcsID second) => Without(IDOp.Pair(first, second));
+    public Query Without<T>() => Without(_world.Component<T>().ID);
 
     public Query Without(EcsID id)
     {
@@ -95,27 +77,17 @@ public unsafe ref struct Query
         return this;
     }
 
-    public Query Singleton(EcsID id)
-    {
-        EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
+    public unsafe void Iterate(IteratorDelegate action) => _world.Query(Terms, action);
 
-        ref var term = ref CurrentTerm;
-        term.ID = id;
-        term.Op = TermOp.Singleton;
+	public void System(IteratorDelegate fn) => System<EcsSystemPhaseOnUpdate>(fn);
+	
+	public void System<TPhase>(IteratorDelegate fn)
+	{
+		var terms = Terms;
+		EcsID query = terms.Length > 0 ? _world.Entity() : 0;
 
-        _termIndex += 1;
-
-        return this;
-    }
-
-    public unsafe void Iterate(IteratorDelegate action)
-    {
-        _world.Query(Terms, &IterateSys, action);
-
-        static void IterateSys(ref Iterator it)
-        {
-            if (it.UserData is IteratorDelegate del)
-                del.Invoke(ref it);
-        }
-    }
+		_world.Entity()
+			.Set(new EcsSystem(fn, query, terms, float.NaN))
+			.Set<TPhase>();
+	}
 }

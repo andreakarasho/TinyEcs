@@ -7,14 +7,14 @@ public readonly ref struct Iterator
     private readonly Span<EcsID> _entities;
     private readonly Span<int> _entitiesToTableRows;
     private readonly Table _table;
-    private readonly Span<nuint> _columns;
+    private readonly Span<Array> _columns;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Iterator(
         Commands commands,
         Archetype archetype,
         object? userData,
-        Span<nuint> columns,
+        Span<Array> columns,
         EcsID eventID = default,
         EcsID eventComponent = default
     )
@@ -38,7 +38,7 @@ public readonly ref struct Iterator
         Span<EcsID> entities,
         Span<int> toRows,
         object? userData,
-        Span<nuint> columns,
+        Span<Array> columns,
         EcsID eventID = default,
         EcsID eventComponent = default
     )
@@ -64,19 +64,15 @@ public readonly ref struct Iterator
     public readonly EcsID EventID { get; }
     public readonly EcsID EventTriggeredComponent { get; }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe readonly FieldIterator<T> Field<T>(int index) where T : unmanaged
-    {
-		return new FieldIterator<T>(_table.ComponentData<T>(index, 0, Count, sizeof(T)), _entitiesToTableRows);
-        var data = (T*)_columns[index];
-        return new FieldIterator<T>(data, _entitiesToTableRows);
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe ref T Single<T>(int index) where T : unmanaged
+    public unsafe readonly FieldIterator<T> Field<T>(int index) 
     {
-        var data = (T*)_columns[index];
-        return ref data[0];
+		var span = new Span<T>((T[])_columns[index]);
+
+		return new FieldIterator<T>(span, _entitiesToTableRows);
+		//index = _table.GetComponentIndex(World.Component<T>().ID);
+		//return new FieldIterator<T>(_table.ComponentData<T>(index, 0, Count), _entitiesToTableRows);
     }
 
     public readonly EntityView Entity(int row) => World.Entity(_entities[row]);
@@ -85,7 +81,7 @@ public readonly ref struct Iterator
 }
 
 [SkipLocalsInit]
-public unsafe readonly ref struct FieldIterator<T> where T : unmanaged
+public unsafe readonly ref struct FieldIterator<T> 
 {
     private readonly ref T _firstElement;
     private readonly ref int _firstEntity;
@@ -94,13 +90,6 @@ public unsafe readonly ref struct FieldIterator<T> where T : unmanaged
     internal FieldIterator(Span<T> elements, Span<int> entities)
     {
         _firstElement = ref MemoryMarshal.GetReference(elements);
-        _firstEntity = ref MemoryMarshal.GetReference(entities);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal FieldIterator(T* elements, Span<int> entities)
-    {
-        _firstElement = ref Unsafe.AsRef<T>(elements);
         _firstEntity = ref MemoryMarshal.GetReference(entities);
     }
 

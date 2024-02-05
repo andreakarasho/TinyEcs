@@ -287,7 +287,7 @@ sealed class EntitySparseSet<T>
 
 
 
-public unsafe sealed class Vec<T> : IDisposable where T : unmanaged
+public unsafe sealed class Vec<T> : IDisposable 
 {
 	private T* _data;
 

@@ -28,7 +28,7 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public readonly override bool Equals(object? obj) => obj is EntityView ent && Equals(ent);
 
-    public readonly EntityView Set<T>() where T : unmanaged
+    public readonly EntityView Set<T>()
     {
         World.Set<T>(ID);
         return this;
@@ -40,7 +40,7 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
         return this;
     }
 
-    public readonly EntityView Set<T>(T component) where T : unmanaged
+    public readonly EntityView Set<T>(T component) 
     {
         World.Set(ID, component);
         return this;
@@ -64,29 +64,9 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
     //    return this;
     //}
 
-    public readonly EntityView Unset<T>() where T : unmanaged
+    public readonly EntityView Unset<T>() 
     {
         World.Unset<T>(ID);
-        return this;
-    }
-
-    public readonly EntityView Unset<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        return Unset(World.Entity<TKind>(), World.Entity<TTarget>());
-    }
-
-    public readonly EntityView Unset<TKind>(EcsID target) where TKind : unmanaged
-    {
-        return Unset(World.Entity<TKind>(), target);
-    }
-
-    public readonly EntityView Unset(EcsID first, EcsID second)
-    {
-        var id = IDOp.Pair(first, second);
-        var cmp = new EcsComponent(id, 0);
-        World.DetachComponent(ID, ref cmp);
         return this;
     }
 
@@ -104,45 +84,45 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
 
-    public readonly ref T Get<T>() where T : unmanaged => ref World.Get<T>(ID);
+    public readonly ref T Get<T>() => ref World.Get<T>(ID);
 
-    public readonly bool Has<T>() where T : unmanaged => World.Has<T>(ID);
+    public readonly bool Has<T>() => World.Has<T>(ID);
 
-    public readonly bool Has<TKind, TTarget>()
-        where TKind : unmanaged
-        where TTarget : unmanaged
-    {
-        return World.Has(ID, World.Entity<TKind>(), World.Entity<TTarget>());
-    }
+    //public readonly bool Has<TKind, TTarget>()
+    //    where TKind : unmanaged
+    //    where TTarget : unmanaged
+    //{
+    //    return World.Has(ID, World.Entity<TKind>(), World.Entity<TTarget>());
+    //}
 
-    public readonly EntityView ChildOf(EcsID parent)
-    {
-        World.Set<EcsChildOf>(ID, parent);
-        return this;
-    }
+    //public readonly EntityView ChildOf(EcsID parent)
+    //{
+    //    World.Set<EcsChildOf>(ID, parent);
+    //    return this;
+    //}
 
-    public readonly void Children(Action<EntityView> action)
-    {
-        World
-            .Query()
-            .With<EcsChildOf>(ID)
-            .Iterate(
-                (ref Iterator it) =>
-                {
-                    for (int i = 0, count = it.Count; i < count; ++i)
-                        action(it.Entity(i));
-                }
-            );
-    }
+    //public readonly void Children(Action<EntityView> action)
+    //{
+    //    World
+    //        .Query()
+    //        .With<EcsChildOf>(ID)
+    //        .Iterate(
+    //            (ref Iterator it) =>
+    //            {
+    //                for (int i = 0, count = it.Count; i < count; ++i)
+    //                    action(it.Entity(i));
+    //            }
+    //        );
+    //}
 
-    public readonly void ClearChildren()
-    {
-        var id = World.Entity<EcsChildOf>();
-        var myID = ID; // lol
-        Children(v => v.Unset(id, myID));
-    }
+    //public readonly void ClearChildren()
+    //{
+    //    var id = World.Entity<EcsChildOf>();
+    //    var myID = ID; // lol
+    //    Children(v => v.Unset(id, myID));
+    //}
 
-    public readonly EntityView Parent() => World.Entity(World.GetParent(ID));
+    //public readonly EntityView Parent() => World.Entity(World.GetParent(ID));
 
     public readonly void Delete() => World.Delete(ID);
 
@@ -173,23 +153,23 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
     }
 
     public unsafe readonly EntityView System(
-        delegate* <ref Iterator, void> callback,
+		IteratorDelegate callback,
         params Term[] terms
     ) => System(callback, float.NaN, terms);
 
     public unsafe readonly EntityView System(
-        delegate* <ref Iterator, void> callback,
+        IteratorDelegate callback,
         float tick,
         params Term[] terms
     )
     {
-        EcsID query = terms.Length > 0 ? World.Entity().Set<EcsPanic, EcsDelete>() : 0;
+        EcsID query = terms.Length > 0 ? World.Entity() : 0;
 
         Array.Sort(terms);
 
         Set(new EcsSystem(callback, query, terms, tick));
 
-        return Set<EcsPanic, EcsDelete>();
+        return this;
     }
 
     public unsafe readonly EntityView Event(delegate* <ref Iterator, void> callback)

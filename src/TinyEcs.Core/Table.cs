@@ -43,9 +43,6 @@ sealed unsafe class Table
     public int Columns => Components.Length;
     public readonly EcsComponent[] Components;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public byte* GetData(int column, int row, int size) => null;
-        //(byte*)_componentsData[column] + row * size;
 
     internal int Add(EcsID id)
     {
@@ -96,12 +93,21 @@ sealed unsafe class Table
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<T> ComponentData<T>(int column, int row, int count, int size) where T : unmanaged
+    internal Span<T> ComponentData<T>(int column, int row, int count)
     {
         EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+
 		ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
-		return array.AsSpan(row, count * 1);
+		return array.AsSpan(row, count);
     }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Array RawComponentData(int column)
+	{
+		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+
+		return _componentsData[column];
+	}
 
     internal void Remove(int row)
     {
@@ -109,12 +115,10 @@ sealed unsafe class Table
         {
             ref readonly var meta = ref Components[i];
 
-            var leftArray = ComponentData<byte>(i, 0, _capacity, meta.Size);
+			var leftArray = RawComponentData(i);
 
-            var removeComponent = leftArray.Slice(meta.Size * row, meta.Size);
-            var swapComponent = leftArray.Slice(meta.Size * (_count - 1), meta.Size);
-
-            swapComponent.CopyTo(removeComponent);
+			var tmp = leftArray.GetValue(_count - 1);
+			leftArray.SetValue(tmp, row);
         }
 
         --_count;
@@ -142,14 +146,15 @@ sealed unsafe class Table
 
             ref readonly var meta = ref Components[i];
 
-            var leftArray = ComponentData<byte>(i, 0, _capacity, meta.Size);
-            var rightArray = to.ComponentData<byte>(j, 0, to._capacity, meta.Size);
+			var leftArray = RawComponentData(i);
+			var rightArray = to.RawComponentData(j);
 
-            var insertComponent = rightArray.Slice(meta.Size * toRow, meta.Size);
-            var removeComponent = leftArray.Slice(meta.Size * fromRow, meta.Size);
-            var swapComponent = leftArray.Slice(meta.Size * fromCount, meta.Size);
-            removeComponent.CopyTo(insertComponent);
-            swapComponent.CopyTo(removeComponent);
+			var insertComponent = rightArray.GetValue(toRow);
+			var removeComponent = leftArray.GetValue(fromRow);
+			var swapComponent = leftArray.GetValue(fromCount);
+
+			rightArray.SetValue(removeComponent, toRow);
+			leftArray.SetValue(swapComponent, fromRow);
         }
 
         _count = fromCount;
