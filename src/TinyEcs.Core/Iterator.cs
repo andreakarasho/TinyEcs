@@ -66,11 +66,10 @@ public readonly ref struct Iterator
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe readonly FieldIterator<T> Field<T>(int index) 
+    public unsafe readonly FieldIterator<T> Field<T>(int index) where T : struct
     {
-		var span = new Span<T>((T[])_columns[index]);
-
-		return new FieldIterator<T>(span, _entitiesToTableRows);
+		ref var array = ref Unsafe.As<Array, T[]>(ref _columns[index]);
+		return new FieldIterator<T>(array, _entitiesToTableRows);
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -81,7 +80,7 @@ public readonly ref struct Iterator
 }
 
 [SkipLocalsInit]
-public unsafe readonly ref struct FieldIterator<T> 
+public unsafe readonly ref struct FieldIterator<T> where T : struct
 {
     private readonly ref T _firstElement;
     private readonly ref int _firstEntity;

@@ -1,3 +1,4 @@
+using System.Numerics;
 using TinyEcs;
 
 sealed unsafe class Table
@@ -48,7 +49,7 @@ sealed unsafe class Table
     {
         if (_capacity == _count)
         {
-            _capacity *= 2;
+			_capacity <<= 3;
 
             ResizeComponentArray(_capacity);
         }
@@ -113,8 +114,6 @@ sealed unsafe class Table
     {
         for (int i = 0; i < Components.Length; ++i)
         {
-            ref readonly var meta = ref Components[i];
-
 			var leftArray = RawComponentData(i);
 
 			var tmp = leftArray.GetValue(_count - 1);
@@ -144,8 +143,6 @@ sealed unsafe class Table
                 ++y;
             }
 
-            ref readonly var meta = ref Components[i];
-
 			var leftArray = RawComponentData(i);
 			var rightArray = to.RawComponentData(j);
 
@@ -164,9 +161,7 @@ sealed unsafe class Table
     {
         for (int i = 0; i < Components.Length; ++i)
         {
-            ref readonly var meta = ref Components[i];
-
-			var tmp = Lookup.GetArray(meta.ID, capacity);
+			var tmp = Lookup.GetArray(Components[i].ID, capacity);
 			_componentsData[i]?.CopyTo(tmp!, 0);
 			_componentsData[i] = tmp!;
 

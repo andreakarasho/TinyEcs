@@ -1,7 +1,7 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public ref struct UnsafeSpan<T> 
+public ref struct UnsafeSpan<T> where T : struct
 {
     private ref T _start;
     private readonly ref T _end;

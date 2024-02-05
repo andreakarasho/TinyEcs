@@ -146,13 +146,15 @@ public sealed class Commands
             EcsAssert.Assert(_main.Exists(set.Entity));
 
             var cmp = new EcsComponent(set.Component, set.DataLength, string.Empty);
-    //        _main.Set(
-    //            set.Entity,
-    //            in cmp,
-				//in set.Data
-    //        );
 
-            set.Data = null;
+			Console.WriteLine("Commands::Merge NEEDS TO BE FIXED!!");
+			//_main.Set(
+			//	set.Entity,
+			//	in cmp,
+			//	in set.Data
+			//);
+
+			set.Data = null;
             set.DataLength = 0;
         }
 
