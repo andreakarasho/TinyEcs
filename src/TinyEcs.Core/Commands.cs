@@ -40,17 +40,17 @@ public sealed class Commands
 
     public unsafe void Set(EcsID id, EcsID tag)
     {
-        EcsAssert.Assert(!IDOp.IsPair(tag));
-
-        if (_main.Exists(tag) && Has<EcsComponent>(tag))
-        {
-            ref readonly var cmp2 = ref _main.Component<EcsComponent>();
-            Set(id, in cmp2);
-            return;
-        }
-
-        var cmp = new EcsComponent(tag, 0, string.Empty);
-        Set(id, ref cmp);
+        // EcsAssert.Assert(!IDOp.IsPair(tag));
+        //
+        // if (_main.Exists(tag) && Has<EcsComponent>(tag))
+        // {
+        //     ref readonly var cmp2 = ref _main.Component<EcsComponent>();
+        //     Set(id, in cmp2);
+        //     return;
+        // }
+        //
+        // var cmp = new EcsComponent(tag, 0);
+        // Set(id, ref cmp);
     }
 
     public unsafe void Set<T>(EcsID id) where T : struct
@@ -145,7 +145,7 @@ public sealed class Commands
         {
             EcsAssert.Assert(_main.Exists(set.Entity));
 
-            var cmp = new EcsComponent(set.Component, set.DataLength, string.Empty);
+            var cmp = new EcsComponent(set.Component, set.DataLength);
 
 			Console.WriteLine("Commands::Merge NEEDS TO BE FIXED!!");
 			//_main.Set(
@@ -162,7 +162,7 @@ public sealed class Commands
         {
             EcsAssert.Assert(_main.Exists(unset.Entity));
 
-            var cmp = new EcsComponent(unset.Component, unset.ComponentSize, string.Empty);
+            var cmp = new EcsComponent(unset.Component, unset.ComponentSize);
             _main.DetachComponent(unset.Entity, ref cmp);
         }
 
@@ -186,7 +186,7 @@ public sealed class Commands
     private unsafe struct SetComponent
     {
         public EcsID Entity;
-        public EcsID Component;
+        public int Component;
         public object Data;
         public int DataLength;
     }
@@ -194,7 +194,7 @@ public sealed class Commands
     private struct UnsetComponent
     {
         public EcsID Entity;
-        public EcsID Component;
+        public int Component;
         public int ComponentSize;
     }
 }
@@ -224,11 +224,6 @@ public readonly ref struct CommandEntityView
         return this;
     }
 
-    public readonly CommandEntityView Set(EcsID id)
-    {
-        _cmds.Set(_id, id);
-        return this;
-    }
     public readonly CommandEntityView Unset<T>() where T : struct
 	{
         _cmds.Unset<T>(_id);

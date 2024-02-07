@@ -5,8 +5,7 @@ public delegate void IteratorDelegate(ref Iterator it);
 public readonly ref struct Iterator
 {
     private readonly Span<EntityView> _entities;
-    private readonly Span<int> _entitiesToTableRows;
-    private readonly Table _table;
+    private readonly Archetype _archetype;
     private readonly Span<Array> _columns;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -14,43 +13,32 @@ public readonly ref struct Iterator
         Commands commands,
         Archetype archetype,
         object? userData,
-        Span<Array> columns,
-        EcsID eventID = default,
-        EcsID eventComponent = default
+        Span<Array> columns
     )
         : this(
             commands,
             archetype.Count,
-            archetype.Table,
+            archetype,
             archetype.Entities,
-            archetype.EntitiesTableRows,
             userData,
-            columns,
-            eventID,
-            eventComponent
+            columns
         ) { }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Iterator(
         Commands commands,
         int count,
-        Table table,
+		Archetype archetype,
         Span<EntityView> entities,
-        Span<int> toRows,
         object? userData,
-        Span<Array> columns,
-        EcsID eventID = default,
-        EcsID eventComponent = default
+        Span<Array> columns
     )
     {
         Commands = commands;
         World = commands.World;
         UserData = userData;
-        EventID = eventID;
-        EventTriggeredComponent = eventComponent;
-        _table = table;
+        _archetype = archetype;
         _entities = entities;
-        _entitiesToTableRows = toRows;
         Count = count;
         DeltaTime = commands.World.DeltaTime;
         _columns = columns;
@@ -61,19 +49,26 @@ public readonly ref struct Iterator
     public readonly int Count { get; }
     public readonly float DeltaTime { get; }
     public readonly object? UserData { get; }
-    public readonly EcsID EventID { get; }
-    public readonly EcsID EventTriggeredComponent { get; }
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe readonly FieldIterator<T> Field<T>(int index) where T : struct
+    public unsafe Span<T> Field<T>(int index) where T : struct
     {
-		ref var array = ref Unsafe.As<Array, T[]>(ref _columns[index]);
-		return new FieldIterator<T>(array, _entitiesToTableRows);
+	    var r = _archetype.RawComponentData(index);
+		ref var array = ref Unsafe.As<Array, T[]>(ref r);
+		return array;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe ref T FieldRef<T>(int index) where T : struct
+    {
+	    var r = _archetype.RawComponentData(index);
+	    ref var array = ref Unsafe.As<Array, T[]>(ref r);
+	    return ref MemoryMarshal.GetArrayDataReference(array);
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref readonly EntityView Entity(int row) => ref _entities[row];
+	public readonly ref EntityView Entity(int row) => ref _entities[row];
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly CommandEntityView EntityDeferred(int row) => Commands.Entity(_entities[row]);
@@ -83,18 +78,16 @@ public readonly ref struct Iterator
 public unsafe readonly ref struct FieldIterator<T> where T : struct
 {
     private readonly ref T _firstElement;
-    private readonly ref int _firstEntity;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal FieldIterator(Span<T> elements, Span<int> entities)
+    internal FieldIterator(Span<T> elements)
     {
         _firstElement = ref MemoryMarshal.GetReference(elements);
-        _firstEntity = ref MemoryMarshal.GetReference(entities);
     }
 
     public readonly ref T this[int index]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => ref Unsafe.Add(ref _firstElement, Unsafe.Add(ref _firstEntity, index));
+        get => ref Unsafe.Add(ref _firstElement, index);
     }
 }

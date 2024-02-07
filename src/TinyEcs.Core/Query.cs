@@ -1,46 +1,14 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public unsafe ref partial struct Query
+public sealed unsafe partial class Query
 {
     public const int TERMS_COUNT = 25;
 
     private readonly World _world;
-    private int _termIndex;
-    private unsafe fixed byte _terms[TERMS_COUNT * (sizeof(uint) + sizeof(byte))];
+	private readonly List<Term> _terms = new List<Term>();
 
-    private ref Term CurrentTerm
-    {
-        get
-        {
-            fixed (byte* termPtr = &_terms[_termIndex * sizeof(Term)])
-            {
-                return ref Unsafe.AsRef<Term>(termPtr);
-            }
-        }
-    }
-
-    internal Span<Term> Terms
-    {
-        get
-        {
-            fixed (byte* termPtr = &_terms[0])
-            {
-                return new Span<Term>(termPtr, _termIndex);
-            }
-        }
-    }
-
-    internal Span<Term> AllTerms
-    {
-        get
-        {
-            fixed (byte* termPtr = &_terms[0])
-            {
-                return new Span<Term>(termPtr, TERMS_COUNT);
-            }
-        }
-    }
+	private Span<Term> Terms => CollectionsMarshal.AsSpan(_terms);
 
     internal Query(World world)
     {
@@ -49,38 +17,34 @@ public unsafe ref partial struct Query
 
     public Query With<T>() where T : struct => With(_world.Component<T>().ID);
 
-    public Query With(EcsID id)
+    private Query With(int id)
     {
-        EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
-
-        ref var term = ref CurrentTerm;
+		var term = new Term();
         term.ID = id;
         term.Op = TermOp.With;
 
-        _termIndex += 1;
+		_terms.Add(term);
 
-        return this;
+		return this;
     }
 
     public Query Without<T>() where T : struct => Without(_world.Component<T>().ID);
 
-    public Query Without(EcsID id)
+    private Query Without(int id)
     {
-        EcsAssert.Assert(_termIndex + 1 < TERMS_COUNT);
-
-        ref var term = ref CurrentTerm;
-        term.ID = id;
+		var term = new Term();
+		term.ID = id;
         term.Op = TermOp.Without;
 
-        _termIndex += 1;
+		_terms.Add(term);
 
-        return this;
+		return this;
     }
 
-    public void Iterate(IteratorDelegate action) => _world.Query(Terms, action); 
+    public void Iterate(IteratorDelegate action) => _world.Query(Terms, action);
 
 	public void System(IteratorDelegate fn) => System<EcsSystemPhaseOnUpdate>(fn);
-	
+
 	public void System<TPhase>(IteratorDelegate fn) where TPhase : struct
 	{
 		var terms = Terms;
@@ -89,5 +53,31 @@ public unsafe ref partial struct Query
 		_world.Entity()
 			.Set(new EcsSystem(fn, query, terms, float.NaN))
 			.Set<TPhase>();
+	}
+
+	private readonly List<Archetype> _cachedArchetypes = new List<Archetype>();
+
+	public ArchetypeEnumerator GetEnumerator()
+	{
+		_cachedArchetypes.Clear();
+		_world.FindArchetypes(Terms, _cachedArchetypes);
+
+		return new ArchetypeEnumerator(CollectionsMarshal.AsSpan(_cachedArchetypes));
+	}
+
+	public ref struct ArchetypeEnumerator
+	{
+		private readonly Span<Archetype> _list;
+		private int _index;
+
+		public ArchetypeEnumerator(Span<Archetype> list)
+		{
+			_list = list;
+			_index = -1;
+		}
+
+		public Archetype Current => _list[_index];
+
+		public bool MoveNext() => ++_index < _list.Length;
 	}
 }

@@ -30,12 +30,10 @@ public sealed partial class World
     public ref T Get<T>(EcsID entity) where T : struct
 	{
         ref var record = ref GetRecord(entity);
-        var raw = record.Archetype.ComponentData<T>(record.Row, 1);
+        var raw = record.Archetype.ComponentData<T>();
 
-        EcsAssert.Assert(!raw.IsEmpty);
-
-        return ref MemoryMarshal.GetReference(raw);
+        return ref raw[record.Row];
     }
 
-    public void RunPhase<TPhase>() where TPhase : struct => RunPhase(Component<TPhase>().ID);
+    public void RunPhase<TPhase>() where TPhase : struct => RunPhase(in Component<TPhase>());
 }

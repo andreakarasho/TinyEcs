@@ -2,15 +2,13 @@ namespace TinyEcs;
 
 public readonly struct EcsComponent
 {
-    public readonly ulong ID;
+    public readonly int ID;
     public readonly int Size;
-	public readonly string Name;
 
-    public EcsComponent(EcsID id, int size, string name)
+    public EcsComponent(int id, int size)
     {
         ID = id;
         Size = size;
-		Name = name;
     }
 }
 
@@ -240,14 +238,14 @@ public partial class World
         //     stackalloc EcsID[] { EcsEventOnDelete }
         // );
 
-        // EntityView CreateWithLookup<T>(EcsID id) 
+        // EntityView CreateWithLookup<T>(EcsID id)
         // {
         //     var view = Entity(id);
         //     Lookup.Entity<T>.Component = new(view, GetSize<T>());
         //     return view;
         // }
 
-        // static EntityView AssignDefaults<T>(EntityView view) 
+        // static EntityView AssignDefaults<T>(EntityView view)
         // {
         //     ref var cmp = ref Lookup.Entity<T>.Component;
         //     view.Set(cmp).Set(EcsPanic, EcsDelete);

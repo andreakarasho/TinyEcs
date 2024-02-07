@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class ComponentComparer : IComparer<EcsID>, IComparer<Term>, IComparer<EcsComponent>
+sealed class ComponentComparer : IComparer<int>, IComparer<Term>, IComparer<EcsComponent>
 {
 	private readonly World _world;
 
@@ -15,7 +15,7 @@ sealed class ComponentComparer : IComparer<EcsID>, IComparer<Term>, IComparer<Ec
 		return CompareTerms(_world, x.ID, y.ID);
 	}
 
-	public int Compare(EcsID x, EcsID y)
+	public int Compare(int x, int y)
 	{
 		return CompareTerms(_world, x, y);
 	}
@@ -25,20 +25,20 @@ sealed class ComponentComparer : IComparer<EcsID>, IComparer<Term>, IComparer<Ec
 		return CompareTerms(_world, x.ID, y.ID);
 	}
 
-	public static int CompareTerms(World world, ulong a, ulong b)
+	public static int CompareTerms(World world, int a, int b)
 	{
-		if (IDOp.IsPair(a) && IDOp.IsPair(b))
-		{
-			if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
-			{
-				var secondY = IDOp.GetPairSecond(b);
+		//if (IDOp.IsPair(a) && IDOp.IsPair(b))
+		//{
+		//	if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
+		//	{
+		//		var secondY = IDOp.GetPairSecond(b);
 
-				if (secondY == Lookup.Entity<EcsAny>.Component.ID)
-				{
-					return 0;
-				}
-			}
-		}
+		//		if (secondY == Lookup.Entity<EcsAny>.Component.ID)
+		//		{
+		//			return 0;
+		//		}
+		//	}
+		//}
 
 		return a.CompareTo(b);
 	}

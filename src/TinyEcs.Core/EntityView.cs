@@ -5,7 +5,7 @@ namespace TinyEcs;
 #endif
 [StructLayout(LayoutKind.Sequential)]
 [DebuggerDisplay("ID: {ID}")]
-public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
+public readonly unsafe struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
     public static readonly EntityView Invalid = new(null, 0);
 
@@ -145,12 +145,12 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public readonly void Each(Action<EntityView> action)
     {
-        ref var record = ref World.GetRecord(ID);
-
-        for (int i = 0; i < record.Archetype.ComponentInfo.Length; ++i)
-        {
-            action(World.Entity(record.Archetype.ComponentInfo[i].ID));
-        }
+        // ref var record = ref World.GetRecord(ID);
+        //
+        // for (int i = 0; i < record.Archetype.Components.Length; ++i)
+        // {
+        //     action(World.Entity(record.Archetype.Components[i].ID));
+        // }
     }
 
   //  public unsafe readonly EntityView System(
@@ -180,11 +180,11 @@ public unsafe readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
 
     public static implicit operator EcsID(EntityView d) => d.ID;
 
-    public static implicit operator Term(EntityView d) => Term.With(d.ID);
-
-    public static Term operator !(EntityView id) => Term.Without(id.ID);
-
-    public static Term operator -(EntityView id) => Term.Without(id.ID);
-
-    public static Term operator +(EntityView id) => Term.With(id.ID);
+    // public static implicit operator Term(EntityView d) => Term.With(d.ID);
+    //
+    // public static Term operator !(EntityView id) => Term.Without(id.ID);
+    //
+    // public static Term operator -(EntityView id) => Term.Without(id.ID);
+    //
+    // public static Term operator +(EntityView id) => Term.With(id.ID);
 }

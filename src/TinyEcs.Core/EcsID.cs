@@ -22,9 +22,9 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 	public static bool operator ==(EcsID id, EcsID other) => id.Value.Equals(other.Value);
 	public static bool operator !=(EcsID id, EcsID other) => !id.Value.Equals(other.Value);
 
-	public static Term operator !(EcsID id) => Term.Without(id.Value);
-	public static Term operator -(EcsID id) => Term.Without(id.Value);
-	public static Term operator +(EcsID id) => Term.With(id.Value);
+	// public static Term operator !(EcsID id) => Term.Without(id.Value);
+	// public static Term operator -(EcsID id) => Term.Without(id.Value);
+	// public static Term operator +(EcsID id) => Term.With(id.Value);
 
 
 	public readonly override bool Equals(object? obj) => obj is EcsID ent && Equals(ent);

@@ -24,80 +24,14 @@ unsafe
 	for (int i = 0; i < ENTITIES_COUNT; i++)
 		ecs.Entity()
 			.Set<Position>(new Position())
-			.Set<Velocity>(new Velocity())
-			//.Set<ManagedData>(new ManagedData() { Integer = i, Text = i.ToString() })
-			;
-
-	ecs.Entity()
-			.Set<PlayerTag>()
-			.Set<Position>(new Position() { X = 1 })
-			.Set<Velocity>(new Velocity() { Y = 1 })
-			.Set<ManagedData>(new ManagedData() { Integer = 1, Text = "PALLE" });
-
-	ecs.Query()
-		.With<EcsComponent>()
-		.Iterate(static (ref Iterator it) => {
-			var cmpA = it.Field<EcsComponent>(0);
-
-			for (int i = 0; i < it.Count; ++i)
-			{
-				ref var cmp = ref cmpA[i];
-				var entity = it.Entity(i);
-
-				Console.WriteLine("{0} --> ID: {1} - SIZE: {2}", cmp.Size <= 0 ? "tag      " : "component", entity.ID, cmp.Size);
-			}
-		});
+			.Set<Velocity>(new Velocity());
 
 	//ecs.Query()
-	//	.With<Position>()
-	//	.With<Velocity>()
-	//	//.With<ManagedData>()
-	//	//.Without<PlayerTag>()
-	//	.System(static (ref Iterator it) =>
+	//	.System<EcsSystemPhaseOnUpdate, Position, Velocity>(static (ref Position pos, ref Velocity vel) =>
 	//	{
-	//		var posA = it.Field<Position>(0);
-	//		var velA = it.Field<Velocity>(1);
-	//		//var manA = it.Field<ManagedData>(2);
-
-	//		for (int i = 0, count = it.Count; i < count; ++i)
-	//		{
-	//			ref var pos = ref posA[i];
-	//			ref var vel = ref velA[i];
-	//			//ref var man = ref manA[i];
-
-	//			pos.X *= vel.X;
-	//			pos.Y *= vel.Y;
-	//		}
+	//		pos.X *= vel.X;
+	//		pos.Y *= vel.Y;
 	//	});
-
-	//ecs.Query()
-	//	.With<Position>()
-	//	.With<Velocity>()
-	//	.With<ManagedData>()
-	//	.With<PlayerTag>()
-	//	.System(static (ref Iterator it) =>
-	//	{
-	//		var posA = it.Field<Position>(0);
-	//		var velA = it.Field<Velocity>(1);
-	//		var manA = it.Field<ManagedData>(2);
-
-	//		for (int i = 0, count = it.Count; i < count; ++i)
-	//		{
-	//			ref var pos = ref posA[i];
-	//			ref var vel = ref velA[i];
-	//			ref var man = ref manA[i];
-
-	//			pos.X *= vel.X;
-	//			pos.Y *= vel.Y;
-	//		}
-	//	});
-
-	ecs.Query()
-		.System<EcsSystemPhaseOnUpdate, Position, Velocity>(static (ref Position pos, ref Velocity vel) =>
-		{
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		});
 
 	//ecs.Query()
 	//	//.Without<PlayerTag>()
@@ -107,6 +41,12 @@ unsafe
 	//		pos.Y *= vel.Y;
 	//	});
 }
+
+var query = ecs.Query()
+	.With<Position>()
+	.With<Velocity>();
+
+IteratorDelegate del = Iter;
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -118,7 +58,26 @@ while (true)
 
 	for (int i = 0; i < 3600; ++i)
 	{
-		ecs.Step(cur);
+		query.Iterate(del);
+		//ecs.Step(cur);
+
+		// foreach (var archetype in query)
+		// {
+		// 	var count = archetype.Count;
+		// 	ref var pos = ref MemoryMarshal.GetReference(archetype.ComponentData<Position>());
+		// 	ref var vel = ref MemoryMarshal.GetReference(archetype.ComponentData<Velocity>());
+		//
+		// 	ref var last2 = ref Unsafe.Add(ref pos, count);
+		//
+		// 	while (Unsafe.IsAddressLessThan(ref pos, ref last2))
+		// 	{
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		//
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+		// 	}
+		// }
 	}
 
 	last = start;
@@ -127,7 +86,21 @@ while (true)
 	Console.WriteLine("query done in {0} ms", start - last);
 }
 
+static void Iter(ref Iterator it)
+{
+	ref var pos = ref it.FieldRef<Position>(0);
+	ref var vel = ref it.FieldRef<Velocity>(1);
+	ref var last = ref Unsafe.Add(ref pos, it.Count);
 
+	while (Unsafe.IsAddressLessThan(ref pos, ref last))
+	{
+		pos.X *= vel.X;
+		pos.Y *= vel.Y;
+
+		pos = ref Unsafe.Add(ref pos, 1);
+		vel = ref Unsafe.Add(ref vel, 1);
+	}
+}
 
 enum TileType
 {

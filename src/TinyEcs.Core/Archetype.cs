@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-public sealed class Archetype
+public sealed partial class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
@@ -8,83 +8,112 @@ public sealed class Archetype
     private readonly ComponentComparer _comparer;
     private int _capacity, _count;
     private EntityView[] _entities;
-    private int[] _entitiesTableRows;
+    private readonly int[] _lookup;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
-    private readonly Table _table;
 
-    internal Archetype(
+	private readonly Array[] _componentsData;
+
+
+	internal Archetype(
         World world,
-        Table table,
         ReadOnlySpan<EcsComponent> components,
         ComponentComparer comparer
     )
     {
         _comparer = comparer;
         _world = world;
-        _table = table;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         _count = 0;
         _entities = new EntityView[ARCHETYPE_INITIAL_CAPACITY];
-        _entitiesTableRows = new int[ARCHETYPE_INITIAL_CAPACITY];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
-        ComponentInfo = components.ToArray();
-    }
+        Components = components.ToArray();
+
+        var maxID = -1;
+        for (var i = 0; i < components.Length; ++i)
+	        maxID = Math.Max(maxID, components[i].ID);
+
+        _lookup = new int[maxID + 1];
+        _lookup.AsSpan().Fill(-1);
+        for (var i = 0; i < components.Length; ++i)
+	        _lookup[components[i].ID] = i;
+
+		_componentsData = new Array[Components.Length];
+		ResizeComponentArray(_capacity);
+	}
 
     internal EntityView[] Entities => _entities;
-    internal int[] EntitiesTableRows => _entitiesTableRows;
     public World World => _world;
     public int Count => _count;
-    internal Table Table => _table;
+    public readonly EcsComponent[] Components;
 
-    public readonly EcsComponent[] ComponentInfo;
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetComponentIndex(ref readonly EcsComponent cmp)
     {
-        if (cmp.Size <= 0)
-        {
-            return Array.BinarySearch(ComponentInfo, cmp, _comparer);
-        }
-
-        return _table.GetComponentIndex(in cmp);
+	    return GetComponentIndex(cmp.ID);
     }
 
-    internal (int, int) Add(EcsID id, int tableRow = -1)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int GetComponentIndex(int id)
+	{
+		return id >= 0 && id < _lookup.Length ? _lookup[id] : -1;
+	}
+
+	internal int Add(EcsID id)
     {
         if (_capacity == _count)
         {
-            _capacity *= 2;
+			_capacity <<= 3;
 
             Array.Resize(ref _entities, _capacity);
-            Array.Resize(ref _entitiesTableRows, _capacity);
-        }
+			ResizeComponentArray(_capacity);
+		}
 
         _entities[_count] = new(_world, id);
-        var row = tableRow < 0 ? _table.Add(id) : tableRow;
-        _entitiesTableRows[_count] = row;
-
-        return (_count++, row);
+        return _count++;
     }
 
     internal EcsID Remove(ref EcsRecord record)
     {
-        (var removed, var removedRow) = SwapWithLast(record.Row);
+		var removed = SwapWithLast(record.Row);
 
-        _table.Remove(removedRow);
+		for (int i = 0; i < Components.Length; ++i)
+		{
+			var leftArray = RawComponentData(i);
 
-        --_count;
+			var tmp = leftArray.GetValue(_count - 1);
+			leftArray.SetValue(tmp, record.Row);
+		}
+
+		--_count;
 
         return removed;
     }
 
-    internal Archetype InsertVertex(
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Span<T> ComponentData<T>(int column, int row, int count) where T : struct
+	{
+		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+
+		ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
+		return array.AsSpan(row, count);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Array RawComponentData(int column)
+	{
+		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+
+		return _componentsData[column];
+	}
+
+	internal Archetype InsertVertex(
         Archetype left,
-        Table table,
         ReadOnlySpan<EcsComponent> components,
         ref readonly EcsComponent component
     )
     {
-        var vertex = new Archetype(left._world, table, components, _comparer);
+        var vertex = new Archetype(left._world, components, _comparer);
         MakeEdges(left, vertex, component.ID);
         InsertVertex(vertex);
         return vertex;
@@ -92,39 +121,74 @@ public sealed class Archetype
 
     internal int MoveEntity(Archetype to, int fromRow)
     {
-        (var removed, var removedRow) = SwapWithLast(fromRow);
-
-        var sameTable = _table.Hash == to.Table.Hash;
-        (var toRow, var toTableRow) = to.Add(removed, sameTable ? removedRow : -1);
-
-        if (!sameTable)
-            _table.MoveTo(removedRow, to._table, toTableRow);
+		var removed = SwapWithLast(fromRow);
+		var toRow = to.Add(removed);
+        MoveTo(fromRow, to, toRow);
 
         --_count;
 
         return toRow;
     }
 
-    internal Span<T> ComponentData<T>(int row, int count) where T : struct
+    private void MoveTo(int fromRow, Archetype to, int toRow)
+	{
+		var isLeft = to.Components.Length < Components.Length;
+		int i = 0,
+			j = 0;
+		var count = isLeft ? to.Components.Length : Components.Length;
+
+		ref var x = ref (isLeft ? ref j : ref i);
+		ref var y = ref (!isLeft ? ref j : ref i);
+
+		var last = _count - 1;
+
+		for (; x < count; ++x, ++y)
+		{
+			while (Components[i].ID != to.Components[j].ID)
+			{
+				// advance the sign with less components!
+				++y;
+			}
+
+			var fromArray = RawComponentData(i);
+			var toArray = to.RawComponentData(j);
+
+			// copy the moved entity to the target archetype
+			Array.Copy(fromArray, fromRow, toArray, toRow, 1);
+
+			// swap last with the hole
+			Array.Copy(fromArray, last, fromArray, fromRow, 1);
+		}
+
+		//_count = fromCount;
+	}
+
+	internal Span<T> ComponentData<T>() where T : struct
     {
-        EcsAssert.Assert(row >= 0);
-        EcsAssert.Assert(row < _entities.Length);
+        //ref readonly var cmp = ref _world.Component<T>();
+        //EcsAssert.Assert(cmp.Size > 0);
 
-        ref readonly var cmp = ref _world.Component<T>();
-        EcsAssert.Assert(cmp.Size > 0);
-
-        var column = GetComponentIndex(in cmp);
-        EcsAssert.Assert(column >= 0);
-
-        return _table.ComponentData<T>(column, _entitiesTableRows[row], count);
+        var column = GetComponentIndex(Lookup.Entity<T>.HashCode);
+        return ComponentData<T>(column, 0, Count);
     }
 
-    internal void Clear()
+	private void ResizeComponentArray(int capacity)
+	{
+		for (int i = 0; i < Components.Length; ++i)
+		{
+			var tmp = Lookup.GetArray(Components[i].ID, capacity);
+			_componentsData[i]?.CopyTo(tmp!, 0);
+			_componentsData[i] = tmp!;
+
+			_capacity = capacity;
+		}
+	}
+
+	internal void Clear()
     {
         _count = 0;
         _capacity = ARCHETYPE_INITIAL_CAPACITY;
         Array.Resize(ref _entities, _capacity);
-        Array.Resize(ref _entitiesTableRows, _capacity);
     }
 
     internal void Optimize()
@@ -135,11 +199,10 @@ public sealed class Archetype
         {
             _capacity = newCapacity;
             Array.Resize(ref _entities, _capacity);
-            Array.Resize(ref _entitiesTableRows, _capacity);
         }
     }
 
-    private (EcsID, int) SwapWithLast(int fromRow)
+    private EcsID SwapWithLast(int fromRow)
     {
         ref var fromRec = ref _world.GetRecord(_entities[fromRow]);
         ref var lastRec = ref _world.GetRecord(_entities[_count - 1]);
@@ -148,13 +211,10 @@ public sealed class Archetype
         var removed = _entities[fromRow];
         _entities[fromRow] = _entities[_count - 1];
 
-        var removedRow = _entitiesTableRows[fromRow];
-        _entitiesTableRows[fromRow] = _entitiesTableRows[_count - 1];
-
-        return (removed, removedRow);
+        return removed;
     }
 
-    private static void MakeEdges(Archetype left, Archetype right, EcsID id)
+    private static void MakeEdges(Archetype left, Archetype right, int id)
     {
         left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = id });
         right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = id });
@@ -162,8 +222,8 @@ public sealed class Archetype
 
     private void InsertVertex(Archetype newNode)
     {
-        var nodeTypeLen = ComponentInfo.Length;
-        var newTypeLen = newNode.ComponentInfo.Length;
+        var nodeTypeLen = Components.Length;
+        var newTypeLen = newNode.Components.Length;
 
         if (nodeTypeLen > newTypeLen - 1)
         {
@@ -184,73 +244,77 @@ public sealed class Archetype
             return;
         }
 
-        if (!IsSuperset(newNode.ComponentInfo))
+        if (!IsSuperset(newNode.Components))
         {
             return;
         }
 
         var i = 0;
-        var newNodeTypeLen = newNode.ComponentInfo.Length;
-        for (; i < newNodeTypeLen && ComponentInfo[i].ID == newNode.ComponentInfo[i].ID; ++i) { }
+        var newNodeTypeLen = newNode.Components.Length;
+        for (; i < newNodeTypeLen && Components[i].ID == newNode.Components[i].ID; ++i) { }
 
-        MakeEdges(newNode, this, ComponentInfo[i].ID);
+        MakeEdges(newNode, this, Components[i].ID);
     }
 
-    internal bool IsSuperset(UnsafeSpan<EcsComponent> other)
+    internal bool IsSuperset(Span<EcsComponent> other)
     {
-        var thisComps = new UnsafeSpan<EcsComponent>(ComponentInfo);
+	    int i = 0, j = 0;
+	    while (i < Components.Length && j < other.Length)
+	    {
+		    if (Components[i].ID == other[j].ID)
+		    {
+			    j++;
+		    }
 
-        while (thisComps.CanAdvance() && other.CanAdvance())
-        {
-            if (thisComps.Value.ID == other.Value.ID)
-            {
-                other.Advance();
-            }
+		    i++;
+	    }
 
-            thisComps.Advance();
-        }
-
-        return Unsafe.AreSame(ref other.Value, ref other.End);
+	    return j == other.Length;
     }
 
-    internal int FindMatch(UnsafeSpan<Term> searching)
+    internal int FindMatch(Span<Term> searching)
     {
-        var currents = new UnsafeSpan<EcsComponent>(ComponentInfo);
+	    var currents = Components;
+	    var i = 0;
+	    var j = 0;
 
-        while (currents.CanAdvance() && searching.CanAdvance())
+        while (i < currents.Length && j < searching.Length)
         {
-            if (ComponentComparer.CompareTerms(_world, currents.Value.ID, searching.Value.ID) == 0)
+	        ref var current = ref currents[i];
+	        ref var search = ref searching[j];
+
+            if (current.ID.CompareTo(search.ID) == 0)
             {
-                if (searching.Value.Op != TermOp.With)
+                if (search.Op != TermOp.With)
                     return -1;
 
-                searching.Advance();
+                ++j;
             }
-            else if (currents.Value.ID > searching.Value.ID && searching.Value.Op != TermOp.With)
+            else if (current.ID > search.ID && search.Op != TermOp.With)
             {
-                searching.Advance();
+	            ++j;
                 continue;
             }
 
-            currents.Advance();
+            ++i;
         }
 
-        while (searching.CanAdvance() && searching.Value.Op != TermOp.With)
-            searching.Advance();
+        while (j < searching.Length && searching[j].Op != TermOp.With)
+	        ++j;
 
-        return Unsafe.AreSame(ref searching.Value, ref searching.End) ? 0 : 1;
+        return i == j ? 0 : 1;
     }
 
     public void Print()
     {
         PrintRec(this, 0, 0);
 
-        static void PrintRec(Archetype root, int depth, EcsID rootComponent)
+        static void PrintRec(Archetype root, int depth, int rootComponent)
         {
             Console.WriteLine(
                 "{0}Parent [{1}] common ID: {2}",
                 new string('\t', depth),
-                string.Join(", ", root.ComponentInfo.Select(s => s.ID)),
+                string.Join(", ", root.Components.Select(s => s.ID)),
                 rootComponent
             );
 
@@ -269,6 +333,6 @@ public sealed class Archetype
 
 struct EcsEdge
 {
-    public EcsID ComponentID;
+    public int ComponentID;
     public Archetype Archetype;
 }

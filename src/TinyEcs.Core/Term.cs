@@ -2,21 +2,21 @@ namespace TinyEcs;
 
 public struct Term : IComparable<Term>
 {
-    public ulong ID;
+    public int ID;
     public TermOp Op;
 
-    public static Term With(EcsID id) => new() { ID = id, Op = TermOp.With };
+    public static Term With(int id) => new() { ID = id, Op = TermOp.With };
 
-    public static Term Without(EcsID id) => new() { ID = id, Op = TermOp.Without };
+    public static Term Without(int id) => new() { ID = id, Op = TermOp.Without };
 
     public readonly int CompareTo(Term other)
     {
         return ID.CompareTo(other.ID);
     }
 
-    public static implicit operator EcsID(Term id) => id.ID;
+    public static implicit operator int(Term id) => id.ID;
 
-    public static implicit operator Term(EcsID id) => With(id);
+    public static implicit operator Term(int id) => With(id);
 
     public static Term operator !(Term id) => id.Not();
 
