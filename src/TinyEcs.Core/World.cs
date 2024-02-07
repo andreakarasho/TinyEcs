@@ -447,7 +447,7 @@ public sealed partial class World : IDisposable
 
         if (cmp.Size > 0)
         {
-			record.Archetype.ComponentData<T>(column, record.Row, 1)[0] = data;
+			record.Archetype.ComponentData<T>().Slice(record.Row, 1)[0] = data;
         }
 
         if (emit)
@@ -579,7 +579,7 @@ public sealed partial class World : IDisposable
             null,
             Span<Array>.Empty
         );
-        var sysA = it.Field<EcsSystem>(0);
+        var sysA = it.Field<EcsSystem>();
 
         for (int i = 0; i < it.Count; ++i)
         {
@@ -758,7 +758,7 @@ internal static class Lookup
 	{
         public static readonly unsafe int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
-        public static readonly int HashCode = Interlocked.Increment(ref _index);
+        public static readonly int HashCode = System.Threading.Interlocked.Increment(ref _index);
 
 		public static readonly EcsComponent Component = new EcsComponent(HashCode, Size);
 

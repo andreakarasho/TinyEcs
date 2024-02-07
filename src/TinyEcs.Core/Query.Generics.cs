@@ -39,7 +39,7 @@ public delegate void QueryTemplate<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, 
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
+					ref var t0A = ref it.FieldRef<T0>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -65,8 +65,8 @@ With<T1>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -94,9 +94,9 @@ With<T2>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -126,10 +126,10 @@ With<T3>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -161,11 +161,11 @@ With<T4>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -199,12 +199,12 @@ With<T5>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -240,13 +240,13 @@ With<T6>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -284,14 +284,14 @@ With<T7>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -331,15 +331,15 @@ With<T8>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -381,16 +381,16 @@ With<T9>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -434,17 +434,17 @@ With<T10>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -490,18 +490,18 @@ With<T11>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -549,19 +549,19 @@ With<T12>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -611,20 +611,20 @@ With<T13>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -676,21 +676,21 @@ With<T14>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -744,22 +744,22 @@ With<T15>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -815,23 +815,23 @@ With<T16>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -889,24 +889,24 @@ With<T17>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -966,25 +966,25 @@ With<T18>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1046,26 +1046,26 @@ With<T19>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1129,27 +1129,27 @@ With<T20>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1215,28 +1215,28 @@ With<T21>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1304,29 +1304,29 @@ With<T22>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1396,30 +1396,30 @@ With<T23>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
-ref var t23A = ref it.FieldRef<T23>(23);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
+ref var t23A = ref it.FieldRef<T23>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1491,31 +1491,31 @@ With<T24>();
 			_world.Entity()
 				.Set(new EcsSystem((ref Iterator it) =>
 				{
-					ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
-ref var t23A = ref it.FieldRef<T23>(23);
-ref var t24A = ref it.FieldRef<T24>(24);
+					ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
+ref var t23A = ref it.FieldRef<T23>();
+ref var t24A = ref it.FieldRef<T24>();
 
 
 					ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1563,7 +1563,7 @@ t24A = ref Unsafe.Add(ref t24A, 1);
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
+				ref var t0A = ref it.FieldRef<T0>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1585,8 +1585,8 @@ With<T1>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1610,9 +1610,9 @@ With<T2>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1638,10 +1638,10 @@ With<T3>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1669,11 +1669,11 @@ With<T4>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1703,12 +1703,12 @@ With<T5>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1740,13 +1740,13 @@ With<T6>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1780,14 +1780,14 @@ With<T7>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1823,15 +1823,15 @@ With<T8>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1869,16 +1869,16 @@ With<T9>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1918,17 +1918,17 @@ With<T10>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -1970,18 +1970,18 @@ With<T11>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2025,19 +2025,19 @@ With<T12>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2083,20 +2083,20 @@ With<T13>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2144,21 +2144,21 @@ With<T14>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2208,22 +2208,22 @@ With<T15>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2275,23 +2275,23 @@ With<T16>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2345,24 +2345,24 @@ With<T17>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2418,25 +2418,25 @@ With<T18>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2494,26 +2494,26 @@ With<T19>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2573,27 +2573,27 @@ With<T20>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2655,28 +2655,28 @@ With<T21>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2740,29 +2740,29 @@ With<T22>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2828,30 +2828,30 @@ With<T23>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
-ref var t23A = ref it.FieldRef<T23>(23);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
+ref var t23A = ref it.FieldRef<T23>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);
@@ -2919,31 +2919,31 @@ With<T24>();
 
 			_world.Query(Terms, (ref Iterator it) =>
 			{
-				ref var t0A = ref it.FieldRef<T0>(0);
-ref var t1A = ref it.FieldRef<T1>(1);
-ref var t2A = ref it.FieldRef<T2>(2);
-ref var t3A = ref it.FieldRef<T3>(3);
-ref var t4A = ref it.FieldRef<T4>(4);
-ref var t5A = ref it.FieldRef<T5>(5);
-ref var t6A = ref it.FieldRef<T6>(6);
-ref var t7A = ref it.FieldRef<T7>(7);
-ref var t8A = ref it.FieldRef<T8>(8);
-ref var t9A = ref it.FieldRef<T9>(9);
-ref var t10A = ref it.FieldRef<T10>(10);
-ref var t11A = ref it.FieldRef<T11>(11);
-ref var t12A = ref it.FieldRef<T12>(12);
-ref var t13A = ref it.FieldRef<T13>(13);
-ref var t14A = ref it.FieldRef<T14>(14);
-ref var t15A = ref it.FieldRef<T15>(15);
-ref var t16A = ref it.FieldRef<T16>(16);
-ref var t17A = ref it.FieldRef<T17>(17);
-ref var t18A = ref it.FieldRef<T18>(18);
-ref var t19A = ref it.FieldRef<T19>(19);
-ref var t20A = ref it.FieldRef<T20>(20);
-ref var t21A = ref it.FieldRef<T21>(21);
-ref var t22A = ref it.FieldRef<T22>(22);
-ref var t23A = ref it.FieldRef<T23>(23);
-ref var t24A = ref it.FieldRef<T24>(24);
+				ref var t0A = ref it.FieldRef<T0>();
+ref var t1A = ref it.FieldRef<T1>();
+ref var t2A = ref it.FieldRef<T2>();
+ref var t3A = ref it.FieldRef<T3>();
+ref var t4A = ref it.FieldRef<T4>();
+ref var t5A = ref it.FieldRef<T5>();
+ref var t6A = ref it.FieldRef<T6>();
+ref var t7A = ref it.FieldRef<T7>();
+ref var t8A = ref it.FieldRef<T8>();
+ref var t9A = ref it.FieldRef<T9>();
+ref var t10A = ref it.FieldRef<T10>();
+ref var t11A = ref it.FieldRef<T11>();
+ref var t12A = ref it.FieldRef<T12>();
+ref var t13A = ref it.FieldRef<T13>();
+ref var t14A = ref it.FieldRef<T14>();
+ref var t15A = ref it.FieldRef<T15>();
+ref var t16A = ref it.FieldRef<T16>();
+ref var t17A = ref it.FieldRef<T17>();
+ref var t18A = ref it.FieldRef<T18>();
+ref var t19A = ref it.FieldRef<T19>();
+ref var t20A = ref it.FieldRef<T20>();
+ref var t21A = ref it.FieldRef<T21>();
+ref var t22A = ref it.FieldRef<T22>();
+ref var t23A = ref it.FieldRef<T23>();
+ref var t24A = ref it.FieldRef<T24>();
 
 
 				ref var last = ref Unsafe.Add(ref t0A, it.Count);

@@ -75,7 +75,7 @@ namespace TinyEcs
 				sbUnsafeAdd.Clear();
 
 				sbWiths.AppendFormat("With<T{0}>();\n", i);
-				sbFieldDecl.AppendFormat("ref var t{0}A = ref it.FieldRef<T{0}>({0});\n", i);
+				sbFieldDecl.AppendFormat("ref var t{0}A = ref it.FieldRef<T{0}>();\n", i);
 
 				if (queryForEntity)
 				{

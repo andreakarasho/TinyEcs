@@ -88,8 +88,8 @@ while (true)
 
 static void Iter(ref Iterator it)
 {
-	ref var pos = ref it.FieldRef<Position>(0);
-	ref var vel = ref it.FieldRef<Velocity>(1);
+	ref var pos = ref it.FieldRef<Position>();
+	ref var vel = ref it.FieldRef<Velocity>();
 	ref var last = ref Unsafe.Add(ref pos, it.Count);
 
 	while (Unsafe.IsAddressLessThan(ref pos, ref last))

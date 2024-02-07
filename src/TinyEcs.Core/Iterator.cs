@@ -52,19 +52,15 @@ public readonly ref struct Iterator
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe Span<T> Field<T>(int index) where T : struct
+    public unsafe Span<T> Field<T>() where T : struct
     {
-	    var r = _archetype.RawComponentData(index);
-		ref var array = ref Unsafe.As<Array, T[]>(ref r);
-		return array;
+	    return _archetype.ComponentData<T>();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe ref T FieldRef<T>(int index) where T : struct
+    public ref T FieldRef<T>() where T : struct
     {
-	    var r = _archetype.RawComponentData(index);
-	    ref var array = ref Unsafe.As<Array, T[]>(ref r);
-	    return ref MemoryMarshal.GetArrayDataReference(array);
+	    return ref MemoryMarshal.GetReference(_archetype.ComponentData<T>());
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

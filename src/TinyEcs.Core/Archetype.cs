@@ -90,14 +90,15 @@ public sealed partial class Archetype
         return removed;
     }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Span<T> ComponentData<T>(int column, int row, int count) where T : struct
-	{
-		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Span<T> ComponentData<T>() where T : struct
+    {
+	    var column = GetComponentIndex(Lookup.Entity<T>.HashCode);
+	    EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
 
-		ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
-		return array.AsSpan(row, count);
-	}
+	    ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
+	    return array.AsSpan(0, Count);
+    }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal Array RawComponentData(int column)
@@ -162,15 +163,6 @@ public sealed partial class Archetype
 
 		//_count = fromCount;
 	}
-
-	internal Span<T> ComponentData<T>() where T : struct
-    {
-        //ref readonly var cmp = ref _world.Component<T>();
-        //EcsAssert.Assert(cmp.Size > 0);
-
-        var column = GetComponentIndex(Lookup.Entity<T>.HashCode);
-        return ComponentData<T>(column, 0, Count);
-    }
 
 	private void ResizeComponentArray(int capacity)
 	{
