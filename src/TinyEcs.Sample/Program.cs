@@ -9,44 +9,32 @@ using System.Text;
 using System.Threading.Tasks;
 using TinyEcs;
 
-const int ENTITIES_COUNT = 524_288 * 2 * 1;
+const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-unsafe
-{
-	var text0 = Generate.CreateQueries(false);
-	var text1 = Generate.CreateQueries(true);
+var text0 = Generate.CreateQueries(false);
+var text1 = Generate.CreateQueries(true);
 
-	File.WriteAllText("a.txt", text0);
-	File.WriteAllText("b.txt", text1);
+File.WriteAllText("a.txt", text0);
+File.WriteAllText("b.txt", text1);
 
-	for (int i = 0; i < ENTITIES_COUNT; i++)
-		ecs.Entity()
-			.Set<Position>(new Position())
-			.Set<Velocity>(new Velocity());
+for (int i = 0; i < ENTITIES_COUNT; i++)
+	ecs.Entity()
+		.Set<Position>(new Position())
+		.Set<Velocity>(new Velocity());
 
-	//ecs.Query()
-	//	.System<EcsSystemPhaseOnUpdate, Position, Velocity>(static (ref Position pos, ref Velocity vel) =>
-	//	{
-	//		pos.X *= vel.X;
-	//		pos.Y *= vel.Y;
-	//	});
 
-	//ecs.Query()
-	//	//.Without<PlayerTag>()
-	//	.System<EcsSystemPhaseOnUpdate, Position, Velocity>((ref readonly EntityView entity, ref Position pos, ref Velocity vel) =>
-	//	{
-	//		pos.X *= vel.X;
-	//		pos.Y *= vel.Y;
-	//	});
-}
+// ecs.Query()
+// 	.Each(static (ref readonly EntityView entity, ref Velocity pos, ref Position vel) =>
+// 	{
+// 		pos.X *= vel.X;
+// 		pos.Y *= vel.Y;
+// 	});
 
-var query = ecs.Query()
+using var query = ecs.Query()
 	.With<Position>()
 	.With<Velocity>();
-
-IteratorDelegate del = Iter;
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -58,48 +46,37 @@ while (true)
 
 	for (int i = 0; i < 3600; ++i)
 	{
-		query.Iterate(del);
+		//query.Iterate(del);
 		//ecs.Step(cur);
 
-		// foreach (var archetype in query)
-		// {
-		// 	var count = archetype.Count;
-		// 	ref var pos = ref MemoryMarshal.GetReference(archetype.ComponentData<Position>());
-		// 	ref var vel = ref MemoryMarshal.GetReference(archetype.ComponentData<Velocity>());
-		//
-		// 	ref var last2 = ref Unsafe.Add(ref pos, count);
-		//
-		// 	while (Unsafe.IsAddressLessThan(ref pos, ref last2))
-		// 	{
-		// 		pos.X *= vel.X;
-		// 		pos.Y *= vel.Y;
-		//
-		// 		pos = ref Unsafe.Add(ref pos, 1);
-		// 		vel = ref Unsafe.Add(ref vel, 1);
-		// 	}
-		// }
+		foreach (var archetype in query)
+		{
+			var column0 = archetype.GetComponentIndex<Position>();
+			var column1 = archetype.GetComponentIndex<Velocity>();
+
+			foreach (ref var chunk in archetype.Chunks)
+			{
+				ref var pos = ref chunk.GetReference<Position>(column0);
+				ref var vel = ref chunk.GetReference<Velocity>(column1);
+
+				ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
+
+				while (Unsafe.IsAddressLessThan(ref pos, ref last2))
+				{
+					pos.X *= vel.X;
+					pos.Y *= vel.Y;
+
+					pos = ref Unsafe.Add(ref pos, 1);
+					vel = ref Unsafe.Add(ref vel, 1);
+				}
+			}
+		}
 	}
 
 	last = start;
 	start = sw.ElapsedMilliseconds;
 
 	Console.WriteLine("query done in {0} ms", start - last);
-}
-
-static void Iter(ref Iterator it)
-{
-	ref var pos = ref it.FieldRef<Position>();
-	ref var vel = ref it.FieldRef<Velocity>();
-	ref var last = ref Unsafe.Add(ref pos, it.Count);
-
-	while (Unsafe.IsAddressLessThan(ref pos, ref last))
-	{
-		pos.X *= vel.X;
-		pos.Y *= vel.Y;
-
-		pos = ref Unsafe.Add(ref pos, 1);
-		vel = ref Unsafe.Add(ref vel, 1);
-	}
 }
 
 enum TileType

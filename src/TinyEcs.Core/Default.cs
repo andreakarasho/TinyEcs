@@ -1,5 +1,6 @@
 namespace TinyEcs;
 
+[DebuggerDisplay("ID: {ID}, Size: {Size}")]
 public readonly struct EcsComponent
 {
     public readonly int ID;
@@ -12,73 +13,73 @@ public readonly struct EcsComponent
     }
 }
 
-public unsafe struct EcsSystem
-{
-    const int TERMS_COUNT = 32;
-
-    public readonly IteratorDelegate Callback;
-    public readonly EcsID Query;
-    public readonly float Tick;
-    public float TickCurrent;
-    private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(byte))];
-    private readonly int _termsCount;
-
-    public Span<Term> Terms
-    {
-        get
-        {
-            fixed (byte* ptr = _terms)
-            {
-                return new Span<Term>(ptr, _termsCount);
-            }
-        }
-    }
-
-    public EcsSystem(
-		IteratorDelegate func,
-        EcsID query,
-        ReadOnlySpan<Term> terms,
-        float tick
-    )
-    {
-        Callback = func;
-        Query = query;
-        _termsCount = terms.Length;
-        terms.CopyTo(Terms);
-        Tick = tick;
-        TickCurrent = 0f;
-    }
-}
-
-public unsafe struct EcsEvent
-{
-    const int TERMS_COUNT = 16;
-
-    public readonly delegate* <ref Iterator, void> Callback;
-
-    private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(TermOp))];
-    private readonly int _termsCount;
-
-    public Span<Term> Terms
-    {
-        get
-        {
-            fixed (byte* ptr = _terms)
-            {
-                return new Span<Term>(ptr, _termsCount);
-            }
-        }
-    }
-
-    public EcsEvent(delegate* <ref Iterator, void> callback, ReadOnlySpan<Term> terms)
-    {
-        Callback = callback;
-        _termsCount = terms.Length;
-        var currentTerms = Terms;
-        terms.CopyTo(currentTerms);
-        currentTerms.Sort();
-    }
-}
+// public unsafe struct EcsSystem
+// {
+//     const int TERMS_COUNT = 32;
+//
+//     public readonly IteratorDelegate Callback;
+//     public readonly EcsID Query;
+//     public readonly float Tick;
+//     public float TickCurrent;
+//     private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(byte))];
+//     private readonly int _termsCount;
+//
+//     public Span<Term> Terms
+//     {
+//         get
+//         {
+//             fixed (byte* ptr = _terms)
+//             {
+//                 return new Span<Term>(ptr, _termsCount);
+//             }
+//         }
+//     }
+//
+//     public EcsSystem(
+// 		IteratorDelegate func,
+//         EcsID query,
+//         ReadOnlySpan<Term> terms,
+//         float tick
+//     )
+//     {
+//         Callback = func;
+//         Query = query;
+//         _termsCount = terms.Length;
+//         terms.CopyTo(Terms);
+//         Tick = tick;
+//         TickCurrent = 0f;
+//     }
+// }
+//
+// public unsafe struct EcsEvent
+// {
+//     const int TERMS_COUNT = 16;
+//
+//     public readonly delegate* <ref Iterator, void> Callback;
+//
+//     private fixed byte _terms[TERMS_COUNT * (sizeof(ulong) + sizeof(TermOp))];
+//     private readonly int _termsCount;
+//
+//     public Span<Term> Terms
+//     {
+//         get
+//         {
+//             fixed (byte* ptr = _terms)
+//             {
+//                 return new Span<Term>(ptr, _termsCount);
+//             }
+//         }
+//     }
+//
+//     public EcsEvent(delegate* <ref Iterator, void> callback, ReadOnlySpan<Term> terms)
+//     {
+//         Callback = callback;
+//         _termsCount = terms.Length;
+//         var currentTerms = Terms;
+//         terms.CopyTo(currentTerms);
+//         currentTerms.Sort();
+//     }
+// }
 
 public struct EcsEventOnSet { }
 

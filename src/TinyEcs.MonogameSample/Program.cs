@@ -1,28 +1,25 @@
-using System.Collections;
-using System.Reflection.Metadata;
-using System.Runtime.CompilerServices;
 using FontStashSharp;
-using FontStashSharp.RichText;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
 using TinyEcs;
 
 using var game = new TinyGame();
 game.Run();
 
-sealed unsafe class TinyGame : Game
+sealed class TinyGame : Game
 {
-    const int WINDOW_WIDTH = 800;
-    const int WINDOW_HEIGHT = 600;
+    public const int WINDOW_WIDTH = 800;
+    public const int WINDOW_HEIGHT = 600;
 
-    const int VELOCITY = 250;
+    public const int VELOCITY = 250;
     const int ENTITIES_TO_SPAWN = 1000;
 
     private readonly GraphicsDeviceManager _graphicsDeviceManager;
     private SpriteBatch? _spriteBatch;
     private World _ecs;
     private FontSystem _fontSystem;
+    private readonly List<IUpdateSystem<GameTime>> _systems = new List<IUpdateSystem<GameTime>>();
+    private readonly List<IUpdateSystem<GameTime>> _rendering = new List<IUpdateSystem<GameTime>>();
 
     public TinyGame()
     {
@@ -45,78 +42,15 @@ sealed unsafe class TinyGame : Game
 
         _ecs = new World();
 
-        _ = Assets<GraphicsDevice>.Register("device", GraphicsDevice);
-        _ = Assets<SpriteBatch>.Register("batcher", _spriteBatch);
+        SpawnEntities();
 
-        var pos = _ecs.Entity<Position>();
-        var vel = _ecs.Entity<Velocity>();
-        var rot = _ecs.Entity<Rotation>();
-        var spr = _ecs.Entity<Sprite>();
-        var gameStateSingl = _ecs.Entity<GameState>();
+        _systems.Add(new MoveSystem(_ecs));
+        _systems.Add(new CheckBorderSystem(_ecs));
 
-        var deviceHandle = Assets<GraphicsDevice>.Get("device");
-        var batcherHandle = Assets<SpriteBatch>.Get("batcher");
-        var fontSysHandle = Assets<FontSystem>.Get("fontSys");
-
-        _ecs.SetSingleton(new GameState(deviceHandle, batcherHandle, fontSysHandle));
-
-        // _ecs.Entity().System(&Setup).Set<EcsPhase, EcsSystemPhaseOnStartup>();
-
-        _ecs.Entity()
-            .System(&SpawnEntities, Term.Singleton(gameStateSingl))
-            .Set<EcsPhase, EcsSystemPhaseOnStartup>();
-
-        _ecs.Entity().System(&MoveSystem, pos, vel, rot).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-        _ecs.Entity().System(&CheckBorderSystem, pos, vel).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-        _ecs.Entity().System(&PrintMessage, 1f).Set<EcsPhase, EcsSystemPhaseOnUpdate>();
-
-        _ecs.Entity("BeginRenderer")
-            .System(&BeginRender, Term.Singleton(gameStateSingl))
-            .Set<EcsPhase, RenderingPhase>();
-
-        _ecs.Entity("RenderObjects")
-            .System(&Render, pos, rot, spr, Term.Singleton(gameStateSingl))
-            .Set<EcsPhase, RenderingPhase>();
-
-        _ecs.Entity("RenderText")
-            .System(&RenderText, Term.Singleton(gameStateSingl))
-            .Set<EcsPhase, RenderingPhase>();
-
-        _ecs.Entity("EndRenderer")
-            .System(&EndRender, Term.Singleton(gameStateSingl))
-            .Set<EcsPhase, RenderingPhase>();
-
-        //_ecs.StartupSystem(&Setup);
-        //_ecs.StartupSystem(&SpawnEntities);
-
-        // var qry = _ecs.Query()
-        // 	.With<Position>()
-        // 	.With<Velocity>()
-        // 	.With<Rotation>();
-
-        //_ecs.System(&MoveSystem, qry);
-        //_ecs.System(&CheckBorderSystem, qry);
-        //_ecs.System(&PrintMessage, 1f);
-
-
-        // _ecs.System(&BeginRender)
-        // 	.Set<EcsPhase, RenderingPhase>();
-
-        // _ecs.System(&Render,
-        // 	_ecs.Query()
-        // 		.With<Position>()
-        // 		.With<Rotation>()
-        // 		.With<Sprite>()
-        // 	)
-        // 	.Set<EcsPhase, RenderingPhase>();
-
-        // _ecs.System(&RenderText)
-        // 	.Set<EcsPhase, RenderingPhase>();
-
-        // _ecs.System(&EndRender)
-        // 	.Set<EcsPhase, RenderingPhase>();
+        _rendering.Add(new BeginRenderSystem(_spriteBatch));
+        _rendering.Add(new RenderEntities(_ecs, _spriteBatch));
+        _rendering.Add(new RenderText(_ecs, _spriteBatch, _fontSystem));
+        _rendering.Add(new EndRenderSystem(_spriteBatch));
     }
 
     protected override void LoadContent()
@@ -126,214 +60,67 @@ sealed unsafe class TinyGame : Game
         var path = Path.Combine(AppContext.BaseDirectory, "Content", "fonts");
         foreach (var file in Directory.GetFiles(path, "*.ttf"))
             _fontSystem.AddFont(File.ReadAllBytes(file));
-
-        _ = Assets<FontSystem>.Register("fontSys", _fontSystem);
     }
 
     protected override void Update(GameTime gameTime)
     {
-        _ecs!.Step((float)gameTime.ElapsedGameTime.TotalSeconds);
+        foreach (var system in _systems)
+	        system.Update(in gameTime);
 
         base.Update(gameTime);
     }
 
     protected override void Draw(GameTime gameTime)
     {
-        _ecs!.RunPhase<RenderingPhase>();
+	    foreach (var system in _rendering)
+		    system.Update(in gameTime);
 
         base.Draw(gameTime);
     }
 
-    static void PrintMessage(ref Iterator it)
+    private void SpawnEntities()
     {
-        Console.WriteLine("print!");
-    }
+	    var rnd = new Random();
+	    var texture = Texture2D.FromFile(
+		    GraphicsDevice,
+		    Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png")
+	    );
 
-    static void Setup(ref Iterator it) { }
-
-    static void SpawnEntities(ref Iterator it)
-    {
-        var rnd = new Random();
-        ref var gameState = ref it.Single<GameState>(0);
-        var texture = Texture2D.FromFile(
-            gameState.Device.GetValue(),
-            Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png")
-        );
-        var textureHandle = Assets<Texture2D>.Register("texture", texture);
-
-        for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
-        {
-            it.Commands!
-                .Entity()
-                .Set(
-                    new Position()
-                    {
-                        Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))
-                    }
-                )
-                .Set(
-                    new Velocity()
-                    {
-                        Value = new Vector2(
-                            rnd.Next(-VELOCITY, VELOCITY),
-                            rnd.Next(-VELOCITY, VELOCITY)
-                        )
-                    }
-                )
-                .Set(
-                    new Sprite()
-                    {
-                        Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256)),
-                        Scale = rnd.NextSingle(),
-                        Texture = textureHandle
-                    }
-                )
-                .Set(
-                    new Rotation()
-                    {
-                        Value = 0f,
-                        Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
-                    }
-                );
-        }
-    }
-
-    static void MoveSystem(ref Iterator it)
-    {
-        var p = it.Field<Position>(0);
-        var v = it.Field<Velocity>(1);
-        var r = it.Field<Rotation>(2);
-
-        for (int i = 0; i < it.Count; ++i)
-        {
-            ref var pos = ref p[i];
-            ref var vel = ref v[i];
-            ref var rot = ref r[i];
-
-            Vector2.Multiply(ref vel.Value, it.DeltaTime, out var res);
-            Vector2.Add(ref pos.Value, ref res, out pos.Value);
-
-            rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * it.DeltaTime));
-        }
-    }
-
-    static void CheckBorderSystem(ref Iterator it)
-    {
-        var p = it.Field<Position>(0);
-        var v = it.Field<Velocity>(1);
-
-        for (int i = 0; i < it.Count; ++i)
-        {
-            ref var pos = ref p[i];
-            ref var vel = ref v[i];
-
-            if (pos.Value.X < 0)
-            {
-                pos.Value.X = 0;
-                vel.Value.X *= -1;
-            }
-            else if (pos.Value.X > WINDOW_WIDTH)
-            {
-                pos.Value.X = WINDOW_WIDTH;
-                vel.Value.X *= -1;
-            }
-
-            if (pos.Value.Y < 0)
-            {
-                pos.Value.Y = 0;
-                vel.Value.Y *= -1;
-            }
-            else if (pos.Value.Y > WINDOW_HEIGHT)
-            {
-                pos.Value.Y = WINDOW_HEIGHT;
-                vel.Value.Y *= -1;
-            }
-        }
-    }
-
-    static void BeginRender(ref Iterator it)
-    {
-        ref var gameState = ref it.Single<GameState>(0);
-        var batch = gameState.Batch.GetValue();
-
-        batch.GraphicsDevice.Clear(Color.Black);
-        batch.Begin();
-    }
-
-    static void EndRender(ref Iterator it)
-    {
-        ref var gameState = ref it.Single<GameState>(0);
-        var batch = gameState.Batch.GetValue();
-
-        batch.End();
-    }
-
-    static void Render(ref Iterator it)
-    {
-        var p = it.Field<Position>(0);
-        var r = it.Field<Rotation>(1);
-        var s = it.Field<Sprite>(2);
-        ref var gameState = ref it.Single<GameState>(3);
-
-        var batch = gameState.Batch.GetValue();
-        var origin = new Vector2(0.5f);
-
-        for (int i = 0; i < it.Count; ++i)
-        {
-            ref var pos = ref p[i];
-            ref var sprite = ref s[i];
-            ref var rotation = ref r[i];
-
-            batch.Draw(
-                sprite.Texture,
-                pos.Value,
-                null,
-                sprite.Color,
-                rotation.Value,
-                origin,
-                sprite.Scale,
-                SpriteEffects.None,
-                0f
-            );
-        }
-    }
-
-    static void RenderText(ref Iterator it)
-    {
-        ref var gameState = ref it.Single<GameState>(0);
-        var batch = gameState.Batch.GetValue();
-        var fontSys = gameState.FontSystem.GetValue();
-
-        var dbgText =
-            $@"[Debug]
-					Entities: {it.World.EntityCount}
-					DeltaTime: {it.DeltaTime}";
-        var font18 = fontSys.GetFont(18);
-        var size = font18.MeasureString(dbgText);
-        size.X = batch.GraphicsDevice.Viewport.Width - size.X - 15;
-        size.Y = 15;
-        batch.DrawString(
-            font18,
-            dbgText,
-            size,
-            Color.White,
-            effect: FontSystemEffect.Stroked,
-            effectAmount: 1
-        );
-
-        var rotatingText = "Hello from TinyEcs!";
-        var font32 = fontSys.GetFont(32);
-        size = font32.MeasureString(rotatingText);
-        size.X = batch.GraphicsDevice.Viewport.Width / 2f - size.X / 2f;
-        size.Y = batch.GraphicsDevice.Viewport.Height / 2f - size.Y / 2f;
-        batch.DrawString(
-            font32,
-            rotatingText,
-            size,
-            Color.Yellow,
-            effect: FontSystemEffect.Stroked,
-            effectAmount: 1
-        );
+	    for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
+	    {
+		    _ecs!
+			    .Entity()
+			    .Set(
+				    new Position()
+				    {
+					    Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))
+				    }
+			    )
+			    .Set(
+				    new Velocity()
+				    {
+					    Value = new Vector2(
+						    rnd.Next(-VELOCITY, VELOCITY),
+						    rnd.Next(-VELOCITY, VELOCITY)
+					    )
+				    }
+			    )
+			    .Set(
+				    new Sprite()
+				    {
+					    Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256)),
+					    Scale = rnd.NextSingle(),
+					    Texture = texture
+				    }
+			    )
+			    .Set(
+				    new Rotation()
+				    {
+					    Value = 0f,
+					    Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
+				    }
+			    );
+	    }
     }
 }
 
@@ -351,7 +138,7 @@ struct Sprite
 {
     public Color Color;
     public float Scale;
-    public Handle<Texture2D> Texture;
+    public Texture2D Texture;
 }
 
 struct Rotation
@@ -360,76 +147,214 @@ struct Rotation
     public float Acceleration;
 }
 
-struct RenderingPhase { }
 
-readonly struct GameState
+sealed class MoveSystem : IUpdateSystem<GameTime>
 {
-    public readonly Handle<GraphicsDevice> Device;
-    public readonly Handle<SpriteBatch> Batch;
-    public readonly Handle<FontSystem> FontSystem;
+	private readonly Query _query;
 
-    public GameState(
-        Handle<GraphicsDevice> device,
-        Handle<SpriteBatch> batch,
-        Handle<FontSystem> fontSystem
-    )
-    {
-        Device = device;
-        Batch = batch;
-        FontSystem = fontSystem;
-    }
+	public MoveSystem(World ecs)
+	{
+		_query = ecs.Query()
+			//.With<Position>().With<Rotation>().With<Velocity>()
+			;
+	}
+
+	public void Update(in GameTime data)
+	{
+		var deltaTime = (float)data.ElapsedGameTime.TotalSeconds;
+
+		_query.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+		{
+			Vector2.Multiply(ref vel.Value, deltaTime, out var res);
+			Vector2.Add(ref pos.Value, ref res, out pos.Value);
+
+			rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * deltaTime));
+		});
+
+		// foreach (var arch in _query)
+		// {
+		// 	var index0 = arch.GetComponentIndex<Position>();
+		// 	var index1 = arch.GetComponentIndex<Velocity>();
+		// 	var index2 = arch.GetComponentIndex<Rotation>();
+		//
+		// 	foreach (ref var chunk in arch.Chunks)
+		// 	{
+		// 		ref var pos = ref chunk.GetReference<Position>(index0);
+		// 		ref var vel = ref chunk.GetReference<Velocity>(index1);
+		// 		ref var rot = ref chunk.GetReference<Rotation>(index2);
+		// 		ref var last = ref Unsafe.Add(ref pos, chunk.Count);
+		//
+		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last))
+		// 		{
+		// 			Move((float)data.ElapsedGameTime.TotalSeconds, ref pos, ref vel, ref rot);
+		//
+		// 			pos = ref Unsafe.Add(ref pos, 1);
+		// 			vel = ref Unsafe.Add(ref vel, 1);
+		// 			rot = ref Unsafe.Add(ref rot, 1);
+		// 		}
+		// 	}
+		// }
+	}
+
+	private static void Move(float deltaTime, ref Position pos, ref Velocity vel, ref Rotation rot)
+	{
+		Vector2.Multiply(ref vel.Value, deltaTime, out var res);
+		Vector2.Add(ref pos.Value, ref res, out pos.Value);
+
+		rot.Value = MathHelper.WrapAngle(rot.Value + (rot.Acceleration * deltaTime));
+	}
 }
 
-public static class Assets<T>
+sealed class CheckBorderSystem : IUpdateSystem<GameTime>
 {
-    private static T[] assets = new T[32];
-    private static readonly Dictionary<string, int> identifierToSlot =
-        new Dictionary<string, int>();
-    private static int nextFreeSlot;
+	private readonly Query _query;
 
-    public static int Count { get; private set; }
+	public CheckBorderSystem(World ecs)
+	{
+		_query = ecs.Query();
+	}
 
-    public static Handle<T> Register(string identifier, T asset)
-    {
-        if (identifierToSlot.ContainsKey(identifier))
-            throw new Exception(
-                "Cannot register multiple assets with the same name: " + identifier
-            );
+	public void Update(in GameTime data)
+	{
+		_query.Each((ref Position pos, ref Velocity vel) =>
+		{
+			if (pos.Value.X < 0)
+			{
+				pos.Value.X = 0;
+				vel.Value.X *= -1;
+			}
+			else if (pos.Value.X > TinyGame.WINDOW_WIDTH)
+			{
+				pos.Value.X = TinyGame.WINDOW_WIDTH;
+				vel.Value.X *= -1;
+			}
 
-        int slot = nextFreeSlot++;
-
-        if (slot >= assets.Length)
-            Array.Resize(ref assets, assets.Length * 2);
-
-        assets[slot] = asset;
-        identifierToSlot[identifier] = slot;
-
-        return new Handle<T>(slot);
-    }
-
-    public static Handle<T> Get(string identifier)
-    {
-        if (!identifierToSlot.TryGetValue(identifier, out int value))
-            throw new Exception("Asset does not exist: " + identifier);
-
-        return new Handle<T>(value);
-    }
-
-    internal static T Get(int slot) => assets[slot];
-
-    internal static bool Has(string identifier) => identifierToSlot.ContainsKey(identifier);
+			if (pos.Value.Y < 0)
+			{
+				pos.Value.Y = 0;
+				vel.Value.Y *= -1;
+			}
+			else if (pos.Value.Y > TinyGame.WINDOW_HEIGHT)
+			{
+				pos.Value.Y = TinyGame.WINDOW_HEIGHT;
+				vel.Value.Y *= -1;
+			}
+		});
+	}
 }
 
-public readonly struct Handle<T>
+sealed class BeginRenderSystem : IUpdateSystem<GameTime>
 {
-    private readonly int slot;
+	private readonly SpriteBatch _batch;
 
-    internal Handle(int slot)
-    {
-        this.slot = slot;
-    }
+	public BeginRenderSystem(SpriteBatch batch)
+	{
+		_batch = batch;
+	}
 
-    public readonly T GetValue() => Assets<T>.Get(slot);
+	public void Update(in GameTime gameTime)
+	{
+		_batch.GraphicsDevice.Clear(Color.Black);
+		_batch.Begin();
+	}
+}
 
-    public static implicit operator T(Handle<T> handle) => handle.GetValue();
+sealed class EndRenderSystem : IUpdateSystem<GameTime>
+{
+	private readonly SpriteBatch _batch;
+
+	public EndRenderSystem(SpriteBatch batch)
+	{
+		_batch = batch;
+	}
+
+	public void Update(in GameTime gameTime)
+	{
+		_batch.End();
+	}
+}
+
+sealed class RenderEntities : IUpdateSystem<GameTime>
+{
+	private readonly SpriteBatch _batch;
+	private readonly Query _query;
+
+	public RenderEntities(World ecs, SpriteBatch batch)
+	{
+		_batch = batch;
+		_query = ecs.Query();
+	}
+
+	public void Update(in GameTime gameTime)
+	{
+		_query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+		{
+			_batch.Draw(
+				sprite.Texture,
+				pos.Value,
+				null,
+				sprite.Color,
+				rotation.Value,
+				new Vector2(0.5f),
+				sprite.Scale,
+				SpriteEffects.None,
+				0f
+			);
+		});
+	}
+}
+
+sealed class RenderText : IUpdateSystem<GameTime>
+{
+	private readonly SpriteBatch _batch;
+	private readonly FontSystem _fontSystem;
+	private readonly World _ecs;
+
+	public RenderText(World ecs, SpriteBatch batch, FontSystem fontSystem)
+	{
+		_ecs = ecs;
+		_batch = batch;
+		_fontSystem = fontSystem;
+	}
+
+	public void Update(in GameTime gameTime)
+	{
+		var deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+		var dbgText =
+			$@"[Debug]
+					Entities: {_ecs.EntityCount}
+					DeltaTime: {deltaTime}";
+		var font18 = _fontSystem.GetFont(18);
+		var size = font18.MeasureString(dbgText);
+		size.X = _batch.GraphicsDevice.Viewport.Width - size.X - 15;
+		size.Y = 15;
+		_batch.DrawString(
+			font18,
+			dbgText,
+			size,
+			Color.White,
+			effect: FontSystemEffect.Stroked,
+			effectAmount: 1
+		);
+
+		var rotatingText = "Hello from TinyEcs!";
+		var font32 = _fontSystem.GetFont(32);
+		size = font32.MeasureString(rotatingText);
+		size.X = _batch.GraphicsDevice.Viewport.Width / 2f - size.X / 2f;
+		size.Y = _batch.GraphicsDevice.Viewport.Height / 2f - size.Y / 2f;
+		_batch.DrawString(
+			font32,
+			rotatingText,
+			size,
+			Color.Yellow,
+			effect: FontSystemEffect.Stroked,
+			effectAmount: 1
+		);
+	}
+}
+
+interface IUpdateSystem<T>
+{
+	void Update(in T data);
 }

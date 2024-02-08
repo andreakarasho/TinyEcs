@@ -1,29 +1,34 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public sealed unsafe partial class Query
+public sealed unsafe partial class Query : IDisposable
 {
     public const int TERMS_COUNT = 25;
 
     private readonly World _world;
-	private readonly List<Term> _terms = new List<Term>();
+    private readonly Vec<Term> _terms = Vec<Term>.Init(TERMS_COUNT);
 
-	private Span<Term> Terms => CollectionsMarshal.AsSpan(_terms);
+	private Span<Term> Terms => _terms.Span;
 
     internal Query(World world)
     {
         _world = world;
     }
 
+    public void Dispose()
+    {
+	    _terms.Dispose();
+    }
+
     public Query With<T>() where T : struct => With(_world.Component<T>().ID);
 
     private Query With(int id)
     {
-		var term = new Term();
-        term.ID = id;
-        term.Op = TermOp.With;
+	    if (Exists(id)) return this;
 
-		_terms.Add(term);
+	    ref var term = ref _terms.AddRef();
+	    term.ID = id;
+        term.Op = TermOp.With;
 
 		return this;
     }
@@ -32,28 +37,22 @@ public sealed unsafe partial class Query
 
     private Query Without(int id)
     {
-		var term = new Term();
+	    if (Exists(id)) return this;
+
+	    ref var term = ref _terms.AddRef();
 		term.ID = id;
         term.Op = TermOp.Without;
-
-		_terms.Add(term);
 
 		return this;
     }
 
-    public void Iterate(IteratorDelegate action) => _world.Query(Terms, action);
-
-	public void System(IteratorDelegate fn) => System<EcsSystemPhaseOnUpdate>(fn);
-
-	public void System<TPhase>(IteratorDelegate fn) where TPhase : struct
-	{
-		var terms = Terms;
-		EcsID query = terms.Length > 0 ? _world.Entity() : 0;
-
-		_world.Entity()
-			.Set(new EcsSystem(fn, query, terms, float.NaN))
-			.Set<TPhase>();
-	}
+    private bool Exists(int id)
+    {
+	    foreach (ref var term in _terms.Span)
+		    if (term.ID == id)
+			    return true;
+	    return false;
+    }
 
 	private readonly List<Archetype> _cachedArchetypes = new List<Archetype>();
 

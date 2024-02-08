@@ -1,18 +1,48 @@
 namespace TinyEcs;
 
-public sealed partial class Archetype
+public struct ArchetypeChunk
+{
+	public Array[]? Components;
+	public EntityView[] Entities;
+	public int Count;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public ref T GetReference<T>(int column) where T : struct
+	{
+		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
+		return ref MemoryMarshal.GetArrayDataReference(array);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public Span<T> GetSpan<T>(int column) where T : struct
+	{
+		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
+		return array.AsSpan(0, Count);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Array RawComponentData(int column)
+	{
+		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		return Components![column];
+	}
+}
+
+public sealed class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
+    private int _lastChunkIndex;
+    private ArchetypeChunk[] _chunks;
+    private const int CHUNK_THRESHOLD = 4096;
+
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    private int _capacity, _count;
-    private EntityView[] _entities;
     private readonly int[] _lookup;
+    private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
-
-	private readonly Array[] _componentsData;
-
 
 	internal Archetype(
         World world,
@@ -22,9 +52,6 @@ public sealed partial class Archetype
     {
         _comparer = comparer;
         _world = world;
-        _capacity = ARCHETYPE_INITIAL_CAPACITY;
-        _count = 0;
-        _entities = new EntityView[ARCHETYPE_INITIAL_CAPACITY];
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = components.ToArray();
@@ -38,14 +65,32 @@ public sealed partial class Archetype
         for (var i = 0; i < components.Length; ++i)
 	        _lookup[components[i].ID] = i;
 
-		_componentsData = new Array[Components.Length];
-		ResizeComponentArray(_capacity);
-	}
+        _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
+    }
 
-    internal EntityView[] Entities => _entities;
     public World World => _world;
     public int Count => _count;
     public readonly EcsComponent[] Components;
+    public Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count / CHUNK_THRESHOLD) + 1);
+
+    [SkipLocalsInit]
+    public ref ArchetypeChunk GetChunk(int index)
+    {
+	    if (index >= _chunks.Length)
+		    Array.Resize(ref _chunks, _chunks.Length * 2);
+
+	    ref var chunk = ref _chunks[index / CHUNK_THRESHOLD];
+	    if (chunk.Components == null)
+	    {
+		    chunk.Entities = new EntityView[CHUNK_THRESHOLD];
+		    chunk.Components = new Array[Components.Length];
+		    for (var i = 0; i < Components.Length; ++i)
+			    chunk.Components[i] = Lookup.GetArray(Components[i].ID, CHUNK_THRESHOLD)!;
+	    }
+
+	    return ref chunk;
+    }
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetComponentIndex(ref readonly EcsComponent cmp)
@@ -59,54 +104,39 @@ public sealed partial class Archetype
 		return id >= 0 && id < _lookup.Length ? _lookup[id] : -1;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public int GetComponentIndex<T>() where T : struct
+	{
+		var id = Lookup.Entity<T>.HashCode;
+		return id >= 0 && id < _lookup.Length ? _lookup[id] : -1;
+	}
+
 	internal int Add(EcsID id)
-    {
-        if (_capacity == _count)
-        {
-			_capacity <<= 3;
-
-            Array.Resize(ref _entities, _capacity);
-			ResizeComponentArray(_capacity);
-		}
-
-        _entities[_count] = new(_world, id);
+	{
+		ref var chunk = ref GetChunk(_count);
+		chunk.Entities[_count % CHUNK_THRESHOLD] = new(_world, id);
+		chunk.Count = _count % CHUNK_THRESHOLD;
         return _count++;
     }
 
     internal EcsID Remove(ref EcsRecord record)
     {
 		var removed = SwapWithLast(record.Row);
+		ref var chunk = ref GetChunk(record.Row);
 
 		for (int i = 0; i < Components.Length; ++i)
 		{
-			var leftArray = RawComponentData(i);
+			var leftArray = chunk.RawComponentData(i);
 
 			var tmp = leftArray.GetValue(_count - 1);
 			leftArray.SetValue(tmp, record.Row);
 		}
 
+		chunk.Count--;
 		--_count;
 
         return removed;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<T> ComponentData<T>() where T : struct
-    {
-	    var column = GetComponentIndex(Lookup.Entity<T>.HashCode);
-	    EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
-
-	    ref var array = ref Unsafe.As<Array, T[]>(ref _componentsData[column]);
-	    return array.AsSpan(0, Count);
-    }
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Array RawComponentData(int column)
-	{
-		EcsAssert.Assert(column >= 0 && column < _componentsData.Length);
-
-		return _componentsData[column];
-	}
 
 	internal Archetype InsertVertex(
         Archetype left,
@@ -143,6 +173,9 @@ public sealed partial class Archetype
 
 		var last = _count - 1;
 
+		ref var fromChunk = ref GetChunk(fromRow);
+		ref var toChunk = ref to.GetChunk(toRow);
+
 		for (; x < count; ++x, ++y)
 		{
 			while (Components[i].ID != to.Components[j].ID)
@@ -151,57 +184,42 @@ public sealed partial class Archetype
 				++y;
 			}
 
-			var fromArray = RawComponentData(i);
-			var toArray = to.RawComponentData(j);
+			var fromArray = fromChunk.RawComponentData(i);
+			var toArray = toChunk.RawComponentData(j);
 
 			// copy the moved entity to the target archetype
-			Array.Copy(fromArray, fromRow, toArray, toRow, 1);
+			Array.Copy(fromArray, fromRow % CHUNK_THRESHOLD, toArray, toRow % CHUNK_THRESHOLD, 1);
 
 			// swap last with the hole
-			Array.Copy(fromArray, last, fromArray, fromRow, 1);
+			Array.Copy(fromArray, last % CHUNK_THRESHOLD, fromArray, fromRow % CHUNK_THRESHOLD, 1);
 		}
 
+		fromChunk.Count--;
+		toChunk.Count++;
 		//_count = fromCount;
-	}
-
-	private void ResizeComponentArray(int capacity)
-	{
-		for (int i = 0; i < Components.Length; ++i)
-		{
-			var tmp = Lookup.GetArray(Components[i].ID, capacity);
-			_componentsData[i]?.CopyTo(tmp!, 0);
-			_componentsData[i] = tmp!;
-
-			_capacity = capacity;
-		}
 	}
 
 	internal void Clear()
     {
         _count = 0;
-        _capacity = ARCHETYPE_INITIAL_CAPACITY;
-        Array.Resize(ref _entities, _capacity);
     }
 
     internal void Optimize()
     {
-        var pow = (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)_count);
-        var newCapacity = Math.Max(ARCHETYPE_INITIAL_CAPACITY, pow);
-        if (newCapacity < _capacity)
-        {
-            _capacity = newCapacity;
-            Array.Resize(ref _entities, _capacity);
-        }
+
     }
 
     private EcsID SwapWithLast(int fromRow)
     {
-        ref var fromRec = ref _world.GetRecord(_entities[fromRow]);
-        ref var lastRec = ref _world.GetRecord(_entities[_count - 1]);
+	    ref var chunkFrom = ref GetChunk(fromRow);
+	    ref var chunkTo = ref GetChunk(_count - 1);
+
+        ref var fromRec = ref _world.GetRecord(chunkFrom.Entities[fromRow % CHUNK_THRESHOLD]);
+        ref var lastRec = ref _world.GetRecord(chunkTo.Entities[(_count - 1) % CHUNK_THRESHOLD]);
         lastRec.Row = fromRec.Row;
 
-        var removed = _entities[fromRow];
-        _entities[fromRow] = _entities[_count - 1];
+        var removed = chunkFrom.Entities[fromRow % CHUNK_THRESHOLD];
+        chunkFrom.Entities[fromRow % CHUNK_THRESHOLD] = chunkTo.Entities[(_count - 1) % CHUNK_THRESHOLD];
 
         return removed;
     }
@@ -294,7 +312,7 @@ public sealed partial class Archetype
         while (j < searching.Length && searching[j].Op != TermOp.With)
 	        ++j;
 
-        return i == j ? 0 : 1;
+        return j == searching.Length ? 0 : 1;
     }
 
     public void Print()

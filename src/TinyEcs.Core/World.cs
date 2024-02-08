@@ -1,5 +1,3 @@
-using System;
-
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -56,48 +54,6 @@ public sealed partial class World : IDisposable
         }
     }
 
-    // internal unsafe EntityView CreateComponent(EcsID id, int size)
-    // {
-    //     if (id == 0)
-    //     {
-    //         id = NewEmpty();
-    //     }
-    //     else if (Exists(id) && Has<EcsComponent>(id))
-    //     {
-    //         ref var cmp = ref Get<EcsComponent>(id);
-    //         EcsAssert.Panic(cmp.Size == size);
-
-    //         return Entity(id);
-    //     }
-
-    //     size = Math.Max(size, 0);
-
-    //     var cmp2 = new EcsComponent(id, size);
-    //     Set(id, cmp2);
-    //     Set(id, EcsPanic, EcsDelete);
-
-    //     if (size == 0)
-    //         Set(id, EcsTag);
-
-    //     return Entity(id);
-    // }
-
-    // private unsafe int GetSize<T>()
-    // {
-    //     var size = sizeof(T);
-
-    //     if (size != 1)
-    //         return size;
-
-    //     // credit: BeanCheeseBurrito from Flecs.NET
-    //     Unsafe.SkipInit<T>(out var t1);
-    //     Unsafe.SkipInit<T>(out var t2);
-    //     Unsafe.As<T, byte>(ref t1) = 0x7F;
-    //     Unsafe.As<T, byte>(ref t2) = 0xFF;
-
-    //     return ValueType.Equals(t1, t2) ? 0 : size;
-    // }
-
     internal unsafe ref readonly EcsComponent Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Entity<T>.Component;
@@ -142,19 +98,19 @@ public sealed partial class World : IDisposable
 
     public Query Query() => new(this);
 
-    public unsafe EntityView Event(
-        delegate* <ref Iterator, void> callback,
-        ReadOnlySpan<Term> terms,
-        ReadOnlySpan<EcsID> events
-    )
-    {
-        var obs = Entity().Set(new EcsEvent(callback, terms));
-
-        foreach (ref readonly var id in events)
-            obs.Set(id);
-
-        return obs;
-    }
+    // public unsafe EntityView Event(
+    //     delegate* <ref Iterator, void> callback,
+    //     ReadOnlySpan<Term> terms,
+    //     ReadOnlySpan<EcsID> events
+    // )
+    // {
+    //     var obs = Entity().Set(new EcsEvent(callback, terms));
+    //
+    //     foreach (ref readonly var id in events)
+    //         obs.Set(id);
+    //
+    //     return obs;
+    // }
 
     public EntityView Entity(ReadOnlySpan<char> name)
     {
@@ -181,6 +137,7 @@ public sealed partial class World : IDisposable
         );
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
+        record.Chunk = _archRoot.GetChunk(record.Row);
 
         return new(this, id);
     }
@@ -230,109 +187,19 @@ public sealed partial class World : IDisposable
     {
         EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-        // if (add)
-        // {
-        //     // TODO: Use Events to handle this case.
-        //     //		 The event must check for component with Exclusive tag
-        //     if (IDOp.IsPair(cmp.ID))
-        //     {
-        //         var first = IDOp.GetPairFirst(cmp.ID);
-        //         var second = IDOp.GetPairSecond(cmp.ID);
-
-        //         if (Has(first, EcsExclusive))
-        //         {
-        //             var cmp2 = new EcsComponent(IDOp.Pair(first, EcsAny), 0);
-        //             var column = record.Archetype.GetComponentIndex(ref cmp2);
-
-        //             if (column >= 0 && record.Archetype.ComponentInfo[column].ID != cmp.ID)
-        //             {
-        //                 DetachComponent(entity, ref record.Archetype.ComponentInfo[column]);
-        //             }
-        //         }
-        //     }
-        // }
-        // else
-        // {
-        //     EmitEvent(EcsEventOnUnset, entity, cmp.ID);
-        // }
-
-        //var arch = MakeArchetype(record.Archetype, ref cmp, add);
-
         var arch = CreateArchetype(record.Archetype, in cmp, add);
         if (arch == null)
             return false;
 
         record.Row = record.Archetype.MoveEntity(arch, record.Row);
         record.Archetype = arch!;
+        record.Chunk = arch.GetChunk(record.Row);
 
         return true;
     }
 
-    private Archetype? MakeArchetype(Archetype root, ref EcsComponent cmp, bool add)
-    {
-        // ignore if the entity doesn't have the component
-        if (!add && root.GetComponentIndex(ref cmp) < 0)
-            return null;
-
-        var edges = add ? root._edgesRight : root._edgesLeft;
-
-        foreach (ref var edge in CollectionsMarshal.AsSpan(edges))
-        {
-            if (edge.ComponentID == cmp.ID)
-            {
-                var super = add ? edge.Archetype : root;
-                var sub = !add ? edge.Archetype : root;
-                if (super.IsSuperset(sub.Components))
-                {
-                    return edge.Archetype;
-                }
-            }
-        }
-
-        var newSign = new EcsComponent[root.Components.Length + (add ? 1 : -1)];
-        if (add)
-        {
-            root.Components.CopyTo(newSign, 0);
-            newSign[^1] = cmp;
-            Array.Sort(newSign, _comparer);
-        }
-        else
-        {
-            for (int i = 0, j = 0; i < root.Components.Length; ++i)
-            {
-                if (root.Components[i].ID != cmp.ID)
-                {
-                    newSign[j++] = root.Components[i];
-                }
-            }
-        }
-
-        var arch = _archRoot.InsertVertex(root, newSign, ref cmp);
-
-        return arch;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int Hash(UnsafeSpan<EcsComponent> components, bool checkSize)
-        {
-            unchecked
-            {
-	            int hash = 5381;
-
-                while (components.CanAdvance())
-                {
-                    if (!checkSize || components.Value.Size > 0)
-                        hash = ((hash << 5) + hash) + components.Value.ID;
-
-                    components.Advance();
-                }
-
-                return hash;
-            }
-        }
-    }
-
     [SkipLocalsInit]
-    internal Archetype? CreateArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
+    private Archetype? CreateArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
     {
         if (!add && root.GetComponentIndex(in cmp) < 0)
             return null;
@@ -342,7 +209,7 @@ public sealed partial class World : IDisposable
 
         const int STACKALLOC_SIZE = 16;
 		EcsComponent[]? buffer = null;
-		scoped Span<EcsComponent> span = cmpCount <= STACKALLOC_SIZE ? stackalloc EcsComponent[STACKALLOC_SIZE] : (buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount));
+		scoped var span = cmpCount <= STACKALLOC_SIZE ? stackalloc EcsComponent[STACKALLOC_SIZE] : (buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount));
 
 		span = span[..cmpCount];
 
@@ -384,17 +251,10 @@ public sealed partial class World : IDisposable
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		static int getHash(Span<Term> terms, bool checkSize)
 		{
-			unchecked
-			{
-				int hash = 5381;
-
-				for (var i = 0; i < terms.Length; ++i)
-				{
-					hash = ((hash << 5) + hash) + terms[i].ID;
-				}
-
-				return hash;
-			}
+			var hc = terms.Length;
+			foreach (ref var val in terms)
+				hc = unchecked(hc * 314159 + val);
+			return hc;
 		}
 	}
 
@@ -412,26 +272,16 @@ public sealed partial class World : IDisposable
 		return ref arch;
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static int getHash(UnsafeSpan<EcsComponent> components, bool checkSize)
+		static int getHash(Span<EcsComponent> components, bool checkSize)
 		{
-			unchecked
-			{
-				int hash = 5381;
-
-				while (components.CanAdvance())
-				{
-					//if (!checkSize || components.Value.Size > 0)
-						hash = ((hash << 5) + hash) + components.Value.ID;
-
-					components.Advance();
-				}
-
-				return hash;
-			}
+			var hc = components.Length;
+			foreach (ref var val in components)
+				hc = unchecked(hc * 314159 + val.ID);
+			return hc;
 		}
 	}
 
-    internal void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : struct
+	private void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : struct
     {
         EcsAssert.Assert(cmp.Size == Lookup.Entity<T>.Size);
 
@@ -447,7 +297,8 @@ public sealed partial class World : IDisposable
 
         if (cmp.Size > 0)
         {
-			record.Archetype.ComponentData<T>().Slice(record.Row, 1)[0] = data;
+	        var span = record.Chunk.GetSpan<T>(column);
+			span.Slice(record.Row % 4096, 1)[0] = data;
         }
 
         if (emit)
@@ -482,41 +333,41 @@ public sealed partial class World : IDisposable
         public Term LastComponent;
     }
 
-    static unsafe void OnEvent(ref Iterator it)
-    {
-        if (it.Count == 0)
-            return;
-
-        //var columns = Span<Array>.Empty;
-        //ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
-        //ref var record = ref it.World.GetRecord(eventInfo.Entity);
-        //var iterator = new Iterator(
-        //    it.Commands,
-        //    1,
-        //    record.Archetype.Table,
-        //    stackalloc EcsID[1] { eventInfo.Entity },
-        //    stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
-        //    null,
-        //    columns,
-        //    eventInfo.Event,
-        //    eventInfo.LastComponent
-        //);
-
-        //var evA = it.Field<EcsEvent>(0);
-
-        //for (int i = 0; i < it.Count; ++i)
-        //{
-        //    ref var ev = ref evA[i];
-
-        //    if (
-        //        record.Archetype.FindMatch(ev.Terms) == 0
-        //        && ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0
-        //    )
-        //    {
-        //        ev.Callback(ref iterator);
-        //    }
-        //}
-    }
+    // static unsafe void OnEvent(ref Iterator it)
+    // {
+    //     if (it.Count == 0)
+    //         return;
+    //
+    //     //var columns = Span<Array>.Empty;
+    //     //ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
+    //     //ref var record = ref it.World.GetRecord(eventInfo.Entity);
+    //     //var iterator = new Iterator(
+    //     //    it.Commands,
+    //     //    1,
+    //     //    record.Archetype.Table,
+    //     //    stackalloc EcsID[1] { eventInfo.Entity },
+    //     //    stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
+    //     //    null,
+    //     //    columns,
+    //     //    eventInfo.Event,
+    //     //    eventInfo.LastComponent
+    //     //);
+    //
+    //     //var evA = it.Field<EcsEvent>(0);
+    //
+    //     //for (int i = 0; i < it.Count; ++i)
+    //     //{
+    //     //    ref var ev = ref evA[i];
+    //
+    //     //    if (
+    //     //        record.Archetype.FindMatch(ev.Terms) == 0
+    //     //        && ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0
+    //     //    )
+    //     //    {
+    //     //        ev.Callback(ref iterator);
+    //     //    }
+    //     //}
+    // }
 
     internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
     {
@@ -538,9 +389,9 @@ public sealed partial class World : IDisposable
     [SkipLocalsInit]
     public unsafe void RunPhase(ref readonly EcsComponent cmp)
     {
-        Span<Term> terms = stackalloc Term[] { Term.With(Component<EcsSystem>().ID), Term.With(cmp.ID), };
-
-        Query(terms, RunSystems);
+        // Span<Term> terms = stackalloc Term[] { Term.With(Component<EcsSystem>().ID), Term.With(cmp.ID), };
+        //
+        // Query(terms, RunSystems);
     }
 
     public void Step(float deltaTime = 0.0f)
@@ -569,57 +420,51 @@ public sealed partial class World : IDisposable
         }
     }
 
-    static unsafe void RunSystems(ref Iterator it)
+    // static unsafe void RunSystems(ref Iterator it)
+    // {
+    //     var emptyIt = new Iterator(
+    //         it.Commands,
+    //         0,
+    //         it.World._archRoot,
+    //         Span<EntityView>.Empty,
+    //         null,
+    //         Span<Array>.Empty
+    //     );
+    //     var sysA = it.Field<EcsSystem>();
+    //
+    //     for (int i = 0; i < it.Count; ++i)
+    //     {
+    //         ref var sys = ref sysA[i];
+    //
+    //         if (!float.IsNaN(sys.Tick))
+    //         {
+    //             // TODO: check for it.DeltaTime > 0?
+    //             sys.TickCurrent += it.DeltaTime;
+    //
+    //             if (sys.TickCurrent < sys.Tick)
+    //             {
+    //                 continue;
+    //             }
+    //
+    //             sys.TickCurrent = 0;
+    //         }
+    //
+    //         if (sys.Query.Value != 0)
+    //         {
+    //             it.World.Query(sys.Terms, sys.Callback);
+    //         }
+    //         else
+    //         {
+    //             sys.Callback(ref emptyIt);
+    //         }
+    //     }
+    // }
+
+    public void FindArchetypes(Span<Term> terms, List<Archetype> list)
     {
-        var emptyIt = new Iterator(
-            it.Commands,
-            0,
-            it.World._archRoot,
-            Span<EntityView>.Empty,
-            null,
-            Span<Array>.Empty
-        );
-        var sysA = it.Field<EcsSystem>();
+		terms.Sort();
 
-        for (int i = 0; i < it.Count; ++i)
-        {
-            ref var sys = ref sysA[i];
-
-            if (!float.IsNaN(sys.Tick))
-            {
-                // TODO: check for it.DeltaTime > 0?
-                sys.TickCurrent += it.DeltaTime;
-
-                if (sys.TickCurrent < sys.Tick)
-                {
-                    continue;
-                }
-
-                sys.TickCurrent = 0;
-            }
-
-            if (sys.Query.Value != 0)
-            {
-                it.World.Query(sys.Terms, sys.Callback);
-            }
-            else
-            {
-                sys.Callback(ref emptyIt);
-            }
-        }
-    }
-
-    public unsafe void FindArchetypes(Span<Term> terms, List<Archetype> list)
-    {
-		Span<Term> sortedTerms = stackalloc Term[terms.Length];
-        terms.CopyTo(sortedTerms);
-        sortedTerms.Sort();
-
-        var rootArch = GetArchetype(sortedTerms);
-        if (rootArch == null)
-	        return;
-
-        QueryRec(rootArch, sortedTerms, list);
+        QueryRec(_archRoot, terms, list);
 
         static void QueryRec(Archetype root, Span<Term> sortedTerms, List<Archetype> list)
         {
@@ -647,92 +492,6 @@ public sealed partial class World : IDisposable
             while (Unsafe.IsAddressLessThan(ref start, ref end))
             {
                 QueryRec(start.Archetype, sortedTerms, list);
-
-                start = ref Unsafe.Add(ref start, 1);
-            }
-        }
-    }
-
-    public unsafe void Query(
-        Span<Term> terms,
-		IteratorDelegate action,
-        object? userData = null
-    )
-    {
-		var arrayBuf = ArrayPool<Array>.Shared.Rent(terms.Length);
-		Span<Array> columns = arrayBuf.AsSpan(0, terms.Length);
-		Span<Term> sortedTerms = stackalloc Term[terms.Length];
-        terms.CopyTo(sortedTerms);
-        sortedTerms.Sort();
-
-		try
-		{
-			var rootArch = GetArchetype(sortedTerms);
-			if (rootArch == null)
-				return;
-
-			QueryRec(rootArch, terms, sortedTerms, _commands, action, userData, columns);
-		}
-		finally
-		{
-			ArrayPool<Array>.Shared.Return(arrayBuf);
-		}
-
-        static void QueryRec(
-            Archetype root,
-            Span<Term> terms,
-            Span<Term> sortedTerms,
-            Commands commands,
-			IteratorDelegate action,
-            object? userData,
-            Span<Array> matchedColumns
-        )
-        {
-            var result = root.FindMatch(sortedTerms);
-            if (result < 0)
-            {
-                return;
-            }
-
-            if (result == 0 && root.Count > 0)
-            {
-     //            var matched = terms;
-     //            for (int i = 0, j = 0; i < matched.Length; ++i)
-     //            {
-					// if (matched[i].Op == TermOp.Without)
-					// 	continue;
-     //
-     //                var columnIdx = root.GetComponentIndex(matched[i].ID);
-     //                if (columnIdx <= -1)
-     //                    continue;
-     //
-					// matchedColumns[j++] = root.RawComponentData(columnIdx);
-     //            }
-
-                var it = new Iterator(commands, root, userData, matchedColumns);
-                action(ref it);
-            }
-
-            var span = CollectionsMarshal.AsSpan(root._edgesRight);
-            if (span.IsEmpty)
-            {
-                return;
-            }
-
-            ref var start = ref MemoryMarshal.GetReference(span);
-            ref var end = ref Unsafe.Add(ref start, span.Length);
-
-            while (Unsafe.IsAddressLessThan(ref start, ref end))
-            {
-                QueryRec(
-                    start.Archetype,
-                    terms,
-                    sortedTerms,
-                    commands,
-                    action,
-                    userData,
-                    matchedColumns
-                );
 
                 start = ref Unsafe.Add(ref start, 1);
             }
@@ -787,6 +546,7 @@ internal static class Lookup
 
 struct EcsRecord
 {
-    public Archetype Archetype;
+	public Archetype Archetype;
+    public ArchetypeChunk Chunk;
     public int Row;
 }

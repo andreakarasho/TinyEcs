@@ -30,9 +30,10 @@ public sealed partial class World
     public ref T Get<T>(EcsID entity) where T : struct
 	{
         ref var record = ref GetRecord(entity);
-        var raw = record.Archetype.ComponentData<T>();
+        var column = record.Archetype.GetComponentIndex(Lookup.Entity<T>.HashCode);
+        var raw = record.Chunk.GetSpan<T>(column);
 
-        return ref raw[record.Row];
+        return ref raw[record.Row % 4096];
     }
 
     public void RunPhase<TPhase>() where TPhase : struct => RunPhase(in Component<TPhase>());

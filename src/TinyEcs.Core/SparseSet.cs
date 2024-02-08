@@ -287,7 +287,7 @@ sealed class EntitySparseSet<T>
 
 
 
-public unsafe sealed class Vec<T> : IDisposable where T : unmanaged
+public sealed unsafe class Vec<T> : IDisposable where T : unmanaged
 {
 	private T* _data;
 
@@ -349,6 +349,14 @@ public unsafe sealed class Vec<T> : IDisposable where T : unmanaged
 			EnsureCapacity(Capacity * 2);
 
 		_data[Count++] = item;
+	}
+
+	public ref T AddRef()
+	{
+		if (Count >= Capacity)
+			EnsureCapacity(Capacity * 2);
+
+		return ref _data[Count++];
 	}
 
 	public void EnsureCapacity(int newCapacity, bool initZero = false)
