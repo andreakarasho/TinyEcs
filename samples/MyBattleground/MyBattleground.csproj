@@ -1,15 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFrameworks>net7.0;net8.0</TargetFrameworks>
+		<TargetFramework>net8.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
-
-
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
 		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
@@ -27,19 +25,16 @@
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
 	</PropertyGroup>
 
-
 	<ItemGroup>
-		<Compile Include = "../TinyEcs.Core/**/*.cs" />
+		<ProjectReference Include="../TinyEcs.Core/**/*.cs" />
   	</ItemGroup>
-
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
 	</ItemGroup>
 
-
-	<!-- <ItemGroup>
-	  <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
-	</ItemGroup> -->
+	<ItemGroup>
+	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	</ItemGroup>
 
 </Project>

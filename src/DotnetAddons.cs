@@ -40,7 +40,7 @@ namespace System.Runtime.CompilerServices
 
 
 #if NETSTANDARD2_1
-internal unsafe readonly ref struct Ref<T> where T : unmanaged
+internal unsafe readonly ref struct Ref<T> 
 {
     private readonly T* _value;
 

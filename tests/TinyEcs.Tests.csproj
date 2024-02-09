@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -24,7 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
-		<Compile Include = "../src/TinyEcs.Core/**/*.cs" />
+		<Compile Include="../src/TinyEcs.Core/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\TinyEcs.csproj" />
   </ItemGroup>
 
 </Project>

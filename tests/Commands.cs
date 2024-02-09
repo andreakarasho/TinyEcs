@@ -67,5 +67,41 @@ namespace TinyEcs.Tests
 
 			Assert.False(e.Has<FloatComponent>());
 		}
+
+		[Fact]
+		public void Merge_UnsetOnlyComponentWithMultiComponents_Entity()
+		{
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
+
+			const float VAL = 0.012344f;
+
+			var e = ctx.World.Entity();
+			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
+			e.Set<NormalTag>();
+
+			cmd.Unset<FloatComponent>(e);
+			cmd.Merge();
+
+			Assert.False(e.Has<FloatComponent>());
+		}
+
+		[Fact]
+		public void Merge_UnsetOnlyTagWithMultiComponents_Entity()
+		{
+			using var ctx = new Context();
+			var cmd = new Commands(ctx.World);
+
+			const float VAL = 0.012344f;
+
+			var e = ctx.World.Entity();
+			e.Set<FloatComponent>(new FloatComponent() { Value = VAL });
+			e.Set<NormalTag>();
+
+			cmd.Unset<NormalTag>(e);
+			cmd.Merge();
+
+			Assert.False(e.Has<NormalTag>());
+		}
 	}
 }

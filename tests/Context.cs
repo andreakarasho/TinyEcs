@@ -9,11 +9,11 @@ namespace TinyEcs.Tests
 			World = new World();
 
 			// we need to register components in order to avoid ID conflics
-			World.Entity<LargeComponent>();
-			World.Entity<FloatComponent>();
-			World.Entity<IntComponent>();
-			World.Entity<BoolComponent>();
-			World.Entity<NormalTag>();
+			World.Component<LargeComponent>();
+			World.Component<FloatComponent>();
+			World.Component<IntComponent>();
+			World.Component<BoolComponent>();
+			World.Component<NormalTag>();
 		}
 
 		public void Dispose()

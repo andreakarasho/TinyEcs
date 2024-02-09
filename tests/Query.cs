@@ -10,13 +10,13 @@
         {
             using var ctx = new Context();
 
-            for (int i = 0; i < amount; i++)
+            for (var i = 0; i < amount; i++)
                 ctx.World.Set(ctx.World.Entity(), new FloatComponent());
 
-            var query = ctx.World.Query().With<FloatComponent>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query().With<FloatComponent>())
+	            foreach (ref var chunk in arch.Chunks)
+		            done += chunk.Count;
 
             Assert.Equal(amount, done);
         }
@@ -36,10 +36,10 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var query = ctx.World.Query().With<FloatComponent>().With<IntComponent>();
-
             int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            foreach (var arch in ctx.World.Query().With<FloatComponent>().With<IntComponent>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(amount, done);
         }
@@ -52,7 +52,7 @@
         {
             using var ctx = new Context();
 
-            for (int i = 0; i < amount; i++)
+            for (var i = 0; i < amount; i++)
             {
                 var e = ctx.World.Entity();
                 ctx.World.Set(e, new FloatComponent());
@@ -60,14 +60,13 @@
                 ctx.World.Set(e, new BoolComponent());
             }
 
-            var query = ctx.World
-                .Query()
-                .With<FloatComponent>()
-                .With<IntComponent>()
-                .With<BoolComponent>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query()
+	                     .With<FloatComponent>()
+	                     .With<IntComponent>()
+	                     .With<BoolComponent>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(amount, done);
         }
@@ -88,14 +87,13 @@
                 ctx.World.Set(e, new BoolComponent());
             }
 
-            var query = ctx.World
-                .Query()
-                .With<FloatComponent>()
-                .With<IntComponent>()
-                .Without<BoolComponent>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query()
+	                     .With<FloatComponent>()
+	                     .With<IntComponent>()
+	                     .Without<BoolComponent>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(0, done);
         }
@@ -115,14 +113,13 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var query = ctx.World
-                .Query()
-                .With<FloatComponent>()
-                .With<IntComponent>()
-                .Without<BoolComponent>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query()
+	                     .With<FloatComponent>()
+	                     .With<IntComponent>()
+	                     .Without<BoolComponent>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(amount, done);
         }
@@ -142,14 +139,13 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var query = ctx.World
-                .Query()
-                .With<FloatComponent>()
-                .Without<IntComponent>()
-                .Without<BoolComponent>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query()
+	                     .With<FloatComponent>()
+	                     .Without<IntComponent>()
+	                     .Without<BoolComponent>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(0, done);
         }
@@ -182,15 +178,14 @@
             ctx.World.Set(e4, new BoolComponent());
             ctx.World.Set<NormalTag>(e4);
 
-            var query = ctx.World
-                .Query()
-                .With<FloatComponent>()
-                .With<IntComponent>()
-                .Without<BoolComponent>()
-                .Without<NormalTag>();
-
-            int done = 0;
-            query.Iterate((ref Iterator it) => done += it.Count);
+            var done = 0;
+            foreach (var arch in ctx.World.Query()
+	                     .With<FloatComponent>()
+	                     .With<IntComponent>()
+	                     .Without<BoolComponent>()
+	                     .Without<NormalTag>())
+            foreach (ref var chunk in arch.Chunks)
+	            done += chunk.Count;
 
             Assert.Equal(good, done);
         }
