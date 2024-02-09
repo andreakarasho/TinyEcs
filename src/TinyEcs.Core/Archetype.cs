@@ -30,11 +30,26 @@ public struct ArchetypeChunk
 	}
 }
 
+public ref struct ChunkEnumerator
+{
+	private readonly Span<ArchetypeChunk> _chunks;
+	private int _index;
+
+	internal ChunkEnumerator(Span<ArchetypeChunk> chunks)
+	{
+		_chunks = chunks;
+		_index = -1;
+	}
+
+	public ref readonly ArchetypeChunk Current => ref _chunks[_index];
+
+	public bool MoveNext() => ++_index < _chunks.Length;
+}
+
 public sealed class Archetype
 {
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
-    private int _lastChunkIndex;
     private ArchetypeChunk[] _chunks;
     private const int CHUNK_THRESHOLD = 4096;
 
@@ -71,7 +86,7 @@ public sealed class Archetype
     public World World => _world;
     public int Count => _count;
     public readonly EcsComponent[] Components;
-    public Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count / CHUNK_THRESHOLD) + 1);
+    internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
 
     [SkipLocalsInit]
     public ref ArchetypeChunk GetChunk(int index)
@@ -91,6 +106,10 @@ public sealed class Archetype
 	    return ref chunk;
     }
 
+    public ChunkEnumerator GetEnumerator()
+    {
+	    return new ChunkEnumerator(Chunks);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetComponentIndex(ref readonly EcsComponent cmp)
@@ -124,12 +143,12 @@ public sealed class Archetype
 		var removed = SwapWithLast(record.Row);
 		ref var chunk = ref GetChunk(record.Row);
 
-		for (int i = 0; i < Components.Length; ++i)
+		for (var i = 0; i < Components.Length; ++i)
 		{
-			var leftArray = chunk.RawComponentData(i);
-
-			var tmp = leftArray.GetValue(_count - 1);
-			leftArray.SetValue(tmp, record.Row);
+			var array = chunk.RawComponentData(i);
+			Array.Copy(array,
+				(_count - 1) % CHUNK_THRESHOLD, array,
+				record.Row % CHUNK_THRESHOLD, 1);
 		}
 
 		chunk.Count--;
@@ -196,7 +215,6 @@ public sealed class Archetype
 
 		fromChunk.Count--;
 		toChunk.Count++;
-		//_count = fromCount;
 	}
 
 	internal void Clear()
@@ -266,7 +284,7 @@ public sealed class Archetype
         MakeEdges(newNode, this, Components[i].ID);
     }
 
-    internal bool IsSuperset(Span<EcsComponent> other)
+    private bool IsSuperset(Span<EcsComponent> other)
     {
 	    int i = 0, j = 0;
 	    while (i < Components.Length && j < other.Length)

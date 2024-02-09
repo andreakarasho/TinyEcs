@@ -27,7 +27,7 @@ namespace TinyEcs
 			foreach (var archetype in this)
 			{{
 				{9}
-				foreach (ref var chunk in archetype.Chunks)
+				foreach (ref readonly var chunk in archetype)
 				{{
 					{2}
 					{7}

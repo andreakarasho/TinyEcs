@@ -12,7 +12,7 @@ sealed class TinyGame : Game
     public const int WINDOW_HEIGHT = 600;
 
     public const int VELOCITY = 250;
-    const int ENTITIES_TO_SPAWN = 1000;
+    const int ENTITIES_TO_SPAWN = 4096;
 
     private readonly GraphicsDeviceManager _graphicsDeviceManager;
     private SpriteBatch? _spriteBatch;

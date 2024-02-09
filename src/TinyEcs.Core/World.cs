@@ -29,8 +29,6 @@ public sealed partial class World : IDisposable
 
     public int EntityCount => _entities.Length;
 
-    public float DeltaTime { get; private set; }
-
     public void Dispose()
     {
         _entities.Clear();
@@ -396,8 +394,6 @@ public sealed partial class World : IDisposable
 
     public void Step(float deltaTime = 0.0f)
     {
-        DeltaTime = deltaTime;
-
         _commands.Merge();
 
         if (_frame == 0)
@@ -515,7 +511,7 @@ internal static class Lookup
 	[SkipLocalsInit]
     internal static class Entity<T> where T : struct
 	{
-        public static readonly unsafe int Size = GetSize();
+        public static readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
         public static readonly int HashCode = System.Threading.Interlocked.Increment(ref _index);
 
@@ -523,14 +519,14 @@ internal static class Lookup
 
 		static Entity()
 		{
-			_arrayCreator.Add(Component.ID, count => new T[count]);
+			_arrayCreator.Add(Component.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 		}
 
-		private static unsafe int GetSize()
+		private static int GetSize()
 		{
-			var size = Unsafe.SizeOf<T>();
+			var size = RuntimeHelpers.IsReferenceOrContainsReferences<T>() ? IntPtr.Size : Unsafe.SizeOf<T>();
 
-			if (size != 1 || RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+			if (size != 1)
 				return size;
 
 			// credit: BeanCheeseBurrito from Flecs.NET

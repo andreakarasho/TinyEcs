@@ -22,15 +22,17 @@ File.WriteAllText("b.txt", text1);
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		.Set<Position>(new Position())
-		.Set<Velocity>(new Velocity());
+		.Set<Velocity>(new Velocity())
+		.Set<PlayerTag>();
 
 
-// ecs.Query()
-// 	.Each(static (ref readonly EntityView entity, ref Velocity pos, ref Position vel) =>
-// 	{
-// 		pos.X *= vel.X;
-// 		pos.Y *= vel.Y;
-// 	});
+ecs.Query()
+	.With<PlayerTag>()
+	.Each(static (ref Velocity pos, ref Position vel) =>
+	{
+		pos.X *= vel.X;
+		pos.Y *= vel.Y;
+	});
 
 using var query = ecs.Query()
 	.With<Position>()
@@ -54,7 +56,7 @@ while (true)
 			var column0 = archetype.GetComponentIndex<Position>();
 			var column1 = archetype.GetComponentIndex<Velocity>();
 
-			foreach (ref var chunk in archetype.Chunks)
+			foreach (ref readonly var chunk in archetype)
 			{
 				ref var pos = ref chunk.GetReference<Position>(column0);
 				ref var vel = ref chunk.GetReference<Velocity>(column1);
