@@ -7,12 +7,6 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-var text0 = Generate.CreateQueries(false);
-var text1 = Generate.CreateQueries(true);
-
-File.WriteAllText("a.txt", text0);
-File.WriteAllText("b.txt", text1);
-
 
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()

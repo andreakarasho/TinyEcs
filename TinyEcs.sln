@@ -17,6 +17,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MyBattleground", "samples\M
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcsGame", "samples\TinyEcsGame\TinyEcsGame.csproj", "{9FDC10BD-6BCD-4F99-B0FA-E47921DE75B6}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{2F77B046-8050-473D-BEE9-6E1C251F7A49}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcs.Generator", "tools\TinyEcs.Generator\TinyEcs.Generator.csproj", "{EC4831EE-15EE-46F7-9A5D-A8C5180A8930}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +43,10 @@ Global
 		{9FDC10BD-6BCD-4F99-B0FA-E47921DE75B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9FDC10BD-6BCD-4F99-B0FA-E47921DE75B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9FDC10BD-6BCD-4F99-B0FA-E47921DE75B6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC4831EE-15EE-46F7-9A5D-A8C5180A8930}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC4831EE-15EE-46F7-9A5D-A8C5180A8930}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC4831EE-15EE-46F7-9A5D-A8C5180A8930}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC4831EE-15EE-46F7-9A5D-A8C5180A8930}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,6 +56,7 @@ Global
 		{C1B15479-149D-4951-B16E-1980B5451205} = {E5F5B263-28C0-415E-BBD3-AA370FEE093A}
 		{95AFBF2E-6A84-44D2-8496-07CD879D9E40} = {1F4AAB6E-01EE-4314-AFD3-C246193A14CA}
 		{9FDC10BD-6BCD-4F99-B0FA-E47921DE75B6} = {1F4AAB6E-01EE-4314-AFD3-C246193A14CA}
+		{EC4831EE-15EE-46F7-9A5D-A8C5180A8930} = {2F77B046-8050-473D-BEE9-6E1C251F7A49}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {41A04670-264C-4A26-AE2E-874466E06CF9}

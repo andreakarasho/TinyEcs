@@ -29,7 +29,7 @@ public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8,
 
 
 
-		public void EachWithEntity<T0>(QueryTemplateWithEntity<T0> fn) where T0 : struct
+		public void EachWithEntity<T0>(QueryTemplateWithEntity<T0> fn) where T0 : struct 
 		{
 			With<T0>();
 
@@ -56,7 +56,7 @@ public delegate void QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8,
 			}
 		}
 
-		public void EachWithEntity<T0, T1>(QueryTemplateWithEntity<T0, T1> fn) where T0 : struct where T1 : struct
+		public void EachWithEntity<T0, T1>(QueryTemplateWithEntity<T0, T1> fn) where T0 : struct where T1 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -87,7 +87,7 @@ t1A = ref Unsafe.Add(ref t1A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2>(QueryTemplateWithEntity<T0, T1, T2> fn) where T0 : struct where T1 : struct where T2 : struct
+		public void EachWithEntity<T0, T1, T2>(QueryTemplateWithEntity<T0, T1, T2> fn) where T0 : struct where T1 : struct where T2 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -122,7 +122,7 @@ t2A = ref Unsafe.Add(ref t2A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3>(QueryTemplateWithEntity<T0, T1, T2, T3> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct
+		public void EachWithEntity<T0, T1, T2, T3>(QueryTemplateWithEntity<T0, T1, T2, T3> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -161,7 +161,7 @@ t3A = ref Unsafe.Add(ref t3A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4>(QueryTemplateWithEntity<T0, T1, T2, T3, T4> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4>(QueryTemplateWithEntity<T0, T1, T2, T3, T4> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -204,7 +204,7 @@ t4A = ref Unsafe.Add(ref t4A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -251,7 +251,7 @@ t5A = ref Unsafe.Add(ref t5A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -302,7 +302,7 @@ t6A = ref Unsafe.Add(ref t6A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -357,7 +357,7 @@ t7A = ref Unsafe.Add(ref t7A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -416,7 +416,7 @@ t8A = ref Unsafe.Add(ref t8A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -479,7 +479,7 @@ t9A = ref Unsafe.Add(ref t9A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -546,7 +546,7 @@ t10A = ref Unsafe.Add(ref t10A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -617,7 +617,7 @@ t11A = ref Unsafe.Add(ref t11A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -692,7 +692,7 @@ t12A = ref Unsafe.Add(ref t12A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -771,7 +771,7 @@ t13A = ref Unsafe.Add(ref t13A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -854,7 +854,7 @@ t14A = ref Unsafe.Add(ref t14A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -941,7 +941,7 @@ t15A = ref Unsafe.Add(ref t15A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1032,7 +1032,7 @@ t16A = ref Unsafe.Add(ref t16A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1127,7 +1127,7 @@ t17A = ref Unsafe.Add(ref t17A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1226,7 +1226,7 @@ t18A = ref Unsafe.Add(ref t18A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1329,7 +1329,7 @@ t19A = ref Unsafe.Add(ref t19A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1436,7 +1436,7 @@ t20A = ref Unsafe.Add(ref t20A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1547,7 +1547,7 @@ t21A = ref Unsafe.Add(ref t21A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1662,7 +1662,7 @@ t22A = ref Unsafe.Add(ref t22A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct where T23 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct where T23 : struct 
 		{
 			With<T0>();
 With<T1>();
@@ -1781,7 +1781,7 @@ t23A = ref Unsafe.Add(ref t23A, 1);
 			}
 		}
 
-		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct where T23 : struct where T24 : struct
+		public void EachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24>(QueryTemplateWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24> fn) where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct where T16 : struct where T17 : struct where T18 : struct where T19 : struct where T20 : struct where T21 : struct where T22 : struct where T23 : struct where T24 : struct 
 		{
 			With<T0>();
 With<T1>();
