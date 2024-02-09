@@ -13,14 +13,14 @@ File.WriteAllText("b.txt", text1);
 
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
-		.Set<Position>(new Position())
-		.Set<Velocity>(new Velocity())
-		.Set<PlayerTag>();
+		 .Set<Position>(new Position())
+		 .Set<Velocity>(new Velocity())
+		 .Set<PlayerTag>();
 
 
 ecs.Query()
 	.With<PlayerTag>()
-	.Each(static (ref Velocity pos, ref Position vel) =>
+	.EachWithEntity(static (ref readonly EntityView e, ref Velocity pos, ref Position vel) =>
 	{
 		pos.X *= vel.X;
 		pos.Y *= vel.Y;
@@ -40,8 +40,11 @@ while (true)
 
 	for (int i = 0; i < 3600; ++i)
 	{
-		//query.Iterate(del);
-		//ecs.Step(cur);
+		// query.Each(static (ref Velocity pos, ref Position vel) =>
+		// {
+		// 	pos.X *= vel.X;
+		// 	pos.Y *= vel.Y;
+		// });
 
 		foreach (var archetype in query)
 		{

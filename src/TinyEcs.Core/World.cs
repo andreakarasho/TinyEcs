@@ -123,11 +123,6 @@ public sealed partial class World : IDisposable
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
     }
 
- //    public EntityView Entity<T>(EcsID id = default) where T : struct
-	// {
- //        return Entity(Component<T>().ID);
- //    }
-
     internal EntityView NewEmpty(ulong id = 0)
     {
         ref var record = ref (

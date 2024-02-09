@@ -21,7 +21,7 @@ namespace TinyEcs
 
 			var iteratorTemplate = """
 
-		public void Each<{0}>(QueryTemplate{4}<{0}> fn) {5}
+		public void Each{4}<{0}>(QueryTemplate{4}<{0}> fn) {5}
 		{{
 			{1}
 			foreach (var archetype in this)
