@@ -11,7 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B5D54911
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TinyEcs.Tests", "tests\TinyEcs.Tests.csproj", "{D39BBB77-EBFE-4127-97A5-C62FD6D4EB36}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyEcsMonogameSample", "src\TinyEcs.MonogameSample\TinyEcsMonogameSample.csproj", "{92A3C830-B742-42AD-AF5A-12E6A3613D6F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TinyEcsGame", "src\TinyEcs.MonogameSample\TinyEcsGame.csproj", "{92A3C830-B742-42AD-AF5A-12E6A3613D6F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -296,7 +296,8 @@ public sealed partial class World : IDisposable
         if (cmp.Size > 0)
         {
 	        var span = record.Chunk.GetSpan<T>(column);
-			span.Slice(record.Row % 4096, 1)[0] = data;
+	        EcsAssert.Assert(!span.IsEmpty);
+			span.Slice(record.Row % span.Length, 1)[0] = data;
         }
 
         if (emit)
@@ -304,68 +305,6 @@ public sealed partial class World : IDisposable
             //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
     }
-
-    [SkipLocalsInit]
-    public unsafe void EmitEvent(EcsID eventID, EcsID entity, EcsID component)
-    {
-        // EcsAssert.Assert(Exists(eventID));
-        // EcsAssert.Assert(Exists(entity));
-        // EcsAssert.Assert(Exists(component));
-
-        // Query(
-        //     stackalloc Term[] { Term.With(EcsEvent), Term.With(eventID), },
-        //     &OnEvent,
-        //     new ObserverInfo()
-        //     {
-        //         Entity = entity,
-        //         Event = eventID,
-        //         LastComponent = Term.With(component)
-        //     }
-        // );
-    }
-
-    private struct ObserverInfo
-    {
-        public EcsID Entity;
-        public EcsID Event;
-        public Term LastComponent;
-    }
-
-    // static unsafe void OnEvent(ref Iterator it)
-    // {
-    //     if (it.Count == 0)
-    //         return;
-    //
-    //     //var columns = Span<Array>.Empty;
-    //     //ref var eventInfo = ref Unsafe.Unbox<ObserverInfo>(it.UserData!);
-    //     //ref var record = ref it.World.GetRecord(eventInfo.Entity);
-    //     //var iterator = new Iterator(
-    //     //    it.Commands,
-    //     //    1,
-    //     //    record.Archetype.Table,
-    //     //    stackalloc EcsID[1] { eventInfo.Entity },
-    //     //    stackalloc int[1] { record.Archetype.EntitiesTableRows[record.Row] },
-    //     //    null,
-    //     //    columns,
-    //     //    eventInfo.Event,
-    //     //    eventInfo.LastComponent
-    //     //);
-    //
-    //     //var evA = it.Field<EcsEvent>(0);
-    //
-    //     //for (int i = 0; i < it.Count; ++i)
-    //     //{
-    //     //    ref var ev = ref evA[i];
-    //
-    //     //    if (
-    //     //        record.Archetype.FindMatch(ev.Terms) == 0
-    //     //        && ev.Terms.BinarySearch(eventInfo.LastComponent, it.World._comparer) >= 0
-    //     //    )
-    //     //    {
-    //     //        ev.Callback(ref iterator);
-    //     //    }
-    //     //}
-    // }
 
     internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
     {
