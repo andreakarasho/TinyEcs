@@ -32,13 +32,17 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<Compile Include = "../TinyEcs.Core/**/*.cs" />
+		<Compile Include="../TinyEcs.Core/**/*.cs" />
   	</ItemGroup>
 
 	<ItemGroup>
 		<Content Include="Content\**\*.*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
 	</ItemGroup>
 
 </Project>

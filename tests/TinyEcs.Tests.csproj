@@ -24,7 +24,11 @@
   </ItemGroup>
 
   <ItemGroup>
-		<Compile Include = "../src/TinyEcs.Core/**/*.cs" />
+		<Compile Include="../src/TinyEcs.Core/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\TinyEcs.csproj" />
   </ItemGroup>
 
 </Project>

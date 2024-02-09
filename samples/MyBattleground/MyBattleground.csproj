@@ -9,8 +9,6 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
-
-
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
 		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
 		<IlcOptimizationPreference>Size</IlcOptimizationPreference>
@@ -27,19 +25,16 @@
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
 	</PropertyGroup>
 
-
 	<ItemGroup>
-		<Compile Include = "../TinyEcs.Core/**/*.cs" />
+		<ProjectReference Include="../TinyEcs.Core/**/*.cs" />
   	</ItemGroup>
-
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
 	</ItemGroup>
 
-
-	<!-- <ItemGroup>
-	  <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
-	</ItemGroup> -->
+	<ItemGroup>
+	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	</ItemGroup>
 
 </Project>

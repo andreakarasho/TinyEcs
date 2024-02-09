@@ -1,4 +1,6 @@
 // https://github.com/jasonliang-dev/entity-component-system
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using TinyEcs;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
