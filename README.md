@@ -5,7 +5,7 @@ NativeAOT & bflat compatible.
 
 # Requirements
 
-`net7.0+` atm
+`net8.0+` atm
 
 # Status
 
@@ -14,7 +14,7 @@ NativeAOT & bflat compatible.
 # Run the pepe game!
 
 ```
-cd src/TinyEcs.MonogameSample
+cd samples/TinyEcsGame
 dotnet run -c Release
 ```
 
@@ -23,68 +23,34 @@ dotnet run -c Release
 ```csharp
 using var ecs = new World();
 
-// Create the components & tags
-var posID = ecs.Entity<Position>();
-var playerTag = ecs.Entity<Player>();
-var npcTag = ecs.Entity<Npc>();
-
-// Create a run-once system which will run the first time
-// the app calls "ecs.Step(deltaTime)" method
+// Generate a player entity
 ecs.Entity()
-		.System(&Setup)
-		.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+	.Set(new Position() { X = 2 })
+	.Set(new Name() { Name = "Tom" })
+	.Set<Player>();
 
-// Create a frame which will run every frame
-// if the query condition is satisfied
+// Generate a npc entity
 ecs.Entity()
-	.System(&MovePlayer, posID, playerTag)
-	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+	.Set(new Position() { X = 75 })
+	.Set(new Name() { Name = "Dan" })
+	.Set<Npc>();
 
-// Create a system that runs every second
-ecs.Entity()
-	.System(&MessageEverySecond, 1f)
-	.Set<EcsPhase, EcsSystemPhaseOnUpdate>();
+// Query for all entities with [Position + Name]
+ecs.Query()
+	.Each((ref Position pos, ref Name name) => {
+		Console.WriteLine(name.Vaue);
+	});
 
-
-// Run the loop!
-var sw = Stopwatch.StartNew();
-while (true)
-    ecs.Step((float) sw.ElapsedMilliseconds);
-
-
-
-static void Setup(ref Iterator it)
-{
-    // Create an empty entity into the main world.
-    // All changes to the entity are done without modifing the world.
-    // Commands will get merged at the end of the frame.
-    it.Commands.Entity()
-        .Set(new Position() { X = -12f, Y = 0f, Z = 75f })
-        .Set<Player>();
-
-	it.Commands.Entity()
-		.Set(new Position() { X = 0f, Y = 0f, Z = 20f })
-		.Set<Npc>();
-}
-
-static void MovePlayer(ref Iterator it)
-{
-    var posSpan = it.Field<Position>(0);
-
-    for (int i = 0; i < it.Count; ++i)
-    {
-        ref var pos = ref posSpan[i];
-        pos.X += 0.5f * it.DeltaTime;
-    }
-}
-
-static void MessageEverySecond(ref Iterator it)
-{
-	Console.WriteLine("message!");
-}
+// Query for all entities with [Position + Name + Player]
+ecs.Query()
+	.With<Player>()
+	.Each((ref Position pos, ref Name name) => {
+		Console.WriteLine(name.Vaue);
+	});
 
 
 struct Position { public float X, Y, Z; }
+struct Name { public string Value; }
 struct Player { }
 struct Npc { }
 ```
