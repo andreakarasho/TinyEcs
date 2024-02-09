@@ -5,22 +5,23 @@ public sealed partial class World
     public void Set<T>(EcsID entity) where T : struct
 	{
         ref readonly var cmp = ref Component<T>();
-
         EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 
-		Unsafe.SkipInit<T>(out var def);
-        Set(entity, in cmp, in def);
+        ref var record = ref GetRecord(entity);
+        _ = Set(ref record, in cmp);
     }
 
     [SkipLocalsInit]
-    public unsafe void Set<T>(EcsID entity, T component) where T : struct
+    public void Set<T>(EcsID entity, T component) where T : struct
 	{
         ref readonly var cmp = ref Component<T>();
-
         EcsAssert.Assert(cmp.Size > 0, "this is not a component");
 
-        Set(entity, in cmp, in component);
-    }
+        ref var record = ref GetRecord(entity);
+        var raw = Set(ref record, in cmp)!;
+        ref var array = ref Unsafe.As<Array, T[]>(ref raw);
+        array[record.Row % record.Chunk.Count] = component;
+	}
 
     public void Unset<T>(EcsID entity) where T : struct =>
         DetachComponent(entity, in Component<T>());
@@ -35,6 +36,4 @@ public sealed partial class World
 
         return ref raw[record.Row % 4096];
     }
-
-    public void RunPhase<TPhase>() where TPhase : struct => RunPhase(in Component<TPhase>());
 }

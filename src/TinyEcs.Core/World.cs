@@ -27,6 +27,10 @@ public sealed partial class World : IDisposable
         //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
     }
 
+    public CommandEntityView DeferredEntity() => _commands.Entity();
+
+    public void Merge() => _commands.Merge();
+
     public int EntityCount => _entities.Length;
 
     public void Dispose()
@@ -168,11 +172,10 @@ public sealed partial class World : IDisposable
     internal void DetachComponent(EcsID entity, ref readonly EcsComponent cmp)
     {
         ref var record = ref GetRecord(entity);
-        InternalAttachDetach(entity, ref record, in cmp, false);
+        InternalAttachDetach(ref record, in cmp, false);
     }
 
     private bool InternalAttachDetach(
-        EcsID entity,
         ref EcsRecord record,
         ref readonly EcsComponent cmp,
         bool add
@@ -274,31 +277,33 @@ public sealed partial class World : IDisposable
 		}
 	}
 
-	private void Set<T>(EcsID entity, ref readonly EcsComponent cmp, ref readonly T data) where T : struct
+	internal Array? Set(ref EcsRecord record, ref readonly EcsComponent cmp)
     {
-        EcsAssert.Assert(cmp.Size == Lookup.Entity<T>.Size);
-
-        ref var record = ref GetRecord(entity);
-
         var emit = false;
         var column = record.Archetype.GetComponentIndex(in cmp);
         if (column < 0)
         {
-            emit = InternalAttachDetach(entity, ref record, in cmp, true);
+            emit = InternalAttachDetach(ref record, in cmp, true);
             column = record.Archetype.GetComponentIndex(in cmp);
         }
 
         if (cmp.Size > 0)
         {
-	        var span = record.Chunk.GetSpan<T>(column);
-	        EcsAssert.Assert(!span.IsEmpty);
-			span.Slice(record.Row % span.Length, 1)[0] = data;
+	        var destArray = record.Chunk.RawComponentData(column);
+	        return destArray;
+	        //       destArray.SetValue(data, record.Row % record.Chunk.Count);
+	        //
+	        //       var span = record.Chunk.GetSpan<T>(column);
+	        //       EcsAssert.Assert(!span.IsEmpty);
+	        // span.Slice(record.Row % span.Length, 1)[0] = data;
         }
 
         if (emit)
         {
             //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
+
+        return null;
     }
 
     internal bool Has(EcsID entity, ref readonly EcsComponent cmp)

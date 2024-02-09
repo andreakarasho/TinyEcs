@@ -53,14 +53,14 @@ public sealed class Commands
         // Set(id, ref cmp);
     }
 
-    public unsafe void Set<T>(EcsID id) where T : struct
+    public void Set<T>(EcsID id) where T : struct
 	{
         ref readonly var cmp = ref _main.Component<T>();
 		EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 		Set(id, in cmp);
 	}
 
-    public unsafe ref T Set<T>(EcsID id, T component) where T : struct
+    public ref T Set<T>(EcsID id, T component) where T : struct
 	{
         EcsAssert.Assert(_main.Exists(id));
 
@@ -84,7 +84,7 @@ public sealed class Commands
 		return ref Unsafe.As<object, T>(ref objRef);
     }
 
-    private unsafe ref object Set(EcsID id, ref readonly EcsComponent cmp)
+    private ref object Set(EcsID id, ref readonly EcsComponent cmp)
     {
         EcsAssert.Assert(_main.Exists(id));
 
@@ -134,7 +134,7 @@ public sealed class Commands
         return _main.Has<T>(entity);
     }
 
-    public unsafe void Merge()
+    public void Merge()
     {
         if (_despawn.Length == 0 && _set.Length == 0 && _unset.Length == 0)
         {
@@ -147,14 +147,11 @@ public sealed class Commands
 
             var cmp = new EcsComponent(set.Component, set.DataLength);
 
-			Console.WriteLine("Commands::Merge NEEDS TO BE FIXED!!");
-			//_main.Set(
-			//	set.Entity,
-			//	in cmp,
-			//	in set.Data
-			//);
+            ref var record = ref _main.GetRecord(set.Entity);
+            var array = _main.Set(ref record, in cmp);
+            array?.SetValue(set.Data, record.Row % record.Chunk.Count);
 
-			set.Data = null;
+            set.Data = null;
             set.DataLength = 0;
         }
 

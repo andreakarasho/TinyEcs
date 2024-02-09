@@ -11,6 +11,7 @@ var text1 = Generate.CreateQueries(true);
 File.WriteAllText("a.txt", text0);
 File.WriteAllText("b.txt", text1);
 
+
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())

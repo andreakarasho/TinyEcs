@@ -145,6 +145,9 @@ public sealed class Archetype
 
 		for (var i = 0; i < Components.Length; ++i)
 		{
+			if (Components[i].Size <= 0)
+				continue;
+
 			var array = chunk.RawComponentData(i);
 			Array.Copy(array,
 				(_count - 1) % CHUNK_THRESHOLD, array,
@@ -202,6 +205,9 @@ public sealed class Archetype
 				// advance the sign with less components!
 				++y;
 			}
+
+			if (Components[i].Size <= 0)
+				continue;
 
 			var fromArray = fromChunk.RawComponentData(i);
 			var toArray = toChunk.RawComponentData(j);
