@@ -11,7 +11,11 @@ public struct ArchetypeChunk
 	{
 		EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
+#if NET
 		return ref MemoryMarshal.GetArrayDataReference(array);
+#else
+		return ref array[0];
+#endif
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -89,7 +93,7 @@ public sealed class Archetype
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
 
     [SkipLocalsInit]
-    public ref ArchetypeChunk GetChunk(int index)
+    internal ref ArchetypeChunk GetChunk(int index)
     {
 	    if (index >= _chunks.Length)
 		    Array.Resize(ref _chunks, _chunks.Length * 2);
@@ -266,11 +270,7 @@ public sealed class Archetype
 
         if (nodeTypeLen < newTypeLen - 1)
         {
-#if NET5_0_OR_GREATER
-            foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
-#else
-            foreach (var edge in _edgesRight)
-#endif
+	        foreach (ref var edge in CollectionsMarshal.AsSpan(_edgesRight))
             {
                 edge.Archetype.InsertVertex(newNode);
             }
@@ -346,16 +346,14 @@ public sealed class Archetype
         static void PrintRec(Archetype root, int depth, int rootComponent)
         {
             Console.WriteLine(
-                "{0}Parent [{1}] common ID: {2}",
+                "{0}- Parent [{1}] common ID: {2}",
                 new string('\t', depth),
-                string.Join(", ", root.Components.Select(s => s.ID)),
+                string.Join(", ", root.Components.Select(s => Lookup.GetArray(s.ID, 0).ToString() )),
                 rootComponent
             );
 
             if (root._edgesRight.Count > 0)
-                Console.WriteLine("{0}Children: ", new string('\t', depth));
-
-            //Console.WriteLine("{0}[{1}] |{2}| - Table [{3}]", new string('.', depth), string.Join(", ", root.ComponentInfo.Select(s => s.ID)), rootComponent, string.Join(", ", root.Table.Components.Select(s => s.ID)));
+                Console.WriteLine("{0}  Children: ", new string('\t', depth));
 
             foreach (ref readonly var edge in CollectionsMarshal.AsSpan(root._edgesRight))
             {

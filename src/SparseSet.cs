@@ -4,7 +4,7 @@ sealed class EntitySparseSet<T>
 {
 	private struct Chunk
 	{
-		public int[] Sparse;
+		public int[]? Sparse;
 		public T[] Values;
 	}
 
@@ -61,7 +61,7 @@ sealed class EntitySparseSet<T>
 		_dense.Add(0);
 
 		ref var chunk = ref GetChunkOrCreate((int)index >> 12);
-		EcsAssert.Assert(chunk.Sparse[(int)index & 0xFFF] == 0);
+		EcsAssert.Assert(chunk.Sparse![(int)index & 0xFFF] == 0);
 
 		SparseAssignIndex(ref chunk, index, dense);
 
@@ -96,7 +96,7 @@ sealed class EntitySparseSet<T>
 		var gen = SplitGeneration(ref outerIdx);
 		var realID = (int)outerIdx & 0xFFF;
 		ref var chunk = ref GetChunkOrCreate((int)outerIdx >> 12);
-		var dense = chunk.Sparse[realID];
+		var dense = chunk.Sparse![realID];
 
 		if (dense != 0)
 		{
@@ -215,7 +215,7 @@ sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private void SparseAssignIndex(ref Chunk chunk, ulong index, int dense)
 	{
-		chunk.Sparse[(int)index & 0xFFF] = dense;
+		chunk.Sparse![(int)index & 0xFFF] = dense;
 		_dense[dense] = index;
 	}
 
@@ -364,7 +364,7 @@ public sealed unsafe class Vec<T> : IDisposable where T : unmanaged
 		if (newCapacity <= Capacity)
 			return;
 
-		T* ptr = (T*) NativeMemory.Realloc(_data, (nuint) newCapacity * (nuint) sizeof(T));
+		var ptr = (T*) NativeMemory.Realloc(_data, (nuint) newCapacity * (nuint) sizeof(T));
 
 		if (initZero)
 			Unsafe.InitBlock(&ptr[Count], 0, (uint)((newCapacity - Count) * (uint)sizeof(T)));

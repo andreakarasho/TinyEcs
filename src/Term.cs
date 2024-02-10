@@ -49,3 +49,8 @@ public readonly struct Without<T> where T : struct
 {
 	public static implicit operator Term(Without<T> _) => Term.Without(Lookup.Entity<T>.Component.ID);
 }
+
+public readonly struct Not<T> where T : struct
+{
+	public static implicit operator Term(Not<T> _) => Term.Without(Lookup.Entity<T>.Component.ID);
+}

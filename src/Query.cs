@@ -1,14 +1,12 @@
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public sealed unsafe partial class Query : IDisposable
+public sealed partial class Query : IDisposable
 {
     public const int TERMS_COUNT = 25;
 
     private readonly World _world;
     private readonly Vec<Term> _terms = Vec<Term>.Init(TERMS_COUNT);
-
-	private Span<Term> Terms => _terms.Span;
 
     internal Query(World world)
     {
@@ -20,7 +18,8 @@ public sealed unsafe partial class Query : IDisposable
 	    _terms.Dispose();
     }
 
-    public Query With<T>() where T : struct => With(_world.Component<T>().ID);
+    public Query With<T>() where T : struct
+	    => With(_world.Component<T>().ID);
 
     private Query With(int id)
     {
@@ -33,7 +32,8 @@ public sealed unsafe partial class Query : IDisposable
 		return this;
     }
 
-    public Query Without<T>() where T : struct => Without(_world.Component<T>().ID);
+    public Query Without<T>() where T : struct
+	    => Without(_world.Component<T>().ID);
 
     private Query Without(int id)
     {
@@ -59,9 +59,58 @@ public sealed unsafe partial class Query : IDisposable
 	public ArchetypeEnumerator GetEnumerator()
 	{
 		_cachedArchetypes.Clear();
-		_world.FindArchetypes(Terms, _cachedArchetypes);
+		_world.FindArchetypes(_terms.Span, _cachedArchetypes);
 
 		return new ArchetypeEnumerator(CollectionsMarshal.AsSpan(_cachedArchetypes));
+	}
+
+	static void QueryRec(Archetype root, Span<Term> sortedTerms)
+	{
+		var result = root.FindMatch(sortedTerms);
+		if (result < 0)
+		{
+			return;
+		}
+
+		if (result == 0 && root.Count > 0)
+		{
+			// found
+		}
+
+		var span = CollectionsMarshal.AsSpan(root._edgesRight);
+		if (span.IsEmpty)
+		{
+			return;
+		}
+
+		ref var start = ref MemoryMarshal.GetReference(span);
+		ref var end = ref Unsafe.Add(ref start, span.Length);
+
+		while (Unsafe.IsAddressLessThan(ref start, ref end))
+		{
+			QueryRec(start.Archetype, sortedTerms);
+
+			start = ref Unsafe.Add(ref start, 1);
+		}
+	}
+
+	public delegate void QueryTemplateWithEntity(ref readonly EntityView entity);
+	public void EachWithEntity(QueryTemplateWithEntity fn)
+	{
+		foreach (var archetype in this)
+		{
+			foreach (ref readonly var chunk in archetype)
+			{
+				ref var firstEnt = ref chunk.Entities[0];
+				ref var last = ref Unsafe.Add(ref firstEnt, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref firstEnt, ref last))
+				{
+					fn(in firstEnt);
+
+					firstEnt = ref Unsafe.Add(ref firstEnt, 1);
+				}
+			}
+		}
 	}
 
 	public ref struct ArchetypeEnumerator

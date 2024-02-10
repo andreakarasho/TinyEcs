@@ -2,15 +2,19 @@
 
 	<PropertyGroup>
 		<OutputType>Library</OutputType>
-		<TargetFramework>net8.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
 	</ItemGroup>
 
 </Project>

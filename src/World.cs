@@ -1,3 +1,5 @@
+using Microsoft.Collections.Extensions;
+
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -5,9 +7,9 @@ public sealed partial class World : IDisposable
     const ulong ECS_MAX_COMPONENT_FAST_ID = 256;
     const ulong ECS_START_USER_ENTITY_DEFINE = ECS_MAX_COMPONENT_FAST_ID;
 
-    private readonly Archetype _archRoot;
+    internal readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
-    private readonly Dictionary<int, Archetype> _typeIndex = new();
+    private readonly DictionarySlim<int, Archetype> _typeIndex = new();
     private readonly ComponentComparer _comparer;
     private readonly Commands _commands;
     private int _frame;
@@ -259,11 +261,21 @@ public sealed partial class World : IDisposable
 		var hash = getHash(components, false);
 		var exists = false;
 
-		ref var arch = ref create ? ref CollectionsMarshal.GetValueRefOrAddDefault(
-			_typeIndex,
-			hash,
-			out exists
-		) : ref CollectionsMarshal.GetValueRefOrNullRef(_typeIndex, hash);
+		ref var arch = ref Unsafe.NullRef<Archetype>();
+		if (create)
+		{
+			arch = ref _typeIndex.GetOrAddValueRef(hash);
+		}
+		else if (_typeIndex.TryGetValue(hash, out arch))
+		{
+
+		}
+
+		// ref var arch = ref create ? ref CollectionsMarshal.GetValueRefOrAddDefault(
+		// 	_typeIndex,
+		// 	hash,
+		// 	out exists
+		// ) : ref CollectionsMarshal.GetValueRefOrNullRef(_typeIndex, hash);
 
 		return ref arch;
 
@@ -439,12 +451,20 @@ internal static class Lookup
 	private static int _index = -1;
 
 	private static readonly Dictionary<int, Func<int, Array>> _arrayCreator = new Dictionary<int, Func<int, Array>>();
+	private static readonly Dictionary<Type, int> _typesConvertion = new();
 
 	public static Array? GetArray(int hashcode, int count)
 	{
 		var ok = _arrayCreator.TryGetValue(hashcode, out var fn);
 		EcsAssert.Assert(ok, $"invalid hashcode {hashcode}");
 		return fn?.Invoke(count) ?? null;
+	}
+
+	public static int GetID(Type type)
+	{
+		var ok = _typesConvertion.TryGetValue(type, out var id);
+		EcsAssert.Assert(ok, $"invalid hashcode {type}");
+		return id;
 	}
 
 	[SkipLocalsInit]
@@ -459,6 +479,7 @@ internal static class Lookup
 		static Entity()
 		{
 			_arrayCreator.Add(Component.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
+			_typesConvertion.Add(typeof(T), Component.ID);
 		}
 
 		private static int GetSize()
