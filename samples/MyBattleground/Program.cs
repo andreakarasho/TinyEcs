@@ -8,11 +8,20 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 
 
+ecs.Entity()
+	.Set<Position>(new Position())
+	.Set<Velocity>(new Velocity());
+
+ecs.Entity()
+	.Set<Position>(new Position())
+	.Set<Velocity>(new Velocity());
+
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity())
 		 .Set<PlayerTag>();
+
 
 
 ecs.Query()
@@ -43,7 +52,7 @@ while (true)
 		// 	pos.Y *= vel.Y;
 		// });
 
-		foreach (var archetype in query)
+		foreach (var archetype in ecs.Query<(Position, Velocity)>())
 		{
 			var column0 = archetype.GetComponentIndex<Position>();
 			var column1 = archetype.GetComponentIndex<Velocity>();
@@ -65,6 +74,29 @@ while (true)
 				}
 			}
 		}
+
+		// foreach (var archetype in query)
+		// {
+		// 	var column0 = archetype.GetComponentIndex<Position>();
+		// 	var column1 = archetype.GetComponentIndex<Velocity>();
+		//
+		// 	foreach (ref readonly var chunk in archetype)
+		// 	{
+		// 		ref var pos = ref chunk.GetReference<Position>(column0);
+		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
+		//
+		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
+		//
+		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
+		// 		{
+		// 			pos.X *= vel.X;
+		// 			pos.Y *= vel.Y;
+		//
+		// 			pos = ref Unsafe.Add(ref pos, 1);
+		// 			vel = ref Unsafe.Add(ref vel, 1);
+		// 		}
+		// 	}
+		// }
 	}
 
 	last = start;

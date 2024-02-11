@@ -38,21 +38,6 @@ public sealed class Commands
         }
     }
 
-    public unsafe void Set(EcsID id, EcsID tag)
-    {
-        // EcsAssert.Assert(!IDOp.IsPair(tag));
-        //
-        // if (_main.Exists(tag) && Has<EcsComponent>(tag))
-        // {
-        //     ref readonly var cmp2 = ref _main.Component<EcsComponent>();
-        //     Set(id, in cmp2);
-        //     return;
-        // }
-        //
-        // var cmp = new EcsComponent(tag, 0);
-        // Set(id, ref cmp);
-    }
-
     public void Set<T>(EcsID id) where T : struct
 	{
         ref readonly var cmp = ref _main.Component<T>();
@@ -180,7 +165,7 @@ public sealed class Commands
         _despawn.Clear();
     }
 
-    private unsafe struct SetComponent
+    private struct SetComponent
     {
         public EcsID Entity;
         public int Component;

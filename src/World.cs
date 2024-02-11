@@ -10,6 +10,8 @@ public sealed partial class World : IDisposable
     internal readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<int, Archetype> _typeIndex = new();
+    private Archetype[] _archetypes = new Archetype[16];
+    private int _archetypeCount;
     private readonly ComponentComparer _comparer;
     private readonly Commands _commands;
     private int _frame;
@@ -29,11 +31,13 @@ public sealed partial class World : IDisposable
         //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
     }
 
+    public int EntityCount => _entities.Length;
+
+    public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
+
     public CommandEntityView DeferredEntity() => _commands.Entity();
 
     public void Merge() => _commands.Merge();
-
-    public int EntityCount => _entities.Length;
 
     public void Dispose()
     {
@@ -41,6 +45,9 @@ public sealed partial class World : IDisposable
         _archRoot.Clear();
         _typeIndex.Clear();
         _commands.Clear();
+
+        Array.Clear(_archetypes, 0, _archetypeCount);
+        _archetypeCount = 0;
     }
 
     public void Optimize()
@@ -229,7 +236,14 @@ public sealed partial class World : IDisposable
         }
 
 		ref var arch = ref GetArchetype(span, true);
-		arch ??= _archRoot.InsertVertex(root, span, in cmp);
+		if (arch == null)
+		{
+			arch = _archRoot.InsertVertex(root, span, in cmp);
+
+			if (_archetypeCount >= _archetypes.Length)
+				Array.Resize(ref _archetypes, _archetypes.Length * 2);
+			_archetypes[_archetypeCount++] = arch;
+		}
 
 		if (buffer != null)
             ArrayPool<EcsComponent>.Shared.Return(buffer);
@@ -259,12 +273,14 @@ public sealed partial class World : IDisposable
 	internal ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
 	{
 		var hash = getHash(components, false);
-		var exists = false;
-
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 		if (create)
 		{
-			arch = ref _typeIndex.GetOrAddValueRef(hash);
+			arch = ref _typeIndex.GetOrAddValueRef(hash, out var exists);
+			if (!exists)
+			{
+
+			}
 		}
 		else if (_typeIndex.TryGetValue(hash, out arch))
 		{
@@ -444,6 +460,71 @@ public sealed partial class World : IDisposable
             }
         }
     }
+
+    // public IEnumerable<Archetype> Query<T>() where T : ITuple
+    // {
+	   //  var terms = QueryLookup<T>.Terms.AsMemory();
+    //
+	   //  for (var i = 0; i < _archetypeCount; ++i)
+	   //  {
+		  //   var arch = _archetypes[i];
+		  //   var result = arch.FindMatch(terms.Span);
+		  //   if (result == 0 && arch.Count > 0)
+		  //   {
+			 //    yield return arch;
+		  //   }
+	   //  }
+    // }
+
+    public QueryInternal<T> Query<T>() where T : ITuple
+    {
+	    var it = new QueryInternal<T>(Archetypes);
+	    return it;
+	    //return new QueryIterator(Archetypes, QueryLookup<T>.Terms);
+    }
+}
+
+public readonly ref struct QueryInternal<T> where T : ITuple
+{
+	private readonly ReadOnlySpan<Archetype> _archetypes;
+	public QueryInternal(ReadOnlySpan<Archetype> archetypes)
+	{
+		_archetypes = archetypes;
+	}
+
+	public QueryIterator GetEnumerator()
+	{
+		return new QueryIterator(_archetypes, QueryLookup<T>.Terms);
+	}
+}
+
+public ref struct QueryIterator
+{
+	private readonly Span<Term> _terms;
+	private readonly ReadOnlySpan<Archetype> _archetypes;
+	private int _index;
+
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, Span<Term> terms)
+	{
+		_archetypes = archetypes;
+		_terms = terms;
+		_index = -1;
+	}
+
+	public Archetype Current => _archetypes[_index];
+
+	public bool MoveNext()
+	{
+		while (++_index < _archetypes.Length)
+		{
+			var arch = _archetypes[_index];
+			var result = arch.FindMatch(_terms);
+			if (result == 0 && arch.Count > 0)
+				return true;
+		}
+
+		return false;
+	}
 }
 
 internal static class Lookup
@@ -480,6 +561,7 @@ internal static class Lookup
 		{
 			_arrayCreator.Add(Component.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 			_typesConvertion.Add(typeof(T), Component.ID);
+			_typesConvertion.Add(typeof(Not<T>), -Component.ID);
 		}
 
 		private static int GetSize()
@@ -498,6 +580,29 @@ internal static class Lookup
 			return ValueType.Equals(t1, t2) ? 0 : size;
 		}
     }
+}
+
+internal static class QueryLookup<T> where T : ITuple
+{
+	public static readonly T Value = Activator.CreateInstance<T>();
+	public static readonly Term[] Terms;
+
+	static QueryLookup()
+	{
+		var tuple = Value;
+		Terms = new Term[tuple.Length];
+
+		for (var i = 0; i < tuple.Length; ++i)
+		{
+			var type = tuple[i]!.GetType();
+			var id = Lookup.GetID(type);
+
+			Terms[i].ID = Math.Abs(id);
+			Terms[i].Op = id >= 0 ? TermOp.With : TermOp.Without;
+		}
+
+		Array.Sort(Terms);
+	}
 }
 
 struct EcsRecord

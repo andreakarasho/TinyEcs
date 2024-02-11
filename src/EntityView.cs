@@ -5,7 +5,7 @@ namespace TinyEcs;
 #endif
 [StructLayout(LayoutKind.Sequential)]
 [DebuggerDisplay("ID: {ID}")]
-public readonly unsafe struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
+public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
     public static readonly EntityView Invalid = new(null, 0);
 
@@ -35,35 +35,11 @@ public readonly unsafe struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
         return this;
     }
 
-    public readonly EntityView Set(EcsID id)
-    {
-        World.Set(ID, id);
-        return this;
-    }
-
     public readonly EntityView Set<T>(T component) where T : struct
 	{
         World.Set(ID, component);
         return this;
     }
-
-    //public readonly EntityView Set<TKind, TTarget>()
-    //    where TKind : unmanaged
-    //    where TTarget : unmanaged
-    //{
-    //    return Set(World.Entity<TKind>(), World.Entity<TTarget>());
-    //}
-
-    //public readonly EntityView Set<TKind>(EcsID target) where TKind : unmanaged
-    //{
-    //    return Set(World.Entity<TKind>(), target);
-    //}
-
-    //public readonly EntityView Set(EcsID first, EcsID second)
-    //{
-    //    World.Set(ID, first, second);
-    //    return this;
-    //}
 
     public readonly EntityView Unset<T>() where T : struct
 	{
@@ -88,42 +64,6 @@ public readonly unsafe struct EntityView : IEquatable<EcsID>, IEquatable<EntityV
     public readonly ref T Get<T>() where T : struct => ref World.Get<T>(ID);
 
     public readonly bool Has<T>() where T : struct => World.Has<T>(ID);
-
-    //public readonly bool Has<TKind, TTarget>()
-    //    where TKind : unmanaged
-    //    where TTarget : unmanaged
-    //{
-    //    return World.Has(ID, World.Entity<TKind>(), World.Entity<TTarget>());
-    //}
-
-    //public readonly EntityView ChildOf(EcsID parent)
-    //{
-    //    World.Set<EcsChildOf>(ID, parent);
-    //    return this;
-    //}
-
-    //public readonly void Children(Action<EntityView> action)
-    //{
-    //    World
-    //        .Query()
-    //        .With<EcsChildOf>(ID)
-    //        .Iterate(
-    //            (ref Iterator it) =>
-    //            {
-    //                for (int i = 0, count = it.Count; i < count; ++i)
-    //                    action(it.Entity(i));
-    //            }
-    //        );
-    //}
-
-    //public readonly void ClearChildren()
-    //{
-    //    var id = World.Entity<EcsChildOf>();
-    //    var myID = ID; // lol
-    //    Children(v => v.Unset(id, myID));
-    //}
-
-    //public readonly EntityView Parent() => World.Entity(World.GetParent(ID));
 
     public readonly void Delete() => World.Delete(ID);
 

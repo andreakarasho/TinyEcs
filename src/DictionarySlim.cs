@@ -215,9 +215,10 @@ namespace Microsoft.Collections.Extensions
         /// </summary>
         /// <param name="key">Key to look for</param>
         /// <returns>Reference to the new or existing value</returns>
-        public ref TValue GetOrAddValueRef(TKey key)
+        public ref TValue GetOrAddValueRef(TKey key, out bool exists)
         {
             if (key == null) ThrowHelper.ThrowKeyArgumentNullException();
+            exists = true;
             Entry[] entries = _entries;
             int collisionCount = 0;
             int bucketIndex = key.GetHashCode() & (_buckets.Length - 1);
@@ -235,6 +236,7 @@ namespace Microsoft.Collections.Extensions
                 collisionCount++;
             }
 
+            exists = false;
             return ref AddKey(key, bucketIndex);
         }
 

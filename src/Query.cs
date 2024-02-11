@@ -29,6 +29,8 @@ public sealed partial class Query : IDisposable
 	    term.ID = id;
         term.Op = TermOp.With;
 
+        _terms.Span.Sort();
+
 		return this;
     }
 
@@ -42,6 +44,8 @@ public sealed partial class Query : IDisposable
 	    ref var term = ref _terms.AddRef();
 		term.ID = id;
         term.Op = TermOp.Without;
+
+        _terms.Span.Sort();
 
 		return this;
     }
