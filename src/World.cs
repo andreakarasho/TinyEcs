@@ -655,18 +655,18 @@ public readonly ref struct FilterM<TFilter> where TFilter : struct
 
 }
 
-public interface IQuery
+public partial interface IQuery
 {
-	void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
-	void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
+	// void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
+	// void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
 }
 
 public partial interface IFilterOrQuery
 {
 	IQuery Filter<TFilter>() where TFilter : struct;
 
-	void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
-	void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
+	// void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
+	// void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
 }
 
 public partial struct FilterQuery : IFilterOrQuery, IQuery
@@ -688,51 +688,51 @@ public partial struct FilterQuery : IFilterOrQuery, IQuery
 		return this;
 	}
 
-	public void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct
-	{
-	}
-
-	public void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct
-	{
-		if (_fullTerms.Length == 0)
-		{
-			_fullTerms = new Term[_terms.Length + 2];
-			_fullTerms[^2].ID = Lookup.Entity<T0>.HashCode;
-			_fullTerms[^2].Op = TermOp.With;
-			_fullTerms[^1].ID = Lookup.Entity<T1>.HashCode;
-			_fullTerms[^1].Op = TermOp.With;
-
-			_terms.CopyTo(_fullTerms.AsSpan());
-			Array.Sort(_fullTerms);
-		}
-
-		var query = new QueryInternal(_archetypes.Span, _fullTerms);
-
-		foreach (var arch in query)
-		{
-			// columns
-			var column0 = arch.GetComponentIndex<T0>();
-			var column1 = arch.GetComponentIndex<T1>();
-
-			foreach (ref readonly var chunk in arch)
-			{
-				// field list
-				ref var t0A = ref chunk.GetReference<T0>(column0);
-				ref var t1A = ref chunk.GetReference<T1>(column1);
-
-				ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
-				while (Unsafe.IsAddressLessThan(ref t0A, ref last))
-				{
-					// sign list
-					fn(ref t0A, ref t1A);
-
-					// unsafe add list
-					t0A = ref Unsafe.Add(ref t0A, 1);
-					t1A = ref Unsafe.Add(ref t1A, 1);
-				}
-			}
-		}
-	}
+	// public void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct
+	// {
+	// }
+	//
+	// public void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct
+	// {
+	// 	if (_fullTerms.Length == 0)
+	// 	{
+	// 		_fullTerms = new Term[_terms.Length + 2];
+	// 		_fullTerms[^2].ID = Lookup.Entity<T0>.HashCode;
+	// 		_fullTerms[^2].Op = TermOp.With;
+	// 		_fullTerms[^1].ID = Lookup.Entity<T1>.HashCode;
+	// 		_fullTerms[^1].Op = TermOp.With;
+	//
+	// 		_terms.CopyTo(_fullTerms.AsSpan());
+	// 		Array.Sort(_fullTerms);
+	// 	}
+	//
+	// 	var query = new QueryInternal(_archetypes.Span, _fullTerms);
+	//
+	// 	foreach (var arch in query)
+	// 	{
+	// 		// columns
+	// 		var column0 = arch.GetComponentIndex<T0>();
+	// 		var column1 = arch.GetComponentIndex<T1>();
+	//
+	// 		foreach (ref readonly var chunk in arch)
+	// 		{
+	// 			// field list
+	// 			ref var t0A = ref chunk.GetReference<T0>(column0);
+	// 			ref var t1A = ref chunk.GetReference<T1>(column1);
+	//
+	// 			ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+	// 			while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+	// 			{
+	// 				// sign list
+	// 				fn(ref t0A, ref t1A);
+	//
+	// 				// unsafe add list
+	// 				t0A = ref Unsafe.Add(ref t0A, 1);
+	// 				t1A = ref Unsafe.Add(ref t1A, 1);
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 internal static class Lookup
