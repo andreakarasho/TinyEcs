@@ -16,6 +16,12 @@ ecs.Entity()
 	.Set<Position>(new Position())
 	.Set<Velocity>(new Velocity());
 
+ecs.Entity()
+	.Set<Position>(new Position())
+	.Set<Velocity>(new Velocity())
+	.Set<Likes>()
+	.Set<Dogs>();
+
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
@@ -23,6 +29,30 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		 .Set<PlayerTag>();
 
 
+ecs.Query222()
+	.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
+	.Each((ref Position position, ref Velocity vel) =>
+	{
+
+	});
+
+ecs.Query222().Each((ref Position position, ref Velocity vel) =>
+{
+
+});
+
+ecs.Query2<Position, Not<PlayerTag>>();
+ecs.Query2<(Position, Velocity), Not<PlayerTag>>();
+ecs.Query2<(Position, Velocity), With<PlayerTag>>();
+ecs.Query2<(Position, Velocity), (With<PlayerTag>, Not<Likes>, Not<Dogs>)>();
+ecs.Query2<Position, (With<PlayerTag>, Not<Likes>)>();
+
+//ecs.Query2<(Position, Velocity), Or<(With<Likes>, With<Dogs>)>>();
+
+// ecs.Palle((ref Position pos, ref Not<PlayerTag> vel) =>
+// {
+//
+// });
 
 ecs.Query()
 	.With<PlayerTag>()
@@ -52,28 +82,45 @@ while (true)
 		// 	pos.Y *= vel.Y;
 		// });
 
-		foreach (var archetype in ecs.Query<(Position, Velocity)>())
-		{
-			var column0 = archetype.GetComponentIndex<Position>();
-			var column1 = archetype.GetComponentIndex<Velocity>();
 
-			foreach (ref readonly var chunk in archetype)
+		ecs.Query222()
+			//.Filter<Not<PlayerTag>>()
+			.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
+			.Each((ref Position pos, ref Velocity vel) =>
 			{
-				ref var pos = ref chunk.GetReference<Position>(column0);
-				ref var vel = ref chunk.GetReference<Velocity>(column1);
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			});
 
-				ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
 
-				while (Unsafe.IsAddressLessThan(ref pos, ref last2))
-				{
-					pos.X *= vel.X;
-					pos.Y *= vel.Y;
+		// ecs.Query<(Position, Velocity, Not<PlayerTag>), Position, Velocity>((ref Position pos, ref Velocity vel) =>
+		// {
+		// 	pos.X *= vel.X;
+		// 	pos.Y *= vel.Y;
+		// });
 
-					pos = ref Unsafe.Add(ref pos, 1);
-					vel = ref Unsafe.Add(ref vel, 1);
-				}
-			}
-		}
+		// foreach (var archetype in ecs.Query<(Position, Velocity)>())
+		// {
+		// 	var column0 = archetype.GetComponentIndex<Position>();
+		// 	var column1 = archetype.GetComponentIndex<Velocity>();
+		//
+		// 	foreach (ref readonly var chunk in archetype)
+		// 	{
+		// 		ref var pos = ref chunk.GetReference<Position>(column0);
+		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
+		//
+		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
+		//
+		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
+		// 		{
+		// 			pos.X *= vel.X;
+		// 			pos.Y *= vel.Y;
+		//
+		// 			pos = ref Unsafe.Add(ref pos, 1);
+		// 			vel = ref Unsafe.Add(ref vel, 1);
+		// 		}
+		// 	}
+		// }
 
 		// foreach (var archetype in query)
 		// {

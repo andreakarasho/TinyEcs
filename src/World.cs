@@ -461,50 +461,155 @@ public sealed partial class World : IDisposable
         }
     }
 
-    // public IEnumerable<Archetype> Query<T>() where T : ITuple
-    // {
-	   //  var terms = QueryLookup<T>.Terms.AsMemory();
-    //
-	   //  for (var i = 0; i < _archetypeCount; ++i)
-	   //  {
-		  //   var arch = _archetypes[i];
-		  //   var result = arch.FindMatch(terms.Span);
-		  //   if (result == 0 && arch.Count > 0)
-		  //   {
-			 //    yield return arch;
-		  //   }
-	   //  }
-    // }
 
-    public QueryInternal<T> Query<T>() where T : ITuple
+
+    public IFilterOrQuery Query222()
     {
-	    var it = new QueryInternal<T>(Archetypes);
-	    return it;
-	    //return new QueryIterator(Archetypes, QueryLookup<T>.Terms);
+	    return new FilterQuery(_archetypes.AsMemory(0, _archetypeCount));
     }
+
+    public void Query2<TQuery, TFilter>()
+	    where TQuery : struct
+	    where TFilter : struct
+    {
+	    var terms = QueryLookup<TQuery, TFilter>.Terms;
+	    var columns = QueryLookup<TQuery, TFilter>.Columns;
+	    var query = new QueryInternal(Archetypes, terms);
+
+	    Span<int> indices = stackalloc int[columns.Length];
+
+	    foreach (var arch in query)
+	    {
+		    for (var i = 0; i < indices.Length; ++i)
+			    indices[i] = arch.GetComponentIndex(columns[i]);
+
+		    foreach (ref readonly var chunk in arch)
+		    {
+		    }
+	    }
+    }
+
+    public void Query<T>() where T : struct
+    {
+	    var query = new QueryInternal(Archetypes, QueryLookup<T>.Terms);
+	    var terms = query.Terms;
+	    Span<int> ids = stackalloc int[terms.Length];
+	    var maxCol = 0;
+	    for (var i = 0; i < terms.Length; ++i)
+		    if (terms[i].Op == TermOp.With)
+			    ids[maxCol++] = terms[i].ID;
+
+	    ids = ids[..maxCol];
+	    Span<int> columns = stackalloc int[ids.Length];
+
+	    foreach (var arch in query)
+	    {
+		    for (var i = 0; i < ids.Length; ++i)
+			    columns[i] = arch.GetComponentIndex(ids[i]);
+
+		    foreach (ref readonly var chunk in arch)
+		    {
+			    for (var i = 0; i < columns.Length; ++i)
+			    {
+				    var array = chunk.RawComponentData(columns[i]);
+			    }
+
+		    }
+	    }
+    }
+
+    public void Palle<T0, T1>(QueryDelegate<T0, T1> fn) where T0 : struct where T1 : struct
+    {
+	    var query = new QueryInternal(Archetypes, QueryLookup<(T0, T1)>.Terms);
+
+	    foreach (var arch in query)
+	    {
+		    // columns
+		    var column0 = arch.GetComponentIndex<T0>();
+		    var column1 = arch.GetComponentIndex<T1>();
+
+		    foreach (ref readonly var chunk in arch)
+		    {
+			    // field list
+			    ref var t0A = ref chunk.GetReference<T0>(column0);
+			    ref var t1A = ref chunk.GetReference<T1>(column1);
+
+			    ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+			    while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+			    {
+				    // sign list
+				    fn(ref t0A, ref t1A);
+
+				    // unsafe add list
+				    t0A = ref Unsafe.Add(ref t0A, 1);
+				    t1A = ref Unsafe.Add(ref t1A, 1);
+			    }
+		    }
+	    }
+    }
+
+	public delegate void QueryDelegate<T0, T1>(ref T0 t0, ref T1 t1) where T0 : struct where T1 : struct;
+	public void Query<TQuery, T0, T1>(QueryDelegate<T0, T1> fn)
+	    where TQuery : struct
+	    where T0 : struct
+	    where T1 : struct
+    {
+	    var query = new QueryInternal(Archetypes, QueryLookup<TQuery>.Terms);
+
+	    foreach (var arch in query)
+	    {
+			// columns
+			var column0 = arch.GetComponentIndex<T0>();
+			var column1 = arch.GetComponentIndex<T1>();
+
+			foreach (ref readonly var chunk in arch)
+			{
+				// field list
+				ref var t0A = ref chunk.GetReference<T0>(column0);
+				ref var t1A = ref chunk.GetReference<T1>(column1);
+
+				ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+				{
+					// sign list
+					fn(ref t0A, ref t1A);
+
+					// unsafe add list
+					t0A = ref Unsafe.Add(ref t0A, 1);
+					t1A = ref Unsafe.Add(ref t1A, 1);
+				}
+			}
+	    }
+    }
+
 }
 
-public readonly ref struct QueryInternal<T> where T : ITuple
+public readonly ref struct QueryInternal
 {
 	private readonly ReadOnlySpan<Archetype> _archetypes;
-	public QueryInternal(ReadOnlySpan<Archetype> archetypes)
+	private readonly ReadOnlySpan<Term> _terms;
+
+	internal QueryInternal(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
 	{
 		_archetypes = archetypes;
+		_terms = terms;
 	}
+
+	public ReadOnlySpan<Term> Terms => _terms;
 
 	public QueryIterator GetEnumerator()
 	{
-		return new QueryIterator(_archetypes, QueryLookup<T>.Terms);
+		return new QueryIterator(_archetypes, _terms);
 	}
 }
 
 public ref struct QueryIterator
 {
-	private readonly Span<Term> _terms;
+	private readonly ReadOnlySpan<Term> _terms;
 	private readonly ReadOnlySpan<Archetype> _archetypes;
 	private int _index;
 
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, Span<Term> terms)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
 	{
 		_archetypes = archetypes;
 		_terms = terms;
@@ -515,6 +620,8 @@ public ref struct QueryIterator
 
 	public bool MoveNext()
 	{
+		Span<int> columns = stackalloc int[_terms.Length];
+
 		while (++_index < _archetypes.Length)
 		{
 			var arch = _archetypes[_index];
@@ -524,6 +631,107 @@ public ref struct QueryIterator
 		}
 
 		return false;
+	}
+}
+
+public readonly ref struct Column<T> where T : struct
+{
+	internal Column(ref ArchetypeChunk chunk, int column)
+	{
+		Data = chunk.GetSpan<T>(column);
+	}
+
+	public readonly Span<T> Data;
+}
+
+public readonly struct QueryM<T0> where T0 : struct { }
+public readonly struct QueryM<T0, T1> : IQueryM<T0, T1> where T0 : struct where T1 : struct { }
+public interface IQueryM<T0, T1> where T0 : struct where T1 : struct { }
+
+public readonly struct QueryM<T0, T1, T2> where T0 : struct where T1 : struct where T2 : struct { }
+
+public readonly ref struct FilterM<TFilter> where TFilter : struct
+{
+
+}
+
+public interface IQuery
+{
+	void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
+	void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
+}
+
+public partial interface IFilterOrQuery
+{
+	IQuery Filter<TFilter>() where TFilter : struct;
+
+	void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct;
+	void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct;
+}
+
+public partial struct FilterQuery : IFilterOrQuery, IQuery
+{
+	private readonly ReadOnlyMemory<Archetype> _archetypes;
+	private Term[] _terms, _fullTerms;
+
+	internal FilterQuery(ReadOnlyMemory<Archetype> archetypes)
+	{
+		_archetypes = archetypes;
+		_terms = Array.Empty<Term>();
+		_fullTerms = Array.Empty<Term>();
+	}
+
+	public IQuery Filter<TFilter>() where TFilter : struct
+	{
+		_terms = QueryLookup<TFilter>.Terms;
+
+		return this;
+	}
+
+	public void Each<T0>(Query.QueryTemplate<T0> fn) where T0 : struct
+	{
+	}
+
+	public void Each<T0, T1>(Query.QueryTemplate<T0, T1> fn) where T0 : struct where T1 : struct
+	{
+		if (_fullTerms.Length == 0)
+		{
+			_fullTerms = new Term[_terms.Length + 2];
+			_fullTerms[^2].ID = Lookup.Entity<T0>.HashCode;
+			_fullTerms[^2].Op = TermOp.With;
+			_fullTerms[^1].ID = Lookup.Entity<T1>.HashCode;
+			_fullTerms[^1].Op = TermOp.With;
+
+			_terms.CopyTo(_fullTerms.AsSpan());
+			Array.Sort(_fullTerms);
+		}
+
+		var query = new QueryInternal(_archetypes.Span, _fullTerms);
+
+		foreach (var arch in query)
+		{
+			// columns
+			var column0 = arch.GetComponentIndex<T0>();
+			var column1 = arch.GetComponentIndex<T1>();
+
+			foreach (ref readonly var chunk in arch)
+			{
+				// field list
+				ref var t0A = ref chunk.GetReference<T0>(column0);
+				ref var t1A = ref chunk.GetReference<T1>(column1);
+
+				ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+				{
+					// sign list
+					fn(ref t0A, ref t1A);
+
+					// unsafe add list
+					t0A = ref Unsafe.Add(ref t0A, 1);
+					t1A = ref Unsafe.Add(ref t1A, 1);
+				}
+			}
+		}
 	}
 }
 
@@ -561,6 +769,7 @@ internal static class Lookup
 		{
 			_arrayCreator.Add(Component.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 			_typesConvertion.Add(typeof(T), Component.ID);
+			_typesConvertion.Add(typeof(With<T>), Component.ID);
 			_typesConvertion.Add(typeof(Not<T>), -Component.ID);
 		}
 
@@ -582,26 +791,115 @@ internal static class Lookup
     }
 }
 
-internal static class QueryLookup<T> where T : ITuple
+internal static class QueryLookup<TQuery, TFilter> where TQuery : struct where TFilter : struct
 {
-	public static readonly T Value = Activator.CreateInstance<T>();
+	public static readonly Term[] Terms;
+	public static readonly Term[] Columns;
+
+	static QueryLookup()
+	{
+		var list = new List<Term>();
+		if (typeof(ITuple).IsAssignableFrom(typeof(TQuery)))
+		{
+			list.AddRange(ParseTuple((ITuple)default(TQuery)));
+		}
+		else
+		{
+			list.Add(new Term() { ID = Lookup.GetID(typeof(TQuery)), Op = TermOp.With});
+		}
+
+		list.Sort();
+		Columns = list.ToArray();
+
+		if (typeof(ITuple).IsAssignableFrom(typeof(TFilter)))
+		{
+			list.AddRange(ParseTuple((ITuple)default(TFilter)));
+		}
+		else
+		{
+			var id = Lookup.GetID(typeof(TFilter));
+			list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
+		}
+
+		list.Sort();
+		Terms = list.ToArray();
+
+		static List<Term> ParseTuple(ITuple tuple)
+		{
+			var terms = new List<Term>();
+
+			for (var i = 0; i < tuple.Length; ++i)
+			{
+				var type = tuple[i]!.GetType();
+
+				if (typeof(ITuple).IsAssignableFrom(type))
+				{
+					terms.AddRange(ParseTuple((ITuple)tuple[i]));
+					continue;
+				}
+
+				var id = Lookup.GetID(type);
+				terms.Add(new Term()
+				{
+					ID = Math.Abs(id),
+					Op = id >= 0 ? TermOp.With : TermOp.Without
+				});
+			}
+
+			terms.Sort();
+
+			return terms;
+		}
+	}
+}
+
+internal static class QueryLookup<T> where T : struct
+{
 	public static readonly Term[] Terms;
 
 	static QueryLookup()
 	{
-		var tuple = Value;
-		Terms = new Term[tuple.Length];
+		var list = new List<Term>();
 
-		for (var i = 0; i < tuple.Length; ++i)
+		if (typeof(ITuple).IsAssignableFrom(typeof(T)))
 		{
-			var type = tuple[i]!.GetType();
-			var id = Lookup.GetID(type);
-
-			Terms[i].ID = Math.Abs(id);
-			Terms[i].Op = id >= 0 ? TermOp.With : TermOp.Without;
+			list.AddRange(ParseTuple((ITuple)default(T)));
+		}
+		else
+		{
+			var id = Lookup.GetID(typeof(T));
+			list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
 		}
 
-		Array.Sort(Terms);
+		list.Sort();
+		Terms = list.ToArray();
+
+		static List<Term> ParseTuple(ITuple tuple)
+		{
+			var terms = new List<Term>();
+
+			for (var i = 0; i < tuple.Length; ++i)
+			{
+				var type = tuple[i]!.GetType();
+
+				if (typeof(ITuple).IsAssignableFrom(type))
+				{
+					terms.AddRange(ParseTuple((ITuple)tuple[i]));
+					continue;
+				}
+
+				var id = Lookup.GetID(type);
+				terms.Add(new Term()
+				{
+					ID = Math.Abs(id),
+					Op = id >= 0 ? TermOp.With : TermOp.Without
+				});
+			}
+
+			terms.Sort();
+
+			return terms;
+		}
 	}
 }
 

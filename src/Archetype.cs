@@ -131,7 +131,7 @@ public sealed class Archetype
 	public int GetComponentIndex<T>() where T : struct
 	{
 		var id = Lookup.Entity<T>.HashCode;
-		return id >= 0 && id < _lookup.Length ? _lookup[id] : -1;
+		return GetComponentIndex(id);
 	}
 
 	internal int Add(EcsID id)
@@ -306,7 +306,7 @@ public sealed class Archetype
 	    return j == other.Length;
     }
 
-    internal int FindMatch(Span<Term> searching)
+    internal int FindMatch(ReadOnlySpan<Term> searching)
     {
 	    var currents = Components;
 	    var i = 0;
@@ -315,7 +315,7 @@ public sealed class Archetype
         while (i < currents.Length && j < searching.Length)
         {
 	        ref var current = ref currents[i];
-	        ref var search = ref searching[j];
+	        ref readonly var search = ref searching[j];
 
             if (current.ID.CompareTo(search.ID) == 0)
             {

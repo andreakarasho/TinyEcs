@@ -11,4 +11,8 @@
     <ProjectReference Include="..\..\src\TinyEcs.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.0-3.final" />
+  </ItemGroup>
+
 </Project>

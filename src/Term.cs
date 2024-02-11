@@ -1,5 +1,6 @@
 namespace TinyEcs;
 
+[DebuggerDisplay("{ID} - {Op}")]
 public struct Term : IComparable<Term>
 {
     public int ID;
@@ -40,17 +41,21 @@ public enum TermOp : byte
     Without
 }
 
-public readonly struct With<T> where T : struct
+public readonly struct With<T> : IFilter where T : struct
 {
 	public static implicit operator Term(With<T> _) => Term.With(Lookup.Entity<T>.Component.ID);
 }
 
-public readonly struct Without<T> where T : struct
+public readonly struct Without<T> : IFilter where T : struct
 {
 	public static implicit operator Term(Without<T> _) => Term.Without(Lookup.Entity<T>.Component.ID);
 }
 
-public readonly struct Not<T> where T : struct
+public readonly struct Not<T> : IFilter where T : struct
 {
 	public static implicit operator Term(Not<T> _) => Term.Without(Lookup.Entity<T>.Component.ID);
 }
+
+public readonly struct Or<T> : IFilter where T : struct { }
+
+public interface IFilter { }

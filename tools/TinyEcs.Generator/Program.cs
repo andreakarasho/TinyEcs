@@ -3,12 +3,13 @@ using TinyEcs;
 
 var text0 = CreateQueries(false);
 var text1 = CreateQueries(true);
+var text2 = CreateWorldQueries();
 
 var dir = new DirectoryInfo("../../../../../src");
 
 File.WriteAllText(Path.Combine(dir.FullName, "Query.Generics.cs"), text0);
 File.WriteAllText(Path.Combine(dir.FullName, "Query.Generics.WithEntity.cs"), text1);
-
+File.WriteAllText(Path.Combine(dir.FullName, "World.Queries.cs"), text2);
 
 
 string CreateQueries(bool queryForEntity)
@@ -104,6 +105,104 @@ string CreateQueries(bool queryForEntity)
 
 
 	var text = $"namespace TinyEcs;\npartial class Query\n{{\n{sb}\n\n{sbIterators}\n}}";
+
+	return text;
+}
+
+string CreateWorldQueries()
+{
+	var template =
+		"""
+
+
+		 public delegate void QueryDelegate<{0}>({6}){1};
+		 public void Query<TQuery, {0}>(QueryDelegate<{0}> fn)
+			    where TQuery : ITuple
+			    {1}
+		    {{
+			    var query = new QueryInternal<TQuery>(Archetypes);
+
+			    foreach (var arch in query)
+			    {{
+					// columns
+					{2}
+
+					foreach (ref readonly var chunk in arch)
+					{{
+						// field list
+						{3}
+
+						ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+						while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+						{{
+							// sign list
+							fn({4});
+
+							// unsafe add list
+							{5}
+						}}
+					}}
+			    }}
+		    }}
+
+
+		""";
+
+	var file = new StringBuilder();
+
+	var genericList = new StringBuilder();
+	var genericListSign = new StringBuilder();
+	var whereList = new StringBuilder();
+	var columnList = new StringBuilder();
+	var fieldList = new StringBuilder();
+	var signList = new StringBuilder();
+	var unsafeAddList = new StringBuilder();
+
+	for (int i = 0, max = Query.TERMS_COUNT; i < max; ++i)
+	{
+		genericList.Clear();
+		whereList.Clear();
+		unsafeAddList.Clear();
+		signList.Clear();
+		genericListSign.Clear();
+
+		columnList.AppendFormat("var column{0} = arch.GetComponentIndex<T{0}>();\n", i);
+		fieldList.AppendFormat("ref var t{0}A = ref chunk.GetReference<T{0}>(column{0});\n", i);
+
+		for (int j = 0, count = i; j <= count; ++j)
+		{
+			genericList.AppendFormat("T{0}", j);
+			genericListSign.AppendFormat("ref T{0} t{0}", j);
+			signList.AppendFormat("ref t{0}A", j);
+			unsafeAddList.AppendFormat("t{0}A = ref Unsafe.Add(ref t{0}A, 1);\n", j);
+			whereList.AppendFormat("where T{0} : struct ", j);
+
+			if (j + 1 <= count)
+			{
+				genericListSign.Append(", ");
+				genericList.Append(", ");
+				signList.Append(", ");
+			}
+		}
+
+		file.AppendFormat(template,
+			genericList,
+			whereList,
+			columnList,
+			fieldList,
+			signList,
+			unsafeAddList,
+			genericListSign
+		);
+	}
+
+	var text = $@"
+			   namespace TinyEcs;
+	           sealed partial class World
+	           {{
+	            {file}
+				}}
+	           ";
 
 	return text;
 }
