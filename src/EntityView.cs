@@ -71,60 +71,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
     public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool IsEntity() => (ID & EcsConst.ECS_ID_FLAGS_MASK) == 0;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool IsPair() => IDOp.IsPair(ID);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EcsID First() => IDOp.GetPairFirst(ID);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EcsID Second() => IDOp.GetPairSecond(ID);
-
-    public readonly void Each(Action<EntityView> action)
-    {
-        // ref var record = ref World.GetRecord(ID);
-        //
-        // for (int i = 0; i < record.Archetype.Components.Length; ++i)
-        // {
-        //     action(World.Entity(record.Archetype.Components[i].ID));
-        // }
-    }
-
-  //  public unsafe readonly EntityView System(
-		//IteratorDelegate callback,
-  //      params Term[] terms
-  //  ) => System(callback, float.NaN, terms);
-
-  //  public unsafe readonly EntityView System(
-  //      IteratorDelegate callback,
-  //      float tick,
-  //      params Term[] terms
-  //  )
-  //  {
-  //      EcsID query = terms.Length > 0 ? World.Entity() : 0;
-
-  //      Array.Sort(terms);
-
-  //      Set(new EcsSystem(callback, query, terms, tick));
-
-  //      return this;
-  //  }
-
-  //  public unsafe readonly EntityView Event(delegate* <ref Iterator, void> callback)
-  //  {
-  //      return this;
-  //  }
 
     public static implicit operator EcsID(EntityView d) => d.ID;
-
-    // public static implicit operator Term(EntityView d) => Term.With(d.ID);
-    //
-    // public static Term operator !(EntityView id) => Term.Without(id.ID);
-    //
-    // public static Term operator -(EntityView id) => Term.Without(id.ID);
-    //
-    // public static Term operator +(EntityView id) => Term.With(id.ID);
 }

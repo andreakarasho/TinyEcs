@@ -130,7 +130,7 @@ public sealed class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int GetComponentIndex<T>() where T : struct
 	{
-		var id = Lookup.Entity<T>.HashCode;
+		var id = Lookup.Component<T>.HashCode;
 		return GetComponentIndex(id);
 	}
 

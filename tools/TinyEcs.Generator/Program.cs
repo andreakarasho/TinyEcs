@@ -28,26 +28,31 @@ public sealed class Generator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					{GenerateQueryTemplateDelegates()}
-					{GenerateFilterQuery(false)}
-					{GenerateFilterQuery(true)}
+					{GenerateQueryTemplateDelegates(false)}
+					{GenerateQueryTemplateDelegates(true)}
+					{GenerateFilterQuery(false, false)}
+					{GenerateFilterQuery(true, false)}
+					{GenerateFilterQuery(false, true)}
+					{GenerateFilterQuery(true, true)}
                 }}
 
                 #pragma warning restore 1591
             ";
 		}
 
-		static string GenerateQueryTemplateDelegates()
+		static string GenerateQueryTemplateDelegates(bool withEntityView)
 		{
 			var sb = new StringBuilder();
+			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
 
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var signParams = GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
+				var signParams = (withEntityView ? "EntityView entity, " : "") +
+				                 GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
 
-				sb.AppendLine($"public delegate void QueryFilterDelegate<{typeParams}>({signParams}) {whereParams};");
+				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
 			}
 
 			return sb.ToString();
@@ -74,11 +79,12 @@ public sealed class Generator : IIncrementalGenerator
 		// 	return sb.ToString();
 		// }
 
-		static string GenerateFilterQuery(bool withFilter)
+		static string GenerateFilterQuery(bool withFilter, bool withEntityView)
 		{
 			var className = withFilter ? "struct FilterQuery" : "class World";
 			var filter = withFilter ? "<TFilter>" : "";
 			var filterMethod = withFilter ? ", TFilter" : "";
+			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
 
 			var sb = new StringBuilder();
 			sb.AppendLine($@"
@@ -91,14 +97,17 @@ public sealed class Generator : IIncrementalGenerator
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
 				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
-				var signCallback = GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+				var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+				var signCallback = (withEntityView ? "entityA, " : "") +
+				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
+				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
+				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
 
 				sb.AppendLine($@"
-						public void Query<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams}
+						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
-							var terms = QueryLookup<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
+							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
 							var query = new QueryInternal({(withFilter ? "_archetypes.Span" : "Archetypes")}, terms);
 							foreach (var arch in query)
 							{{
@@ -109,6 +118,7 @@ public sealed class Generator : IIncrementalGenerator
 								{{
 									// field list
 									{fieldList}
+
 									ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
 									while (Unsafe.IsAddressLessThan(ref t0A, ref last))
 									{{

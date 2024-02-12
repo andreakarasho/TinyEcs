@@ -8,7 +8,7 @@ public sealed partial class World : IDisposable
     const ulong ECS_MAX_COMPONENT_FAST_ID = 256;
     const ulong ECS_START_USER_ENTITY_DEFINE = ECS_MAX_COMPONENT_FAST_ID;
 
-    internal readonly Archetype _archRoot;
+    private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<int, Archetype> _typeIndex = new();
     private Archetype[] _archetypes = new Archetype[16];
@@ -28,7 +28,7 @@ public sealed partial class World : IDisposable
         );
         _commands = new(this);
 
-        InitializeDefaults();
+        //InitializeDefaults();
         //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
     }
 
@@ -68,7 +68,7 @@ public sealed partial class World : IDisposable
 
     internal unsafe ref readonly EcsComponent Component<T>() where T : struct
 	{
-        ref readonly var lookup = ref Lookup.Entity<T>.Component;
+        ref readonly var lookup = ref Lookup.Component<T>.Value;
 
         // if (lookup.ID == 0 || !Exists(lookup.ID))
         // {
@@ -110,23 +110,10 @@ public sealed partial class World : IDisposable
 
     //public Query Query() => new(this);
 
-    // public unsafe EntityView Event(
-    //     delegate* <ref Iterator, void> callback,
-    //     ReadOnlySpan<Term> terms,
-    //     ReadOnlySpan<EcsID> events
-    // )
-    // {
-    //     var obs = Entity().Set(new EcsEvent(callback, terms));
-    //
-    //     foreach (ref readonly var id in events)
-    //         obs.Set(id);
-    //
-    //     return obs;
-    // }
-
-    public EntityView Entity(ReadOnlySpan<char> name)
+    public EntityView Entity(string name)
     {
         // TODO
+
         EcsID id = 0;
 
         return Entity(id);
@@ -252,25 +239,6 @@ public sealed partial class World : IDisposable
         return arch;
     }
 
-	internal Archetype? GetArchetype(Span<Term> terms)
-	{
-		var hash = getHash(terms, false);
-
-		_typeIndex.TryGetValue(hash, out var arch);
-		//ref var arch = ref CollectionsMarshal.GetValueRefOrNullRef(_typeIndex, hash);
-
-		return arch;
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static int getHash(Span<Term> terms, bool checkSize)
-		{
-			var hc = terms.Length;
-			foreach (ref var val in terms)
-				hc = unchecked(hc * 314159 + val);
-			return hc;
-		}
-	}
-
 	internal ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
 	{
 		var hash = getHash(components, false);
@@ -316,23 +284,17 @@ public sealed partial class World : IDisposable
             column = record.Archetype.GetComponentIndex(in cmp);
         }
 
+        Array? array = null;
+
         if (cmp.Size > 0)
-        {
-	        var destArray = record.Chunk.RawComponentData(column);
-	        return destArray;
-	        //       destArray.SetValue(data, record.Row % record.Chunk.Count);
-	        //
-	        //       var span = record.Chunk.GetSpan<T>(column);
-	        //       EcsAssert.Assert(!span.IsEmpty);
-	        // span.Slice(record.Row % span.Length, 1)[0] = data;
-        }
+	        array = record.Chunk.RawComponentData(column);
 
         if (emit)
         {
             //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
 
-        return null;
+        return array;
     }
 
     internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
@@ -351,38 +313,38 @@ public sealed partial class World : IDisposable
     {
         _archRoot.Print();
     }
+    //
+    // [SkipLocalsInit]
+    // public unsafe void RunPhase(ref readonly EcsComponent cmp)
+    // {
+    //     // Span<Term> terms = stackalloc Term[] { Term.With(Component<EcsSystem>().ID), Term.With(cmp.ID), };
+    //     //
+    //     // Query(terms, RunSystems);
+    // }
 
-    [SkipLocalsInit]
-    public unsafe void RunPhase(ref readonly EcsComponent cmp)
-    {
-        // Span<Term> terms = stackalloc Term[] { Term.With(Component<EcsSystem>().ID), Term.With(cmp.ID), };
-        //
-        // Query(terms, RunSystems);
-    }
-
-    public void Step(float deltaTime = 0.0f)
-    {
-        _commands.Merge();
-
-        if (_frame == 0)
-        {
-            RunPhase(in Component<EcsSystemPhasePreStartup>());
-            RunPhase(in Component<EcsSystemPhaseOnStartup>());
-            RunPhase(in Component<EcsSystemPhasePostStartup>());
-        }
-
-        RunPhase(in Component<EcsSystemPhasePreUpdate>());
-        RunPhase(in Component<EcsSystemPhaseOnUpdate>());
-        RunPhase(in Component<EcsSystemPhasePostUpdate>());
-
-        _commands.Merge();
-        _frame += 1;
-
-        if (_frame % 10 == 0)
-        {
-            Optimize();
-        }
-    }
+    // public void Step(float deltaTime = 0.0f)
+    // {
+    //     _commands.Merge();
+    //
+    //     if (_frame == 0)
+    //     {
+    //         RunPhase(in Component<EcsSystemPhasePreStartup>());
+    //         RunPhase(in Component<EcsSystemPhaseOnStartup>());
+    //         RunPhase(in Component<EcsSystemPhasePostStartup>());
+    //     }
+    //
+    //     RunPhase(in Component<EcsSystemPhasePreUpdate>());
+    //     RunPhase(in Component<EcsSystemPhaseOnUpdate>());
+    //     RunPhase(in Component<EcsSystemPhasePostUpdate>());
+    //
+    //     _commands.Merge();
+    //     _frame += 1;
+    //
+    //     if (_frame % 10 == 0)
+    //     {
+    //         Optimize();
+    //     }
+    // }
 
     // static unsafe void RunSystems(ref Iterator it)
     // {
@@ -423,44 +385,6 @@ public sealed partial class World : IDisposable
     //         }
     //     }
     // }
-
-    public void FindArchetypes(Span<Term> terms, List<Archetype> list)
-    {
-		terms.Sort();
-
-        QueryRec(_archRoot, terms, list);
-
-        static void QueryRec(Archetype root, Span<Term> sortedTerms, List<Archetype> list)
-        {
-            var result = root.FindMatch(sortedTerms);
-            if (result < 0)
-            {
-                return;
-            }
-
-            if (result == 0 && root.Count > 0)
-            {
-				// found
-				list.Add(root);
-            }
-
-            var span = CollectionsMarshal.AsSpan(root._edgesRight);
-            if (span.IsEmpty)
-            {
-                return;
-            }
-
-            ref var start = ref MemoryMarshal.GetReference(span);
-            ref var end = ref Unsafe.Add(ref start, span.Length);
-
-            while (Unsafe.IsAddressLessThan(ref start, ref end))
-            {
-                QueryRec(start.Archetype, sortedTerms, list);
-
-                start = ref Unsafe.Add(ref start, 1);
-            }
-        }
-    }
 
     public FilterQuery<TFilter> Filter<TFilter>() where TFilter : struct
     {
@@ -537,7 +461,7 @@ public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 
 	public QueryIterator GetEnumerator()
     {
-        return new QueryIterator(_archetypes.Span, QueryLookup<TFilter>.Terms);
+        return new QueryIterator(_archetypes.Span, Lookup.Query<TFilter>.Terms);
     }
 }
 
@@ -563,20 +487,21 @@ internal static class Lookup
 	}
 
 	[SkipLocalsInit]
-    internal static class Entity<T> where T : struct
+    internal static class Component<T> where T : struct
 	{
         public static readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
         public static readonly int HashCode = System.Threading.Interlocked.Increment(ref _index);
 
-		public static readonly EcsComponent Component = new EcsComponent(HashCode, Size);
+		public static readonly EcsComponent Value = new EcsComponent(HashCode, Size);
 
-		static Entity()
+		static Component()
 		{
-			_arrayCreator.Add(Component.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
-			_typesConvertion.Add(typeof(T), Component.ID);
-			_typesConvertion.Add(typeof(With<T>), Component.ID);
-			_typesConvertion.Add(typeof(Not<T>), -Component.ID);
+			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
+			_typesConvertion.Add(typeof(T), Value.ID);
+			_typesConvertion.Add(typeof(With<T>), Value.ID);
+			_typesConvertion.Add(typeof(Not<T>), -Value.ID);
+			_typesConvertion.Add(typeof(Without<T>), -Value.ID);
 		}
 
 		private static int GetSize()
@@ -595,116 +520,104 @@ internal static class Lookup
 			return ValueType.Equals(t1, t2) ? 0 : size;
 		}
     }
-}
 
-internal static class QueryLookup<TQuery, TFilter> where TQuery : struct where TFilter : struct
-{
-	public static readonly Term[] Terms;
-	public static readonly Term[] Columns;
-
-	static QueryLookup()
+    internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct
 	{
-		var list = new List<Term>();
-		if (typeof(ITuple).IsAssignableFrom(typeof(TQuery)))
-		{
-			list.AddRange(ParseTuple((ITuple)default(TQuery)));
-		}
-		else
-		{
-			list.Add(new Term() { ID = Lookup.GetID(typeof(TQuery)), Op = TermOp.With});
-		}
+		public static readonly Term[] Terms;
+		public static readonly Term[] Columns;
 
-		list.Sort();
-		Columns = list.ToArray();
-
-		if (typeof(ITuple).IsAssignableFrom(typeof(TFilter)))
+		static Query()
 		{
-			list.AddRange(ParseTuple((ITuple)default(TFilter)));
-		}
-		else
-		{
-			var id = Lookup.GetID(typeof(TFilter));
-			list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
-		}
-
-		list.Sort();
-		Terms = list.ToArray();
-
-		static List<Term> ParseTuple(ITuple tuple)
-		{
-			var terms = new List<Term>();
-
-			for (var i = 0; i < tuple.Length; ++i)
+			var list = new List<Term>();
+			if (typeof(ITuple).IsAssignableFrom(typeof(TQuery)))
 			{
-				var type = tuple[i]!.GetType();
-
-				if (typeof(ITuple).IsAssignableFrom(type))
-				{
-					terms.AddRange(ParseTuple((ITuple)tuple[i]));
-					continue;
-				}
-
-				var id = Lookup.GetID(type);
-				terms.Add(new Term()
-				{
-					ID = Math.Abs(id),
-					Op = id >= 0 ? TermOp.With : TermOp.Without
-				});
+				ParseTuple((ITuple)default(TQuery), list);
+			}
+			else
+			{
+				list.Add(new Term() { ID = Lookup.GetID(typeof(TQuery)), Op = TermOp.With });
 			}
 
-			terms.Sort();
+			list.Sort();
+			Columns = list.ToArray();
 
-			return terms;
+			if (typeof(ITuple).IsAssignableFrom(typeof(TFilter)))
+			{
+				ParseTuple((ITuple)default(TFilter), list);
+			}
+			else
+			{
+				var id = Lookup.GetID(typeof(TFilter));
+				list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
+			}
+
+			list.Sort();
+			Terms = list.ToArray();
+
+			static void ParseTuple(ITuple tuple, List<Term> terms)
+			{
+				for (var i = 0; i < tuple.Length; ++i)
+				{
+					var type = tuple[i]!.GetType();
+
+					if (typeof(ITuple).IsAssignableFrom(type))
+					{
+						ParseTuple((ITuple)tuple[i], terms);
+						continue;
+					}
+
+					var id = Lookup.GetID(type);
+					terms.Add(new Term()
+					{
+						ID = Math.Abs(id),
+						Op = id >= 0 ? TermOp.With : TermOp.Without
+					});
+				}
+			}
 		}
 	}
-}
 
-internal static class QueryLookup<T> where T : struct
-{
-	public static readonly Term[] Terms;
-
-	static QueryLookup()
+	internal static class Query<T> where T : struct
 	{
-		var list = new List<Term>();
+		public static readonly Term[] Terms;
 
-		if (typeof(ITuple).IsAssignableFrom(typeof(T)))
+		static Query()
 		{
-			list.AddRange(ParseTuple((ITuple)default(T)));
-		}
-		else
-		{
-			var id = Lookup.GetID(typeof(T));
-			list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
-		}
+			var list = new List<Term>();
 
-		list.Sort();
-		Terms = list.ToArray();
-
-		static List<Term> ParseTuple(ITuple tuple)
-		{
-			var terms = new List<Term>();
-
-			for (var i = 0; i < tuple.Length; ++i)
+			if (typeof(ITuple).IsAssignableFrom(typeof(T)))
 			{
-				var type = tuple[i]!.GetType();
-
-				if (typeof(ITuple).IsAssignableFrom(type))
-				{
-					terms.AddRange(ParseTuple((ITuple)tuple[i]));
-					continue;
-				}
-
-				var id = Lookup.GetID(type);
-				terms.Add(new Term()
-				{
-					ID = Math.Abs(id),
-					Op = id >= 0 ? TermOp.With : TermOp.Without
-				});
+				ParseTuple((ITuple)default(T), list);
+			}
+			else
+			{
+				var id = Lookup.GetID(typeof(T));
+				list.Add(new Term() { ID = Math.Abs(id), Op = id >= 0 ? TermOp.With : TermOp.Without });
 			}
 
-			terms.Sort();
+			list.Sort();
+			Terms = list.ToArray();
 
-			return terms;
+			static void ParseTuple(ITuple tuple, List<Term> terms)
+			{
+				for (var i = 0; i < tuple.Length; ++i)
+				{
+					var type = tuple[i]!.GetType();
+
+					if (typeof(ITuple).IsAssignableFrom(type))
+					{
+						ParseTuple((ITuple)tuple[i], terms);
+						continue;
+					}
+
+					var id = Lookup.GetID(type);
+					terms.Add(new Term()
+					{
+						ID = Math.Abs(id),
+						Op = id >= 0 ? TermOp.With : TermOp.Without
+					});
+				}
+			}
 		}
 	}
 }

@@ -44,8 +44,7 @@ foreach (var arch in ecs.Filter<(Position, Velocity, With<PlayerTag>, Not<Likes>
 
 	}
 }
-
-ecs.Query((ref Position position, ref Velocity vel) =>
+ecs.Query((EntityView entity, ref Position position, ref Velocity vel) =>
 {
 
 });
@@ -80,7 +79,7 @@ while (true)
 
 
 		ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
-			.Query((ref Position pos, ref Velocity vel) =>
+			.Query((EntityView entity, ref Position pos, ref Velocity vel) =>
 			{
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;
