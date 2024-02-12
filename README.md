@@ -5,7 +5,7 @@ NativeAOT & bflat compatible.
 
 # Requirements
 
-`net8.0+` atm
+`netstandard2.1` `net8.0`
 
 # Status
 
