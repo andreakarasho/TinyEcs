@@ -26,10 +26,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="../TinyEcs.Core/**/*.cs" />
-  	</ItemGroup>
-
-	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
 	</ItemGroup>
 

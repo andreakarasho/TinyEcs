@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -30,10 +30,6 @@
 		<TrimMode>link</TrimMode>
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<Compile Include="../TinyEcs.Core/**/*.cs" />
-  	</ItemGroup>
 
 	<ItemGroup>
 		<Content Include="Content\**\*.*">

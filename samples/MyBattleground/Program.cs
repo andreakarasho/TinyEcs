@@ -29,42 +29,38 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		 .Set<PlayerTag>();
 
 
-ecs.Query222()
+ecs.Query()
 	.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
 	.Each((ref Position position, ref Velocity vel) =>
 	{
 
 	});
 
-ecs.Query222().Each((ref Position position, ref Velocity vel) =>
+foreach (var arch in ecs.Query()
+	         .Filter<(Position, Velocity, With<PlayerTag>, Not<Likes>, Not<Dogs>)>())
+{
+	foreach (ref readonly var chunk in arch)
+	{
+
+	}
+}
+
+ecs.Query().Each((ref Position position, ref Velocity vel) =>
 {
 
 });
 
-ecs.Query2<Position, Not<PlayerTag>>();
-ecs.Query2<(Position, Velocity), Not<PlayerTag>>();
-ecs.Query2<(Position, Velocity), With<PlayerTag>>();
-ecs.Query2<(Position, Velocity), (With<PlayerTag>, Not<Likes>, Not<Dogs>)>();
-ecs.Query2<Position, (With<PlayerTag>, Not<Likes>)>();
+// ecs.Query()
+// 	.With<PlayerTag>()
+// 	.EachWithEntity(static (ref readonly EntityView e, ref Velocity pos, ref Position vel) =>
+// 	{
+// 		pos.X *= vel.X;
+// 		pos.Y *= vel.Y;
+// 	});
 
-//ecs.Query2<(Position, Velocity), Or<(With<Likes>, With<Dogs>)>>();
-
-// ecs.Palle((ref Position pos, ref Not<PlayerTag> vel) =>
-// {
-//
-// });
-
-ecs.Query()
-	.With<PlayerTag>()
-	.EachWithEntity(static (ref readonly EntityView e, ref Velocity pos, ref Position vel) =>
-	{
-		pos.X *= vel.X;
-		pos.Y *= vel.Y;
-	});
-
-using var query = ecs.Query()
-	.With<Position>()
-	.With<Velocity>();
+// using var query = ecs.Query()
+// 	.With<Position>()
+// 	.With<Velocity>();
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -83,7 +79,7 @@ while (true)
 		// });
 
 
-		ecs.Query222()
+		ecs.Query()
 			//.Filter<Not<PlayerTag>>()
 			.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
 			.Each((ref Position pos, ref Velocity vel) =>
@@ -92,12 +88,6 @@ while (true)
 				pos.Y *= vel.Y;
 			});
 
-
-		// ecs.Query<(Position, Velocity, Not<PlayerTag>), Position, Velocity>((ref Position pos, ref Velocity vel) =>
-		// {
-		// 	pos.X *= vel.X;
-		// 	pos.Y *= vel.Y;
-		// });
 
 		// foreach (var archetype in ecs.Query<(Position, Velocity)>())
 		// {

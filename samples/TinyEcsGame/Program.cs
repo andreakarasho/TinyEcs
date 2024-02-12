@@ -104,22 +104,18 @@ struct Rotation
 }
 
 
-sealed class MoveSystem : IUpdateSystem<float>
+sealed class MoveSystem : UpdateSystem<float>
 {
-	private readonly Query _query;
-
-	public MoveSystem(World ecs)
+	public MoveSystem(World ecs) : base(ecs)
 	{
-		_query = ecs.Query()
-			//.With<Position>().With<Rotation>().With<Velocity>()
-			;
+
 	}
 
-	public void Update(in float data)
+	public override void Update(in float data)
 	{
 		var deltaTime = data;
 
-		_query.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+		Ecs.Query().Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 		{
 			pos.Value += vel.Value * deltaTime;
 			rot.Value += (rot.Acceleration * deltaTime) * Raylib.RAD2DEG;
@@ -127,21 +123,18 @@ sealed class MoveSystem : IUpdateSystem<float>
 	}
 }
 
-sealed class CheckBorderSystem : IUpdateSystem<float>
+sealed class CheckBorderSystem : UpdateSystem<float>
 {
-	private readonly Query _query;
-
-	public CheckBorderSystem(World ecs)
+	public CheckBorderSystem(World ecs) : base(ecs)
 	{
-		_query = ecs.Query();
 	}
 
-	public void Update(in float data)
+	public override void Update(in float data)
 	{
 		const int WINDOW_WIDTH = 800;
 		const int WINDOW_HEIGHT = 600;
 
-		_query.Each((ref Position pos, ref Velocity vel) =>
+		Ecs.Query().Each((ref Position pos, ref Velocity vel) =>
 		{
 			if (pos.Value.X < 0.0f)
 			{
@@ -185,34 +178,28 @@ sealed class EndRenderSystem : IUpdateSystem<float>
 	}
 }
 
-sealed class RenderEntities : IUpdateSystem<float>
+sealed class RenderEntities : UpdateSystem<float>
 {
-	private readonly Query _query;
-
-	public RenderEntities(World ecs)
+	public RenderEntities(World ecs) : base(ecs)
 	{
-		_query = ecs.Query();
 	}
 
-	public void Update(in float gameTime)
+	public override void Update(in float gameTime)
 	{
-		_query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+		Ecs.Query().Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 		{
 			Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
 		});
 	}
 }
 
-sealed class RenderText : IUpdateSystem<float>
+sealed class RenderText : UpdateSystem<float>
 {
-	private readonly World _ecs;
-
-	public RenderText(World ecs)
+	public RenderText(World ecs) : base(ecs)
 	{
-		_ecs = ecs;
 	}
 
-	public void Update(in float gameTime)
+	public override void Update(in float gameTime)
 	{
 		var deltaTime = gameTime;
 
@@ -220,7 +207,7 @@ sealed class RenderText : IUpdateSystem<float>
 			$"""
 			 [Debug]
 			 FPS: {Raylib.GetFPS()}
-			 Entities: {_ecs.EntityCount}
+			 Entities: {Ecs.EntityCount}
 			 DeltaTime: {deltaTime}
 			 """.Replace("\r", "\n");
 		var textSize = 24;
@@ -228,6 +215,17 @@ sealed class RenderText : IUpdateSystem<float>
 	}
 }
 
+abstract class UpdateSystem<T> : IUpdateSystem<T>
+{
+	protected UpdateSystem(World ecs)
+	{
+		Ecs = ecs;
+	}
+
+	public World Ecs { get; }
+
+	public abstract void Update(in T data);
+}
 interface IUpdateSystem<T>
 {
 	void Update(in T data);
