@@ -138,7 +138,7 @@ public sealed class Archetype
 	{
 		ref var chunk = ref GetChunk(_count);
 		chunk.Entities[_count % CHUNK_THRESHOLD] = new(_world, id);
-		chunk.Count = _count % CHUNK_THRESHOLD;
+		chunk.Count = (_count % CHUNK_THRESHOLD) + 1;
         return _count++;
     }
 

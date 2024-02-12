@@ -29,38 +29,6 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		 .Set<PlayerTag>();
 
 
-ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
-	.Query((ref Position position, ref Velocity vel) =>
-	{
-
-	});
-
-ecs.Query((ref Position s) => {});
-
-foreach (var arch in ecs.Filter<(Position, Velocity, With<PlayerTag>, Not<Likes>, Not<Dogs>)>())
-{
-	foreach (ref readonly var chunk in arch)
-	{
-
-	}
-}
-ecs.Query((EntityView entity, ref Position position, ref Velocity vel) =>
-{
-
-});
-
-// ecs.Query()
-// 	.With<PlayerTag>()
-// 	.EachWithEntity(static (ref readonly EntityView e, ref Velocity pos, ref Position vel) =>
-// 	{
-// 		pos.X *= vel.X;
-// 		pos.Y *= vel.Y;
-// 	});
-
-// using var query = ecs.Query()
-// 	.With<Position>()
-// 	.With<Velocity>();
-
 var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
@@ -71,45 +39,14 @@ while (true)
 
 	for (int i = 0; i < 3600; ++i)
 	{
-		// query.Each(static (ref Velocity pos, ref Position vel) =>
-		// {
-		// 	pos.X *= vel.X;
-		// 	pos.Y *= vel.Y;
-		// });
-
-
 		ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
-			.Query((EntityView entity, ref Position pos, ref Velocity vel) =>
+			.Query((ref Position pos, ref Velocity vel) =>
 			{
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;
 			});
 
-
-		// foreach (var archetype in ecs.Query<(Position, Velocity)>())
-		// {
-		// 	var column0 = archetype.GetComponentIndex<Position>();
-		// 	var column1 = archetype.GetComponentIndex<Velocity>();
-		//
-		// 	foreach (ref readonly var chunk in archetype)
-		// 	{
-		// 		ref var pos = ref chunk.GetReference<Position>(column0);
-		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
-		//
-		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
-		//
-		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
-		// 		{
-		// 			pos.X *= vel.X;
-		// 			pos.Y *= vel.Y;
-		//
-		// 			pos = ref Unsafe.Add(ref pos, 1);
-		// 			vel = ref Unsafe.Add(ref vel, 1);
-		// 		}
-		// 	}
-		// }
-
-		// foreach (var archetype in query)
+		// foreach (var archetype in ecs.Filter<(Position, Velocity)>())
 		// {
 		// 	var column0 = archetype.GetComponentIndex<Position>();
 		// 	var column1 = archetype.GetComponentIndex<Velocity>();
