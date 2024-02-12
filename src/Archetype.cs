@@ -137,8 +137,7 @@ public sealed class Archetype
 	internal int Add(EcsID id)
 	{
 		ref var chunk = ref GetChunk(_count);
-		chunk.Entities[_count % CHUNK_THRESHOLD] = new(_world, id);
-		chunk.Count = (_count % CHUNK_THRESHOLD) + 1;
+		chunk.Entities[chunk.Count++] = new(_world, id);
         return _count++;
     }
 
@@ -224,7 +223,6 @@ public sealed class Archetype
 		}
 
 		fromChunk.Count--;
-		toChunk.Count++;
 	}
 
 	internal void Clear()
