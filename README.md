@@ -40,7 +40,7 @@ ecs.Query((ref Position pos, ref Name name) => {
 		Console.WriteLine(name.Vaue);
 	});
 
-// Query for all entities with [Position + Name + Player + !Npc]
+// Query for all entities with [Position + Name + Player], without [Npc]
 ecs.Filter<(Player, Not<Npc>)>()
 	.Query((ref Position pos, ref Name name) => {
 		Console.WriteLine(name.Vaue);
