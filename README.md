@@ -35,8 +35,8 @@ ecs.Entity()
 	.Set(new Name() { Name = "Dan" })
 	.Set<Npc>();
 
-// Query for all entities with [Position + Name]
-ecs.Query((ref Position pos, ref Name name) => {
+// Query for all entities with [Position + Name] and the entity
+ecs.Query((EntityView entity, ref Position pos, ref Name name) => {
 		Console.WriteLine(name.Vaue);
 	});
 
