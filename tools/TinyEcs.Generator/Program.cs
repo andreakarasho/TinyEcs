@@ -99,7 +99,7 @@ public sealed class Generator : IIncrementalGenerator
 						public void Query<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams}
 						{{
 							var terms = QueryLookup<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
-							var query = new QueryInternal(_archetypes{(withFilter ? ".Span" : "")}, terms);
+							var query = new QueryInternal({(withFilter ? "_archetypes.Span" : "Archetypes")}, terms);
 							foreach (var arch in query)
 							{{
 								// columns
