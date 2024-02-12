@@ -29,9 +29,8 @@ public sealed class Generator : IIncrementalGenerator
                 namespace TinyEcs
                 {{
 					{GenerateQueryTemplateDelegates()}
-                    {GenerateQueryInterfaceMethods("IQuery")}
-					{GenerateQueryInterfaceMethods("IFilterOrQuery")}
-                    {GenerateFilterQuery()}
+					{GenerateFilterQuery(false)}
+					{GenerateFilterQuery(true)}
                 }}
 
                 #pragma warning restore 1591
@@ -54,59 +53,53 @@ public sealed class Generator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
-		static string GenerateQueryInterfaceMethods(string name)
+		// static string GenerateQueryInterfaceMethods(string name)
+		// {
+		// 	var sb = new StringBuilder();
+		// 	sb.AppendLine(@$"
+		// 		public partial interface {name}
+		// 		{{
+		// 	");
+		//
+		// 	for (var i = 0; i < MAX_GENERICS; ++i)
+		// 	{
+		// 		var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+		// 		var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+		//
+		// 		sb.AppendLine($"void Each<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams};");
+		// 	}
+		//
+		// 	sb.AppendLine("}");
+		//
+		// 	return sb.ToString();
+		// }
+
+		static string GenerateFilterQuery(bool withFilter)
 		{
+			var className = withFilter ? "struct FilterQuery" : "class World";
+			var filter = withFilter ? "<TFilter>" : "";
+			var filterMethod = withFilter ? ", TFilter" : "";
+
 			var sb = new StringBuilder();
-			sb.AppendLine(@$"
-				public partial interface {name}
+			sb.AppendLine($@"
+				public partial {className}{filter}
 				{{
 			");
 
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-
-				sb.AppendLine($"void Each<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams};");
-			}
-
-			sb.AppendLine("}");
-
-			return sb.ToString();
-		}
-
-		static string GenerateFilterQuery()
-		{
-			var sb = new StringBuilder();
-			sb.AppendLine(@"
-				public partial struct FilterQuery
-				{
-			");
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var fillMissingTerms = GenerateSequence(i + 1, "", j =>
-					$@"_fullTerms[^{j + 1}].ID = Lookup.Entity<T{j}>.HashCode;
-					   _fullTerms[^{j + 1}].Op = TermOp.With;
-					");
 				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
 				var fieldList = GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
 				var signCallback = GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
 				var advanceField = GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
 
 				sb.AppendLine($@"
-						public void Each<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams}
+						public void Query<{typeParams}>(QueryFilterDelegate<{typeParams}> fn) {whereParams}
 						{{
-							if (_fullTerms.Length == 0)
-							{{
-								_fullTerms = new Term[_terms.Length + {i + 1}];
-								{fillMissingTerms}
-								_terms.CopyTo(_fullTerms.AsSpan());
-								Array.Sort(_fullTerms);
-							}}
-							var query = new QueryInternal(_archetypes.Span, _fullTerms);
+							var terms = QueryLookup<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
+							var query = new QueryInternal(_archetypes{(withFilter ? ".Span" : "")}, terms);
 							foreach (var arch in query)
 							{{
 								// columns

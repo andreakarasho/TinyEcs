@@ -29,15 +29,15 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		 .Set<PlayerTag>();
 
 
-ecs.Query()
-	.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
-	.Each((ref Position position, ref Velocity vel) =>
+ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
+	.Query((ref Position position, ref Velocity vel) =>
 	{
 
 	});
 
-foreach (var arch in ecs.Query()
-	         .Filter<(Position, Velocity, With<PlayerTag>, Not<Likes>, Not<Dogs>)>())
+ecs.Query((ref Position s) => {});
+
+foreach (var arch in ecs.Filter<(Position, Velocity, With<PlayerTag>, Not<Likes>, Not<Dogs>)>())
 {
 	foreach (ref readonly var chunk in arch)
 	{
@@ -45,7 +45,7 @@ foreach (var arch in ecs.Query()
 	}
 }
 
-ecs.Query().Each((ref Position position, ref Velocity vel) =>
+ecs.Query((ref Position position, ref Velocity vel) =>
 {
 
 });
@@ -79,10 +79,8 @@ while (true)
 		// });
 
 
-		ecs.Query()
-			//.Filter<Not<PlayerTag>>()
-			.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
-			.Each((ref Position pos, ref Velocity vel) =>
+		ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
+			.Query((ref Position pos, ref Velocity vel) =>
 			{
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;

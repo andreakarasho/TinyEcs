@@ -14,7 +14,7 @@
                 ctx.World.Set(ctx.World.Entity(), new FloatComponent());
 
             var done = 0;
-            ctx.World.Query().Each((ref FloatComponent cmp) => done++);
+            ctx.World.Query((ref FloatComponent cmp) => done++);
 
             Assert.Equal(amount, done);
         }
@@ -35,7 +35,7 @@
             }
 
             var done = 0;
-            ctx.World.Query().Each((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
+            ctx.World.Query((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
 
             Assert.Equal(amount, done);
         }
@@ -57,7 +57,7 @@
             }
 
             var done = 0;
-            ctx.World.Query().Each((ref FloatComponent cmp0, ref IntComponent cmp1, ref BoolComponent cmp2) => done++);
+            ctx.World.Query((ref FloatComponent cmp0, ref IntComponent cmp1, ref BoolComponent cmp2) => done++);
 
             Assert.Equal(amount, done);
         }
@@ -79,9 +79,9 @@
             }
 
             var done = 0;
-            ctx.World.Query()
+            ctx.World
 	            .Filter<Not<BoolComponent>>()
-	            .Each((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
+	            .Query((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
 
             Assert.Equal(0, done);
         }
@@ -102,9 +102,9 @@
             }
 
             var done = 0;
-            ctx.World.Query()
+            ctx.World
 	            .Filter<Not<BoolComponent>>()
-	            .Each((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
+	            .Query((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
 
             Assert.Equal(amount, done);
         }
@@ -125,9 +125,9 @@
             }
 
             var done = 0;
-            ctx.World.Query()
+            ctx.World
 	            .Filter<(Not<BoolComponent>, Not<IntComponent>)>()
-	            .Each((ref FloatComponent cmp0) => done++);
+	            .Query((ref FloatComponent cmp0) => done++);
 
             Assert.Equal(0, done);
         }
@@ -161,9 +161,9 @@
             ctx.World.Set<NormalTag>(e4);
 
             var done = 0;
-            ctx.World.Query()
+            ctx.World
 	            .Filter<(Not<BoolComponent>, Not<NormalTag>)>()
-	            .Each((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
+	            .Query((ref FloatComponent cmp0, ref IntComponent cmp1) => done++);
 
             Assert.Equal(good, done);
         }

@@ -462,9 +462,9 @@ public sealed partial class World : IDisposable
         }
     }
 
-    public IFilterOrQuery Query()
+    public FilterQuery<TFilter> Filter<TFilter>() where TFilter : struct
     {
-	    return new FilterQuery(_archetypes.AsMemory(0, _archetypeCount));
+	    return new FilterQuery<TFilter>(_archetypes.AsMemory(0, _archetypeCount));
     }
 }
 
@@ -478,8 +478,6 @@ public readonly ref struct QueryInternal
 		_archetypes = archetypes;
 		_terms = terms;
 	}
-
-	public ReadOnlySpan<Term> Terms => _terms;
 
 	public QueryIterator GetEnumerator()
 	{
@@ -504,8 +502,6 @@ public ref struct QueryIterator
 
 	public bool MoveNext()
 	{
-		Span<int> columns = stackalloc int[_terms.Length];
-
 		while (++_index < _archetypes.Length)
 		{
 			var arch = _archetypes[_index];
@@ -516,6 +512,8 @@ public ref struct QueryIterator
 
 		return false;
 	}
+
+	public void Reset() => _index = -1;
 }
 
 public partial interface IQuery
@@ -528,33 +526,18 @@ public partial interface IFilterOrQuery
 	IQuery Filter<TFilter>() where TFilter : struct;
 }
 
-public partial struct FilterQuery : IFilterOrQuery, IQuery
+public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 {
 	private readonly ReadOnlyMemory<Archetype> _archetypes;
-	private Term[] _terms, _fullTerms;
 
 	internal FilterQuery(ReadOnlyMemory<Archetype> archetypes)
 	{
 		_archetypes = archetypes;
-		_terms = Array.Empty<Term>();
-		_fullTerms = Array.Empty<Term>();
 	}
 
-	public IQuery Filter<TFilter>() where TFilter : struct
-	{
-		_terms = QueryLookup<TFilter>.Terms;
-
-		return this;
-	}
-
-	// public QueryInternal GetEnumerable()
-        	// {
-        	// 	return new QueryInternal(_archetypes.Span, _terms);
-        	// }
-
-    public QueryIterator GetEnumerator()
+	public QueryIterator GetEnumerator()
     {
-        return new QueryIterator(_archetypes.Span, _terms);
+        return new QueryIterator(_archetypes.Span, QueryLookup<TFilter>.Terms);
     }
 }
 

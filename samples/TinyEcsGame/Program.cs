@@ -115,7 +115,7 @@ sealed class MoveSystem : UpdateSystem<float>
 	{
 		var deltaTime = data;
 
-		Ecs.Query().Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+		Ecs.Query((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 		{
 			pos.Value += vel.Value * deltaTime;
 			rot.Value += (rot.Acceleration * deltaTime) * Raylib.RAD2DEG;
@@ -134,7 +134,7 @@ sealed class CheckBorderSystem : UpdateSystem<float>
 		const int WINDOW_WIDTH = 800;
 		const int WINDOW_HEIGHT = 600;
 
-		Ecs.Query().Each((ref Position pos, ref Velocity vel) =>
+		Ecs.Query((ref Position pos, ref Velocity vel) =>
 		{
 			if (pos.Value.X < 0.0f)
 			{
@@ -186,7 +186,7 @@ sealed class RenderEntities : UpdateSystem<float>
 
 	public override void Update(in float gameTime)
 	{
-		Ecs.Query().Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+		Ecs.Query((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 		{
 			Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
 		});
