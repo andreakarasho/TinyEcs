@@ -36,15 +36,13 @@ ecs.Entity()
 	.Set<Npc>();
 
 // Query for all entities with [Position + Name]
-ecs.Query()
-	.Each((ref Position pos, ref Name name) => {
+ecs.Query((ref Position pos, ref Name name) => {
 		Console.WriteLine(name.Vaue);
 	});
 
-// Query for all entities with [Position + Name + Player]
-ecs.Query()
-	.With<Player>()
-	.Each((ref Position pos, ref Name name) => {
+// Query for all entities with [Position + Name + Player + !Npc]
+ecs.Filter<(Player, Not<Npc>)>()
+	.Query((ref Position pos, ref Name name) => {
 		Console.WriteLine(name.Vaue);
 	});
 
