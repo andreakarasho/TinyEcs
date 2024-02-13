@@ -131,7 +131,6 @@ public sealed partial class World : IDisposable
         );
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
-        record.Chunk = _archRoot.GetChunk(record.Row);
 
         return new(this, id);
     }
@@ -186,7 +185,6 @@ public sealed partial class World : IDisposable
 
         record.Row = record.Archetype.MoveEntity(arch, record.Row);
         record.Archetype = arch!;
-        record.Chunk = arch.GetChunk(record.Row);
 
         return true;
     }
@@ -239,7 +237,7 @@ public sealed partial class World : IDisposable
         return arch;
     }
 
-	internal ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
+    private ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
 	{
 		var hash = getHash(components, false);
 		ref var arch = ref Unsafe.NullRef<Archetype>();
@@ -287,7 +285,7 @@ public sealed partial class World : IDisposable
         Array? array = null;
 
         if (cmp.Size > 0)
-	        array = record.Chunk.RawComponentData(column);
+	        array = record.GetChunk().RawComponentData(column);
 
         if (emit)
         {
@@ -438,16 +436,10 @@ public ref struct QueryIterator
 	}
 
 	public void Reset() => _index = -1;
-}
-
-public partial interface IQuery
-{
-	QueryIterator GetEnumerator();
-}
-
-public partial interface IFilterOrQuery
-{
-	IQuery Filter<TFilter>() where TFilter : struct;
+	public IEnumerator GetEnumerator()
+	{
+		throw new NotImplementedException();
+	}
 }
 
 public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
@@ -625,6 +617,7 @@ internal static class Lookup
 struct EcsRecord
 {
 	public Archetype Archetype;
-    public ArchetypeChunk Chunk;
     public int Row;
+
+    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }

@@ -20,7 +20,7 @@ public sealed partial class World
         ref var record = ref GetRecord(entity);
         var raw = Set(ref record, in cmp)!;
         ref var array = ref Unsafe.As<Array, T[]>(ref raw);
-        array[record.Row % record.Chunk.Count] = component;
+        array[record.Row % record.GetChunk().Count] = component;
 	}
 
     public void Unset<T>(EcsID entity) where T : struct =>
@@ -32,7 +32,7 @@ public sealed partial class World
 	{
         ref var record = ref GetRecord(entity);
         var column = record.Archetype.GetComponentIndex(Lookup.Component<T>.HashCode);
-        var raw = record.Chunk.GetSpan<T>(column);
+        var raw = record.GetChunk().GetSpan<T>(column);
 
         return ref raw[record.Row % 4096];
     }

@@ -33,9 +33,10 @@ var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
 
+
 while (true)
 {
-	var cur = (start - last) / 1000f;
+	//var cur = (start - last) / 1000f;
 
 	for (int i = 0; i < 3600; ++i)
 	{
