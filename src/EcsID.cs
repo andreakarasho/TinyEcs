@@ -18,6 +18,7 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 
 	public static implicit operator ulong(EcsID id) => id.Value;
 	public static implicit operator EcsID(ulong value) => new (value);
+	public static implicit operator Term(EcsID value) => Term.With(value.Value);
 
 	public static bool operator ==(EcsID id, EcsID other) => id.Value.Equals(other.Value);
 	public static bool operator !=(EcsID id, EcsID other) => !id.Value.Equals(other.Value);

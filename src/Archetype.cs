@@ -1,3 +1,5 @@
+using Microsoft.Collections.Extensions;
+
 namespace TinyEcs;
 
 public struct ArchetypeChunk
@@ -59,7 +61,8 @@ public sealed class Archetype
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    private readonly int[] _lookup;
+    //private readonly int[] _lookup;
+    private readonly DictionarySlim<ulong, int> _lookup;
     private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
 
@@ -75,14 +78,18 @@ public sealed class Archetype
         _edgesRight = new List<EcsEdge>();
         Components = components.ToArray();
 
-        var maxID = -1;
-        for (var i = 0; i < components.Length; ++i)
-	        maxID = Math.Max(maxID, components[i].ID);
+        // var maxID = -1;
+        // for (var i = 0; i < components.Length; ++i)
+	       //  maxID = Math.Max(maxID, components[i].ID);
 
-        _lookup = new int[maxID + 1];
-        _lookup.AsSpan().Fill(-1);
-        for (var i = 0; i < components.Length; ++i)
-	        _lookup[components[i].ID] = i;
+        // _lookup = new int[maxID + 1];
+        // _lookup.AsSpan().Fill(-1);
+        // for (var i = 0; i < components.Length; ++i)
+	       //  _lookup[components[i].ID] = i;
+
+       _lookup = new DictionarySlim<ulong, int>();
+       for (var i = 0; i < components.Length; ++i)
+	       _lookup.GetOrAddValueRef(components[i].ID, out _) = i;
 
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
     }
@@ -104,7 +111,7 @@ public sealed class Archetype
 		    chunk.Entities = new EntityView[CHUNK_THRESHOLD];
 		    chunk.Components = new Array[Components.Length];
 		    for (var i = 0; i < Components.Length; ++i)
-			    chunk.Components[i] = Lookup.GetArray(Components[i].ID, CHUNK_THRESHOLD)!;
+			    chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_THRESHOLD)! : null!;
 	    }
 
 	    return ref chunk;
@@ -122,9 +129,12 @@ public sealed class Archetype
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal int GetComponentIndex(int id)
+    internal int GetComponentIndex(ulong id)
 	{
-		return id >= 0 && id < _lookup.Length ? _lookup[id] : -1;
+		if (!_lookup.TryGetValue(id, out var v))
+			return -1;
+		return v;
+		//return id >= 0 && id < _lookup.Count ? _lookup[id] : -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -250,7 +260,7 @@ public sealed class Archetype
         return removed;
     }
 
-    private static void MakeEdges(Archetype left, Archetype right, int id)
+    private static void MakeEdges(Archetype left, Archetype right, ulong id)
     {
         left._edgesRight.Add(new EcsEdge() { Archetype = right, ComponentID = id });
         right._edgesLeft.Add(new EcsEdge() { Archetype = left, ComponentID = id });
@@ -341,7 +351,7 @@ public sealed class Archetype
     {
         PrintRec(this, 0, 0);
 
-        static void PrintRec(Archetype root, int depth, int rootComponent)
+        static void PrintRec(Archetype root, int depth, ulong rootComponent)
         {
             Console.WriteLine(
                 "{0}- Parent [{1}] common ID: {2}",
@@ -363,6 +373,6 @@ public sealed class Archetype
 
 struct EcsEdge
 {
-    public int ComponentID;
+    public ulong ComponentID;
     public Archetype Archetype;
 }

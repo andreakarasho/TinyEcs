@@ -71,6 +71,11 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
     public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
+    public readonly void AddChild(EntityView child) => World.ChildOf(ID, child);
+    public readonly void ChildOf(EntityView parent) => World.ChildOf(parent, ID);
 
     public static implicit operator EcsID(EntityView d) => d.ID;
+
+    public static bool operator ==(EntityView a, EntityView b) => a.ID.Equals(b.ID);
+    public static bool operator !=(EntityView a, EntityView b) => !(a == b);
 }

@@ -8,9 +8,62 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 
 
-ecs.Entity()
+var e = ecs.Entity()
 	.Set<Position>(new Position())
 	.Set<Velocity>(new Velocity());
+
+var child = ecs.Entity();
+var child2 = ecs.Entity();
+var child3 = ecs.Entity();
+
+ecs.Relation<Root>(e, child);
+ecs.Relation<Root>(e, child2);
+ecs.Relation<Root>(child2, child3);
+
+ecs.Filter<With<(Root, EcsID)>>()
+	.Query((EntityView entity, ref (Root, EcsID) relation) =>
+	{
+		Console.WriteLine("parent {0}", entity.ID);
+		Console.WriteLine("....child: {0}", relation.Item2);
+	});
+
+ecs.Query((EntityView entity, ref (EcsID, Root) relation) =>
+	{
+		// filter by the parent id
+		if (relation.Item1 != e)
+		{
+			return;
+		}
+
+		Console.WriteLine("child {0}", entity.ID);
+		Console.WriteLine("....parent: {0}", relation.Item1);
+	});
+
+
+e.AddChild(child);
+e.AddChild(child2);
+
+var ff = ecs.Pair<ChildOf>(e);
+
+var qry = ecs.QueryBuilder().With(ff).Build();
+
+foreach (var arch in qry)
+{
+
+}
+
+foreach (var arch in ecs.Filter([ff]))
+{
+	foreach (ref readonly var chunk in arch)
+	{
+		foreach (ref var entity in chunk.Entities.AsSpan(0, chunk.Count))
+		{
+			Console.WriteLine("child {0}", entity.ID);
+		}
+	}
+}
+
+
 
 ecs.Entity()
 	.Set<Position>(new Position())
@@ -101,3 +154,12 @@ struct ManagedData { public string Text; public int Integer; }
 
 struct Context1 {}
 struct Context2 {}
+
+struct Root { }
+struct Child { }
+
+struct Relation<TAction, TTarget> where TAction : struct where TTarget : struct
+{
+	public TAction Action;
+	public TTarget Target;
+}

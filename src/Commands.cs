@@ -168,7 +168,7 @@ public sealed class Commands
     private struct SetComponent
     {
         public EcsID Entity;
-        public int Component;
+        public ulong Component;
         public object Data;
         public int DataLength;
     }
@@ -176,7 +176,7 @@ public sealed class Commands
     private struct UnsetComponent
     {
         public EcsID Entity;
-        public int Component;
+        public ulong Component;
         public int ComponentSize;
     }
 }

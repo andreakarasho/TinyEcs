@@ -31,9 +31,21 @@ public sealed partial class World
     public ref T Get<T>(EcsID entity) where T : struct
 	{
         ref var record = ref GetRecord(entity);
-        var column = record.Archetype.GetComponentIndex(Lookup.Component<T>.HashCode);
-        var raw = record.GetChunk().GetSpan<T>(column);
+        var column = record.Archetype.GetComponentIndex(Component<T>().ID);
+        ref var chunk = ref record.GetChunk();
+        var raw = chunk.GetSpan<T>(column);
+        return ref raw[record.Row % chunk.Count];
+    }
 
-        return ref raw[record.Row % 4096];
+    public ref T TryGet<T>(EcsID entity) where T : struct
+    {
+	    ref var record = ref GetRecord(entity);
+	    var column = record.Archetype.GetComponentIndex(Component<T>().ID);
+	    if (column < 0)
+		    return ref Unsafe.NullRef<T>();
+
+	    ref var chunk = ref record.GetChunk();
+	    var raw = chunk.GetSpan<T>(column);
+	    return ref raw[record.Row % chunk.Count];
     }
 }

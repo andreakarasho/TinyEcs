@@ -3,21 +3,21 @@ namespace TinyEcs;
 [DebuggerDisplay("{ID} - {Op}")]
 public struct Term : IComparable<Term>
 {
-    public int ID;
+    public ulong ID;
     public TermOp Op;
 
-    public static Term With(int id) => new() { ID = id, Op = TermOp.With };
+    public static Term With(ulong id) => new() { ID = id, Op = TermOp.With };
 
-    public static Term Without(int id) => new() { ID = id, Op = TermOp.Without };
+    public static Term Without(ulong id) => new() { ID = id, Op = TermOp.Without };
 
     public readonly int CompareTo(Term other)
     {
         return ID.CompareTo(other.ID);
     }
 
-    public static implicit operator int(Term id) => id.ID;
+    public static implicit operator ulong(Term id) => id.ID;
 
-    public static implicit operator Term(int id) => With(id);
+    public static implicit operator Term(ulong id) => With(id);
 
     public static Term operator !(Term id) => id.Not();
 
@@ -55,6 +55,8 @@ public readonly struct Not<T> : IFilter where T : struct
 {
 	public static implicit operator Term(Not<T> _) => Term.Without(Lookup.Component<T>.Value.ID);
 }
+
+public readonly struct Pair<T> : IFilter where T : struct { }
 
 public readonly struct Or<T> : IFilter where T : struct { }
 
