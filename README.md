@@ -25,9 +25,9 @@ using var ecs = new World();
 
 // Generate a player entity
 ecs.Entity()
-    .Set(new Position() { X = 2 })
-    .Set(new Name() { Name = "Tom" })
-    .Set<Player>();
+   .Set(new Position() { X = 2 })
+   .Set(new Name() { Name = "Tom" })
+   .Set<Player>();
 
 // Generate a npc entity
 ecs.Entity()
