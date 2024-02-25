@@ -59,7 +59,7 @@ Access to the entity data
 
 ```csharp
 ref var pos = ref entity.Get<Position>();
-ref var pos = world.Get<Position>(entity);
+ref var pos = ref world.Get<Position>(entity);
 
 bool hasPos = entity.Has<Position>();
 bool hasPos = world.Has<Position>(entity);
