@@ -24,13 +24,13 @@ dotnet run -c Release
 using var ecs = new World();
 
 // Generate a player entity
-ecs.Entity()
+var player = ecs.Entity()
    .Set(new Position() { X = 2 })
    .Set(new Name() { Name = "Tom" })
    .Set<Player>();
 
 // Generate a npc entity
-ecs.Entity()
+var npc = ecs.Entity()
    .Set(new Position() { X = 75 })
    .Set(new Name() { Name = "Dan" })
    .Set<Npc>();
@@ -51,6 +51,42 @@ struct Position { public float X, Y, Z; }
 struct Name { public string Value; }
 struct Player { }
 struct Npc { }
+```
+
+# More functionalities
+
+Access to the entity data
+
+```csharp
+ref var pos = ref entity.Get<Position>();
+ref var pos = world.Get<Position>(entity);
+
+bool hasPos = entity.Has<Position>();
+bool hasPos = world.Has<Position>(entity);
+
+entity.Unset<Position>();
+world.Unset<Position>(entity);
+```
+
+Advanced queries
+
+```csharp
+foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>)>())
+{
+	var posIndex = archetype.GetComponentIndex<Position>();
+	var velIndex = archetype.GetComponentIndex<Velocity>();
+
+	foreach (ref readonly var chunk in archetype)
+	{
+		ref var pos = ref chunk.GetReference<Position>(posIndex);
+		ref var vel = ref chunk.GetReference<Velocity>(velIndex);
+
+		for (var i = 0; i < chunk.Count; ++i)
+		{
+			// ...
+		}
+	}
+}
 ```
 
 # Credits
