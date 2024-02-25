@@ -170,9 +170,9 @@ public static class DotnetExtensions
 		}
 	}
 
-	public static System.Collections.Immutable.ImmutableArray<TSource> ToImmutableArray<TSource>(this IEnumerable<TSource> items)
-	{
-		return System.Collections.Immutable.ImmutableArray.CreateRange(items);
-	}
+	// public static System.Collections.Immutable.ImmutableArray<TSource> ToImmutableArray<TSource>(this IEnumerable<TSource> items)
+	// {
+	// 	return System.Collections.Immutable.ImmutableArray.CreateRange(items);
+	// }
 }
 #endif
