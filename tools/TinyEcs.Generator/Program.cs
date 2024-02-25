@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace TinyEcs.Generator;
 
 [Generator]
-public sealed class Generator : IIncrementalGenerator
+public sealed class MyGenerator : IIncrementalGenerator
 {
 	private const int MAX_GENERICS = 25;
 
@@ -108,7 +108,7 @@ public sealed class Generator : IIncrementalGenerator
 						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
 							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
-							var query = new QueryInternal({(withFilter ? "_archetypes.Span" : "Archetypes")}, terms);
+							var query = new QueryInternal({(withFilter ? "_archetypes" : "Archetypes")}, terms);
 							foreach (var arch in query)
 							{{
 								// columns

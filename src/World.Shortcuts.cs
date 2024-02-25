@@ -33,8 +33,7 @@ public sealed partial class World
         ref var record = ref GetRecord(entity);
         var column = record.Archetype.GetComponentIndex(Component<T>().ID);
         ref var chunk = ref record.GetChunk();
-        var raw = chunk.GetSpan<T>(column);
-        return ref raw[record.Row % chunk.Count];
+        return ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row % chunk.Count);
     }
 
     public ref T TryGet<T>(EcsID entity) where T : struct
@@ -45,7 +44,6 @@ public sealed partial class World
 		    return ref Unsafe.NullRef<T>();
 
 	    ref var chunk = ref record.GetChunk();
-	    var raw = chunk.GetSpan<T>(column);
-	    return ref raw[record.Row % chunk.Count];
+	    return ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row % chunk.Count);
     }
 }

@@ -9,7 +9,7 @@ public struct ArchetypeChunk
 	public int Count;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ref T GetReference<T>(int column) where T : struct
+	public readonly ref T GetReference<T>(int column) where T : struct
 	{
 		EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
@@ -21,7 +21,7 @@ public struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Span<T> GetSpan<T>(int column) where T : struct
+	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
 		EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
@@ -29,7 +29,7 @@ public struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal Array RawComponentData(int column)
+	internal readonly Array RawComponentData(int column)
 	{
 		EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		return Components![column];
@@ -47,7 +47,7 @@ public ref struct ChunkEnumerator
 		_index = -1;
 	}
 
-	public ref readonly ArchetypeChunk Current => ref _chunks[_index];
+	public readonly ref readonly ArchetypeChunk Current => ref _chunks[_index];
 
 	public bool MoveNext() => ++_index < _chunks.Length;
 }

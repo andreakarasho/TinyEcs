@@ -11,7 +11,7 @@
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
 		<IlcGenerateCompleteTypeMetadata>false</IlcGenerateCompleteTypeMetadata>
-		<IlcOptimizationPreference>Size</IlcOptimizationPreference>
+		<IlcOptimizationPreference>Speed</IlcOptimizationPreference>
 		<IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
 		<IlcInvariantGlobalization>true</IlcInvariantGlobalization>
 		<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
@@ -23,7 +23,13 @@
 		<NoConfig>true</NoConfig>
 		<TrimMode>link</TrimMode>
 		<RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
+
+		<IlcInstructionSet>native</IlcInstructionSet>
 	</PropertyGroup>
+
+	<ItemGroup Condition="$(PublishAot) == 'true'">
+		<NativeLibrary Include="-O3" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
@@ -31,6 +37,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	  <ProjectReference Include="..\..\plugins\TinyEcs.Plugins\TinyEcs.Plugins.csproj" />
 	</ItemGroup>
 
 </Project>

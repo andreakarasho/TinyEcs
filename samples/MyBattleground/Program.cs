@@ -1,6 +1,6 @@
 // https://github.com/jasonliang-dev/entity-component-system
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
+using System;
 using TinyEcs;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
@@ -16,53 +16,40 @@ var child = ecs.Entity();
 var child2 = ecs.Entity();
 var child3 = ecs.Entity();
 
-ecs.Relation<Root>(e, child);
-ecs.Relation<Root>(e, child2);
-ecs.Relation<Root>(child2, child3);
-
-ecs.Filter<With<(Root, EcsID)>>()
-	.Query((EntityView entity, ref (Root, EcsID) relation) =>
-	{
-		Console.WriteLine("parent {0}", entity.ID);
-		Console.WriteLine("....child: {0}", relation.Item2);
-	});
-
-ecs.Query((EntityView entity, ref (EcsID, Root) relation) =>
-	{
-		// filter by the parent id
-		if (relation.Item1 != e)
-		{
-			return;
-		}
-
-		Console.WriteLine("child {0}", entity.ID);
-		Console.WriteLine("....parent: {0}", relation.Item1);
-	});
-
 
 e.AddChild(child);
 e.AddChild(child2);
+child2.AddChild(child3);
 
-var ff = ecs.Pair<ChildOf>(e);
 
-var qry = ecs.QueryBuilder().With(ff).Build();
+ecs.Filter<(With<Child>, With<Parent>)>().Query((EntityView entity, ref Relationship relation) => {
+	Console.WriteLine("im a child {0} with parent {1}", entity.ID, relation.Parent);
+});
 
-foreach (var arch in qry)
-{
+ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+});
 
-}
+Console.WriteLine();
 
-foreach (var arch in ecs.Filter([ff]))
-{
-	foreach (ref readonly var chunk in arch)
-	{
-		foreach (ref var entity in chunk.Entities.AsSpan(0, chunk.Count))
-		{
-			Console.WriteLine("child {0}", entity.ID);
-		}
-	}
-}
+e.RemoveChild(child);
+ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+});
 
+Console.WriteLine();
+
+child2.RemoveChild(child3);
+ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+});
+
+Console.WriteLine();
+
+e.ClearChildren();
+ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+});
 
 
 ecs.Entity()
@@ -71,9 +58,7 @@ ecs.Entity()
 
 ecs.Entity()
 	.Set<Position>(new Position())
-	.Set<Velocity>(new Velocity())
-	.Set<Likes>()
-	.Set<Dogs>();
+	.Set<Velocity>(new Velocity());
 
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
@@ -86,11 +71,9 @@ var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
 
-
 while (true)
 {
 	//var cur = (start - last) / 1000f;
-
 	for (int i = 0; i < 3600; ++i)
 	{
 		ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
@@ -130,6 +113,9 @@ while (true)
 	Console.WriteLine("query done in {0} ms", start - last);
 }
 
+
+
+
 enum TileType
 {
 	Land,
@@ -155,11 +141,5 @@ struct ManagedData { public string Text; public int Integer; }
 struct Context1 {}
 struct Context2 {}
 
-struct Root { }
-struct Child { }
-
-struct Relation<TAction, TTarget> where TAction : struct where TTarget : struct
-{
-	public TAction Action;
-	public TTarget Target;
-}
+struct Chunk;
+struct ChunkTile;

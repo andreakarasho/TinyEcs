@@ -118,7 +118,7 @@ sealed class MoveSystem : UpdateSystem<float>
 		Ecs.Query((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 		{
 			pos.Value += vel.Value * deltaTime;
-			rot.Value += (rot.Acceleration * deltaTime) * Raylib.RAD2DEG;
+			rot.Value += rot.Acceleration * deltaTime * Raylib.RAD2DEG;
 		});
 	}
 }

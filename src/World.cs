@@ -107,65 +107,6 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
-    public void ChildOf(EcsID id, EcsID child)
-    {
-	    var pair = IDOp.Pair(Component<ChildOf>().ID, id);
-	    var cmp = new EcsComponent(pair, 0);
-	    ref var record = ref GetRecord(child);
-	    _ = Set(ref record, in cmp);
-    }
-
-    public void Relation<TRoot>(EcsID id, EcsID target) where TRoot : struct
-    {
-	    Set<(TRoot, EcsID)>(id, (default, target));
-	    Set<(EcsID, TRoot)>(target, (id, default));
-    }
-
-    public EcsID Pair(EcsID first, EcsID second) => IDOp.Pair(first, second);
-    public EcsID Pair<TAction>(EcsID target) where TAction : struct => IDOp.Pair(Component<TAction>().ID, target);
-
-    public void AddChild(EcsID id, EcsID child)
-    {
-	    if (Has<Parent>(id))
-	    {
-		    ref var parent = ref Get<Parent>(id);
-		    EcsAssert.Panic(parent.ParentId != child, "you can't add the child as parent");
-	    }
-
-	    if (Has<Parent>(child))
-	    {
-		    ref var parent = ref Get<Parent>(child);
-		    if (parent.ParentId == id)
-			    return;
-
-		    ref var children = ref Get<Children>(parent.ParentId);
-		    children.Ids.Remove(child);
-	    }
-
-	    Set(child, new Parent() { ParentId = id });
-
-	    if (Has<Children>(id))
-	    {
-		    ref var children = ref Get<Children>(id);
-		    children.Ids.Add(child);
-	    }
-	    else
-	    {
-		    var children = new Children();
-		    children.Ids.Add(child);
-		    Set(id, children);
-	    }
-    }
-
-    public void RemoveChild(EcsID id)
-    {
-	    EcsAssert.Panic(Has<Parent>(id), $"{id} is not a child!?");
-
-	    ref var parent = ref Get<Parent>(id);
-	    ref var children = ref Get<Children>(parent.ParentId);
-	    children.Ids.Remove(id);
-    }
-
     public EntityView Entity(string name)
     {
         // TODO
@@ -370,12 +311,12 @@ public sealed partial class World : IDisposable
 
     public FilterQuery<TFilter> Filter<TFilter>() where TFilter : struct
     {
-	    return new FilterQuery<TFilter>(_archetypes.AsMemory(0, _archetypeCount));
+	    return new FilterQuery<TFilter>(_archetypes.AsSpan(0, _archetypeCount));
     }
 
     public FilterQuery Filter(ReadOnlySpan<Term> terms)
     {
-	    return new FilterQuery(_archetypes.AsMemory(0, _archetypeCount), terms);
+	    return new FilterQuery(_archetypes.AsSpan(0, _archetypeCount), terms);
     }
 
     public IQueryConstruct QueryBuilder() => new QueryBuilder(this);
@@ -431,30 +372,25 @@ public ref struct QueryIterator
 
 public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 {
-	private readonly ReadOnlyMemory<Archetype> _archetypes;
+	private readonly ReadOnlySpan<Archetype> _archetypes;
 
-	internal FilterQuery(ReadOnlyMemory<Archetype> archetypes)
+	internal FilterQuery(ReadOnlySpan<Archetype> archetypes)
 	{
 		_archetypes = archetypes;
 	}
 
-	public FilterQuery<TFilter> Pair(EcsID first, EcsID second)
-	{
-		return this;
-	}
-
 	public QueryIterator GetEnumerator()
     {
-        return new QueryIterator(_archetypes.Span, Lookup.Query<TFilter>.Terms);
+        return new QueryIterator(_archetypes, Lookup.Query<TFilter>.Terms);
     }
 }
 
 public readonly ref struct FilterQuery
 {
-	private readonly ReadOnlyMemory<Archetype> _archetypes;
+	private readonly ReadOnlySpan<Archetype> _archetypes;
 	private readonly ReadOnlySpan<Term> _terms;
 
-	internal FilterQuery(ReadOnlyMemory<Archetype> archetypes, ReadOnlySpan<Term> terms)
+	internal FilterQuery(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
 	{
 		_archetypes = archetypes;
 		_terms = terms;
@@ -462,7 +398,7 @@ public readonly ref struct FilterQuery
 
 	public QueryIterator GetEnumerator()
 	{
-		return new QueryIterator(_archetypes.Span, _terms);
+		return new QueryIterator(_archetypes, _terms);
 	}
 }
 
@@ -606,6 +542,8 @@ internal static class Lookup
 		if (typeof(ITuple).IsAssignableFrom(type))
 		{
 			ParseTuple((ITuple)default(T), terms);
+
+			return;
 		}
 
 		EcsAssert.Assert(false, $"type not found {type}");

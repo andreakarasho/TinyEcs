@@ -7,7 +7,7 @@ namespace TinyEcs;
 [DebuggerDisplay("ID: {ID}")]
 public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
-    public static readonly EntityView Invalid = new(null, 0);
+    public static readonly EntityView Invalid = new(null!, 0);
 
     public readonly EcsID ID;
     public readonly World World;
@@ -41,6 +41,26 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
+	// public readonly EntityView Set<TAction, TTarget>()
+	// 	where TAction : struct where TTarget : struct
+	// {
+	// 	World.Set(ID, World.Component<TAction>().ID, World.Component<TTarget>().ID);
+	// 	return this;
+	// }
+
+	// public readonly EntityView Set<TAction>(EcsID target)
+	// 	where TAction : struct
+	// {
+	// 	World.Set(ID, World.Component<TAction>().ID, target);
+	// 	return this;
+	// }
+
+	// public readonly EntityView Set(EcsID action, EcsID target)
+	// {
+	// 	World.Set(ID, action, target);
+	// 	return this;
+	// }
+
     public readonly EntityView Unset<T>() where T : struct
 	{
         World.Unset<T>(ID);
@@ -71,8 +91,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
     public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
-    public readonly void AddChild(EntityView child) => World.ChildOf(ID, child);
-    public readonly void ChildOf(EntityView parent) => World.ChildOf(parent, ID);
 
     public static implicit operator EcsID(EntityView d) => d.ID;
 
