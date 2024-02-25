@@ -134,7 +134,7 @@ namespace System.Runtime.InteropServices
 	// }
 }
 
-public static class SortExtensions
+public static class DotnetExtensions
 {
 	public static void Sort<T>(this Span<T> span) where T : IComparable<T>
 	{
@@ -168,6 +168,11 @@ public static class SortExtensions
 				}
 			}
 		}
+	}
+
+	public static System.Collections.Immutable.ImmutableArray<TSource> ToImmutableArray<TSource>(this IEnumerable<TSource> items)
+	{
+		return System.Collections.Immutable.ImmutableArray.CreateRange(items);
 	}
 }
 #endif

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
@@ -409,7 +410,7 @@ public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 	public void Query(QueryFilterDelegateWithEntity fn)
 	{
 		var terms = Lookup.Query<TFilter>.Terms;
-		var query = new QueryInternal(_archetypes, terms);
+		var query = new QueryInternal(_archetypes, terms.AsSpan());
 		foreach (var arch in query)
 		{
 			foreach (ref readonly var chunk in arch)
@@ -427,7 +428,7 @@ public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 
 	public QueryIterator GetEnumerator()
     {
-        return new QueryIterator(_archetypes, Lookup.Query<TFilter>.Terms);
+        return new QueryIterator(_archetypes, Lookup.Query<TFilter>.Terms.AsSpan());
     }
 }
 
@@ -550,7 +551,7 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, HashSet<Term> terms)
+	static void ParseTuple(ITuple tuple, SortedSet<Term> terms)
 	{
 		for (var i = 0; i < tuple.Length; ++i)
 		{
@@ -571,7 +572,7 @@ internal static class Lookup
 		}
 	}
 
-	static void ParseType<T>(HashSet<Term> terms) where T : struct
+	static void ParseType<T>(SortedSet<Term> terms) where T : struct
 	{
 		var type = typeof(T);
 		if (_typesConvertion.TryGetValue(type, out var id))
@@ -597,32 +598,29 @@ internal static class Lookup
 
     internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct
 	{
-		public static readonly Term[] Terms;
-		public static readonly Term[] Columns;
+		public static readonly ImmutableArray<Term> Terms;
+		public static readonly ImmutableArray<Term> Columns;
 
 		static Query()
 		{
-			var list = new HashSet<Term>();
+			var list = new SortedSet<Term>();
 			ParseType<TQuery>(list);
-			Columns = list.ToArray();
-			Array.Sort(Columns);
+			Columns = list.ToImmutableArray();
 
 			ParseType<TFilter>(list);
-			Terms = list.ToArray();
-			Array.Sort(Terms);
+			Terms = list.ToImmutableArray();
 		}
 	}
 
 	internal static class Query<T> where T : struct
 	{
-		public static readonly Term[] Terms;
+		public static readonly ImmutableArray<Term> Terms;
 
 		static Query()
 		{
-			var list = new HashSet<Term>();
+			var list = new SortedSet<Term>();
 			ParseType<T>(list);
-			Terms = list.ToArray();
-			Array.Sort(Terms);
+			Terms = list.ToImmutableArray();
 		}
 	}
 }

@@ -107,7 +107,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
-							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms;
+							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
 							var query = new QueryInternal({(withFilter ? "_archetypes" : "Archetypes")}, terms);
 							foreach (var arch in query)
 							{{
