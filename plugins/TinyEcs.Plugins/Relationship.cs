@@ -12,7 +12,7 @@ public struct Relationship
 public readonly struct Parent { }
 public readonly struct Child { }
 
-public static class WorldExtention
+public static class RelationshipPlugin
 {
 	public static void AddChild(this EntityView entity, EcsID child)
 		=> entity.World.AddChild(entity.ID, child);

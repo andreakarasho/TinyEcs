@@ -240,7 +240,7 @@ public sealed partial class World : IDisposable
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 		if (create)
 		{
-			arch = ref _typeIndex.GetOrAddValueRef(hash, out var exists);
+			arch = ref _typeIndex.GetOrAddValueRef(hash, out var exists)!;
 			if (!exists)
 			{
 
