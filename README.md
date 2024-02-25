@@ -78,8 +78,8 @@ foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>
 
 	foreach (ref readonly var chunk in archetype)
 	{
-		ref var pos = ref chunk.GetReference<Position>(posIndex);
-		ref var vel = ref chunk.GetReference<Velocity>(velIndex);
+		var posSpan = chunk.GetSpan<Position>(posIndex);
+		var velSpan = chunk.GetSpan<Velocity>(velIndex);
 
 		for (var i = 0; i < chunk.Count; ++i)
 		{
