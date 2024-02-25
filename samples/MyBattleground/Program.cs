@@ -12,6 +12,12 @@ var e = ecs.Entity("Main")
 	.Set<Velocity>(new Velocity());
 
 
+ecs.Filter<(Position, Velocity)>()
+	.Query((EntityView entity) => {
+		Console.WriteLine(entity);
+	});
+
+
 var e2 = ecs.Entity("Main");
 ref var pp = ref e2.Get<Position>();
 

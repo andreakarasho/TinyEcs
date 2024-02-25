@@ -395,6 +395,8 @@ public ref struct QueryIterator
 	public void Reset() => _index = -1;
 }
 
+public delegate void QueryFilterDelegateWithEntity(EntityView entity);
+
 public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 {
 	private readonly ReadOnlySpan<Archetype> _archetypes;
@@ -402,6 +404,25 @@ public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
 	internal FilterQuery(ReadOnlySpan<Archetype> archetypes)
 	{
 		_archetypes = archetypes;
+	}
+
+	public void Query(QueryFilterDelegateWithEntity fn)
+	{
+		var terms = Lookup.Query<TFilter>.Terms;
+		var query = new QueryInternal(_archetypes, terms);
+		foreach (var arch in query)
+		{
+			foreach (ref readonly var chunk in arch)
+			{
+				ref var entity = ref chunk.Entities[0];
+				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref entity, ref last))
+				{
+					fn(entity);
+					entity = ref Unsafe.Add(ref entity, 1);
+				}
+			}
+		}
 	}
 
 	public QueryIterator GetEnumerator()
