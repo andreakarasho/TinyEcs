@@ -1,4 +1,6 @@
-﻿namespace TinyEcs;
+﻿using System.Runtime.CompilerServices;
+
+namespace TinyEcs;
 
 public struct Relationship
 {
@@ -7,6 +9,35 @@ public struct Relationship
     public EcsID Parent;
     public EcsID Next;
     public EcsID Prev;
+
+	public readonly RelationshipIterator Children(World world) => new (world, First);
+}
+
+public ref struct RelationshipIterator
+{
+	private readonly World _world;
+	private EcsID _currentEntity, _next;
+
+	internal RelationshipIterator(World world, EcsID first)
+	{
+		_world = world;
+		_currentEntity = first;
+		_next = first;
+	}
+
+	public readonly EcsID Current => _currentEntity;
+
+	public bool MoveNext()
+	{
+		_currentEntity = _next;
+
+		if (_next != 0)
+			_next = _world.Get<Relationship>(_next).Next;
+
+		return _currentEntity != 0;
+	}
+
+	public readonly RelationshipIterator GetEnumerator() => this;
 }
 
 public readonly struct Parent { }
@@ -14,6 +45,19 @@ public readonly struct Child { }
 
 public static class RelationshipPlugin
 {
+	[ModuleInitializer]
+	internal static void ModuleInit()
+	{
+		// nop, this trigger the static ctor
+	}
+
+	static RelationshipPlugin()
+	{
+		World.OnPluginInitialization += world => {
+			world.OnEntityDeleted += e => e.ClearChildren();
+		};
+	}
+
 	public static void AddChild(this EntityView entity, EcsID child)
 		=> entity.World.AddChild(entity.ID, child);
 
@@ -22,6 +66,14 @@ public static class RelationshipPlugin
 
 	public static void ClearChildren(this EntityView entity)
 		=> entity.World.ClearChildren(entity.ID);
+
+	public static RelationshipIterator Children(this EntityView entity)
+	{
+		if (!entity.Has<Relationship>())
+			return default;
+
+		return entity.Get<Relationship>().Children(entity.World);
+	}
 
 	public static void AddChild(this World world, EcsID parentId, EcsID childId)
     {

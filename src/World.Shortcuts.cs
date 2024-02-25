@@ -8,7 +8,7 @@ public sealed partial class World
         EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 
         ref var record = ref GetRecord(entity);
-        _ = Set(ref record, in cmp);
+        _ = Set(Entity(entity), ref record, in cmp);
     }
 
     [SkipLocalsInit]
@@ -18,7 +18,7 @@ public sealed partial class World
         EcsAssert.Assert(cmp.Size > 0, "this is not a component");
 
         ref var record = ref GetRecord(entity);
-        var raw = Set(ref record, in cmp)!;
+        var raw = Set(Entity(entity), ref record, in cmp)!;
         ref var array = ref Unsafe.As<Array, T[]>(ref raw);
         array[record.Row % record.GetChunk().Count] = component;
 	}

@@ -133,10 +133,10 @@ public sealed class Commands
             var cmp = new EcsComponent(set.Component, set.DataLength);
 
             ref var record = ref _main.GetRecord(set.Entity);
-            var array = _main.Set(ref record, in cmp);
+            var array = _main.Set(_main.Entity(set.Entity), ref record, in cmp);
             array?.SetValue(set.Data, record.Row % record.GetChunk().Count);
 
-            set.Data = null;
+            set.Data = null!;
             set.DataLength = 0;
         }
 

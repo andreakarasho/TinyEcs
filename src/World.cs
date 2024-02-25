@@ -10,6 +10,7 @@ public sealed partial class World : IDisposable
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
+	private readonly Dictionary<string, EcsID> _entityNames = new();
     private Archetype[] _archetypes = new Archetype[16];
     private int _archetypeCount;
     private readonly ComponentComparer _comparer;
@@ -29,7 +30,14 @@ public sealed partial class World : IDisposable
 
         //InitializeDefaults();
         //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
+
+		OnPluginInitialization?.Invoke(this);
     }
+
+	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
+	public event Action<EntityView, EcsComponent> OnComponentSet, OnComponentUnset;
+	public static event Action<World>? OnPluginInitialization;
+
 
     public int EntityCount => _entities.Length;
 
@@ -45,6 +53,7 @@ public sealed partial class World : IDisposable
         _archRoot.Clear();
         _typeIndex.Clear();
         _commands.Clear();
+		_entityNames.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);
         _archetypeCount = 0;
@@ -109,11 +118,16 @@ public sealed partial class World : IDisposable
 
     public EntityView Entity(string name)
     {
-        // TODO
+		_entityNames.TryGetValue(name, out var id);
 
-        EcsID id = 0;
+        var entity = Entity(id);
+		if (id == 0)
+		{
+			_entityNames.Add(name, entity.ID);
+			GetRecord(entity.ID).Name = name;
+		}
 
-        return Entity(id);
+		return entity;
     }
 
     public EntityView Entity(EcsID id = default)
@@ -129,7 +143,11 @@ public sealed partial class World : IDisposable
         record.Archetype = _archRoot;
         record.Row = _archRoot.Add(id);
 
-        return new(this, id);
+        var e = new EntityView(this, id);
+
+		OnEntityCreated?.Invoke(e);
+
+		return e;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -142,12 +160,17 @@ public sealed partial class World : IDisposable
 
     public void Delete(EcsID entity)
     {
+		OnEntityDeleted?.Invoke(new (this, entity));
+
         ref var record = ref GetRecord(entity);
 
         var removedId = record.Archetype.Remove(ref record);
         EcsAssert.Assert(removedId == entity);
 
         _entities.Remove(removedId);
+
+		if (!string.IsNullOrEmpty(record.Name))
+			_entityNames.Remove(record.Name);
     }
 
     public bool Exists(EcsID entity)
@@ -164,6 +187,7 @@ public sealed partial class World : IDisposable
 
     internal void DetachComponent(EcsID entity, ref readonly EcsComponent cmp)
     {
+		OnComponentUnset?.Invoke(Entity(entity), cmp);
         ref var record = ref GetRecord(entity);
         InternalAttachDetach(ref record, in cmp, false);
     }
@@ -269,7 +293,7 @@ public sealed partial class World : IDisposable
 		}
 	}
 
-	internal Array? Set(ref EcsRecord record, ref readonly EcsComponent cmp)
+	internal Array? Set(EntityView entity, ref EcsRecord record, ref readonly EcsComponent cmp)
     {
         var emit = false;
         var column = record.Archetype.GetComponentIndex(in cmp);
@@ -286,6 +310,7 @@ public sealed partial class World : IDisposable
 
         if (emit)
         {
+			OnComponentSet?.Invoke(entity, cmp);
             //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
 
@@ -352,7 +377,7 @@ public ref struct QueryIterator
 		_index = -1;
 	}
 
-	public Archetype Current => _archetypes[_index];
+	public readonly Archetype Current => _archetypes[_index];
 
 	public bool MoveNext()
 	{
@@ -512,7 +537,7 @@ internal static class Lookup
 
 			if (typeof(ITuple).IsAssignableFrom(type))
 			{
-				ParseTuple((ITuple)tuple[i], terms);
+				ParseTuple((ITuple)tuple[i]!, terms);
 				continue;
 			}
 
@@ -585,6 +610,7 @@ struct EcsRecord
 {
 	public Archetype Archetype;
     public int Row;
+	public string? Name;
 
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }

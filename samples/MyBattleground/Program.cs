@@ -7,41 +7,55 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-
-var e = ecs.Entity()
-	.Set<Position>(new Position())
+var e = ecs.Entity("Main")
+	.Set<Position>(new Position() {X = 2})
 	.Set<Velocity>(new Velocity());
 
-var child = ecs.Entity();
-var child2 = ecs.Entity();
-var child3 = ecs.Entity();
+
+var e2 = ecs.Entity("Main");
+ref var pp = ref e2.Get<Position>();
+
+var child = ecs.Entity("child 0");
+var child2 = ecs.Entity("child 1");
+var child3 = ecs.Entity("child 2");
 
 
 e.AddChild(child);
 e.AddChild(child2);
 child2.AddChild(child3);
 
+foreach (var childId in e.Children())
+{
+
+}
 
 ecs.Filter<(With<Child>, With<Parent>)>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("im a child {0} with parent {1}", entity.ID, relation.Parent);
+	Console.WriteLine("im [{0}] a child of {1}, but also having {2} children", entity, ecs.Entity(relation.Parent), relation.Count);
 });
 
+Console.WriteLine();
+
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
+
+	foreach (var id in entity.Children())
+	{
+		Console.WriteLine("\tChild: {0}", ecs.Entity(id));
+	}
 });
 
 Console.WriteLine();
 
 e.RemoveChild(child);
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
 });
 
 Console.WriteLine();
 
 child2.RemoveChild(child3);
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
 });
 
 Console.WriteLine();
@@ -51,6 +65,7 @@ ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) 
 	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
 });
 
+e.Delete();
 
 ecs.Entity()
 	.Set<Position>(new Position())
@@ -66,7 +81,6 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		 .Set<Velocity>(new Velocity())
 		 .Set<PlayerTag>();
 
-
 var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
@@ -76,7 +90,7 @@ while (true)
 	//var cur = (start - last) / 1000f;
 	for (int i = 0; i < 3600; ++i)
 	{
-		ecs.Filter<(With<PlayerTag>, Not<Likes>, Not<Dogs>)>()
+		ecs.Filter<With<PlayerTag>>()
 			.Query((ref Position pos, ref Velocity vel) =>
 			{
 				pos.X *= vel.X;
