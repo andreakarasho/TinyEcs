@@ -25,26 +25,26 @@ using var ecs = new World();
 
 // Generate a player entity
 ecs.Entity()
-	.Set(new Position() { X = 2 })
-	.Set(new Name() { Name = "Tom" })
-	.Set<Player>();
+    .Set(new Position() { X = 2 })
+    .Set(new Name() { Name = "Tom" })
+    .Set<Player>();
 
 // Generate a npc entity
 ecs.Entity()
-	.Set(new Position() { X = 75 })
-	.Set(new Name() { Name = "Dan" })
-	.Set<Npc>();
+   .Set(new Position() { X = 75 })
+   .Set(new Name() { Name = "Dan" })
+   .Set<Npc>();
 
 // Query for all entities with [Position + Name] and the entity
 ecs.Query((EntityView entity, ref Position pos, ref Name name) => {
-		Console.WriteLine(name.Vaue);
-	});
+    Console.WriteLine(name.Vaue);
+});
 
 // Query for all entities with [Position + Name + Player], without [Npc]
 ecs.Filter<(Player, Not<Npc>)>()
-	.Query((ref Position pos, ref Name name) => {
-		Console.WriteLine(name.Vaue);
-	});
+   .Query((ref Position pos, ref Name name) => {
+        Console.WriteLine(name.Vaue);
+});
 
 
 struct Position { public float X, Y, Z; }
