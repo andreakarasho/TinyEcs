@@ -36,7 +36,7 @@ public sealed partial class World : IDisposable
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, EcsComponent> OnComponentSet, OnComponentUnset;
+	public event Action<EntityView, EcsComponent>? OnComponentSet, OnComponentUnset;
 	public static event Action<World>? OnPluginInitialization;
 
 
