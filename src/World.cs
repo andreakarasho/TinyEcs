@@ -347,62 +347,6 @@ public sealed partial class World : IDisposable
 		return arch;
 	}
 
-	public void System<TFilter, T0, T1>(QueryFilterDelegate<T0, T1> fn)
-		where TFilter : struct where T0 : struct where T1 : struct
-	{
-		var hash = Lookup.Query<(T0, T1), TFilter>.Hash;
-		var terms = Lookup.Query<(T0, T1), TFilter>.Terms.AsSpan();
-		var withouts = Lookup.Query<(T0, T1), TFilter>.Withouts;
-
-		var arch = FindArchetype(hash, terms);
-		if (arch == null)
-			return;
-
-		InternalQuery(arch, fn, terms, withouts);
-
-		static void InternalQuery
-		(
-			Archetype root,
-			QueryFilterDelegate<T0, T1> fn,
-			ReadOnlySpan<Term> terms,
-			IDictionary<ulong, Term> withouts
-		)
-		{
-			if (root.Count > 0)
-			{
-				var column0 = root.GetComponentIndex<T0>();
-				var column1 = root.GetComponentIndex<T1>();
-
-				foreach (ref readonly var chunk in root)
-				{
-					ref var c0 = ref chunk.GetReference<T0>(column0);
-					ref var c1 = ref chunk.GetReference<T1>(column1);
-					ref var last = ref Unsafe.Add(ref c0, chunk.Count);
-
-					while (Unsafe.IsAddressLessThan(ref c0, ref last))
-					{
-						fn(ref c0, ref c1);
-						c0 = ref Unsafe.Add(ref c0, 1);
-						c1 = ref Unsafe.Add(ref c1, 1);
-					}
-				}
-			}
-
-			var span = CollectionsMarshal.AsSpan(root._edgesRight);
-
-			ref var start = ref MemoryMarshal.GetReference(span);
-			ref var end = ref Unsafe.Add(ref start, span.Length);
-
-			while (Unsafe.IsAddressLessThan(ref start, ref end))
-			{
-				if (!withouts.ContainsKey(start.ComponentID))
-					InternalQuery(start.Archetype, fn, terms, withouts);
-
-				start = ref Unsafe.Add(ref start, 1);
-			}
-		}
-	}
-
 	static Archetype? FindFirst(Archetype root, ReadOnlySpan<Term> terms)
 	{
 		var result = root.FindMatch(terms);
