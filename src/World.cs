@@ -364,10 +364,12 @@ public sealed partial class World : IDisposable
 		return new QueryIterator2(list);
 	}
 
-	public void System<T0, T1>(QueryFilterDelegate<T0, T1> fn) where T0 : struct where T1 : struct
+	public void System<TFilter, T0, T1>(QueryFilterDelegate<T0, T1> fn) 
+		where TFilter : struct where T0 : struct where T1 : struct
 	{
-		var hash = Lookup.Query<(T0, T1)>.Hash;
-		var terms = Lookup.Query<(T0, T1)>.Terms.AsSpan();
+		var hash = Lookup.Query<(T0, T1), TFilter>.Hash;
+		var terms = Lookup.Query<(T0, T1), TFilter>.Terms.AsSpan();
+		var withouts = Lookup.Query<(T0, T1), TFilter>.Withouts;
 
 		if (!_typeIndex.TryGetValue(hash, out var arch))
 		{
@@ -377,9 +379,15 @@ public sealed partial class World : IDisposable
 		if (arch == null)
 			return;
 
-		InternalQuery(arch, fn, terms);
+		InternalQuery(arch, fn, terms, withouts);
 
-		static void InternalQuery(Archetype root, QueryFilterDelegate<T0, T1> fn, ReadOnlySpan<Term> terms)
+		static void InternalQuery
+		(
+			Archetype root, 
+			QueryFilterDelegate<T0, T1> fn, 
+			ReadOnlySpan<Term> terms,
+			ImmutableDictionary<ulong, Term> withouts
+		)
 		{
 			if (root.Count > 0)
 			{
@@ -408,7 +416,8 @@ public sealed partial class World : IDisposable
 
 			while (Unsafe.IsAddressLessThan(ref start, ref end))
 			{
-				InternalQuery(start.Archetype, fn, terms);
+				if (!withouts.ContainsKey(start.ComponentID))
+					InternalQuery(start.Archetype, fn, terms, withouts);
 
 				start = ref Unsafe.Add(ref start, 1);
 			}
@@ -779,6 +788,7 @@ internal static class Lookup
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ImmutableArray<Term> Columns;
+		public static readonly ImmutableDictionary<ulong, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
@@ -790,13 +800,17 @@ internal static class Lookup
 			ParseType<TFilter>(list);
 			Terms = list.ToImmutableArray();
 
-			Hash = GetHash(Terms.AsSpan());
+			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
+			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+
+			Hash = GetHash(Withs.Values.ToArray());
 		}
 	}
 
 	internal static class Query<T> where T : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
+		public static readonly ImmutableDictionary<ulong, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
@@ -805,7 +819,10 @@ internal static class Lookup
 			ParseType<T>(list);
 			Terms = list.ToImmutableArray();
 
-			Hash = GetHash(Terms.AsSpan());
+			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
+			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+
+			Hash = GetHash(Withs.Values.ToArray());
 		}
 	}
 }

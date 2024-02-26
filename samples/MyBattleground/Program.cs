@@ -75,8 +75,11 @@ ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) 
 
 e.Delete();
 
+	ecs.Entity()
+		 .Set<Position>(new Position())
+		 .Set<Velocity>(new Velocity());
 
-for (int i = 0; i < ENTITIES_COUNT; i++)
+for (int i = 0; i < ENTITIES_COUNT / 1000; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity())
@@ -101,7 +104,7 @@ while (true)
 		// 		pos.Y *= vel.Y;
 		// 	});
 
-		ecs.System((ref Position pos , ref Velocity vel) => {
+		ecs.System<Not<PlayerTag>, Position, Velocity>((ref Position pos , ref Velocity vel) => {
 			pos.X *= vel.X;
 			pos.Y *= vel.Y;
 		});
