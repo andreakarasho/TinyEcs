@@ -107,27 +107,49 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
+							var hash = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Hash;
 							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
-							var query = new QueryInternal({(withFilter ? "_archetypes" : "Archetypes")}, terms);
-							foreach (var arch in query)
+							var withouts = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Withouts;
+							var arch = {(withFilter ? "_world." : "")}FindArchetype(hash, terms);
+							if (arch == null) return;
+							InternalQuery(arch, fn, terms, withouts);
+
+							static void InternalQuery
+							(
+								Archetype arch, 
+								{delegateName}<{typeParams}> fn, 
+								ReadOnlySpan<Term> terms,
+								IDictionary<ulong, Term> withouts
+							)
 							{{
-								// columns
-								{columnIndices}
-
-								foreach (ref readonly var chunk in arch)
+								if (arch.Count > 0)
 								{{
-									// field list
-									{fieldList}
+									{columnIndices}
 
-									ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
-									while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+									foreach (ref readonly var chunk in arch)
 									{{
-										// sign list
-										fn({signCallback});
+										{fieldList}
+										ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
 
-										// unsafe add list
-										{advanceField}
+										while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+										{{
+											fn({signCallback});
+											{advanceField}
+										}}
 									}}
+								}}
+
+								var span = CollectionsMarshal.AsSpan(arch._edgesRight);
+
+								ref var start = ref MemoryMarshal.GetReference(span);
+								ref var end = ref Unsafe.Add(ref start, span.Length);
+
+								while (Unsafe.IsAddressLessThan(ref start, ref end))
+								{{
+									if (!withouts.ContainsKey(start.ComponentID))
+										InternalQuery(start.Archetype, fn, terms, withouts);
+
+									start = ref Unsafe.Add(ref start, 1);
 								}}
 							}}
 						}}

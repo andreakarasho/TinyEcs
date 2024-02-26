@@ -79,7 +79,7 @@ e.Delete();
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity());
 
-for (int i = 0; i < ENTITIES_COUNT / 1000; i++)
+for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity())
@@ -97,58 +97,30 @@ while (true)
 	//var cur = (start - last) / 1000f;
 	for (int i = 0; i < 3600; ++i)
 	{
-		// ecs.Filter<With<PlayerTag>>()
-		// 	.Query((ref Position pos, ref Velocity vel) =>
-		// 	{
-		// 		pos.X *= vel.X;
-		// 		pos.Y *= vel.Y;
-		// 	});
-
-		ecs.System<Not<PlayerTag>, Position, Velocity>((ref Position pos , ref Velocity vel) => {
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		});
-
-		// foreach (var archetype in ecs.Query2<(Position, Velocity)>())
-		// {
-		// 	var column0 = archetype.GetComponentIndex<Position>();
-		// 	var column1 = archetype.GetComponentIndex<Velocity>();
-
-		// 	foreach (ref readonly var chunk in archetype)
-		// 	{
-		// 		ref var pos = ref chunk.GetReference<Position>(column0);
-		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
-
-		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
-
-		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
-		// 		{
-		// 			pos.X *= vel.X;
-		// 			pos.Y *= vel.Y;
-
-		// 			pos = ref Unsafe.Add(ref pos, 1);
-		// 			vel = ref Unsafe.Add(ref vel, 1);
-		// 		}
-		// 	}
-		// }
+		ecs.Filter<With<PlayerTag>>()
+			.Query((ref Position pos, ref Velocity vel) =>
+			{
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			});
 
 		// foreach (var archetype in ecs.Filter<(Position, Velocity)>())
 		// {
 		// 	var column0 = archetype.GetComponentIndex<Position>();
 		// 	var column1 = archetype.GetComponentIndex<Velocity>();
-		//
+		
 		// 	foreach (ref readonly var chunk in archetype)
 		// 	{
 		// 		ref var pos = ref chunk.GetReference<Position>(column0);
 		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
-		//
+		
 		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
-		//
+		
 		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
 		// 		{
 		// 			pos.X *= vel.X;
 		// 			pos.Y *= vel.Y;
-		//
+		
 		// 			pos = ref Unsafe.Add(ref pos, 1);
 		// 			vel = ref Unsafe.Add(ref vel, 1);
 		// 		}
