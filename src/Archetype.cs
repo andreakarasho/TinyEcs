@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
@@ -76,7 +77,7 @@ public sealed class Archetype
         _world = world;
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
-        Components = components.ToArray();
+        Components = components.ToImmutableArray();
 
         // var maxID = -1;
         // for (var i = 0; i < components.Length; ++i)
@@ -96,7 +97,7 @@ public sealed class Archetype
 
     public World World => _world;
     public int Count => _count;
-    public readonly EcsComponent[] Components;
+    public readonly ImmutableArray<EcsComponent> Components;
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
 
     [SkipLocalsInit]
@@ -286,7 +287,7 @@ public sealed class Archetype
             return;
         }
 
-        if (!IsSuperset(newNode.Components))
+        if (!IsSuperset(newNode.Components.AsSpan()))
         {
             return;
         }
@@ -298,7 +299,7 @@ public sealed class Archetype
         MakeEdges(newNode, this, Components[i].ID);
     }
 
-    private bool IsSuperset(Span<EcsComponent> other)
+    private bool IsSuperset(ReadOnlySpan<EcsComponent> other)
     {
 	    int i = 0, j = 0;
 	    while (i < Components.Length && j < other.Length)
@@ -316,13 +317,13 @@ public sealed class Archetype
 
     internal int FindMatch(ReadOnlySpan<Term> searching)
     {
-	    var currents = Components;
+	    var currents = Components.AsSpan();
 	    var i = 0;
 	    var j = 0;
 
         while (i < currents.Length && j < searching.Length)
         {
-	        ref var current = ref currents[i];
+	        ref readonly var current = ref currents[i];
 	        ref readonly var search = ref searching[j];
 
             if (current.ID.CompareTo(search.ID) == 0)

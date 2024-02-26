@@ -201,7 +201,7 @@ public sealed partial class World : IDisposable
     {
         EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
 
-        var arch = CreateArchetype(record.Archetype, in cmp, add);
+        var arch = AttachToArchetype(record.Archetype, in cmp, add);
         if (arch == null)
             return false;
 
@@ -212,7 +212,7 @@ public sealed partial class World : IDisposable
     }
 
     [SkipLocalsInit]
-    private Archetype? CreateArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
+    private Archetype? AttachToArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
     {
         if (!add && root.GetComponentIndex(in cmp) < 0)
             return null;
@@ -261,7 +261,7 @@ public sealed partial class World : IDisposable
 
     private ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
 	{
-		var hash = getHash(components, false);
+		var hash = Hashing.Calculate(components);
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 		if (create)
 		{
@@ -283,15 +283,6 @@ public sealed partial class World : IDisposable
 		// ) : ref CollectionsMarshal.GetValueRefOrNullRef(_typeIndex, hash);
 
 		return ref arch;
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		static ulong getHash(Span<EcsComponent> components, bool checkSize)
-		{
-			var hc = (ulong)components.Length;
-			foreach (ref var val in components)
-				hc = unchecked(hc * 314159 + val.ID);
-			return hc;
-		}
 	}
 
 	internal Array? Set(EntityView entity, ref EcsRecord record, ref readonly EcsComponent cmp)
@@ -312,7 +303,6 @@ public sealed partial class World : IDisposable
         if (emit)
         {
 			OnComponentSet?.Invoke(entity, cmp);
-            //EmitEvent(EcsEventOnSet, entity, cmp.ID);
         }
 
         return array;
@@ -327,7 +317,7 @@ public sealed partial class World : IDisposable
     public ReadOnlySpan<EcsComponent> GetType(EcsID id)
     {
         ref var record = ref GetRecord(id);
-        return record.Archetype.Components;
+        return record.Archetype.Components.AsSpan();
     }
 
     public void PrintGraph()
@@ -346,7 +336,7 @@ public sealed partial class World : IDisposable
     }
 
     public IQueryConstruct QueryBuilder() => new QueryBuilder(this);
-	
+
 	internal Archetype? FindArchetype(ulong hash, ReadOnlySpan<Term> terms)
 	{
 		if (!_typeIndex.TryGetValue(hash, out var arch))
@@ -357,7 +347,7 @@ public sealed partial class World : IDisposable
 		return arch;
 	}
 
-	public void System<TFilter, T0, T1>(QueryFilterDelegate<T0, T1> fn) 
+	public void System<TFilter, T0, T1>(QueryFilterDelegate<T0, T1> fn)
 		where TFilter : struct where T0 : struct where T1 : struct
 	{
 		var hash = Lookup.Query<(T0, T1), TFilter>.Hash;
@@ -372,8 +362,8 @@ public sealed partial class World : IDisposable
 
 		static void InternalQuery
 		(
-			Archetype root, 
-			QueryFilterDelegate<T0, T1> fn, 
+			Archetype root,
+			QueryFilterDelegate<T0, T1> fn,
 			ReadOnlySpan<Term> terms,
 			IDictionary<ulong, Term> withouts
 		)
@@ -578,6 +568,25 @@ public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 	}
 }
 
+internal static class Hashing
+{
+	public static ulong Calculate(ReadOnlySpan<EcsComponent> components)
+	{
+		var hc = (ulong)components.Length;
+		foreach (ref readonly var val in components)
+			hc = unchecked(hc * 314159 + val.ID);
+		return hc;
+	}
+
+	public static ulong Calculate(ReadOnlySpan<Term> terms)
+	{
+		var hc = (ulong)terms.Length;
+		foreach (ref readonly var val in terms)
+			hc = unchecked(hc * 314159 + val.ID);
+		return hc;
+	}
+}
+
 internal static class Lookup
 {
 	private static ulong _index = 0;
@@ -646,7 +655,7 @@ internal static class Lookup
 				continue;
 			}
 
-			var id = Lookup.GetID(type);
+			var id = GetID(type);
 			terms.Add(new Term()
 			{
 				ID = IDOp.GetPairSecond(id),
@@ -679,15 +688,6 @@ internal static class Lookup
 		EcsAssert.Assert(false, $"type not found {type}");
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	static ulong GetHash(ReadOnlySpan<Term> terms)
-	{
-		var hc = (ulong)terms.Length;
-		foreach (ref readonly var val in terms)
-			hc = unchecked(hc * 314159 + val.ID);
-		return hc;
-	}
-
     internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
@@ -707,7 +707,7 @@ internal static class Lookup
 			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
 			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
 
-			Hash = GetHash(Withs.Values.ToArray());
+			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}
 	}
 
@@ -726,7 +726,7 @@ internal static class Lookup
 			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
 			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
 
-			Hash = GetHash(Withs.Values.ToArray());
+			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}
 	}
 }
