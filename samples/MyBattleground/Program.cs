@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System;
 using TinyEcs;
+using System.Runtime.CompilerServices;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
@@ -16,6 +17,7 @@ ecs.Filter<(Position, Velocity)>()
 	.Query((EntityView entity) => {
 		Console.WriteLine(entity);
 	});
+
 
 
 var e2 = ecs.Entity("Main");
@@ -73,19 +75,15 @@ ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) 
 
 e.Delete();
 
-ecs.Entity()
-	.Set<Position>(new Position())
-	.Set<Velocity>(new Velocity());
-
-ecs.Entity()
-	.Set<Position>(new Position())
-	.Set<Velocity>(new Velocity());
 
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity())
-		 .Set<PlayerTag>();
+		 .Set<PlayerTag>()
+		 .Set<Dogs>()
+		 .Set<Likes>()
+		 ;
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -96,12 +94,40 @@ while (true)
 	//var cur = (start - last) / 1000f;
 	for (int i = 0; i < 3600; ++i)
 	{
-		ecs.Filter<With<PlayerTag>>()
-			.Query((ref Position pos, ref Velocity vel) =>
-			{
-				pos.X *= vel.X;
-				pos.Y *= vel.Y;
-			});
+		// ecs.Filter<With<PlayerTag>>()
+		// 	.Query((ref Position pos, ref Velocity vel) =>
+		// 	{
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		// 	});
+
+		ecs.System((ref Position pos , ref Velocity vel) => {
+			pos.X *= vel.X;
+			pos.Y *= vel.Y;
+		});
+
+		// foreach (var archetype in ecs.Query2<(Position, Velocity)>())
+		// {
+		// 	var column0 = archetype.GetComponentIndex<Position>();
+		// 	var column1 = archetype.GetComponentIndex<Velocity>();
+
+		// 	foreach (ref readonly var chunk in archetype)
+		// 	{
+		// 		ref var pos = ref chunk.GetReference<Position>(column0);
+		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
+
+		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
+
+		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
+		// 		{
+		// 			pos.X *= vel.X;
+		// 			pos.Y *= vel.Y;
+
+		// 			pos = ref Unsafe.Add(ref pos, 1);
+		// 			vel = ref Unsafe.Add(ref vel, 1);
+		// 		}
+		// 	}
+		// }
 
 		// foreach (var archetype in ecs.Filter<(Position, Velocity)>())
 		// {
