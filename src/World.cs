@@ -11,7 +11,6 @@ public sealed partial class World : IDisposable
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
-	private readonly Dictionary<string, EcsID> _entityNames = new();
     private Archetype[] _archetypes = new Archetype[16];
     private int _archetypeCount;
     private readonly ComponentComparer _comparer;
@@ -54,7 +53,6 @@ public sealed partial class World : IDisposable
         _archRoot.Clear();
         _typeIndex.Clear();
         _commands.Clear();
-		_entityNames.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);
         _archetypeCount = 0;
@@ -75,7 +73,7 @@ public sealed partial class World : IDisposable
         }
     }
 
-    internal unsafe ref readonly EcsComponent Component<T>() where T : struct
+    public unsafe ref readonly EcsComponent Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
@@ -117,19 +115,19 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
-    public EntityView Entity(string name)
-    {
-		_entityNames.TryGetValue(name, out var id);
+    // public EntityView Entity(string name)
+    // {
+	// 	_entityNames.TryGetValue(name, out var id);
 
-        var entity = Entity(id);
-		if (id == 0)
-		{
-			_entityNames.Add(name, entity.ID);
-			GetRecord(entity.ID).Name = name;
-		}
+    //     var entity = Entity(id);
+	// 	if (id == 0)
+	// 	{
+	// 		_entityNames.Add(name, entity.ID);
+	// 		GetRecord(entity.ID).Name = name;
+	// 	}
 
-		return entity;
-    }
+	// 	return entity;
+    // }
 
     public EntityView Entity(EcsID id = default)
     {
@@ -169,9 +167,6 @@ public sealed partial class World : IDisposable
         EcsAssert.Assert(removedId == entity);
 
         _entities.Remove(removedId);
-
-		if (!string.IsNullOrEmpty(record.Name))
-			_entityNames.Remove(record.Name);
     }
 
     public bool Exists(EcsID entity)
@@ -679,7 +674,6 @@ struct EcsRecord
 {
 	public Archetype Archetype;
     public int Row;
-	public string? Name;
 
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }

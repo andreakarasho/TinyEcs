@@ -48,12 +48,9 @@ public static class RelationshipPlugin
 	[ModuleInitializer]
 	internal static void ModuleInit()
 	{
-		// nop, this trigger the static ctor
-	}
-
-	static RelationshipPlugin()
-	{
 		World.OnPluginInitialization += world => {
+			world.Component<Parent>();
+			world.Component<Child>();
 			world.OnEntityDeleted += e => e.ClearChildren();
 		};
 	}

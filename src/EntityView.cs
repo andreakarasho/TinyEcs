@@ -19,7 +19,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         ID = id;
     }
 
-	public string Name => ToString();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Equals(EcsID other) => ID == other;
@@ -92,8 +91,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     public readonly bool Exists() => World.Exists(ID);
 
     public readonly bool IsEnabled() => !Has<EcsDisabled>();
-
-	public override string ToString() => World.GetRecord(ID).Name ?? $"{ID}";
 
 
 	public static implicit operator EcsID(EntityView d) => d.ID;

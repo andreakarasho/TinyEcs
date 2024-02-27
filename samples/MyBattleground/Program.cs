@@ -15,7 +15,7 @@ var e = ecs.Entity("Main")
 
 ecs.Filter<(Position, Velocity)>()
 	.Query((EntityView entity) => {
-		Console.WriteLine(entity);
+		Console.WriteLine(entity.Name());
 	});
 
 
@@ -38,17 +38,17 @@ foreach (var childId in e.Children())
 }
 
 ecs.Filter<(With<Child>, With<Parent>)>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("im [{0}] a child of {1}, but also having {2} children", entity, ecs.Entity(relation.Parent), relation.Count);
+	Console.WriteLine("im [{0}] a child of {1}, but also having {2} children", entity.Name(), ecs.Entity(relation.Parent).Name(), relation.Count);
 });
 
 Console.WriteLine();
 
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 
 	foreach (var id in entity.Children())
 	{
-		Console.WriteLine("\tChild: {0}", ecs.Entity(id));
+		Console.WriteLine("\tChild: {0}", ecs.Entity(id).Name());
 	}
 });
 
@@ -56,21 +56,21 @@ Console.WriteLine();
 
 e.RemoveChild(child);
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 });
 
 Console.WriteLine();
 
 child2.RemoveChild(child3);
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 });
 
 Console.WriteLine();
 
 e.ClearChildren();
 ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity.ID, relation.Count);
+	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 });
 
 e.Delete();
@@ -83,9 +83,9 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 	ecs.Entity()
 		 .Set<Position>(new Position())
 		 .Set<Velocity>(new Velocity())
-		 .Set<PlayerTag>()
-		 .Set<Dogs>()
-		 .Set<Likes>()
+		//  .Set<PlayerTag>()
+		//  .Set<Dogs>()
+		//  .Set<Likes>()
 		 ;
 
 var sw = Stopwatch.StartNew();
@@ -108,19 +108,19 @@ while (true)
 		// {
 		// 	var column0 = archetype.GetComponentIndex<Position>();
 		// 	var column1 = archetype.GetComponentIndex<Velocity>();
-		
+
 		// 	foreach (ref readonly var chunk in archetype)
 		// 	{
 		// 		ref var pos = ref chunk.GetReference<Position>(column0);
 		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
-		
+
 		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
-		
+
 		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
 		// 		{
 		// 			pos.X *= vel.X;
 		// 			pos.Y *= vel.Y;
-		
+
 		// 			pos = ref Unsafe.Add(ref pos, 1);
 		// 			vel = ref Unsafe.Add(ref vel, 1);
 		// 		}
