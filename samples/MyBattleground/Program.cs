@@ -12,7 +12,6 @@ var e = ecs.Entity("Main")
 	.Set<Position>(new Position() {X = 2})
 	.Set<Velocity>(new Velocity());
 
-
 ecs.Filter<(Position, Velocity)>()
 	.Query((EntityView entity) => {
 		Console.WriteLine(entity.Name());
@@ -20,8 +19,8 @@ ecs.Filter<(Position, Velocity)>()
 
 
 
-var e2 = ecs.Entity("Main");
-ref var pp = ref e2.Get<Position>();
+// var e2 = ecs.Entity("Main");
+// ref var pp = ref e2.Get<Position>();
 
 var child = ecs.Entity("child 0");
 var child2 = ecs.Entity("child 1");
@@ -68,21 +67,34 @@ ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) 
 
 Console.WriteLine();
 
-e.ClearChildren();
-ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
-	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
-});
+// e.ClearChildren();
+// ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+// 	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
+// });
+
+for (var i = 0; i < 5; ++i)
+{
+	var c = ecs.Entity();
+	Console.WriteLine("Add {0}", c.ID);
+	e.AddChild(c);
+}
+
+foreach (var childId in e.Children())
+{
+	Console.WriteLine("child {0}", childId);
+}
 
 e.Delete();
+var exists = e.Exists();
 
-	ecs.Entity()
-		 .Set<Position>(new Position())
-		 .Set<Velocity>(new Velocity());
+ecs.Entity()
+	.Set<Position>(new Position())
+	.Set<Velocity>(new Velocity());
 
 for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 	ecs.Entity()
-		 .Set<Position>(new Position())
-		 .Set<Velocity>(new Velocity())
+		.Set<Position>(new Position())
+		.Set<Velocity>(new Velocity())
 		//  .Set<PlayerTag>()
 		//  .Set<Dogs>()
 		//  .Set<Likes>()
@@ -97,7 +109,8 @@ while (true)
 	//var cur = (start - last) / 1000f;
 	for (int i = 0; i < 3600; ++i)
 	{
-		ecs.Filter<With<PlayerTag>>()
+		ecs
+		//.Filter<With<PlayerTag>>()
 			.Query((ref Position pos, ref Velocity vel) =>
 			{
 				pos.X *= vel.X;

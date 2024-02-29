@@ -13,6 +13,9 @@ public struct Relationship
 	public readonly RelationshipIterator Children(World world) => new (world, First);
 }
 
+public readonly struct Parent { }
+public readonly struct Child { }
+
 public ref struct RelationshipIterator
 {
 	private readonly World _world;
@@ -40,9 +43,6 @@ public ref struct RelationshipIterator
 	public readonly RelationshipIterator GetEnumerator() => this;
 }
 
-public readonly struct Parent { }
-public readonly struct Child { }
-
 public static class RelationshipPlugin
 {
 	[ModuleInitializer]
@@ -51,7 +51,27 @@ public static class RelationshipPlugin
 		World.OnPluginInitialization += world => {
 			world.Component<Parent>();
 			world.Component<Child>();
-			world.OnEntityDeleted += e => e.ClearChildren();
+			world.Component<Relationship>();
+			world.OnEntityDeleted += e => {
+				if (e.Has<Parent>())
+				{
+					e.World.Merge();
+
+					foreach (var childId in e.Children())
+					{
+						e.World.DeferredEntity(childId).Delete();
+					}
+
+					e.World.Merge();
+				}
+
+				if (e.Has<Child>())
+				{
+					ref var rel = ref e.Get<Relationship>();
+					if (rel.Parent != 0 && e.World.Exists(rel.Parent))
+						e.World.Entity(rel.Parent).RemoveChild(e);
+				}
+			};
 		};
 	}
 

@@ -43,7 +43,7 @@ public sealed partial class World : IDisposable
 
     public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
 
-    public CommandEntityView DeferredEntity() => _commands.Entity();
+    public CommandEntityView DeferredEntity(EcsID id = default) => _commands.Entity(id);
 
     public void Merge() => _commands.Merge();
 
