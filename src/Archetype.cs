@@ -156,19 +156,20 @@ public sealed class Archetype
     {
 		var removed = SwapWithLast(record.Row);
 		ref var chunk = ref GetChunk(record.Row);
+		ref var lastChunk = ref GetChunk(_count - 1);
 
 		for (var i = 0; i < Components.Length; ++i)
 		{
 			if (Components[i].Size <= 0)
 				continue;
 
-			var array = chunk.RawComponentData(i);
-			Array.Copy(array,
-				(_count - 1) % CHUNK_THRESHOLD, array,
-				record.Row % CHUNK_THRESHOLD, 1);
+			var arrayToBeRemoved = chunk.RawComponentData(i);
+			var lastValidArray = lastChunk.RawComponentData(i);
+
+			Array.Copy(lastValidArray, (_count - 1) % lastChunk.Count, arrayToBeRemoved, record.Row % chunk.Count, 1);
 		}
 
-		chunk.Count--;
+		lastChunk.Count -= 1;
 		--_count;
 
         return removed;
@@ -227,13 +228,13 @@ public sealed class Archetype
 			var toArray = toChunk.RawComponentData(j);
 
 			// copy the moved entity to the target archetype
-			Array.Copy(fromArray, fromRow % CHUNK_THRESHOLD, toArray, toRow % CHUNK_THRESHOLD, 1);
+			Array.Copy(fromArray, fromRow % fromChunk.Count, toArray, toRow % toChunk.Count, 1);
 
 			// swap last with the hole
-			Array.Copy(fromArray, last % CHUNK_THRESHOLD, fromArray, fromRow % CHUNK_THRESHOLD, 1);
+			Array.Copy(fromArray, last % toChunk.Count, fromArray, fromRow % fromChunk.Count, 1);
 		}
 
-		fromChunk.Count--;
+		fromChunk.Count -= 1;
 	}
 
 	internal void Clear()
@@ -251,12 +252,12 @@ public sealed class Archetype
 	    ref var chunkFrom = ref GetChunk(fromRow);
 	    ref var chunkTo = ref GetChunk(_count - 1);
 
-        ref var fromRec = ref _world.GetRecord(chunkFrom.Entities[fromRow % CHUNK_THRESHOLD]);
-        ref var lastRec = ref _world.GetRecord(chunkTo.Entities[(_count - 1) % CHUNK_THRESHOLD]);
+        ref var fromRec = ref _world.GetRecord(chunkFrom.Entities[fromRow % chunkFrom.Count]);
+        ref var lastRec = ref _world.GetRecord(chunkTo.Entities[(_count - 1) % chunkTo.Count]);
         lastRec.Row = fromRec.Row;
 
-        var removed = chunkFrom.Entities[fromRow % CHUNK_THRESHOLD];
-        chunkFrom.Entities[fromRow % CHUNK_THRESHOLD] = chunkTo.Entities[(_count - 1) % CHUNK_THRESHOLD];
+        var removed = chunkFrom.Entities[fromRow % chunkFrom.Count];
+        chunkFrom.Entities[fromRow % chunkFrom.Count] = chunkTo.Entities[(_count - 1) % chunkTo.Count];
 
         return removed;
     }
