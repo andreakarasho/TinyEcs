@@ -99,14 +99,17 @@ public sealed class Archetype
     public int Count => _count;
     public readonly ImmutableArray<EcsComponent> Components;
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
+	internal int EmptyChunks => _chunks.Length - Chunks.Length;
 
     [SkipLocalsInit]
     internal ref ArchetypeChunk GetChunk(int index)
     {
+		index /= CHUNK_THRESHOLD;
+
 	    if (index >= _chunks.Length)
 		    Array.Resize(ref _chunks, _chunks.Length * 2);
 
-	    ref var chunk = ref _chunks[index / CHUNK_THRESHOLD];
+	    ref var chunk = ref _chunks[index];
 	    if (chunk.Components == null)
 	    {
 		    chunk.Entities = new EntityView[CHUNK_THRESHOLD];
