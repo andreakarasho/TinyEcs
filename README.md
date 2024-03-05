@@ -89,6 +89,39 @@ foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>
 }
 ```
 
+# Plugins
+
+Relationships
+```csharp
+// Spawn the container
+var woodenChest = ecs.Entity()
+   .Set<Container>();
+
+var sword = ecs.Entity()
+    .Set<Weapon>()
+    .Set<Damage>(new () { Min = 5, Max = 15 });
+    .Set<Amount>(new () { Value = 1 });
+var goldCoins = ecs.Entity()
+    .Set<Gold>()
+    .Set<Amount>(new () { Value = 245 })
+var silverCoins = ecs.Entity()
+    .Set<Silver>()
+    .Set<Amount>(new () { Value = 874 })
+
+// Add contents to the woodenChest
+woodenChest.AddChild(sword);
+woodenChest.AddChild(goldCoins);
+woodenChest.AddChild(silverCoins);
+```
+
+Unique entities
+```csharp
+// create or get an entity named 'Khun'
+var dog = ecs.Entity("Khun");
+dog.Set<Bau>(); 🐶
+```
+
+
 # Credits
 
 Base code idea inspired by:
