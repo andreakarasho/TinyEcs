@@ -77,20 +77,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Enable()
-    {
-        World.Unset<EcsDisabled>(ID);
-        return this;
-    }
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly EntityView Disable()
-    {
-        World.Set<EcsDisabled>(ID);
-        return this;
-    }
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -104,9 +90,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Exists() => World.Exists(ID);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool IsEnabled() => !Has<EcsDisabled>();
 
 
 	public static implicit operator EcsID(EntityView d) => d.ID;

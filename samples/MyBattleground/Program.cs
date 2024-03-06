@@ -12,6 +12,13 @@ var e = ecs.Entity("Main")
 	.Set<Position>(new Position() {X = 2})
 	.Set<Velocity>(new Velocity());
 
+e.Disable();
+var enabled = e.IsEnabled();
+e.Disable();
+enabled = e.IsEnabled();
+e.Enable();
+enabled = e.IsEnabled();
+
 ecs.Filter<(Position, Velocity)>()
 	.Query((EntityView entity) => {
 		Console.WriteLine(entity.Name());
@@ -93,16 +100,20 @@ ecs.Entity()
 
 for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 	ecs.Entity()
-		.Set<Position>(new Position())
-		.Set<Velocity>(new Velocity())
+		.Set<Position>(new Position() {X = i})
+		.Set<Velocity>(new Velocity(){X = i})
 		//  .Set<PlayerTag>()
 		//  .Set<Dogs>()
 		//  .Set<Likes>()
 		 ;
 
+for (var i = 7000; i < 8000 * 2; ++i)
+	ecs.Entity((ulong)i).Delete();
+
 var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
+
 
 while (true)
 {
@@ -116,29 +127,6 @@ while (true)
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;
 			});
-
-		// foreach (var archetype in ecs.Filter<(Position, Velocity)>())
-		// {
-		// 	var column0 = archetype.GetComponentIndex<Position>();
-		// 	var column1 = archetype.GetComponentIndex<Velocity>();
-
-		// 	foreach (ref readonly var chunk in archetype)
-		// 	{
-		// 		ref var pos = ref chunk.GetReference<Position>(column0);
-		// 		ref var vel = ref chunk.GetReference<Velocity>(column1);
-
-		// 		ref var last2 = ref Unsafe.Add(ref pos, chunk.Count);
-
-		// 		while (Unsafe.IsAddressLessThan(ref pos, ref last2))
-		// 		{
-		// 			pos.X *= vel.X;
-		// 			pos.Y *= vel.Y;
-
-		// 			pos = ref Unsafe.Add(ref pos, 1);
-		// 			vel = ref Unsafe.Add(ref vel, 1);
-		// 		}
-		// 	}
-		// }
 	}
 
 	last = start;
