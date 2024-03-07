@@ -92,6 +92,7 @@ foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>
 # Plugins
 
 Relationships
+
 ```csharp
 // Spawn the container
 var woodenChest = ecs.Entity()
@@ -115,12 +116,25 @@ woodenChest.AddChild(silverCoins);
 ```
 
 Unique entities
+
 ```csharp
 // create or get an entity named 'Khun'
 var dog = ecs.Entity("Khun");
 dog.Set<Bau>(); 🐶
 ```
 
+Enable/Disable entities
+
+```csharp
+var ent = ecs.Entity();
+ent.Disable();
+ent.Enable();
+bool isEnabled = ent.IsEnabled();
+
+// `Disabled` is a simple built-in component!
+ecs.Filter<Not<Disabled>>()
+	.Query((EntityView entity) => { });
+```
 
 # Credits
 
