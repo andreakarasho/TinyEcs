@@ -77,7 +77,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ReadOnlySpan<EcsComponent> Type() => World.GetType(ID);
+    public readonly ReadOnlySpan<ComponentInfo> Type() => World.GetType(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct => ref World.Get<T>(ID);

@@ -69,7 +69,7 @@ public sealed class Commands
 		return ref Unsafe.As<object, T>(ref objRef);
     }
 
-    private ref object Set(EcsID id, ref readonly EcsComponent cmp)
+    private ref object Set(EcsID id, ref readonly ComponentInfo cmp)
     {
         EcsAssert.Assert(_main.Exists(id));
 
@@ -130,7 +130,7 @@ public sealed class Commands
         {
             EcsAssert.Assert(_main.Exists(set.Entity));
 
-            var cmp = new EcsComponent(set.Component, set.DataLength);
+            var cmp = new ComponentInfo(set.Component, set.DataLength);
 
             ref var record = ref _main.GetRecord(set.Entity);
             var array = _main.Set(_main.Entity(set.Entity), ref record, in cmp);
@@ -144,7 +144,7 @@ public sealed class Commands
         {
             EcsAssert.Assert(_main.Exists(unset.Entity));
 
-            var cmp = new EcsComponent(unset.Component, unset.ComponentSize);
+            var cmp = new ComponentInfo(unset.Component, unset.ComponentSize);
             _main.DetachComponent(unset.Entity, ref cmp);
         }
 

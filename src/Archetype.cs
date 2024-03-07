@@ -69,7 +69,7 @@ public sealed class Archetype
 
 	internal Archetype(
         World world,
-        ReadOnlySpan<EcsComponent> components,
+        ReadOnlySpan<ComponentInfo> components,
         ComponentComparer comparer
     )
     {
@@ -97,7 +97,7 @@ public sealed class Archetype
 
     public World World => _world;
     public int Count => _count;
-    public readonly ImmutableArray<EcsComponent> Components;
+    public readonly ImmutableArray<ComponentInfo> Components;
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
 	internal int EmptyChunks => _chunks.Length - Chunks.Length;
 
@@ -127,7 +127,7 @@ public sealed class Archetype
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int GetComponentIndex(ref readonly EcsComponent cmp)
+    internal int GetComponentIndex(ref readonly ComponentInfo cmp)
     {
 	    return GetComponentIndex(cmp.ID);
     }
@@ -180,8 +180,8 @@ public sealed class Archetype
 
 	internal Archetype InsertVertex(
         Archetype left,
-        ReadOnlySpan<EcsComponent> components,
-        ref readonly EcsComponent component
+        ReadOnlySpan<ComponentInfo> components,
+        ref readonly ComponentInfo component
     )
     {
         var vertex = new Archetype(left._world, components, _comparer);
@@ -303,7 +303,7 @@ public sealed class Archetype
         MakeEdges(newNode, this, Components[i].ID);
     }
 
-    private bool IsSuperset(ReadOnlySpan<EcsComponent> other)
+    private bool IsSuperset(ReadOnlySpan<ComponentInfo> other)
     {
 	    int i = 0, j = 0;
 	    while (i < Components.Length && j < other.Length)

@@ -19,12 +19,14 @@ enabled = e.IsEnabled();
 e.Enable();
 enabled = e.IsEnabled();
 
-ecs.Filter<(Position, Velocity)>()
+ecs.Filter<(Position, Velocity, Not<Disabled>)>()
 	.Query((EntityView entity) => {
 		Console.WriteLine(entity.Name());
 	});
 
-
+ecs.Query((EntityView entity, ref ComponentInfo cmp) => {
+		Console.WriteLine("cmp {0} size {1}", cmp.ID, cmp.Size);
+	});
 
 // var e2 = ecs.Entity("Main");
 // ref var pp = ref e2.Get<Position>();

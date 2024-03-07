@@ -19,7 +19,7 @@ namespace TinyEcs.Tests
 			cmd.Merge();
 
 			Assert.True(ctx.World.Exists(e.ID));
-			Assert.False(ctx.World.Has<EcsDisabled>(e.ID));
+			Assert.False(ctx.World.Has<Disabled>(e.ID));
 		}
 
 		[Fact]

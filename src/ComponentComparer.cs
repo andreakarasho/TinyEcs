@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<EcsComponent>
+sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<ComponentInfo>
 {
 	private readonly World _world;
 
@@ -10,7 +10,7 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Ec
 	}
 
 
-	public int Compare(EcsComponent x, EcsComponent y)
+	public int Compare(ComponentInfo x, ComponentInfo y)
 	{
 		return CompareTerms(_world, x.ID, y.ID);
 	}

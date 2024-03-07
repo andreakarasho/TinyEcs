@@ -5,9 +5,6 @@ namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
-    const ulong ECS_MAX_COMPONENT_FAST_ID = 256;
-    const ulong ECS_START_USER_ENTITY_DEFINE = ECS_MAX_COMPONENT_FAST_ID;
-
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
@@ -15,27 +12,26 @@ public sealed partial class World : IDisposable
     private int _archetypeCount;
     private readonly ComponentComparer _comparer;
     private readonly Commands _commands;
-    private int _frame;
-    private EcsID _lastCompID = 1;
+	private readonly EcsID _maxCmpId;
 
-    public World()
+    public World(ulong maxComponentId = 256)
     {
         _comparer = new ComponentComparer(this);
         _archRoot = new Archetype(
             this,
-            ReadOnlySpan<EcsComponent>.Empty,
+            ReadOnlySpan<ComponentInfo>.Empty,
             _comparer
         );
         _commands = new(this);
 
-        //InitializeDefaults();
-        //_entities.MaxID = ECS_START_USER_ENTITY_DEFINE;
+		_maxCmpId = maxComponentId;
+        _entities.MaxID = maxComponentId;
 
 		OnPluginInitialization?.Invoke(this);
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, EcsComponent>? OnComponentSet, OnComponentUnset;
+	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
 	public static event Action<World>? OnPluginInitialization;
 
 
@@ -73,9 +69,17 @@ public sealed partial class World : IDisposable
         }
     }
 
-    public unsafe ref readonly EcsComponent Component<T>() where T : struct
+    public ref readonly ComponentInfo Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
+
+		EcsAssert.Panic(lookup.ID < _maxCmpId);
+
+		if (!Exists(lookup.ID))
+		{
+			var e = Entity(lookup.ID)
+				.Set(lookup);
+		}
 
         // if (lookup.ID == 0 || !Exists(lookup.ID))
         // {
@@ -129,6 +133,11 @@ public sealed partial class World : IDisposable
 	// 	return entity;
     // }
 
+	public EntityView Entity<T>() where T : struct
+	{
+		return Entity(Component<T>().ID);
+	}
+
     public EntityView Entity(EcsID id = default)
     {
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
@@ -181,7 +190,7 @@ public sealed partial class World : IDisposable
         return _entities.Contains(entity);
     }
 
-    internal void DetachComponent(EcsID entity, ref readonly EcsComponent cmp)
+    internal void DetachComponent(EcsID entity, ref readonly ComponentInfo cmp)
     {
 		OnComponentUnset?.Invoke(Entity(entity), cmp);
         ref var record = ref GetRecord(entity);
@@ -190,7 +199,7 @@ public sealed partial class World : IDisposable
 
     private bool InternalAttachDetach(
         ref EcsRecord record,
-        ref readonly EcsComponent cmp,
+        ref readonly ComponentInfo cmp,
         bool add
     )
     {
@@ -207,7 +216,7 @@ public sealed partial class World : IDisposable
     }
 
     [SkipLocalsInit]
-    private Archetype? AttachToArchetype(Archetype root, ref readonly EcsComponent cmp, bool add)
+    private Archetype? AttachToArchetype(Archetype root, ref readonly ComponentInfo cmp, bool add)
     {
         if (!add && root.GetComponentIndex(in cmp) < 0)
             return null;
@@ -216,8 +225,8 @@ public sealed partial class World : IDisposable
         var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
 
         const int STACKALLOC_SIZE = 16;
-		EcsComponent[]? buffer = null;
-		scoped var span = cmpCount <= STACKALLOC_SIZE ? stackalloc EcsComponent[STACKALLOC_SIZE] : (buffer = ArrayPool<EcsComponent>.Shared.Rent(cmpCount));
+		ComponentInfo[]? buffer = null;
+		scoped var span = cmpCount <= STACKALLOC_SIZE ? stackalloc ComponentInfo[STACKALLOC_SIZE] : (buffer = ArrayPool<ComponentInfo>.Shared.Rent(cmpCount));
 
 		span = span[..cmpCount];
 
@@ -249,12 +258,12 @@ public sealed partial class World : IDisposable
 		}
 
 		if (buffer != null)
-            ArrayPool<EcsComponent>.Shared.Return(buffer);
+            ArrayPool<ComponentInfo>.Shared.Return(buffer);
 
         return arch;
     }
 
-    private ref Archetype? GetArchetype(Span<EcsComponent> components, bool create)
+    private ref Archetype? GetArchetype(Span<ComponentInfo> components, bool create)
 	{
 		var hash = Hashing.Calculate(components);
 		ref var arch = ref Unsafe.NullRef<Archetype>();
@@ -280,7 +289,7 @@ public sealed partial class World : IDisposable
 		return ref arch;
 	}
 
-	internal Array? Set(EntityView entity, ref EcsRecord record, ref readonly EcsComponent cmp)
+	internal Array? Set(EntityView entity, ref EcsRecord record, ref readonly ComponentInfo cmp)
     {
         var emit = false;
         var column = record.Archetype.GetComponentIndex(in cmp);
@@ -303,13 +312,13 @@ public sealed partial class World : IDisposable
         return array;
     }
 
-    internal bool Has(EcsID entity, ref readonly EcsComponent cmp)
+    internal bool Has(EcsID entity, ref readonly ComponentInfo cmp)
     {
         ref var record = ref GetRecord(entity);
         return record.Archetype.GetComponentIndex(in cmp) >= 0;
     }
 
-    public ReadOnlySpan<EcsComponent> GetType(EcsID id)
+    public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
     {
         ref var record = ref GetRecord(id);
         return record.Archetype.Components.AsSpan();
@@ -509,7 +518,7 @@ public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 
 internal static class Hashing
 {
-	public static ulong Calculate(ReadOnlySpan<EcsComponent> components)
+	public static ulong Calculate(ReadOnlySpan<ComponentInfo> components)
 	{
 		var hc = (ulong)components.Length;
 		foreach (ref readonly var val in components)
@@ -552,9 +561,9 @@ internal static class Lookup
 	{
         public static readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
-        public static readonly ulong HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index)) - 1;
+        public static readonly ulong HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index)) - 0;
 
-		public static readonly EcsComponent Value = new EcsComponent(HashCode, Size);
+		public static readonly ComponentInfo Value = new ComponentInfo(HashCode, Size);
 
 		static Component()
 		{

@@ -23,7 +23,7 @@
         [Fact]
         public void SparseSet_Recycle()
         {
-            var set = new EntitySparseSet<EcsComponent>();
+            var set = new EntitySparseSet<ComponentInfo>();
             int count = 1000;
             var genCount = 100;
             var ids = new List<ulong>();
