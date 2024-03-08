@@ -27,18 +27,18 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Co
 
 	public static int CompareTerms(World world, ulong a, ulong b)
 	{
-		//if (IDOp.IsPair(a) && IDOp.IsPair(b))
-		//{
-		//	if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
-		//	{
-		//		var secondY = IDOp.GetPairSecond(b);
+		// if (IDOp.IsPair(a) && IDOp.IsPair(b))
+		// {
+		// 	if (IDOp.GetPairFirst(a) == IDOp.GetPairFirst(b))
+		// 	{
+		// 		var secondY = IDOp.GetPairSecond(b);
 
-		//		if (secondY == Lookup.Entity<EcsAny>.Component.ID)
-		//		{
-		//			return 0;
-		//		}
-		//	}
-		//}
+		// 		if (secondY == ulong.MaxValue)
+		// 		{
+		// 			return 0;
+		// 		}
+		// 	}
+		// }
 
 		return a.CompareTo(b);
 	}

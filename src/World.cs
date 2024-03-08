@@ -162,7 +162,7 @@ public sealed partial class World : IDisposable
     internal ref EcsRecord GetRecord(EcsID id)
     {
         ref var record = ref _entities.Get(id);
-        EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+        EcsAssert.Assert(!Unsafe.IsNullRef(ref record), $"entity {id} is dead or doesn't exist!");
         return ref record;
     }
 

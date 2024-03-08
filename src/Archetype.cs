@@ -330,7 +330,7 @@ public sealed class Archetype
 	        ref readonly var current = ref currents[i];
 	        ref readonly var search = ref searching[j];
 
-            if (current.ID.CompareTo(search.ID) == 0)
+            if (_comparer.Compare(current.ID, search.ID) == 0)
             {
                 if (search.Op != TermOp.With)
                     return -1;

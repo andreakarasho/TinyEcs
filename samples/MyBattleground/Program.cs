@@ -12,6 +12,13 @@ var e = ecs.Entity("Main")
 	.Set<Position>(new Position() {X = 2})
 	.Set<Velocity>(new Velocity());
 
+
+var rabbit = ecs.Entity();
+var eats = ecs.Entity();
+var carrots = ecs.Entity();
+var grass = ecs.Entity();
+
+
 e.Disable();
 var enabled = e.IsEnabled();
 e.Disable();
@@ -36,25 +43,36 @@ var child2 = ecs.Entity("child 1");
 var child3 = ecs.Entity("child 2");
 
 
-e.AddChild(child);
-e.AddChild(child2);
-child2.AddChild(child3);
+e.AddChild<Hierarchy>(child);
+e.AddChild<Hierarchy>(child2);
+child2.AddChild<Hierarchy>(child3);
 
-foreach (var childId in e.Children())
+
+e.AddChild<Chunk>(child2);
+e.AddChild<Chunk>(child3);
+
+child2.Delete();
+
+foreach (var childId in e.Children<Hierarchy>())
 {
 
 }
 
-ecs.Filter<(With<Child>, With<Parent>)>().Query((EntityView entity, ref Relationship relation) => {
+foreach (var childId in e.Children<Chunk>())
+{
+
+}
+
+ecs.Filter<(With<Child<Hierarchy>>, With<Parent<Hierarchy>>)>().Query((EntityView entity, ref Relationship<Hierarchy> relation) => {
 	Console.WriteLine("im [{0}] a child of {1}, but also having {2} children", entity.Name(), ecs.Entity(relation.Parent).Name(), relation.Count);
 });
 
 Console.WriteLine();
 
-ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+ecs.Filter<With<Parent<Hierarchy>>>().Query((EntityView entity, ref Relationship<Hierarchy> relation) => {
 	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 
-	foreach (var id in entity.Children())
+	foreach (var id in entity.Children<Hierarchy>())
 	{
 		Console.WriteLine("\tChild: {0}", ecs.Entity(id).Name());
 	}
@@ -62,15 +80,15 @@ ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) 
 
 Console.WriteLine();
 
-e.RemoveChild(child);
-ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+e.RemoveChild<Hierarchy>(child);
+ecs.Filter<With<Parent<Hierarchy>>>().Query((EntityView entity, ref Relationship<Hierarchy> relation) => {
 	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 });
 
 Console.WriteLine();
 
-child2.RemoveChild(child3);
-ecs.Filter<With<Parent>>().Query((EntityView entity, ref Relationship relation) => {
+child2.RemoveChild<Hierarchy>(child3);
+ecs.Filter<With<Parent<Hierarchy>>>().Query((EntityView entity, ref Relationship<Hierarchy> relation) => {
 	Console.WriteLine("parent {0} has {1} children", entity.Name(), relation.Count);
 });
 
@@ -85,10 +103,10 @@ for (var i = 0; i < 5; ++i)
 {
 	var c = ecs.Entity();
 	Console.WriteLine("Add {0}", c.ID);
-	e.AddChild(c);
+	e.AddChild<Hierarchy>(c);
 }
 
-foreach (var childId in e.Children())
+foreach (var childId in e.Children<Hierarchy>())
 {
 	Console.WriteLine("child {0}", childId);
 }

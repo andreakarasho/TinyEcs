@@ -2,7 +2,10 @@
 
 namespace TinyEcs;
 
-public struct Relationship
+public readonly struct Hierarchy { }
+
+
+public struct Relationship<T> where T : struct
 {
     public int Count;
     public EcsID First;
@@ -10,13 +13,13 @@ public struct Relationship
     public EcsID Next;
     public EcsID Prev;
 
-	public readonly RelationshipIterator Children(World world) => new (world, First);
+	public readonly RelationshipIterator<T> Children(World world) => new (world, First);
 }
 
-public readonly struct Parent { }
-public readonly struct Child { }
+public readonly struct Parent<T> where T : struct { }
+public readonly struct Child<T> where T : struct { }
 
-public ref struct RelationshipIterator
+public ref struct RelationshipIterator<T> where T : struct
 {
 	private readonly World _world;
 	private EcsID _currentEntity, _next;
@@ -35,12 +38,12 @@ public ref struct RelationshipIterator
 		_currentEntity = _next;
 
 		if (_next != 0)
-			_next = _world.Get<Relationship>(_next).Next;
+			_next = _world.Get<Relationship<T>>(_next).Next;
 
 		return _currentEntity != 0;
 	}
 
-	public readonly RelationshipIterator GetEnumerator() => this;
+	public readonly RelationshipIterator<T> GetEnumerator() => this;
 }
 
 public static class RelationshipPlugin
@@ -49,63 +52,74 @@ public static class RelationshipPlugin
 	internal static void ModuleInit()
 	{
 		World.OnPluginInitialization += world => {
-			world.Component<Parent>();
-			world.Component<Child>();
-			world.Component<Relationship>();
-			world.OnEntityDeleted += e => {
-				if (e.Has<Parent>())
-				{
-					e.World.Merge();
-
-					foreach (var childId in e.Children())
-					{
-						e.World.DeferredEntity(childId).Delete();
-					}
-
-					e.World.Merge();
-				}
-
-				if (e.Has<Child>())
-				{
-					ref var rel = ref e.Get<Relationship>();
-					if (rel.Parent != 0 && e.World.Exists(rel.Parent))
-						e.World.Entity(rel.Parent).RemoveChild(e);
-				}
-			};
+			world.Component<Parent<Hierarchy>>();
+			world.Component<Child<Hierarchy>>();
+			world.Component<Relationship<Hierarchy>>();
+			world.BindDeletion<Hierarchy>();
 		};
 	}
 
-	public static void AddChild(this EntityView entity, EcsID child)
-		=> entity.World.AddChild(entity.ID, child);
-
-	public static void RemoveChild(this EntityView entity, EcsID child)
-		=> entity.World.RemoveChild(entity.ID, child);
-
-	public static void ClearChildren(this EntityView entity)
-		=> entity.World.ClearChildren(entity.ID);
-
-	public static RelationshipIterator Children(this EntityView entity)
+	private static void BindDeletion<T>(this World world) where T : struct
 	{
-		if (!entity.Has<Relationship>())
-			return default;
+		world.OnEntityDeleted += e => {
+			if (e.Has<Parent<T>>())
+			{
+				var first = e.Get<Relationship<T>>().First;
+				while (first != 0)
+				{
+					var next = e.World.Get<Relationship<T>>(first).Next;
+					e.World.Delete(first);
+					first = next;
+				}
+			}
 
-		return entity.Get<Relationship>().Children(entity.World);
+			if (e.Has<Child<T>>())
+			{
+				ref var rel = ref e.Get<Relationship<T>>();
+				if (rel.Parent != 0 && e.World.Exists(rel.Parent))
+					e.World.Entity(rel.Parent).RemoveChild<T>(e);
+			}
+		};
 	}
 
-	public static void AddChild(this World world, EcsID parentId, EcsID childId)
+	public static void AddChild<T>(this EntityView entity, EcsID child) where T : struct
+		=> entity.World.AddChild<T>(entity.ID, child);
+
+	public static void RemoveChild<T>(this EntityView entity, EcsID child) where T : struct
+		=> entity.World.RemoveChild<T>(entity.ID, child);
+
+	public static void ClearChildren<T>(this EntityView entity) where T : struct
+		=> entity.World.ClearChildren<T>(entity.ID);
+
+	public static RelationshipIterator<T> Children<T>(this EntityView entity) where T : struct
+	{
+		if (!entity.Has<Relationship<T>>())
+			return default;
+
+		return entity.Get<Relationship<T>>().Children(entity.World)!;
+	}
+
+	public static void AddChild<T>(this World world, EcsID parentId, EcsID childId) where T : struct
     {
-		if (!world.Has<Relationship>(parentId))
+		var hierarchy = world.Entity<T>();
+		if (!hierarchy.Has<T>())
 		{
-			world.Set(parentId, new Relationship());
+			hierarchy.Set<T>();
+			world.BindDeletion<T>();
 		}
 
-		if (!world.Has<Relationship>(childId))
+		if (!world.Has<Relationship<T>>(parentId))
 		{
-			world.Set(childId, new Relationship());
+			world.Set(parentId, new Relationship<T>());
 		}
 
-		ref var parentRelationship = ref world.Get<Relationship>(parentId);
-        ref var childRelationship = ref world.Get<Relationship>(childId);
+		if (!world.Has<Relationship<T>>(childId))
+		{
+			world.Set(childId, new Relationship<T>());
+		}
+
+		ref var parentRelationship = ref world.Get<Relationship<T>>(parentId);
+        ref var childRelationship = ref world.Get<Relationship<T>>(childId);
 
         // Update child's parent
         childRelationship.Parent = parentId;
@@ -119,34 +133,34 @@ public static class RelationshipPlugin
         {
             // Traverse to the end of the children list
             var current = parentRelationship.First;
-            while (world.Get<Relationship>(current).Next != 0)
+            while (world.Get<Relationship<T>>(current).Next != 0)
             {
-                current = world.Get<Relationship>(current).Next;
+                current = world.Get<Relationship<T>>(current).Next;
             }
 
             // Add the child at the end
-            ref var lastRelationship = ref world.Get<Relationship>(current);
+            ref var lastRelationship = ref world.Get<Relationship<T>>(current);
             lastRelationship.Next = childId;
             childRelationship.Prev = current;
             parentRelationship.Count++;
         }
 
-		world.Set<Parent>(parentId);
-		world.Set<Child>(childId);
+		world.Set<Parent<T>>(parentId);
+		world.Set<Child<T>>(childId);
     }
 
-    public static void RemoveChild(this World world, EcsID parentId, EcsID childId)
+    public static void RemoveChild<T>(this World world, EcsID parentId, EcsID childId) where T : struct
     {
-		if (!world.Has<Relationship>(parentId))
+		if (!world.Has<Relationship<T>>(parentId))
 			return;
 
-		ref var parentRelationship = ref world.Get<Relationship>(parentId);
-        ref var childRelationship = ref world.Get<Relationship>(childId);
+		ref var parentRelationship = ref world.Get<Relationship<T>>(parentId);
+        ref var childRelationship = ref world.Get<Relationship<T>>(childId);
 
         if (childRelationship.Prev != 0)
         {
             // Update previous sibling's next pointer
-            ref var prevRelationship = ref world.Get<Relationship>(childRelationship.Prev);
+            ref var prevRelationship = ref world.Get<Relationship<T>>(childRelationship.Prev);
             prevRelationship.Next = childRelationship.Next;
         }
         else
@@ -158,7 +172,7 @@ public static class RelationshipPlugin
         if (childRelationship.Next != 0)
         {
             // Update next sibling's previous pointer
-            ref var nextRelationship = ref world.Get<Relationship>(childRelationship.Next);
+            ref var nextRelationship = ref world.Get<Relationship<T>>(childRelationship.Next);
             nextRelationship.Prev = childRelationship.Prev;
         }
 
@@ -168,33 +182,33 @@ public static class RelationshipPlugin
         childRelationship.Prev = 0;
         parentRelationship.Count--;
 
-		world.Unset<Relationship>(childId);
-		world.Unset<Child>(childId);
+		world.Unset<Relationship<T>>(childId);
+		world.Unset<Child<T>>(childId);
 
 		if (parentRelationship.Count <= 0)
 		{
-			world.Unset<Parent>(parentId);
+			world.Unset<Parent<T>>(parentId);
 
 			if (parentRelationship.Parent == 0)
-				world.Unset<Relationship>(parentId);
+				world.Unset<Relationship<T>>(parentId);
 		}
     }
 
-    public static void ClearChildren(this World world, EcsID parentId)
+    public static void ClearChildren<T>(this World world, EcsID parentId) where T : struct
     {
-		if (!world.Has<Relationship>(parentId))
+		if (!world.Has<Relationship<T>>(parentId))
 			return;
 
-        ref var parentRelationship = ref world.Get<Relationship>(parentId);
+        ref var parentRelationship = ref world.Get<Relationship<T>>(parentId);
         var currentChild = parentRelationship.First;
 
         while (currentChild != 0)
         {
-            var nextChild = world.Get<Relationship>(currentChild).Next;
-            world.RemoveChild(parentId, currentChild);
+            var nextChild = world.Get<Relationship<T>>(currentChild).Next;
+            world.RemoveChild<T>(parentId, currentChild);
             currentChild = nextChild;
         }
 
-		world.Unset<Parent>(parentId);
+		world.Unset<Parent<T>>(parentId);
     }
 }
