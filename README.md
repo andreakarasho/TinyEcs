@@ -94,25 +94,33 @@ foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>
 Relationships
 
 ```csharp
+// We can define a custom hierarchy
+//  so we can handle multiple parent-child
+//  relationships at the same time
+struct ChestContainer {}
+
 // Spawn the container
 var woodenChest = ecs.Entity()
    .Set<Container>();
 
+// Spawn the chest content
 var sword = ecs.Entity()
     .Set<Weapon>()
     .Set<Damage>(new () { Min = 5, Max = 15 });
     .Set<Amount>(new () { Value = 1 });
+
 var goldCoins = ecs.Entity()
     .Set<Gold>()
-    .Set<Amount>(new () { Value = 245 })
+    .Set<Amount>(new () { Value = 245 });
+
 var silverCoins = ecs.Entity()
     .Set<Silver>()
-    .Set<Amount>(new () { Value = 874 })
+    .Set<Amount>(new () { Value = 874 });
 
-// Add contents to the woodenChest
-woodenChest.AddChild(sword);
-woodenChest.AddChild(goldCoins);
-woodenChest.AddChild(silverCoins);
+// Add items to the woodenChest
+woodenChest.AddChild<ChestContainer>(sword);
+woodenChest.AddChild<ChestContainer>(goldCoins);
+woodenChest.AddChild<ChestContainer>(silverCoins);
 ```
 
 Unique entities
