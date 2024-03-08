@@ -121,6 +121,12 @@ var silverCoins = ecs.Entity()
 woodenChest.AddChild<ChestContainer>(sword);
 woodenChest.AddChild<ChestContainer>(goldCoins);
 woodenChest.AddChild<ChestContainer>(silverCoins);
+
+// Query for all children that have a 'ChestContainer' relationship
+ecs.Filter<With<Child<ChestContainer>>>()
+   .Query((EntityView entity) => {
+       Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!");
+   });
 ```
 
 Unique entities
