@@ -107,7 +107,7 @@ public sealed class Archetype
 		index /= CHUNK_THRESHOLD;
 
 	    if (index >= _chunks.Length)
-		    Array.Resize(ref _chunks, _chunks.Length * 2);
+		    Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
 
 	    ref var chunk = ref _chunks[index];
 	    if (chunk.Components == null)
@@ -197,6 +197,13 @@ public sealed class Archetype
         MoveTo(fromRow, to, toRow);
 
         --_count;
+
+
+		// Cleanup
+		var empty = EmptyChunks;
+		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
+		if (empty > half)
+			Array.Resize(ref _chunks, half);
 
         return toRow;
     }
