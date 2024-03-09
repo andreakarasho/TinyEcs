@@ -198,7 +198,6 @@ public sealed class Archetype
 
         --_count;
 
-
 		// Cleanup
 		var empty = EmptyChunks;
 		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
