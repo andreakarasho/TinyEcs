@@ -12,6 +12,19 @@
 		<CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\Generated</CompilerGeneratedFilesOutputPath>
 	</PropertyGroup>
 
+	<PropertyGroup>
+		<PackageId>TinyEcs.Main</PackageId>
+		<PackageVersion>1.0.0</PackageVersion>
+		<Authors>andreakarasho</Authors>
+		<Description>Entity Component System</Description>
+		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+		<PackageReleaseNotes>First release</PackageReleaseNotes>
+		<PackageTags>ecs gamedev game unity godot monogame fna nativeaot naot</PackageTags>
+		<PackageProjectUrl>https://github.com/andreakarasho/TinyEcs</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/andreakarasho/TinyEcs</RepositoryUrl>
+        <RepositoryType>Github</RepositoryType>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
 	</ItemGroup>

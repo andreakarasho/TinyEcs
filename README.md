@@ -1,5 +1,8 @@
 # TinyEcs
 
+![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)
+![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)
+
 Small project born by the need of a reflection-free dotnet ECS library.<br>
 NativeAOT & bflat compatible.
 Compatible with all major game engines/frameworks Unity, Godot, Monogame, FNA, Raylib-cs, etc...
