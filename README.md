@@ -1,7 +1,7 @@
 # TinyEcs
 
-![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)
-![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)
+[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
+[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)](https://www.nuget.org/packages/TinyEcs.Plugins)
 
 Small project born by the need of a reflection-free dotnet ECS library.<br>
 NativeAOT & bflat compatible.
