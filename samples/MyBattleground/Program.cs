@@ -7,11 +7,15 @@ using System.Runtime.CompilerServices;
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
+var systems = new SystemManager(ecs);
+systems.Add<MoveSystem>();
+
 
 var e = ecs.Entity("Main")
 	.Set<Position>(new Position() {X = 2})
 	.Set<Velocity>(new Velocity());
 
+systems.Update();
 
 var rabbit = ecs.Entity();
 var eats = ecs.Entity();
@@ -185,3 +189,24 @@ struct Context2 {}
 
 struct Chunk;
 struct ChunkTile;
+
+
+sealed class MoveSystem : TinyEcs.System
+{
+	public override void OnCreate()
+	{
+		Console.WriteLine("system {0} created", Name);
+	}
+
+	public override void OnStart()
+	{
+		Console.WriteLine("system {0} started", Name);
+	}
+
+	public override void OnUpdate()
+	{
+		Ecs.Query((ref Position pos, ref Velocity vel) => {
+			Console.WriteLine("aa");
+		});
+	}
+}

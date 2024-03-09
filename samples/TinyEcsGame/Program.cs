@@ -12,73 +12,33 @@ const int ENTITIES_TO_SPAWN = 1_000_00;
 Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TinyEcs sample");
 
 using var ecs = new World();
-SpawnEntities(ecs);
+var systems = new SystemManager(ecs);
 
-var systems = new List<IUpdateSystem<float>>();
-systems.Add(new MoveSystem(ecs));
-systems.Add(new CheckBorderSystem(ecs));
+var spawner = systems.Add<SpawnEntities>();
+spawner.EntitiesToSpawn = ENTITIES_TO_SPAWN;
+spawner.WindowSize = new Vector2(WINDOW_WIDTH, WINDOW_HEIGHT);
+spawner.Velocity = VELOCITY;
 
-var rendering = new List<IUpdateSystem<float>>();
-rendering.Add(new BeginRenderSystem());
-rendering.Add(new RenderEntities(ecs));
-rendering.Add(new RenderText(ecs));
-rendering.Add(new EndRenderSystem());
+systems.Add<MoveSystem>();
+systems.Add<CheckBorderSystem>().WindowSize = spawner.WindowSize;
+
+systems.Add<BeginRenderSystem>();
+systems.Add<RenderEntities>();
+systems.Add<RenderText>();
+systems.Add<EndRenderSystem>();
+
 
 while (!Raylib.WindowShouldClose())
 {
-	var deltaTime = Raylib.GetFrameTime();
-
-	foreach (var system in systems)
-		system.Update(in deltaTime);
-
-	foreach (var system in rendering)
-		system.Update(in deltaTime);
+	systems.Update();
 }
 
+systems.Clear();
 Raylib.CloseWindow();
 
 
-void SpawnEntities(World ecs)
-{
-	var rnd = new Random();
-	var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
 
-	for (ulong i = 0; i < ENTITIES_TO_SPAWN; ++i)
-	{
-		ecs!
-			.Entity()
-			.Set(
-				new Position()
-				{
-					Value = new Vector2(rnd.Next(0, WINDOW_WIDTH), rnd.Next(0, WINDOW_HEIGHT))
-				}
-			)
-			.Set(
-				new Velocity()
-				{
-					Value = new Vector2(
-						rnd.Next(-VELOCITY, VELOCITY),
-						rnd.Next(-VELOCITY, VELOCITY)
-					)
-				}
-			)
-			.Set(
-				new Sprite()
-				{
-					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
-					Scale = rnd.NextSingle(),
-					Texture = texture
-				}
-			)
-			.Set(
-				new Rotation()
-				{
-					Value = 0f,
-					Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
-				}
-			);
-	}
-}
+
 
 struct Position
 {
@@ -104,16 +64,11 @@ struct Rotation
 }
 
 
-sealed class MoveSystem : UpdateSystem<float>
+sealed class MoveSystem : TinyEcs.System
 {
-	public MoveSystem(World ecs) : base(ecs)
+	public override void OnUpdate()
 	{
-
-	}
-
-	public override void Update(in float data)
-	{
-		var deltaTime = data;
+		var deltaTime = Raylib.GetFrameTime();
 
 		Ecs.Query((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 		{
@@ -123,17 +78,12 @@ sealed class MoveSystem : UpdateSystem<float>
 	}
 }
 
-sealed class CheckBorderSystem : UpdateSystem<float>
+sealed class CheckBorderSystem : TinyEcs.System
 {
-	public CheckBorderSystem(World ecs) : base(ecs)
-	{
-	}
+	public Vector2 WindowSize { get; set; }
 
-	public override void Update(in float data)
+	public override void OnUpdate()
 	{
-		const int WINDOW_WIDTH = 800;
-		const int WINDOW_HEIGHT = 600;
-
 		Ecs.Query((ref Position pos, ref Velocity vel) =>
 		{
 			if (pos.Value.X < 0.0f)
@@ -141,9 +91,9 @@ sealed class CheckBorderSystem : UpdateSystem<float>
 				pos.Value.X = 0;
 				vel.Value.X *= -1;
 			}
-			else if (pos.Value.X > WINDOW_WIDTH)
+			else if (pos.Value.X > WindowSize.X)
 			{
-				pos.Value.X = WINDOW_WIDTH;
+				pos.Value.X = WindowSize.X;
 				vel.Value.X *= -1;
 			}
 
@@ -152,39 +102,35 @@ sealed class CheckBorderSystem : UpdateSystem<float>
 				pos.Value.Y = 0;
 				vel.Value.Y *= -1;
 			}
-			else if (pos.Value.Y > WINDOW_HEIGHT)
+			else if (pos.Value.Y > WindowSize.Y)
 			{
-				pos.Value.Y = WINDOW_HEIGHT;
+				pos.Value.Y = WindowSize.Y;
 				vel.Value.Y *= -1;
 			}
 		});
 	}
 }
 
-sealed class BeginRenderSystem : IUpdateSystem<float>
+sealed class BeginRenderSystem : TinyEcs.System
 {
-	public void Update(in float gameTime)
+	public override void OnUpdate()
 	{
 		Raylib.BeginDrawing();
 		Raylib.ClearBackground(Color.Black);
 	}
 }
 
-sealed class EndRenderSystem : IUpdateSystem<float>
+sealed class EndRenderSystem : TinyEcs.System
 {
-	public void Update(in float gameTime)
+	public override void OnUpdate()
 	{
 		Raylib.EndDrawing();
 	}
 }
 
-sealed class RenderEntities : UpdateSystem<float>
+sealed class RenderEntities : TinyEcs.System
 {
-	public RenderEntities(World ecs) : base(ecs)
-	{
-	}
-
-	public override void Update(in float gameTime)
+	public override void OnUpdate()
 	{
 		Ecs.Query((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 		{
@@ -193,15 +139,11 @@ sealed class RenderEntities : UpdateSystem<float>
 	}
 }
 
-sealed class RenderText : UpdateSystem<float>
+sealed class RenderText : TinyEcs.System
 {
-	public RenderText(World ecs) : base(ecs)
+	public override void OnUpdate()
 	{
-	}
-
-	public override void Update(in float gameTime)
-	{
-		var deltaTime = gameTime;
+		var deltaTime = Raylib.GetFrameTime();
 
 		var dbgText =
 			$"""
@@ -215,18 +157,54 @@ sealed class RenderText : UpdateSystem<float>
 	}
 }
 
-abstract class UpdateSystem<T> : IUpdateSystem<T>
+sealed class SpawnEntities : TinyEcs.System
 {
-	protected UpdateSystem(World ecs)
+	public int EntitiesToSpawn { get; set; }
+	public Vector2 WindowSize { get; set; }
+	public int Velocity { get; set; }
+
+	public override void OnCreate()
 	{
-		Ecs = ecs;
+		// This system is just one shot
+		Disable();
+
+		var rnd = new Random();
+		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
+
+		for (var i = 0; i < EntitiesToSpawn; ++i)
+		{
+			Ecs!
+				.Entity()
+				.Set(
+					new Position()
+					{
+						Value = new Vector2(rnd.Next(0, (int)WindowSize.X), rnd.Next(0, (int)WindowSize.Y))
+					}
+				)
+				.Set(
+					new Velocity()
+					{
+						Value = new Vector2(
+							rnd.Next(-Velocity, Velocity),
+							rnd.Next(-Velocity, Velocity)
+						)
+					}
+				)
+				.Set(
+					new Sprite()
+					{
+						Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
+						Scale = rnd.NextSingle(),
+						Texture = texture
+					}
+				)
+				.Set(
+					new Rotation()
+					{
+						Value = 0f,
+						Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
+					}
+				);
+		}
 	}
-
-	public World Ecs { get; }
-
-	public abstract void Update(in T data);
-}
-interface IUpdateSystem<T>
-{
-	void Update(in T data);
 }
