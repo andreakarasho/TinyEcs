@@ -2,6 +2,7 @@
 
 Small project born by the need of a reflection-free dotnet ECS library.<br>
 NativeAOT & bflat compatible.
+Compatible with all major game engines/frameworks Unity, Godot, Monogame, FNA, Raylib-cs, etc...
 
 # Requirements
 
