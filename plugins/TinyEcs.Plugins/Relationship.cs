@@ -65,7 +65,7 @@ public static class RelationshipPlugin
 			if (e.Has<Parent<T>>())
 			{
 				var first = e.Get<Relationship<T>>().First;
-				while (first != 0)
+				while (first != 0 && e.World.Exists(first))
 				{
 					var next = e.World.Get<Relationship<T>>(first).Next;
 					e.World.Delete(first);

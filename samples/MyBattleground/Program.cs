@@ -51,7 +51,7 @@ child2.AddChild<Hierarchy>(child3);
 e.AddChild<Chunk>(child2);
 e.AddChild<Chunk>(child3);
 
-child2.Delete();
+//child2.Delete();
 
 foreach (var childId in e.Children<Hierarchy>())
 {
