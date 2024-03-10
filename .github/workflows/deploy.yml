@@ -25,6 +25,6 @@ jobs:
       run: dotnet pack src/ -c Release -o dist && dotnet pack plugins/TinyEcs.Plugins/ -c Release -o dist
     - name: Publish
       run: |
-        dotnet nuget push "dist/TinyEcs.Main.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }}
-        dotnet nuget push "dist/TinyEcs.Plugins.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }}
+        dotnet nuget push "dist/TinyEcs.Main.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }} --source "github"
+        dotnet nuget push "dist/TinyEcs.Plugins.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }} --source "github"
       
