@@ -107,49 +107,39 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
-							var hash = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Hash;
 							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
-							var withouts = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Withouts;
-							var arch = {(withFilter ? "_world." : "")}FindArchetype(hash, terms);
-							if (arch == null) return;
-							InternalQuery(arch, fn, terms, withouts);
+							var query = new QueryInternal({(withFilter ? "_world." : "")}Archetypes, terms);
 
-							static void InternalQuery
-							(
-								Archetype arch, 
-								{delegateName}<{typeParams}> fn, 
-								ReadOnlySpan<Term> terms,
-								IDictionary<ulong, Term> withouts
-							)
+							foreach (var arch in query)
 							{{
-								if (arch.Count > 0)
-								{{
-									{columnIndices}
+								{columnIndices}
 
-									foreach (ref readonly var chunk in arch)
+								foreach (ref readonly var chunk in arch)
+								{{
+									{fieldList}
+									ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
+									ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+
+									while (Unsafe.IsAddressLessThan(ref t0A, ref last))
 									{{
-										{fieldList}
-										ref var last = ref Unsafe.Add(ref t0A, chunk.Count);
+										fn({signCallback});
+										{advanceField}
 
-										while (Unsafe.IsAddressLessThan(ref t0A, ref last))
-										{{
-											fn({signCallback});
-											{advanceField}
-										}}
+										fn({signCallback});
+										{advanceField}
+
+										fn({signCallback});
+										{advanceField}
+
+										fn({signCallback});
+										{advanceField}
 									}}
-								}}
 
-								var span = CollectionsMarshal.AsSpan(arch._edgesRight);
-
-								ref var start = ref MemoryMarshal.GetReference(span);
-								ref var end = ref Unsafe.Add(ref start, span.Length);
-
-								while (Unsafe.IsAddressLessThan(ref start, ref end))
-								{{
-									if (!withouts.ContainsKey(start.ComponentID))
-										InternalQuery(start.Archetype, fn, terms, withouts);
-
-									start = ref Unsafe.Add(ref start, 1);
+									while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+									{{
+										fn({signCallback});
+										{advanceField}
+									}}
 								}}
 							}}
 						}}
@@ -160,6 +150,104 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 			return sb.ToString();
 		}
+
+		// static string GenerateFilterQuery(bool withFilter, bool withEntityView)
+		// {
+		// 	var className = withFilter ? "struct FilterQuery" : "class World";
+		// 	var filter = withFilter ? "<TFilter>" : "";
+		// 	var filterMethod = withFilter ? ", TFilter" : "";
+		// 	var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
+
+		// 	var sb = new StringBuilder();
+		// 	sb.AppendLine($@"
+		// 		public partial {className}{filter}
+		// 		{{
+		// 	");
+
+		// 	for (var i = 0; i < MAX_GENERICS; ++i)
+		// 	{
+		// 		var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+		// 		var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
+		// 		var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
+		// 		var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+		// 		                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+		// 		var signCallback = (withEntityView ? "entityA, " : "") +
+		// 		                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
+		// 		var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
+		// 		                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+
+		// 		sb.AppendLine($@"
+		// 				public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+		// 				{{
+		// 					var hash = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Hash;
+		// 					var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
+		// 					var withouts = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Withouts;
+		// 					var arch = {(withFilter ? "_world." : "")}FindArchetype(hash, terms);
+		// 					if (arch == null) return;
+		// 					InternalQuery(arch, fn, terms, withouts);
+
+		// 					static void InternalQuery
+		// 					(
+		// 						Archetype arch,
+		// 						{delegateName}<{typeParams}> fn,
+		// 						ReadOnlySpan<Term> terms,
+		// 						IDictionary<ulong, Term> withouts
+		// 					)
+		// 					{{
+		// 						if (arch.Count > 0)
+		// 						{{
+		// 							{columnIndices}
+
+		// 							foreach (ref readonly var chunk in arch)
+		// 							{{
+		// 								{fieldList}
+		// 								ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
+		// 								ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+
+		// 								while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+		// 								{{
+		// 									fn({signCallback});
+		// 									{advanceField}
+
+		// 									fn({signCallback});
+		// 									{advanceField}
+
+		// 									fn({signCallback});
+		// 									{advanceField}
+
+		// 									fn({signCallback});
+		// 									{advanceField}
+		// 								}}
+
+		// 								while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+		// 								{{
+		// 									fn({signCallback});
+		// 									{advanceField}
+		// 								}}
+		// 							}}
+		// 						}}
+
+		// 						var span = CollectionsMarshal.AsSpan(arch._edgesRight);
+
+		// 						ref var start = ref MemoryMarshal.GetReference(span);
+		// 						ref var end = ref Unsafe.Add(ref start, span.Length);
+
+		// 						while (Unsafe.IsAddressLessThan(ref start, ref end))
+		// 						{{
+		// 							if (!withouts.ContainsKey(start.ComponentID))
+		// 								InternalQuery(start.Archetype, fn, terms, withouts);
+
+		// 							start = ref Unsafe.Add(ref start, 1);
+		// 						}}
+		// 					}}
+		// 				}}
+		// 		");
+		// 	}
+
+		// 	sb.AppendLine("}");
+
+		// 	return sb.ToString();
+		// }
 
 		static string GenerateSequence(int count, string separator, Func<int, string> generator)
 		{
