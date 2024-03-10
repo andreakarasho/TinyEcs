@@ -1,0 +1,33 @@
+name: deploy
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+        dotnet-quality: preview
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+    - name: Pack
+      run: dotnet pack /src -c Release -o dist && dotnet pack /plugins/TinyEcs.Plugins/ -c Release -o dist
+    - name: Publish
+      run: |
+        dotnet nuget push "dist/TinyEcs.Main.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }} --source "github"
+        dotnet nuget push "dist/TinyEcs.Plugins.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }} --source "github"
+      
