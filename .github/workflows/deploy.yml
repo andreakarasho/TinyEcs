@@ -26,7 +26,7 @@ jobs:
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Pack
-      run: dotnet pack /src -c Release -o dist && dotnet pack /plugins/TinyEcs.Plugins/ -c Release -o dist
+      run: dotnet pack src/ -c Release -o dist && dotnet pack plugins/TinyEcs.Plugins/ -c Release -o dist
     - name: Publish
       run: |
         dotnet nuget push "dist/TinyEcs.Main.1.0.0.nupkg" --api-key ${{ secrets.NUGET_KEY }} --source "github"
