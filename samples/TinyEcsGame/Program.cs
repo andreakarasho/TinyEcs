@@ -64,7 +64,7 @@ struct Rotation
 }
 
 
-sealed class MoveSystem : TinyEcs.System
+sealed class MoveSystem : TinyEcs.EcsSystem
 {
 	public override void OnUpdate()
 	{
@@ -78,7 +78,7 @@ sealed class MoveSystem : TinyEcs.System
 	}
 }
 
-sealed class CheckBorderSystem : TinyEcs.System
+sealed class CheckBorderSystem : TinyEcs.EcsSystem
 {
 	public Vector2 WindowSize { get; set; }
 
@@ -111,7 +111,7 @@ sealed class CheckBorderSystem : TinyEcs.System
 	}
 }
 
-sealed class BeginRenderSystem : TinyEcs.System
+sealed class BeginRenderSystem : TinyEcs.EcsSystem
 {
 	public override void OnUpdate()
 	{
@@ -120,7 +120,7 @@ sealed class BeginRenderSystem : TinyEcs.System
 	}
 }
 
-sealed class EndRenderSystem : TinyEcs.System
+sealed class EndRenderSystem : TinyEcs.EcsSystem
 {
 	public override void OnUpdate()
 	{
@@ -128,7 +128,7 @@ sealed class EndRenderSystem : TinyEcs.System
 	}
 }
 
-sealed class RenderEntities : TinyEcs.System
+sealed class RenderEntities : TinyEcs.EcsSystem
 {
 	public override void OnUpdate()
 	{
@@ -139,7 +139,7 @@ sealed class RenderEntities : TinyEcs.System
 	}
 }
 
-sealed class RenderText : TinyEcs.System
+sealed class RenderText : TinyEcs.EcsSystem
 {
 	public override void OnUpdate()
 	{
@@ -157,7 +157,7 @@ sealed class RenderText : TinyEcs.System
 	}
 }
 
-sealed class SpawnEntities : TinyEcs.System
+sealed class SpawnEntities : TinyEcs.EcsSystem
 {
 	public int EntitiesToSpawn { get; set; }
 	public Vector2 WindowSize { get; set; }

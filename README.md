@@ -154,6 +154,52 @@ ecs.Filter<Not<Disabled>>()
 	.Query((EntityView entity) => { });
 ```
 
+Systems
+
+```csharp
+using var ecs = new World();
+
+// Declare a system manager
+var systems = new SystemManager(ecs);
+
+// Bind your systems. You can bind one system per type!
+var moveSystem = systems.Add<MoveSystem>("My optional name");
+
+// Update all systems to this system manager
+systems.Update();
+
+// You can disable a system
+moveSystem.Disable();
+
+// ... and enable it
+moveSystem.Enable();
+
+// Delete
+systems.Delete<MoveSystem>();
+
+// Find a system to do some fancy stuff
+var foundSystem = systems.Find<MoveSystem>();
+
+
+
+sealed class MoveSystem : EcsSystem {
+	public override void OnCreate() {
+		Ecs.Entity()
+			.Set<Position>(new () { X = 0, Y = 0})
+			.Set<Velocity>(new () { X = 12.0f, Y = 1f });
+	}
+
+	public override void OnUpdate() {
+		var deltaTime = Time.Delta;
+		Ecs.Query((ref Position pos, ref Velocity vel) => {
+			pos.X += vel.X * deltaTime;
+			pos.Y += vel.Y * deltaTime;
+		});
+	}
+}
+
+```
+
 # Credits
 
 Base code idea inspired by:

@@ -8,8 +8,9 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 var systems = new SystemManager(ecs);
-systems.Add<MoveSystem>();
+var ff = systems.Add<MoveSystem>();
 
+Console.WriteLine("system name : {0}", ff.Name);
 
 var e = ecs.Entity("Main")
 	.Set<Position>(new Position() {X = 2})
@@ -191,7 +192,7 @@ struct Chunk;
 struct ChunkTile;
 
 
-sealed class MoveSystem : TinyEcs.System
+sealed class MoveSystem : EcsSystem
 {
 	public override void OnCreate()
 	{

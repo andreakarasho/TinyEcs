@@ -2,10 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-public abstract class System
+public abstract class EcsSystem
 {
+#nullable disable
 	[NotNull] public World Ecs { get; internal set; }
 	[NotNull] public string Name { get; internal set; }
+#nullable restore
 
 	public bool IsEnabled { get; private set; } = true;
 	internal bool IsDestroyed { get; set; }
@@ -35,10 +37,10 @@ public abstract class System
 
 	private void Enable(bool enable)
 	{
-		var tmp = IsEnabled;
-		IsEnabled = enable;
-		if (tmp == enable)
+		if (IsEnabled == enable)
 			return;
+
+		IsEnabled = enable;
 
 		if (enable)
 			OnStart();
@@ -51,19 +53,19 @@ public abstract class System
 public sealed class SystemManager
 {
 	private readonly World _ecs;
-	private readonly List<System> _systems, _toCreate, _toDelete;
-	private readonly Dictionary<Type, System> _hashes;
+	private readonly List<EcsSystem> _systems, _toCreate, _toDelete;
+	private readonly Dictionary<Type, EcsSystem> _hashes;
 
 	public SystemManager(World ecs)
 	{
 		_ecs = ecs;
-		_hashes = new Dictionary<Type, System>();
-		_systems = new List<System>();
-		_toCreate = new List<System>();
-		_toDelete = new List<System>();
+		_hashes = new Dictionary<Type, EcsSystem>();
+		_systems = new List<EcsSystem>();
+		_toCreate = new List<EcsSystem>();
+		_toDelete = new List<EcsSystem>();
 	}
 
-	public T Add<T>(string name = "") where T : System, new()
+	public T Add<T>(string name = "") where T : EcsSystem, new()
 	{
 		if (_hashes.TryGetValue(typeof(T), out var system))
 			return (T)system;
@@ -71,7 +73,7 @@ public sealed class SystemManager
 		system = new T
 		{
 			Ecs = _ecs,
-			Name = string.IsNullOrWhiteSpace(name) ? typeof(T).Name : name
+			Name = string.IsNullOrWhiteSpace(name) ? typeof(T).ToString() : name
 		};
 
 		_hashes.Add(typeof(T), system);
@@ -81,7 +83,7 @@ public sealed class SystemManager
 		return (T)system;
 	}
 
-	public void Delete<T>() where T : System
+	public void Delete<T>() where T : EcsSystem
 	{
 		var found = Find<T>();
 		if (found == null || found.IsDestroyed) return;
@@ -93,7 +95,7 @@ public sealed class SystemManager
 		}
 	}
 
-	public T? Find<T>() where T : System
+	public T? Find<T>() where T : EcsSystem
 	{
 		_ = _hashes.TryGetValue(typeof(T), out var system);
 		return system as T;
@@ -136,7 +138,6 @@ public sealed class SystemManager
 			sys.OnUpdate();
 			sys.OnAfterUpdate();
 		}
-
 	}
 
 	public void Clear()
@@ -146,5 +147,6 @@ public sealed class SystemManager
 		_systems.ForEach(s => s.OnDestroy());
 		_systems.Clear();
 		_toDelete.Clear();
+		_hashes.Clear();
 	}
 }
