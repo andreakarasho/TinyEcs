@@ -13,6 +13,7 @@ public sealed partial class World : IDisposable
     private readonly ComponentComparer _comparer;
     private readonly Commands _commands;
 	private readonly EcsID _maxCmpId;
+	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
 
     public World(ulong maxComponentId = 256)
     {
@@ -49,6 +50,7 @@ public sealed partial class World : IDisposable
         _archRoot.Clear();
         _typeIndex.Clear();
         _commands.Clear();
+		_cachedQueries.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);
         _archetypeCount = 0;
@@ -329,58 +331,66 @@ public sealed partial class World : IDisposable
         _archRoot.Print();
     }
 
-    public FilterQuery<TFilter> Filter<TFilter>() where TFilter : struct
-    {
-	    return new FilterQuery<TFilter>(this);
-    }
+	public Query Query<TQuery>() where TQuery : struct
+	{
+		return GetQuery(Lookup.Query<TQuery>.Hash, Lookup.Query<TQuery>.Terms);
+	}
 
-    public FilterQuery Filter(ReadOnlySpan<Term> terms)
-    {
-	    return new FilterQuery(_archetypes.AsSpan(0, _archetypeCount), terms);
-    }
+	public Query Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
+	{
+		return GetQuery(Lookup.Query<TQuery, TFilter>.Hash, Lookup.Query<TQuery, TFilter>.Terms);
+	}
+
+	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms)
+	{
+		if (!_cachedQueries.TryGetValue(hash, out var query))
+		{
+			query = new Query(this, terms);
+			_cachedQueries.Add(hash, query);
+		}
+
+		query.Match();
+
+		return query;
+	}
 
     public IQueryConstruct QueryBuilder() => new QueryBuilder(this);
 
-	internal Archetype? FindArchetype(ulong hash, ReadOnlySpan<Term> terms)
+	internal Archetype? FindArchetype(ulong hash)
 	{
 		if (!_typeIndex.TryGetValue(hash, out var arch))
 		{
-			arch = FindFirst(_archRoot, terms);
+			arch = _archRoot;
 		}
 
 		return arch;
 	}
 
-	static Archetype? FindFirst(Archetype root, ReadOnlySpan<Term> terms)
+	internal void MatchArchetypes(Archetype root, ReadOnlySpan<Term> terms, List<Archetype> matched)
 	{
 		var result = root.FindMatch(terms);
 		if (result < 0)
 		{
-			return null;
+			return;
 		}
 
 		if (result == 0)
 		{
-			return root;
+			matched.Add(root);
 		}
 
 		var span = CollectionsMarshal.AsSpan(root._edgesRight);
 		if (span.IsEmpty)
-			return null;
+			return;
 
 		ref var start = ref MemoryMarshal.GetReference(span);
 		ref var end = ref Unsafe.Add(ref start, span.Length);
 
 		while (Unsafe.IsAddressLessThan(ref start, ref end))
 		{
-			var res = FindFirst(start.Archetype, terms);
-			if (res != null)
-				return res;
-
+			MatchArchetypes(start.Archetype, terms, matched);
 			start = ref Unsafe.Add(ref start, 1);
 		}
-
-		return null;
 	}
 }
 
@@ -404,8 +414,7 @@ public ref struct QueryInternal
 		while (++_index < _archetypes.Length)
 		{
 			var arch = _archetypes[_index];
-			var result = arch.FindMatch(_terms);
-			if (result == 0 && arch.Count > 0)
+			if (arch.Count > 0)
 				return true;
 		}
 
@@ -419,55 +428,19 @@ public ref struct QueryInternal
 
 public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 
-public readonly ref partial struct FilterQuery<TFilter> where TFilter : struct
+public partial interface IQuery
 {
-	private readonly World _world;
-
-	internal FilterQuery(World world)
-	{
-		_world = world;
-	}
-
-	public void Query(QueryFilterDelegateWithEntity fn)
-	{
-		var terms = Lookup.Query<TFilter>.Terms;
-		var query = new QueryInternal(_world.Archetypes, terms.AsSpan());
-		foreach (var arch in query)
-		{
-			foreach (ref readonly var chunk in arch)
-			{
-				ref var entity = ref chunk.Entities[0];
-				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
-				while (Unsafe.IsAddressLessThan(ref entity, ref last))
-				{
-					fn(entity);
-					entity = ref Unsafe.Add(ref entity, 1);
-				}
-			}
-		}
-	}
-
-	public QueryInternal GetEnumerator()
-    {
-        return new QueryInternal(_world.Archetypes, Lookup.Query<TFilter>.Terms.AsSpan());
-    }
+	void Query();
 }
 
-public readonly ref struct FilterQuery
+public interface IQueryFilter
 {
-	private readonly ReadOnlySpan<Archetype> _archetypes;
-	private readonly ReadOnlySpan<Term> _terms;
+	IQuery Filter<T>()
+		where T : struct;
 
-	internal FilterQuery(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
-	{
-		_archetypes = archetypes;
-		_terms = terms;
-	}
-
-	public QueryInternal GetEnumerator()
-	{
-		return new QueryInternal(_archetypes, _terms);
-	}
+	IQuery Filter<TQuery, TFilter>()
+		where TQuery : struct
+		where TFilter : struct;
 }
 
 public interface IQueryConstruct
@@ -480,14 +453,13 @@ public interface IQueryConstruct
 
 public interface IQueryBuild
 {
-	QueryInternal Build();
+	Query Build();
 }
 
 public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 {
 	private readonly World _world;
 	private readonly HashSet<Term> _components = new();
-	private Term[]? _terms;
 
 	internal QueryBuilder(World world) => _world = world;
 
@@ -509,10 +481,66 @@ public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 		return this;
 	}
 
-	public QueryInternal Build()
+	public Query Build()
 	{
-		_terms ??= _components.ToArray();
-		return new QueryInternal(_world.Archetypes, _terms);
+		var terms = _components.ToImmutableArray();
+		return _world.GetQuery(Hashing.Calculate(terms.AsSpan()), terms);
+	}
+}
+
+public sealed partial class Query
+{
+	private readonly World _world;
+	private readonly ImmutableArray<Term> _terms;
+	private readonly List<Archetype> _matchedArchetypes;
+	private ulong _lastArchetypeIdMatched = 0;
+
+	internal Query(World world, ImmutableArray<Term> terms)
+	{
+		_world = world;
+		_terms = terms;
+		_matchedArchetypes = new List<Archetype>();
+	}
+
+	internal void Match()
+	{
+		var allArchetypes = _world.Archetypes;
+
+		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
+			return;
+
+		var terms = _terms.AsSpan();
+		var first = _world.FindArchetype(Hashing.Calculate(terms));
+		if (first == null)
+			return;
+
+		_lastArchetypeIdMatched = allArchetypes[^1].Id;
+		_matchedArchetypes.Clear();
+		_world.MatchArchetypes(first, terms, _matchedArchetypes);
+	}
+
+	public QueryInternal GetEnumerator()
+	{
+		Match();
+
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes), _terms.AsSpan());
+	}
+
+	public void Each(QueryFilterDelegateWithEntity fn)
+	{
+		foreach (var arch in this)
+		{
+			foreach (ref readonly var chunk in arch)
+			{
+				ref var entity = ref chunk.Entities[0];
+				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref entity, ref last))
+				{
+					fn(entity);
+					entity = ref Unsafe.Add(ref entity, 1);
+				}
+			}
+		}
 	}
 }
 

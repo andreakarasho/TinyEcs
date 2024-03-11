@@ -5,7 +5,7 @@ namespace TinyEcs;
 public abstract class EcsSystem
 {
 #nullable disable
-	[NotNull] public World Ecs { get; internal set; }
+	[NotNull] internal World Ecs { get; set; }
 	[NotNull] public string Name { get; internal set; }
 #nullable restore
 
@@ -13,21 +13,21 @@ public abstract class EcsSystem
 	internal bool IsDestroyed { get; set; }
 
 
-	public virtual void OnCreate() { }
+	public virtual void OnCreate(World ecs) { }
 
-	public virtual void OnStart() { }
+	public virtual void OnStart(World ecs) { }
 
-	public virtual void OnStop() { }
+	public virtual void OnStop(World ecs) { }
 
-	public virtual void OnBeforeUpdate() { }
+	public virtual void OnBeforeUpdate(World ecs) { }
 
-	public virtual void OnUpdate() { }
+	public virtual void OnUpdate(World ecs) { }
 
-	public virtual void OnAfterUpdate() { }
+	public virtual void OnAfterUpdate(World ecs) { }
 
-	public virtual void OnCleanup() { }
+	public virtual void OnCleanup(World ecs) { }
 
-	public virtual void OnDestroy() { }
+	public virtual void OnDestroy(World ecs) { }
 
 
 	public void Enable() => Enable(true);
@@ -43,9 +43,9 @@ public abstract class EcsSystem
 		IsEnabled = enable;
 
 		if (enable)
-			OnStart();
+			OnStart(Ecs);
 		else
-			OnStop();
+			OnStop(Ecs);
 	}
 }
 
@@ -107,10 +107,10 @@ public sealed class SystemManager
 			sys.Disable();
 
 		foreach (var sys in _toDelete)
-			sys.OnCleanup();
+			sys.OnCleanup(_ecs);
 
 		foreach (var sys in _toDelete)
-			sys.OnDestroy();
+			sys.OnDestroy(_ecs);
 
 		foreach (var sys in _toDelete)
 			_systems.Remove(sys);
@@ -122,9 +122,9 @@ public sealed class SystemManager
 		{
 			foreach (var sys in _toCreate)
 			{
-				sys.OnCreate();
+				sys.OnCreate(_ecs);
 				if (sys.IsEnabled)
-					sys.OnStart();
+					sys.OnStart(_ecs);
 			}
 
 			_toCreate.Clear();
@@ -134,17 +134,17 @@ public sealed class SystemManager
 		{
 			if (!sys.IsEnabled) continue;
 
-			sys.OnBeforeUpdate();
-			sys.OnUpdate();
-			sys.OnAfterUpdate();
+			sys.OnBeforeUpdate(_ecs);
+			sys.OnUpdate(_ecs);
+			sys.OnAfterUpdate(_ecs);
 		}
 	}
 
 	public void Clear()
 	{
 		_systems.ForEach(s => s.Disable());
-		_systems.ForEach(s => s.OnCleanup());
-		_systems.ForEach(s => s.OnDestroy());
+		_systems.ForEach(s => s.OnCleanup(_ecs));
+		_systems.ForEach(s => s.OnDestroy(_ecs));
 		_systems.Clear();
 		_toDelete.Clear();
 		_hashes.Clear();

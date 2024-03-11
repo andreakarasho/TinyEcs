@@ -26,7 +26,7 @@ public static class UniqueEntityPlugin
 			return world.Entity();
 
 		var found = EntityView.Invalid;
-		world.Query((EntityView entity, ref Identity identity) => {
+		world.Each((EntityView entity, ref Identity identity) => {
 			if (identity.Value?.Equals(name) ?? false)
 				found = entity;
 		});

@@ -81,14 +81,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 		static string GenerateFilterQuery(bool withFilter, bool withEntityView)
 		{
-			var className = withFilter ? "struct FilterQuery" : "class World";
-			var filter = withFilter ? "<TFilter>" : "";
-			var filterMethod = withFilter ? ", TFilter" : "";
+			var className = withFilter ? "class World" : "class Query";
 			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
 
 			var sb = new StringBuilder();
 			sb.AppendLine($@"
-				public partial {className}{filter}
+				public partial {className}
 				{{
 			");
 
@@ -104,13 +102,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
 				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
 
-				sb.AppendLine($@"
-						public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-						{{
-							var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
-							var query = new QueryInternal({(withFilter ? "_world." : "")}Archetypes, terms);
+				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
 
-							foreach (var arch in query)
+				sb.AppendLine($@"
+						public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+						{{
+							foreach (var arch in {(withFilter ? getQuery : "this")})
 							{{
 								{columnIndices}
 
@@ -150,6 +147,78 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 			return sb.ToString();
 		}
+
+		// static string GenerateFilterQuery(bool withFilter, bool withEntityView)
+		// {
+		// 	var className = withFilter ? "struct FilterQuery" : "class World";
+		// 	var filter = withFilter ? "<TFilter>" : "";
+		// 	var filterMethod = withFilter ? ", TFilter" : "";
+		// 	var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
+
+		// 	var sb = new StringBuilder();
+		// 	sb.AppendLine($@"
+		// 		public partial {className}{filter}
+		// 		{{
+		// 	");
+
+		// 	for (var i = 0; i < MAX_GENERICS; ++i)
+		// 	{
+		// 		var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+		// 		var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
+		// 		var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
+		// 		var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+		// 		                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+		// 		var signCallback = (withEntityView ? "entityA, " : "") +
+		// 		                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
+		// 		var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
+		// 		                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+
+		// 		sb.AppendLine($@"
+		// 				public void Query<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+		// 				{{
+		// 					var terms = Lookup.Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}{filterMethod}>.Terms.AsSpan();
+		// 					var query = new QueryInternal({(withFilter ? "_world." : "")}Archetypes, terms);
+
+		// 					foreach (var arch in query)
+		// 					{{
+		// 						{columnIndices}
+
+		// 						foreach (ref readonly var chunk in arch)
+		// 						{{
+		// 							{fieldList}
+		// 							ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
+		// 							ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+
+		// 							while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+		// 							{{
+		// 								fn({signCallback});
+		// 								{advanceField}
+
+		// 								fn({signCallback});
+		// 								{advanceField}
+
+		// 								fn({signCallback});
+		// 								{advanceField}
+
+		// 								fn({signCallback});
+		// 								{advanceField}
+		// 							}}
+
+		// 							while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+		// 							{{
+		// 								fn({signCallback});
+		// 								{advanceField}
+		// 							}}
+		// 						}}
+		// 					}}
+		// 				}}
+		// 		");
+		// 	}
+
+		// 	sb.AppendLine("}");
+
+		// 	return sb.ToString();
+		// }
 
 		// static string GenerateFilterQuery(bool withFilter, bool withEntityView)
 		// {

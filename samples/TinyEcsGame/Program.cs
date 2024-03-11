@@ -66,11 +66,11 @@ struct Rotation
 
 sealed class MoveSystem : TinyEcs.EcsSystem
 {
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
 		var deltaTime = Raylib.GetFrameTime();
 
-		Ecs.Query((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+		ecs.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 		{
 			pos.Value += vel.Value * deltaTime;
 			rot.Value += rot.Acceleration * deltaTime * Raylib.RAD2DEG;
@@ -82,9 +82,9 @@ sealed class CheckBorderSystem : TinyEcs.EcsSystem
 {
 	public Vector2 WindowSize { get; set; }
 
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
-		Ecs.Query((ref Position pos, ref Velocity vel) =>
+		ecs.Each((ref Position pos, ref Velocity vel) =>
 		{
 			if (pos.Value.X < 0.0f)
 			{
@@ -113,7 +113,7 @@ sealed class CheckBorderSystem : TinyEcs.EcsSystem
 
 sealed class BeginRenderSystem : TinyEcs.EcsSystem
 {
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
 		Raylib.BeginDrawing();
 		Raylib.ClearBackground(Color.Black);
@@ -122,7 +122,7 @@ sealed class BeginRenderSystem : TinyEcs.EcsSystem
 
 sealed class EndRenderSystem : TinyEcs.EcsSystem
 {
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
 		Raylib.EndDrawing();
 	}
@@ -130,9 +130,9 @@ sealed class EndRenderSystem : TinyEcs.EcsSystem
 
 sealed class RenderEntities : TinyEcs.EcsSystem
 {
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
-		Ecs.Query((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+		ecs.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 		{
 			Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
 		});
@@ -141,7 +141,7 @@ sealed class RenderEntities : TinyEcs.EcsSystem
 
 sealed class RenderText : TinyEcs.EcsSystem
 {
-	public override void OnUpdate()
+	public override void OnUpdate(World ecs)
 	{
 		var deltaTime = Raylib.GetFrameTime();
 
@@ -149,7 +149,7 @@ sealed class RenderText : TinyEcs.EcsSystem
 			$"""
 			 [Debug]
 			 FPS: {Raylib.GetFPS()}
-			 Entities: {Ecs.EntityCount}
+			 Entities: {ecs.EntityCount}
 			 DeltaTime: {deltaTime}
 			 """.Replace("\r", "\n");
 		var textSize = 24;
@@ -163,7 +163,7 @@ sealed class SpawnEntities : TinyEcs.EcsSystem
 	public Vector2 WindowSize { get; set; }
 	public int Velocity { get; set; }
 
-	public override void OnCreate()
+	public override void OnCreate(World ecs)
 	{
 		// This system is just one shot
 		Disable();
@@ -173,7 +173,7 @@ sealed class SpawnEntities : TinyEcs.EcsSystem
 
 		for (var i = 0; i < EntitiesToSpawn; ++i)
 		{
-			Ecs!
+			ecs!
 				.Entity()
 				.Set(
 					new Position()

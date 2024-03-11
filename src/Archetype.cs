@@ -93,11 +93,14 @@ public sealed class Archetype
 	       _lookup.GetOrAddValueRef(components[i].ID, out _) = i;
 
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
+
+		Id = Hashing.Calculate(components);
     }
 
     public World World => _world;
     public int Count => _count;
     public readonly ImmutableArray<ComponentInfo> Components;
+	public ulong Id { get; }
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
 	internal int EmptyChunks => _chunks.Length - Chunks.Length;
 
