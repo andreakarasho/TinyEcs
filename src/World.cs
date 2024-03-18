@@ -1,9 +1,11 @@
 using System.Collections.Immutable;
+using System.Formats.Tar;
+using System.Reflection;
 using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
 
-public sealed partial class World : IDisposable
+public sealed partial class World : ISystemParam, IDisposable
 {
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
@@ -331,21 +333,29 @@ public sealed partial class World : IDisposable
         _archRoot.Print();
     }
 
-	public Query Query<TQuery>() where TQuery : struct
+	public Query<TQuery> Query<TQuery>() where TQuery : struct
 	{
-		return GetQuery(Lookup.Query<TQuery>.Hash, Lookup.Query<TQuery>.Terms);
+		return (Query<TQuery>) GetQuery(
+			Lookup.Query<TQuery>.Hash,
+		 	Lookup.Query<TQuery>.Terms,
+		 	static (world, _) => new Query<TQuery>(world)
+		);
 	}
 
-	public Query Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
+	public Query<TQuery, TFilter> Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
 	{
-		return GetQuery(Lookup.Query<TQuery, TFilter>.Hash, Lookup.Query<TQuery, TFilter>.Terms);
+		return (Query<TQuery, TFilter>) GetQuery(
+			Lookup.Query<TQuery, TFilter>.Hash,
+			Lookup.Query<TQuery, TFilter>.Terms,
+		 	static (world, _) => new Query<TQuery, TFilter>(world)
+		);
 	}
 
-	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms)
+	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms, Func<World, ImmutableArray<Term>, Query> factory)
 	{
 		if (!_cachedQueries.TryGetValue(hash, out var query))
 		{
-			query = new Query(this, terms);
+			query = factory(this, terms);
 			_cachedQueries.Add(hash, query);
 		}
 
@@ -390,156 +400,6 @@ public sealed partial class World : IDisposable
 		{
 			MatchArchetypes(start.Archetype, terms, matched);
 			start = ref Unsafe.Add(ref start, 1);
-		}
-	}
-}
-
-public ref struct QueryInternal
-{
-	private readonly ReadOnlySpan<Archetype> _archetypes;
-	private readonly ReadOnlySpan<Term> _terms;
-	private int _index;
-
-	internal QueryInternal(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
-	{
-		_archetypes = archetypes;
-		_terms = terms;
-		_index = -1;
-	}
-
-	public readonly Archetype Current => _archetypes[_index];
-
-	public bool MoveNext()
-	{
-		while (++_index < _archetypes.Length)
-		{
-			var arch = _archetypes[_index];
-			if (arch.Count > 0)
-				return true;
-		}
-
-		return false;
-	}
-
-	public void Reset() => _index = -1;
-
-	public readonly QueryInternal GetEnumerator() => this;
-}
-
-public delegate void QueryFilterDelegateWithEntity(EntityView entity);
-
-public partial interface IQuery
-{
-	void Query();
-}
-
-public interface IQueryFilter
-{
-	IQuery Filter<T>()
-		where T : struct;
-
-	IQuery Filter<TQuery, TFilter>()
-		where TQuery : struct
-		where TFilter : struct;
-}
-
-public interface IQueryConstruct
-{
-	IQueryBuild With<T>() where T : struct;
-	IQueryBuild With(EcsID id);
-	IQueryBuild Without<T>() where T : struct;
-	IQueryBuild Without(EcsID id);
-}
-
-public interface IQueryBuild
-{
-	Query Build();
-}
-
-public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
-{
-	private readonly World _world;
-	private readonly HashSet<Term> _components = new();
-
-	internal QueryBuilder(World world) => _world = world;
-
-	public IQueryBuild With<T>() where T : struct
-		=> With(_world.Component<T>().ID);
-
-	public IQueryBuild With(EcsID id)
-	{
-		_components.Add(Term.With(id));
-		return this;
-	}
-
-	public IQueryBuild Without<T>() where T : struct
-		=> Without(_world.Component<T>().ID);
-
-	public IQueryBuild Without(EcsID id)
-	{
-		_components.Add(Term.Without(id));
-		return this;
-	}
-
-	public Query Build()
-	{
-		var terms = _components.ToImmutableArray();
-		return _world.GetQuery(Hashing.Calculate(terms.AsSpan()), terms);
-	}
-}
-
-public sealed partial class Query
-{
-	private readonly World _world;
-	private readonly ImmutableArray<Term> _terms;
-	private readonly List<Archetype> _matchedArchetypes;
-	private ulong _lastArchetypeIdMatched = 0;
-
-	internal Query(World world, ImmutableArray<Term> terms)
-	{
-		_world = world;
-		_terms = terms;
-		_matchedArchetypes = new List<Archetype>();
-	}
-
-	internal void Match()
-	{
-		var allArchetypes = _world.Archetypes;
-
-		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
-			return;
-
-		var terms = _terms.AsSpan();
-		var first = _world.FindArchetype(Hashing.Calculate(terms));
-		if (first == null)
-			return;
-
-		_lastArchetypeIdMatched = allArchetypes[^1].Id;
-		_matchedArchetypes.Clear();
-		_world.MatchArchetypes(first, terms, _matchedArchetypes);
-	}
-
-	public QueryInternal GetEnumerator()
-	{
-		Match();
-
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes), _terms.AsSpan());
-	}
-
-	public void Each(QueryFilterDelegateWithEntity fn)
-	{
-		foreach (var arch in this)
-		{
-			foreach (ref readonly var chunk in arch)
-			{
-				ref var entity = ref chunk.Entities[0];
-				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
-				while (Unsafe.IsAddressLessThan(ref entity, ref last))
-				{
-					fn(entity);
-					entity = ref Unsafe.Add(ref entity, 1);
-				}
-			}
 		}
 	}
 }
@@ -714,3 +574,15 @@ struct EcsRecord
 
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }
+
+
+internal enum SystemParamType
+{
+	Query,
+	QueryWithFilter,
+}
+
+public interface ISystemParam
+{
+}
+

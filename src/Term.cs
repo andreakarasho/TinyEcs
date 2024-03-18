@@ -56,8 +56,6 @@ public readonly struct Not<T> : IFilter where T : struct
 	public static implicit operator Term(Not<T> _) => Term.Without(Lookup.Component<T>.Value.ID);
 }
 
-public readonly struct Pair<T> : IFilter where T : struct { }
-
 public readonly struct Or<T> : IFilter where T : struct { }
 
 public interface IFilter { }

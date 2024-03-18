@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace TinyEcs;
 
-public sealed class Commands
+public sealed class Commands : ISystemParam
 {
     private readonly World _main;
     private readonly EntitySparseSet<EcsID> _despawn;

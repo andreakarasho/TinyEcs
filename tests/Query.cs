@@ -14,7 +14,7 @@
                 ctx.World.Set(ctx.World.Entity(), new FloatComponent());
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<FloatComponent>())
+            foreach (var arch in ctx.World.Query<FloatComponent>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -37,7 +37,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, IntComponent)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -61,7 +61,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, IntComponent, BoolComponent)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, BoolComponent)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -85,7 +85,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, IntComponent, Not<BoolComponent>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -108,7 +108,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, IntComponent, Not<BoolComponent>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -131,7 +131,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, Not<IntComponent>, Not<IntComponent>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, Not<IntComponent>, Not<IntComponent>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -167,7 +167,7 @@
             ctx.World.Set<NormalTag>(e4);
 
             var done = 0;
-            foreach (var arch in ctx.World.Filter<(FloatComponent, IntComponent, Not<BoolComponent>, Not<NormalTag>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>, Not<NormalTag>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 

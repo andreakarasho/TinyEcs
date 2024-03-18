@@ -1,4 +1,100 @@
+#if !NET7_0_OR_GREATER
+namespace TinyEcs
+{
+	public readonly ref struct Ref<T>
+	{
+		//
+		// Summary:
+		//     The 1-length System.Span`1 instance used to track the target T value.
+		internal readonly Span<T> Span;
+
+		//
+		// Summary:
+		//     Gets the T reference represented by the current CommunityToolkit.HighPerformance.Ref`1
+		//     instance.
+		public ref T Value
+		{
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			get
+			{
+				return ref MemoryMarshal.GetReference(Span);
+			}
+		}
+
+		//
+		// Summary:
+		//     Initializes a new instance of the CommunityToolkit.HighPerformance.Ref`1 struct.
+		//
+		//
+		// Parameters:
+		//   value:
+		//     The reference to the target T value.
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public Ref(ref T value)
+		{
+			Span = MemoryMarshal.CreateSpan(ref value, 1);
+		}
+
+		//
+		// Summary:
+		//     Initializes a new instance of the CommunityToolkit.HighPerformance.Ref`1 struct.
+		//
+		//
+		// Parameters:
+		//   pointer:
+		//     The pointer to the target value.
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public unsafe Ref(void* pointer)
+			: this(ref Unsafe.AsRef<T>(pointer))
+		{
+		}
+
+		//
+		// Summary:
+		//     Implicitly gets the T value from a given CommunityToolkit.HighPerformance.Ref`1
+		//     instance.
+		//
+		// Parameters:
+		//   reference:
+		//     The input CommunityToolkit.HighPerformance.Ref`1 instance.
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static implicit operator T(Ref<T> reference)
+		{
+			return reference.Value;
+		}
+	}
+}
+#endif
+
+
 #if !NET5_0_OR_GREATER
+namespace System.Diagnostics.CodeAnalysis
+{
+	/// <summary>
+	///     Used to indicate a byref escapes and is not scoped.
+	/// </summary>
+	/// <remarks>
+	///     There are several cases where the C# compiler treats a <see langword="ref"/> as implicitly
+	///     <see langword="scoped"/> - where the compiler does not allow the <see langword="ref"/> to escape the method.
+	///     <br/>
+	///     For example:
+	///     <list type="number">
+	///         <item><see langword="this"/> for <see langword="struct"/> instance methods.</item>
+	///         <item><see langword="ref"/> parameters that refer to <see langword="ref"/> <see langword="struct"/> types.</item>
+	///         <item><see langword="out"/> parameters.</item>
+	///     </list>
+	///     This attribute is used in those instances where the <see langword="ref"/> should be allowed to escape.
+	/// </remarks>
+	[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+	public sealed class UnscopedRefAttribute : Attribute
+	{
+		/// <summary>
+		///     Initializes a new instance of the <see cref="UnscopedRefAttribute"/> class.
+		/// </summary>
+		public UnscopedRefAttribute() { }
+	}
+}
+
 namespace System.Runtime.CompilerServices
 {
 	/// <summary>
