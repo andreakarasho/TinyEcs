@@ -52,7 +52,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : ISystemParam, new()");
-				var objs = GenerateSequence(i + 1, "\n", j => $"var obj{j} = SysParam.Get<T{j}>(res, _world);");
+				var objs = GenerateSequence(i + 1, "\n", j => $"var obj{j} = ISystemParam.Get<T{j}>(res, _world);");
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 
 				sb.AppendLine($@"

@@ -74,12 +74,8 @@ public sealed partial class Scheduler
 public interface ISystemParam
 {
 	void New(object arguments);
-}
 
-
-static class SysParam
-{
-	public static T Get<T>(Dictionary<Type, ISystemParam> resources, object arguments) where T : ISystemParam, new()
+	internal static T Get<T>(Dictionary<Type, ISystemParam> resources, object arguments) where T : ISystemParam, new()
 	{
 		if (!resources.TryGetValue(typeof(T), out var value))
 		{
