@@ -35,10 +35,44 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{GenerateFilterQuery(true, false)}
 					{GenerateFilterQuery(false, true)}
 					{GenerateFilterQuery(true, true)}
+					{GenerateSystems()}
                 }}
 
                 #pragma warning restore 1591
             ";
+		}
+
+		static string GenerateSystems()
+		{
+			var sb = new StringBuilder();
+
+			sb.AppendLine("partial class Scheduler {");
+
+			for (var i = 0; i < 16; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : ISystemParam, new()");
+				var objs = GenerateSequence(i + 1, "\n", j => $"var obj{j} = SysParam.Get<T{j}>(res, _world);");
+				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+
+				sb.AppendLine($@"
+					public Scheduler AddSystem<{generics}>(Action<{generics}> system)
+						{whereGenerics}
+					{{
+						var fn = (Dictionary<Type, ISystemParam> res) => {{
+							{objs}
+							system({objsArgs});
+						}};
+						_systems.Add(new ErasedFunctionSystem(fn));
+
+						return this;
+					}}
+				");
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
 		}
 
 		static string GenerateQueryTemplateDelegates(bool withEntityView)

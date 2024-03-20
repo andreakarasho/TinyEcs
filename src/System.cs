@@ -57,50 +57,6 @@ public sealed partial class Scheduler
 		return this;
 	}
 
-    public Scheduler AddSystem<T0>(Action<T0> system)
-		where T0 : ISystemParam, new()
-    {
-		var fn = (Dictionary<Type, ISystemParam> res) => {
-			var obj0 = SysParam.Get<T0>(res, _world);
-			system(obj0);
-		};
-		_systems.Add(new ErasedFunctionSystem(fn));
-
-		return this;
-    }
-
-    public Scheduler AddSystem<T0, T1>(Action<T0, T1> system)
-		where T0 : ISystemParam, new()
-		where T1 : ISystemParam, new()
-    {
-		var fn = (Dictionary<Type, ISystemParam> res) => {
-			var obj0 = SysParam.Get<T0>(res, _world);
-			var obj1 = SysParam.Get<T1>(res, _world);
-
-			system(obj0, obj1);
-		};
-		_systems.Add(new ErasedFunctionSystem(fn));
-
-		return this;
-    }
-
-	public Scheduler AddSystem<T0, T1, T2>(Action<T0, T1, T2> system)
-		where T0 : ISystemParam, new()
-		where T1 : ISystemParam, new()
-		where T2 : ISystemParam, new()
-    {
-		var fn = (Dictionary<Type, ISystemParam> res) => {
-			var obj0 = SysParam.Get<T0>(res, _world);
-			var obj1 = SysParam.Get<T1>(res, _world);
-			var obj2 = SysParam.Get<T2>(res, _world);
-
-			system(obj0, obj1, obj2);
-		};
-		_systems.Add(new ErasedFunctionSystem(fn));
-
-		return this;
-    }
-
     public Scheduler AddResource<T>(T resource)
     {
 		return AddSystemParam(new Res<T>() { Value = resource });
