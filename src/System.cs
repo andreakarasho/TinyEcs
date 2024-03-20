@@ -12,12 +12,12 @@ public sealed class Res<T> : ISystemParam
 	}
 }
 
-public interface ISystem
+internal interface ISystem
 {
     void Run(Dictionary<Type, ISystemParam> resources);
 }
 
-public sealed class ErasedFunctionSystem : ISystem
+internal sealed class ErasedFunctionSystem : ISystem
 {
     private readonly Action<Dictionary<Type, ISystemParam>> f;
 
