@@ -22,7 +22,7 @@ cd samples/TinyEcsGame
 dotnet run -c Release
 ```
 
-# Basic sample
+# Basic samples
 
 ```csharp
 using var ecs = new World();
@@ -55,6 +55,40 @@ struct Position { public float X, Y, Z; }
 struct Name { public string Value; }
 struct Player { }
 struct Npc { }
+```
+
+Bevy systems :D
+
+```csharp
+using var ecs = new World();
+var scheduler = new Scheduler(ecs);
+
+scheduler
+    // Arguments oderd doesn't matter!
+    .AddSystem((Commands commands, Query<(Position, Velocity), Not<Npc>> query) => {
+        // query execution
+        query.Each((ref Position pos, ref Velocity vel) => {
+
+        });
+
+        // spawn a deferred entity
+        commands.Entity()
+            .Set<Position>(default)
+            .Set<Velocity>(default);
+    })
+
+    // Merge the deferred commands to the world
+    .AddSystem((Commands commands) => commands.Merge())
+
+    // Res<> is a special type which stores any value you want
+    .AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
+
+    // Add an unique resource type which can be invoked as system argument
+	// In this case it's Res<string>
+    .AddResource("My text");
+
+// Run all systems once
+scheduler.Run();
 ```
 
 # More functionalities
@@ -152,52 +186,6 @@ bool isEnabled = ent.IsEnabled();
 // `Disabled` is a simple built-in component!
 ecs.Filter<Not<Disabled>>()
 	.Query((EntityView entity) => { });
-```
-
-Systems
-
-```csharp
-using var ecs = new World();
-
-// Declare a system manager
-var systems = new SystemManager(ecs);
-
-// Bind your systems. You can bind one system per type!
-var moveSystem = systems.Add<MoveSystem>("My optional name");
-
-// Update all systems to this system manager
-systems.Update();
-
-// You can disable a system
-moveSystem.Disable();
-
-// ... and enable it
-moveSystem.Enable();
-
-// Delete
-systems.Delete<MoveSystem>();
-
-// Find a system to do some fancy stuff
-var foundSystem = systems.Find<MoveSystem>();
-
-
-
-sealed class MoveSystem : EcsSystem {
-	public override void OnCreate() {
-		Ecs.Entity()
-			.Set<Position>(new () { X = 0, Y = 0})
-			.Set<Velocity>(new () { X = 12.0f, Y = 1f });
-	}
-
-	public override void OnUpdate() {
-		var deltaTime = Time.Delta;
-		Ecs.Query((ref Position pos, ref Velocity vel) => {
-			pos.X += vel.X * deltaTime;
-			pos.Y += vel.Y * deltaTime;
-		});
-	}
-}
-
 ```
 
 # Credits
