@@ -4,32 +4,40 @@ namespace TinyEcs;
 
 public sealed class Commands : ISystemParam
 {
-    private readonly World _main;
     private readonly EntitySparseSet<EcsID> _despawn;
     private readonly EntitySparseSet<SetComponent> _set;
     private readonly EntitySparseSet<UnsetComponent> _unset;
 
-    public Commands(World main)
+    internal Commands(World main)
     {
-        _main = main;
+        World = main;
         _despawn = new();
         _set = new();
         _unset = new();
     }
 
-    internal World World => _main;
+	public Commands() : this(null!) { }
+
+
+    internal World World { get; set; }
+
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
+	}
 
     public CommandEntityView Entity(EcsID id = default)
     {
-        if (id == 0 || !_main.Exists(id))
-            id = _main.NewEmpty(id);
+        if (id == 0 || !World.Exists(id))
+            id = World.NewEmpty(id);
 
         return new CommandEntityView(this, id);
     }
 
     public void Delete(EcsID id)
     {
-        EcsAssert.Assert(_main.Exists(id));
+        EcsAssert.Assert(World.Exists(id));
 
         ref var entity = ref _despawn.Get(id);
         if (Unsafe.IsNullRef(ref entity))
@@ -40,21 +48,21 @@ public sealed class Commands : ISystemParam
 
     public void Set<T>(EcsID id) where T : struct
 	{
-        ref readonly var cmp = ref _main.Component<T>();
+        ref readonly var cmp = ref World.Component<T>();
 		EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
 		Set(id, in cmp);
 	}
 
     public ref T Set<T>(EcsID id, T component) where T : struct
 	{
-        EcsAssert.Assert(_main.Exists(id));
+        EcsAssert.Assert(World.Exists(id));
 
-        ref readonly var cmp = ref _main.Component<T>();
+        ref readonly var cmp = ref World.Component<T>();
         EcsAssert.Assert(cmp.Size > 0);
 
-        if (_main.Has(id, in cmp))
+        if (World.Has(id, in cmp))
         {
-            ref var value = ref _main.Get<T>(id);
+            ref var value = ref World.Get<T>(id);
             value = component;
 
             return ref value;
@@ -71,7 +79,7 @@ public sealed class Commands : ISystemParam
 
     private ref object Set(EcsID id, ref readonly ComponentInfo cmp)
     {
-        EcsAssert.Assert(_main.Exists(id));
+        EcsAssert.Assert(World.Exists(id));
 
         ref var set = ref _set.CreateNew(out _);
         set.Entity = id;
@@ -89,9 +97,9 @@ public sealed class Commands : ISystemParam
 
     public void Unset<T>(EcsID id) where T : struct
 	{
-        EcsAssert.Assert(_main.Exists(id));
+        EcsAssert.Assert(World.Exists(id));
 
-        ref readonly var cmp = ref _main.Component<T>();
+        ref readonly var cmp = ref World.Component<T>();
         ref var unset = ref _unset.CreateNew(out _);
         unset.Entity = id;
         unset.Component = cmp.ID;
@@ -100,11 +108,11 @@ public sealed class Commands : ISystemParam
 
     public ref T Get<T>(EcsID entity) where T : struct
 	{
-        EcsAssert.Assert(_main.Exists(entity));
+        EcsAssert.Assert(World.Exists(entity));
 
-        if (_main.Has<T>(entity))
+        if (World.Has<T>(entity))
         {
-            return ref _main.Get<T>(entity);
+            return ref World.Get<T>(entity);
         }
 
         Unsafe.SkipInit<T>(out var cmp);
@@ -114,9 +122,9 @@ public sealed class Commands : ISystemParam
 
     public bool Has<T>(EcsID entity) where T : struct
 	{
-        EcsAssert.Assert(_main.Exists(entity));
+        EcsAssert.Assert(World.Exists(entity));
 
-        return _main.Has<T>(entity);
+        return World.Has<T>(entity);
     }
 
     public void Merge()
@@ -128,12 +136,12 @@ public sealed class Commands : ISystemParam
 
         foreach (ref var set in _set)
         {
-            EcsAssert.Assert(_main.Exists(set.Entity));
+            EcsAssert.Assert(World.Exists(set.Entity));
 
             var cmp = new ComponentInfo(set.Component, set.DataLength);
 
-            ref var record = ref _main.GetRecord(set.Entity);
-            var array = _main.Set(_main.Entity(set.Entity), ref record, in cmp);
+            ref var record = ref World.GetRecord(set.Entity);
+            var array = World.Set(World.Entity(set.Entity), ref record, in cmp);
             array?.SetValue(set.Data, record.Row % record.GetChunk().Count);
 
             set.Data = null!;
@@ -142,17 +150,17 @@ public sealed class Commands : ISystemParam
 
         foreach (ref var unset in _unset)
         {
-            EcsAssert.Assert(_main.Exists(unset.Entity));
+            EcsAssert.Assert(World.Exists(unset.Entity));
 
             var cmp = new ComponentInfo(unset.Component, unset.ComponentSize);
-            _main.DetachComponent(unset.Entity, ref cmp);
+            World.DetachComponent(unset.Entity, ref cmp);
         }
 
         foreach (ref var despawn in _despawn)
         {
-            EcsAssert.Assert(_main.Exists(despawn));
+            EcsAssert.Assert(World.Exists(despawn));
 
-            _main.Delete(despawn);
+            World.Delete(despawn);
         }
 
         Clear();
@@ -165,7 +173,7 @@ public sealed class Commands : ISystemParam
         _despawn.Clear();
     }
 
-    private struct SetComponent
+	private struct SetComponent
     {
         public EcsID Entity;
         public ulong Component;

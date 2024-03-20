@@ -14,45 +14,48 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-
-
 ecs.Entity<PlayerTag>();
 ecs.Entity<Likes>();
 ecs.Entity<Position>();
 ecs.Entity<Velocity>();
 
+var scheduler = new Scheduler(ecs);
+scheduler
+	.AddSystem(
+		(
+			Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
+			Query<Position> query1,
+			Res<string> myText
+		) =>
+		{
+			query0.Each((ref Position pos, ref Velocity vel) => {
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			});
 
+			query1.Each((ref Position pos) => { });
 
-var scheduler = new Scheduler();
+			Console.WriteLine("What: {0}", myText.Value);
+		}
+	)
+	.AddSystem((Commands commands) => {
+		commands.Entity()
+			.Set<Position>(default)
+			.Set<Velocity>(default);
+	})
+	.AddSystem((Commands commands) => {
+		commands.Merge();
+	})
+	.AddSystem((World world) => {
+		Console.WriteLine("entities in world {0}", world.EntityCount);
+	})
+	.AddSystem((ComplexQuery complex) => {
+		Console.WriteLine();
+	})
+	.AddResource("oh shit i made it");
 
-// these should be added automatically somehow idk...
-scheduler.AddSystemParam(ecs.Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)>());
-scheduler.AddSystemParam(ecs.Query<Position>());
-
-scheduler.AddSystem(
-	(
-		Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
-		Query<Position> query1,
-		Res<string> myText
-	) =>
-	{
-		query0.Each((ref Position pos, ref Velocity vel) => {
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		});
-
-		query1.Each((ref Position pos) => { });
-
-		Console.WriteLine("What: {0}", myText.Value);
-	}
-);
-
-// scheduler.AddSystem((Commands commands) => {
-// 	commands.Entity();
-// });
-
-scheduler.AddResource("oh shit i made it");
 scheduler.Run();
+
 
 // var e = ecs.Entity("Main")
 // 	.Set<Position>(new Position() {X = 2})
@@ -81,19 +84,6 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		// ecs.Query<(Position, Velocity)>()
-		//    .Each((ref Position pos, ref Velocity vel) => {
-		// 	pos.X *= vel.X;
-		// 	pos.Y *= vel.Y;
-		// });
-
-		// ecs.Each((ref Position pos, ref Velocity vel) => {
-		// 	pos.X *= vel.X;
-		// 	pos.Y *= vel.Y;
-		// });
-
-		//ecs.Exec(fn);
-
 		scheduler.Run();
 	}
 
@@ -135,14 +125,15 @@ struct Chunk;
 struct ChunkTile;
 
 
-class Systemmsss
+struct ComplexQuery : ISystemParam
 {
-	void systemMove(Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> q)
-	{
-		q.Each((ref Position pos, ref Velocity vel) => {
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		});
-	}
+	public Query<(Position, Velocity)> Q0;
+	public Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)> Q1;
 
+	void ISystemParam.New(object arguments)
+	{
+		var world = (World) arguments;
+		Q0 = world.Query<(Position, Velocity)>();
+		Q1 = world.Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>();
+	}
 }

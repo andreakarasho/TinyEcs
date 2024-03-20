@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using System.Formats.Tar;
-using System.Reflection;
 using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
@@ -16,6 +14,8 @@ public sealed partial class World : ISystemParam, IDisposable
     private readonly Commands _commands;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
+
+	public World() : this(256) { }
 
     public World(ulong maxComponentId = 256)
     {
@@ -33,10 +33,14 @@ public sealed partial class World : ISystemParam, IDisposable
 		OnPluginInitialization?.Invoke(this);
     }
 
+	void ISystemParam.New(object arguments)
+	{
+
+	}
+
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
 	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
 	public static event Action<World>? OnPluginInitialization;
-
 
     public int EntityCount => _entities.Length;
 
@@ -335,6 +339,7 @@ public sealed partial class World : ISystemParam, IDisposable
 
 	public Query<TQuery> Query<TQuery>() where TQuery : struct
 	{
+
 		return (Query<TQuery>) GetQuery(
 			Lookup.Query<TQuery>.Hash,
 		 	Lookup.Query<TQuery>.Terms,
@@ -574,15 +579,3 @@ struct EcsRecord
 
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }
-
-
-internal enum SystemParamType
-{
-	Query,
-	QueryWithFilter,
-}
-
-public interface ISystemParam
-{
-}
-

@@ -100,47 +100,61 @@ public sealed partial class Query<TQuery> : Query, ISystemParam
 	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms)
 	{
 	}
+
+	public Query() : this (null!) { }
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
+	}
 }
 
 public sealed partial class Query<TQuery, TFilter> : Query, ISystemParam
 	where TQuery : struct where TFilter : struct
 {
+	public Query() : this (null!) { }
+
 	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms)
 	{
+	}
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
 	}
 }
 
 public partial class Query : IQuery
 {
-	private readonly World _world;
 	private readonly ImmutableArray<Term> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
 
 	internal Query(World world, ImmutableArray<Term> terms)
 	{
-		_world = world;
+		World = world;
 		_terms = terms;
 		_matchedArchetypes = new List<Archetype>();
 	}
 
+	public World World { get; internal set; }
 	internal List<Archetype> MatchedArchetypes => _matchedArchetypes;
 
 	internal void Match()
 	{
-		var allArchetypes = _world.Archetypes;
+		var allArchetypes = World.Archetypes;
 
 		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
 			return;
 
 		var terms = _terms.AsSpan();
-		var first = _world.FindArchetype(Hashing.Calculate(terms));
+		var first = World.FindArchetype(Hashing.Calculate(terms));
 		if (first == null)
 			return;
 
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
-		_world.MatchArchetypes(first, terms, _matchedArchetypes);
+		World.MatchArchetypes(first, terms, _matchedArchetypes);
 	}
 
 	public QueryInternal GetEnumerator()

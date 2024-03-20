@@ -12,33 +12,163 @@ const int ENTITIES_TO_SPAWN = 1_000_00;
 Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TinyEcs sample");
 
 using var ecs = new World();
-var systems = new SystemManager(ecs);
 
-var spawner = systems.Add<SpawnEntities>();
-spawner.EntitiesToSpawn = ENTITIES_TO_SPAWN;
-spawner.WindowSize = new Vector2(WINDOW_WIDTH, WINDOW_HEIGHT);
-spawner.Velocity = VELOCITY;
+var scheduler = new Scheduler(ecs);
+var wndSize = new WindowSize() { Value = { X = WINDOW_WIDTH, Y = WINDOW_HEIGHT } };
+SpawnEntities(ecs, wndSize);
 
-systems.Add<MoveSystem>();
-systems.Add<CheckBorderSystem>().WindowSize = spawner.WindowSize;
+// bleh
+var fn0 = MoveSystem;
+var fn1 = CheckBounds;
+var fn2 = BeginRenderer;
+var fn3 = RenderEntities;
+var fn4 = DrawText;
+var fn5 = EndRenderer;
 
-systems.Add<BeginRenderSystem>();
-systems.Add<RenderEntities>();
-systems.Add<RenderText>();
-systems.Add<EndRenderSystem>();
+scheduler
+	.AddSystem((Res<Time> time) => time.Value = new Time() { Value = Raylib.GetFrameTime() })
+	.AddSystem(fn0)
+	.AddSystem(fn1)
+	.AddSystem(fn2)
+	.AddSystem(fn3)
+	.AddSystem(fn4)
+	.AddSystem(fn5)
+
+	.AddResource(wndSize)
+	.AddResource(new Time());
 
 
 while (!Raylib.WindowShouldClose())
 {
-	systems.Update();
+	scheduler.Run();
 }
 
-systems.Clear();
 Raylib.CloseWindow();
 
 
 
+static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> query)
+{
+	query.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+	{
+		pos.Value += vel.Value * time.Value.Value;
+		rot.Value += rot.Acceleration * time.Value.Value * Raylib.RAD2DEG;
+	});
+}
 
+static void CheckBounds(Query<(Position, Velocity)> query, Res<WindowSize> windowSize)
+{
+	query.Each((ref Position pos, ref Velocity vel) =>
+	{
+		if (pos.Value.X < 0.0f)
+		{
+			pos.Value.X = 0;
+			vel.Value.X *= -1;
+		}
+		else if (pos.Value.X > windowSize.Value.Value.X)
+		{
+			pos.Value.X = windowSize.Value.Value.X;
+			vel.Value.X *= -1;
+		}
+
+		if (pos.Value.Y < 0.0f)
+		{
+			pos.Value.Y = 0;
+			vel.Value.Y *= -1;
+		}
+		else if (pos.Value.Y > windowSize.Value.Value.Y)
+		{
+			pos.Value.Y = windowSize.Value.Value.Y;
+			vel.Value.Y *= -1;
+		}
+	});
+}
+
+static void BeginRenderer()
+{
+	Raylib.BeginDrawing();
+	Raylib.ClearBackground(Color.Black);
+}
+
+static void EndRenderer()
+{
+	Raylib.EndDrawing();
+}
+
+static void RenderEntities(Query<(Sprite, Position, Rotation)> query)
+{
+	query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+	{
+		Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
+	});
+}
+
+static void DrawText(World ecs)
+{
+	var deltaTime = Raylib.GetFrameTime();
+
+	var dbgText =
+		$"""
+			[Debug]
+			FPS: {Raylib.GetFPS()}
+			Entities: {ecs.EntityCount}
+			DeltaTime: {deltaTime}
+			""".Replace("\r", "\n");
+	var textSize = 24;
+	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
+}
+
+static void SpawnEntities(World ecs, WindowSize size)
+{
+	var rnd = new Random();
+	var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
+
+	for (var i = 0; i < ENTITIES_TO_SPAWN; ++i)
+	{
+		ecs!
+			.Entity()
+			.Set(
+				new Position()
+				{
+					Value = new Vector2(rnd.Next(0, (int)size.Value.X), rnd.Next(0, (int)size.Value.Y))
+				}
+			)
+			.Set(
+				new Velocity()
+				{
+					Value = new Vector2(
+						rnd.Next(-VELOCITY, VELOCITY),
+						rnd.Next(-VELOCITY, VELOCITY)
+					)
+				}
+			)
+			.Set(
+				new Sprite()
+				{
+					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
+					Scale = rnd.NextSingle(),
+					Texture = texture
+				}
+			)
+			.Set(
+				new Rotation()
+				{
+					Value = 0f,
+					Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
+				}
+			);
+	}
+}
+
+struct Time
+{
+	public float Value;
+}
+
+struct WindowSize
+{
+	public Vector2 Value;
+}
 
 struct Position
 {
@@ -61,150 +191,4 @@ struct Rotation
 {
     public float Value;
     public float Acceleration;
-}
-
-
-sealed class MoveSystem : TinyEcs.EcsSystem
-{
-	public override void OnUpdate(World ecs)
-	{
-		var deltaTime = Raylib.GetFrameTime();
-
-		ecs.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
-		{
-			pos.Value += vel.Value * deltaTime;
-			rot.Value += rot.Acceleration * deltaTime * Raylib.RAD2DEG;
-		});
-	}
-}
-
-sealed class CheckBorderSystem : TinyEcs.EcsSystem
-{
-	public Vector2 WindowSize { get; set; }
-
-	public override void OnUpdate(World ecs)
-	{
-		ecs.Each((ref Position pos, ref Velocity vel) =>
-		{
-			if (pos.Value.X < 0.0f)
-			{
-				pos.Value.X = 0;
-				vel.Value.X *= -1;
-			}
-			else if (pos.Value.X > WindowSize.X)
-			{
-				pos.Value.X = WindowSize.X;
-				vel.Value.X *= -1;
-			}
-
-			if (pos.Value.Y < 0.0f)
-			{
-				pos.Value.Y = 0;
-				vel.Value.Y *= -1;
-			}
-			else if (pos.Value.Y > WindowSize.Y)
-			{
-				pos.Value.Y = WindowSize.Y;
-				vel.Value.Y *= -1;
-			}
-		});
-	}
-}
-
-sealed class BeginRenderSystem : TinyEcs.EcsSystem
-{
-	public override void OnUpdate(World ecs)
-	{
-		Raylib.BeginDrawing();
-		Raylib.ClearBackground(Color.Black);
-	}
-}
-
-sealed class EndRenderSystem : TinyEcs.EcsSystem
-{
-	public override void OnUpdate(World ecs)
-	{
-		Raylib.EndDrawing();
-	}
-}
-
-sealed class RenderEntities : TinyEcs.EcsSystem
-{
-	public override void OnUpdate(World ecs)
-	{
-		ecs.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
-		{
-			Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
-		});
-	}
-}
-
-sealed class RenderText : TinyEcs.EcsSystem
-{
-	public override void OnUpdate(World ecs)
-	{
-		var deltaTime = Raylib.GetFrameTime();
-
-		var dbgText =
-			$"""
-			 [Debug]
-			 FPS: {Raylib.GetFPS()}
-			 Entities: {ecs.EntityCount}
-			 DeltaTime: {deltaTime}
-			 """.Replace("\r", "\n");
-		var textSize = 24;
-		Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
-	}
-}
-
-sealed class SpawnEntities : TinyEcs.EcsSystem
-{
-	public int EntitiesToSpawn { get; set; }
-	public Vector2 WindowSize { get; set; }
-	public int Velocity { get; set; }
-
-	public override void OnCreate(World ecs)
-	{
-		// This system is just one shot
-		Disable();
-
-		var rnd = new Random();
-		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
-
-		for (var i = 0; i < EntitiesToSpawn; ++i)
-		{
-			ecs!
-				.Entity()
-				.Set(
-					new Position()
-					{
-						Value = new Vector2(rnd.Next(0, (int)WindowSize.X), rnd.Next(0, (int)WindowSize.Y))
-					}
-				)
-				.Set(
-					new Velocity()
-					{
-						Value = new Vector2(
-							rnd.Next(-Velocity, Velocity),
-							rnd.Next(-Velocity, Velocity)
-						)
-					}
-				)
-				.Set(
-					new Sprite()
-					{
-						Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
-						Scale = rnd.NextSingle(),
-						Texture = texture
-					}
-				)
-				.Set(
-					new Rotation()
-					{
-						Value = 0f,
-						Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
-					}
-				);
-		}
-	}
 }
