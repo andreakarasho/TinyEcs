@@ -47,6 +47,13 @@ public sealed partial class Scheduler
 		return this;
 	}
 
+	public Scheduler AddPlugin<T>() where T : IPlugin, new()
+	{
+		new T().Build(this);
+
+		return this;
+	}
+
     public Scheduler AddResource<T>(T resource)
     {
 		return AddSystemParam(new Res<T>() { Value = resource });
@@ -60,6 +67,10 @@ public sealed partial class Scheduler
 	}
 }
 
+public interface IPlugin
+{
+	void Build(Scheduler scheduler);
+}
 
 public interface ISystemParam
 {

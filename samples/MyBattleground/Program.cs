@@ -21,6 +21,7 @@ ecs.Entity<Velocity>();
 
 var scheduler = new Scheduler(ecs);
 scheduler
+	.AddPlugin<MyPlugin>()
 	.AddSystem(
 		(
 			Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
@@ -140,5 +141,16 @@ struct ComplexQuery : ISystemParam
 		var world = (World) arguments;
 		Q0 = world.Query<(Position, Velocity)>();
 		Q1 = world.Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>();
+	}
+}
+
+
+struct MyPlugin : IPlugin
+{
+	public readonly void Build(Scheduler scheduler)
+	{
+		scheduler
+			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value))
+			.AddResource(123);
 	}
 }
