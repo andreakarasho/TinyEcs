@@ -42,7 +42,7 @@ public sealed partial class Scheduler
 
 	public Scheduler AddSystem(Action system)
 	{
-		_systems.Add(new ErasedFunctionSystem((_) => system()));
+		_systems.Add(new ErasedFunctionSystem(_ => system()));
 
 		return this;
 	}

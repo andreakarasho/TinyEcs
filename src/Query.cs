@@ -51,12 +51,6 @@ public interface IQueryBuild
 	Query Build();
 }
 
-public interface IQuery
-{
-
-}
-
-
 public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 {
 	private readonly World _world;
@@ -110,7 +104,7 @@ public sealed partial class Query<TQuery, TFilter> : Query
 	}
 }
 
-public partial class Query : IQuery
+public partial class Query
 {
 	private readonly ImmutableArray<Term> _terms;
 	private readonly List<Archetype> _matchedArchetypes;

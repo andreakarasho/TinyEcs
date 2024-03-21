@@ -85,7 +85,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -108,7 +108,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -131,7 +131,7 @@
             }
 
             var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, Not<IntComponent>, Not<IntComponent>)>())
+            foreach (var arch in ctx.World.Query<FloatComponent, (Not<IntComponent>, Not<IntComponent>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 
@@ -148,6 +148,7 @@
             var e = ctx.World.Entity();
             ctx.World.Set(e, new FloatComponent());
             ctx.World.Set(e, new IntComponent());
+			good++;
 
             var e2 = ctx.World.Entity();
             ctx.World.Set(e2, new FloatComponent());
@@ -158,7 +159,6 @@
             ctx.World.Set(e3, new FloatComponent());
             ctx.World.Set(e3, new IntComponent());
             ctx.World.Set(e3, new BoolComponent());
-            good++;
 
             var e4 = ctx.World.Entity();
             ctx.World.Set(e4, new FloatComponent());
@@ -167,7 +167,7 @@
             ctx.World.Set<NormalTag>(e4);
 
             var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, Not<BoolComponent>, Not<NormalTag>)>())
+            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), (Not<BoolComponent>, Not<NormalTag>)>())
             foreach (ref readonly var chunk in arch)
 	            done += chunk.Count;
 

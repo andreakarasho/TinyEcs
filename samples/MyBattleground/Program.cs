@@ -84,6 +84,11 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
+		// ecs.Query<(Position, Velocity)>().Each((ref Position pos, ref Velocity vel) => {
+		// 	pos.X *= vel.X;
+		// 	pos.Y *= vel.Y;
+		// });
+
 		scheduler.Run();
 	}
 

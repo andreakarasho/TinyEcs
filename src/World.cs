@@ -410,7 +410,8 @@ internal static class Hashing
 	{
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
-			hc = unchecked(hc * 314159 + val.ID);
+			if (val.Op == TermOp.With)
+				hc = unchecked(hc * 314159 + val.ID);
 		return hc;
 	}
 }
