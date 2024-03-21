@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace TinyEcs;
 
-public sealed class Commands : ISystemParam
+public sealed partial class Commands
 {
     private readonly EntitySparseSet<EcsID> _despawn;
     private readonly EntitySparseSet<SetComponent> _set;
@@ -16,16 +16,8 @@ public sealed class Commands : ISystemParam
         _unset = new();
     }
 
-	public Commands() : this(null!) { }
-
-
     internal World World { get; set; }
 
-
-	void ISystemParam.New(object arguments)
-	{
-		World = (World) arguments;
-	}
 
     public CommandEntityView Entity(EcsID id = default)
     {

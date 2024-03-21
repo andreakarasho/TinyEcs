@@ -2,16 +2,6 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
-public sealed class Res<T> : ISystemParam
-{
-    public T Value { get; set; }
-
-	void ISystemParam.New(object arguments)
-	{
-		throw new NotImplementedException();
-	}
-}
-
 internal interface ISystem
 {
     void Run(Dictionary<Type, ISystemParam> resources);
@@ -85,5 +75,56 @@ public interface ISystemParam
 		}
 
 		return (T)value;
+	}
+}
+
+
+partial class World : ISystemParam
+{
+	public World() : this(256) { }
+
+	void ISystemParam.New(object arguments)
+	{
+
+	}
+}
+
+partial class Query<TQuery> : ISystemParam
+{
+	public Query() : this (null!) { }
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
+	}
+}
+
+partial class Query<TQuery, TFilter> : ISystemParam
+{
+	public Query() : this (null!) { }
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
+	}
+}
+
+partial class Commands : ISystemParam
+{
+	public Commands() : this(null!) { }
+
+	void ISystemParam.New(object arguments)
+	{
+		World = (World) arguments;
+	}
+}
+
+public sealed class Res<T> : ISystemParam
+{
+    public T? Value { get; set; }
+
+	void ISystemParam.New(object arguments)
+	{
+		throw new Exception("Resources must be initialized by yourself!");
 	}
 }

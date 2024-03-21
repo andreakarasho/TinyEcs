@@ -94,33 +94,19 @@ public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
 }
 
 
-public sealed partial class Query<TQuery> : Query, ISystemParam
+public sealed partial class Query<TQuery> : Query
 	where TQuery : struct
 {
 	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms)
 	{
 	}
-
-	public Query() : this (null!) { }
-
-	void ISystemParam.New(object arguments)
-	{
-		World = (World) arguments;
-	}
 }
 
-public sealed partial class Query<TQuery, TFilter> : Query, ISystemParam
+public sealed partial class Query<TQuery, TFilter> : Query
 	where TQuery : struct where TFilter : struct
 {
-	public Query() : this (null!) { }
-
 	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms)
 	{
-	}
-
-	void ISystemParam.New(object arguments)
-	{
-		World = (World) arguments;
 	}
 }
 

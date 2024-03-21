@@ -3,7 +3,7 @@ using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
 
-public sealed partial class World : ISystemParam, IDisposable
+public sealed partial class World : IDisposable
 {
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
@@ -11,11 +11,8 @@ public sealed partial class World : ISystemParam, IDisposable
     private Archetype[] _archetypes = new Archetype[16];
     private int _archetypeCount;
     private readonly ComponentComparer _comparer;
-    private readonly Commands _commands;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
-
-	public World() : this(256) { }
 
     public World(ulong maxComponentId = 256)
     {
@@ -25,18 +22,12 @@ public sealed partial class World : ISystemParam, IDisposable
             ReadOnlySpan<ComponentInfo>.Empty,
             _comparer
         );
-        _commands = new(this);
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
 		OnPluginInitialization?.Invoke(this);
     }
-
-	void ISystemParam.New(object arguments)
-	{
-
-	}
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
 	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
@@ -46,16 +37,12 @@ public sealed partial class World : ISystemParam, IDisposable
 
     public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
 
-    public CommandEntityView DeferredEntity(EcsID id = default) => _commands.Entity(id);
-
-    public void Merge() => _commands.Merge();
 
     public void Dispose()
     {
         _entities.Clear();
         _archRoot.Clear();
         _typeIndex.Clear();
-        _commands.Clear();
 		_cachedQueries.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);
