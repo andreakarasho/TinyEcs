@@ -27,7 +27,7 @@ var fn5 = EndRenderer;
 
 scheduler
 	.AddSystem(init, SystemStages.Startup)
-	.AddSystem((Res<Time> time) => time.Value = new Time() { Value = Raylib.GetFrameTime() })
+	.AddSystem((Res<Time> time) => time.Value = new Time() { Value = Raylib.GetFrameTime() }, SystemStages.BeforeUpdate)
 	.AddSystem(fn0)
 	.AddSystem(fn1)
 	.AddSystem(fn2)
@@ -104,16 +104,14 @@ static void RenderEntities(Query<(Sprite, Position, Rotation)> query)
 	});
 }
 
-static void DrawText(World ecs)
+static void DrawText(World ecs, Res<Time> time)
 {
-	var deltaTime = Raylib.GetFrameTime();
-
 	var dbgText =
 		$"""
 			[Debug]
 			FPS: {Raylib.GetFPS()}
 			Entities: {ecs.EntityCount}
-			DeltaTime: {deltaTime}
+			DeltaTime: {time.Value.Value}
 			""".Replace("\r", "\n");
 	var textSize = 24;
 	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);

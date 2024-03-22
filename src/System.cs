@@ -156,6 +156,13 @@ public sealed class Res<T> : ISystemParam
 {
     public T? Value { get; set; }
 
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static implicit operator T?(Res<T> reference)
+	{
+		return reference.Value;
+	}
+
 	void ISystemParam.New(object arguments)
 	{
 		throw new Exception("Resources must be initialized by yourself!");

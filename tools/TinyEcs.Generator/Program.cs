@@ -46,7 +46,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 		{
 			var sb = new StringBuilder();
 
-			sb.AppendLine("partial class Scheduler {");
+			sb.AppendLine("public partial class Scheduler {");
 
 			for (var i = 0; i < 16; ++i)
 			{
