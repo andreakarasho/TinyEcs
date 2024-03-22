@@ -66,7 +66,7 @@ var scheduler = new Scheduler(ecs);
 scheduler
     // Create a one-shot system
     .AddSystem((Commands commands) => {
-        // spawn a deferred entity
+        // spawn some deferred entities
         for (var i = 0; i < 1000; ++i)
             commands.Entity()
                 .Set<Position>(default)
