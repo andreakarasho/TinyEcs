@@ -64,17 +64,21 @@ using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
 scheduler
+    // Create a one-shot system
+    .AddSystem((Commands commands) => {
+        // spawn a deferred entity
+        for (var i = 0; i < 1000; ++i)
+            commands.Entity()
+                .Set<Position>(default)
+                .Set<Velocity>(default);
+	}, SystemStages.Startup)
+
     // Arguments oderd doesn't matter!
-    .AddSystem((Commands commands, Query<(Position, Velocity), Not<Npc>> query) => {
+    .AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
         // query execution
         query.Each((ref Position pos, ref Velocity vel) => {
 
         });
-
-        // spawn a deferred entity
-        commands.Entity()
-            .Set<Position>(default)
-            .Set<Velocity>(default);
     })
 
     // Merge the deferred commands to the world
