@@ -448,13 +448,7 @@ internal static class Lookup
 
 		static Component()
 		{
-			_arrayCreator.Add(Value.ID, count => Size > 0 ?
-#if NET5_0_OR_GREATER
-			GC.AllocateUninitializedArray<T>(count)
-#else
-			new T[count]
-#endif
-			: Array.Empty<T>());
+			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 			_typesConvertion.Add(typeof(T), Value.ID);
 			_typesConvertion.Add(typeof(With<T>), Value.ID);
 			_typesConvertion.Add(typeof(Not<T>), IDOp.Pair(0xFF_FF_FF_FF, Value.ID));

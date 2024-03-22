@@ -15,9 +15,9 @@ using var ecs = new World();
 
 var scheduler = new Scheduler(ecs);
 var wndSize = new WindowSize() { Value = { X = WINDOW_WIDTH, Y = WINDOW_HEIGHT } };
-SpawnEntities(ecs, wndSize);
 
 // bleh
+var init = SpawnEntities;
 var fn0 = MoveSystem;
 var fn1 = CheckBounds;
 var fn2 = BeginRenderer;
@@ -26,6 +26,7 @@ var fn4 = DrawText;
 var fn5 = EndRenderer;
 
 scheduler
+	.AddSystem(init, SystemStages.Startup)
 	.AddSystem((Res<Time> time) => time.Value = new Time() { Value = Raylib.GetFrameTime() })
 	.AddSystem(fn0)
 	.AddSystem(fn1)
@@ -118,7 +119,7 @@ static void DrawText(World ecs)
 	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
 }
 
-static void SpawnEntities(World ecs, WindowSize size)
+static void SpawnEntities(World ecs, Res<WindowSize> size)
 {
 	var rnd = new Random();
 	var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
@@ -130,7 +131,7 @@ static void SpawnEntities(World ecs, WindowSize size)
 			.Set(
 				new Position()
 				{
-					Value = new Vector2(rnd.Next(0, (int)size.Value.X), rnd.Next(0, (int)size.Value.Y))
+					Value = new Vector2(rnd.Next(0, (int)size.Value.Value.X), rnd.Next(0, (int)size.Value.Value.Y))
 				}
 			)
 			.Set(

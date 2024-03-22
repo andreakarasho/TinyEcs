@@ -19,30 +19,55 @@ internal sealed class ErasedFunctionSystem : ISystem
     public void Run(Dictionary<Type, ISystemParam> resources) => f(resources);
 }
 
+public enum SystemStages
+{
+	Startup,
+	BeforeUpdate,
+	Update,
+	AfterUpdate,
+
+	Last = AfterUpdate
+}
+
+public interface ISystemStage
+{
+
+}
+
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<ISystem> _systems = new ();
+    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)SystemStages.Last + 1];
     private readonly Dictionary<Type, ISystemParam> _resources = new ();
 
 	public Scheduler(World world)
 	{
 		_world = world;
 
+		for (var i = 0; i < _systems.Length; ++i)
+			_systems[i] = new ();
+
 		AddSystemParam(world);
 	}
 
     public void Run()
     {
-        foreach (var system in _systems)
-        {
-            system.Run(_resources);
-        }
+		RunStage(SystemStages.Startup);
+		_systems[(int) SystemStages.Startup].Clear();
+
+		for (var stage = SystemStages.BeforeUpdate; stage <= SystemStages.Last; stage += 1)
+        	RunStage(stage);
     }
 
-	public Scheduler AddSystem(Action system)
+	private void RunStage(SystemStages stage)
 	{
-		_systems.Add(new ErasedFunctionSystem(_ => system()));
+		foreach (var system in _systems[(int) stage])
+			system.Run(_resources);
+	}
+
+	public Scheduler AddSystem(Action system, SystemStages stage = SystemStages.Update)
+	{
+		_systems[(int)stage].Add(new ErasedFunctionSystem(_ => system()));
 
 		return this;
 	}
@@ -94,10 +119,7 @@ partial class World : ISystemParam
 {
 	public World() : this(256) { }
 
-	void ISystemParam.New(object arguments)
-	{
-
-	}
+	void ISystemParam.New(object arguments) { }
 }
 
 partial class Query<TQuery> : ISystemParam

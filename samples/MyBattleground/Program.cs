@@ -11,7 +11,6 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 //BevySystems2.Program3.Test();
 
 
-
 using var ecs = new World();
 
 ecs.Entity<PlayerTag>();
@@ -55,6 +54,8 @@ scheduler
 	})
 	.AddResource("oh shit i made it");
 
+
+scheduler.Run();
 scheduler.Run();
 
 
@@ -85,12 +86,12 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		// ecs.Query<(Position, Velocity)>().Each((ref Position pos, ref Velocity vel) => {
-		// 	pos.X *= vel.X;
-		// 	pos.Y *= vel.Y;
-		// });
+		ecs.Query<(Position, Velocity)>().Each((ref Position pos, ref Velocity vel) => {
+			pos.X *= vel.X;
+			pos.Y *= vel.Y;
+		});
 
-		scheduler.Run();
+		//scheduler.Run();
 	}
 
 	last = start;
@@ -145,12 +146,10 @@ struct ComplexQuery : ISystemParam
 }
 
 
-struct MyPlugin : IPlugin
+readonly struct MyPlugin : IPlugin
 {
 	public readonly void Build(Scheduler scheduler)
-	{
-		scheduler
-			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value))
+		=> scheduler
+			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), SystemStages.Startup)
 			.AddResource(123);
-	}
 }
