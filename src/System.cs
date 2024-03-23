@@ -25,19 +25,12 @@ public enum SystemStages
 	BeforeUpdate,
 	Update,
 	AfterUpdate,
-
-	Last = AfterUpdate
-}
-
-public interface ISystemStage
-{
-
 }
 
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)SystemStages.Last + 1];
+    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)SystemStages.AfterUpdate + 1];
     private readonly Dictionary<Type, ISystemParam> _resources = new ();
 
 	public Scheduler(World world)
@@ -55,7 +48,7 @@ public sealed partial class Scheduler
 		RunStage(SystemStages.Startup);
 		_systems[(int) SystemStages.Startup].Clear();
 
-		for (var stage = SystemStages.BeforeUpdate; stage <= SystemStages.Last; stage += 1)
+		for (var stage = SystemStages.BeforeUpdate; stage <= SystemStages.AfterUpdate; stage += 1)
         	RunStage(stage);
     }
 
@@ -79,12 +72,19 @@ public sealed partial class Scheduler
 		return this;
 	}
 
+	public Scheduler AddEvent<T>() where T : new()
+	{
+		var queue = new Queue<T>();
+		return AddSystemParam(new EventWriter<T>(queue))
+			.AddSystemParam(new EventReader<T>(queue));
+	}
+
     public Scheduler AddResource<T>(T resource)
     {
 		return AddSystemParam(new Res<T>() { Value = resource });
     }
 
-	public Scheduler AddSystemParam<T>(T param) where T : ISystemParam
+	internal Scheduler AddSystemParam<T>(T param) where T : ISystemParam
 	{
 		_resources[typeof(T)] = param;
 
@@ -101,7 +101,8 @@ public interface ISystemParam
 {
 	void New(object arguments);
 
-	internal static T Get<T>(Dictionary<Type, ISystemParam> resources, object arguments) where T : ISystemParam, new()
+	internal static T Get<T>(Dictionary<Type, ISystemParam> resources, object arguments)
+		where T : ISystemParam, new()
 	{
 		if (!resources.TryGetValue(typeof(T), out var value))
 		{
@@ -112,6 +113,41 @@ public interface ISystemParam
 
 		return (T)value;
 	}
+}
+
+public sealed class EventWriter<T> : ISystemParam
+{
+	private readonly Queue<T>? _queue;
+
+	internal EventWriter(Queue<T> queue)
+		=> _queue = queue;
+
+	public EventWriter()
+		=> throw new Exception("EventWriter must be initialized by yourself!");
+
+	public void Enqueue(T ev)
+		=> _queue!.Enqueue(ev);
+
+	public void New(object arguments) { }
+}
+
+public sealed class EventReader<T> : ISystemParam
+{
+	private readonly Queue<T>? _queue;
+
+	internal EventReader(Queue<T> queue)
+		=> _queue = queue;
+
+	public EventReader()
+		=> throw new Exception("EventReader must be initialized by yourself!");
+
+	public IEnumerable<T> Read()
+	{
+		while (_queue!.TryDequeue(out var result))
+			yield return result;
+	}
+
+	public void New(object arguments) { }
 }
 
 
@@ -154,7 +190,9 @@ partial class Commands : ISystemParam
 
 public sealed class Res<T> : ISystemParam
 {
-    public T? Value { get; set; }
+	private T? _t;
+
+    public ref T? Value => ref _t;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

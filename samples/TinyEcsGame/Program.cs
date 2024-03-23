@@ -1,6 +1,7 @@
 using System.Numerics;
 using TinyEcs;
 using Raylib_cs;
+using System.Runtime.CompilerServices;
 
 
 const int WINDOW_WIDTH = 800;
@@ -27,7 +28,8 @@ var fn5 = EndRenderer;
 
 scheduler
 	.AddSystem(init, SystemStages.Startup)
-	.AddSystem((Res<Time> time) => time.Value = new Time() { Value = Raylib.GetFrameTime() }, SystemStages.BeforeUpdate)
+	.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), SystemStages.BeforeUpdate)
+	.AddPlugin<RaylibPlugin>()
 	.AddSystem(fn0)
 	.AddSystem(fn1)
 	.AddSystem(fn2)
@@ -190,4 +192,36 @@ struct Rotation
 {
     public float Value;
     public float Acceleration;
+}
+
+readonly struct RaylibPlugin : IPlugin
+{
+	public readonly void Build(Scheduler scheduler)
+	{
+		scheduler
+			.AddSystem((Res<Input> input) => {
+				foreach (ref var v in input.Value)
+					v = KeyboardKey.Null;
+
+				var key = Raylib.GetKeyPressed();
+				while (key != 0)
+				{
+					input.Value[key] = (KeyboardKey) key;
+					key = Raylib.GetKeyPressed();
+				}
+			})
+			.AddSystem((Res<Input> input) => {
+				if (input.Value[(int)KeyboardKey.A] == KeyboardKey.A)
+				{
+					Console.WriteLine("pressed {0}", KeyboardKey.A);
+				}
+			})
+			.AddResource(new Input());
+	}
+
+	[InlineArray(512)]
+	struct Input
+	{
+		private KeyboardKey _k0;
+	}
 }

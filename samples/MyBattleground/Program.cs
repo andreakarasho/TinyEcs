@@ -7,10 +7,6 @@ using System.Runtime.CompilerServices;
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 
-// Program2.Test();
-//BevySystems2.Program3.Test();
-
-
 using var ecs = new World();
 
 ecs.Entity<PlayerTag>();
@@ -20,7 +16,22 @@ ecs.Entity<Velocity>();
 
 var scheduler = new Scheduler(ecs);
 scheduler
+
+	.AddEvent<MyEvent>()
+	.AddSystem((EventWriter<MyEvent> writer) => {
+		writer.Enqueue(new MyEvent() { Value = 1});
+		writer.Enqueue(new MyEvent() { Value = 2});
+		writer.Enqueue(new MyEvent() { Value = 3});
+	})
+	.AddSystem((EventReader<MyEvent> reader) => {
+		foreach (var val in reader.Read())
+		{
+			Console.WriteLine(val.Value);
+		}
+	})
+
 	.AddPlugin<MyPlugin>()
+
 	.AddSystem(
 		(
 			Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
@@ -50,8 +61,15 @@ scheduler
 		Console.WriteLine("entities in world {0}", world.EntityCount);
 	})
 	.AddSystem((ComplexQuery complex) => {
-		Console.WriteLine();
+		complex.Q0.Each((ref Position pos, ref Velocity vel) => {
+
+		});
+
+		complex.Q1.Each((ref Position pos, ref Velocity vel) => {
+
+		});
 	})
+
 	.AddResource("oh shit i made it");
 
 
@@ -152,4 +170,9 @@ readonly struct MyPlugin : IPlugin
 		=> scheduler
 			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), SystemStages.Startup)
 			.AddResource(123);
+}
+
+struct MyEvent
+{
+	public int Value;
 }
