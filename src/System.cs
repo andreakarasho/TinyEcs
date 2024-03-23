@@ -123,7 +123,7 @@ public sealed class EventWriter<T> : ISystemParam
 		=> _queue = queue;
 
 	public EventWriter()
-		=> throw new Exception("EventWriter must be initialized by yourself!");
+		=> throw new Exception("EventWriter must be initialized using the 'scheduler.AddEvent<T>' api");
 
 	public void Enqueue(T ev)
 		=> _queue!.Enqueue(ev);
@@ -139,7 +139,7 @@ public sealed class EventReader<T> : ISystemParam
 		=> _queue = queue;
 
 	public EventReader()
-		=> throw new Exception("EventReader must be initialized by yourself!");
+		=> throw new Exception("EventReader must be initialized using the 'scheduler.AddEvent<T>' api");
 
 	public IEnumerable<T> Read()
 	{
@@ -203,6 +203,6 @@ public sealed class Res<T> : ISystemParam
 
 	void ISystemParam.New(object arguments)
 	{
-		throw new Exception("Resources must be initialized by yourself!");
+		throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
 	}
 }
