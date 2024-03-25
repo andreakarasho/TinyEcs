@@ -51,10 +51,10 @@ public sealed class MyGenerator : IIncrementalGenerator
 			for (var i = 0; i < 16; ++i)
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : ISystemParam, new()");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
 				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, _world);");
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
-				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = default;");
+				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 
 				sb.AppendLine($@"
 					public Scheduler AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, Func<bool> runIf = null!)
