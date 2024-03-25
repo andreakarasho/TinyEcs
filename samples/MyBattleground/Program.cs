@@ -19,6 +19,14 @@ ecs.Entity<Velocity>();
 var scheduler = new Scheduler(ecs);
 scheduler
 
+	.AddSystem((Local<int> i32, Res<string> str) => {
+		Console.WriteLine(i32.Value++);
+	})
+
+	.AddSystem((Local<int> i32, Res<string> str) => {
+		Console.WriteLine(i32.Value++);
+	})
+
 	.AddState<GameStates>()
 	.AddSystem(() => Console.WriteLine("playing the game"), runIf: () => scheduler.IsState(GameStates.InGame))
 	.AddSystem(() => Console.WriteLine("game paused"), runIf: () => scheduler.IsState(GameStates.Paused))
@@ -82,7 +90,8 @@ scheduler
 		});
 	})
 
-	.AddResource("oh shit i made it");
+	.AddResource("oh shit i made it")
+	;
 
 
 scheduler.Run();

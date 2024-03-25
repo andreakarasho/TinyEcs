@@ -9,14 +9,16 @@ internal interface ISystem
 
 internal sealed class ErasedFunctionSystem : ISystem
 {
-    private readonly Action<Dictionary<Type, ISystemParam>> f;
+    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>> _fn;
+	private readonly Dictionary<Type, ISystemParam> _locals;
 
-    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>> f)
+    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>> fn)
     {
-        this.f = f;
+        _fn = fn;
+		_locals = new ();
     }
 
-	public void Run(Dictionary<Type, ISystemParam> resources) => f(resources);
+	public void Run(Dictionary<Type, ISystemParam> resources) => _fn(resources, _locals);
 }
 
 public enum Stages
@@ -45,7 +47,7 @@ public sealed partial class Scheduler
 
 
 	public bool IsState<TState>(TState state) where TState : Enum =>
-		ISystemParam.Get<Res<TState>>(_resources, null!)?.Value?.Equals(state) ?? false;
+		ISystemParam.Get<Res<TState>>(_resources, null!, null!)?.Value?.Equals(state) ?? false;
 
     public void Run()
     {
@@ -64,7 +66,7 @@ public sealed partial class Scheduler
 
 	public Scheduler AddSystem(Action system, Stages stage = Stages.Update, Func<bool> runIf = null!)
 	{
-		_systems[(int)stage].Add(new ErasedFunctionSystem(_ => { if (runIf?.Invoke() ?? true) system(); }));
+		_systems[(int)stage].Add(new ErasedFunctionSystem((_, _) => { if (runIf?.Invoke() ?? true) system(); }));
 
 		return this;
 	}
@@ -110,18 +112,31 @@ public interface ISystemParam
 {
 	void New(object arguments);
 
-	internal static T Get<T>(Dictionary<Type, ISystemParam> resources, object arguments)
+	internal static T Get<T>(Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam>? localRes, object arguments)
 		where T : ISystemParam, new()
 	{
-		if (!resources.TryGetValue(typeof(T), out var value))
+		if (localRes?.TryGetValue(typeof(T), out var value) ?? false)
+		{
+			return (T)value;
+		}
+
+		if (!globalRes.TryGetValue(typeof(T), out value))
 		{
 			value = new T();
 			value.New(arguments);
-			resources.Add(typeof(T), value);
+
+			if (localRes != null && value is ISystemParamExclusive exclusive)
+				localRes.Add(typeof(T), value);
+			else
+				globalRes.Add(typeof(T), value);
 		}
 
 		return (T)value;
 	}
+}
+
+public interface ISystemParamExclusive
+{
 }
 
 public sealed class EventWriter<T> : ISystemParam
@@ -212,6 +227,25 @@ public sealed class Res<T> : ISystemParam
 
 	void ISystemParam.New(object arguments)
 	{
-		throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
+		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
+	}
+}
+
+public sealed class Local<T> : ISystemParam, ISystemParamExclusive
+{
+	private T? _t;
+
+    public ref T? Value => ref _t;
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static implicit operator T?(Local<T> reference)
+	{
+		return reference.Value;
+	}
+
+	void ISystemParam.New(object arguments)
+	{
+		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
 	}
 }

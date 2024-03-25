@@ -52,14 +52,14 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : ISystemParam, new()");
-				var objs = GenerateSequence(i + 1, "\n", j => $"var obj{j} = ISystemParam.Get<T{j}>(res, _world);");
+				var objs = GenerateSequence(i + 1, "\n", j => $"var obj{j} = ISystemParam.Get<T{j}>(globalRes, localRes, _world);");
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 
 				sb.AppendLine($@"
 					public Scheduler AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, Func<bool> runIf = null!)
 						{whereGenerics}
 					{{
-						var fn = (Dictionary<Type, ISystemParam> res) => {{
+						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {{
 							if (runIf != null && !runIf()) return;
 							{objs}
 							system({objsArgs});
