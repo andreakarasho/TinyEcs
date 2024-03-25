@@ -15,6 +15,7 @@ ecs.Entity<Position>();
 ecs.Entity<Velocity>();
 
 
+
 var scheduler = new Scheduler(ecs);
 scheduler
 
@@ -105,8 +106,6 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 
 // for (var i = 7000; i < 8000 * 2; ++i)
 // 	ecs.Entity((ulong)i).Delete();
-
-
 var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;

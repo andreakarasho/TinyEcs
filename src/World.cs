@@ -326,7 +326,6 @@ public sealed partial class World : IDisposable
 
 	public Query<TQuery> Query<TQuery>() where TQuery : struct
 	{
-
 		return (Query<TQuery>) GetQuery(
 			Lookup.Query<TQuery>.Hash,
 		 	Lookup.Query<TQuery>.Terms,
@@ -341,6 +340,23 @@ public sealed partial class World : IDisposable
 			Lookup.Query<TQuery, TFilter>.Terms,
 		 	static (world, _) => new Query<TQuery, TFilter>(world)
 		);
+	}
+
+	public void Each(QueryFilterDelegateWithEntity fn)
+	{
+		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms)))
+		{
+			foreach (ref readonly var chunk in arch)
+			{
+				ref var entity = ref chunk.Entities[0];
+				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref entity, ref last))
+				{
+					fn(entity);
+					entity = ref Unsafe.Add(ref entity, 1);
+				}
+			}
+		}
 	}
 
 	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms, Func<World, ImmutableArray<Term>, Query> factory)

@@ -40,14 +40,13 @@ var npc = ecs.Entity()
    .Set<Npc>();
 
 // Query for all entities with [Position + Name] and the entity
-ecs.Query((EntityView entity, ref Position pos, ref Name name) => {
+ecs.Each((EntityView entity, ref Position pos, ref Name name) => {
     Console.WriteLine(name.Vaue);
 });
 
 // Query for all entities with [Position + Name + Player], without [Npc]
-ecs.Filter<(Player, Not<Npc>)>()
-   .Query((ref Position pos, ref Name name) => {
-        Console.WriteLine(name.Vaue);
+ecs.Each<(Position, Name), (Player, Not<Npc>)>((ref Position pos, ref Name name) => {
+    Console.WriteLine(name.Vaue);
 });
 
 
@@ -113,7 +112,7 @@ world.Unset<Position>(entity);
 Advanced queries
 
 ```csharp
-foreach (var archetype in world.Filter<(With<Position>, With<Velocity>, Not<Npc>)>())
+foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>())
 {
 	var posIndex = archetype.GetComponentIndex<Position>();
 	var velIndex = archetype.GetComponentIndex<Velocity>();
@@ -165,10 +164,8 @@ woodenChest.AddChild<ChestContainer>(goldCoins);
 woodenChest.AddChild<ChestContainer>(silverCoins);
 
 // Query for all children that have a 'ChestContainer' relationship
-ecs.Filter<With<Child<ChestContainer>>>()
-   .Query((EntityView entity) => {
-       Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!");
-   });
+ecs.Each<With<Child<ChestContainer>>>((EntityView entity) =>
+    Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
 ```
 
 Unique entities
@@ -188,8 +185,7 @@ ent.Enable();
 bool isEnabled = ent.IsEnabled();
 
 // `Disabled` is a simple built-in component!
-ecs.Filter<Not<Disabled>>()
-	.Query((EntityView entity) => { });
+ecs.Each<Not<Disabled>>((EntityView entity) => Console.WriteLine("entity {0}", entity.ID));
 ```
 
 # Credits
