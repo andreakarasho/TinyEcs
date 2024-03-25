@@ -56,10 +56,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 
 				sb.AppendLine($@"
-					public Scheduler AddSystem<{generics}>(Action<{generics}> system, SystemStages stage = SystemStages.Update)
+					public Scheduler AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, Func<bool> runIf = null!)
 						{whereGenerics}
 					{{
 						var fn = (Dictionary<Type, ISystemParam> res) => {{
+							if (runIf != null && !runIf()) return;
 							{objs}
 							system({objsArgs});
 						}};

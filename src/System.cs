@@ -16,10 +16,10 @@ internal sealed class ErasedFunctionSystem : ISystem
         this.f = f;
     }
 
-    public void Run(Dictionary<Type, ISystemParam> resources) => f(resources);
+	public void Run(Dictionary<Type, ISystemParam> resources) => f(resources);
 }
 
-public enum SystemStages
+public enum Stages
 {
 	Startup,
 	BeforeUpdate,
@@ -30,7 +30,7 @@ public enum SystemStages
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)SystemStages.AfterUpdate + 1];
+    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)Stages.AfterUpdate + 1];
     private readonly Dictionary<Type, ISystemParam> _resources = new ();
 
 	public Scheduler(World world)
@@ -43,24 +43,28 @@ public sealed partial class Scheduler
 		AddSystemParam(world);
 	}
 
+
+	public bool IsState<TState>(TState state) where TState : Enum =>
+		ISystemParam.Get<Res<TState>>(_resources, null!)?.Value?.Equals(state) ?? false;
+
     public void Run()
     {
-		RunStage(SystemStages.Startup);
-		_systems[(int) SystemStages.Startup].Clear();
+		RunStage(Stages.Startup);
+		_systems[(int) Stages.Startup].Clear();
 
-		for (var stage = SystemStages.BeforeUpdate; stage <= SystemStages.AfterUpdate; stage += 1)
+		for (var stage = Stages.BeforeUpdate; stage <= Stages.AfterUpdate; stage += 1)
         	RunStage(stage);
     }
 
-	private void RunStage(SystemStages stage)
+	private void RunStage(Stages stage)
 	{
 		foreach (var system in _systems[(int) stage])
 			system.Run(_resources);
 	}
 
-	public Scheduler AddSystem(Action system, SystemStages stage = SystemStages.Update)
+	public Scheduler AddSystem(Action system, Stages stage = Stages.Update, Func<bool> runIf = null!)
 	{
-		_systems[(int)stage].Add(new ErasedFunctionSystem(_ => system()));
+		_systems[(int)stage].Add(new ErasedFunctionSystem(_ => { if (runIf?.Invoke() ?? true) system(); }));
 
 		return this;
 	}
@@ -72,11 +76,16 @@ public sealed partial class Scheduler
 		return this;
 	}
 
-	public Scheduler AddEvent<T>() where T : new()
+	public Scheduler AddEvent<T>()
 	{
 		var queue = new Queue<T>();
 		return AddSystemParam(new EventWriter<T>(queue))
 			.AddSystemParam(new EventReader<T>(queue));
+	}
+
+	public Scheduler AddState<T>(T initialState = default!) where T : Enum
+	{
+		return AddResource(initialState);
 	}
 
     public Scheduler AddResource<T>(T resource)

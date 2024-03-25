@@ -27,8 +27,8 @@ var fn4 = DrawText;
 var fn5 = EndRenderer;
 
 scheduler
-	.AddSystem(init, SystemStages.Startup)
-	.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), SystemStages.BeforeUpdate)
+	.AddSystem(init, Stages.Startup)
+	.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate)
 	.AddPlugin<RaylibPlugin>()
 	.AddSystem(fn0)
 	.AddSystem(fn1)

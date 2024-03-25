@@ -14,8 +14,20 @@ ecs.Entity<Likes>();
 ecs.Entity<Position>();
 ecs.Entity<Velocity>();
 
+
 var scheduler = new Scheduler(ecs);
 scheduler
+
+	.AddState<GameStates>()
+	.AddSystem(() => Console.WriteLine("playing the game"), runIf: () => scheduler.IsState(GameStates.InGame))
+	.AddSystem(() => Console.WriteLine("game paused"), runIf: () => scheduler.IsState(GameStates.Paused))
+	.AddSystem((Res<GameStates> state) =>
+		state.Value = state.Value switch
+		{
+			GameStates.InGame => GameStates.Paused,
+			GameStates.Paused => GameStates.InGame,
+			_ => state.Value,
+		})
 
 	.AddEvent<MyEvent>()
 	.AddSystem((EventWriter<MyEvent> writer) => {
@@ -32,8 +44,7 @@ scheduler
 
 	.AddPlugin<MyPlugin>()
 
-	.AddSystem(
-		(
+	.AddSystem((
 			Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
 			Query<Position> query1,
 			Res<string> myText
@@ -104,12 +115,12 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		ecs.Query<(Position, Velocity)>().Each((ref Position pos, ref Velocity vel) => {
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		});
+		// ecs.Query<(Position, Velocity)>().Each((ref Position pos, ref Velocity vel) => {
+		// 	pos.X *= vel.X;
+		// 	pos.Y *= vel.Y;
+		// });
 
-		//scheduler.Run();
+		scheduler.Run();
 	}
 
 	last = start;
@@ -168,11 +179,18 @@ readonly struct MyPlugin : IPlugin
 {
 	public readonly void Build(Scheduler scheduler)
 		=> scheduler
-			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), SystemStages.Startup)
+			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), Stages.Startup)
 			.AddResource(123);
 }
 
 struct MyEvent
 {
 	public int Value;
+}
+
+
+enum GameStates
+{
+	InGame,
+	Paused
 }
