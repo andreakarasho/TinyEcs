@@ -47,7 +47,7 @@ public sealed partial class Scheduler
 
 
 	public bool IsState<TState>(TState state) where TState : Enum =>
-		ISystemParam.Get<Res<TState>>(_resources, null!, null!)?.Value?.Equals(state) ?? false;
+		ISystemParam.Get<Res<TState>>(_resources, _resources, null!)?.Value?.Equals(state) ?? false;
 
     public void Run()
     {
@@ -112,10 +112,10 @@ public interface ISystemParam
 {
 	void New(object arguments);
 
-	internal static T Get<T>(Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam>? localRes, object arguments)
+	internal static T Get<T>(Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, object arguments)
 		where T : ISystemParam, new()
 	{
-		if (localRes?.TryGetValue(typeof(T), out var value) ?? false)
+		if (localRes.TryGetValue(typeof(T), out var value))
 		{
 			return (T)value;
 		}
@@ -125,7 +125,7 @@ public interface ISystemParam
 			value = new T();
 			value.New(arguments);
 
-			if (localRes != null && value is ISystemParamExclusive exclusive)
+			if (value is ISystemParamExclusive exclusive)
 				localRes.Add(typeof(T), value);
 			else
 				globalRes.Add(typeof(T), value);

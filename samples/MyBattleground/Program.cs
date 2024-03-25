@@ -169,7 +169,7 @@ struct Chunk;
 struct ChunkTile;
 
 
-struct ComplexQuery : ISystemParam
+class ComplexQuery : ISystemParam
 {
 	public Query<(Position, Velocity)> Q0;
 	public Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)> Q1;
