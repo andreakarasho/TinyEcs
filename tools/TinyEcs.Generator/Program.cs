@@ -36,6 +36,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{GenerateFilterQuery(false, true)}
 					{GenerateFilterQuery(true, true)}
 					{GenerateSystems()}
+					{GenerateSystemsInterfaces()}
                 }}
 
                 #pragma warning restore 1591
@@ -61,14 +62,61 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{whereGenerics}
 					{{
 						{emptyVars}
-						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, Func<bool> runIf) => {{
-							if (runIf != null && !runIf()) return;
+						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, Func<object, bool> runIf) => {{
+							if (runIf != null && !runIf(_world)) return;
 							{objs}
 							system({objsArgs});
 						}};
 						var sys = new ErasedFunctionSystem(fn);
 						_systems[(int) stage].Add(sys);
 						return sys;
+					}}
+				");
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
+		}
+
+		static string GenerateSystemsInterfaces()
+		{
+			var sb = new StringBuilder();
+
+			sb.AppendLine("public partial interface ISystem {");
+
+			for (var i = 0; i < 16; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
+
+				sb.AppendLine($@"
+					public ISystem RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics};
+				");
+			}
+
+			sb.AppendLine("}");
+
+
+			sb.AppendLine("internal partial class ErasedFunctionSystem {");
+
+			for (var i = 0; i < 16; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, args);");
+				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+
+				sb.AppendLine($@"
+					ISystem ISystem.RunIf<{generics}>(Func<{generics}, bool> condition)
+					{{
+						{emptyVars}
+						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, object args) => {{
+							{objs}
+							return condition({objsArgs});
+						}};
+						_conditions.Add(fn);
+						return this;
 					}}
 				");
 			}

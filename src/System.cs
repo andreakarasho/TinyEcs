@@ -2,79 +2,34 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
+using ParamMap = Dictionary<Type, ISystemParam>;
+
 public partial interface ISystem
 {
-    void Run(Dictionary<Type, ISystemParam> resources);
+    internal void Run(Dictionary<Type, ISystemParam> resources);
 
 	public ISystem RunIf(Func<bool> condition);
-	public ISystem RunIf<T0>(Func<T0, bool> condition)
-		where T0 : class, ISystemParam, new();
-	public ISystem RunIf<T0, T1>(Func<T0, T1, bool> condition)
-		where T0 : class, ISystemParam, new()
-		where T1 : class, ISystemParam, new();
-	public ISystem RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
-		where T0 : class, ISystemParam, new()
-		where T1 : class, ISystemParam, new()
-		where T2 : class, ISystemParam, new();
 }
 
 internal sealed partial class ErasedFunctionSystem : ISystem
 {
-    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<bool>> _fn;
+    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<object, bool>> _fn;
 	private readonly Dictionary<Type, ISystemParam> _locals;
-	private readonly List<Func<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, bool>> _ifs;
+	private readonly List<Func<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, object, bool>> _conditions;
 
-    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<bool>> fn)
+    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<object, bool>> fn)
     {
         _fn = fn;
 		_locals = new ();
-		_ifs = new ();
+		_conditions = new ();
     }
 
-	public void Run(Dictionary<Type, ISystemParam> resources) => _fn(resources, _locals, () => _ifs.All(s => s(resources, _locals)));
+	void ISystem.Run(Dictionary<Type, ISystemParam> resources)
+		=> _fn(resources, _locals, args => _conditions.All(s => s(resources, _locals, args)));
 
 	ISystem ISystem.RunIf(Func<bool> condition)
 	{
-		_ifs.Add((_, _) => condition());
-		return this;
-	}
-
-	ISystem ISystem.RunIf<T0>(Func<T0, bool> condition)
-	{
-		T0? obj0 = null;
-		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
-			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
-			return condition(obj0);
-		};
-		_ifs.Add(fn);
-		return this;
-	}
-
-	ISystem ISystem.RunIf<T0, T1>(Func<T0, T1, bool> condition)
-	{
-		T0? obj0 = null;
-		T1? obj1 = null;
-		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
-			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
-			obj1 ??= ISystemParam.Get<T1>(globalRes, localRes, null);
-			return condition(obj0, obj1);
-		};
-		_ifs.Add(fn);
-		return this;
-	}
-
-	ISystem ISystem.RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
-	{
-		T0? obj0 = null;
-		T1? obj1 = null;
-		T2? obj2 = null;
-		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
-			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
-			obj1 ??= ISystemParam.Get<T1>(globalRes, localRes, null);
-			obj2 ??= ISystemParam.Get<T2>(globalRes, localRes, null);
-			return condition(obj0, obj1, obj2);
-		};
-		_ifs.Add(fn);
+		_conditions.Add((_, _, _) => condition());
 		return this;
 	}
 }
@@ -104,8 +59,8 @@ public sealed partial class Scheduler
 	}
 
 
-	public bool IsState<TState>(TState state) where TState : Enum =>
-		ISystemParam.Get<Res<TState>>(_resources, _resources, null!)?.Value?.Equals(state) ?? false;
+	// public bool IsState<TState>(TState state) where TState : Enum =>
+	// 	ISystemParam.Get<Res<TState>>(_resources, _resources, null!)?.Value?.Equals(state) ?? false;
 
     public void Run()
     {
@@ -124,7 +79,7 @@ public sealed partial class Scheduler
 
 	public ISystem AddSystem(Action system, Stages stage = Stages.Update)
 	{
-		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke() ?? true) system(); });
+		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke(null!) ?? true) system(); });
 		_systems[(int)stage].Add(sys);
 
 		return sys;
