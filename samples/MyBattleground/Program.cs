@@ -22,7 +22,7 @@ scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) =>
 	Console.WriteLine(i32.Value++);
 })
 .RunIf(() => true)
-.RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2) => state.Value == GameStates.InGame);
+.RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
 
 scheduler.AddSystem((Local<int> i32, Res<string> str) => {
 	Console.WriteLine(i32.Value++);

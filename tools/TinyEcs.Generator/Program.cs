@@ -29,6 +29,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
+					using SysParamMap = Dictionary<Type, ISystemParam>;
+
 					{GenerateQueryTemplateDelegates(false)}
 					{GenerateQueryTemplateDelegates(true)}
 					{GenerateFilterQuery(false, false)}
@@ -62,7 +64,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{whereGenerics}
 					{{
 						{emptyVars}
-						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, Func<object, bool> runIf) => {{
+						var fn = (SysParamMap globalRes, SysParamMap localRes, Func<object, bool> runIf) => {{
 							if (runIf != null && !runIf(_world)) return;
 							{objs}
 							system({objsArgs});
@@ -111,7 +113,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					ISystem ISystem.RunIf<{generics}>(Func<{generics}, bool> condition)
 					{{
 						{emptyVars}
-						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, object args) => {{
+						var fn = (SysParamMap globalRes, SysParamMap localRes, object args) => {{
 							{objs}
 							return condition({objsArgs});
 						}};

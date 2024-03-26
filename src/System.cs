@@ -2,29 +2,29 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
-using ParamMap = Dictionary<Type, ISystemParam>;
+using SysParamMap = Dictionary<Type, ISystemParam>;
 
 public partial interface ISystem
 {
-    internal void Run(Dictionary<Type, ISystemParam> resources);
+    internal void Run(SysParamMap resources);
 
 	public ISystem RunIf(Func<bool> condition);
 }
 
 internal sealed partial class ErasedFunctionSystem : ISystem
 {
-    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<object, bool>> _fn;
-	private readonly Dictionary<Type, ISystemParam> _locals;
-	private readonly List<Func<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, object, bool>> _conditions;
+    private readonly Action<SysParamMap, SysParamMap, Func<object, bool>> _fn;
+	private readonly SysParamMap _locals;
+	private readonly List<Func<SysParamMap, SysParamMap, object, bool>> _conditions;
 
-    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<object, bool>> fn)
+    public ErasedFunctionSystem(Action<SysParamMap, SysParamMap, Func<object, bool>> fn)
     {
         _fn = fn;
 		_locals = new ();
 		_conditions = new ();
     }
 
-	void ISystem.Run(Dictionary<Type, ISystemParam> resources)
+	void ISystem.Run(SysParamMap resources)
 		=> _fn(resources, _locals, args => _conditions.All(s => s(resources, _locals, args)));
 
 	ISystem ISystem.RunIf(Func<bool> condition)
@@ -46,7 +46,7 @@ public sealed partial class Scheduler
 {
 	private readonly World _world;
     private readonly List<ISystem>[] _systems = new List<ISystem>[(int)Stages.AfterUpdate + 1];
-    private readonly Dictionary<Type, ISystemParam> _resources = new ();
+    private readonly SysParamMap _resources = new ();
 
 	public Scheduler(World world)
 	{
@@ -126,7 +126,7 @@ public interface ISystemParam
 {
 	void New(object arguments);
 
-	internal static T Get<T>(Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, object arguments)
+	internal static T Get<T>(SysParamMap globalRes, SysParamMap localRes, object arguments)
 		where T : ISystemParam, new()
 	{
 		if (localRes.TryGetValue(typeof(T), out var value))
