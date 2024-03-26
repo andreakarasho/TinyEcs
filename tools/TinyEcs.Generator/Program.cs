@@ -57,17 +57,18 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 
 				sb.AppendLine($@"
-					public Scheduler AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, Func<bool> runIf = null!)
+					public ISystem AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update)
 						{whereGenerics}
 					{{
 						{emptyVars}
-						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {{
+						var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes, Func<bool> runIf) => {{
 							if (runIf != null && !runIf()) return;
 							{objs}
 							system({objsArgs});
 						}};
-						_systems[(int) stage].Add(new ErasedFunctionSystem(fn));
-						return this;
+						var sys = new ErasedFunctionSystem(fn);
+						_systems[(int) stage].Add(sys);
+						return sys;
 					}}
 				");
 			}

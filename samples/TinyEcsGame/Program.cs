@@ -26,19 +26,19 @@ var fn3 = RenderEntities;
 var fn4 = DrawText;
 var fn5 = EndRenderer;
 
-scheduler
-	.AddSystem(init, Stages.Startup)
-	.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate)
-	.AddPlugin<RaylibPlugin>()
-	.AddSystem(fn0)
-	.AddSystem(fn1)
-	.AddSystem(fn2)
-	.AddSystem(fn3)
-	.AddSystem(fn4)
-	.AddSystem(fn5)
 
-	.AddResource(wndSize)
-	.AddResource(new Time());
+scheduler.AddSystem(init, Stages.Startup);
+scheduler.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
+scheduler.AddPlugin<RaylibPlugin>();
+scheduler.AddSystem(fn0);
+scheduler.AddSystem(fn1);
+scheduler.AddSystem(fn2);
+scheduler.AddSystem(fn3);
+scheduler.AddSystem(fn4);
+scheduler.AddSystem(fn5);
+
+scheduler.AddResource(wndSize);
+scheduler.AddResource(new Time());
 
 
 while (!Raylib.WindowShouldClose())
@@ -198,25 +198,24 @@ readonly struct RaylibPlugin : IPlugin
 {
 	public readonly void Build(Scheduler scheduler)
 	{
-		scheduler
-			.AddSystem((Res<Input> input) => {
-				foreach (ref var v in input.Value)
-					v = KeyboardKey.Null;
+		scheduler.AddSystem((Res<Input> input) => {
+			foreach (ref var v in input.Value)
+				v = KeyboardKey.Null;
 
-				var key = Raylib.GetKeyPressed();
-				while (key != 0)
-				{
-					input.Value[key] = (KeyboardKey) key;
-					key = Raylib.GetKeyPressed();
-				}
-			})
-			.AddSystem((Res<Input> input) => {
-				if (input.Value[(int)KeyboardKey.A] == KeyboardKey.A)
-				{
-					Console.WriteLine("pressed {0}", KeyboardKey.A);
-				}
-			})
-			.AddResource(new Input());
+			var key = Raylib.GetKeyPressed();
+			while (key != 0)
+			{
+				input.Value[key] = (KeyboardKey) key;
+				key = Raylib.GetKeyPressed();
+			}
+		});
+		scheduler.AddSystem((Res<Input> input) => {
+			if (input.Value[(int)KeyboardKey.A] == KeyboardKey.A)
+			{
+				Console.WriteLine("pressed {0}", KeyboardKey.A);
+			}
+		});
+		scheduler.AddResource(new Input());
 	}
 
 	[InlineArray(512)]

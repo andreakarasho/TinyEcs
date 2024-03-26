@@ -2,23 +2,81 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
-internal interface ISystem
+public partial interface ISystem
 {
     void Run(Dictionary<Type, ISystemParam> resources);
+
+	public ISystem RunIf(Func<bool> condition);
+	public ISystem RunIf<T0>(Func<T0, bool> condition)
+		where T0 : class, ISystemParam, new();
+	public ISystem RunIf<T0, T1>(Func<T0, T1, bool> condition)
+		where T0 : class, ISystemParam, new()
+		where T1 : class, ISystemParam, new();
+	public ISystem RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
+		where T0 : class, ISystemParam, new()
+		where T1 : class, ISystemParam, new()
+		where T2 : class, ISystemParam, new();
 }
 
-internal sealed class ErasedFunctionSystem : ISystem
+internal sealed partial class ErasedFunctionSystem : ISystem
 {
-    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>> _fn;
+    private readonly Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<bool>> _fn;
 	private readonly Dictionary<Type, ISystemParam> _locals;
+	private readonly List<Func<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, bool>> _ifs;
 
-    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>> fn)
+    public ErasedFunctionSystem(Action<Dictionary<Type, ISystemParam>, Dictionary<Type, ISystemParam>, Func<bool>> fn)
     {
         _fn = fn;
 		_locals = new ();
+		_ifs = new ();
     }
 
-	public void Run(Dictionary<Type, ISystemParam> resources) => _fn(resources, _locals);
+	public void Run(Dictionary<Type, ISystemParam> resources) => _fn(resources, _locals, () => _ifs.All(s => s(resources, _locals)));
+
+	ISystem ISystem.RunIf(Func<bool> condition)
+	{
+		_ifs.Add((_, _) => condition());
+		return this;
+	}
+
+	ISystem ISystem.RunIf<T0>(Func<T0, bool> condition)
+	{
+		T0? obj0 = null;
+		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
+			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
+			return condition(obj0);
+		};
+		_ifs.Add(fn);
+		return this;
+	}
+
+	ISystem ISystem.RunIf<T0, T1>(Func<T0, T1, bool> condition)
+	{
+		T0? obj0 = null;
+		T1? obj1 = null;
+		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
+			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
+			obj1 ??= ISystemParam.Get<T1>(globalRes, localRes, null);
+			return condition(obj0, obj1);
+		};
+		_ifs.Add(fn);
+		return this;
+	}
+
+	ISystem ISystem.RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
+	{
+		T0? obj0 = null;
+		T1? obj1 = null;
+		T2? obj2 = null;
+		var fn = (Dictionary<Type, ISystemParam> globalRes, Dictionary<Type, ISystemParam> localRes) => {
+			obj0 ??= ISystemParam.Get<T0>(globalRes, localRes, null);
+			obj1 ??= ISystemParam.Get<T1>(globalRes, localRes, null);
+			obj2 ??= ISystemParam.Get<T2>(globalRes, localRes, null);
+			return condition(obj0, obj1, obj2);
+		};
+		_ifs.Add(fn);
+		return this;
+	}
 }
 
 public enum Stages
@@ -64,11 +122,12 @@ public sealed partial class Scheduler
 			system.Run(_resources);
 	}
 
-	public Scheduler AddSystem(Action system, Stages stage = Stages.Update, Func<bool> runIf = null!)
+	public ISystem AddSystem(Action system, Stages stage = Stages.Update)
 	{
-		_systems[(int)stage].Add(new ErasedFunctionSystem((_, _) => { if (runIf?.Invoke() ?? true) system(); }));
+		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke() ?? true) system(); });
+		_systems[(int)stage].Add(sys);
 
-		return this;
+		return sys;
 	}
 
 	public Scheduler AddPlugin<T>() where T : IPlugin, new()

@@ -17,81 +17,81 @@ ecs.Entity<Velocity>();
 
 
 var scheduler = new Scheduler(ecs);
-scheduler
 
-	.AddSystem((Local<int> i32, Res<string> str) => {
-		Console.WriteLine(i32.Value++);
-	})
+scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) => {
+	Console.WriteLine(i32.Value++);
+})
+.RunIf(() => true)
+.RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2) => state.Value == GameStates.InGame);
 
-	.AddSystem((Local<int> i32, Res<string> str) => {
-		Console.WriteLine(i32.Value++);
-	})
+scheduler.AddSystem((Local<int> i32, Res<string> str) => {
+	Console.WriteLine(i32.Value++);
+});
 
-	.AddState<GameStates>()
-	.AddSystem(() => Console.WriteLine("playing the game"), runIf: () => scheduler.IsState(GameStates.InGame))
-	.AddSystem(() => Console.WriteLine("game paused"), runIf: () => scheduler.IsState(GameStates.Paused))
-	.AddSystem((Res<GameStates> state) =>
-		state.Value = state.Value switch
-		{
-			GameStates.InGame => GameStates.Paused,
-			GameStates.Paused => GameStates.InGame,
-			_ => state.Value,
-		})
+scheduler.AddState<GameStates>();
+scheduler.AddSystem(() => Console.WriteLine("playing the game")).RunIf((Res<GameStates> state) => state.Value == GameStates.InGame);
+scheduler.AddSystem(() => Console.WriteLine("game paused")).RunIf((Res<GameStates> state) => state.Value == GameStates.Paused);
+scheduler.AddSystem((Res<GameStates> state) =>
+	state.Value = state.Value switch
+	{
+		GameStates.InGame => GameStates.Paused,
+		GameStates.Paused => GameStates.InGame,
+		_ => state.Value,
+	});
 
-	.AddEvent<MyEvent>()
-	.AddSystem((EventWriter<MyEvent> writer) => {
-		writer.Enqueue(new MyEvent() { Value = 1});
-		writer.Enqueue(new MyEvent() { Value = 2});
-		writer.Enqueue(new MyEvent() { Value = 3});
-	})
-	.AddSystem((EventReader<MyEvent> reader) => {
-		foreach (var val in reader.Read())
-		{
-			Console.WriteLine(val.Value);
-		}
-	})
+scheduler.AddEvent<MyEvent>();
+scheduler.AddSystem((EventWriter<MyEvent> writer) => {
+	writer.Enqueue(new MyEvent() { Value = 1});
+	writer.Enqueue(new MyEvent() { Value = 2});
+	writer.Enqueue(new MyEvent() { Value = 3});
+});
+scheduler.AddSystem((EventReader<MyEvent> reader) => {
+	foreach (var val in reader.Read())
+	{
+		Console.WriteLine(val.Value);
+	}
+});
 
-	.AddPlugin<MyPlugin>()
+scheduler.AddPlugin<MyPlugin>();
 
-	.AddSystem((
-			Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
-			Query<Position> query1,
-			Res<string> myText
-		) =>
-		{
-			query0.Each((ref Position pos, ref Velocity vel) => {
-				pos.X *= vel.X;
-				pos.Y *= vel.Y;
-			});
-
-			query1.Each((ref Position pos) => { });
-
-			Console.WriteLine("What: {0}", myText.Value);
-		}
-	)
-	.AddSystem((Commands commands) => {
-		commands.Entity()
-			.Set<Position>(default)
-			.Set<Velocity>(default);
-	})
-	.AddSystem((Commands commands) => {
-		commands.Merge();
-	})
-	.AddSystem((World world) => {
-		Console.WriteLine("entities in world {0}", world.EntityCount);
-	})
-	.AddSystem((ComplexQuery complex) => {
-		complex.Q0.Each((ref Position pos, ref Velocity vel) => {
-
+scheduler.AddSystem((
+		Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
+		Query<Position> query1,
+		Res<string> myText
+	) =>
+	{
+		query0.Each((ref Position pos, ref Velocity vel) => {
+			pos.X *= vel.X;
+			pos.Y *= vel.Y;
 		});
 
-		complex.Q1.Each((ref Position pos, ref Velocity vel) => {
+		query1.Each((ref Position pos) => { });
 
-		});
-	})
+		Console.WriteLine("What: {0}", myText.Value);
+	}
+);
+scheduler.AddSystem((Commands commands) => {
+	commands.Entity()
+		.Set<Position>(default)
+		.Set<Velocity>(default);
+});
+scheduler.AddSystem((Commands commands) => {
+	commands.Merge();
+});
+scheduler.AddSystem((World world) => {
+	Console.WriteLine("entities in world {0}", world.EntityCount);
+});
+scheduler.AddSystem((ComplexQuery complex) => {
+	complex.Q0.Each((ref Position pos, ref Velocity vel) => {
 
-	.AddResource("oh shit i made it")
-	;
+	});
+
+	complex.Q1.Each((ref Position pos, ref Velocity vel) => {
+
+	});
+});
+
+scheduler.AddResource("oh shit i made it");
 
 
 scheduler.Run();
@@ -186,9 +186,10 @@ class ComplexQuery : ISystemParam
 readonly struct MyPlugin : IPlugin
 {
 	public readonly void Build(Scheduler scheduler)
-		=> scheduler
-			.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), Stages.Startup)
-			.AddResource(123);
+	{
+		scheduler.AddSystem((Res<int> myNum) => Console.WriteLine("My num is {0}", myNum.Value), Stages.Startup);
+		scheduler.AddResource(123);
+	}
 }
 
 struct MyEvent
