@@ -137,6 +137,28 @@ public partial class Query
 		World.MatchArchetypes(first, terms, _matchedArchetypes);
 	}
 
+	public int Count()
+	{
+		Match();
+		return _matchedArchetypes.Sum(static s => s.Count);
+	}
+
+	public ref T Single<T>() where T : struct
+	{
+		var count = Count();
+		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
+
+		foreach (var arch in this)
+		{
+			var column = arch.GetComponentIndex<T>();
+			EcsAssert.Panic(column > 0, "component not found");
+			ref var value = ref arch.GetChunk(0).GetReference<T>(column);
+			return ref value;
+		}
+
+		return ref Unsafe.NullRef<T>();
+	}
+
 	public QueryInternal GetEnumerator()
 	{
 		Match();

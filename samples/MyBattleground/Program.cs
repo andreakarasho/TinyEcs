@@ -15,6 +15,9 @@ ecs.Entity<Position>();
 ecs.Entity<Velocity>();
 
 
+var eee = ecs.Entity()
+	.Set<PlayerTag>()
+	.Set(new Position() {X = 999});
 
 var scheduler = new Scheduler(ecs);
 
@@ -29,8 +32,13 @@ scheduler.AddSystem((Local<int> i32, Res<string> str) => {
 });
 
 scheduler.AddState<GameStates>();
-scheduler.AddSystem(() => Console.WriteLine("playing the game")).RunIf((Res<GameStates> state) => state.Value == GameStates.InGame);
-scheduler.AddSystem(() => Console.WriteLine("game paused")).RunIf((Res<GameStates> state) => state.Value == GameStates.Paused);
+scheduler.AddSystem(() => Console.WriteLine("playing the game"))
+	.RunIf((Res<GameStates> state) => state.Value == GameStates.InGame);
+
+scheduler.AddSystem(() => Console.WriteLine("game paused"))
+	.RunIf((Res<GameStates> state) => state.Value == GameStates.Paused)
+	.RunIf((Query<Position, (With<PlayerTag>, Without<ComponentInfo>)> query) => query.Count() > 0 && query.Single<Position>().X > 0);
+
 scheduler.AddSystem((Res<GameStates> state) =>
 	state.Value = state.Value switch
 	{
@@ -41,9 +49,9 @@ scheduler.AddSystem((Res<GameStates> state) =>
 
 scheduler.AddEvent<MyEvent>();
 scheduler.AddSystem((EventWriter<MyEvent> writer) => {
-	writer.Enqueue(new MyEvent() { Value = 1});
-	writer.Enqueue(new MyEvent() { Value = 2});
-	writer.Enqueue(new MyEvent() { Value = 3});
+	writer.Enqueue(new MyEvent() { Value = 1 });
+	writer.Enqueue(new MyEvent() { Value = 2 });
+	writer.Enqueue(new MyEvent() { Value = 3 });
 });
 scheduler.AddSystem((EventReader<MyEvent> reader) => {
 	foreach (var val in reader.Read())
@@ -71,7 +79,7 @@ scheduler.AddSystem((
 	}
 );
 scheduler.AddSystem((Commands commands) => {
-	commands.Entity()
+	var ff = commands.Entity()
 		.Set<Position>(default)
 		.Set<Velocity>(default);
 });

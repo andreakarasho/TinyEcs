@@ -79,7 +79,7 @@ public sealed partial class Scheduler
 
 	public ISystem AddSystem(Action system, Stages stage = Stages.Update)
 	{
-		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke(null!) ?? true) system(); });
+		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke(_world) ?? true) system(); });
 		_systems[(int)stage].Add(sys);
 
 		return sys;
