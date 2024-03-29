@@ -116,6 +116,8 @@ public sealed partial class Scheduler
 
 		return this;
 	}
+
+	internal bool ResourceExists<T>() => _resources.ContainsKey(typeof(T));
 }
 
 public interface IPlugin
@@ -232,9 +234,10 @@ partial class Commands : ISystemParam
 	}
 
 	public void AddResource<T>(T resource)
-	{
-		_scheduler?.AddResource(resource);
-	}
+		=> _scheduler?.AddResource(resource);
+
+	public bool ResourceExists<T>()
+		=> _scheduler.ResourceExists<T>();
 }
 
 public sealed class Res<T> : ISystemParam
