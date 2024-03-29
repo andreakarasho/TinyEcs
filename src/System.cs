@@ -237,7 +237,7 @@ partial class Commands : ISystemParam
 		=> _scheduler?.AddResource(resource);
 
 	public bool ResourceExists<T>()
-		=> _scheduler.ResourceExists<T>();
+		=> _scheduler.ResourceExists<Res<T>>();
 }
 
 public sealed class Res<T> : ISystemParam
