@@ -27,17 +27,22 @@ scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) =>
 .RunIf(() => true)
 .RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
 
-scheduler.AddSystem((Local<int> i32, Res<string> str) => {
+scheduler.AddSystem((Local<int> i32, Res<string> str, Commands commands) => {
 	Console.WriteLine(i32.Value++);
-});
 
+	commands.AddResource(23ul);
+}, Stages.Startup);
+scheduler.AddSystem((Res<ulong> ul) => {
+	Console.WriteLine(ul.Value++);
+});
 scheduler.AddState<GameStates>();
 scheduler.AddSystem(() => Console.WriteLine("playing the game"))
-	.RunIf((Res<GameStates> state) => state.Value == GameStates.InGame);
+	.RunIf((Res<GameStates> state) => state == GameStates.InGame);
 
 scheduler.AddSystem(() => Console.WriteLine("game paused"))
 	.RunIf((Res<GameStates> state) => state.Value == GameStates.Paused)
-	.RunIf((Query<Position, (With<PlayerTag>, Without<ComponentInfo>)> query) => query.Count() > 0 && query.Single<Position>().X > 0);
+	.RunIf((Query<Position, (With<PlayerTag>, Without<ComponentInfo>)> query)
+		=> query.Count() > 0 && query.Single<Position>().X > 0);
 
 scheduler.AddSystem((Res<GameStates> state) =>
 	state.Value = state.Value switch

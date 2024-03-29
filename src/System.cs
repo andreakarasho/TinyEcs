@@ -56,6 +56,7 @@ public sealed partial class Scheduler
 			_systems[i] = new ();
 
 		AddSystemParam(world);
+		AddSystemParam(new Commands(world, this));
 	}
 
 
@@ -218,11 +219,21 @@ partial class Query<TQuery, TFilter> : ISystemParam
 
 partial class Commands : ISystemParam
 {
+	private readonly Scheduler _scheduler;
+
 	public Commands() : this(null!) { }
+
+	public Commands(World world, Scheduler scheduler) : this(world)
+		=> _scheduler = scheduler;
 
 	void ISystemParam.New(object arguments)
 	{
 		World = (World) arguments;
+	}
+
+	public void AddResource<T>(T resource)
+	{
+		_scheduler?.AddResource(resource);
 	}
 }
 
@@ -263,3 +274,26 @@ public sealed class Local<T> : ISystemParam, ISystemParamExclusive
 		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
 	}
 }
+
+// public sealed class SystemState : ISystemParam
+// {
+// 	private readonly Scheduler _scheduler;
+
+// 	internal SystemState(Scheduler scheduler)
+// 	{
+// 		_scheduler = scheduler;
+// 	}
+
+// 	public SystemState()
+// 		=> throw new Exception("You are not allowed to initialixze this object by yourself!");
+
+// 	public void AddResource<T>(T resource)
+// 	{
+// 		_scheduler.AddResource(resource);
+// 	}
+
+// 	void ISystemParam.New(object arguments)
+// 	{
+
+// 	}
+// }
