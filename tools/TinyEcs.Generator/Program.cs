@@ -11,17 +11,38 @@ namespace TinyEcs.Generator;
 [Generator]
 public sealed class MyGenerator : IIncrementalGenerator
 {
-	private const int MAX_GENERICS = 25;
+	private const int MAX_GENERICS = 16;
 
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
-			postContext.AddSource("TinyEcs.g.cs", CodeFormatter.Format(Generate()));
+			postContext.AddSource("TinyEcs.Queries.g.cs", CodeFormatter.Format(GenerateQueries()));
+			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
 		});
 
 
-		static string Generate()
+		static string GenerateQueries()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					{GenerateQueryTemplateDelegates(false)}
+					{GenerateQueryTemplateDelegates(true)}
+					{GenerateFilterQuery(false, false)}
+					{GenerateFilterQuery(true, false)}
+					{GenerateFilterQuery(false, true)}
+					{GenerateFilterQuery(true, true)}
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSystems()
 		{
 			return $@"
                 #pragma warning disable 1591
@@ -31,13 +52,7 @@ public sealed class MyGenerator : IIncrementalGenerator
                 {{
 					using SysParamMap = Dictionary<Type, ISystemParam>;
 
-					{GenerateQueryTemplateDelegates(false)}
-					{GenerateQueryTemplateDelegates(true)}
-					{GenerateFilterQuery(false, false)}
-					{GenerateFilterQuery(true, false)}
-					{GenerateFilterQuery(false, true)}
-					{GenerateFilterQuery(true, true)}
-					{GenerateSystems()}
+					{GenerateSchedulerSystems()}
 					{GenerateSystemsInterfaces()}
                 }}
 
@@ -45,13 +60,13 @@ public sealed class MyGenerator : IIncrementalGenerator
             ";
 		}
 
-		static string GenerateSystems()
+		static string GenerateSchedulerSystems()
 		{
 			var sb = new StringBuilder();
 
 			sb.AppendLine("public partial class Scheduler {");
 
-			for (var i = 0; i < 16; ++i)
+			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
@@ -87,7 +102,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 			sb.AppendLine("public partial interface ISystem {");
 
-			for (var i = 0; i < 16; ++i)
+			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
@@ -157,6 +172,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				{{
 			");
 
+			// single thread
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
@@ -206,6 +222,75 @@ public sealed class MyGenerator : IIncrementalGenerator
 									}}
 								}}
 							}}
+						}}
+				");
+			}
+
+			// multi thread
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
+				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
+				var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+				var signCallback = (withEntityView ? "entityA, " : "") +
+				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
+				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
+				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+
+				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
+
+				sb.AppendLine($@"
+						public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+						{{
+							var query = {(withFilter ? getQuery : "this")};
+							var cde = query.ThreadCounter;
+							cde.Reset();
+							foreach (var arch in query)
+							{{
+								{columnIndices}
+
+								var chunks = arch.MemChunks;
+								cde.AddCount(chunks.Length);
+
+								for (var i = 0; i < chunks.Length; ++i)
+								{{
+									System.Threading.ThreadPool.QueueUserWorkItem(state => {{
+										ref var index = ref Unsafe.Unbox<int>(state);
+										ref readonly var chunk = ref chunks.Span[index];
+
+										{fieldList}
+										ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
+										ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+
+										while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+										{{
+											fn({signCallback});
+											{advanceField}
+
+											fn({signCallback});
+											{advanceField}
+
+											fn({signCallback});
+											{advanceField}
+
+											fn({signCallback});
+											{advanceField}
+										}}
+
+										while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+										{{
+											fn({signCallback});
+											{advanceField}
+										}}
+										cde.Signal();
+									}}, i);
+								}}
+							}}
+
+							cde.Signal();
+							cde.Wait();
 						}}
 				");
 			}

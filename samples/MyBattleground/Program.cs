@@ -126,6 +126,8 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 		//  .Set<Likes>()
 		 ;
 
+
+
 // for (var i = 7000; i < 8000 * 2; ++i)
 // 	ecs.Entity((ulong)i).Delete();
 var sw = Stopwatch.StartNew();
@@ -141,7 +143,13 @@ while (true)
 		// 	pos.Y *= vel.Y;
 		// });
 
-		scheduler.Run();
+		ecs//.Query<(Position, Velocity)>()
+			.EachJob((ref Position pos, ref Velocity vel) => {
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			});
+
+		//scheduler.Run();
 	}
 
 	last = start;

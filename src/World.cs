@@ -43,6 +43,10 @@ public sealed partial class World : IDisposable
         _entities.Clear();
         _archRoot.Clear();
         _typeIndex.Clear();
+
+		foreach (var query in _cachedQueries.Values)
+			query.Dispose();
+
 		_cachedQueries.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);

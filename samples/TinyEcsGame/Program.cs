@@ -52,7 +52,7 @@ Raylib.CloseWindow();
 
 static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> query)
 {
-	query.Each((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+	query.EachJob((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 	{
 		pos.Value += vel.Value * time.Value.Value;
 		rot.Value += rot.Acceleration * time.Value.Value * Raylib.RAD2DEG;
@@ -61,7 +61,7 @@ static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> que
 
 static void CheckBounds(Query<(Position, Velocity)> query, Res<WindowSize> windowSize)
 {
-	query.Each((ref Position pos, ref Velocity vel) =>
+	query.EachJob((ref Position pos, ref Velocity vel) =>
 	{
 		if (pos.Value.X < 0.0f)
 		{

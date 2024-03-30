@@ -104,7 +104,7 @@ public sealed partial class Query<TQuery, TFilter> : Query
 	}
 }
 
-public partial class Query
+public partial class Query : IDisposable
 {
 	private readonly ImmutableArray<Term> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
@@ -119,6 +119,9 @@ public partial class Query
 
 	public World World { get; internal set; }
 	internal List<Archetype> MatchedArchetypes => _matchedArchetypes;
+	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
+
+	public void Dispose() => ThreadCounter.Dispose();
 
 	internal void Match()
 	{

@@ -221,7 +221,7 @@ partial class Query<TQuery, TFilter> : ISystemParam
 
 partial class Commands : ISystemParam
 {
-	private readonly Scheduler _scheduler;
+	private readonly Scheduler? _scheduler;
 
 	public Commands() : this(null!) { }
 
@@ -237,7 +237,7 @@ partial class Commands : ISystemParam
 		=> _scheduler?.AddResource(resource);
 
 	public bool ResourceExists<T>()
-		=> _scheduler.ResourceExists<Res<T>>();
+		=> _scheduler?.ResourceExists<Res<T>>() ?? false;
 }
 
 public sealed class Res<T> : ISystemParam
