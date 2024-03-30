@@ -39,13 +39,15 @@ var npc = ecs.Entity()
    .Set(new Name() { Name = "Dan" })
    .Set<Npc>();
 
-// Query for all entities with [Position + Name] and the entity
+// Query for all entities with [Position + Name] and access the entity associated
 ecs.Each((EntityView entity, ref Position pos, ref Name name) => {
     Console.WriteLine(name.Vaue);
 });
 
-// Query for all entities with [Position + Name + Player], without [Npc]
-ecs.Each<(Position, Name), (Player, Not<Npc>)>((ref Position pos, ref Name name) => {
+// Query, using a multithread strategy, for all entities with [Position + Name + Player], without [Npc].
+// The first tuple (Position, Name) is the accessing data,
+//   the 2nd tuple (With<Player>, Not<Npc>) is the filter.
+ecs.EachJob<(Position, Name), (With<Player>, Not<Npc>)>((ref Position pos, ref Name name) => {
     Console.WriteLine(name.Vaue);
 });
 
