@@ -21,7 +21,10 @@ ecs.Deferred(w => {
 		.Set(new Position() {X = 999});
 
 	eee.Get<Position>().X += 1;
-	eee.Get<Position>().X += 1;
+
+	w.Deferred(w => {
+		eee.Get<Position>().X += 1;
+	});
 });
 
 ref var ppp = ref eee.Get<Position>();
