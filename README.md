@@ -64,33 +64,40 @@ Bevy systems :D
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
-scheduler
-    // Create a one-shot system
-    .AddSystem((Commands commands) => {
-        // spawn some deferred entities
-        for (var i = 0; i < 1000; ++i)
-            commands.Entity()
-                .Set<Position>(default)
-                .Set<Velocity>(default);
-	}, SystemStages.Startup)
 
-    // Arguments oderd doesn't matter!
-    .AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
-        // query execution
-        query.Each((ref Position pos, ref Velocity vel) => {
+// Create a one-shot system
+scheduler.AddSystem((World world) => {
+   // spawn some deferred entities
+    world.BeginDeferred();
+    for (var i = 0; i < 1000; ++i)
+        world.Entity()
+            .Set<Position>(default)
+            .Set<Velocity>(default);
+    world.EndDefered();
+}, SystemStages.Startup);
 
-        });
-    })
 
-    // Merge the deferred commands to the world
-    .AddSystem((Commands commands) => commands.Merge())
+// Arguments order doesn't matter!
+scheduler.AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
+	// query execution
+	query.Each((ref Position pos, ref Velocity vel) => {
+		// do something here
+	});
 
-    // Res<> is a special type which stores any value you want
-    .AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
+	// Same query, but using more threads!
+	query.EachJob((ref Position pos, ref Velocity vel) => {
+		// do something here
+	});
+});
 
-    // Add an unique resource type which can be invoked as system argument
-	// In this case it's Res<string>
-    .AddResource("My text");
+// Res<> is a special type which stores any value you want
+scheduler.AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
+    // Run the system only if the 'string' resource exists
+    .RunIf((SchedulerState schedState) => schedState.ResourceExists<string>());
+
+// Add an unique resource type which can be invoked as system argument
+// In this case it's Res<string>
+scheduler.AddResource("My text");
 
 // Run all systems once
 scheduler.Run();
