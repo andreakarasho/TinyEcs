@@ -371,6 +371,8 @@ public sealed partial class World : IDisposable
 
 	public void Each(QueryFilterDelegateWithEntity fn)
 	{
+		Lock();
+
 		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms)))
 		{
 			foreach (ref readonly var chunk in arch)
@@ -384,6 +386,8 @@ public sealed partial class World : IDisposable
 				}
 			}
 		}
+
+		Unlock();
 	}
 
 	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms, Func<World, ImmutableArray<Term>, Query> factory)

@@ -50,7 +50,7 @@ public sealed partial class World
 	}
 
     public bool Has<T>(EcsID entity) where T : struct
-		=> IsDeferred ? HasDeferred<T>(entity) : Has(entity, in Component<T>());
+		=> (Exists(entity) && Has(entity, in Component<T>())) || (IsDeferred && HasDeferred<T>(entity));
 
     public ref T Get<T>(EcsID entity) where T : struct
 	{

@@ -186,10 +186,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
 
 				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
+				var worldLock = !withFilter ? "World." : "";
 
 				sb.AppendLine($@"
 						public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
+							{worldLock}Lock();
+
 							foreach (var arch in {(withFilter ? getQuery : "this")})
 							{{
 								{columnIndices}
@@ -222,6 +225,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 									}}
 								}}
 							}}
+
+							{worldLock}Unlock();
 						}}
 				");
 			}
@@ -240,10 +245,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
 
 				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
+				var worldLock = !withFilter ? "World." : "";
 
 				sb.AppendLine($@"
 						public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
+							{worldLock}Lock();
 							var query = {(withFilter ? getQuery : "this")};
 							var cde = query.ThreadCounter;
 							cde.Reset();
@@ -291,6 +298,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 							cde.Signal();
 							cde.Wait();
+							{worldLock}Unlock();
 						}}
 				");
 			}

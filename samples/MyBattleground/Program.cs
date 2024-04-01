@@ -125,18 +125,18 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 		//  .Set<Likes>()
 		 ;
 
-ecs.Entity<MyEvent>();
+// ecs.Entity<MyEvent>();
 
 ecs.Query<Position>()
 	.Each((EntityView ent) => {
 
 		ent.Set(new MyEvent() { Value = 2 });
 
-		// ref var v = ref ent.Get<MyEvent>();
-		// v.Value += 1;
+		ref var v = ref ent.Get<MyEvent>();
+		v.Value += 1;
 
-		// ref var v2 = ref ent.Get<MyEvent>();
-		// v.Value += 1;
+		ref var v2 = ref ent.Get<MyEvent>();
+		v.Value += 1;
 
 
 		// var ee = ent.World.Entity()

@@ -164,6 +164,7 @@ public sealed class Archetype
 	private EcsID RemoveByRow(int row)
 	{
 		_count -= 1;
+		EcsAssert.Assert(_count >= 0, "Negative count");
 
 		ref var chunk = ref GetChunk(row);
 		ref var lastChunk = ref GetChunk(_count);
@@ -201,6 +202,7 @@ public sealed class Archetype
 		}
 
 		lastChunk.Count -= 1;
+		EcsAssert.Assert(lastChunk.Count >= 0, "Negative chunk count");
 
 		// Cleanup
 		var empty = EmptyChunks;
