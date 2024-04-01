@@ -58,7 +58,8 @@ public sealed class Archetype
     const int ARCHETYPE_INITIAL_CAPACITY = 16;
 
     private ArchetypeChunk[] _chunks;
-    private const int CHUNK_THRESHOLD = 4096;
+    internal const int CHUNK_THRESHOLD = 0xFFF;
+	internal const int CHUNK_SIZE = 4096;
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
@@ -101,15 +102,15 @@ public sealed class Archetype
     public int Count => _count;
     public readonly ImmutableArray<ComponentInfo> Components;
 	public ulong Id { get; }
-    internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
-	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_THRESHOLD - 1) / CHUNK_THRESHOLD);
+    internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
+	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 
 	internal int EmptyChunks => _chunks.Length - Chunks.Length;
 
     [SkipLocalsInit]
     internal ref ArchetypeChunk GetChunk(int index)
     {
-		index /= CHUNK_THRESHOLD;
+		index /= CHUNK_SIZE;
 
 	    if (index >= _chunks.Length)
 		    Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
@@ -117,10 +118,10 @@ public sealed class Archetype
 	    ref var chunk = ref _chunks[index];
 	    if (chunk.Components == null)
 	    {
-		    chunk.Entities = new EntityView[CHUNK_THRESHOLD];
+		    chunk.Entities = new EntityView[CHUNK_SIZE];
 		    chunk.Components = new Array[Components.Length];
 		    for (var i = 0; i < Components.Length; ++i)
-			    chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_THRESHOLD)! : null!;
+			    chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_SIZE)! : null!;
 	    }
 
 	    return ref chunk;
@@ -160,28 +161,58 @@ public sealed class Archetype
         return _count++;
     }
 
-    internal EcsID Remove(ref EcsRecord record)
-    {
-		var removed = SwapWithLast(record.Row);
-		ref var chunk = ref GetChunk(record.Row);
-		ref var lastChunk = ref GetChunk(_count - 1);
+	private EcsID RemoveByRow(int row)
+	{
+		_count -= 1;
+
+		ref var chunk = ref GetChunk(row);
+		ref var lastChunk = ref GetChunk(_count);
+		var removed = chunk.Entities[row & CHUNK_THRESHOLD];
+
+		if (row < _count)
+		{
+			EcsAssert.Assert(lastChunk.Entities[_count & CHUNK_THRESHOLD] != EntityView.Invalid, "Entity is invalid. This should never happen!");
+
+			chunk.Entities[row & CHUNK_THRESHOLD] = lastChunk.Entities[_count & CHUNK_THRESHOLD];
+
+			for (var i = 0; i < Components.Length; ++i)
+			{
+				if (Components[i].Size <= 0)
+					continue;
+
+				var arrayToBeRemoved = chunk.RawComponentData(i);
+				var lastValidArray = lastChunk.RawComponentData(i);
+
+				Array.Copy(lastValidArray, _count & CHUNK_THRESHOLD, arrayToBeRemoved, row & CHUNK_THRESHOLD, 1);
+			}
+
+			_world.GetRecord(chunk.Entities[row & CHUNK_THRESHOLD]).Row = row;
+		}
+
+		lastChunk.Entities[_count & CHUNK_THRESHOLD] = EntityView.Invalid;
 
 		for (var i = 0; i < Components.Length; ++i)
 		{
 			if (Components[i].Size <= 0)
 				continue;
 
-			var arrayToBeRemoved = chunk.RawComponentData(i);
 			var lastValidArray = lastChunk.RawComponentData(i);
-
-			Array.Copy(lastValidArray, (_count - 1) % lastChunk.Count, arrayToBeRemoved, record.Row % chunk.Count, 1);
+			Array.Clear(lastValidArray, _count & CHUNK_THRESHOLD, 1);
 		}
 
 		lastChunk.Count -= 1;
-		--_count;
+
+		// Cleanup
+		var empty = EmptyChunks;
+		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
+		if (empty > half)
+			Array.Resize(ref _chunks, half);
 
         return removed;
-    }
+	}
+
+    internal EcsID Remove(ref EcsRecord record)
+		=> RemoveByRow(record.Row);
 
 	internal Archetype InsertVertex(
         Archetype left,
@@ -195,41 +226,24 @@ public sealed class Archetype
         return vertex;
     }
 
-    internal int MoveEntity(Archetype to, int fromRow)
+    internal int MoveEntity(Archetype newArch, int oldRow)
     {
-		var removed = SwapWithLast(fromRow);
-		var toRow = to.Add(removed);
-        MoveTo(fromRow, to, toRow);
+		ref var fromChunk = ref GetChunk(oldRow);
+		var newRow = newArch.Add(fromChunk.Entities[oldRow & CHUNK_THRESHOLD]);
 
-        --_count;
-
-		// Cleanup
-		var empty = EmptyChunks;
-		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
-		if (empty > half)
-			Array.Resize(ref _chunks, half);
-
-        return toRow;
-    }
-
-    private void MoveTo(int fromRow, Archetype to, int toRow)
-	{
-		var isLeft = to.Components.Length < Components.Length;
+		var isLeft = newArch.Components.Length < Components.Length;
 		int i = 0,
 			j = 0;
-		var count = isLeft ? to.Components.Length : Components.Length;
+		var count = isLeft ? newArch.Components.Length : Components.Length;
 
 		ref var x = ref (isLeft ? ref j : ref i);
 		ref var y = ref (!isLeft ? ref j : ref i);
 
-		var last = _count - 1;
-
-		ref var fromChunk = ref GetChunk(fromRow);
-		ref var toChunk = ref to.GetChunk(toRow);
+		ref var toChunk = ref newArch.GetChunk(newRow);
 
 		for (; x < count; ++x, ++y)
 		{
-			while (Components[i].ID != to.Components[j].ID)
+			while (Components[i].ID != newArch.Components[j].ID)
 			{
 				// advance the sign with less components!
 				++y;
@@ -242,14 +256,12 @@ public sealed class Archetype
 			var toArray = toChunk.RawComponentData(j);
 
 			// copy the moved entity to the target archetype
-			Array.Copy(fromArray, fromRow % fromChunk.Count, toArray, toRow % toChunk.Count, 1);
-
-			// swap last with the hole
-			Array.Copy(fromArray, last % toChunk.Count, fromArray, fromRow % fromChunk.Count, 1);
+			Array.Copy(fromArray, oldRow & CHUNK_THRESHOLD, toArray, newRow & CHUNK_THRESHOLD, 1);
 		}
 
-		fromChunk.Count -= 1;
-	}
+		RemoveByRow(oldRow);
+		return newRow;
+    }
 
 	internal void Clear()
     {
@@ -259,21 +271,6 @@ public sealed class Archetype
     internal void Optimize()
     {
 
-    }
-
-    private EcsID SwapWithLast(int fromRow)
-    {
-	    ref var chunkFrom = ref GetChunk(fromRow);
-	    ref var chunkTo = ref GetChunk(_count - 1);
-
-        ref var fromRec = ref _world.GetRecord(chunkFrom.Entities[fromRow % chunkFrom.Count]);
-        ref var lastRec = ref _world.GetRecord(chunkTo.Entities[(_count - 1) % chunkTo.Count]);
-        lastRec.Row = fromRec.Row;
-
-        var removed = chunkFrom.Entities[fromRow % chunkFrom.Count];
-        chunkFrom.Entities[fromRow % chunkFrom.Count] = chunkTo.Entities[(_count - 1) % chunkTo.Count];
-
-        return removed;
     }
 
     private static void MakeEdges(Archetype left, Archetype right, ulong id)
