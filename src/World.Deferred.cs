@@ -128,6 +128,17 @@ public sealed partial class World
 		if (_deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(cmp.ID))
 		{
 			ref var obj = ref dict.GetOrAddValueRef(cmp.ID, out var _);
+
+			var cmd = new DeferredOp()
+			{
+				Op = DeferredOpTypes.EditComponent,
+				Entity = entity,
+				ComponentInfo = cmp,
+				Data = null!
+			};
+
+			_operations.Enqueue(cmd);
+
 			return ref Unsafe.Unbox<T>(obj);
 		}
 
@@ -141,20 +152,36 @@ public sealed partial class World
 		{
 			switch (op.Op)
 			{
-				// case DeferredOpTypes.CreateEntity:
-				// 	NewEmpty(op.Entity);
-				// 	break;
 				case DeferredOpTypes.DestroyEntity:
 					Delete(op.Entity);
 					break;
+
 				case DeferredOpTypes.SetComponent:
+				{
 					ref var record = ref GetRecord(op.Entity);
 					var array = Set(Entity(op.Entity), ref record, in op.ComponentInfo);
 					array?.SetValue(op.Data, record.Row & Archetype.CHUNK_THRESHOLD);
+
 					break;
+				}
+
 				case DeferredOpTypes.UnsetComponent:
 					DetachComponent(op.Entity, in op.ComponentInfo);
 					break;
+
+				case DeferredOpTypes.EditComponent:
+				{
+					if (_deferredSets.TryGetValue(op.Entity, out var dict) && dict.ContainsKey(op.ComponentInfo.ID))
+					{
+						ref var obj = ref dict.GetOrAddValueRef(op.ComponentInfo.ID, out var _);
+
+						ref var record = ref GetRecord(op.Entity);
+						var array = Set(Entity(op.Entity), ref record, in op.ComponentInfo);
+						array?.SetValue(obj, record.Row & Archetype.CHUNK_THRESHOLD);
+					}
+
+					break;
+				}
 			}
 		}
 
@@ -184,9 +211,9 @@ public sealed partial class World
 
 	enum DeferredOpTypes : byte
 	{
-		CreateEntity,
 		DestroyEntity,
 		SetComponent,
-		UnsetComponent
+		UnsetComponent,
+		EditComponent,
 	}
 }

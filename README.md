@@ -58,7 +58,9 @@ struct Player { }
 struct Npc { }
 ```
 
-Bevy systems :D
+# Bevy systems
+
+Organize your application using the "Bevy systems" concept
 
 ```csharp
 using var ecs = new World();
@@ -118,7 +120,28 @@ entity.Unset<Position>();
 world.Unset<Position>(entity);
 ```
 
-Advanced queries
+Deferred operations
+
+```csharp
+world.Deferred(w => {
+	// Spawn an empty entity and set the Position value
+	var entity = w.Entity().Set<Position>(new() { X = 23, Y = 10 });
+
+	// this will return the Position value assigned before using the Set op
+	ref var pos = ref entity.Get<Position>();
+	pos.X += 1;
+
+	// entity will get removed later
+	entity.Delete();
+});
+
+// or
+world.BeginDeferred();
+// [...]
+world.EndDeferred();
+```
+
+Raw queries
 
 ```csharp
 foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>())

@@ -15,9 +15,16 @@ ecs.Entity<Position>();
 ecs.Entity<Velocity>();
 
 
-var eee = ecs.Entity()
-	.Set<PlayerTag>()
-	.Set(new Position() {X = 999});
+var eee = ecs.Entity();
+ecs.Deferred(w => {
+	eee.Set<PlayerTag>()
+		.Set(new Position() {X = 999});
+
+	eee.Get<Position>().X += 1;
+	eee.Get<Position>().X += 1;
+});
+
+ref var ppp = ref eee.Get<Position>();
 
 var scheduler = new Scheduler(ecs);
 
