@@ -191,7 +191,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 						public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
-							{worldLock}Lock();
+							{worldLock}BeginDeferred();
 
 							foreach (var arch in {(withFilter ? getQuery : "this")})
 							{{
@@ -226,7 +226,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 								}}
 							}}
 
-							{worldLock}Unlock();
+							{worldLock}EndDeferred();
 						}}
 				");
 			}
@@ -250,7 +250,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 						public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 						{{
-							{worldLock}Lock();
+							{worldLock}BeginDeferred();
 							var query = {(withFilter ? getQuery : "this")};
 							var cde = query.ThreadCounter;
 							cde.Reset();
@@ -298,7 +298,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 							cde.Signal();
 							cde.Wait();
-							{worldLock}Unlock();
+							{worldLock}EndDeferred();
 						}}
 				");
 			}

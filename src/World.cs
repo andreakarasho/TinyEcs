@@ -13,6 +13,8 @@ public sealed partial class World : IDisposable
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
+	private readonly object _newEntLock = new object();
+
 
     public World(ulong maxComponentId = 256)
     {
@@ -117,20 +119,6 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
-    // public EntityView Entity(string name)
-    // {
-	// 	_entityNames.TryGetValue(name, out var id);
-
-    //     var entity = Entity(id);
-	// 	if (id == 0)
-	// 	{
-	// 		_entityNames.Add(name, entity.ID);
-	// 		GetRecord(entity.ID).Name = name;
-	// 	}
-
-	// 	return entity;
-    // }
-
 	public EntityView Entity<T>() where T : struct
 	{
 		return Entity(Component<T>().ID);
@@ -143,34 +131,20 @@ public sealed partial class World : IDisposable
 
     internal EntityView NewEmpty(ulong id = 0)
     {
-		// if (IsDeferred)
-		// {
-		// 	if (id == 0)
-		// 	{
-		// 		id = _worldState.NewEntities++ + _entities.MaxID;
-		// 	}
+		lock (_newEntLock)
+		{
+			ref var record = ref (
+				id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
+			);
+			record.Archetype = _archRoot;
+			record.Row = _archRoot.Add(id);
 
-		// 	// _operations.Enqueue(new DeferredOp() {
-		// 	// 	Op = DeferredOpTypes.CreateEntity,
-		// 	// 	Entity = id,
-		// 	// });
+			var e = new EntityView(this, id);
 
-		// 	_commands.Entity(id);
+			OnEntityCreated?.Invoke(e);
 
-		// 	return new EntityView(this, id);
-		// }
-
-        ref var record = ref (
-            id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
-        );
-        record.Archetype = _archRoot;
-        record.Row = _archRoot.Add(id);
-
-        var e = new EntityView(this, id);
-
-		OnEntityCreated?.Invoke(e);
-
-		return e;
+			return e;
+		}
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -190,14 +164,17 @@ public sealed partial class World : IDisposable
 			return;
 		}
 
-		OnEntityDeleted?.Invoke(new (this, entity));
+		lock (_newEntLock)
+		{
+			OnEntityDeleted?.Invoke(new (this, entity));
 
-        ref var record = ref GetRecord(entity);
+			ref var record = ref GetRecord(entity);
 
-        var removedId = record.Archetype.Remove(ref record);
-        EcsAssert.Assert(removedId == entity);
+			var removedId = record.Archetype.Remove(ref record);
+			EcsAssert.Assert(removedId == entity);
 
-        _entities.Remove(removedId);
+			_entities.Remove(removedId);
+		}
     }
 
     public bool Exists(EcsID entity)
@@ -371,7 +348,7 @@ public sealed partial class World : IDisposable
 
 	public void Each(QueryFilterDelegateWithEntity fn)
 	{
-		Lock();
+		BeginDeferred();
 
 		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms)))
 		{
@@ -387,7 +364,7 @@ public sealed partial class World : IDisposable
 			}
 		}
 
-		Unlock();
+		EndDeferred();
 	}
 
 	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms, Func<World, ImmutableArray<Term>, Query> factory)

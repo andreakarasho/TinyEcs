@@ -82,4 +82,11 @@ public sealed partial class World
 	    ref var chunk = ref record.GetChunk();
 	    return ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & Archetype.CHUNK_THRESHOLD);
     }
+
+	public void Deferred(Action<World> fn)
+	{
+		BeginDeferred();
+		fn(this);
+		EndDeferred();
+	}
 }

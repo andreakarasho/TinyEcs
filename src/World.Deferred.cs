@@ -7,26 +7,35 @@ public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
     private readonly ConcurrentDictionary<EcsID, DictionarySlim<EcsID, object?>> _deferredSets = new();
-	private WorldState _worldState;
+	private WorldState _worldState = new () { State = WorldStateTypes.Normal, Locks = 0 };
+	private readonly object _worldStateLock = new object();
+
 
 
 	public bool IsDeferred => _worldState.State == WorldStateTypes.Deferred;
 
-	internal void Lock()
+
+	public void BeginDeferred()
 	{
-		_worldState.State = WorldStateTypes.Deferred;
-		Interlocked.Increment(ref _worldState.Locks);
+		lock (_worldStateLock)
+		{
+			_worldState.State = WorldStateTypes.Deferred;
+			_worldState.Locks += 1;
+		}
 	}
 
-	internal void Unlock()
+	public void EndDeferred()
 	{
-		Interlocked.Decrement(ref _worldState.Locks);
-
-		if (_worldState.Locks == 0)
+		lock (_worldStateLock)
 		{
-			_worldState.NewEntities = 0;
-			_worldState.State = WorldStateTypes.Normal;
-			Merge();
+			_worldState.Locks -= 1;
+
+			if (_worldState.Locks == 0)
+			{
+				_worldState.NewEntities = 0;
+				_worldState.State = WorldStateTypes.Normal;
+				Merge();
+			}
 		}
 	}
 

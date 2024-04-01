@@ -27,10 +27,10 @@ scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) =>
 .RunIf(() => true)
 .RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
 
-scheduler.AddSystem((Local<int> i32, Res<string> str, Commands commands) => {
+scheduler.AddSystem((Local<int> i32, Res<string> str, SchedulerState schedState) => {
 	Console.WriteLine(i32.Value++);
 
-	commands.AddResource(23ul);
+	schedState.AddResource(23ul);
 }, Stages.Startup);
 scheduler.AddSystem((Res<ulong> ul) => {
 	Console.WriteLine(ul.Value++);
@@ -83,13 +83,20 @@ scheduler.AddSystem((
 		Console.WriteLine("What: {0}", myText.Value);
 	}
 );
-scheduler.AddSystem((Commands commands) => {
-	var ff = commands.Entity()
+scheduler.AddSystem((World world) => {
+
+	world.BeginDeferred();
+	var ff = world.Entity()
 		.Set<Position>(default)
 		.Set<Velocity>(default);
-});
-scheduler.AddSystem((Commands commands) => {
-	commands.Merge();
+	world.EndDeferred();
+
+	world.Deferred(w => {
+		var ff = w.Entity()
+			.Set<Position>(default)
+			.Set<Velocity>(default)
+			.Set<Likes>();
+	});
 });
 scheduler.AddSystem((World world) => {
 	Console.WriteLine("entities in world {0}", world.EntityCount);
@@ -128,7 +135,7 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 // ecs.Entity<MyEvent>();
 
 ecs.Query<Position>()
-	.Each((EntityView ent) => {
+	.EachJob((EntityView ent, ref Position pos) => {
 
 		ent.Set(new MyEvent() { Value = 2 });
 
@@ -137,6 +144,8 @@ ecs.Query<Position>()
 
 		ref var v2 = ref ent.Get<MyEvent>();
 		v.Value += 1;
+
+		ent.Unset<MyEvent>();
 
 
 		// var ee = ent.World.Entity()

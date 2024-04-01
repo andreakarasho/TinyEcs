@@ -171,7 +171,7 @@ public partial class Query : IDisposable
 
 	public void Each(QueryFilterDelegateWithEntity fn)
 	{
-		World.Lock();
+		World.BeginDeferred();
 
 		foreach (var arch in this)
 		{
@@ -187,6 +187,6 @@ public partial class Query : IDisposable
 			}
 		}
 
-		World.Unlock();
+		World.EndDeferred();
 	}
 }

@@ -56,7 +56,7 @@ public sealed partial class Scheduler
 			_systems[i] = new ();
 
 		AddSystemParam(world);
-		AddSystemParam(new Commands(world, this));
+		AddSystemParam(new SchedulerState(this));
 	}
 
 
@@ -117,7 +117,10 @@ public sealed partial class Scheduler
 		return this;
 	}
 
-	internal bool ResourceExists<T>() => _resources.ContainsKey(typeof(T));
+	internal bool ResourceExists<T>() where T : ISystemParam
+	{
+		return _resources.ContainsKey(typeof(T));
+	}
 }
 
 public interface IPlugin
@@ -219,27 +222,6 @@ partial class Query<TQuery, TFilter> : ISystemParam
 	}
 }
 
-partial class Commands : ISystemParam
-{
-	private readonly Scheduler? _scheduler;
-
-	public Commands() : this(null!) { }
-
-	public Commands(World world, Scheduler scheduler) : this(world)
-		=> _scheduler = scheduler;
-
-	void ISystemParam.New(object arguments)
-	{
-		World = (World) arguments;
-	}
-
-	public void AddResource<T>(T resource)
-		=> _scheduler?.AddResource(resource);
-
-	public bool ResourceExists<T>()
-		=> _scheduler?.ResourceExists<Res<T>>() ?? false;
-}
-
 public sealed class Res<T> : ISystemParam
 {
 	private T? _t;
@@ -278,25 +260,30 @@ public sealed class Local<T> : ISystemParam, ISystemParamExclusive
 	}
 }
 
-// public sealed class SystemState : ISystemParam
-// {
-// 	private readonly Scheduler _scheduler;
+public sealed class SchedulerState : ISystemParam
+{
+	private readonly Scheduler _scheduler;
 
-// 	internal SystemState(Scheduler scheduler)
-// 	{
-// 		_scheduler = scheduler;
-// 	}
+	internal SchedulerState(Scheduler scheduler)
+	{
+		_scheduler = scheduler;
+	}
 
-// 	public SystemState()
-// 		=> throw new Exception("You are not allowed to initialixze this object by yourself!");
+	public SchedulerState()
+		=> throw new Exception("You are not allowed to initialixze this object by yourself!");
 
-// 	public void AddResource<T>(T resource)
-// 	{
-// 		_scheduler.AddResource(resource);
-// 	}
+	public void AddResource<T>(T resource)
+	{
+		_scheduler.AddResource(resource);
+	}
 
-// 	void ISystemParam.New(object arguments)
-// 	{
+	public bool ResourceExists<T>()
+	{
+		return _scheduler.ResourceExists<Res<T>>();
+	}
 
-// 	}
-// }
+	void ISystemParam.New(object arguments)
+	{
+
+	}
+}
