@@ -106,7 +106,6 @@ scheduler.AddSystem((ComplexQuery complex) => {
 
 scheduler.AddResource("oh shit i made it");
 
-
 scheduler.Run();
 scheduler.Run();
 
@@ -126,7 +125,27 @@ for (int i = 0; i < ENTITIES_COUNT / 1; i++)
 		//  .Set<Likes>()
 		 ;
 
+ecs.Entity<MyEvent>();
 
+ecs.Query<Position>()
+	.Each((EntityView ent) => {
+
+		ent.Set(new MyEvent() { Value = 2 });
+
+		// ref var v = ref ent.Get<MyEvent>();
+		// v.Value += 1;
+
+		// ref var v2 = ref ent.Get<MyEvent>();
+		// v.Value += 1;
+
+
+		// var ee = ent.World.Entity()
+		// 	.Set<MyEvent>(new MyEvent() { Value = 222 });
+
+		// ref var v22 = ref ee.Get<MyEvent>();
+		// v22.Value += 2;
+
+	});
 
 // for (var i = 7000; i < 8000 * 2; ++i)
 // 	ecs.Entity((ulong)i).Delete();

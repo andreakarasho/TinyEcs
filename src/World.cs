@@ -25,7 +25,6 @@ public sealed partial class World : IDisposable
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
-
 		OnPluginInitialization?.Invoke(this);
     }
 
@@ -144,6 +143,23 @@ public sealed partial class World : IDisposable
 
     internal EntityView NewEmpty(ulong id = 0)
     {
+		// if (IsDeferred)
+		// {
+		// 	if (id == 0)
+		// 	{
+		// 		id = _worldState.NewEntities++ + _entities.MaxID;
+		// 	}
+
+		// 	// _operations.Enqueue(new DeferredOp() {
+		// 	// 	Op = DeferredOpTypes.CreateEntity,
+		// 	// 	Entity = id,
+		// 	// });
+
+		// 	_commands.Entity(id);
+
+		// 	return new EntityView(this, id);
+		// }
+
         ref var record = ref (
             id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
         );
@@ -167,6 +183,13 @@ public sealed partial class World : IDisposable
 
     public void Delete(EcsID entity)
     {
+		if (IsDeferred)
+		{
+			DeleteDeferred(entity);
+
+			return;
+		}
+
 		OnEntityDeleted?.Invoke(new (this, entity));
 
         ref var record = ref GetRecord(entity);

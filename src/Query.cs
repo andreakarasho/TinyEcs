@@ -171,6 +171,8 @@ public partial class Query : IDisposable
 
 	public void Each(QueryFilterDelegateWithEntity fn)
 	{
+		World.Lock();
+
 		foreach (var arch in this)
 		{
 			foreach (ref readonly var chunk in arch)
@@ -184,5 +186,7 @@ public partial class Query : IDisposable
 				}
 			}
 		}
+
+		World.Unlock();
 	}
 }
