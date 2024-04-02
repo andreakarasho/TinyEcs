@@ -56,7 +56,7 @@ public sealed partial class World
 	{
 		ref readonly var cmp = ref Component<T>();
 
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, in cmp))
 		{
 			return ref GetDeferred<T>(entity);
 		}
@@ -69,13 +69,15 @@ public sealed partial class World
 
     public ref T TryGet<T>(EcsID entity) where T : struct
     {
-		if (IsDeferred)
+		ref readonly var cmp = ref Component<T>();
+
+		if (IsDeferred && !Has(entity, in cmp))
 		{
 			return ref GetDeferred<T>(entity);
 		}
 
 	    ref var record = ref GetRecord(entity);
-	    var column = record.Archetype.GetComponentIndex(Component<T>().ID);
+	    var column = record.Archetype.GetComponentIndex(cmp.ID);
 	    if (column < 0)
 		    return ref Unsafe.NullRef<T>();
 
