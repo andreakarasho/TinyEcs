@@ -81,15 +81,15 @@ scheduler.AddSystem((World world) => {
 
 // Arguments order doesn't matter!
 scheduler.AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
-	// query execution
-	query.Each((ref Position pos, ref Velocity vel) => {
-		// do something here
-	});
+    // query execution
+    query.Each((ref Position pos, ref Velocity vel) => {
+        // do something here
+    });
 
-	// Same query, but using more threads!
-	query.EachJob((ref Position pos, ref Velocity vel) => {
-		// do something here
-	});
+    // Same query, but using more threads!
+    query.EachJob((ref Position pos, ref Velocity vel) => {
+        // do something here
+    });
 });
 
 // Res<> is a special type which stores any value you want
@@ -124,21 +124,48 @@ Deferred operations
 
 ```csharp
 world.Deferred(w => {
-	// Spawn an empty entity and set the Position value
-	var entity = w.Entity().Set<Position>(new() { X = 23, Y = 10 });
+    // Spawn an empty entity and set the Position value
+    var entity = w.Entity().Set<Position>(new() { X = 23, Y = 10 });
 
-	// this will return the Position value assigned before using the Set op
-	ref var pos = ref entity.Get<Position>();
-	pos.X += 1;
+    // this will return the Position value assigned before using the Set op
+    ref var pos = ref entity.Get<Position>();
+    pos.X += 1;
 
-	// entity will get removed later
-	entity.Delete();
+    // entity will get removed later
+    entity.Delete();
 });
 
+// ===============================
 // or
 world.BeginDeferred();
 // [...]
 world.EndDeferred();
+
+// ===============================
+// Now let's see some "hidden" deferred opereations
+// still normal
+var entity = world.Entity();
+entity.Set<Position>(new () { X = 14, Y = 0 });
+
+// Quering put the world in a deferred state automatically!
+// Once the query is done, the world state back to Normal.
+// Then all deferred changes get merged.
+// Deferred operations are quite expensive!
+world.Each((EntityView ent) => {
+    // Deferred set.
+    // The entity doesn't have a Velocity component
+    ent.Set<Velocity>(new () { X = 23f });
+
+    // Deferred get
+    ref var defVel = ref ent.Get<Velocity>();
+
+    // Normal get.
+    // The entity already contains the Position component
+    ref var pos = ref ent.Get<Position>();
+
+    // deferred delete
+    ent.Delete();
+});
 ```
 
 Raw queries
@@ -146,20 +173,29 @@ Raw queries
 ```csharp
 foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>())
 {
-	var posIndex = archetype.GetComponentIndex<Position>();
-	var velIndex = archetype.GetComponentIndex<Velocity>();
+    var posIndex = archetype.GetComponentIndex<Position>();
+    var velIndex = archetype.GetComponentIndex<Velocity>();
 
-	foreach (ref readonly var chunk in archetype)
-	{
-		var posSpan = chunk.GetSpan<Position>(posIndex);
-		var velSpan = chunk.GetSpan<Velocity>(velIndex);
+    foreach (ref readonly var chunk in archetype)
+    {
+        var posSpan = chunk.GetSpan<Position>(posIndex);
+        var velSpan = chunk.GetSpan<Velocity>(velIndex);
 
-		for (var i = 0; i < chunk.Count; ++i)
-		{
-			// ...
-		}
-	}
+        for (var i = 0; i < chunk.Count; ++i)
+        {
+            // ...
+        }
+    }
 }
+```
+
+Multithreading
+
+```csharp
+world.EachJob<(A, B), (With<C>, Not<D>)>(...);
+
+world.Query<(A, B), (With<C>, Not<D>)>()
+    .EachJob(...);
 ```
 
 # Plugins
