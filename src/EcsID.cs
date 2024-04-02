@@ -3,11 +3,22 @@ namespace TinyEcs;
 [StructLayout(LayoutKind.Explicit)]
 public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable<EcsID>, IComparable<EcsID>
 {
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public EcsID(ulong value) => Value = value;
+
+
 	[FieldOffset(0)]
 	public readonly ulong Value;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public EcsID(ulong value) => Value = value;
+	[FieldOffset(0)]
+	public readonly int ID;
+
+	[FieldOffset(4)]
+	public readonly int Generation;
+
+
+	// public bool IsPair => IDOp.IsPair(Value);
+	// public bool IsComponent => IDOp.IsComponent(Value);
 
 
 	public readonly int CompareTo(ulong other) => Value.CompareTo(other);

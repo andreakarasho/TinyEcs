@@ -19,21 +19,25 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         ID = id;
     }
 
-	public EcsID Generation => IDOp.GetGeneration(ID);
-	public EcsID RealID => IDOp.RealID(ID);
+	public int Generation => ID.Generation;
+	public int RealID => ID.ID;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Equals(EcsID other) => ID == other;
+    public readonly bool Equals(EcsID other)
+		=> ID == other;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Equals(EntityView other) => ID == other.ID;
+    public readonly bool Equals(EntityView other)
+		=> ID == other.ID;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly override int GetHashCode() => ID.GetHashCode();
+    public readonly override int GetHashCode()
+		=> ID.GetHashCode();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly override bool Equals(object? obj) => obj is EntityView ent && Equals(ent);
+    public readonly override bool Equals(object? obj)
+		=> obj is EntityView ent && Equals(ent);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Set<T>() where T : struct
@@ -77,19 +81,24 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ReadOnlySpan<ComponentInfo> Type() => World.GetType(ID);
+    public readonly ReadOnlySpan<ComponentInfo> Type()
+		=> World.GetType(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref T Get<T>() where T : struct => ref World.Get<T>(ID);
+    public readonly ref T Get<T>() where T : struct
+		=> ref World.Get<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Has<T>() where T : struct => World.Has<T>(ID);
+    public readonly bool Has<T>() where T : struct
+		=> World.Has<T>(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly void Delete() => World.Delete(ID);
+    public readonly void Delete()
+		=> World.Delete(ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly bool Exists() => World.Exists(ID);
+    public readonly bool Exists()
+		=> World.Exists(ID);
 
 
 	public static implicit operator EcsID(EntityView d) => d.ID;
