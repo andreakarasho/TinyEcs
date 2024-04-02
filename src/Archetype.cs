@@ -104,8 +104,8 @@ public sealed class Archetype
 	public ulong Id { get; }
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
-
 	internal int EmptyChunks => _chunks.Length - Chunks.Length;
+
 
     [SkipLocalsInit]
     internal ref ArchetypeChunk GetChunk(int index)
