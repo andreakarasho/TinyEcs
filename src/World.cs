@@ -35,6 +35,7 @@ public sealed partial class World : IDisposable
 	public static event Action<World>? OnPluginInitialization;
 
     public int EntityCount => _entities.Length;
+	internal Archetype Root => _archRoot;
 
     public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
 
