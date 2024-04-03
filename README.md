@@ -7,6 +7,7 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 ## Key Features
 
+-   Fast
 -   Reflection-free design
 -   NativeAOT & bflat compatibility
 -   Compatible with major game engines/frameworks: Unity, Godot, Monogame, FNA, Raylib-cs, etc.
