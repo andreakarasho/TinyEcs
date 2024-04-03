@@ -76,12 +76,37 @@ scheduler.AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
     // Query execution
 });
 
+scheduler.AddPlugin<MyPlugin>();
+
 scheduler.AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
     .RunIf((SchedulerState schedState) => schedState.ResourceExists<string>());
 scheduler.AddResource("My text");
 
 // Run all systems once
 scheduler.Run();
+
+
+struct MyPlugin : IPlugin
+{
+    public void Build(Scheuler scheduler)
+    {
+        scheduler.AddSystem((World world, Local<int> i32) => {
+            // Do something
+        });
+
+        scheduler.AddSystem((EventWriter<MyEvent> writer) => {
+            // Write events
+        });
+
+        scheduler.AddSystem((EventReader<MyEvent> reader) => {
+            // Read events
+        });
+
+        scheduler.AddEvent<MyEvent>();
+    }
+
+    struct MyEvent { }
+}
 ```
 
 ## More Functionalities
