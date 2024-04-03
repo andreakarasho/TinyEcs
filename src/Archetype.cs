@@ -5,9 +5,10 @@ namespace TinyEcs;
 
 public struct ArchetypeChunk
 {
-	public Array[]? Components;
-	public EntityView[] Entities;
-	public int Count;
+	internal Array[]? Components;
+	internal EntityView[] Entities;
+
+	public int Count { get; internal set; }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
@@ -371,7 +372,7 @@ public sealed class Archetype
             Console.WriteLine(
                 "{0}- Parent [{1}] common ID: {2}",
                 new string('\t', depth),
-                string.Join(", ", root.Components.Select(s => Lookup.GetArray(s.ID, 0).ToString() )),
+                string.Join(", ", root.Components.Select(s => Lookup.GetArray(s.ID, 0)!.ToString() )),
                 rootComponent
             );
 

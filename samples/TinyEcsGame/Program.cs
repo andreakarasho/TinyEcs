@@ -55,7 +55,7 @@ static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> que
 	query.EachJob((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 	{
 		pos.Value += vel.Value * time.Value.Value;
-		rot.Value += rot.Acceleration * time.Value.Value * Raylib.RAD2DEG;
+		rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
 	});
 }
 
@@ -98,11 +98,11 @@ static void EndRenderer()
 	Raylib.EndDrawing();
 }
 
-static void RenderEntities(Query<(Sprite, Position, Rotation)> query)
+static void RenderEntities(Query<(Sprite, Position, Rotation)> query, Res<Texture2D> texture)
 {
 	query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 	{
-		Raylib.DrawTextureEx(sprite.Texture, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
+		Raylib.DrawTextureEx(texture.Value, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
 	});
 }
 
@@ -119,14 +119,15 @@ static void DrawText(World ecs, Res<Time> time)
 	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
 }
 
-static void SpawnEntities(World ecs, Res<WindowSize> size)
+static void SpawnEntities(World ecs, Res<WindowSize> size, SchedulerState scheduler)
 {
 	var rnd = new Random();
 	var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
+	scheduler.AddResource(texture);
 
 	for (var i = 0; i < ENTITIES_TO_SPAWN; ++i)
 	{
-		ecs!
+		ecs
 			.Entity()
 			.Set(
 				new Position()
@@ -148,14 +149,14 @@ static void SpawnEntities(World ecs, Res<WindowSize> size)
 				{
 					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
 					Scale = rnd.NextSingle(),
-					Texture = texture
+					Texture = texture.Id
 				}
 			)
 			.Set(
 				new Rotation()
 				{
 					Value = 0f,
-					Acceleration = rnd.Next(5, 20) * (rnd.Next() % 2 == 0 ? -1 : 1)
+					Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
 				}
 			);
 	}
@@ -185,7 +186,8 @@ struct Sprite
 {
     public Color Color;
     public float Scale;
-    public Texture2D Texture;
+	public uint Texture;
+    //public Texture2D Texture;
 }
 
 struct Rotation

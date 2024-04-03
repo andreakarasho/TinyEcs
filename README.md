@@ -3,267 +3,157 @@
 [![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
 [![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)](https://www.nuget.org/packages/TinyEcs.Plugins)
 
-Small project born by the need of a reflection-free dotnet ECS library.<br>
-NativeAOT & bflat compatible.
-Compatible with all major game engines/frameworks Unity, Godot, Monogame, FNA, Raylib-cs, etc...
+TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
-# Requirements
+## Key Features
 
-`netstandard2.1` `net8.0`
+-   Reflection-free design
+-   NativeAOT & bflat compatibility
+-   Compatible with major game engines/frameworks: Unity, Godot, Monogame, FNA, Raylib-cs, etc.
 
-# Status
+## Requirements
 
-<i>This project is in an early development stage. Breaking changes are real :D</i> `¯\_(ツ)_/¯`
+-   `netstandard2.1`
+-   `net8.0`
 
-# Run the pepe game!
+## Status
 
-```
+🚧 Early development stage: Expect breaking changes! 🚧
+
+## Run the pepe game!
+
+```bash
 cd samples/TinyEcsGame
 dotnet run -c Release
 ```
 
-# Basic samples
+## Basic Samples
 
 ```csharp
 using var ecs = new World();
 
-// Generate a player entity
+// Generate entities
 var player = ecs.Entity()
-   .Set(new Position() { X = 2 })
-   .Set(new Name() { Name = "Tom" })
-   .Set<Player>();
+    .Set<Position>(new Position { X = 2 })
+    .Set<Name>(new Name { Value = "Tom" })
+    .Set<Player>();
 
-// Generate a npc entity
 var npc = ecs.Entity()
-   .Set(new Position() { X = 75 })
-   .Set(new Name() { Name = "Dan" })
-   .Set<Npc>();
+    .Set<Position>(new Position { X = 75 })
+    .Set<Name>(new Name { Value = "Dan" })
+    .Set<Npc>();
 
-// Query for all entities with [Position + Name] and access the entity associated
+// Query entities with Position + Name components
 ecs.Each((EntityView entity, ref Position pos, ref Name name) => {
-    Console.WriteLine(name.Vaue);
+    Console.WriteLine(name.Value);
 });
 
-// Query, using a multithread strategy, for all entities with [Position + Name + Player], without [Npc].
-// The first tuple (Position, Name) is the accessing data,
-//   the 2nd tuple (With<Player>, Not<Npc>) is the filter.
+// Multi-threaded query for entities with Position + Name + Player, without Npc.
 ecs.EachJob<(Position, Name), (With<Player>, Not<Npc>)>((ref Position pos, ref Name name) => {
-    Console.WriteLine(name.Vaue);
+    Console.WriteLine(name.Value);
 });
 
-
+// Component structs
 struct Position { public float X, Y, Z; }
 struct Name { public string Value; }
 struct Player { }
 struct Npc { }
 ```
 
-# Bevy systems
+## Bevy Systems
 
-Organize your application using the "Bevy systems" concept
+Organize your application using the "Bevy systems" concept.
 
 ```csharp
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
-
-// Create a one-shot system
 scheduler.AddSystem((World world) => {
-   // spawn some deferred entities
-    world.BeginDeferred();
-    for (var i = 0; i < 1000; ++i)
-        world.Entity()
-            .Set<Position>(default)
-            .Set<Velocity>(default);
-    world.EndDefered();
+    // Spawn entities
 }, SystemStages.Startup);
 
-
-// Arguments order doesn't matter!
 scheduler.AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
-    // query execution
-    query.Each((ref Position pos, ref Velocity vel) => {
-        // do something here
-    });
-
-    // Same query, but using more threads!
-    query.EachJob((ref Position pos, ref Velocity vel) => {
-        // do something here
-    });
+    // Query execution
 });
 
-// Res<> is a special type which stores any value you want
 scheduler.AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
-    // Run the system only if the 'string' resource exists
     .RunIf((SchedulerState schedState) => schedState.ResourceExists<string>());
-
-// Add an unique resource type which can be invoked as system argument
-// In this case it's Res<string>
 scheduler.AddResource("My text");
 
 // Run all systems once
 scheduler.Run();
 ```
 
-# More functionalities
+## More Functionalities
 
-Access to the entity data
+Access entity data, deferred operations, raw queries, and multithreading.
 
 ```csharp
+// Entity data access
 ref var pos = ref entity.Get<Position>();
-ref var pos = ref world.Get<Position>(entity);
-
 bool hasPos = entity.Has<Position>();
-bool hasPos = world.Has<Position>(entity);
-
 entity.Unset<Position>();
-world.Unset<Position>(entity);
-```
 
-Deferred operations
-
-```csharp
+// Deferred operations
 world.Deferred(w => {
-    // Spawn an empty entity and set the Position value
-    var entity = w.Entity().Set<Position>(new() { X = 23, Y = 10 });
-
-    // this will return the Position value assigned before using the Set op
-    ref var pos = ref entity.Get<Position>();
-    pos.X += 1;
-
-    // entity will get removed later
-    entity.Delete();
+    // Operations
 });
-
-// ===============================
-// or
 world.BeginDeferred();
-// [...]
+// Operations
 world.EndDeferred();
 
-// ===============================
-// Now let's see some "hidden" deferred opereations
-// still normal
-var entity = world.Entity();
-entity.Set<Position>(new () { X = 14, Y = 0 });
-
-// Quering put the world in a deferred state automatically!
-// Once the query is done, the world state back to Normal.
-// Then all deferred changes get merged.
-// Deferred operations are quite expensive!
-world.Each((EntityView ent) => {
-    // Deferred set.
-    // The entity doesn't have a Velocity component
-    ent.Set<Velocity>(new () { X = 23f });
-
-    // Deferred get
-    ref var defVel = ref ent.Get<Velocity>();
-
-    // Normal get.
-    // The entity already contains the Position component
-    ref var pos = ref ent.Get<Position>();
-
-    // deferred delete
-    ent.Delete();
-});
-```
-
-Raw queries
-
-```csharp
-foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>())
-{
-    var posIndex = archetype.GetComponentIndex<Position>();
-    var velIndex = archetype.GetComponentIndex<Velocity>();
-
-    foreach (ref readonly var chunk in archetype)
-    {
-        var posSpan = chunk.GetSpan<Position>(posIndex);
-        var velSpan = chunk.GetSpan<Velocity>(velIndex);
-
-        for (var i = 0; i < chunk.Count; ++i)
-        {
-            // ...
-        }
-    }
+// Raw queries
+foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>()) {
+    // Operations
 }
-```
 
-Multithreading
-
-```csharp
+// Multithreading
 world.EachJob<(A, B), (With<C>, Not<D>)>(...);
-
-world.Query<(A, B), (With<C>, Not<D>)>()
-    .EachJob(...);
 ```
 
-# Plugins
+## Plugins
 
-Relationships
+Enhance functionality with plugins like relationships, unique entities, and entity enable/disable.
 
 ```csharp
-// We can define a custom hierarchy
-//  so we can handle multiple parent-child
-//  relationships at the same time
-struct ChestContainer {}
-
-// Spawn the container
+// Relationships
 var woodenChest = ecs.Entity()
-   .Set<Container>();
+    .Set<Container>();
 
-// Spawn the chest content
 var sword = ecs.Entity()
     .Set<Weapon>()
-    .Set<Damage>(new () { Min = 5, Max = 15 });
-    .Set<Amount>(new () { Value = 1 });
+    .Set<Damage>(new Damage { Min = 5, Max = 15 })
+    .Set<Amount>(new Amount { Value = 1 });
 
-var goldCoins = ecs.Entity()
-    .Set<Gold>()
-    .Set<Amount>(new () { Value = 245 });
-
-var silverCoins = ecs.Entity()
-    .Set<Silver>()
-    .Set<Amount>(new () { Value = 874 });
-
-// Add items to the woodenChest
 woodenChest.AddChild<ChestContainer>(sword);
-woodenChest.AddChild<ChestContainer>(goldCoins);
-woodenChest.AddChild<ChestContainer>(silverCoins);
 
-// Query for all children that have a 'ChestContainer' relationship
 ecs.Each<With<Child<ChestContainer>>>((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
-```
 
-Unique entities
+// Unique entities
+var dog = ecs.Entity("Khun").Set<Bau>();
 
-```csharp
-// create or get an entity named 'Khun'
-var dog = ecs.Entity("Khun");
-dog.Set<Bau>(); 🐶
-```
-
-Enable/Disable entities
-
-```csharp
+// Enable/Disable entities
 var ent = ecs.Entity();
 ent.Disable();
 ent.Enable();
 bool isEnabled = ent.IsEnabled();
 
-// `Disabled` is a simple built-in component!
 ecs.Each<Not<Disabled>>((EntityView entity) => Console.WriteLine("entity {0}", entity.ID));
 ```
 
-# Credits
+## Credits
 
-Base code idea inspired by:
+Inspired by:
 
--   https://github.com/jasonliang-dev/entity-component-system
--   https://github.com/SanderMertens/flecs
--   https://github.com/bevyengine/bevy
+-   [entity-component-system](https://github.com/jasonliang-dev/entity-component-system)
+-   [flecs](https://github.com/SanderMertens/flecs)
+-   [bevy](https://github.com/bevyengine/bevy)
 
-# Cool design reference
+## Cool Design Reference
 
--   https://github.com/SanderMertens/flecs/blob/master/docs/Manual.md
+-   [flecs Manual](https://github.com/SanderMertens/flecs/blob/master/docs/Manual.md)
+
+```
+
+```
