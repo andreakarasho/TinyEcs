@@ -153,7 +153,3 @@ Inspired by:
 ## Cool Design Reference
 
 -   [flecs Manual](https://github.com/SanderMertens/flecs/blob/master/docs/Manual.md)
-
-```
-
-```
