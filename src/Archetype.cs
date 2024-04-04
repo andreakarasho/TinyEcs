@@ -69,7 +69,6 @@ public sealed class Archetype
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    //private readonly int[] _lookup;
     private readonly DictionarySlim<ulong, int> _lookup;
     private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
@@ -85,23 +84,12 @@ public sealed class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = components;
-
-        // var maxID = -1;
-        // for (var i = 0; i < components.Length; ++i)
-	       //  maxID = Math.Max(maxID, components[i].ID);
-
-        // _lookup = new int[maxID + 1];
-        // _lookup.AsSpan().Fill(-1);
-        // for (var i = 0; i < components.Length; ++i)
-	       //  _lookup[components[i].ID] = i;
-
-       _lookup = new DictionarySlim<ulong, int>();
-       for (var i = 0; i < components.Length; ++i)
-	       _lookup.GetOrAddValueRef(components[i].ID, out _) = i;
-
+		Id = Hashing.Calculate(components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
-		Id = Hashing.Calculate(components.AsSpan());
+       	_lookup = new DictionarySlim<ulong, int>();
+       	for (var i = 0; i < components.Length; ++i)
+			_lookup.GetOrAddValueRef(components[i].ID, out _) = i;
     }
 
     public World World => _world;
@@ -147,10 +135,7 @@ public sealed class Archetype
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetComponentIndex(ulong id)
 	{
-		if (!_lookup.TryGetValue(id, out var v))
-			return -1;
-		return v;
-		//return id >= 0 && id < _lookup.Count ? _lookup[id] : -1;
+		return _lookup.TryGetValue(id, out var v) ? v : -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -267,7 +252,7 @@ public sealed class Archetype
 			Array.Copy(fromArray, oldRow & CHUNK_THRESHOLD, toArray, newRow & CHUNK_THRESHOLD, 1);
 		}
 
-		RemoveByRow(oldRow);
+		_ = RemoveByRow(oldRow);
 		return newRow;
     }
 
