@@ -71,7 +71,7 @@ public sealed class Archetype
 
 	internal Archetype(
         World world,
-        ReadOnlySpan<ComponentInfo> components,
+        ImmutableArray<ComponentInfo> components,
         ComponentComparer comparer
     )
     {
@@ -79,7 +79,7 @@ public sealed class Archetype
         _world = world;
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
-        Components = components.ToImmutableArray();
+        Components = components;
 
         // var maxID = -1;
         // for (var i = 0; i < components.Length; ++i)
@@ -96,7 +96,7 @@ public sealed class Archetype
 
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
-		Id = Hashing.Calculate(components);
+		Id = Hashing.Calculate(components.AsSpan());
     }
 
     public World World => _world;
@@ -219,7 +219,7 @@ public sealed class Archetype
 
 	internal Archetype InsertVertex(
         Archetype left,
-        ReadOnlySpan<ComponentInfo> components,
+        ImmutableArray<ComponentInfo> components,
         ref readonly ComponentInfo component
     )
     {

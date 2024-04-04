@@ -159,16 +159,20 @@ public sealed partial class World
 				case DeferredOpTypes.SetComponent:
 				{
 					ref var record = ref GetRecord(op.Entity);
-					var array = Set(Entity(op.Entity), ref record, in op.ComponentInfo);
+					var array = Set(ref record, in op.ComponentInfo);
 					array?.SetValue(op.Data, record.Row & Archetype.CHUNK_THRESHOLD);
 
 					break;
 				}
 
 				case DeferredOpTypes.UnsetComponent:
-					DetachComponent(op.Entity, in op.ComponentInfo);
-					break;
+				{
+					ref var record = ref GetRecord(op.Entity);
+					DetachComponent(ref record, in op.ComponentInfo);
 
+					break;
+				}
+					
 				case DeferredOpTypes.EditComponent:
 				{
 					if (_deferredSets.TryGetValue(op.Entity, out var dict) && dict.ContainsKey(op.ComponentInfo.ID))
@@ -176,7 +180,7 @@ public sealed partial class World
 						ref var obj = ref dict.GetOrAddValueRef(op.ComponentInfo.ID, out var _);
 
 						ref var record = ref GetRecord(op.Entity);
-						var array = Set(Entity(op.Entity), ref record, in op.ComponentInfo);
+						var array = Set(ref record, in op.ComponentInfo);
 						array?.SetValue(obj, record.Row & Archetype.CHUNK_THRESHOLD);
 					}
 

@@ -21,7 +21,7 @@ public sealed partial class World : IDisposable
         _comparer = new ComponentComparer(this);
         _archRoot = new Archetype(
             this,
-            ReadOnlySpan<ComponentInfo>.Empty,
+            ImmutableArray<ComponentInfo>.Empty,
             _comparer
         );
 
@@ -190,82 +190,64 @@ public sealed partial class World : IDisposable
         return _entities.Contains(entity);
     }
 
-    internal void DetachComponent(EcsID entity, ref readonly ComponentInfo cmp)
-    {
-		OnComponentUnset?.Invoke(Entity(entity), cmp);
-        ref var record = ref GetRecord(entity);
-        InternalAttachDetach(ref record, in cmp, false);
-    }
+	private void DetachComponent(ref EcsRecord record, ref readonly ComponentInfo cmp)
+	{
+		var oldArch = record.Archetype;
 
-    private bool InternalAttachDetach(
-        ref EcsRecord record,
-        ref readonly ComponentInfo cmp,
-        bool add
-    )
-    {
-        EcsAssert.Assert(!Unsafe.IsNullRef(ref record));
+		if (oldArch.GetComponentIndex(in cmp) < 0)
+            return;
 
-        var arch = AttachToArchetype(record.Archetype, in cmp, add);
-        if (arch == null)
-            return false;
+		OnComponentUnset?.Invoke(record.GetChunk().Entities[record.Row & Archetype.CHUNK_THRESHOLD], cmp);
 
-        record.Row = record.Archetype.MoveEntity(arch, record.Row);
-        record.Archetype = arch!;
+		var newSign = oldArch.Components.Remove(cmp);
+		EcsAssert.Assert(newSign.Length < oldArch.Components.Length, "bad");
 
-        return true;
-    }
-
-    [SkipLocalsInit]
-    private Archetype? AttachToArchetype(Archetype root, ref readonly ComponentInfo cmp, bool add)
-    {
-        if (!add && root.GetComponentIndex(in cmp) < 0)
-            return null;
-
-        var initType = root.Components;
-        var cmpCount = Math.Max(0, initType.Length + (add ? 1 : -1));
-
-        const int STACKALLOC_SIZE = 16;
-		ComponentInfo[]? buffer = null;
-		scoped var span = cmpCount <= STACKALLOC_SIZE ? stackalloc ComponentInfo[STACKALLOC_SIZE] : (buffer = ArrayPool<ComponentInfo>.Shared.Rent(cmpCount));
-
-		span = span[..cmpCount];
-
-        if (!add)
-        {
-            for (int i = 0, j = 0; i < initType.Length; ++i)
-            {
-                if (initType[i].ID != cmp.ID)
-                {
-                    span[j++] = initType[i];
-                }
-            }
-        }
-        else if (!span.IsEmpty)
-        {
-            initType.CopyTo(span);
-            span[^1] = cmp;
-            span.Sort(_comparer);
-        }
-
-		ref var arch = ref GetArchetype(span, true);
-		if (arch == null)
+		ref var newArch = ref GetArchetype(newSign, true);
+		if (newArch == null)
 		{
-			arch = _archRoot.InsertVertex(root, span, in cmp);
+			newArch = _archRoot.InsertVertex(oldArch, newSign, in cmp);
 
 			if (_archetypeCount >= _archetypes.Length)
 				Array.Resize(ref _archetypes, _archetypes.Length * 2);
-			_archetypes[_archetypeCount++] = arch;
+			_archetypes[_archetypeCount++] = newArch;
 		}
 
-		if (buffer != null)
-            ArrayPool<ComponentInfo>.Shared.Return(buffer);
+		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
+        record.Archetype = newArch!;
+	}
 
-        return arch;
-    }
-
-    private ref Archetype? GetArchetype(Span<ComponentInfo> components, bool create)
+	private int AttachComponent(ref EcsRecord record, ref readonly ComponentInfo cmp)
 	{
-		var hash = Hashing.Calculate(components);
+		var oldArch = record.Archetype;
+		
+		var index = oldArch.GetComponentIndex(in cmp);
+		if (index >= 0)
+            return index;
+
+		var newSign = oldArch.Components.Add(cmp).Sort(_comparer);
+		EcsAssert.Assert(newSign.Length > oldArch.Components.Length, "bad");
+		
+		ref var newArch = ref GetArchetype(newSign, true);
+		if (newArch == null)
+		{
+			newArch = _archRoot.InsertVertex(oldArch, newSign, in cmp);
+
+			if (_archetypeCount >= _archetypes.Length)
+				Array.Resize(ref _archetypes, _archetypes.Length * 2);
+			_archetypes[_archetypeCount++] = newArch;
+		}
+
+		record.Row = record.Archetype.MoveEntity(newArch, record.Row);
+        record.Archetype = newArch!;
+
+		OnComponentSet?.Invoke(record.GetChunk().Entities[record.Row & Archetype.CHUNK_THRESHOLD], cmp);
+
+		return newArch.GetComponentIndex(cmp.ID);
+	}
+
+    private ref Archetype? GetArchetype(ImmutableArray<ComponentInfo> components, bool create)
+	{
+		var hash = Hashing.Calculate(components.AsSpan());
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 		if (create)
 		{
@@ -289,26 +271,10 @@ public sealed partial class World : IDisposable
 		return ref arch;
 	}
 
-	internal Array? Set(EntityView entity, ref EcsRecord record, ref readonly ComponentInfo cmp)
+	internal Array? Set(ref EcsRecord record, ref readonly ComponentInfo cmp)
     {
-        var emit = false;
-        var column = record.Archetype.GetComponentIndex(in cmp);
-        if (column < 0)
-        {
-            emit = InternalAttachDetach(ref record, in cmp, true);
-            column = record.Archetype.GetComponentIndex(in cmp);
-        }
-
-        Array? array = null;
-
-        if (cmp.Size > 0)
-	        array = record.GetChunk().RawComponentData(column);
-
-        if (emit)
-        {
-			OnComponentSet?.Invoke(entity, cmp);
-        }
-
+        var column = AttachComponent(ref record, in cmp);
+        var array = cmp.Size > 0 ? record.GetChunk().RawComponentData(column) : null;
         return array;
     }
 
