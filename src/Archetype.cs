@@ -10,6 +10,11 @@ public struct ArchetypeChunk
 
 	public int Count { get; internal set; }
 
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref EntityView EntityAt(int row)
+		=> ref Entities[row & Archetype.CHUNK_THRESHOLD];
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
@@ -158,7 +163,7 @@ public sealed class Archetype
 	internal int Add(EcsID id)
 	{
 		ref var chunk = ref GetChunk(_count);
-		chunk.Entities[chunk.Count++] = new(_world, id);
+		chunk.EntityAt(chunk.Count++) = new(_world, id);
         return _count++;
     }
 
@@ -169,13 +174,13 @@ public sealed class Archetype
 
 		ref var chunk = ref GetChunk(row);
 		ref var lastChunk = ref GetChunk(_count);
-		var removed = chunk.Entities[row & CHUNK_THRESHOLD];
+		var removed = chunk.EntityAt(row);
 
 		if (row < _count)
 		{
-			EcsAssert.Assert(lastChunk.Entities[_count & CHUNK_THRESHOLD] != EntityView.Invalid, "Entity is invalid. This should never happen!");
+			EcsAssert.Assert(lastChunk.EntityAt(_count) != EntityView.Invalid, "Entity is invalid. This should never happen!");
 
-			chunk.Entities[row & CHUNK_THRESHOLD] = lastChunk.Entities[_count & CHUNK_THRESHOLD];
+			chunk.EntityAt(row) = lastChunk.EntityAt(_count);
 
 			for (var i = 0; i < Components.Length; ++i)
 			{
@@ -188,10 +193,10 @@ public sealed class Archetype
 				Array.Copy(lastValidArray, _count & CHUNK_THRESHOLD, arrayToBeRemoved, row & CHUNK_THRESHOLD, 1);
 			}
 
-			_world.GetRecord(chunk.Entities[row & CHUNK_THRESHOLD]).Row = row;
+			_world.GetRecord(chunk.EntityAt(row)).Row = row;
 		}
 
-		lastChunk.Entities[_count & CHUNK_THRESHOLD] = EntityView.Invalid;
+		lastChunk.EntityAt(_count) = EntityView.Invalid;
 
 		for (var i = 0; i < Components.Length; ++i)
 		{
@@ -232,7 +237,7 @@ public sealed class Archetype
     internal int MoveEntity(Archetype newArch, int oldRow)
     {
 		ref var fromChunk = ref GetChunk(oldRow);
-		var newRow = newArch.Add(fromChunk.Entities[oldRow & CHUNK_THRESHOLD]);
+		var newRow = newArch.Add(fromChunk.EntityAt(oldRow));
 
 		var isLeft = newArch.Components.Length < Components.Length;
 		int i = 0,

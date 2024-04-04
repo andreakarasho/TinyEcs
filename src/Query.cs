@@ -177,7 +177,7 @@ public partial class Query : IDisposable
 		{
 			foreach (ref readonly var chunk in arch)
 			{
-				ref var entity = ref chunk.Entities[0];
+				ref var entity = ref chunk.EntityAt(0);
 				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
 				while (Unsafe.IsAddressLessThan(ref entity, ref last))
 				{

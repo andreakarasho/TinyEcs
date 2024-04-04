@@ -197,7 +197,7 @@ public sealed partial class World : IDisposable
 		if (oldArch.GetComponentIndex(in cmp) < 0)
             return;
 
-		OnComponentUnset?.Invoke(record.GetChunk().Entities[record.Row & Archetype.CHUNK_THRESHOLD], cmp);
+		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
 		var newSign = oldArch.Components.Remove(cmp);
 		EcsAssert.Assert(newSign.Length < oldArch.Components.Length, "bad");
@@ -219,14 +219,14 @@ public sealed partial class World : IDisposable
 	private int AttachComponent(ref EcsRecord record, ref readonly ComponentInfo cmp)
 	{
 		var oldArch = record.Archetype;
-		
+
 		var index = oldArch.GetComponentIndex(in cmp);
 		if (index >= 0)
             return index;
 
 		var newSign = oldArch.Components.Add(cmp).Sort(_comparer);
 		EcsAssert.Assert(newSign.Length > oldArch.Components.Length, "bad");
-		
+
 		ref var newArch = ref GetArchetype(newSign, true);
 		if (newArch == null)
 		{
@@ -240,7 +240,7 @@ public sealed partial class World : IDisposable
 		record.Row = record.Archetype.MoveEntity(newArch, record.Row);
         record.Archetype = newArch!;
 
-		OnComponentSet?.Invoke(record.GetChunk().Entities[record.Row & Archetype.CHUNK_THRESHOLD], cmp);
+		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
 		return newArch.GetComponentIndex(cmp.ID);
 	}
@@ -321,7 +321,7 @@ public sealed partial class World : IDisposable
 		{
 			foreach (ref readonly var chunk in arch)
 			{
-				ref var entity = ref chunk.Entities[0];
+				ref var entity = ref chunk.EntityAt(0);
 				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
 				while (Unsafe.IsAddressLessThan(ref entity, ref last))
 				{

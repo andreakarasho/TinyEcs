@@ -178,7 +178,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
 				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
 				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
 				var signCallback = (withEntityView ? "entityA, " : "") +
 				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
@@ -237,7 +237,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
 				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.Entities[0];\n" : "") +
+				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
 				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
 				var signCallback = (withEntityView ? "entityA, " : "") +
 				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
