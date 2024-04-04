@@ -89,7 +89,7 @@ scheduler.Run();
 
 struct MyPlugin : IPlugin
 {
-    public void Build(Scheuler scheduler)
+    public void Build(Scheduler scheduler)
     {
         scheduler.AddSystem((World world, Local<int> i32) => {
             // Do something
