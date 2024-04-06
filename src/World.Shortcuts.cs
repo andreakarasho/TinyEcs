@@ -36,59 +36,6 @@ public sealed partial class World
         array[record.Row & Archetype.CHUNK_THRESHOLD] = component;
 	}
 
-	public void Set<TAction, TTarget>(EcsID entity, TTarget? target = default)
-		where TAction : struct
-		where TTarget : struct
-	{
-		// TODO: deferred support
-
-		ref readonly var firstCmp = ref Component<TAction>();
-		ref readonly var secondCmp = ref Component<TTarget>();
-		ref readonly var linkedCmp = ref Component<(TAction, TTarget)>();
-		ref readonly var linkedCmpWildcard0 = ref Component<(Wildcard, TTarget)>();
-		ref readonly var linkedCmpWildcard1 = ref Component<(TAction, Wildcard)>();
-
-		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in linkedCmp);
-
-		if (raw != null)
-		{
-			ref var array = ref Unsafe.As<Array, TTarget[]>(ref raw);
-			array[record.Row & Archetype.CHUNK_THRESHOLD] = target!.Value;
-		}
-	}
-
-	public void Set<TAction>(EcsID entity, EcsID target)
-		where TAction : struct
-	{
-		// TODO: deferred support
-
-		ref readonly var firstCmp = ref Component<TAction>();
-
-		var pair = IDOp.Pair(firstCmp.ID, target);
-		var cmp = new ComponentInfo(pair, 0);
-		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in cmp);
-	}
-
-	public ref TTarget Get<TAction, TTarget>(EcsID entity)
-		where TAction : struct
-		where TTarget : struct
-	{
-		// TODO: deferred support
-
-		ref readonly var firstCmp = ref Component<TAction>();
-		ref readonly var secondCmp = ref Component<TTarget>();
-		ref readonly var linkedCmp = ref Component<(TAction, TTarget)>();
-		ref readonly var linkedCmpWildcard0 = ref Component<(Wildcard, TTarget)>();
-		ref readonly var linkedCmpWildcard1 = ref Component<(TAction, Wildcard)>();
-
-		ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(in linkedCmp);
-        ref var chunk = ref record.GetChunk();
-        return ref Unsafe.Add(ref chunk.GetReference<TTarget>(column), record.Row & Archetype.CHUNK_THRESHOLD);
-	}
-
     public void Unset<T>(EcsID entity) where T : struct
 	{
 		if (IsDeferred)
