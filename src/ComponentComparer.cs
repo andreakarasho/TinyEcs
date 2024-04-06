@@ -33,7 +33,7 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Co
 			{
 				var secondY = IDOp.GetPairSecond(b);
 
-				if (secondY == EcsID.Wildcard)
+				if (secondY == Wildcard.ID)
 				{
 					return 0;
 				}
@@ -42,7 +42,7 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Co
 			{
 				var firstY = IDOp.GetPairFirst(b);
 
-				if (firstY == EcsID.Wildcard)
+				if (firstY == Wildcard.ID)
 				{
 					return 0;
 				}

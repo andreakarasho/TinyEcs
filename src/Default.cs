@@ -12,3 +12,5 @@ public readonly struct ComponentInfo
         Size = size;
     }
 }
+
+public readonly struct Wildcard { internal static EcsID ID = Lookup.Component<Wildcard>.Value.ID; }

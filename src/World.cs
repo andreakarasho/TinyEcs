@@ -30,7 +30,7 @@ public sealed partial class World : IDisposable
 		OnPluginInitialization?.Invoke(this);
 
 
-		_ = EcsID.Wildcard;
+		_ = Entity<Wildcard>();
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;

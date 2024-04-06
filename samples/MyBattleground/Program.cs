@@ -21,7 +21,7 @@ ecs.Query<With<Networked>>()
 });
 
 ecs.OnEntityDeleted += en => {
-	var pp = IDOp.Pair(EcsID.Wildcard, en);
+	var pp = IDOp.Pair(ecs.Entity<Wildcard>(), en);
 	var isPair = IDOp.IsPair(pp);
 	var qry = ecs.QueryBuilder()
 		.With(pp)
@@ -46,6 +46,10 @@ ecs.Set<Likes>(carl, alice);
 
 // Get the 23 apples that Carl likes
 ref var apples = ref ecs.Get<Likes, Apples>(carl);
+ref var apples2 = ref ecs.Get<Apples>(carl);
+
+apples.Amount += 1;
+apples2.Amount += 1;
 
 // That person likes Alice
 ecs.Set<Likes>(thatPerson, alice);
