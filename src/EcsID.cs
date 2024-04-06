@@ -42,4 +42,9 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 	public readonly override bool Equals(object? obj) => obj is EcsID ent && Equals(ent);
 	public readonly override int GetHashCode() => Value.GetHashCode();
 	public readonly override string ToString() =>  Value.ToString();
+
+
+	public static readonly EcsID Wildcard = Lookup.Component<Wildcard>.Value.ID;  //0xFF_FF_FF_F;
 }
+
+public readonly struct Wildcard { }

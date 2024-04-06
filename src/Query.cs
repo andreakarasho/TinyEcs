@@ -38,39 +38,41 @@ public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 
 
 
-public interface IQueryConstruct
-{
-	IQueryBuild With<T>() where T : struct;
-	IQueryBuild With(EcsID id);
-	IQueryBuild Without<T>() where T : struct;
-	IQueryBuild Without(EcsID id);
-}
-
 public interface IQueryBuild
 {
 	Query Build();
 }
 
-public sealed class QueryBuilder : IQueryConstruct, IQueryBuild
+public sealed class QueryBuilder : IQueryBuild
 {
 	private readonly World _world;
 	private readonly HashSet<Term> _components = new();
 
 	internal QueryBuilder(World world) => _world = world;
 
-	public IQueryBuild With<T>() where T : struct
+	public QueryBuilder With<T>() where T : struct
 		=> With(_world.Component<T>().ID);
 
-	public IQueryBuild With(EcsID id)
+	public QueryBuilder With<TAction, TTarget>()
+		where TAction : struct
+		where TTarget : struct
+		=> With(IDOp.Pair(_world.Component<TAction>().ID, _world.Component<TTarget>().ID));
+
+	public QueryBuilder With(EcsID id)
 	{
 		_components.Add(Term.With(id));
 		return this;
 	}
 
-	public IQueryBuild Without<T>() where T : struct
+	public QueryBuilder Without<T>() where T : struct
 		=> Without(_world.Component<T>().ID);
 
-	public IQueryBuild Without(EcsID id)
+	public QueryBuilder Without<TAction, TTarget>()
+		where TAction : struct
+		where TTarget : struct
+		=> Without(IDOp.Pair(_world.Component<TAction>().ID, _world.Component<TTarget>().ID));
+
+	public QueryBuilder Without(EcsID id)
 	{
 		_components.Add(Term.Without(id));
 		return this;

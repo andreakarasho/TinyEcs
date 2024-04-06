@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-static class IDOp
+public static class IDOp
 {
 	public static void Toggle(ref EcsID id)
 	{

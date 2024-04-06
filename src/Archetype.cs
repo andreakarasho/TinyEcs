@@ -89,7 +89,14 @@ public sealed class Archetype
 
        	_lookup = new DictionarySlim<ulong, int>();
        	for (var i = 0; i < components.Length; ++i)
+		{
 			_lookup.GetOrAddValueRef(components[i].ID, out _) = i;
+
+			if (IDOp.IsPair(components[i].ID) && components[i].Size > 0)
+			{
+				_lookup.GetOrAddValueRef(IDOp.GetPairSecond(components[i].ID), out _) = i;
+			}
+		}
     }
 
     public World World => _world;
@@ -115,7 +122,12 @@ public sealed class Archetype
 		    chunk.Entities = new EntityView[CHUNK_SIZE];
 		    chunk.Components = new Array[Components.Length];
 		    for (var i = 0; i < Components.Length; ++i)
-			    chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_SIZE)! : null!;
+			{
+				var pairTarget = IDOp.IsPair(Components[i].ID) && Components[i].Size > 0;
+				var cmpId = pairTarget ? IDOp.GetPairSecond(Components[i].ID) : (EcsID)Components[i].ID;
+
+				chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(cmpId, CHUNK_SIZE)! : null!;
+			}
 	    }
 
 	    return ref chunk;
@@ -331,7 +343,8 @@ public sealed class Archetype
 	        ref readonly var current = ref currents[i];
 	        ref readonly var search = ref searching[j];
 
-            if (current.ID.CompareTo(search.ID) == 0)
+            //if (current.ID.CompareTo(search.ID) == 0)
+			if (_comparer.Compare(current.ID, search.ID) == 0)
             {
                 if (search.Op != TermOp.With)
                     return -1;

@@ -28,6 +28,9 @@ public sealed partial class World : IDisposable
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 		OnPluginInitialization?.Invoke(this);
+
+
+		_ = EcsID.Wildcard;
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
@@ -74,9 +77,12 @@ public sealed partial class World : IDisposable
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
-		EcsAssert.Panic(lookup.ID < _maxCmpId);
+		var isPair = IDOp.IsPair(lookup.ID);
 
-		if (!Exists(lookup.ID))
+		EcsAssert.Panic(isPair || lookup.ID < _maxCmpId,
+			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
+
+		if (!isPair && !Exists(lookup.ID))
 		{
 			var e = Entity(lookup.ID)
 				.Set(lookup);
@@ -347,7 +353,7 @@ public sealed partial class World : IDisposable
 		return query;
 	}
 
-    public IQueryConstruct QueryBuilder() => new QueryBuilder(this);
+    public QueryBuilder QueryBuilder() => new QueryBuilder(this);
 
 	internal Archetype? FindArchetype(ulong hash)
 	{
@@ -412,7 +418,8 @@ internal static class Lookup
 	private static ulong _index = 0;
 
 	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
-	private static readonly Dictionary<Type, ulong> _typesConvertion = new();
+	private static readonly Dictionary<Type, Term> _typesConvertion = new();
+	private static readonly Dictionary<Type, ComponentInfo> _componentInfos = new();
 
 	public static Array? GetArray(ulong hashcode, int count)
 	{
@@ -421,11 +428,11 @@ internal static class Lookup
 		return fn?.Invoke(count) ?? null;
 	}
 
-	private static ulong GetID(Type type)
+	private static Term GetTerm(Type type)
 	{
-		var ok = _typesConvertion.TryGetValue(type, out var id);
+		var ok = _typesConvertion.TryGetValue(type, out var term);
 		EcsAssert.Assert(ok, $"component not found with type {type}");
-		return id;
+		return term;
 	}
 
 	[SkipLocalsInit]
@@ -433,17 +440,42 @@ internal static class Lookup
 	{
         public static readonly int Size = GetSize();
         public static readonly string Name = typeof(T).ToString();
-        public static readonly ulong HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index)) - 0;
-
-		public static readonly ComponentInfo Value = new ComponentInfo(HashCode, Size);
+        public static readonly ulong HashCode;
+		public static readonly ComponentInfo Value;
 
 		static Component()
 		{
+			if (typeof(ITuple).IsAssignableFrom(typeof(T)))
+			{
+				var tuple = (ITuple)default(T);
+				EcsAssert.Panic(tuple.Length == 2, "Relations must be composed by 2 arguments only.");
+
+				var firstId = GetTerm(tuple[0]!.GetType());
+				var secondId = GetTerm(tuple[1]!.GetType());
+				var pairId = IDOp.Pair(firstId.ID, secondId.ID);
+
+				HashCode = pairId;
+				Size = 0;
+
+				if (_componentInfos.TryGetValue(tuple[1]!.GetType(), out var secondCmpInfo))
+				{
+					Size = secondCmpInfo.Size;
+				}
+			}
+			else
+			{
+				HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
+			}
+
+			Value = new ComponentInfo(HashCode, Size);
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
-			_typesConvertion.Add(typeof(T), Value.ID);
-			_typesConvertion.Add(typeof(With<T>), Value.ID);
-			_typesConvertion.Add(typeof(Not<T>), IDOp.Pair(0xFF_FF_FF_FF, Value.ID));
-			_typesConvertion.Add(typeof(Without<T>), IDOp.Pair(0xFF_FF_FF_FF, Value.ID));
+
+			_typesConvertion.Add(typeof(T), Term.With(Value.ID));
+			_typesConvertion.Add(typeof(With<T>), Term.With(Value.ID));
+			_typesConvertion.Add(typeof(Not<T>), Term.Without(Value.ID));
+			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
+
+			_componentInfos.Add(typeof(T), Value);
 		}
 
 		private static int GetSize()
@@ -475,25 +507,17 @@ internal static class Lookup
 				continue;
 			}
 
-			var id = GetID(type);
-			terms.Add(new Term()
-			{
-				ID = IDOp.GetPairSecond(id),
-				Op = IDOp.GetPairFirst(id) == 0 ? TermOp.With : TermOp.Without
-			});
+			var term = GetTerm(type);
+			terms.Add(term);
 		}
 	}
 
 	static void ParseType<T>(SortedSet<Term> terms) where T : struct
 	{
 		var type = typeof(T);
-		if (_typesConvertion.TryGetValue(type, out var id))
+		if (_typesConvertion.TryGetValue(type, out var term))
 		{
-			terms.Add(new Term()
-			{
-				ID = IDOp.GetPairSecond(id),
-				Op = IDOp.GetPairFirst(id) == 0 ? TermOp.With : TermOp.Without
-			});
+			terms.Add(term);
 
 			return;
 		}
@@ -505,7 +529,7 @@ internal static class Lookup
 			return;
 		}
 
-		EcsAssert.Assert(false, $"type not found {type}");
+		EcsAssert.Panic(false, $"Type {type} is not registered. Register {type} using world.Entity<T>() or assign it to an entity.");
 	}
 
     internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct

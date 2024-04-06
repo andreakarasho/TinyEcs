@@ -9,25 +9,78 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-ecs.Entity<PlayerTag>();
+ecs.Entity<PlayerTag>().Set<Networked>();
 ecs.Entity<Likes>();
+ecs.Entity<Dogs>();
 ecs.Entity<Position>();
-ecs.Entity<Velocity>();
+ecs.Entity<Velocity>().Set<Networked>();
+
+ecs.Query<With<Networked>>()
+	.Each((EntityView asd) => {
+	Console.WriteLine("networked entity {0}", asd.ID);
+});
+
+ecs.OnEntityDeleted += en => {
+	var pp = IDOp.Pair(EcsID.Wildcard, en);
+	var isPair = IDOp.IsPair(pp);
+	var qry = ecs.QueryBuilder()
+		.With(pp)
+		.Build();
+
+	qry.Each((EntityView child) => child.Delete());
+};
 
 
-var eee = ecs.Entity();
+var alice = ecs.Entity("Alice");
+var carl = ecs.Entity("Carl");
+var thatPerson = ecs.Entity("That person");
+
+// Carl likes 23 apples
+ecs.Set<Likes, Apples>(carl, new Apples() {Amount = 23});
+
+// Carl likes dogs
+ecs.Set<Likes, Dogs>(carl);
+
+// Carl likes Alice
+ecs.Set<Likes>(carl, alice);
+
+// Get the 23 apples that Carl likes
+ref var apples = ref ecs.Get<Likes, Apples>(carl);
+
+// That person likes Alice
+ecs.Set<Likes>(thatPerson, alice);
+
+// Gimme all entities that are liked by something
+ecs.Query<With<(Likes, Wildcard)>>()
+	.Each((EntityView entity) => {
+		Console.WriteLine("{0} Likes something", entity.Name());
+});
+
+// Gimme all entities that likes apples
+ecs.Query<With<(Likes, Apples)>>()
+	.Each((EntityView entity, ref Apples apples) => {
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Amount);
+});
+
+// Gemme all entities that have a relation with Apples
+ecs.Query<With<(Wildcard, Apples)>>()
+	.Each((EntityView entity, ref Apples apples) => {
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Amount);
+});
+
+
 ecs.Deferred(w => {
-	eee.Set<PlayerTag>()
+	carl.Set<PlayerTag>()
 		.Set(new Position() {X = 999});
 
-	eee.Get<Position>().X += 1;
+	carl.Get<Position>().X += 1;
 
 	w.Deferred(w => {
-		eee.Get<Position>().X += 1;
+		carl.Get<Position>().X += 1;
 	});
 });
 
-ref var ppp = ref eee.Get<Position>();
+ref var ppp = ref carl.Get<Position>();
 
 var scheduler = new Scheduler(ecs);
 
@@ -215,7 +268,7 @@ struct CustomEvent { }
 
 struct Likes;
 struct Dogs { }
-struct Apples { }
+struct Apples { public int Amount; }
 
 struct TestStr { public byte v; }
 
@@ -262,3 +315,5 @@ enum GameStates
 	InGame,
 	Paused
 }
+
+struct Networked { }
