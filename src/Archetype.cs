@@ -94,7 +94,7 @@ public sealed class Archetype
 
 			if (IDOp.IsPair(components[i].ID) && components[i].Size > 0)
 			{
-				_lookup.GetOrAddValueRef(IDOp.GetPairSecond(components[i].ID), out _) = i;
+				//_lookup.GetOrAddValueRef(IDOp.GetPairSecond(components[i].ID), out _) = i;
 			}
 		}
     }
@@ -124,7 +124,7 @@ public sealed class Archetype
 		    for (var i = 0; i < Components.Length; ++i)
 			{
 				var pairTarget = IDOp.IsPair(Components[i].ID) && Components[i].Size > 0;
-				var cmpId = pairTarget ? IDOp.GetPairSecond(Components[i].ID) : (EcsID)Components[i].ID;
+				var cmpId = /*pairTarget ? IDOp.GetPairSecond(Components[i].ID) :*/ (EcsID)Components[i].ID;
 
 				chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(cmpId, CHUNK_SIZE)! : null!;
 			}

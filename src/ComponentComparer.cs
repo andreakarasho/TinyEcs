@@ -47,6 +47,15 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Co
 					return 0;
 				}
 			}
+			// TODO: fix (*, *)
+			// else if (IDOp.GetPairFirst(a) == Wildcard.ID)
+			// {
+			// 	return 0;
+			// }
+			// else if (IDOp.GetPairSecond(b) == Wildcard.ID)
+			// {
+			// 	return 0;
+			// }
 		}
 
 		return a.CompareTo(b);

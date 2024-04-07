@@ -36,8 +36,8 @@ partial class World
 
 		if (raw != null)
 		{
-			ref var array = ref Unsafe.As<Array, TTarget[]>(ref raw);
-			array[record.Row & Archetype.CHUNK_THRESHOLD] = target!.Value;
+			ref var array = ref Unsafe.As<Array, (TAction, TTarget)[]>(ref raw);
+			array[record.Row & Archetype.CHUNK_THRESHOLD].Item2 = target!.Value;
 		}
 	}
 
@@ -68,7 +68,7 @@ partial class World
 		ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(in linkedCmp);
         ref var chunk = ref record.GetChunk();
-        return ref Unsafe.Add(ref chunk.GetReference<TTarget>(column), record.Row & Archetype.CHUNK_THRESHOLD);
+        return ref Unsafe.Add(ref chunk.GetReference<(TAction, TTarget)>(column), record.Row & Archetype.CHUNK_THRESHOLD).Item2;
 	}
 
 	public bool Has<TAction ,TTarget>(EcsID entity)

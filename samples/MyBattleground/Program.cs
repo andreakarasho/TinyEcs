@@ -37,6 +37,7 @@ var thatPerson = ecs.Entity("That person");
 
 // Carl likes 23 apples
 carl.Set<Likes, Apples>(new Apples() {Amount = 23});
+carl.Set(new Apples() { Amount = 9 });
 
 // Carl likes dogs
 carl.Set<Likes, Dogs>();
@@ -56,6 +57,11 @@ var id = carl.Target<Likes>();
 // That person likes Alice
 thatPerson.Set<Likes>(alice);
 
+// ecs.Query<With<(Wildcard, Wildcard)>>()
+// 	.Each((EntityView entity) => {
+// 		Console.WriteLine("{0}", entity.Name());
+// });
+
 // Gimme all entities that are liked by something
 ecs.Query<With<(Likes, Wildcard)>>()
 	.Each((EntityView entity) => {
@@ -68,10 +74,13 @@ ecs.Query<With<(Likes, Wildcard)>>()
 		} while ((targetId = entity.Target<Likes>(index++)) != 0);
 });
 
+var size = Unsafe.SizeOf<(Likes, Apples)>();
 // Gimme all entities that likes apples
 ecs.Query<With<(Likes, Apples)>>()
-	.Each((EntityView entity, ref Apples apples) => {
-		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Amount);
+	.Each((EntityView entity, ref (Likes, Apples) apples) => {
+		//ref var pp = ref Unsafe.As<(Likes, Apples), Apples>(ref apples);
+		apples.Item2.Amount += 1000;
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Item2.Amount);
 });
 
 // Gemme all entities that have a relation with Apples
@@ -79,6 +88,7 @@ ecs.Query<With<(Wildcard, Apples)>>()
 	.Each((EntityView entity, ref Apples apples) => {
 		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Amount);
 });
+
 
 
 ecs.Deferred(w => {

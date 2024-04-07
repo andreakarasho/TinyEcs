@@ -31,6 +31,7 @@ public sealed partial class World : IDisposable
 
 
 		_ = Entity<Wildcard>();
+		_ = Component<(Wildcard, Wildcard)>();
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
