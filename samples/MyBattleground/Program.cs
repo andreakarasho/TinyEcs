@@ -36,28 +36,36 @@ var carl = ecs.Entity("Carl");
 var thatPerson = ecs.Entity("That person");
 
 // Carl likes 23 apples
-ecs.Set<Likes, Apples>(carl, new Apples() {Amount = 23});
+carl.Set<Likes, Apples>(new Apples() {Amount = 23});
 
 // Carl likes dogs
-ecs.Set<Likes, Dogs>(carl);
+carl.Set<Likes, Dogs>();
 
 // Carl likes Alice
-ecs.Set<Likes>(carl, alice);
+carl.Set<Likes>(alice);
 
 // Get the 23 apples that Carl likes
-ref var apples = ref ecs.Get<Likes, Apples>(carl);
-ref var apples2 = ref ecs.Get<Apples>(carl);
+ref var apples = ref carl.Get<Likes, Apples>();
+ref var apples2 = ref carl.Get<Apples>();
 
 apples.Amount += 1;
 apples2.Amount += 1;
 
+var id = carl.Target<Likes>();
+
 // That person likes Alice
-ecs.Set<Likes>(thatPerson, alice);
+thatPerson.Set<Likes>(alice);
 
 // Gimme all entities that are liked by something
 ecs.Query<With<(Likes, Wildcard)>>()
 	.Each((EntityView entity) => {
-		Console.WriteLine("{0} Likes something", entity.Name());
+		var index = 0;
+		var targetId = entity.Target<Likes>(index++);
+
+		do
+		{
+			Console.WriteLine("{0} Likes {1}", entity.Name(), ecs.Entity(targetId).Name());
+		} while ((targetId = entity.Target<Likes>(index++)) != 0);
 });
 
 // Gimme all entities that likes apples
