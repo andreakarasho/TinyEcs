@@ -74,13 +74,11 @@ ecs.Query<With<(Likes, Wildcard)>>()
 		} while ((targetId = entity.Target<Likes>(index++)) != 0);
 });
 
-var size = Unsafe.SizeOf<(Likes, Apples)>();
 // Gimme all entities that likes apples
-ecs.Query<With<(Likes, Apples)>>()
-	.Each((EntityView entity, ref (Likes, Apples) apples) => {
-		//ref var pp = ref Unsafe.As<(Likes, Apples), Apples>(ref apples);
-		apples.Item2.Amount += 1000;
-		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Item2.Amount);
+ecs.Query<(With<(Likes, Apples)>, With<Apples>)>()
+	.Each((EntityView entity, ref (Likes, Apples) applesByRelation, ref Apples apples) => {
+		applesByRelation.Item2.Amount += 1000;
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), applesByRelation.Item2.Amount);
 });
 
 // Gemme all entities that have a relation with Apples
