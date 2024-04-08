@@ -139,7 +139,7 @@ public sealed partial class World
 
 			_operations.Enqueue(cmd);
 
-			return ref Unsafe.Unbox<T>(obj);
+			return ref Unsafe.Unbox<T>(obj!);
 		}
 
 		return ref Unsafe.NullRef<T>();
@@ -172,7 +172,7 @@ public sealed partial class World
 
 					break;
 				}
-					
+
 				case DeferredOpTypes.EditComponent:
 				{
 					if (_deferredSets.TryGetValue(op.Entity, out var dict) && dict.ContainsKey(op.ComponentInfo.ID))

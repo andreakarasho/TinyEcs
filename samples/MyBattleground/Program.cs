@@ -21,10 +21,8 @@ ecs.Query<With<Networked>>()
 });
 
 ecs.OnEntityDeleted += en => {
-	var pp = IDOp.Pair(ecs.Entity<Wildcard>(), en);
-	var isPair = IDOp.IsPair(pp);
 	var qry = ecs.QueryBuilder()
-		.With(pp)
+		.With<Wildcard>(en)
 		.Build();
 
 	qry.Each((EntityView child) => child.Delete());

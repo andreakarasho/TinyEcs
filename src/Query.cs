@@ -46,7 +46,7 @@ public interface IQueryBuild
 public sealed class QueryBuilder : IQueryBuild
 {
 	private readonly World _world;
-	private readonly HashSet<Term> _components = new();
+	private readonly SortedSet<Term> _components = new();
 
 	internal QueryBuilder(World world) => _world = world;
 
@@ -56,7 +56,14 @@ public sealed class QueryBuilder : IQueryBuild
 	public QueryBuilder With<TAction, TTarget>()
 		where TAction : struct
 		where TTarget : struct
-		=> With(IDOp.Pair(_world.Component<TAction>().ID, _world.Component<TTarget>().ID));
+		=> With(_world.Component<TAction>().ID, _world.Component<TTarget>().ID);
+
+	public QueryBuilder With<TAction>(EcsID target)
+		where TAction : struct
+		=> With(_world.Component<TAction>().ID, target);
+
+	public QueryBuilder With(EcsID action, EcsID target)
+		=> With(IDOp.Pair(action, target));
 
 	public QueryBuilder With(EcsID id)
 	{
@@ -71,6 +78,13 @@ public sealed class QueryBuilder : IQueryBuild
 		where TAction : struct
 		where TTarget : struct
 		=> Without(IDOp.Pair(_world.Component<TAction>().ID, _world.Component<TTarget>().ID));
+
+	public QueryBuilder Without<TAction>(EcsID target)
+		where TAction : struct
+		=> Without(_world.Component<TAction>().ID, target);
+
+	public QueryBuilder Without(EcsID action, EcsID target)
+		=> Without(IDOp.Pair(action, target));
 
 	public QueryBuilder Without(EcsID id)
 	{
