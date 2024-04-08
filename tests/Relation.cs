@@ -57,5 +57,22 @@
 			root.Get<Likes, Apples>().Amount += 10;
 			Assert.Equal(20, root.Get<Likes, Apples>().Amount);
 		}
+
+		[Fact]
+		public void Relation_GetTarget()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+			var cats = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			carl.Set(likes, cats);
+
+			Assert.Equal(dogs, carl.Target(likes, 0));
+			Assert.Equal(cats, carl.Target(likes, 1));
+		}
     }
 }

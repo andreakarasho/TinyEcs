@@ -421,7 +421,6 @@ internal static class Lookup
 	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, Term> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
-	private static readonly DictionarySlim<EcsID, ComponentInfo> _componentInfos = new();
 
 	public static Array? GetArray(ulong hashcode, int count)
 	{
@@ -435,11 +434,6 @@ internal static class Lookup
 		var ok = _typesConvertion.TryGetValue(type, out var term);
 		EcsAssert.Assert(ok, $"component not found with type {type}");
 		return term;
-	}
-
-	public static ref readonly ComponentInfo GetComponentInfo(EcsID id)
-	{
-		return ref _componentInfos.GetOrAddValueRef(id, out _);
 	}
 
 	[SkipLocalsInit]
@@ -483,7 +477,6 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
 
 			_componentInfosByType.Add(typeof(T), Value);
-			_componentInfos.GetOrAddValueRef(Value.ID, out _) = Value;
 		}
 
 		private static int GetSize()

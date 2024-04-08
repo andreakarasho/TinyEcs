@@ -66,8 +66,9 @@ partial class World
 			return;
 		}
 
+		var cmp = new ComponentInfo(pairId, 0);
 		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in Lookup.GetComponentInfo(pairId));
+		var raw = Set(ref record, in cmp);
 	}
 
 	public ref TTarget Get<TAction, TTarget>(EcsID entity)
@@ -106,10 +107,10 @@ partial class World
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-		ref readonly var linkedCmp = ref Lookup.GetComponentInfo(pairId);
+		var cmp = new ComponentInfo(pairId, 0);
 
-		return (Exists(entity) && Has(entity, in linkedCmp)) ||
-				(IsDeferred && HasDeferred(entity, linkedCmp.ID));
+		return (Exists(entity) && Has(entity, in cmp)) ||
+				(IsDeferred && HasDeferred(entity, cmp.ID));
 	}
 
 	public void Unset<TAction, TTarget>(EcsID entity)
@@ -144,8 +145,9 @@ partial class World
 			return;
 		}
 
+		var cmp = new ComponentInfo(pairId, 0);
 		ref var record = ref GetRecord(entity);
-		DetachComponent(ref record, in Lookup.GetComponentInfo(pairId));
+		DetachComponent(ref record, in cmp);
 	}
 
 	public EcsID Target<TAction>(EcsID entity, int index = 0)
