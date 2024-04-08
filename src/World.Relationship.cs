@@ -29,24 +29,10 @@ partial class World
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
 
-		if (IsDeferred)
-		{
-			if (target.HasValue)
-				SetDeferred<(TAction, TTarget)>(entity, (default(TAction), target.Value));
-			else
-				SetDeferred<(TAction, TTarget)>(entity);
-
-			return;
-		}
-
-		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in linkedCmp);
-
-		if (raw != null)
-		{
-			ref var array = ref Unsafe.As<Array, (TAction, TTarget)[]>(ref raw);
-			array[record.Row & Archetype.CHUNK_THRESHOLD].Item2 = target!.Value;
-		}
+		if (target.HasValue)
+			Set(entity, (default(TAction), target.Value));
+		else
+			Set<(TAction, TTarget)>(entity);
 	}
 
 	public void Set<TAction>(EcsID entity, EcsID target)
@@ -76,16 +62,7 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-
-		if (IsDeferred && !Has(entity, in linkedCmp))
-		{
-			return ref GetDeferred<(TAction, TTarget)>(entity).Item2;
-		}
-
-		ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(in linkedCmp);
-        ref var chunk = ref record.GetChunk();
-        return ref Unsafe.Add(ref chunk.GetReference<(TAction, TTarget)>(column), record.Row & Archetype.CHUNK_THRESHOLD).Item2;
+		return ref Get<(TAction, TTarget)>(entity).Item2;
 	}
 
 	public bool Has<TAction, TTarget>(EcsID entity)
@@ -93,9 +70,7 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-
-		return (Exists(entity) && Has(entity, in linkedCmp)) ||
-			(IsDeferred && HasDeferred<(TAction, TTarget)>(entity));
+		return Has<(TAction, TTarget)>(entity);
 	}
 
 	public bool Has<TAction>(EcsID entity, EcsID target)
@@ -119,14 +94,7 @@ partial class World
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
 
-		if (IsDeferred)
-		{
-			UnsetDeferred<(TAction, TTarget)>(entity);
-			return;
-		}
-
-		ref var record = ref GetRecord(entity);
-		DetachComponent(ref record, in linkedCmp);
+		Unset<(TAction, TTarget)>(entity);
 	}
 
 	public void Unset<TAction>(EcsID entity, EcsID target)

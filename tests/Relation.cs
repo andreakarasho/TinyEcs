@@ -37,6 +37,10 @@
 			carl.Set(likes, dogs);
 			carl.Unset(likes, dogs);
 			Assert.False(carl.Has(likes, dogs));
+
+			carl.Set<Likes, Dogs>();
+			carl.Unset<Likes, Dogs>();
+			Assert.False(carl.Has<Likes, Dogs>());
 		}
 
 		[Fact]
