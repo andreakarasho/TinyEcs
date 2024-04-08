@@ -1,86 +1,61 @@
-﻿// namespace TinyEcs.Tests
-// {
-//     public class Relation
-//     {
-// 		[Fact]
-// 		public void Attach_ChildOf()
-// 		{
-// 			using var ctx = new Context();
-//
-// 			var root = ctx.World.Entity();
-// 			var child = ctx.World.Entity();
-//
-// 			child.ChildOf(root);
-//
-// 			Assert.True(ctx.World.Has<EcsChildOf>(child, root));
-// 		}
-//
-// 		[Fact]
-// 		public void Detach_ChildOf()
-// 		{
-// 			using var ctx = new Context();
-//
-// 			var root = ctx.World.Entity();
-// 			var child = ctx.World.Entity();
-//
-// 			child.ChildOf(root);
-// 			child.Unset<EcsChildOf>(root);
-//
-// 			Assert.False(ctx.World.Has<EcsChildOf>(child, root));
-// 		}
-//
-// 		[Fact]
-// 		public void Count_Children()
-// 		{
-// 			using var ctx = new Context();
-//
-// 			var root = ctx.World.Entity();
-//
-// 			var count = 100;
-// 			for (int i = 0; i < count; ++i)
-// 				ctx.World.Entity().ChildOf(root);
-//
-// 			var done = 0;
-// 			root.Children(s => done += 1);
-//
-// 			Assert.Equal(count, done);
-// 		}
-//
-// 		[Fact]
-// 		public void Clear_Children()
-// 		{
-// 			using var ctx = new Context();
-//
-// 			var root = ctx.World.Entity();
-//
-// 			var count = 100;
-// 			for (int i = 0; i < count; ++i)
-// 				ctx.World.Entity().ChildOf(root);
-//
-// 			root.ClearChildren();
-// 			var done = 0;
-// 			root.Children(s => done += 1);
-//
-// 			Assert.Equal(0, done);
-// 		}
-//
-// 		[Fact]
-// 		public void Exclusive_Relation()
-// 		{
-// 			using var ctx = new Context();
-//
-// 			var root = ctx.World.Entity();
-// 			var platoonCmp = ctx.World.Entity().Set<EcsExclusive>();
-// 			var platoon1 = ctx.World.Entity();
-// 			var platoon2 = ctx.World.Entity();
-// 			var unit = ctx.World.Entity();
-//
-// 			unit.Set(platoonCmp, platoon1);
-// 			Assert.True(ctx.World.Has(unit.ID, platoonCmp.ID, platoon1.ID));
-//
-// 			unit.Set(platoonCmp, platoon2);
-// 			Assert.False(ctx.World.Has(unit.ID, platoonCmp.ID, platoon1.ID));
-// 			Assert.True(ctx.World.Has(unit.ID, platoonCmp.ID, platoon2.ID));
-// 		}
-//     }
-// }
+﻿namespace TinyEcs.Tests
+{
+    public class Relation
+    {
+		struct Likes { }
+		struct Dogs { }
+		struct Apples { public int Amount; }
+
+
+		[Fact]
+		public void Relation_SetComponentAndTag()
+		{
+			using var ctx = new Context();
+
+			var root = ctx.World.Entity();
+
+			root.Set<Likes, Dogs>();
+			Assert.True(root.Has<Likes, Dogs>());
+
+			root.Set<Likes, Apples>(new Apples() { Amount = 10 });
+			Assert.True(root.Has<Likes, Apples>());
+			Assert.Equal(10, root.Get<Likes, Apples>().Amount);
+
+			root.Get<Likes, Apples>().Amount += 10;
+			Assert.Equal(20, root.Get<Likes, Apples>().Amount);
+		}
+
+		[Fact]
+		public void Relation_Unset()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			carl.Unset(likes, dogs);
+			Assert.False(carl.Has(likes, dogs));
+		}
+
+		[Fact]
+		public void Relation_SetRelationAndComponent()
+		{
+			using var ctx = new Context();
+
+			var root = ctx.World.Entity();
+
+			root.Set(new Apples() { Amount = 99 });
+			Assert.True(root.Has<Apples>());
+			Assert.Equal(99, root.Get<Apples>().Amount);
+
+			root.Set<Likes, Apples>(new Apples() { Amount = 10 });
+			Assert.True(root.Has<Likes, Apples>());
+			Assert.Equal(10, root.Get<Likes, Apples>().Amount);
+
+			root.Get<Likes, Apples>().Amount += 10;
+			Assert.Equal(20, root.Get<Likes, Apples>().Amount);
+		}
+    }
+}
