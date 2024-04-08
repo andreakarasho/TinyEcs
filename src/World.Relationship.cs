@@ -27,9 +27,17 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		// TODO: deferred support
-
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+
+		if (IsDeferred)
+		{
+			if (target.HasValue)
+				SetDeferred<(TAction, TTarget)>(entity, (default(TAction), target.Value));
+			else
+				SetDeferred<(TAction, TTarget)>(entity);
+
+			return;
+		}
 
 		ref var record = ref GetRecord(entity);
 		var raw = Set(ref record, in linkedCmp);
@@ -49,21 +57,29 @@ partial class World
 
 	public void Set(EcsID entity, EcsID action, EcsID target)
 	{
-		// TODO: deferred support
+		var pairId = IDOp.Pair(action, target);
 
-		var pair = IDOp.Pair(action, target);
-		var cmp = new ComponentInfo(pair, 0);
+		if (IsDeferred)
+		{
+			SetDeferred(entity, pairId);
+
+			return;
+		}
+
 		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in cmp);
+		var raw = Set(ref record, in Lookup.GetComponentInfo(pairId));
 	}
 
 	public ref TTarget Get<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
 	{
-		// TODO: deferred support
-
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+
+		if (IsDeferred && !Has(entity, in linkedCmp))
+		{
+			return ref GetDeferred<(TAction, TTarget)>(entity).Item2;
+		}
 
 		ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(in linkedCmp);
@@ -71,46 +87,42 @@ partial class World
         return ref Unsafe.Add(ref chunk.GetReference<(TAction, TTarget)>(column), record.Row & Archetype.CHUNK_THRESHOLD).Item2;
 	}
 
-	public bool Has<TAction ,TTarget>(EcsID entity)
+	public bool Has<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
 	{
-		// TODO: deferred support
-
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
 
-		ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(in linkedCmp);
-		return column >= 0;
+		return (Exists(entity) && Has(entity, in linkedCmp)) ||
+			(IsDeferred && HasDeferred<(TAction, TTarget)>(entity));
 	}
 
 	public bool Has<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
-		// TODO: deferred support
-
 		return Has(entity, Component<TAction>().ID, target);
 	}
 
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
-		// TODO: deferred support
-
 		var pairId = IDOp.Pair(action, target);
-		var cmp = new ComponentInfo(pairId, 0);
+		ref readonly var linkedCmp = ref Lookup.GetComponentInfo(pairId);
 
-		ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(in cmp);
-		return column >= 0;
+		return (Exists(entity) && Has(entity, in linkedCmp)) ||
+				(IsDeferred && HasDeferred(entity, linkedCmp.ID));
 	}
 
 	public void Unset<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
 	{
-		// TODO: deferred support
-
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+
+		if (IsDeferred)
+		{
+			UnsetDeferred<(TAction, TTarget)>(entity);
+			return;
+		}
 
 		ref var record = ref GetRecord(entity);
 		DetachComponent(ref record, in linkedCmp);
@@ -124,13 +136,16 @@ partial class World
 
 	public void Unset(EcsID entity, EcsID action, EcsID target)
 	{
-		// TODO: deferred support
-
 		var pairId = IDOp.Pair(action, target);
-		var cmp = new ComponentInfo(pairId, 0);
+
+		if (IsDeferred)
+		{
+			UnsetDeferred(entity, pairId);
+			return;
+		}
 
 		ref var record = ref GetRecord(entity);
-		DetachComponent(ref record, in cmp);
+		DetachComponent(ref record, in Lookup.GetComponentInfo(pairId));
 	}
 
 	public EcsID Target<TAction>(EcsID entity, int index = 0)

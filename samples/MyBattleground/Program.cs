@@ -34,7 +34,11 @@ var carl = ecs.Entity("Carl");
 var thatPerson = ecs.Entity("That person");
 
 // Carl likes 23 apples
+ecs.BeginDeferred();
 carl.Set<Likes, Apples>(new Apples() {Amount = 23});
+ref var apples = ref carl.Get<Likes, Apples>();
+apples.Amount += 11;
+ecs.EndDeferred();
 carl.Set(new Apples() { Amount = 9 });
 
 // Carl likes dogs
@@ -44,7 +48,6 @@ carl.Set<Likes, Dogs>();
 carl.Set<Likes>(alice);
 
 // Get the 23 apples that Carl likes
-ref var apples = ref carl.Get<Likes, Apples>();
 ref var apples2 = ref carl.Get<Apples>();
 
 apples.Amount += 1;

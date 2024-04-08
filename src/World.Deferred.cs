@@ -39,7 +39,7 @@ public sealed partial class World
 		}
 	}
 
-	private bool StoreDeferredSet<T>(EcsID entity, T? component = null) where T : struct
+	private bool StoreDeferredSet(EcsID entity, EcsID id, object? component = null)
 	{
 		if (!_deferredSets.TryGetValue(entity, out var dict))
 		{
@@ -47,14 +47,16 @@ public sealed partial class World
 			_deferredSets[entity] = dict;
 		}
 
-		dict.GetOrAddValueRef(Component<T>().ID, out var exists) = component;
+		dict.GetOrAddValueRef(id, out var exists) = component;
 
 		return exists;
 	}
 
 	private void SetDeferred<T>(EcsID entity) where T : struct
 	{
-		if (StoreDeferredSet<T>(entity))
+		ref readonly var cmp = ref Component<T>();
+
+		if (StoreDeferredSet(entity, cmp.ID))
 			return;
 
 		var cmd = new DeferredOp()
@@ -62,7 +64,7 @@ public sealed partial class World
 			Op = DeferredOpTypes.SetComponent,
 			Entity = entity,
 			Data = null!,
-			ComponentInfo = Component<T>()
+			ComponentId = cmp.ID
 		};
 
 		_operations.Enqueue(cmd);
@@ -70,7 +72,9 @@ public sealed partial class World
 
 	private void SetDeferred<T>(EcsID entity, T component) where T : struct
 	{
-		if (StoreDeferredSet<T>(entity, component))
+		ref readonly var cmp = ref Component<T>();
+
+		if (StoreDeferredSet(entity, cmp.ID, component))
 			return;
 
 		var cmd = new DeferredOp()
@@ -78,7 +82,23 @@ public sealed partial class World
 			Op = DeferredOpTypes.SetComponent,
 			Entity = entity,
 			Data = component,
-			ComponentInfo = Component<T>()
+			ComponentId = cmp.ID
+		};
+
+		_operations.Enqueue(cmd);
+	}
+
+	private void SetDeferred(EcsID entity, EcsID id)
+	{
+		if (StoreDeferredSet(entity, id))
+			return;
+
+		var cmd = new DeferredOp()
+		{
+			Op = DeferredOpTypes.SetComponent,
+			Entity = entity,
+			Data = null!,
+			ComponentId = id
 		};
 
 		_operations.Enqueue(cmd);
@@ -92,7 +112,26 @@ public sealed partial class World
 		{
 			Op = DeferredOpTypes.UnsetComponent,
 			Entity = entity,
-			ComponentInfo = cmp
+			ComponentId = cmp.ID
+		};
+
+		_operations.Enqueue(cmd);
+
+		if (_deferredSets.TryGetValue(entity, out var dict))
+		{
+			dict.Remove(cmp.ID);
+		}
+	}
+
+	private void UnsetDeferred(EcsID entity, EcsID id)
+	{
+		ref readonly var cmp = ref Lookup.GetComponentInfo(id);
+
+		var cmd = new DeferredOp()
+		{
+			Op = DeferredOpTypes.UnsetComponent,
+			Entity = entity,
+			ComponentId = cmp.ID
 		};
 
 		_operations.Enqueue(cmd);
@@ -122,6 +161,9 @@ public sealed partial class World
 	private bool HasDeferred<T>(EcsID entity) where T : struct
 		=> _deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(Component<T>().ID);
 
+	private bool HasDeferred(EcsID entity, EcsID id)
+		=> _deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(id);
+
 	private ref T GetDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -133,7 +175,7 @@ public sealed partial class World
 			{
 				Op = DeferredOpTypes.EditComponent,
 				Entity = entity,
-				ComponentInfo = cmp,
+				ComponentId = cmp.ID,
 				Data = null!
 			};
 
@@ -159,7 +201,7 @@ public sealed partial class World
 				case DeferredOpTypes.SetComponent:
 				{
 					ref var record = ref GetRecord(op.Entity);
-					var array = Set(ref record, in op.ComponentInfo);
+					var array = Set(ref record, in Lookup.GetComponentInfo(op.ComponentId));
 					array?.SetValue(op.Data, record.Row & Archetype.CHUNK_THRESHOLD);
 
 					break;
@@ -168,19 +210,20 @@ public sealed partial class World
 				case DeferredOpTypes.UnsetComponent:
 				{
 					ref var record = ref GetRecord(op.Entity);
-					DetachComponent(ref record, in op.ComponentInfo);
+					DetachComponent(ref record, in Lookup.GetComponentInfo(op.ComponentId));
 
 					break;
 				}
 
 				case DeferredOpTypes.EditComponent:
 				{
-					if (_deferredSets.TryGetValue(op.Entity, out var dict) && dict.ContainsKey(op.ComponentInfo.ID))
+					ref readonly var cmp = ref Lookup.GetComponentInfo(op.ComponentId);
+					if (_deferredSets.TryGetValue(op.Entity, out var dict) && dict.ContainsKey(cmp.ID))
 					{
-						ref var obj = ref dict.GetOrAddValueRef(op.ComponentInfo.ID, out var _);
+						ref var obj = ref dict.GetOrAddValueRef(cmp.ID, out var _);
 
 						ref var record = ref GetRecord(op.Entity);
-						var array = Set(ref record, in op.ComponentInfo);
+						var array = Set(ref record, in cmp);
 						array?.SetValue(obj, record.Row & Archetype.CHUNK_THRESHOLD);
 					}
 
@@ -209,7 +252,7 @@ public sealed partial class World
 	{
 		public DeferredOpTypes Op;
 		public EcsID Entity;
-		public ComponentInfo ComponentInfo;
+		public EcsID ComponentId;
 		public object Data;
 	}
 
