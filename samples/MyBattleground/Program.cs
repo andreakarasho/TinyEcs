@@ -33,6 +33,24 @@ var alice = ecs.Entity("Alice");
 var carl = ecs.Entity("Carl");
 var thatPerson = ecs.Entity("That person");
 
+
+var likes = ecs.Entity("Likes").Set<Unique>();
+var palle = ecs.Entity("Palle");
+
+carl.Set(likes, palle);
+carl.Set(likes, alice);
+
+carl.AddChild(palle);
+carl.AddChild(alice);
+alice.AddChild(likes);
+
+// this remove (ChildOf, Carl) and get replaced with (ChildOf, ThatPerson)
+// because ChildOf is Unique
+thatPerson.AddChild(palle);
+
+
+var aa = ecs.Entity("Alice");
+
 // Carl likes 23 apples
 ecs.BeginDeferred();
 carl.Set<Likes, Apples>(new Apples() {Amount = 23});
@@ -55,13 +73,14 @@ apples2.Amount += 1;
 
 var id = carl.Target<Likes>();
 
+
 // That person likes Alice
 thatPerson.Set<Likes>(alice);
 
-// ecs.Query<With<(Wildcard, Wildcard)>>()
-// 	.Each((EntityView entity) => {
-// 		Console.WriteLine("{0}", entity.Name());
-// });
+ecs.Query<With<(Wildcard, Wildcard)>>()
+	.Each((EntityView entity) => {
+		Console.WriteLine("{0} (*,{1})", entity.Name(), entity.Target<Wildcard>());
+});
 
 // Gimme all entities that are liked by something
 ecs.Query<With<(Likes, Wildcard)>>()
@@ -256,7 +275,7 @@ while (true)
 		// });
 
 		ecs//.Query<(Position, Velocity)>()
-			.EachJob((ref Position pos, ref Velocity vel) => {
+			.Each((ref Position pos, ref Velocity vel) => {
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;
 			});

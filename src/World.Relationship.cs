@@ -23,16 +23,45 @@ partial class World
 		return ref linkedCmp;
 	}
 
+	private void CheckUnique(EcsID entity, EcsID action)
+	{
+		if (Exists(action))
+		{
+			// only one (A, *)
+			if (Entity(action).Has<Unique>())
+			{
+				var targetId = Target(entity, action);
+				if (targetId != 0)
+				{
+					Unset(entity, action, targetId);
+				}
+			}
+		}
+	}
+
+	private void CheckSymmetric(EcsID entity, EcsID action, EcsID target)
+	{
+		// (R, B) to A will also add (R, A) to B.
+		if (Exists(action) && Entity(action).Has<Symmetric>() && !Has(target, action, entity))
+		{
+			Set(target, action, entity);
+		}
+	}
+
 	public void Set<TAction, TTarget>(EcsID entity, TTarget? target = default)
 		where TAction : struct
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
 
+		CheckUnique(entity, Entity<TAction>());
+
 		if (target.HasValue)
 			Set(entity, (default(TAction), target.Value));
 		else
 			Set<(TAction, TTarget)>(entity);
+
+		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 	}
 
 	public void Set<TAction>(EcsID entity, EcsID target)
@@ -45,6 +74,8 @@ partial class World
 	{
 		var pairId = IDOp.Pair(action, target);
 
+		CheckUnique(entity, action);
+
 		if (IsDeferred)
 		{
 			SetDeferred(entity, pairId);
@@ -54,7 +85,9 @@ partial class World
 
 		var cmp = new ComponentInfo(pairId, 0);
 		ref var record = ref GetRecord(entity);
-		var raw = Set(ref record, in cmp);
+		_ = Set(ref record, in cmp);
+
+		CheckSymmetric(entity, action, target);
 	}
 
 	public ref TTarget Get<TAction, TTarget>(EcsID entity)
@@ -126,6 +159,12 @@ partial class World
 
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
+		// TODO:
+		if (IsDeferred)
+		{
+
+		}
+
 		ref var record = ref GetRecord(entity);
 
 		var found = 0;
@@ -221,5 +260,27 @@ public static class RelationshipEx
 	public static EcsID Target(this EntityView entity, EcsID action, int index = 0)
 	{
 		return entity.World.Target(entity.ID, action, index);
+	}
+}
+
+public static class ChildOfEx
+{
+	public static EntityView AddChild(this EntityView entity, EcsID child)
+	{
+		entity.World.Set<ChildOf>(child, entity.ID);
+		return entity;
+	}
+}
+
+public static class NameEx
+{
+	public static string Name(this EntityView entity)
+	{
+		if (entity.Has<Identifier, Name>())
+		{
+			return entity.Get<Identifier, Name>().Value;
+		}
+
+		return entity.ID.Value.ToString();
 	}
 }

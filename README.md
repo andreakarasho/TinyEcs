@@ -1,7 +1,6 @@
 # TinyEcs
 
 [![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
-[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)](https://www.nuget.org/packages/TinyEcs.Plugins)
 
 TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 

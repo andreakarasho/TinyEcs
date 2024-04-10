@@ -69,7 +69,7 @@ public sealed class Archetype
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    private readonly DictionarySlim<ulong, int> _lookup;
+    private readonly Dictionary<ulong, int> _lookup;
     private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
 
@@ -86,16 +86,11 @@ public sealed class Archetype
         Components = components;
 		Id = Hashing.Calculate(components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
+       	_lookup = new (/*_comparer*/);
 
-       	_lookup = new DictionarySlim<ulong, int>();
        	for (var i = 0; i < components.Length; ++i)
 		{
-			_lookup.GetOrAddValueRef(components[i].ID, out _) = i;
-
-			if (IDOp.IsPair(components[i].ID) && components[i].Size > 0)
-			{
-				//_lookup.GetOrAddValueRef(IDOp.GetPairSecond(components[i].ID), out _) = i;
-			}
+			_lookup.Add(components[i].ID, i);
 		}
     }
 
@@ -123,10 +118,7 @@ public sealed class Archetype
 		    chunk.Components = new Array[Components.Length];
 		    for (var i = 0; i < Components.Length; ++i)
 			{
-				var pairTarget = IDOp.IsPair(Components[i].ID) && Components[i].Size > 0;
-				var cmpId = /*pairTarget ? IDOp.GetPairSecond(Components[i].ID) :*/ (EcsID)Components[i].ID;
-
-				chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(cmpId, CHUNK_SIZE)! : null!;
+				chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_SIZE)! : null!;
 			}
 	    }
 

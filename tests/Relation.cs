@@ -78,5 +78,107 @@
 			Assert.Equal(dogs, carl.Target(likes, 0));
 			Assert.Equal(cats, carl.Target(likes, 1));
 		}
+
+		[Fact]
+		public void Relation_ComponentWildcard()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+			var cats = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			carl.Set(likes, cats);
+
+			using var query = ctx.World.QueryBuilder()
+				.With(likes, Wildcard.ID)
+				.Build();
+
+			Assert.Equal(1, query.Count());
+
+			query.Each((EntityView ent) => {
+				Assert.Equal(carl.ID, ent.ID);
+			});
+		}
+
+		[Fact]
+		public void Relation_WildcardComponent()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var bob = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+			var cats = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			bob.Set(likes, cats);
+
+			using var query = ctx.World.QueryBuilder()
+				.With(Wildcard.ID, dogs)
+				.Build();
+
+			Assert.Equal(1, query.Count());
+
+			query.Each((EntityView ent) => {
+				Assert.Equal(carl.ID, ent.ID);
+			});
+		}
+
+		[Fact]
+		public void Relation_WildcardWildcard()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var bob = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+			var cats = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			bob.Set(likes, cats);
+
+			using var query = ctx.World.QueryBuilder()
+				.With(Wildcard.ID, Wildcard.ID)
+				.Build();
+
+			Assert.Equal(2, query.Count());
+		}
+
+		[Fact]
+		public void Relation_Unique()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var likes = ctx.World.Entity().Set<Unique>();
+			var dogs = ctx.World.Entity();
+			var cats = ctx.World.Entity();
+
+			carl.Set(likes, dogs);
+			Assert.True(carl.Has(likes, dogs));
+
+			carl.Set(likes, cats);
+			Assert.False(carl.Has(likes, dogs));
+			Assert.True(carl.Has(likes, cats));
+		}
+
+		[Fact]
+		public void Relation_Symmetric()
+		{
+			using var ctx = new Context();
+
+			var carl = ctx.World.Entity();
+			var tradeWith = ctx.World.Entity().Set<Symmetric>();
+			var bob = ctx.World.Entity();
+
+			carl.Set(tradeWith, bob);
+			Assert.True(carl.Has(tradeWith, bob));
+			Assert.True(bob.Has(tradeWith, carl));
+		}
     }
 }

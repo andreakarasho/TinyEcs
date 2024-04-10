@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
@@ -14,6 +15,7 @@ public sealed partial class World : IDisposable
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
 	private readonly object _newEntLock = new object();
+	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
 
 
     public World(ulong maxComponentId = 256)
@@ -27,11 +29,16 @@ public sealed partial class World : IDisposable
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
+
+		_ = Entity<DoNotDelete>().Set<DoNotDelete>();
+		_ = Entity<Unique>().Set<DoNotDelete>();
+		_ = Entity<Wildcard>().Set<DoNotDelete>();
+		_ = Entity<(Wildcard, Wildcard)>();
+		_ = Entity<Identifier>().Set<DoNotDelete>();
+		_ = Entity<Name>().Set<DoNotDelete>();
+		_ = Entity<ChildOf>().Set<DoNotDelete>().Set<Unique>();
+
 		OnPluginInitialization?.Invoke(this);
-
-
-		_ = Entity<Wildcard>();
-		_ = Component<(Wildcard, Wildcard)>();
     }
 
 	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
@@ -54,6 +61,7 @@ public sealed partial class World : IDisposable
 			query.Dispose();
 
 		_cachedQueries.Clear();
+		_namesToEntity.Clear();
 
         Array.Clear(_archetypes, 0, _archetypeCount);
         _archetypeCount = 0;
@@ -137,6 +145,25 @@ public sealed partial class World : IDisposable
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
     }
 
+	public EntityView Entity(string name)
+	{
+		if (string.IsNullOrEmpty(name))
+			return EntityView.Invalid;
+
+		EntityView entity;
+		if (_namesToEntity.TryGetValue(name, out var id))
+		{
+			entity = Entity(id);
+		}
+		else
+		{
+			entity = Entity().Set<Identifier, Name>(new (name));
+			_namesToEntity[name] = entity;
+		}
+
+		return entity;
+	}
+
     internal EntityView NewEmpty(ulong id = 0)
     {
 		lock (_newEntLock)
@@ -175,6 +202,14 @@ public sealed partial class World : IDisposable
 		lock (_newEntLock)
 		{
 			OnEntityDeleted?.Invoke(new (this, entity));
+
+			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
+
+			if (Has<Identifier, Name>(entity))
+			{
+				var name = Get<Identifier, Name>(entity).Value;
+				_namesToEntity.Remove(name, out var _);
+			}
 
 			ref var record = ref GetRecord(entity);
 
