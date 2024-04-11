@@ -30,13 +30,22 @@ public sealed partial class World : IDisposable
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
-		_ = Entity<DoNotDelete>().Set<DoNotDelete>();
-		_ = Entity<Unique>().Set<DoNotDelete>();
-		_ = Entity<Wildcard>().Set<DoNotDelete>();
-		_ = Entity<(Wildcard, Wildcard)>();
-		_ = Entity<Identifier>().Set<DoNotDelete>();
-		_ = Entity<Name>().Set<DoNotDelete>();
-		_ = Entity<ChildOf>().Set<DoNotDelete>().Set<Unique>();
+		_ = Component<DoNotDelete>();
+		_ = Component<Unique>();
+		_ = Component<Wildcard>();
+		_ = Component<(Wildcard, Wildcard)>();
+		_ = Component<Identifier>();
+		_ = Component<Name>();
+		_ = Component<ChildOf>();
+
+
+		Entity<DoNotDelete>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(DoNotDelete)));
+		Entity<Unique>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Unique)));
+		Entity<Wildcard>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Wildcard)));
+		Entity<Identifier>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Identifier)));
+		Entity<Name>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Name)));
+		Entity<ChildOf>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(ChildOf))).Set<Unique>();
+
 
 		OnPluginInitialization?.Invoke(this);
     }
@@ -137,7 +146,22 @@ public sealed partial class World : IDisposable
 
 	public EntityView Entity<T>() where T : struct
 	{
-		return Entity(Component<T>().ID);
+		ref readonly var cmp = ref Component<T>();
+
+		var entity = Entity(cmp.ID);
+
+		var name = Lookup.Component<T>.Name;
+
+		if (_namesToEntity.TryGetValue(name, out var id))
+		{
+		}
+		else
+		{
+			_namesToEntity[name] = entity;
+			entity.Set<Identifier, Name>(new (name));
+		}
+
+		return entity;
 	}
 
     public EntityView Entity(EcsID id = default)
@@ -157,8 +181,9 @@ public sealed partial class World : IDisposable
 		}
 		else
 		{
-			entity = Entity().Set<Identifier, Name>(new (name));
+			entity = Entity();
 			_namesToEntity[name] = entity;
+			entity.Set<Identifier, Name>(new (name));
 		}
 
 		return entity;
@@ -241,7 +266,7 @@ public sealed partial class World : IDisposable
 
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
-		var newSign = oldArch.Components.Remove(cmp);
+		var newSign = oldArch.Components.Remove(cmp, _comparer);
 		EcsAssert.Assert(newSign.Length < oldArch.Components.Length, "bad");
 
 		ref var newArch = ref GetArchetype(newSign, true);
@@ -475,7 +500,7 @@ internal static class Lookup
     internal static class Component<T> where T : struct
 	{
         public static readonly int Size = GetSize();
-        public static readonly string Name = typeof(T).ToString();
+        public static readonly string Name = GetName();
         public static readonly ulong HashCode;
 		public static readonly ComponentInfo Value;
 
@@ -512,6 +537,17 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
 
 			_componentInfosByType.Add(typeof(T), Value);
+		}
+
+		private static string GetName()
+		{
+			var name = typeof(T).ToString();
+
+			var indexOf = name.LastIndexOf('.');
+			if (indexOf >= 0)
+				name = name[(indexOf + 1) ..];
+
+			return name;
 		}
 
 		private static int GetSize()

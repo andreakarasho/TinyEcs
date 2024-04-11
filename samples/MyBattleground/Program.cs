@@ -34,7 +34,7 @@ var carl = ecs.Entity("Carl");
 var thatPerson = ecs.Entity("That person");
 
 
-var likes = ecs.Entity("Likes").Set<Unique>();
+var likes = ecs.Entity("Likes");
 var palle = ecs.Entity("Palle");
 
 carl.Set(likes, palle);
@@ -52,11 +52,11 @@ thatPerson.AddChild(palle);
 var aa = ecs.Entity("Alice");
 
 // Carl likes 23 apples
-ecs.BeginDeferred();
+//ecs.BeginDeferred();
 carl.Set<Likes, Apples>(new Apples() {Amount = 23});
 ref var apples = ref carl.Get<Likes, Apples>();
 apples.Amount += 11;
-ecs.EndDeferred();
+//ecs.EndDeferred();
 carl.Set(new Apples() { Amount = 9 });
 
 // Carl likes dogs
@@ -79,19 +79,30 @@ thatPerson.Set<Likes>(alice);
 
 ecs.Query<With<(Wildcard, Wildcard)>>()
 	.Each((EntityView entity) => {
-		Console.WriteLine("{0} (*,{1})", entity.Name(), entity.Target<Wildcard>());
+		//Console.WriteLine("{0} ({1},{2})", entity.Name(), ecs.Entity(entity.Action<Wildcard>()).Name(), ecs.Entity(entity.Target<Wildcard>()).Name());
+
+		var index = 0;
+		EcsID actionId = 0;
+		EcsID targetId = 0;
+
+		while ((actionId = entity.Action<Wildcard>(index)) != 0 && (targetId = entity.Target<Wildcard>(index)) != 0)
+		{
+			Console.WriteLine("{0} ({1}, {2})", entity.Name(), ecs.Entity(actionId).Name(), ecs.Entity(targetId).Name());
+
+			index += 1;
+		}
 });
 
 // Gimme all entities that are liked by something
 ecs.Query<With<(Likes, Wildcard)>>()
 	.Each((EntityView entity) => {
 		var index = 0;
-		var targetId = entity.Target<Likes>(index++);
+		EcsID targetId = 0;
 
-		do
+		while ((targetId = entity.Target<Likes>(index++)) != 0)
 		{
 			Console.WriteLine("{0} Likes {1}", entity.Name(), ecs.Entity(targetId).Name());
-		} while ((targetId = entity.Target<Likes>(index++)) != 0);
+		}
 });
 
 // Gimme all entities that likes apples

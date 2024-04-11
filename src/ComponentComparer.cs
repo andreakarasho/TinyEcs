@@ -2,7 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<ComponentInfo>, IEqualityComparer<ulong>
+sealed class ComponentComparer :
+	IComparer<ulong>,
+	IComparer<Term>,
+	IComparer<ComponentInfo>,
+	IEqualityComparer<ulong>,
+	IEqualityComparer<ComponentInfo>
 {
 	private readonly World _world;
 
@@ -63,5 +68,15 @@ sealed class ComponentComparer : IComparer<ulong>, IComparer<Term>, IComparer<Co
 		return IDOp.IsPair(obj) &&
 			(IDOp.GetPairSecond(obj) == Wildcard.ID || IDOp.GetPairFirst(obj) == Wildcard.ID) ?
 			 0 : obj.GetHashCode();
+	}
+
+	public bool Equals(ComponentInfo x, ComponentInfo y)
+	{
+		return CompareTerms(_world, x.ID, y.ID) == 0;
+	}
+
+	public int GetHashCode([DisallowNull] ComponentInfo obj)
+	{
+		return obj.ID.GetHashCode();
 	}
 }

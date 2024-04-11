@@ -133,6 +133,12 @@
 		{
 			using var ctx = new Context();
 
+			var query = ctx.World.QueryBuilder()
+				.With(Wildcard.ID, Wildcard.ID)
+				.Build();
+
+			var initCount = query.Count();
+
 			var carl = ctx.World.Entity();
 			var bob = ctx.World.Entity();
 			var likes = ctx.World.Entity();
@@ -142,11 +148,13 @@
 			carl.Set(likes, dogs);
 			bob.Set(likes, cats);
 
-			using var query = ctx.World.QueryBuilder()
+			query = ctx.World.QueryBuilder()
 				.With(Wildcard.ID, Wildcard.ID)
 				.Build();
 
-			Assert.Equal(2, query.Count());
+			Assert.Equal(2 + initCount, query.Count());
+
+			query.Dispose();
 		}
 
 		[Fact]

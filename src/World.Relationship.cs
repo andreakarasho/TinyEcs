@@ -159,18 +159,13 @@ partial class World
 
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
-		// TODO:
-		if (IsDeferred)
-		{
-
-		}
-
 		ref var record = ref GetRecord(entity);
 
 		var found = 0;
+		var pair = IDOp.Pair(action, Wildcard.ID);
 		foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
 		{
-			if (!IDOp.IsPair(cmp.ID) || IDOp.GetPairFirst(cmp.ID) != action) continue;
+			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
 
 			if (found++ < index) continue;
 
@@ -179,6 +174,48 @@ partial class World
 
 		return EntityView.Invalid;
 	}
+
+	public EcsID Action<TTarget>(EcsID entity, int index = 0)
+		where TTarget : struct
+	{
+		return Action(entity, Component<TTarget>().ID, index);
+	}
+
+	public EcsID Action(EcsID entity, EcsID target, int index = 0)
+	{
+		ref var record = ref GetRecord(entity);
+
+		var found = 0;
+		var pair = IDOp.Pair(Wildcard.ID, target);
+		foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
+		{
+			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
+
+			if (found++ < index) continue;
+
+			return IDOp.GetPairFirst(cmp.ID);
+		}
+
+		return EntityView.Invalid;
+	}
+
+	// public (EcsID, EcsID) AnyPair(EcsID entity, int index = 0)
+	// {
+	// 	ref var record = ref GetRecord(entity);
+
+	// 	var found = 0;
+	// 	var pair = IDOp.Pair(Wildcard.ID, Wildcard.ID);
+	// 	foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
+	// 	{
+	// 		if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
+
+	// 		if (found++ < index) continue;
+
+	// 		return (IDOp.GetPairFirst(cmp.ID), IDOp.GetPairSecond(cmp.ID));
+	// 	}
+
+	// 	return (EntityView.Invalid, EntityView.Invalid);
+	// }
 }
 
 
@@ -260,6 +297,17 @@ public static class RelationshipEx
 	public static EcsID Target(this EntityView entity, EcsID action, int index = 0)
 	{
 		return entity.World.Target(entity.ID, action, index);
+	}
+
+	public static EcsID Action<TTarget>(this EntityView entity, int index = 0)
+		where TTarget : struct
+	{
+		return entity.World.Action<TTarget>(entity.ID, index);
+	}
+
+	public static EcsID Action(this EntityView entity, EcsID target, int index = 0)
+	{
+		return entity.World.Action(entity.ID, target, index);
 	}
 }
 
