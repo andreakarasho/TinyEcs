@@ -53,26 +53,6 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	// public readonly EntityView Set<TAction, TTarget>()
-	// 	where TAction : struct where TTarget : struct
-	// {
-	// 	World.Set(ID, World.Component<TAction>().ID, World.Component<TTarget>().ID);
-	// 	return this;
-	// }
-
-	// public readonly EntityView Set<TAction>(EcsID target)
-	// 	where TAction : struct
-	// {
-	// 	World.Set(ID, World.Component<TAction>().ID, target);
-	// 	return this;
-	// }
-
-	// public readonly EntityView Set(EcsID action, EcsID target)
-	// {
-	// 	World.Set(ID, action, target);
-	// 	return this;
-	// }
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset<T>() where T : struct
 	{

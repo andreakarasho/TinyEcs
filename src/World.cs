@@ -154,6 +154,7 @@ public sealed partial class World : IDisposable
 
 		if (_namesToEntity.TryGetValue(name, out var id))
 		{
+			EcsAssert.Panic(entity.ID == id, $"You must declare the component before the entity '{id}' named '{name}'");
 		}
 		else
 		{
@@ -261,7 +262,7 @@ public sealed partial class World : IDisposable
 	{
 		var oldArch = record.Archetype;
 
-		if (oldArch.GetComponentIndex(in cmp) < 0)
+		if (oldArch.GetComponentIndex(cmp.ID) < 0)
             return;
 
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
@@ -272,7 +273,7 @@ public sealed partial class World : IDisposable
 		ref var newArch = ref GetArchetype(newSign, true);
 		if (newArch == null)
 		{
-			newArch = _archRoot.InsertVertex(oldArch, newSign, in cmp);
+			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
 
 			if (_archetypeCount >= _archetypes.Length)
 				Array.Resize(ref _archetypes, _archetypes.Length * 2);
@@ -287,7 +288,7 @@ public sealed partial class World : IDisposable
 	{
 		var oldArch = record.Archetype;
 
-		var index = oldArch.GetComponentIndex(in cmp);
+		var index = oldArch.GetComponentIndex(cmp.ID);
 		if (index >= 0)
             return index;
 
@@ -297,7 +298,7 @@ public sealed partial class World : IDisposable
 		ref var newArch = ref GetArchetype(newSign, true);
 		if (newArch == null)
 		{
-			newArch = _archRoot.InsertVertex(oldArch, newSign, in cmp);
+			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
 
 			if (_archetypeCount >= _archetypes.Length)
 				Array.Resize(ref _archetypes, _archetypes.Length * 2);
@@ -345,10 +346,20 @@ public sealed partial class World : IDisposable
         return array;
     }
 
-    internal bool Has(EcsID entity, ref readonly ComponentInfo cmp)
+    internal bool Has(EcsID entity, EcsID id)
     {
-        ref var record = ref GetRecord(entity);
-        return record.Archetype.GetComponentIndex(in cmp) >= 0;
+		ref var record = ref GetRecord(entity);
+        var has = record.Archetype.GetComponentIndex(id) >= 0;
+		if (has) return true;
+
+		if (IDOp.IsPair(id))
+		{
+			(var a, var b) = FindPair(entity, id);
+
+			return a != 0 && b != 0;
+		}
+
+		return id == Wildcard.ID;
     }
 
     public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
@@ -481,12 +492,18 @@ internal static class Lookup
 	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, Term> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
+	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
 
 	public static Array? GetArray(ulong hashcode, int count)
 	{
 		var ok = _arrayCreator.TryGetValue(hashcode, out var fn);
 		EcsAssert.Assert(ok, $"component not found with hashcode {hashcode}");
 		return fn?.Invoke(count) ?? null;
+	}
+
+	public static ComponentInfo GetComponent(EcsID id)
+	{
+		return _components[id];
 	}
 
 	private static Term GetTerm(Type type)
@@ -537,6 +554,8 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
 
 			_componentInfosByType.Add(typeof(T), Value);
+
+			_components.Add(Value.ID, Value);
 		}
 
 		private static string GetName()

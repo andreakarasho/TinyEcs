@@ -61,6 +61,11 @@ carl.Set(new Apples() { Amount = 9 });
 
 // Carl likes dogs
 carl.Set<Likes, Dogs>();
+var h = carl.Has<Likes, PlayerTag>();
+var h2 = carl.Has(likes, alice);
+var h3 = carl.Has<Wildcard, Apples>();
+var h4 = carl.Has<Wildcard, Wildcard>();
+var h5 = carl.Has<Wildcard>();
 
 // Carl likes Alice
 carl.Set<Likes>(alice);

@@ -84,9 +84,10 @@ public sealed class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = components;
+		Pairs = components.Where(x => IDOp.IsPair(x.ID)).ToImmutableArray();
 		Id = Hashing.Calculate(components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
-       	_lookup = new (/*_comparer*/);
+       	_lookup = new Dictionary<ulong, int>(/*_comparer*/);
 
        	for (var i = 0; i < components.Length; ++i)
 		{
@@ -96,7 +97,7 @@ public sealed class Archetype
 
     public World World => _world;
     public int Count => _count;
-    public readonly ImmutableArray<ComponentInfo> Components;
+    public readonly ImmutableArray<ComponentInfo> Components, Pairs;
 	public ulong Id { get; }
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
@@ -131,15 +132,9 @@ public sealed class Archetype
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int GetComponentIndex(ref readonly ComponentInfo cmp)
-    {
-	    return GetComponentIndex(cmp.ID);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int GetComponentIndex(ulong id)
+    internal int GetComponentIndex(EcsID id)
 	{
-		return _lookup.TryGetValue(id, out var v) ? v : -1;
+		return _lookup.TryGetValue(id.Value, out var v) ? v : -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,11 +209,11 @@ public sealed class Archetype
 	internal Archetype InsertVertex(
         Archetype left,
         ImmutableArray<ComponentInfo> components,
-        ref readonly ComponentInfo component
+        EcsID id
     )
     {
         var vertex = new Archetype(left._world, components, _comparer);
-        MakeEdges(left, vertex, component.ID);
+        MakeEdges(left, vertex, id);
         InsertVertex(vertex);
         return vertex;
     }

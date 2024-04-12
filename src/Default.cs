@@ -3,10 +3,10 @@ namespace TinyEcs;
 [DebuggerDisplay("ID: {ID}, Size: {Size}")]
 public readonly struct ComponentInfo
 {
-    public readonly ulong ID;
+    public readonly EcsID ID;
     public readonly int Size;
 
-    internal ComponentInfo(ulong id, int size)
+    internal ComponentInfo(EcsID id, int size)
     {
         ID = id;
         Size = size;

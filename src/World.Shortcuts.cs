@@ -36,6 +36,19 @@ public sealed partial class World
         array[record.Row & Archetype.CHUNK_THRESHOLD] = component;
 	}
 
+	public void Set(EcsID entity, EcsID id)
+	{
+		if (IsDeferred)
+		{
+			SetDeferred(entity, id);
+
+			return;
+		}
+
+		var cmp = new ComponentInfo(id, 0);
+		_ = Set(ref GetRecord(entity), in cmp);
+	}
+
     public void Unset<T>(EcsID entity) where T : struct
 	{
 		if (IsDeferred)
@@ -48,20 +61,33 @@ public sealed partial class World
 		DetachComponent(ref GetRecord(entity), in Component<T>());
 	}
 
+	public void Unset(EcsID entity, EcsID id)
+	{
+		if (IsDeferred)
+		{
+			UnsetDeferred(entity, id);
+
+			return;
+		}
+
+		var cmp = new ComponentInfo(id, 0);
+		DetachComponent(ref GetRecord(entity), in cmp);
+	}
+
     public bool Has<T>(EcsID entity) where T : struct
-		=> (Exists(entity) && Has(entity, in Component<T>())) || (IsDeferred && HasDeferred<T>(entity));
+		=> (Exists(entity) && Has(entity, Component<T>().ID)) || (IsDeferred && HasDeferred<T>(entity));
 
     public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 
-		if (IsDeferred && !Has(entity, in cmp))
+		if (IsDeferred && !Has(entity, cmp.ID))
 		{
 			return ref GetDeferred<T>(entity);
 		}
 
         ref var record = ref GetRecord(entity);
-        var column = record.Archetype.GetComponentIndex(in cmp);
+        var column = record.Archetype.GetComponentIndex(cmp.ID);
         ref var chunk = ref record.GetChunk();
         return ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & Archetype.CHUNK_THRESHOLD);
     }
@@ -70,7 +96,7 @@ public sealed partial class World
     {
 		ref readonly var cmp = ref Component<T>();
 
-		if (IsDeferred && !Has(entity, in cmp))
+		if (IsDeferred && !Has(entity, cmp.ID))
 		{
 			return ref GetDeferred<T>(entity);
 		}

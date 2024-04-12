@@ -115,10 +115,9 @@ partial class World
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-		var cmp = new ComponentInfo(pairId, 0);
 
-		return (Exists(entity) && Has(entity, in cmp)) ||
-				(IsDeferred && HasDeferred(entity, cmp.ID));
+		return (Exists(entity) && Has(entity, pairId)) ||
+				(IsDeferred && HasDeferred(entity, pairId));
 	}
 
 	public void Unset<TAction, TTarget>(EcsID entity)
@@ -165,7 +164,7 @@ partial class World
 		var pair = IDOp.Pair(action, Wildcard.ID);
 		foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
 		{
-			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
+			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID.Value, pair) != 0) continue;
 
 			if (found++ < index) continue;
 
@@ -187,9 +186,9 @@ partial class World
 
 		var found = 0;
 		var pair = IDOp.Pair(Wildcard.ID, target);
-		foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
+		foreach (ref readonly var cmp in record.Archetype.Pairs.AsSpan())
 		{
-			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
+			if (_comparer.Compare(cmp.ID.Value, pair) != 0) continue;
 
 			if (found++ < index) continue;
 
@@ -199,23 +198,22 @@ partial class World
 		return EntityView.Invalid;
 	}
 
-	// public (EcsID, EcsID) AnyPair(EcsID entity, int index = 0)
-	// {
-	// 	ref var record = ref GetRecord(entity);
+	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
+	{
+		ref var record = ref GetRecord(entity);
 
-	// 	var found = 0;
-	// 	var pair = IDOp.Pair(Wildcard.ID, Wildcard.ID);
-	// 	foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
-	// 	{
-	// 		if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID, pair) != 0) continue;
+		var found = 0;
+		foreach (ref readonly var cmp in record.Archetype.Pairs.AsSpan())
+		{
+			if (_comparer.Compare(cmp.ID.Value, pair.Value) != 0) continue;
 
-	// 		if (found++ < index) continue;
+			if (found++ < index) continue;
 
-	// 		return (IDOp.GetPairFirst(cmp.ID), IDOp.GetPairSecond(cmp.ID));
-	// 	}
+			return (IDOp.GetPairFirst(cmp.ID), IDOp.GetPairSecond(cmp.ID));
+		}
 
-	// 	return (EntityView.Invalid, EntityView.Invalid);
-	// }
+		return (EntityView.Invalid, EntityView.Invalid);
+	}
 }
 
 

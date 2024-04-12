@@ -66,8 +66,8 @@ sealed class ComponentComparer :
 	public int GetHashCode([DisallowNull] ulong obj)
 	{
 		return IDOp.IsPair(obj) &&
-			(IDOp.GetPairSecond(obj) == Wildcard.ID || IDOp.GetPairFirst(obj) == Wildcard.ID) ?
-			 0 : obj.GetHashCode();
+			(IDOp.GetPairFirst(obj) == Wildcard.ID || IDOp.GetPairSecond(obj) == Wildcard.ID) ?
+			 1 : obj.GetHashCode();
 	}
 
 	public bool Equals(ComponentInfo x, ComponentInfo y)

@@ -311,5 +311,46 @@ namespace TinyEcs.Tests
 			Assert.Throws<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
 			Assert.Throws<Exception>(() => ctx.World.Delete(Wildcard.ID));
 		}
+
+		[Fact]
+		public void Declare_Tag_Before_NamedEntity()
+		{
+			using var ctx = new Context();
+
+			var b = ctx.World.Entity<NormalTag>();
+			var a = ctx.World.Entity("NormalTag");
+
+			Assert.Equal("NormalTag", a.Name());
+			Assert.Equal("NormalTag", b.Name());
+			Assert.True(a.ID == b.ID);
+		}
+
+		[Fact]
+		public void Declare_NamedEntity_Before_Tag()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity("NormalTag");
+
+			Assert.Throws<Exception>(() => ctx.World.Entity<NormalTag>());
+		}
+
+		[Fact]
+		public void Entity_Has_Wildcard()
+		{
+			using var ctx = new Context();
+
+			var main = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+
+			main.Set<BoolComponent>(new ());
+			main.Set(likes, dogs);
+
+			Assert.True(main.Has<Wildcard>());
+			Assert.True(main.Has(likes, Wildcard.ID));
+			Assert.True(main.Has(Wildcard.ID, dogs));
+			Assert.True(main.Has(Wildcard.ID, Wildcard.ID));
+		}
     }
 }
