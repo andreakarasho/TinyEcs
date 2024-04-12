@@ -14,7 +14,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = Set(ref GetRecord(entity), in cmp);
+        _ = Set(ref GetRecord(entity), cmp.ID, cmp.Size);
     }
 
     [SkipLocalsInit]
@@ -31,7 +31,7 @@ public sealed partial class World
 		}
 
         ref var record = ref GetRecord(entity);
-        var raw = Set(ref record, in cmp)!;
+        var raw = Set(ref record, cmp.ID, cmp.Size)!;
         ref var array = ref Unsafe.As<Array, T[]>(ref raw);
         array[record.Row & Archetype.CHUNK_THRESHOLD] = component;
 	}
@@ -45,8 +45,7 @@ public sealed partial class World
 			return;
 		}
 
-		var cmp = new ComponentInfo(id, 0);
-		_ = Set(ref GetRecord(entity), in cmp);
+		_ = Set(ref GetRecord(entity), id, 0);
 	}
 
     public void Unset<T>(EcsID entity) where T : struct
@@ -58,7 +57,7 @@ public sealed partial class World
 			return;
 		}
 
-		DetachComponent(ref GetRecord(entity), in Component<T>());
+		DetachComponent(ref GetRecord(entity), Component<T>().ID);
 	}
 
 	public void Unset(EcsID entity, EcsID id)
@@ -70,8 +69,7 @@ public sealed partial class World
 			return;
 		}
 
-		var cmp = new ComponentInfo(id, 0);
-		DetachComponent(ref GetRecord(entity), in cmp);
+		DetachComponent(ref GetRecord(entity), id);
 	}
 
     public bool Has<T>(EcsID entity) where T : struct

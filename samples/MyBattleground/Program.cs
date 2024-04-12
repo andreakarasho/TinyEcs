@@ -67,6 +67,10 @@ var h3 = carl.Has<Wildcard, Apples>();
 var h4 = carl.Has<Wildcard, Wildcard>();
 var h5 = carl.Has<Wildcard>();
 
+carl.Set(alice);
+var k = carl.Has(alice);
+
+
 // Carl likes Alice
 carl.Set<Likes>(alice);
 

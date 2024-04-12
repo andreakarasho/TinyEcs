@@ -91,7 +91,7 @@ public sealed partial class World : IDisposable
         }
     }
 
-    public ref readonly ComponentInfo Component<T>() where T : struct
+    internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
@@ -258,13 +258,14 @@ public sealed partial class World : IDisposable
         return _entities.Contains(entity);
     }
 
-	private void DetachComponent(ref EcsRecord record, ref readonly ComponentInfo cmp)
+	private void DetachComponent(ref EcsRecord record, EcsID id)
 	{
 		var oldArch = record.Archetype;
 
-		if (oldArch.GetComponentIndex(cmp.ID) < 0)
+		if (oldArch.GetComponentIndex(id) < 0)
             return;
 
+		var cmp = Lookup.GetComponent(id);
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
 		var newSign = oldArch.Components.Remove(cmp, _comparer);
@@ -284,14 +285,15 @@ public sealed partial class World : IDisposable
         record.Archetype = newArch!;
 	}
 
-	private int AttachComponent(ref EcsRecord record, ref readonly ComponentInfo cmp)
+	private int AttachComponent(ref EcsRecord record, EcsID id)
 	{
 		var oldArch = record.Archetype;
 
-		var index = oldArch.GetComponentIndex(cmp.ID);
+		var index = oldArch.GetComponentIndex(id);
 		if (index >= 0)
             return index;
 
+		var cmp = Lookup.GetComponent(id);
 		var newSign = oldArch.Components.Add(cmp).Sort(_comparer);
 		EcsAssert.Assert(newSign.Length > oldArch.Components.Length, "bad");
 
@@ -339,10 +341,10 @@ public sealed partial class World : IDisposable
 		return ref arch;
 	}
 
-	internal Array? Set(ref EcsRecord record, ref readonly ComponentInfo cmp)
+	internal Array? Set(ref EcsRecord record, EcsID id, int size)
     {
-        var column = AttachComponent(ref record, in cmp);
-        var array = cmp.Size > 0 ? record.GetChunk().RawComponentData(column) : null;
+        var column = AttachComponent(ref record, id);
+        var array = size > 0 ? record.GetChunk().RawComponentData(column) : null;
         return array;
     }
 
@@ -503,7 +505,14 @@ internal static class Lookup
 
 	public static ComponentInfo GetComponent(EcsID id)
 	{
-		return _components[id];
+		if (!_components.TryGetValue(id, out var cmp))
+		{
+			cmp = new ComponentInfo(id, 0);
+			// TODO: i don't want to store non generics stuff
+			//_components.Add(id, cmp);
+		}
+
+		return cmp;
 	}
 
 	private static Term GetTerm(Type type)

@@ -54,11 +54,33 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set(EcsID id)
+	{
+		World.Set(ID, id);
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set(EntityView id)
+		=> Set(id.ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset<T>() where T : struct
 	{
         World.Unset<T>(ID);
         return this;
     }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EntityView Unset(EcsID id)
+	{
+        World.Unset(ID, id);
+        return this;
+    }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EntityView Unset(EntityView id)
+		=> Unset(id.ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ReadOnlySpan<ComponentInfo> Type()
@@ -71,6 +93,14 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has<T>() where T : struct
 		=> World.Has<T>(ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Has(EcsID id)
+		=> World.Has(ID, id);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Has(EntityView id)
+		=> World.Has(ID, id.ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Delete()

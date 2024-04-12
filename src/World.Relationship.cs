@@ -83,9 +83,8 @@ partial class World
 			return;
 		}
 
-		var cmp = new ComponentInfo(pairId, 0);
 		ref var record = ref GetRecord(entity);
-		_ = Set(ref record, in cmp);
+		_ = Set(ref record, pairId, 0);
 
 		CheckSymmetric(entity, action, target);
 	}
@@ -145,9 +144,8 @@ partial class World
 			return;
 		}
 
-		var cmp = new ComponentInfo(pairId, 0);
 		ref var record = ref GetRecord(entity);
-		DetachComponent(ref record, in cmp);
+		DetachComponent(ref record, pairId);
 	}
 
 	public EcsID Target<TAction>(EcsID entity, int index = 0)
@@ -158,20 +156,8 @@ partial class World
 
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
-		ref var record = ref GetRecord(entity);
-
-		var found = 0;
 		var pair = IDOp.Pair(action, Wildcard.ID);
-		foreach (ref readonly var cmp in record.Archetype.Components.AsSpan())
-		{
-			if (!IDOp.IsPair(cmp.ID) || _comparer.Compare(cmp.ID.Value, pair) != 0) continue;
-
-			if (found++ < index) continue;
-
-			return IDOp.GetPairSecond(cmp.ID);
-		}
-
-		return EntityView.Invalid;
+		return FindPair(entity, pair, index).Item2;
 	}
 
 	public EcsID Action<TTarget>(EcsID entity, int index = 0)
@@ -182,20 +168,8 @@ partial class World
 
 	public EcsID Action(EcsID entity, EcsID target, int index = 0)
 	{
-		ref var record = ref GetRecord(entity);
-
-		var found = 0;
 		var pair = IDOp.Pair(Wildcard.ID, target);
-		foreach (ref readonly var cmp in record.Archetype.Pairs.AsSpan())
-		{
-			if (_comparer.Compare(cmp.ID.Value, pair) != 0) continue;
-
-			if (found++ < index) continue;
-
-			return IDOp.GetPairFirst(cmp.ID);
-		}
-
-		return EntityView.Invalid;
+		return FindPair(entity, pair, index).Item1;
 	}
 
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
