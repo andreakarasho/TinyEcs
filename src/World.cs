@@ -34,6 +34,7 @@ public sealed partial class World : IDisposable
 
 		_ = Component<DoNotDelete>();
 		_ = Component<Unique>();
+		_ = Component<Symmetric>();
 		_ = Component<Wildcard>();
 		_ = Component<(Wildcard, Wildcard)>();
 		_ = Component<Identifier>();
@@ -43,6 +44,7 @@ public sealed partial class World : IDisposable
 
 		Entity<DoNotDelete>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(DoNotDelete)));
 		Entity<Unique>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Unique)));
+		Entity<Unique>().Set<Symmetric>().Set<Identifier, Name>(new (nameof(Symmetric)));
 		Entity<Wildcard>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Wildcard)));
 		Entity<Identifier>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Identifier)));
 		Entity<Name>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Name)));
