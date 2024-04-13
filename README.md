@@ -136,12 +136,9 @@ foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>()) {
 world.EachJob<(A, B), (With<C>, Not<D>)>(...);
 ```
 
-## Plugins
-
-Enhance functionality with plugins like relationships, unique entities, and entity enable/disable.
+## Relationships
 
 ```csharp
-// Relationships
 var woodenChest = ecs.Entity()
     .Set<Container>();
 
@@ -150,21 +147,55 @@ var sword = ecs.Entity()
     .Set<Damage>(new Damage { Min = 5, Max = 15 })
     .Set<Amount>(new Amount { Value = 1 });
 
-woodenChest.AddChild<ChestContainer>(sword);
+// This will create a relationship like (Contents, sword)
+woodenChest.Set<Contents>(sword);
 
-ecs.Each<With<(ChestContainer, Wildcard)>>((EntityView entity) =>
+// Grab all relationships of type (Contents, *)
+ecs.Each<With<(Contents, Wildcard)>>((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
+```
 
-// Unique entities
-var dog = ecs.Entity("Khun").Set<Bau>();
+Assign entities to entities
 
-// Enable/Disable entities
-var ent = ecs.Entity();
-ent.Disable();
-ent.Enable();
-bool isEnabled = ent.IsEnabled();
+```csharp
+var bob = ecs.Entity("Bob");
+var likes = ecs.Entity("Likes");
+var pasta = ecs.Entity("Pasta");
 
-ecs.Each<Not<Disabled>>((EntityView entity) => Console.WriteLine("entity {0}", entity.ID));
+bob.Set(likes, pasta);
+```
+
+Use the pre-build `ChildOf` relationship.
+This tag is marked as 'Unique' which means cannot exists more than one `(ChildOf, *)` relation attached to the entity.
+
+```csharp
+var root0 = ecs.Entity();
+var root1 = ecs.Entity();
+var child = ecs.Entity();
+
+// Attach (ChildOf, root0) to child
+root0.AddChild(child);
+
+// Detach any (ChildOf, *) from child
+// and attach (Child=f, root1) to child
+root1.AddChild(child)
+```
+
+## Unique/Named entities
+
+```csharp
+// Get or create an entity named 'Khun' 🐶
+var dog = ecs.Entity("Khun")
+	.Set<Bau>();
+```
+
+```csharp
+// Retrive already-registered components using their names
+// [Might not work on NativeAOT!]
+var entity = ecs.Entity<Apples>();
+var applesComponent = ecs.Entity("Apples");
+
+struct Apples { public int Amount; }
 ```
 
 ## Credits
