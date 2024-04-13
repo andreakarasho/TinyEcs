@@ -25,7 +25,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\TinyEcs.csproj" />
-	<ProjectReference Include="..\plugins\TinyEcs.Plugins\TinyEcs.Plugins.csproj" />
   </ItemGroup>
 
 </Project>

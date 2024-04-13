@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
+using static TinyEcs.Defaults;
+
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable

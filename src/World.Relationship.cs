@@ -1,3 +1,5 @@
+using static TinyEcs.Defaults;
+
 namespace TinyEcs;
 
 partial class World

@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
+using static TinyEcs.Defaults;
+
 namespace TinyEcs;
 
 sealed class ComponentComparer :
