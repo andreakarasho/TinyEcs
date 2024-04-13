@@ -194,11 +194,7 @@ public sealed class Archetype
 		lastChunk.Count -= 1;
 		EcsAssert.Assert(lastChunk.Count >= 0, "Negative chunk count");
 
-		// Cleanup
-		var empty = EmptyChunks;
-		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
-		if (empty > half)
-			Array.Resize(ref _chunks, half);
+		TrimChunksIfNeeded();
 
         return removed;
 	}
@@ -258,12 +254,19 @@ public sealed class Archetype
 	internal void Clear()
     {
         _count = 0;
+		_edgesLeft.Clear();
+		_edgesRight.Clear();
+		TrimChunksIfNeeded();
     }
 
-    internal void Optimize()
-    {
-
-    }
+	private void TrimChunksIfNeeded()
+	{
+		// Cleanup
+		var empty = EmptyChunks;
+		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
+		if (empty > half)
+			Array.Resize(ref _chunks, half);
+	}
 
     private static void MakeEdges(Archetype left, Archetype right, ulong id)
     {

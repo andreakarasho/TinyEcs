@@ -76,21 +76,6 @@ public sealed partial class World : IDisposable
         _archetypeCount = 0;
     }
 
-    public void Optimize()
-    {
-        InternalOptimize(_archRoot);
-
-        static void InternalOptimize(Archetype root)
-        {
-            root.Optimize();
-
-            foreach (ref var edge in CollectionsMarshal.AsSpan(root._edgesRight))
-            {
-                InternalOptimize(edge.Archetype);
-            }
-        }
-    }
-
     internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
@@ -105,41 +90,6 @@ public sealed partial class World : IDisposable
 			var e = Entity(lookup.ID)
 				.Set(lookup);
 		}
-
-        // if (lookup.ID == 0 || !Exists(lookup.ID))
-        // {
-        //     EcsID id = lookup.ID;
-        //     if (id == 0 && _lastCompID < ECS_MAX_COMPONENT_FAST_ID)
-        //     {
-        //         do
-        //         {
-        //             id = _lastCompID++;
-        //         } while (Exists(id) && id <= ECS_MAX_COMPONENT_FAST_ID);
-        //     }
-
-        //     if (id >= ECS_MAX_COMPONENT_FAST_ID)
-        //     {
-        //         id = 0;
-        //     }
-
-        //     id = Entity(id);
-        //     var size = GetSize<T>();
-
-        //     lookup = new EcsComponent(id, size);
-        //     _ = CreateComponent(id, size);
-        // }
-
-        // if (Exists(lookup.ID))
-        // {
-        //     var name = Lookup.Entity<T>.Name;
-        //     ref var cmp2 = ref MemoryMarshal.GetReference(
-        //         MemoryMarshal.Cast<byte, EcsComponent>(
-        //             GetRaw(lookup.ID, EcsComponent, GetSize<EcsComponent>())
-        //         )
-        //     );
-
-        //     EcsAssert.Panic(cmp2.Size == lookup.Size, $"invalid size for {Lookup.Entity<T>.Name}");
-        // }
 
         return ref lookup;
     }
