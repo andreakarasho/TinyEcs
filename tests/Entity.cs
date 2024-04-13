@@ -332,7 +332,7 @@ namespace TinyEcs.Tests
 
 			var a = ctx.World.Entity("NormalTag");
 
-			Assert.Throws<Exception>(() => ctx.World.Entity<NormalTag>());
+			Assert.Equal(ctx.World.Entity<NormalTag>(), a);
 		}
 
 		[Fact]
