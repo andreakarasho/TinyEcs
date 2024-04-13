@@ -178,6 +178,19 @@ public partial class Query : IDisposable
 		return ref Unsafe.NullRef<T>();
 	}
 
+	public EntityView Single()
+	{
+		var count = Count();
+		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
+
+		foreach (var arch in this)
+		{
+			return arch.GetChunk(0).EntityAt(0);
+		}
+
+		return EntityView.Invalid;
+	}
+
 	public QueryInternal GetEnumerator()
 	{
 		Match();

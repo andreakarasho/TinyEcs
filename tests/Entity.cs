@@ -11,6 +11,7 @@ namespace TinyEcs.Tests
             using var ctx = new Context();
             var entity = ctx.World.Entity();
 
+			Assert.True(entity.ID != 0);
             Assert.True(entity.Exists());
         }
 
@@ -122,7 +123,7 @@ namespace TinyEcs.Tests
             ctx.World.Set(entity, new FloatComponent());
             ctx.World.Unset<FloatComponent>(entity);
 
-            Assert.True(!ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
         }
 
         [Fact]
@@ -229,9 +230,9 @@ namespace TinyEcs.Tests
             Assert.Equal(FLOAT_VALUE, ctx.World.Get<FloatComponent>(entity).Value);
 
             ctx.World.Unset<FloatComponent>(entity);
-            Assert.True(!ctx.World.Has<FloatComponent>(entity));
-            Assert.True(!ctx.World.Has<IntComponent>(entity));
-            Assert.True(!ctx.World.Has<LargeComponent>(entity));
+            Assert.False(ctx.World.Has<FloatComponent>(entity));
+            Assert.False(ctx.World.Has<IntComponent>(entity));
+            Assert.False(ctx.World.Has<LargeComponent>(entity));
         }
 
         [Theory]

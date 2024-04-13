@@ -1,4 +1,6 @@
-﻿namespace TinyEcs.Tests
+﻿using System.Runtime.InteropServices;
+
+namespace TinyEcs.Tests
 {
     public class QueryTest
     {
@@ -36,10 +38,7 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent)>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<(FloatComponent, IntComponent)>().Count();
 
             Assert.Equal(amount, done);
         }
@@ -60,10 +59,7 @@
                 ctx.World.Set(e, new BoolComponent());
             }
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent, BoolComponent)>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<(FloatComponent, IntComponent, BoolComponent)>().Count();
 
             Assert.Equal(amount, done);
         }
@@ -84,10 +80,7 @@
                 ctx.World.Set(e, new BoolComponent());
             }
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>().Count();
 
             Assert.Equal(0, done);
         }
@@ -107,10 +100,7 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<(FloatComponent, IntComponent), Not<BoolComponent>>().Count();
 
             Assert.Equal(amount, done);
         }
@@ -130,10 +120,7 @@
                 ctx.World.Set(e, new IntComponent());
             }
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<FloatComponent, (Not<IntComponent>, Not<IntComponent>)>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<FloatComponent, (Not<IntComponent>, Not<IntComponent>)>().Count();
 
             Assert.Equal(0, done);
         }
@@ -166,12 +153,38 @@
             ctx.World.Set(e4, new BoolComponent());
             ctx.World.Set<NormalTag>(e4);
 
-            var done = 0;
-            foreach (var arch in ctx.World.Query<(FloatComponent, IntComponent), (Not<BoolComponent>, Not<NormalTag>)>())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+            var done = ctx.World.Query<(FloatComponent, IntComponent), (Not<BoolComponent>, Not<NormalTag>)>().Count();
 
             Assert.Equal(good, done);
         }
+
+		[Fact]
+		public void Query_Single()
+		{
+			using var ctx = new Context();
+
+			var singleton = ctx.World.Entity()
+				.Set(new FloatComponent())
+				.Set(new IntComponent())
+				.Set<NormalTag>();
+
+			var other = ctx.World.Entity()
+				.Set(new FloatComponent())
+				.Set(new IntComponent());
+
+			var result = ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>()
+				.Single();
+
+			Assert.Equal(singleton.ID, result.ID);
+
+			var singleton2 = ctx.World.Entity()
+				.Set(new FloatComponent())
+				.Set(new IntComponent())
+				.Set<NormalTag>();
+
+			Assert.Throws<Exception>(() =>
+				ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
+			);
+		}
     }
 }
