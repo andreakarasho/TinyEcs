@@ -69,7 +69,7 @@ public sealed class Archetype
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
-    private readonly DictionarySlim<ulong, int> _lookup;
+    private readonly Dictionary<ulong, int> _lookup;
     private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
 
@@ -84,17 +84,20 @@ public sealed class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = components;
+		Pairs = components.Where(x => IDOp.IsPair(x.ID)).ToImmutableArray();
 		Id = Hashing.Calculate(components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
+       	_lookup = new Dictionary<ulong, int>(/*_comparer*/);
 
-       	_lookup = new DictionarySlim<ulong, int>();
        	for (var i = 0; i < components.Length; ++i)
-			_lookup.GetOrAddValueRef(components[i].ID, out _) = i;
+		{
+			_lookup.Add(components[i].ID, i);
+		}
     }
 
     public World World => _world;
     public int Count => _count;
-    public readonly ImmutableArray<ComponentInfo> Components;
+    public readonly ImmutableArray<ComponentInfo> Components, Pairs;
 	public ulong Id { get; }
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
@@ -115,7 +118,9 @@ public sealed class Archetype
 		    chunk.Entities = new EntityView[CHUNK_SIZE];
 		    chunk.Components = new Array[Components.Length];
 		    for (var i = 0; i < Components.Length; ++i)
-			    chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_SIZE)! : null!;
+			{
+				chunk.Components[i] = Components[i].Size > 0 ? Lookup.GetArray(Components[i].ID, CHUNK_SIZE)! : null!;
+			}
 	    }
 
 	    return ref chunk;
@@ -127,15 +132,9 @@ public sealed class Archetype
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int GetComponentIndex(ref readonly ComponentInfo cmp)
-    {
-	    return GetComponentIndex(cmp.ID);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int GetComponentIndex(ulong id)
+    internal int GetComponentIndex(EcsID id)
 	{
-		return _lookup.TryGetValue(id, out var v) ? v : -1;
+		return _lookup.TryGetValue(id.Value, out var v) ? v : -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -195,11 +194,7 @@ public sealed class Archetype
 		lastChunk.Count -= 1;
 		EcsAssert.Assert(lastChunk.Count >= 0, "Negative chunk count");
 
-		// Cleanup
-		var empty = EmptyChunks;
-		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
-		if (empty > half)
-			Array.Resize(ref _chunks, half);
+		TrimChunksIfNeeded();
 
         return removed;
 	}
@@ -210,11 +205,11 @@ public sealed class Archetype
 	internal Archetype InsertVertex(
         Archetype left,
         ImmutableArray<ComponentInfo> components,
-        ref readonly ComponentInfo component
+        EcsID id
     )
     {
         var vertex = new Archetype(left._world, components, _comparer);
-        MakeEdges(left, vertex, component.ID);
+        MakeEdges(left, vertex, id);
         InsertVertex(vertex);
         return vertex;
     }
@@ -259,12 +254,19 @@ public sealed class Archetype
 	internal void Clear()
     {
         _count = 0;
+		_edgesLeft.Clear();
+		_edgesRight.Clear();
+		TrimChunksIfNeeded();
     }
 
-    internal void Optimize()
-    {
-
-    }
+	private void TrimChunksIfNeeded()
+	{
+		// Cleanup
+		var empty = EmptyChunks;
+		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
+		if (empty > half)
+			Array.Resize(ref _chunks, half);
+	}
 
     private static void MakeEdges(Archetype left, Archetype right, ulong id)
     {
@@ -331,7 +333,7 @@ public sealed class Archetype
 	        ref readonly var current = ref currents[i];
 	        ref readonly var search = ref searching[j];
 
-            if (current.ID.CompareTo(search.ID) == 0)
+			if (_comparer.Compare(current.ID, search.ID) == 0)
             {
                 if (search.Op != TermOp.With)
                     return -1;

@@ -264,7 +264,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 								for (var i = 0; i < chunks.Length; ++i)
 								{{
 									System.Threading.ThreadPool.QueueUserWorkItem(state => {{
-										ref var index = ref Unsafe.Unbox<int>(state);
+										ref var index = ref Unsafe.Unbox<int>(state!);
 										ref readonly var chunk = ref chunks.Span[index];
 
 										{fieldList}
@@ -359,16 +359,16 @@ internal sealed class CodeFormatter : CSharpSyntaxRewriter
 
 	public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
 	{
-		return base.VisitNamespaceDeclaration(FormatMembers(node, node.Members));
+		return base.VisitNamespaceDeclaration(FormatMembers(node, node.Members))!;
 	}
 
 	public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
 	{
-		return base.VisitClassDeclaration(FormatMembers(node, node.Members));
+		return base.VisitClassDeclaration(FormatMembers(node, node.Members))!;
 	}
 
 	public override SyntaxNode VisitStructDeclaration(StructDeclarationSyntax node)
 	{
-		return base.VisitStructDeclaration(FormatMembers(node, node.Members));
+		return base.VisitStructDeclaration(FormatMembers(node, node.Members))!;
 	}
 }

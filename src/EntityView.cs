@@ -53,25 +53,16 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	// public readonly EntityView Set<TAction, TTarget>()
-	// 	where TAction : struct where TTarget : struct
-	// {
-	// 	World.Set(ID, World.Component<TAction>().ID, World.Component<TTarget>().ID);
-	// 	return this;
-	// }
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set(EcsID id)
+	{
+		World.Set(ID, id);
+		return this;
+	}
 
-	// public readonly EntityView Set<TAction>(EcsID target)
-	// 	where TAction : struct
-	// {
-	// 	World.Set(ID, World.Component<TAction>().ID, target);
-	// 	return this;
-	// }
-
-	// public readonly EntityView Set(EcsID action, EcsID target)
-	// {
-	// 	World.Set(ID, action, target);
-	// 	return this;
-	// }
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly EntityView Set(EntityView id)
+		=> Set(id.ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset<T>() where T : struct
@@ -79,6 +70,17 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         World.Unset<T>(ID);
         return this;
     }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EntityView Unset(EcsID id)
+	{
+        World.Unset(ID, id);
+        return this;
+    }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly EntityView Unset(EntityView id)
+		=> Unset(id.ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ReadOnlySpan<ComponentInfo> Type()
@@ -91,6 +93,14 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has<T>() where T : struct
 		=> World.Has<T>(ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Has(EcsID id)
+		=> World.Has(ID, id);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly bool Has(EntityView id)
+		=> World.Has(ID, id.ID);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Delete()

@@ -9,25 +9,138 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-ecs.Entity<PlayerTag>();
+ecs.Entity<PlayerTag>().Set<Networked>();
 ecs.Entity<Likes>();
+ecs.Entity<Dogs>();
 ecs.Entity<Position>();
-ecs.Entity<Velocity>();
+ecs.Entity<Velocity>().Set<Networked>();
+
+ecs.Query<With<Networked>>()
+	.Each((EntityView asd) => {
+	Console.WriteLine("networked entity {0}", asd.ID);
+});
+
+ecs.OnEntityDeleted += en => {
+	var qry = ecs.QueryBuilder()
+		.With<Defaults.Wildcard>(en)
+		.Build();
+
+	qry.Each((EntityView child) => child.Delete());
+};
 
 
-var eee = ecs.Entity();
+var alice = ecs.Entity("Alice");
+var carl = ecs.Entity("Carl");
+var thatPerson = ecs.Entity("That person");
+
+
+var likes = ecs.Entity("Likes");
+var palle = ecs.Entity("Palle");
+
+carl.Set(likes, palle);
+carl.Set(likes, alice);
+
+carl.AddChild(palle);
+carl.AddChild(alice);
+alice.AddChild(likes);
+
+// this remove (ChildOf, Carl) and get replaced with (ChildOf, ThatPerson)
+// because ChildOf is Unique
+thatPerson.AddChild(palle);
+
+
+var aa = ecs.Entity("Alice");
+
+// Carl likes 23 apples
+//ecs.BeginDeferred();
+carl.Set<Likes, Apples>(new Apples() {Amount = 23});
+ref var apples = ref carl.Get<Likes, Apples>();
+apples.Amount += 11;
+//ecs.EndDeferred();
+carl.Set(new Apples() { Amount = 9 });
+
+// Carl likes dogs
+carl.Set<Likes, Dogs>();
+var h = carl.Has<Likes, PlayerTag>();
+var h2 = carl.Has(likes, alice);
+var h3 = carl.Has<Defaults.Wildcard, Apples>();
+var h4 = carl.Has<Defaults.Wildcard, Defaults.Wildcard>();
+var h5 = carl.Has<Defaults.Wildcard>();
+
+carl.Set(alice);
+var k = carl.Has(alice);
+
+
+// Carl likes Alice
+carl.Set<Likes>(alice);
+
+// Get the 23 apples that Carl likes
+ref var apples2 = ref carl.Get<Apples>();
+
+apples.Amount += 1;
+apples2.Amount += 1;
+
+var id = carl.Target<Likes>();
+
+
+// That person likes Alice
+thatPerson.Set<Likes>(alice);
+
+ecs.Query<With<(Defaults.Wildcard, Defaults.Wildcard)>>()
+	.Each((EntityView entity) => {
+		//Console.WriteLine("{0} ({1},{2})", entity.Name(), ecs.Entity(entity.Action<Wildcard>()).Name(), ecs.Entity(entity.Target<Wildcard>()).Name());
+
+		var index = 0;
+		EcsID actionId = 0;
+		EcsID targetId = 0;
+
+		while ((actionId = entity.Action<Defaults.Wildcard>(index)) != 0 && (targetId = entity.Target<Defaults.Wildcard>(index)) != 0)
+		{
+			Console.WriteLine("{0} ({1}, {2})", entity.Name(), ecs.Entity(actionId).Name(), ecs.Entity(targetId).Name());
+
+			index += 1;
+		}
+});
+
+// Gimme all entities that are liked by something
+ecs.Query<With<(Likes, Defaults.Wildcard)>>()
+	.Each((EntityView entity) => {
+		var index = 0;
+		EcsID targetId = 0;
+
+		while ((targetId = entity.Target<Likes>(index++)) != 0)
+		{
+			Console.WriteLine("{0} Likes {1}", entity.Name(), ecs.Entity(targetId).Name());
+		}
+});
+
+// Gimme all entities that likes apples
+ecs.Query<(With<(Likes, Apples)>, With<Apples>)>()
+	.Each((EntityView entity, ref (Likes, Apples) applesByRelation, ref Apples apples) => {
+		applesByRelation.Item2.Amount += 1000;
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), applesByRelation.Item2.Amount);
+});
+
+// Gemme all entities that have a relation with Apples
+ecs.Query<With<(Defaults.Wildcard, Apples)>>()
+	.Each((EntityView entity, ref Apples apples) => {
+		Console.WriteLine("{0} Likes {1} Apples", entity.Name(), apples.Amount);
+});
+
+
+
 ecs.Deferred(w => {
-	eee.Set<PlayerTag>()
+	carl.Set<PlayerTag>()
 		.Set(new Position() {X = 999});
 
-	eee.Get<Position>().X += 1;
+	carl.Get<Position>().X += 1;
 
 	w.Deferred(w => {
-		eee.Get<Position>().X += 1;
+		carl.Get<Position>().X += 1;
 	});
 });
 
-ref var ppp = ref eee.Get<Position>();
+ref var ppp = ref carl.Get<Position>();
 
 var scheduler = new Scheduler(ecs);
 
@@ -112,11 +225,11 @@ scheduler.AddSystem((World world) => {
 	Console.WriteLine("entities in world {0}", world.EntityCount);
 });
 scheduler.AddSystem((ComplexQuery complex) => {
-	complex.Q0.Each((ref Position pos, ref Velocity vel) => {
+	complex.Q0!.Each((ref Position pos, ref Velocity vel) => {
 
 	});
 
-	complex.Q1.Each((ref Position pos, ref Velocity vel) => {
+	complex.Q1!.Each((ref Position pos, ref Velocity vel) => {
 
 	});
 });
@@ -182,7 +295,7 @@ while (true)
 		// });
 
 		ecs//.Query<(Position, Velocity)>()
-			.EachJob((ref Position pos, ref Velocity vel) => {
+			.Each((ref Position pos, ref Velocity vel) => {
 				pos.X *= vel.X;
 				pos.Y *= vel.Y;
 			});
@@ -215,7 +328,7 @@ struct CustomEvent { }
 
 struct Likes;
 struct Dogs { }
-struct Apples { }
+struct Apples { public int Amount; }
 
 struct TestStr { public byte v; }
 
@@ -230,8 +343,8 @@ struct ChunkTile;
 
 class ComplexQuery : ISystemParam
 {
-	public Query<(Position, Velocity)> Q0;
-	public Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)> Q1;
+	public Query<(Position, Velocity)>? Q0;
+	public Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>? Q1;
 
 	void ISystemParam.New(object arguments)
 	{
@@ -262,3 +375,5 @@ enum GameStates
 	InGame,
 	Paused
 }
+
+struct Networked { }

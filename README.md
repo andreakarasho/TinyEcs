@@ -1,7 +1,6 @@
 # TinyEcs
 
 [![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
-[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Plugins?label=TinyEcs.Plugins)](https://www.nuget.org/packages/TinyEcs.Plugins)
 
 TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
@@ -36,27 +35,27 @@ using var ecs = new World();
 // Generate entities
 var player = ecs.Entity()
     .Set<Position>(new Position { X = 2 })
-    .Set<Name>(new Name { Value = "Tom" })
+    .Set<Label>(new Label { Value = "Tom" })
     .Set<Player>();
 
 var npc = ecs.Entity()
     .Set<Position>(new Position { X = 75 })
-    .Set<Name>(new Name { Value = "Dan" })
+    .Set<Label>(new Label { Value = "Dan" })
     .Set<Npc>();
 
-// Query entities with Position + Name components
-ecs.Each((EntityView entity, ref Position pos, ref Name name) => {
-    Console.WriteLine(name.Value);
+// Query entities with Position + Label components
+ecs.Each((EntityView entity, ref Position pos, ref Label label) => {
+    Console.WriteLine(label.Value);
 });
 
-// Multi-threaded query for entities with Position + Name + Player, without Npc.
-ecs.EachJob<(Position, Name), (With<Player>, Not<Npc>)>((ref Position pos, ref Name name) => {
-    Console.WriteLine(name.Value);
+// Multi-threaded query for entities with Position + Label + Player, without Npc.
+ecs.EachJob<(Position, Label), (With<Player>, Not<Npc>)>((ref Position pos, ref Label label) => {
+    Console.WriteLine(label.Value);
 });
 
 // Component structs
 struct Position { public float X, Y, Z; }
-struct Name { public string Value; }
+struct Label { public string Value; }
 struct Player { }
 struct Npc { }
 ```
@@ -153,7 +152,7 @@ var sword = ecs.Entity()
 
 woodenChest.AddChild<ChestContainer>(sword);
 
-ecs.Each<With<Child<ChestContainer>>>((EntityView entity) =>
+ecs.Each<With<(ChestContainer, Wildcard)>>((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
 
 // Unique entities

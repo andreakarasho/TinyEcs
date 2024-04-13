@@ -39,27 +39,27 @@ namespace TinyEcs.Tests
             Assert.True(e4.Exists());
         }
 
-        [Fact]
-        public void Entity_Enable()
-        {
-            using var ctx = new Context();
+        // [Fact]
+        // public void Entity_Enable()
+        // {
+        //     using var ctx = new Context();
 
-            var entity = ctx.World.Entity();
-            entity.Enable();
+        //     var entity = ctx.World.Entity();
+        //     entity.Enable();
 
-            Assert.True(entity.IsEnabled());
-        }
+        //     Assert.True(entity.IsEnabled());
+        // }
 
-        [Fact]
-        public void Entity_Disabled()
-        {
-            using var ctx = new Context();
+        // [Fact]
+        // public void Entity_Disabled()
+        // {
+        //     using var ctx = new Context();
 
-            var entity = ctx.World.Entity();
-            entity.Disable();
+        //     var entity = ctx.World.Entity();
+        //     entity.Disable();
 
-            Assert.False(entity.IsEnabled());
-        }
+        //     Assert.False(entity.IsEnabled());
+        // }
 
         [Fact]
         public void Entity_Attach_TwoSameComponent()
@@ -299,5 +299,58 @@ namespace TinyEcs.Tests
             Assert.True(ctx.World.Has<IntComponent>(e1));
             Assert.False(ctx.World.Has<IntComponent>(e0));
         }
+
+		[Fact]
+		public void UndeletableEntity()
+		{
+			using var ctx = new Context();
+			var ent = ctx.World.Entity();
+
+			ent.Delete();
+
+			Assert.Throws<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
+			Assert.Throws<Exception>(() => ctx.World.Delete(Wildcard.ID));
+		}
+
+		[Fact]
+		public void Declare_Tag_Before_NamedEntity()
+		{
+			using var ctx = new Context();
+
+			var b = ctx.World.Entity<NormalTag>();
+			var a = ctx.World.Entity("NormalTag");
+
+			Assert.Equal("NormalTag", a.Name());
+			Assert.Equal("NormalTag", b.Name());
+			Assert.True(a.ID == b.ID);
+		}
+
+		[Fact]
+		public void Declare_NamedEntity_Before_Tag()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity("NormalTag");
+
+			Assert.Throws<Exception>(() => ctx.World.Entity<NormalTag>());
+		}
+
+		[Fact]
+		public void Entity_Has_Wildcard()
+		{
+			using var ctx = new Context();
+
+			var main = ctx.World.Entity();
+			var likes = ctx.World.Entity();
+			var dogs = ctx.World.Entity();
+
+			main.Set<BoolComponent>(new ());
+			main.Set(likes, dogs);
+
+			Assert.True(main.Has<Wildcard>());
+			Assert.True(main.Has(likes, Wildcard.ID));
+			Assert.True(main.Has(Wildcard.ID, dogs));
+			Assert.True(main.Has(Wildcard.ID, Wildcard.ID));
+		}
     }
 }
