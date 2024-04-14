@@ -190,6 +190,11 @@ ref var beginPos = ref player.Get<BeginPoint, Poisition>();
 // Will retrive the end position {10, 35, 0}
 ref var endPos = ref player.Get<EndPoint, Poisition>();
 
+// Queries for begin & end positions!
+// Notice that relationships are rappresented by a Tuple(A, B)
+ecs.Each((ref (BeginPoint, Position) begin, ref (EndPoint, Position) end => {
+	// ...
+}));
 
 struct Position { public Vector3 Value; }
 struct BeginPoint { }
