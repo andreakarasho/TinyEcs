@@ -15,6 +15,15 @@ namespace TinyEcs.Tests
             Assert.True(entity.Exists());
         }
 
+		[Fact]
+		public void Entity_WithId()
+		{
+			using var ctx = new Context();
+
+			var entity = ctx.World.Entity(4000);
+			Assert.Equal(4000ul, entity.ID.Value);
+		}
+
         [Fact]
         public void Entity_Deletion()
         {
