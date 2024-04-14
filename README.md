@@ -8,8 +8,11 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 -   Fast
 -   Reflection-free design
--   NativeAOT & bflat compatibility
+-   NativeAOT & bflat support
+-   Zero runtime allocations
 -   Compatible with major game engines/frameworks: Unity, Godot, Monogame, FNA, Raylib-cs, etc.
+-   Relationships support
+-   `Bevy systems` concept
 
 ## Requirements
 
@@ -136,6 +139,23 @@ foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>()) {
 world.EachJob<(A, B), (With<C>, Not<D>)>(...);
 ```
 
+## Unique/Named entities
+
+```csharp
+// Get or create an entity named 'Khun' 🐶
+var dog = ecs.Entity("Khun")
+	.Set<Bau>();
+```
+
+```csharp
+// Retrive already-registered components using their names
+// [Might not work on NativeAOT!]
+var entity = ecs.Entity<Apples>();
+var applesComponent = ecs.Entity("Apples");
+
+struct Apples { public int Amount; }
+```
+
 ## Relationships
 
 ```csharp
@@ -155,7 +175,28 @@ ecs.Each<With<(Contents, Wildcard)>>((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
 ```
 
-Assign entities to entities
+### Add same component multiple times
+
+Relations open the scenario to assign the same component more than a single time
+
+```csharp
+var player = ecs.Entity();
+player.Set<BeginPoint, Position>(new Position() { Value = Vector3.Zero; });
+player.Set<EndPoint, Position>(new Position() { Value = { X = 10, Y = 35, Z = 0 }; });
+
+// Will retrive the begin position {0, 0, 0}
+ref var beginPos = ref player.Get<BeginPoint, Poisition>();
+
+// Will retrive the end position {10, 35, 0}
+ref var endPos = ref player.Get<EndPoint, Poisition>();
+
+
+struct Position { public Vector3 Value; }
+struct BeginPoint { }
+struct EndPoint { }
+```
+
+### Assign entities to entities
 
 ```csharp
 var bob = ecs.Entity("Bob");
@@ -165,37 +206,44 @@ var pasta = ecs.Entity("Pasta");
 bob.Set(likes, pasta);
 ```
 
+### `ChildOf`
+
 Use the pre-build `ChildOf` relationship.
-This tag is marked as 'Unique' which means cannot exists more than one `(ChildOf, *)` relation attached to the entity.
+This tag is marked as 'Unique' which means cannot exists more than one `(ChildOf, *)` relation attached to the child entity.
+The `parent.AddChild(child)` function it's a shortcut of `child.Set<ChildOf>(parent)`;
 
 ```csharp
-var root0 = ecs.Entity();
-var root1 = ecs.Entity();
+var parent0 = ecs.Entity();
+var parent1 = ecs.Entity();
 var child = ecs.Entity();
 
-// Attach (ChildOf, root0) to child
-root0.AddChild(child);
+// Attach (ChildOf, parent0) to child
+parent0.AddChild(child);
 
 // Detach any (ChildOf, *) from child
-// and attach (Child=f, root1) to child
-root1.AddChild(child)
+// and attach (ChildOf, parent1) to child
+parent1.AddChild(child);
 ```
 
-## Unique/Named entities
+### `Symmetric`
+
+`Symmetric` is a pre-build relationship which assign the relation to the target too:
+`A.Set(Rel, B) <=> B.Set(Rel, A)`
 
 ```csharp
-// Get or create an entity named 'Khun' 🐶
-var dog = ecs.Entity("Khun")
-	.Set<Bau>();
-```
+// Set the tag as symmetric
+ecs.Entity<TradingWith>().Set<Symmetric>();
 
-```csharp
-// Retrive already-registered components using their names
-// [Might not work on NativeAOT!]
-var entity = ecs.Entity<Apples>();
-var applesComponent = ecs.Entity("Apples");
+var playerA = ecs.Entity("Player A");
+var playerB = ecs.Entity("Player B");
 
-struct Apples { public int Amount; }
+playerA.Set<TradingWith>(playerB);
+
+// Both returns 'True'
+var resultA = playerA.Has<TradingWith>(playerB);
+var resultB = playerB.Has<TradingWith>(playerA);
+
+struct TradingWith { }
 ```
 
 ## Credits
