@@ -10,6 +10,3 @@ version="$1"
 
 # Pack main project
 dotnet pack ../src/ -c Release -o ../dist -p:PackageVersion=$version
-
-# Pack TinyEcs.Plugins project
-dotnet pack ../plugins/TinyEcs.Plugins -c Release -o ../dist -p:PackageVersion=$version
