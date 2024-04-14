@@ -84,7 +84,7 @@ public sealed class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = components;
-		Pairs = components.Where(x => IDOp.IsPair(x.ID)).ToImmutableArray();
+		Pairs = components.Where(x => x.ID.IsPair).ToImmutableArray();
 		Id = Hashing.Calculate(components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
        	_lookup = new Dictionary<ulong, int>(/*_comparer*/);
@@ -333,7 +333,7 @@ public sealed class Archetype
 	        ref readonly var current = ref currents[i];
 	        ref readonly var search = ref searching[j];
 
-			if (_comparer.Compare(current.ID, search.ID) == 0)
+			if (_comparer.Compare(current.ID.Value, search.ID.Value) == 0)
             {
                 if (search.Op != TermOp.With)
                     return -1;

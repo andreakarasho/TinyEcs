@@ -3,7 +3,7 @@ namespace TinyEcs;
 [DebuggerDisplay("{ID} - {Op}")]
 public struct Term : IComparable<Term>
 {
-    public ulong ID;
+    public EcsID ID;
     public TermOp Op;
 
     public static Term With(ulong id) => new() { ID = id, Op = TermOp.With };

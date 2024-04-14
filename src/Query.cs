@@ -77,7 +77,7 @@ public sealed class QueryBuilder : IQueryBuild
 	public QueryBuilder Without<TAction, TTarget>()
 		where TAction : struct
 		where TTarget : struct
-		=> Without(IDOp.Pair(_world.Component<TAction>().ID, _world.Component<TTarget>().ID));
+		=> Without(_world.Component<TAction>().ID, _world.Component<TTarget>().ID);
 
 	public QueryBuilder Without<TAction>(EcsID target)
 		where TAction : struct

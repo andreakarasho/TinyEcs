@@ -19,8 +19,8 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         ID = id;
     }
 
-	public int Generation => ID.Generation;
-	public int RealID => ID.ID;
+	public readonly int Generation => ID.Generation;
+	//public int RealID => ID.ID;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

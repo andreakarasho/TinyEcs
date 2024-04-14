@@ -11,14 +11,16 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 	public readonly ulong Value;
 
 	[FieldOffset(0)]
-	public readonly int ID;
+	internal readonly int ID;
 
 	[FieldOffset(4)]
-	public readonly int Generation;
+	internal readonly int Generation;
 
 
-	// public bool IsPair => IDOp.IsPair(Value);
-	// public bool IsComponent => IDOp.IsComponent(Value);
+	public readonly bool IsPair => IDOp.IsPair(Value);
+	public readonly EcsID First => IDOp.GetPairFirst(Value);
+	public readonly EcsID Second => IDOp.GetPairSecond(Value);
+	public readonly (EcsID, EcsID) Pair => (First, Second);
 
 
 	public readonly int CompareTo(ulong other) => Value.CompareTo(other);

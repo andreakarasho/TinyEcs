@@ -185,10 +185,10 @@ partial class World
 
 			if (found++ < index) continue;
 
-			return (IDOp.GetPairFirst(cmp.ID), IDOp.GetPairSecond(cmp.ID));
+			return cmp.ID.Pair;
 		}
 
-		return (EntityView.Invalid, EntityView.Invalid);
+		return EntityView.Invalid.ID.Pair;
 	}
 }
 

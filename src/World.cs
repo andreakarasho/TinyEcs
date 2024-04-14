@@ -84,12 +84,10 @@ public sealed partial class World : IDisposable
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
-		var isPair = IDOp.IsPair(lookup.ID);
-
-		EcsAssert.Panic(isPair || lookup.ID < _maxCmpId,
+		EcsAssert.Panic(lookup.ID.IsPair || lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		if (!isPair && !Exists(lookup.ID))
+		if (!lookup.ID.IsPair && !Exists(lookup.ID))
 		{
 			var e = Entity(lookup.ID)
 				.Set(lookup);
@@ -202,11 +200,9 @@ public sealed partial class World : IDisposable
 
     public bool Exists(EcsID entity)
     {
-        if (IDOp.IsPair(entity))
+        if (entity.IsPair)
         {
-            var first = IDOp.GetPairFirst(entity);
-            var second = IDOp.GetPairSecond(entity);
-            return _entities.Contains(first) && _entities.Contains(second);
+            return _entities.Contains(entity.First) && _entities.Contains(entity.Second);
         }
 
         return _entities.Contains(entity);
@@ -308,7 +304,7 @@ public sealed partial class World : IDisposable
         var has = record.Archetype.GetComponentIndex(id) >= 0;
 		if (has) return true;
 
-		if (IDOp.IsPair(id))
+		if (id.IsPair)
 		{
 			(var a, var b) = FindPair(entity, id);
 
@@ -590,7 +586,7 @@ internal static class Lookup
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ImmutableArray<Term> Columns;
-		public static readonly ImmutableDictionary<ulong, Term> Withs, Withouts;
+		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
@@ -612,7 +608,7 @@ internal static class Lookup
 	internal static class Query<T> where T : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableDictionary<ulong, Term> Withs, Withouts;
+		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
