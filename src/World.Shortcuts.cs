@@ -5,7 +5,7 @@ public sealed partial class World
     public void Set<T>(EcsID entity) where T : struct
 	{
         ref readonly var cmp = ref Component<T>();
-        EcsAssert.Assert(cmp.Size <= 0, "this is not a tag");
+        EcsAssert.Panic(cmp.Size <= 0, "this is not a tag");
 
 		if (IsDeferred)
 		{
@@ -14,14 +14,14 @@ public sealed partial class World
 			return;
 		}
 
-        _ = Set(ref GetRecord(entity), cmp.ID, cmp.Size);
+        _ = AttachComponent(entity, cmp.ID, cmp.Size);
     }
 
     [SkipLocalsInit]
     public void Set<T>(EcsID entity, T component) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
-        EcsAssert.Assert(cmp.Size > 0, "this is not a component");
+        EcsAssert.Panic(cmp.Size > 0, "this is not a component");
 
 		if (IsDeferred)
 		{
@@ -30,10 +30,9 @@ public sealed partial class World
 			return;
 		}
 
-        ref var record = ref GetRecord(entity);
-        var raw = Set(ref record, cmp.ID, cmp.Size)!;
-        ref var array = ref Unsafe.As<Array, T[]>(ref raw);
-        array[record.Row & Archetype.CHUNK_THRESHOLD] = component;
+        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size);
+        ref var array = ref Unsafe.As<Array, T[]>(ref raw!);
+        array[row & Archetype.CHUNK_THRESHOLD] = component;
 	}
 
 	public void Set(EcsID entity, EcsID id)
@@ -45,19 +44,12 @@ public sealed partial class World
 			return;
 		}
 
-		_ = Set(ref GetRecord(entity), id, 0);
+		_ = AttachComponent(entity, id, 0);
 	}
 
     public void Unset<T>(EcsID entity) where T : struct
 	{
-		if (IsDeferred)
-		{
-			UnsetDeferred<T>(entity);
-
-			return;
-		}
-
-		DetachComponent(ref GetRecord(entity), Component<T>().ID);
+		Unset(entity, Component<T>().ID);
 	}
 
 	public void Unset(EcsID entity, EcsID id)
@@ -69,7 +61,7 @@ public sealed partial class World
 			return;
 		}
 
-		DetachComponent(ref GetRecord(entity), id);
+		DetachComponent(entity, id);
 	}
 
     public bool Has<T>(EcsID entity) where T : struct

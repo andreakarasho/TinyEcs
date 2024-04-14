@@ -88,13 +88,12 @@ thatPerson.Set<Likes>(alice);
 
 ecs.Query<With<(Defaults.Wildcard, Defaults.Wildcard)>>()
 	.Each((EntityView entity) => {
-		//Console.WriteLine("{0} ({1},{2})", entity.Name(), ecs.Entity(entity.Action<Wildcard>()).Name(), ecs.Entity(entity.Target<Wildcard>()).Name());
-
 		var index = 0;
 		EcsID actionId = 0;
 		EcsID targetId = 0;
 
-		while ((actionId = entity.Action<Defaults.Wildcard>(index)) != 0 && (targetId = entity.Target<Defaults.Wildcard>(index)) != 0)
+		while ((actionId = entity.Action<Defaults.Wildcard>(index)) != 0 &&
+			   (targetId = entity.Target<Defaults.Wildcard>(index)) != 0)
 		{
 			Console.WriteLine("{0} ({1}, {2})", entity.Name(), ecs.Entity(actionId).Name(), ecs.Entity(targetId).Name());
 

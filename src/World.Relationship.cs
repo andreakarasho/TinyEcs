@@ -85,8 +85,7 @@ partial class World
 			return;
 		}
 
-		ref var record = ref GetRecord(entity);
-		_ = Set(ref record, pairId, 0);
+		_ = AttachComponent(entity, pairId, 0);
 
 		CheckSymmetric(entity, action, target);
 	}
@@ -146,8 +145,7 @@ partial class World
 			return;
 		}
 
-		ref var record = ref GetRecord(entity);
-		DetachComponent(ref record, pairId);
+		DetachComponent(entity, pairId);
 	}
 
 	public EcsID Target<TAction>(EcsID entity, int index = 0)
