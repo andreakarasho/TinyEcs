@@ -1,7 +1,5 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
-using System.Collections.Generic;
-using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -75,16 +73,16 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 
 				sb.AppendLine($@"
-					public ISystem AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update)
+					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update)
 						{whereGenerics}
 					{{
 						{emptyVars}
-						var fn = (SysParamMap globalRes, SysParamMap localRes, Func<object, bool> runIf) => {{
-							if (runIf != null && !runIf(_world)) return;
+						var fn = (World args, SysParamMap globalRes, SysParamMap localRes, Func<SysParamMap, World, bool> runIf) => {{
+							if (runIf != null && !runIf.Invoke(globalRes, args)) return;
 							{objs}
 							system({objsArgs});
 						}};
-						var sys = new ErasedFunctionSystem(fn);
+						var sys = new FuncSystem<World>(_world, fn);
 						_systems[(int) stage].Add(sys);
 						return sys;
 					}}
@@ -100,22 +98,22 @@ public sealed class MyGenerator : IIncrementalGenerator
 		{
 			var sb = new StringBuilder();
 
-			sb.AppendLine("public partial interface ISystem {");
+			// sb.AppendLine("public partial interface ISystem {");
 
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
+			// for (var i = 0; i < MAX_GENERICS; ++i)
+			// {
+			// 	var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+			// 	var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
 
-				sb.AppendLine($@"
-					public ISystem RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics};
-				");
-			}
+			// 	sb.AppendLine($@"
+			// 		public ISystem RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics};
+			// 	");
+			// }
 
-			sb.AppendLine("}");
+			// sb.AppendLine("}");
 
 
-			sb.AppendLine("internal partial class ErasedFunctionSystem {");
+			sb.AppendLine("public sealed partial class FuncSystem<TArg> {");
 
 			for (var i = 0; i < 16; ++i)
 			{
@@ -123,12 +121,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, args);");
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
 
 				sb.AppendLine($@"
-					ISystem ISystem.RunIf<{generics}>(Func<{generics}, bool> condition)
+					public FuncSystem<TArg> RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics}
 					{{
 						{emptyVars}
-						var fn = (SysParamMap globalRes, SysParamMap localRes, object args) => {{
+						var fn = (SysParamMap globalRes, SysParamMap localRes, TArg args) => {{
 							{objs}
 							return condition({objsArgs});
 						}};

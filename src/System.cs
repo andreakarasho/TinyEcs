@@ -4,33 +4,38 @@ namespace TinyEcs;
 
 using SysParamMap = Dictionary<Type, ISystemParam>;
 
-public partial interface ISystem
+public sealed partial class FuncSystem<TArg>
 {
-    internal void Run(SysParamMap resources);
-
-	public ISystem RunIf(Func<bool> condition);
-}
-
-internal sealed partial class ErasedFunctionSystem : ISystem
-{
-    private readonly Action<SysParamMap, SysParamMap, Func<object, bool>> _fn;
+	private readonly TArg _arg;
+    private readonly Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> _fn;
 	private readonly SysParamMap _locals;
-	private readonly List<Func<SysParamMap, SysParamMap, object, bool>> _conditions;
+	private readonly List<Func<SysParamMap, SysParamMap, TArg, bool>> _conditions;
+	private readonly Func<SysParamMap, TArg, bool> _validator;
 
-    public ErasedFunctionSystem(Action<SysParamMap, SysParamMap, Func<object, bool>> fn)
+    internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn)
     {
+		_arg = arg;
         _fn = fn;
 		_locals = new ();
 		_conditions = new ();
+		_validator = ValidateConditions;
     }
 
-	void ISystem.Run(SysParamMap resources)
-		=> _fn(resources, _locals, args => _conditions.All(s => s(resources, _locals, args)));
+	internal void Run(SysParamMap resources)
+		=> _fn(_arg, resources, _locals, _validator);
 
-	ISystem ISystem.RunIf(Func<bool> condition)
+	public FuncSystem<TArg> RunIf(Func<bool> condition)
 	{
 		_conditions.Add((_, _, _) => condition());
 		return this;
+	}
+
+	private bool ValidateConditions(SysParamMap resources, TArg args)
+	{
+		foreach (var fn in _conditions)
+			if (!fn(resources, _locals, args))
+				return false;
+		return true;
 	}
 }
 
@@ -45,7 +50,7 @@ public enum Stages
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<ISystem>[] _systems = new List<ISystem>[(int)Stages.AfterUpdate + 1];
+    private readonly List<FuncSystem<World>>[] _systems = new List<FuncSystem<World>>[(int)Stages.AfterUpdate + 1];
     private readonly SysParamMap _resources = new ();
 
 	public Scheduler(World world)
@@ -78,9 +83,9 @@ public sealed partial class Scheduler
 			system.Run(_resources);
 	}
 
-	public ISystem AddSystem(Action system, Stages stage = Stages.Update)
+	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update)
 	{
-		var sys = new ErasedFunctionSystem((_, _, runIf) => { if (runIf?.Invoke(_world) ?? true) system(); });
+		var sys = new FuncSystem<World>(_world, (args, globalRes, _, runIf) => { if (runIf?.Invoke(globalRes, args) ?? true) system(); });
 		_systems[(int)stage].Add(sys);
 
 		return sys;
