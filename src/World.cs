@@ -189,6 +189,9 @@ public sealed partial class World : IDisposable
 				_namesToEntity.Remove(name, out var _);
 			}
 
+			QueryRaw([IDOp.Pair(Component<ChildOf>().ID, entity)])
+				.Each((EntityView child) => child.Delete());
+
 			ref var record = ref GetRecord(entity);
 
 			var removedId = record.Archetype.Remove(ref record);
@@ -284,12 +287,6 @@ public sealed partial class World : IDisposable
 
 		}
 
-		// ref var arch = ref create ? ref CollectionsMarshal.GetValueRefOrAddDefault(
-		// 	_typeIndex,
-		// 	hash,
-		// 	out exists
-		// ) : ref CollectionsMarshal.GetValueRefOrNullRef(_typeIndex, hash);
-
 		return ref arch;
 	}
 
@@ -319,6 +316,14 @@ public sealed partial class World : IDisposable
     {
         _archRoot.Print();
     }
+
+	public Query QueryRaw(ImmutableArray<Term> terms)
+	{
+		return GetQuery(
+			Hashing.Calculate(terms.AsSpan()),
+			terms,
+			static (world, terms) => new Query(world, terms));
+	}
 
 	public Query<TQuery> Query<TQuery>() where TQuery : struct
 	{

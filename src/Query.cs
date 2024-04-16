@@ -38,12 +38,7 @@ public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 
 
 
-public interface IQueryBuild
-{
-	Query Build();
-}
-
-public sealed class QueryBuilder : IQueryBuild
+public sealed class QueryBuilder
 {
 	private readonly World _world;
 	private readonly SortedSet<Term> _components = new();

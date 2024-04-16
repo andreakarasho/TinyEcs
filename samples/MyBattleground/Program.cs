@@ -20,13 +20,13 @@ ecs.Query<With<Networked>>()
 	Console.WriteLine("networked entity {0}", asd.ID);
 });
 
-ecs.OnEntityDeleted += en => {
-	var qry = ecs.QueryBuilder()
-		.With<Defaults.Wildcard>(en)
-		.Build();
+// ecs.OnEntityDeleted += en => {
+// 	var qry = ecs.QueryBuilder()
+// 		.With<Defaults.Wildcard>(en)
+// 		.Build();
 
-	qry.Each((EntityView child) => child.Delete());
-};
+// 	qry.Each((EntityView child) => child.Delete());
+// };
 
 
 var alice = ecs.Entity("Alice");
@@ -48,6 +48,7 @@ alice.AddChild(likes);
 // because ChildOf is Unique
 thatPerson.AddChild(palle);
 
+//carl.Delete();
 
 var aa = ecs.Entity("Alice");
 
