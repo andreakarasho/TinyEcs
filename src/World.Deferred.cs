@@ -6,6 +6,7 @@ namespace TinyEcs;
 public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
+	private readonly ConcurrentDictionary<EcsID, EcsID> _createdEntities = new();
     private readonly ConcurrentDictionary<EcsID, DictionarySlim<EcsID, object?>> _deferredSets = new();
 	private WorldState _worldState = new () { State = WorldStateTypes.Normal, Locks = 0 };
 	private readonly object _worldStateLock = new object();
@@ -144,6 +145,19 @@ public sealed partial class World
 		}
 	}
 
+	private void CreateDeferred(EcsID entity)
+	{
+		var cmd = new DeferredOp()
+		{
+			Op = DeferredOpTypes.CreateEntity,
+			Entity = entity,
+		};
+
+		_operations.Enqueue(cmd);
+
+		_createdEntities[entity] = entity;
+	}
+
 	private void DeleteDeferred(EcsID entity)
 	{
 		var cmd = new DeferredOp()
@@ -159,6 +173,10 @@ public sealed partial class World
 			dict.Clear();
 		}
 	}
+
+	private bool ExistsDeferred(EcsID entity)
+		=> entity.IsPair ? _createdEntities.ContainsKey(entity.First) &&
+			_createdEntities.ContainsKey(entity.Second) : _createdEntities.ContainsKey(entity);
 
 	private bool HasDeferred<T>(EcsID entity) where T : struct
 		=> _deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(Component<T>().ID);
@@ -196,6 +214,9 @@ public sealed partial class World
 		{
 			switch (op.Op)
 			{
+				case DeferredOpTypes.CreateEntity:
+					var ent = Entity(op.Entity);
+					break;
 				case DeferredOpTypes.DestroyEntity:
 					Delete(op.Entity);
 					break;
@@ -231,6 +252,7 @@ public sealed partial class World
 		}
 
         _deferredSets.Clear();
+		_createdEntities.Clear();
 	}
 
 	enum WorldStateTypes
@@ -256,6 +278,7 @@ public sealed partial class World
 
 	enum DeferredOpTypes : byte
 	{
+		CreateEntity,
 		DestroyEntity,
 		SetComponent,
 		UnsetComponent,

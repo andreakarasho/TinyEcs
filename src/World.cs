@@ -146,6 +146,14 @@ public sealed partial class World : IDisposable
     {
 		lock (_newEntLock)
 		{
+			if (IsDeferred)
+			{
+				if (id == 0)
+					id = ++_entities.MaxID;
+				CreateDeferred(id);
+				return new EntityView(this, id);
+			}
+
 			ref var record = ref (
 				id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
 			);
@@ -203,6 +211,9 @@ public sealed partial class World : IDisposable
 
     public bool Exists(EcsID entity)
     {
+		if (IsDeferred && ExistsDeferred(entity))
+			return true;
+
         if (entity.IsPair)
         {
             return _entities.Contains(entity.First) && _entities.Contains(entity.Second);

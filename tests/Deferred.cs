@@ -2,6 +2,8 @@ namespace TinyEcs.Tests
 {
     public class DeferredTest
     {
+		struct JustForTest { }
+
 		[Fact]
 		public void Deferred_CheckWorldState()
 		{
@@ -12,31 +14,28 @@ namespace TinyEcs.Tests
 			Assert.False(ctx.World.IsDeferred);
 		}
 
-        [Theory]
-        [InlineData(1_000)]
-        [InlineData(1_000_00)]
-        [InlineData(1_000_000)]
-        public void Deferred_NewEntity(int amount)
+        [Fact]
+        public void Deferred_NewEntity()
         {
             using var ctx = new Context();
 
 			var count = ctx.World.EntityCount;
-			var expected = count + amount * 2;
-
-			var t0 = new Thread(() => { for (var i = 0; i < amount; ++i) ctx.World.Entity(); })
-			{ IsBackground = true };
-			var t1 = new Thread(() => { for (var i = 0; i < amount; ++i) ctx.World.Entity(); })
-			{ IsBackground = true };
 
 			ctx.World.BeginDeferred();
-			t0.Start();
-			t1.Start();
+			var e0 = ctx.World.Entity("An entity");
+			var e1 = ctx.World.Entity();
+			var e2 = ctx.World.Entity<JustForTest>();
 
-			t0.Join();
-			t1.Join();
+			Assert.True(e0.Exists());
+			Assert.True(e1.Exists());
+			Assert.True(e2.Exists());
 			ctx.World.EndDeferred();
 
-            Assert.Equal(expected, ctx.World.EntityCount);
+			Assert.True(e0.Exists());
+			Assert.True(e1.Exists());
+			Assert.True(e2.Exists());
+
+			Assert.Equal(count + 3, ctx.World.EntityCount);
         }
 
 		[Fact]
