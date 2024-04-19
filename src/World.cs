@@ -214,7 +214,7 @@ public sealed partial class World : IDisposable
 		if (IsDeferred && ExistsDeferred(entity))
 			return true;
 
-        if (entity.IsPair)
+		if (entity.IsPair)
         {
             return _entities.Contains(entity.First) && _entities.Contains(entity.Second);
         }
@@ -303,6 +303,15 @@ public sealed partial class World : IDisposable
 
     internal bool Has(EcsID entity, EcsID id)
     {
+		if (IsDeferred)
+		{
+			if (HasDeferred(entity, id))
+				return true;
+
+			if (ExistsDeferred(entity))
+				return false;
+		}
+
 		ref var record = ref GetRecord(entity);
         var has = record.Archetype.GetComponentIndex(id) >= 0;
 		if (has) return true;

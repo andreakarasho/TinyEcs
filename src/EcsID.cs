@@ -4,7 +4,7 @@ namespace TinyEcs;
 public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable<EcsID>, IComparable<EcsID>
 {
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public EcsID(ulong value) => Value = value;
+	internal EcsID(ulong value) => Value = value;
 
 
 	[FieldOffset(0)]
@@ -17,6 +17,7 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 	internal readonly int Generation;
 
 
+	public readonly bool IsValid => Value != 0;
 	public readonly bool IsPair => IDOp.IsPair(Value);
 	public readonly EcsID First => IDOp.GetPairFirst(Value);
 	public readonly EcsID Second => IDOp.GetPairSecond(Value);
@@ -43,5 +44,5 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 
 	public readonly override bool Equals(object? obj) => obj is EcsID ent && Equals(ent);
 	public readonly override int GetHashCode() => Value.GetHashCode();
-	public readonly override string ToString() =>  Value.ToString();
+	public readonly override string ToString() => Value.ToString();
 }

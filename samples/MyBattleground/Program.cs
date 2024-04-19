@@ -28,6 +28,10 @@ ecs.Query<With<Networked>>()
 // 	qry.Each((EntityView child) => child.Delete());
 // };
 
+// ecs.OnComponentSet += (e, cmp) => {
+// 	var ee = ecs.Entity("mouse");
+// };
+
 
 var alice = ecs.Entity("Alice");
 var carl = ecs.Entity("Carl");
@@ -93,10 +97,9 @@ ecs.Query<With<(Defaults.Wildcard, Defaults.Wildcard)>>()
 		EcsID actionId = 0;
 		EcsID targetId = 0;
 
-		while ((actionId = entity.Action<Defaults.Wildcard>(index)) != 0 &&
-			   (targetId = entity.Target<Defaults.Wildcard>(index)) != 0)
+		while (((actionId, targetId) = entity.FindPair<Defaults.Wildcard, Defaults.Wildcard>(index)) != (0ul, 0ul))
 		{
-			Console.WriteLine("{0} ({1}, {2})", entity.Name(), ecs.Entity(actionId).Name(), ecs.Entity(targetId).Name());
+			Console.WriteLine("--> {0} ({1}, {2})", entity.Name(), ecs.Entity(actionId).Name(), ecs.Entity(targetId).Name());
 
 			index += 1;
 		}

@@ -162,17 +162,32 @@
 		{
 			using var ctx = new Context();
 
+			var josh = ctx.World.Entity();
+
+			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
 			var likes = ctx.World.Entity().Set<Unique>();
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
+			var pasta = ctx.World.Entity();
 
 			carl.Set(likes, dogs);
 			Assert.True(carl.Has(likes, dogs));
 
+			carl.Set(likes, pasta);
+			Assert.False(carl.Has(likes, dogs));
+			Assert.True(carl.Has(likes, pasta));
+
+			josh.Set(likes, dogs);
+			Assert.True(josh.Has(likes, dogs));
+
+			ctx.World.EndDeferred();
+
 			carl.Set(likes, cats);
 			Assert.False(carl.Has(likes, dogs));
+			Assert.False(carl.Has(likes, pasta));
 			Assert.True(carl.Has(likes, cats));
+			Assert.True(josh.Has(likes, dogs));
 		}
 
 		[Fact]
@@ -185,6 +200,25 @@
 			var bob = ctx.World.Entity();
 
 			carl.Set(tradeWith, bob);
+			Assert.True(carl.Has(tradeWith, bob));
+			Assert.True(bob.Has(tradeWith, carl));
+		}
+
+		[Fact]
+		public void Relation_SymmetricDeferred()
+		{
+			using var ctx = new Context();
+
+			ctx.World.BeginDeferred();
+			var carl = ctx.World.Entity();
+			var tradeWith = ctx.World.Entity().Set<Symmetric>();
+			var bob = ctx.World.Entity();
+
+			carl.Set(tradeWith, bob);
+			Assert.True(carl.Has(tradeWith, bob));
+			Assert.True(bob.Has(tradeWith, carl));
+			ctx.World.EndDeferred();
+
 			Assert.True(carl.Has(tradeWith, bob));
 			Assert.True(bob.Has(tradeWith, carl));
 		}

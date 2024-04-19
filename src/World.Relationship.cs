@@ -46,7 +46,21 @@ partial class World
 		// (R, B) to A will also add (R, A) to B.
 		if (Exists(action) && Entity(action).Has<Symmetric>() && !Has(target, action, entity))
 		{
-			Set(target, action, entity);
+			var pairId = IDOp.Pair(action, entity);
+
+			if (IsDeferred)
+			{
+				if (HasDeferred(target, pairId))
+					return;
+
+				SetDeferred(target, pairId);
+
+				return;
+			}
+
+			BeginDeferred();
+			_ = AttachComponent(target, pairId, 0);
+			EndDeferred();
 		}
 	}
 
@@ -57,13 +71,12 @@ partial class World
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
 
 		CheckUnique(entity, Entity<TAction>());
+		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
 		if (target.HasValue)
 			Set(entity, (default(TAction), target.Value));
 		else
 			Set<(TAction, TTarget)>(entity);
-
-		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 	}
 
 	public void Set<TAction>(EcsID entity, EcsID target)
@@ -77,6 +90,7 @@ partial class World
 		var pairId = IDOp.Pair(action, target);
 
 		CheckUnique(entity, action);
+		CheckSymmetric(entity, action, target);
 
 		if (IsDeferred)
 		{
@@ -85,9 +99,9 @@ partial class World
 			return;
 		}
 
+		BeginDeferred();
 		_ = AttachComponent(entity, pairId, 0);
-
-		CheckSymmetric(entity, action, target);
+		EndDeferred();
 	}
 
 	public ref TTarget Get<TAction, TTarget>(EcsID entity)
@@ -116,8 +130,7 @@ partial class World
 	{
 		var pairId = IDOp.Pair(action, target);
 
-		return (Exists(entity) && Has(entity, pairId)) ||
-				(IsDeferred && HasDeferred(entity, pairId));
+		return Exists(entity) && Has(entity, pairId);
 	}
 
 	public void Unset<TAction, TTarget>(EcsID entity)
@@ -138,14 +151,7 @@ partial class World
 	public void Unset(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-
-		if (IsDeferred)
-		{
-			UnsetDeferred(entity, pairId);
-			return;
-		}
-
-		DetachComponent(entity, pairId);
+		Unset(entity, pairId);
 	}
 
 	public EcsID Target<TAction>(EcsID entity, int index = 0)
@@ -174,6 +180,17 @@ partial class World
 
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
 	{
+		if (IsDeferred)
+		{
+			var defPair = GetDeferred(entity, pair);
+
+			if (defPair.IsPair)
+				return defPair.Pair;
+
+			if (ExistsDeferred(entity))
+				return (0, 0);
+		}
+
 		ref var record = ref GetRecord(entity);
 
 		var found = 0;
@@ -280,6 +297,13 @@ public static class RelationshipEx
 	public static EcsID Action(this EntityView entity, EcsID target, int index = 0)
 	{
 		return entity.World.Action(entity.ID, target, index);
+	}
+
+	public static (EcsID, EcsID) FindPair<TAction, TTarget>(this EntityView entity, int index = 0)
+		where TAction : struct
+		where TTarget : struct
+	{
+		return entity.World.FindPair(entity.ID, IDOp.Pair(entity.World.Component<TAction>().ID, entity.World.Component<TTarget>().ID), index);
 	}
 }
 

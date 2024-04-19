@@ -31,11 +31,13 @@ public sealed partial class World
 		{
 			_worldState.Locks -= 1;
 
+			EcsAssert.Assert(_worldState.Locks >= 0, "begin/end deferred calls mismatch");
+
 			if (_worldState.Locks == 0)
 			{
-				_worldState.NewEntities = 0;
-				_worldState.State = WorldStateTypes.Normal;
+				_worldState.State = WorldStateTypes.Merging;
 				Merge();
+				_worldState.State = WorldStateTypes.Normal;
 			}
 		}
 	}
@@ -179,10 +181,47 @@ public sealed partial class World
 			_createdEntities.ContainsKey(entity.Second) : _createdEntities.ContainsKey(entity);
 
 	private bool HasDeferred<T>(EcsID entity) where T : struct
-		=> _deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(Component<T>().ID);
+		=> HasDeferred(entity, Component<T>().ID);
 
 	private bool HasDeferred(EcsID entity, EcsID id)
-		=> _deferredSets.TryGetValue(entity, out var dict) && dict.ContainsKey(id);
+	{
+		if (_deferredSets.TryGetValue(entity, out var dict))
+		{
+			if (dict.ContainsKey(id)) return true;
+
+			// TODO: fix this crap
+			if (id.IsPair)
+			{
+				foreach ((var cmpId, _) in dict)
+				{
+					if (_comparer.Compare(cmpId.Value, id.Value) == 0)
+						return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	private EcsID GetDeferred(EcsID entity, EcsID id)
+	{
+		if (_deferredSets.TryGetValue(entity, out var dict))
+		{
+			if (dict.ContainsKey(id)) return id;
+
+			// TODO: fix this crap
+			if (id.IsPair)
+			{
+				foreach ((var cmpId, _) in dict)
+				{
+					if (_comparer.Compare(cmpId.Value, id.Value) == 0)
+						return cmpId.Value;
+				}
+			}
+		}
+
+		return 0;
+	}
 
 	private ref T GetDeferred<T>(EcsID entity) where T : struct
 	{
@@ -216,7 +255,9 @@ public sealed partial class World
 			{
 				case DeferredOpTypes.CreateEntity:
 					var ent = Entity(op.Entity);
+					EcsAssert.Assert(ent == op.Entity);
 					break;
+
 				case DeferredOpTypes.DestroyEntity:
 					Delete(op.Entity);
 					break;
@@ -258,14 +299,14 @@ public sealed partial class World
 	enum WorldStateTypes
 	{
 		Normal,
-		Deferred
+		Deferred,
+		Merging
 	}
 
 	struct WorldState
 	{
 		public WorldStateTypes State;
 		public int Locks;
-		public ulong NewEntities;
 	}
 
 	struct DeferredOp
