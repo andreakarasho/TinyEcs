@@ -108,18 +108,22 @@ namespace TinyEcs.Tests
 			entity.Set(new BoolComponent() { Value = false });
 
 			ctx.World.BeginDeferred();
+
 			entity.Set(new FloatComponent() { Value = 9f });
 			entity.Set(new IntComponent() { Value = 123 });
 			entity.Set<NormalTag>();
-
 			Assert.True(entity.Has<BoolComponent>());
-			Assert.True(entity.Has<FloatComponent>());
-			Assert.True(entity.Has<IntComponent>());
-			Assert.True(entity.Has<NormalTag>());
+			Assert.False(entity.Has<FloatComponent>());
+			Assert.False(entity.Has<IntComponent>());
+			Assert.False(entity.Has<NormalTag>());
 
-			entity.Get<FloatComponent>().Value += 1f;
-			entity.Get<IntComponent>().Value += 1;
+			entity.Get<FloatComponent>().Value = 1f;
+			entity.Get<IntComponent>().Value = 10;
 			entity.Get<BoolComponent>().Value = true;
+			Assert.False(entity.Has<FloatComponent>());
+			Assert.False(entity.Has<IntComponent>());
+			Assert.False(entity.Has<NormalTag>());
+
 			ctx.World.EndDeferred();
 
 			Assert.True(entity.Has<BoolComponent>());
@@ -127,9 +131,9 @@ namespace TinyEcs.Tests
 			Assert.True(entity.Has<IntComponent>());
 			Assert.True(entity.Has<NormalTag>());
 
-			Assert.True(entity.Get<BoolComponent>().Value.Equals(true));
-			Assert.True(entity.Get<FloatComponent>().Value.Equals(9f + 1f));
-			Assert.True(entity.Get<IntComponent>().Value.Equals(123 + 1));
+			Assert.True(entity.Get<BoolComponent>().Value);
+			Assert.Equal(1f, entity.Get<FloatComponent>().Value);
+			Assert.Equal(10, entity.Get<IntComponent>().Value);
 		}
 
 		[Fact]
@@ -153,8 +157,8 @@ namespace TinyEcs.Tests
 					ctx.World.BeginDeferred();
 					{
 						Assert.True(ctx.World.IsDeferred);
-						entity.Get<FloatComponent>().Value += 1f;
-						entity.Get<IntComponent>().Value += 1;
+						entity.Get<FloatComponent>().Value = 1f;
+						entity.Get<IntComponent>().Value = 1;
 					}
 					ctx.World.EndDeferred();
 					Assert.True(ctx.World.IsDeferred);
@@ -162,8 +166,8 @@ namespace TinyEcs.Tests
 				ctx.World.EndDeferred();
 				Assert.True(ctx.World.IsDeferred);
 
-				entity.Get<FloatComponent>().Value += 1f;
-				entity.Get<IntComponent>().Value += 1;
+				entity.Get<FloatComponent>().Value = 5f;
+				entity.Get<IntComponent>().Value = 5;
 			}
 			ctx.World.EndDeferred();
 			Assert.False(ctx.World.IsDeferred);
@@ -173,8 +177,8 @@ namespace TinyEcs.Tests
 			Assert.True(entity.Has<IntComponent>());
 			Assert.True(entity.Has<NormalTag>());
 
-			Assert.True(entity.Get<FloatComponent>().Value.Equals(9f + 1f + 1f));
-			Assert.True(entity.Get<IntComponent>().Value.Equals(123 + 1 + 1));
+			Assert.Equal(5f, entity.Get<FloatComponent>().Value);
+			Assert.Equal(5, entity.Get<IntComponent>().Value);
 		}
     }
 }

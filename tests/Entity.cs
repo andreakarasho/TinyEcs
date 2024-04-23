@@ -49,28 +49,6 @@ namespace TinyEcs.Tests
             Assert.True(e4.Exists());
         }
 
-        // [Fact]
-        // public void Entity_Enable()
-        // {
-        //     using var ctx = new Context();
-
-        //     var entity = ctx.World.Entity();
-        //     entity.Enable();
-
-        //     Assert.True(entity.IsEnabled());
-        // }
-
-        // [Fact]
-        // public void Entity_Disabled()
-        // {
-        //     using var ctx = new Context();
-
-        //     var entity = ctx.World.Entity();
-        //     entity.Disable();
-
-        //     Assert.False(entity.IsEnabled());
-        // }
-
         [Fact]
         public void Entity_Attach_TwoSameComponent()
         {

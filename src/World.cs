@@ -41,15 +41,17 @@ public sealed partial class World : IDisposable
 		_ = Component<Name>();
 		_ = Component<ChildOf>();
 
+		setCommon(Entity<DoNotDelete>(), nameof(DoNotDelete));
+		setCommon(Entity<Unique>(), nameof(Unique));
+		setCommon(Entity<Symmetric>(), nameof(Symmetric));
+		setCommon(Entity<Wildcard>(), nameof(Wildcard));
+		setCommon(Entity<Identifier>(), nameof(Identifier));
+		setCommon(Entity<Name>(), nameof(Name));
+		setCommon(Entity<ChildOf>(), nameof(ChildOf))
+			.Set<Unique>();
 
-		Entity<DoNotDelete>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(DoNotDelete)));
-		Entity<Unique>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Unique)));
-		Entity<Unique>().Set<Symmetric>().Set<Identifier, Name>(new (nameof(Symmetric)));
-		Entity<Wildcard>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Wildcard)));
-		Entity<Identifier>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Identifier)));
-		Entity<Name>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(Name)));
-		Entity<ChildOf>().Set<DoNotDelete>().Set<Identifier, Name>(new (nameof(ChildOf))).Set<Unique>();
-
+		static EntityView setCommon(EntityView entity, string name)
+			=> entity.Set<DoNotDelete>().Set<Identifier, Name>(new (name));
 
 		OnPluginInitialization?.Invoke(this);
     }
@@ -146,13 +148,13 @@ public sealed partial class World : IDisposable
     {
 		lock (_newEntLock)
 		{
-			if (IsDeferred)
-			{
-				if (id == 0)
-					id = ++_entities.MaxID;
-				CreateDeferred(id);
-				return new EntityView(this, id);
-			}
+			// if (IsDeferred)
+			// {
+			// 	if (id == 0)
+			// 		id = ++_entities.MaxID;
+			// 	CreateDeferred(id);
+			// 	return new EntityView(this, id);
+			// }
 
 			ref var record = ref (
 				id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
@@ -180,7 +182,8 @@ public sealed partial class World : IDisposable
     {
 		if (IsDeferred)
 		{
-			DeleteDeferred(entity);
+			if (Exists(entity))
+				DeleteDeferred(entity);
 
 			return;
 		}
@@ -211,8 +214,8 @@ public sealed partial class World : IDisposable
 
     public bool Exists(EcsID entity)
     {
-		if (IsDeferred && ExistsDeferred(entity))
-			return true;
+		// if (IsDeferred && ExistsDeferred(entity))
+		// 	return true;
 
 		if (entity.IsPair)
         {
@@ -303,14 +306,14 @@ public sealed partial class World : IDisposable
 
     internal bool Has(EcsID entity, EcsID id)
     {
-		if (IsDeferred)
-		{
-			if (HasDeferred(entity, id))
-				return true;
+		// if (IsDeferred)
+		// {
+		// 	if (HasDeferred(entity, id))
+		// 		return true;
 
-			if (ExistsDeferred(entity))
-				return false;
-		}
+		// 	if (ExistsDeferred(entity))
+		// 		return false;
+		// }
 
 		ref var record = ref GetRecord(entity);
         var has = record.Archetype.GetComponentIndex(id) >= 0;

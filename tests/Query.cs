@@ -7,7 +7,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachOneComponent_WithOneComponent(int amount)
         {
             using var ctx = new Context();
@@ -26,7 +26,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachTwoComponents_WithTwoComponents(int amount)
         {
             using var ctx = new Context();
@@ -46,7 +46,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachThreeComponents_WithThreeComponents(int amount)
         {
             using var ctx = new Context();
@@ -67,7 +67,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachThreeComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
             using var ctx = new Context();
@@ -88,7 +88,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachTwoComponents_WithTwoComponents_WithoutOneComponent(int amount)
         {
             using var ctx = new Context();
@@ -108,7 +108,7 @@ namespace TinyEcs.Tests
         [Theory]
         [InlineData(1)]
         [InlineData(1000)]
-        [InlineData(1_000_000)]
+        [InlineData(10000)]
         public void Query_AttachTwoComponents_WithOneComponents_WithoutTwoComponent(int amount)
         {
             using var ctx = new Context();

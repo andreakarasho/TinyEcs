@@ -57,11 +57,11 @@ thatPerson.AddChild(palle);
 var aa = ecs.Entity("Alice");
 
 // Carl likes 23 apples
-//ecs.BeginDeferred();
+ecs.BeginDeferred();
 carl.Set<Likes, Apples>(new Apples() {Amount = 23});
 ref var apples = ref carl.Get<Likes, Apples>();
 apples.Amount += 11;
-//ecs.EndDeferred();
+ecs.EndDeferred();
 carl.Set(new Apples() { Amount = 9 });
 
 // Carl likes dogs
@@ -90,6 +90,12 @@ var id = carl.Target<Likes>();
 
 // That person likes Alice
 thatPerson.Set<Likes>(alice);
+
+
+ecs.Query<With<ComponentInfo>>()
+	.Each((EntityView ent) => {
+		Console.WriteLine(ent.Name());
+	});
 
 ecs.Query<With<(Defaults.Wildcard, Defaults.Wildcard)>>()
 	.Each((EntityView entity) => {

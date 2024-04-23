@@ -163,6 +163,7 @@
 			using var ctx = new Context();
 
 			var josh = ctx.World.Entity();
+			Assert.True(josh.Exists());
 
 			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
@@ -171,15 +172,21 @@
 			var cats = ctx.World.Entity();
 			var pasta = ctx.World.Entity();
 
+			Assert.True(carl.Exists());
+			Assert.True(likes.Exists());
+			Assert.True(dogs.Exists());
+			Assert.True(cats.Exists());
+			Assert.True(pasta.Exists());
+
 			carl.Set(likes, dogs);
-			Assert.True(carl.Has(likes, dogs));
+			Assert.False(carl.Has(likes, dogs));
 
 			carl.Set(likes, pasta);
 			Assert.False(carl.Has(likes, dogs));
-			Assert.True(carl.Has(likes, pasta));
+			Assert.False(carl.Has(likes, pasta));
 
 			josh.Set(likes, dogs);
-			Assert.True(josh.Has(likes, dogs));
+			Assert.False(josh.Has(likes, dogs));
 
 			ctx.World.EndDeferred();
 
@@ -214,9 +221,13 @@
 			var tradeWith = ctx.World.Entity().Set<Symmetric>();
 			var bob = ctx.World.Entity();
 
+			Assert.True(carl.Exists());
+			Assert.True(tradeWith.Exists());
+			Assert.True(bob.Exists());
+
 			carl.Set(tradeWith, bob);
-			Assert.True(carl.Has(tradeWith, bob));
-			Assert.True(bob.Has(tradeWith, carl));
+			Assert.False(carl.Has(tradeWith, bob));
+			Assert.False(bob.Has(tradeWith, carl));
 			ctx.World.EndDeferred();
 
 			Assert.True(carl.Has(tradeWith, bob));

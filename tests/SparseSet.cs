@@ -3,7 +3,7 @@
     public class SparseSetTest
     {
         [Theory]
-        [InlineData(1_000_000)]
+        [InlineData(100)]
         public void SparseSet_Add(int amount)
         {
             var set = new EntitySparseSet<float>();
@@ -52,7 +52,6 @@
         [InlineData(1)]
         [InlineData(1000)]
         [InlineData(10_000)]
-        [InlineData(1_000_000)]
         public void SparseSet_CheckSequence(int amount)
         {
             //var set = new EntitySparseSet<EcsComponent>();

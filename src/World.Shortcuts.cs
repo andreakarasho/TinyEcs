@@ -7,7 +7,7 @@ public sealed partial class World
         ref readonly var cmp = ref Component<T>();
         EcsAssert.Panic(cmp.Size <= 0, "this is not a tag");
 
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, cmp.ID))
 		{
 			SetDeferred<T>(entity);
 
@@ -25,7 +25,7 @@ public sealed partial class World
 		ref readonly var cmp = ref Component<T>();
         EcsAssert.Panic(cmp.Size > 0, "this is not a component");
 
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, cmp.ID))
 		{
 			SetDeferred(entity, component);
 
@@ -41,7 +41,7 @@ public sealed partial class World
 
 	public void Set(EcsID entity, EcsID id)
 	{
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, id))
 		{
 			SetDeferred(entity, id);
 
@@ -54,9 +54,7 @@ public sealed partial class World
 	}
 
     public void Unset<T>(EcsID entity) where T : struct
-	{
-		Unset(entity, Component<T>().ID);
-	}
+		=> Unset(entity, Component<T>().ID);
 
 	public void Unset(EcsID entity, EcsID id)
 	{
@@ -79,10 +77,12 @@ public sealed partial class World
 	{
 		ref readonly var cmp = ref Component<T>();
 
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, cmp.ID))
 		{
-			if (HasDeferred(entity, cmp.ID))
-				return ref GetDeferred<T>(entity);
+			Unsafe.SkipInit<T>(out var val);
+			return ref SetDeferred(entity, val);
+			// if (HasDeferred(entity, cmp.ID))
+			// 	return ref GetDeferred<T>(entity);
 		}
 
 		BeginDeferred();

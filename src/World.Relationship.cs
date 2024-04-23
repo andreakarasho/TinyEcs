@@ -50,8 +50,8 @@ partial class World
 
 			if (IsDeferred)
 			{
-				if (HasDeferred(target, pairId))
-					return;
+				// if (HasDeferred(target, pairId))
+				// 	return;
 
 				SetDeferred(target, pairId);
 
@@ -92,7 +92,7 @@ partial class World
 		CheckUnique(entity, action);
 		CheckSymmetric(entity, action, target);
 
-		if (IsDeferred)
+		if (IsDeferred && !Has(entity, action, target))
 		{
 			SetDeferred(entity, pairId);
 
@@ -180,16 +180,19 @@ partial class World
 
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
 	{
-		if (IsDeferred)
-		{
-			var defPair = GetDeferred(entity, pair);
+		// if (IsDeferred && !Has(entity, pair))
+		// {
+		// 	return (0, 0);
+		// 	// var defPair = GetDeferred(entity, pair);
 
-			if (defPair.IsPair)
-				return defPair.Pair;
+		// 	// if (defPair.IsPair)
+		// 	// 	return defPair.Pair;
 
-			if (ExistsDeferred(entity))
-				return (0, 0);
-		}
+		// 	// if (ExistsDeferred(entity))
+		// 	// 	return (0, 0);
+
+		// 	//return SetDeferred
+		// }
 
 		ref var record = ref GetRecord(entity);
 
