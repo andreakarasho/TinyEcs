@@ -92,8 +92,11 @@ public sealed partial class Scheduler
 	}
 
 	public Scheduler AddPlugin<T>() where T : IPlugin, new()
+		=> AddPlugin(new T());
+
+	public Scheduler AddPlugin<T>(T plugin) where T : IPlugin
 	{
-		new T().Build(this);
+		plugin.Build(this);
 
 		return this;
 	}
