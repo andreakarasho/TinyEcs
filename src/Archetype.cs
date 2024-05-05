@@ -1,12 +1,20 @@
 using System.Collections.Immutable;
-using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
+
+public enum ComponentFlags : byte
+{
+	None = 1 << 0,
+	Added = 1 << 1,
+	Removed = 1 << 2,
+	Changed = 1 << 3,
+}
 
 public struct ArchetypeChunk
 {
 	internal Array[]? Components;
 	internal EntityView[] Entities;
+	internal int[][] Counters;
 
 	public int Count { get; internal set; }
 
@@ -40,6 +48,45 @@ public struct ArchetypeChunk
 	{
 		EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		return Components![column];
+	}
+
+	internal void SetFlags(int column, int row, ComponentFlags flags, int ticks)
+	{
+		if (!EnsureCountersExists(column))
+			return;
+
+		var oldFlags = (ComponentFlags)(Counters[column][row & Archetype.CHUNK_THRESHOLD] >> 24); // Extract old flags
+		var number = (Counters[column][row & Archetype.CHUNK_THRESHOLD] & 0x00FFFFFF) + 1; // Extract old number, add 1
+		Counters[column][row & Archetype.CHUNK_THRESHOLD] = (int)(number | (int)oldFlags | ((int)flags << 24)); // Combine old flags, new number, and new flags
+	}
+
+	public (bool, bool) HasFlags(int column, int row, ComponentFlags flags, int ticks)
+	{
+		if (Counters == null ||
+			Counters.Length <= column ||
+			Counters[column] == null ||
+			Counters[column].Length <= row)
+			return (false, false);
+
+		ref readonly var value = ref Counters[column][row & Archetype.CHUNK_THRESHOLD];
+		var currentFlags = (ComponentFlags)((value >> 24) & 0xFF);
+		if ((currentFlags & flags) == 0)
+		{
+			return (true, false);
+		}
+		var currentTicks = value & 0xFFFFFF;
+		return (true, ticks < currentTicks);
+	}
+
+	private bool EnsureCountersExists(int column)
+	{
+		if (Components == null)
+			return false;
+
+		Counters ??= new int[Components.Length][];
+		Counters[column] ??= new int[Archetype.CHUNK_SIZE];
+
+		return true;
 	}
 }
 

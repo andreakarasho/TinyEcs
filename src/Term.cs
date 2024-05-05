@@ -5,6 +5,7 @@ public struct Term : IComparable<Term>
 {
     public EcsID ID;
     public TermOp Op;
+	public ComponentFlags Flags;
 
     public static Term With(ulong id) => new() { ID = id, Op = TermOp.With };
 
@@ -57,5 +58,11 @@ public readonly struct Not<T> : IFilter where T : struct
 }
 
 public readonly struct Or<T> : IFilter where T : struct { }
+
+public readonly struct Changed<T> : IFilter where T : struct { }
+
+public readonly struct Added<T> : IFilter where T : struct { }
+
+public readonly struct Removed<T> : IFilter where T : struct { }
 
 public interface IFilter { }

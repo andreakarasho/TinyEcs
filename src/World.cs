@@ -65,6 +65,7 @@ public sealed partial class World : IDisposable
 
     public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
 
+	public int LastTick { get; set; }
 
     public void Dispose()
     {
@@ -249,6 +250,7 @@ public sealed partial class World : IDisposable
 			_archetypes[_archetypeCount++] = newArch;
 		}
 
+		record.GetChunk().SetFlags(oldArch.GetComponentIndex(id), record.Row, ComponentFlags.Removed, LastTick);
 		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
         record.Archetype = newArch!;
 	}
@@ -260,7 +262,10 @@ public sealed partial class World : IDisposable
 
 		var index = oldArch.GetComponentIndex(id);
 		if (index >= 0)
-            return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
+        {
+			record.GetChunk().SetFlags(index, record.Row, ComponentFlags.Changed, LastTick);
+			return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
+		}
 
 		var cmp = Lookup.GetComponent(id, size);
 		var newSign = oldArch.Components.Add(cmp).Sort(_comparer);
@@ -280,6 +285,9 @@ public sealed partial class World : IDisposable
         record.Archetype = newArch!;
 
 		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
+
+		index = record.Archetype.GetComponentIndex(id);
+		record.GetChunk().SetFlags(index, record.Row, ComponentFlags.Added, LastTick);
 
 		return (size > 0 ? record.GetChunk().RawComponentData(newArch.GetComponentIndex(cmp.ID)) : null, record.Row);
 	}
@@ -345,7 +353,7 @@ public sealed partial class World : IDisposable
 		return GetQuery(
 			Hashing.Calculate(terms.AsSpan()),
 			terms,
-			static (world, terms) => new Query(world, terms));
+			static (world, terms) => new Query(world, terms, ComponentFlags.None));
 	}
 
 	public Query<TQuery> Query<TQuery>() where TQuery : struct
@@ -370,7 +378,7 @@ public sealed partial class World : IDisposable
 	{
 		BeginDeferred();
 
-		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms)))
+		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms, ComponentFlags.None)))
 		{
 			foreach (ref readonly var chunk in arch)
 			{
@@ -534,6 +542,10 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(With<T>), Term.With(Value.ID));
 			_typesConvertion.Add(typeof(Not<T>), Term.Without(Value.ID));
 			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
+			_typesConvertion.Add(typeof(Changed<T>), new Term() { ID = Value.ID, Op = TermOp.With, Flags = ComponentFlags.Changed });
+			_typesConvertion.Add(typeof(Added<T>), new Term() { ID = Value.ID, Op = TermOp.With, Flags = ComponentFlags.Added });
+			_typesConvertion.Add(typeof(Removed<T>), new Term() { ID = Value.ID, Op = TermOp.With, Flags = ComponentFlags.Removed });
+
 
 			_componentInfosByType.Add(typeof(T), Value);
 
@@ -610,6 +622,7 @@ internal static class Lookup
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ImmutableArray<Term> Columns;
 		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
+		public static readonly ComponentFlags Flags;
 		public static readonly ulong Hash;
 
 		static Query()
@@ -624,6 +637,10 @@ internal static class Lookup
 			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
 			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
 
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Added).Select(s => s.Flags).FirstOrDefault();
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Removed).Select(s => s.Flags).FirstOrDefault();
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Changed).Select(s => s.Flags).FirstOrDefault();
+
 			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}
 	}
@@ -632,6 +649,7 @@ internal static class Lookup
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
+		public static readonly ComponentFlags Flags;
 		public static readonly ulong Hash;
 
 		static Query()
@@ -642,6 +660,10 @@ internal static class Lookup
 
 			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
 			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Added).Select(s => s.Flags).FirstOrDefault();
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Removed).Select(s => s.Flags).FirstOrDefault();
+			Flags |= list.Where(s => s.Flags == ComponentFlags.Changed).Select(s => s.Flags).FirstOrDefault();
 
 			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}

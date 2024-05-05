@@ -93,7 +93,7 @@ public sealed class QueryBuilder
 		return _world.GetQuery(
 			Hashing.Calculate(terms.AsSpan()),
 			terms,
-			static (world, terms) => new Query(world, terms)
+			static (world, terms) => new Query(world, terms, ComponentFlags.None)
 		);
 	}
 }
@@ -102,7 +102,7 @@ public sealed class QueryBuilder
 public sealed partial class Query<TQuery> : Query
 	where TQuery : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms, Lookup.Query<TQuery>.Flags)
 	{
 	}
 }
@@ -110,7 +110,7 @@ public sealed partial class Query<TQuery> : Query
 public sealed partial class Query<TQuery, TFilter> : Query
 	where TQuery : struct where TFilter : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms, Lookup.Query<TQuery, TFilter>.Flags)
 	{
 	}
 }
@@ -121,14 +121,16 @@ public partial class Query : IDisposable
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
 
-	internal Query(World world, ImmutableArray<Term> terms)
+	internal Query(World world, ImmutableArray<Term> terms, ComponentFlags flags)
 	{
 		World = world;
 		_terms = terms;
 		_matchedArchetypes = new List<Archetype>();
+		Flags = flags;
 	}
 
 	public World World { get; internal set; }
+	public ComponentFlags Flags { get; }
 	internal List<Archetype> MatchedArchetypes => _matchedArchetypes;
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
 

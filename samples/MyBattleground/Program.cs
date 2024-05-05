@@ -15,6 +15,49 @@ ecs.Entity<Dogs>();
 ecs.Entity<Position>();
 ecs.Entity<Velocity>().Set<Networked>();
 
+
+ecs.Entity()
+	.Set(new Position() { X = 1 })
+	.Set(new Position() { X = 2});
+
+var query = ecs.Query<Changed<Position>>();
+if (query.Flags != 0)
+{
+	foreach (var arch in query)
+	{
+		var col0 = arch.GetComponentIndex<Position>();
+
+		foreach (ref readonly var chunk in arch)
+		{
+			var span = chunk.GetSpan<Position>(col0);
+			for (var i = 0; i < span.Length; ++i)
+			{
+				(var supported, var changed) = chunk.HasFlags(col0, i, query.Flags, ecs.LastTick);
+				if (!supported || !changed)
+				{
+					continue;
+				}
+
+				ref var pos = ref span[i];
+			}
+		}
+	}
+}
+else
+{
+	// normal systems behaviour
+}
+
+
+ecs.LastTick += 1;
+
+
+
+ecs.Query<Changed<Position>>()
+	.Each((EntityView changed) => {
+		Console.WriteLine("Changed entity {0}", changed.Name());
+	});
+
 ecs.Query<With<Networked>>()
 	.Each((EntityView asd) => {
 	Console.WriteLine("networked entity {0}", asd.ID);
