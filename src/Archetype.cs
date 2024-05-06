@@ -287,8 +287,8 @@ public sealed class Archetype
 				++y;
 			}
 
-			if (fromChunk.Counters != null && fromChunk.Counters[i] != null && toChunk.EnsureCountersExists(i))
-				Array.Copy(fromChunk.Counters[i], oldRow & CHUNK_THRESHOLD, toChunk.Counters[i], newRow & CHUNK_THRESHOLD, 1);
+			if (fromChunk.Counters != null && fromChunk.Counters[i] != null && toChunk.EnsureCountersExists(j))
+				Array.Copy(fromChunk.Counters[i], oldRow & CHUNK_THRESHOLD, toChunk.Counters[j], newRow & CHUNK_THRESHOLD, 1);
 
 			if (Components[i].Size <= 0)
 				continue;
