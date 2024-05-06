@@ -18,27 +18,37 @@ ecs.Entity<Velocity>().Set<Networked>();
 
 ecs.Entity()
 	.Set(new Position() { X = 1 })
-	.Set(new Position() { X = 2});
+	.Set(new Velocity() { X = 99 })
+	.Set(new Position() { X = 2 });
 
-var query = ecs.Query<Changed<Position>>();
+var query = ecs.Query<(Changed<Position>, Added<Position>, Added<Velocity>)>();
 if (query.Flags != 0)
 {
 	foreach (var arch in query)
 	{
 		var col0 = arch.GetComponentIndex<Position>();
+		var col1 = arch.GetComponentIndex<Velocity>();
 
 		foreach (ref readonly var chunk in arch)
 		{
-			var span = chunk.GetSpan<Position>(col0);
-			for (var i = 0; i < span.Length; ++i)
+			var posA = chunk.GetSpan<Position>(col0);
+			var velA = chunk.GetSpan<Velocity>(col1);
+			for (var i = 0; i < chunk.Count; ++i)
 			{
-				(var supported, var changed) = chunk.HasFlags(col0, i, query.Flags, ecs.LastTick);
+				(var supported, var changed) = chunk.HasFlags(col0, i, ComponentFlags.Added | ComponentFlags.Changed, ecs.LastTick);
 				if (!supported || !changed)
 				{
 					continue;
 				}
 
-				ref var pos = ref span[i];
+				(supported, changed) = chunk.HasFlags(col1, i, ComponentFlags.Added, ecs.LastTick);
+				if (!supported || !changed)
+				{
+					continue;
+				}
+
+				ref var pos = ref posA[i];
+				ref var vel = ref velA[i];
 			}
 		}
 	}

@@ -580,7 +580,7 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, SortedSet<Term> terms)
+	static void ParseTuple(ITuple tuple, List<Term> terms)
 	{
 		for (var i = 0; i < tuple.Length; ++i)
 		{
@@ -597,7 +597,7 @@ internal static class Lookup
 		}
 	}
 
-	static void ParseType<T>(SortedSet<Term> terms) where T : struct
+	static void ParseType<T>(List<Term> terms) where T : struct
 	{
 		var type = typeof(T);
 		if (_typesConvertion.TryGetValue(type, out var term))
@@ -620,22 +620,22 @@ internal static class Lookup
     internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableArray<Term> Columns;
 		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ComponentFlags Flags;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
+			var list = new List<Term>();
 			ParseType<TQuery>(list);
-			Columns = list.ToImmutableArray();
+			list.Sort();
 
 			ParseType<TFilter>(list);
-			Terms = list.ToImmutableArray();
+			list.Sort();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+			Withs = list.Where(s => s.Op == TermOp.With).GroupBy(s => s.ID).ToImmutableDictionary(s => s.Key, k => k.First());
+			Withouts = list.Where(s => s.Op == TermOp.Without).GroupBy(s => s.ID).ToImmutableDictionary(s => s.Key, k => k.First());
+			Terms = Withs.Values.Concat(Withouts.Values).ToImmutableArray();
 
 			Flags |= list.Where(s => s.Flags == ComponentFlags.Added).Select(s => s.Flags).FirstOrDefault();
 			Flags |= list.Where(s => s.Flags == ComponentFlags.Removed).Select(s => s.Flags).FirstOrDefault();
@@ -654,12 +654,13 @@ internal static class Lookup
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
+			var list = new List<Term>();
 			ParseType<T>(list);
-			Terms = list.ToImmutableArray();
+			list.Sort();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+			Withs = list.Where(s => s.Op == TermOp.With).GroupBy(s => s.ID).ToImmutableDictionary(s => s.Key, k => k.First());
+			Withouts = list.Where(s => s.Op == TermOp.Without).GroupBy(s => s.ID).ToImmutableDictionary(s => s.Key, k => k.First());
+			Terms = Withs.Values.Concat(Withouts.Values).ToImmutableArray();
 
 			Flags |= list.Where(s => s.Flags == ComponentFlags.Added).Select(s => s.Flags).FirstOrDefault();
 			Flags |= list.Where(s => s.Flags == ComponentFlags.Removed).Select(s => s.Flags).FirstOrDefault();

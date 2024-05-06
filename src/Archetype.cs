@@ -55,12 +55,13 @@ public struct ArchetypeChunk
 		if (!EnsureCountersExists(column))
 			return;
 
-		var oldFlags = (ComponentFlags)(Counters[column][row & Archetype.CHUNK_THRESHOLD] >> 24); // Extract old flags
-		var number = (Counters[column][row & Archetype.CHUNK_THRESHOLD] & 0x00FFFFFF) + 1; // Extract old number, add 1
-		Counters[column][row & Archetype.CHUNK_THRESHOLD] = (int)(number | (int)oldFlags | ((int)flags << 24)); // Combine old flags, new number, and new flags
+		ref var value = ref Counters[column][row & Archetype.CHUNK_THRESHOLD];
+		var oldFlags = (ComponentFlags)((value >> 24) & 0xFF) | flags;
+		var number = ticks + 1;
+		value = number | ((int)oldFlags << 24);
 	}
 
-	public (bool, bool) HasFlags(int column, int row, ComponentFlags flags, int ticks)
+	public readonly (bool, bool) HasFlags(int column, int row, ComponentFlags flags, int ticks)
 	{
 		if (Counters == null ||
 			Counters.Length <= column ||
@@ -70,15 +71,14 @@ public struct ArchetypeChunk
 
 		ref readonly var value = ref Counters[column][row & Archetype.CHUNK_THRESHOLD];
 		var currentFlags = (ComponentFlags)((value >> 24) & 0xFF);
-		if ((currentFlags & flags) == 0)
-		{
+		if ((currentFlags & flags) != flags)
 			return (true, false);
-		}
+
 		var currentTicks = value & 0xFFFFFF;
 		return (true, ticks < currentTicks);
 	}
 
-	private bool EnsureCountersExists(int column)
+	internal bool EnsureCountersExists(int column)
 	{
 		if (Components == null)
 			return false;
@@ -207,7 +207,7 @@ public sealed class Archetype
 		ref var lastChunk = ref GetChunk(_count);
 		var removed = chunk.EntityAt(row);
 
-		if (row < _count)
+		//if (row < _count)
 		{
 			EcsAssert.Assert(lastChunk.EntityAt(_count) != EntityView.Invalid, "Entity is invalid. This should never happen!");
 
@@ -215,6 +215,9 @@ public sealed class Archetype
 
 			for (var i = 0; i < Components.Length; ++i)
 			{
+				if (lastChunk.Counters != null && chunk.EnsureCountersExists(i))
+					Array.Copy(lastChunk.Counters[i], _count & CHUNK_THRESHOLD, chunk.Counters[i], row & CHUNK_THRESHOLD, 1);
+
 				if (Components[i].Size <= 0)
 					continue;
 
@@ -283,6 +286,9 @@ public sealed class Archetype
 				// advance the sign with less components!
 				++y;
 			}
+
+			if (fromChunk.Counters != null && fromChunk.Counters[i] != null && toChunk.EnsureCountersExists(i))
+				Array.Copy(fromChunk.Counters[i], oldRow & CHUNK_THRESHOLD, toChunk.Counters[i], newRow & CHUNK_THRESHOLD, 1);
 
 			if (Components[i].Size <= 0)
 				continue;
