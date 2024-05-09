@@ -177,6 +177,8 @@ public sealed class EventWriter<T> : ISystemParam
 	public EventWriter()
 		=> throw new Exception("EventWriter must be initialized using the 'scheduler.AddEvent<T>' api");
 
+	public bool IsEmpty => _queue!.Count == 0;
+
 	public void Enqueue(T ev)
 		=> _queue!.Enqueue(ev);
 
@@ -192,6 +194,8 @@ public sealed class EventReader<T> : ISystemParam
 
 	public EventReader()
 		=> throw new Exception("EventReader must be initialized using the 'scheduler.AddEvent<T>' api");
+
+	public bool IsEmpty => _queue!.Count == 0;
 
 	public IEnumerable<T> Read()
 	{
