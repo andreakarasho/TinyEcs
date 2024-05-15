@@ -42,15 +42,17 @@ public sealed partial class FuncSystem<TArg>
 public enum Stages
 {
 	Startup,
+	FrameStart,
 	BeforeUpdate,
 	Update,
 	AfterUpdate,
+	FrameEnd
 }
 
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<FuncSystem<World>>[] _systems = new List<FuncSystem<World>>[(int)Stages.AfterUpdate + 1];
+    private readonly List<FuncSystem<World>>[] _systems = new List<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
     private readonly SysParamMap _resources = new ();
 
 	public Scheduler(World world)
@@ -73,7 +75,7 @@ public sealed partial class Scheduler
 		RunStage(Stages.Startup);
 		_systems[(int) Stages.Startup].Clear();
 
-		for (var stage = Stages.BeforeUpdate; stage <= Stages.AfterUpdate; stage += 1)
+		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
         	RunStage(stage);
     }
 
