@@ -87,6 +87,15 @@ public sealed class QueryBuilder
 		return this;
 	}
 
+	public QueryBuilder Optional<T>() where T :struct
+		=> Optional(_world.Component<T>().ID);
+
+	public QueryBuilder Optional(EcsID id)
+	{
+		_components.Add(new Term() { ID = id, Op = TermOp.Optional });
+		return this;
+	}
+
 	public Query Build()
 	{
 		var terms = _components.ToImmutableArray();
