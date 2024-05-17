@@ -18,7 +18,9 @@ public struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
-		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		if (column < 0 || column >= Components!.Length) return ref Unsafe.NullRef<T>();
+
+		//EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
 #if NET
 		return ref MemoryMarshal.GetArrayDataReference(array);
@@ -30,7 +32,8 @@ public struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
-		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		if (column < 0 || column >= Components!.Length) return Array.Empty<T>();
+		//EcsAssert.Assert(column >= 0 && column < Components!.Length);
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
 		return array.AsSpan(0, Count);
 	}
@@ -335,7 +338,7 @@ public sealed class Archetype
 
 			if (_comparer.Compare(current.ID.Value, search.ID.Value) == 0)
             {
-                if (search.Op != TermOp.With)
+                if (search.Op == TermOp.Without)
                     return -1;
 
                 ++j;

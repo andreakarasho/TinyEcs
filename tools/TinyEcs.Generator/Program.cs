@@ -182,10 +182,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var signCallback = (withEntityView ? "entityA, " : "") +
 				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
 				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
 
 				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
 				var worldLock = !withFilter ? "World." : "";
+				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = Unsafe.IsNullRef(ref t{j}A) ? 0 : 1;");
 
 				sb.AppendLine($@"
 						public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
@@ -198,11 +199,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 								foreach (ref readonly var chunk in arch)
 								{{
+									var done = 0;
 									{fieldList}
-									ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
-									ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+									{incFieldList}
 
-									while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+									while (done <= chunk.Count - 4)
 									{{
 										fn({signCallback});
 										{advanceField}
@@ -215,12 +216,16 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 										fn({signCallback});
 										{advanceField}
+
+										done += 4;
 									}}
 
-									while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+									while (done < chunk.Count)
 									{{
 										fn({signCallback});
 										{advanceField}
+
+										done += 1;
 									}}
 								}}
 							}}
@@ -266,11 +271,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 										ref var index = ref Unsafe.Unbox<int>(state!);
 										ref readonly var chunk = ref chunks.Span[index];
 
-										{fieldList}
-										ref var last = ref Unsafe.Add(ref t0A, chunk.Count - 4);
-										ref var last2 = ref Unsafe.Add(ref t0A, chunk.Count);
+										var done = 0;
 
-										while (Unsafe.IsAddressLessThan(ref t0A, ref last))
+										{fieldList}
+
+										while (done <= chunk.Count - 4)
 										{{
 											fn({signCallback});
 											{advanceField}
@@ -283,12 +288,16 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 											fn({signCallback});
 											{advanceField}
+
+											done += 4;
 										}}
 
-										while (Unsafe.IsAddressLessThan(ref t0A, ref last2))
+										while (done < chunk.Count)
 										{{
 											fn({signCallback});
 											{advanceField}
+
+											done += 1;
 										}}
 										cde.Signal();
 									}}, i);

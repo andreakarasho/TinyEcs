@@ -38,7 +38,8 @@ public static class TermExt
 public enum TermOp : byte
 {
     With,
-    Without
+    Without,
+	Optional
 }
 
 public readonly struct With<T> : IFilter where T : struct
@@ -57,5 +58,7 @@ public readonly struct Not<T> : IFilter where T : struct
 }
 
 public readonly struct Or<T> : IFilter where T : struct { }
+
+public readonly struct Optional<T> : IFilter where T : struct { }
 
 public interface IFilter { }

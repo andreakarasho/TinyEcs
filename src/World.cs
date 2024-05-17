@@ -534,6 +534,7 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(With<T>), Term.With(Value.ID));
 			_typesConvertion.Add(typeof(Not<T>), Term.Without(Value.ID));
 			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
+			_typesConvertion.Add(typeof(Optional<T>), new Term() { ID = Value.ID, Op = TermOp.Optional });
 
 			_componentInfosByType.Add(typeof(T), Value);
 

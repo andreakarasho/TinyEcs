@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace TinyEcs.Tests
 {
@@ -185,6 +186,55 @@ namespace TinyEcs.Tests
 			Assert.Throws<Exception>(() =>
 				ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
 			);
+		}
+
+		[Fact]
+		public void Query_Optional()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity();
+			ctx.World.Entity().Set(new IntComponent() { Value = -10 });
+			ctx.World.Entity().Set(new FloatComponent());
+			ctx.World.Entity().Set(new FloatComponent()).Set(new IntComponent() { Value = 10 });
+
+			var count = 0;
+			ctx.World.Query<(Optional<IntComponent>, With<FloatComponent>)>()
+				.Each((ref IntComponent maybeInt) => {
+					Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
+					count += 1;
+				});
+
+			Assert.Equal(2, count);
+		}
+
+		[Fact]
+		public void Query_Multiple_Optional()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity();
+			ctx.World.Entity().Set(new IntComponent() { Value = -10 });
+			ctx.World.Entity()
+				.Set(new IntComponent() { Value = 10 })
+				.Set<NormalTag>();
+			ctx.World.Entity()
+				.Set(new FloatComponent() { Value = 0.5f })
+				.Set<NormalTag>();
+			ctx.World.Entity()
+				.Set(new FloatComponent() { Value = 0.5f })
+				.Set(new IntComponent() { Value = 10 })
+				.Set<NormalTag>();;
+
+			var count = 0;
+			ctx.World.Query<(Optional<IntComponent>, Optional<FloatComponent>, With<NormalTag>)>()
+				.Each((ref IntComponent maybeInt, ref FloatComponent maybeFloat) => {
+					Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
+					Assert.True(Unsafe.IsNullRef(ref maybeFloat) || maybeFloat.Value == 0.5f);
+					count += 1;
+				});
+
+			Assert.Equal(3, count);
 		}
     }
 }
