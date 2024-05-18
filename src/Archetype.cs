@@ -328,35 +328,7 @@ public sealed class Archetype
 
     internal int FindMatch(ReadOnlySpan<Term> searching)
     {
-	    var currents = Components.AsSpan();
-	    var i = 0;
-	    var j = 0;
-
-        while (i < currents.Length && j < searching.Length)
-        {
-	        ref readonly var current = ref currents[i];
-	        ref readonly var search = ref searching[j];
-
-			if (_comparer.Compare(current.ID.Value, search.ID.Value) == 0)
-            {
-                if (search.Op == TermOp.Without)
-                    return -1;
-
-                ++j;
-            }
-            else if (current.ID > search.ID && search.Op != TermOp.With)
-            {
-	            ++j;
-                continue;
-            }
-
-            ++i;
-        }
-
-        while (j < searching.Length && searching[j].Op != TermOp.With)
-	        ++j;
-
-        return j == searching.Length ? 0 : 1;
+		return Match.Validate(_comparer, Components.AsSpan(), searching);
     }
 
     public void Print()

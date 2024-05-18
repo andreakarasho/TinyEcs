@@ -606,7 +606,9 @@ internal static class Lookup
 		EcsAssert.Panic(false, $"Type {type} is not registered. Register {type} using world.Entity<T>() or assign it to an entity.");
 	}
 
-    internal static class Query<TQuery, TFilter> where TQuery : struct where TFilter : struct
+    internal static class Query<TQuery, TFilter>
+		where TQuery : struct
+		where TFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ImmutableArray<Term> Columns;
