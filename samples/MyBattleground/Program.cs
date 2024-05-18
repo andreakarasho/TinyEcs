@@ -9,11 +9,6 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-var myQ = new MyQuery(ecs);
-myQ.With<Position>();
-myQ.With<Velocity>();
-var res = myQ.Fetch();
-
 ecs.Entity<PlayerTag>().Set<Networked>();
 ecs.Entity<Likes>();
 ecs.Entity<Dogs>();
