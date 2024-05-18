@@ -6,7 +6,7 @@ namespace TinyEcs;
 
 sealed class ComponentComparer :
 	IComparer<ulong>,
-	IComparer<Term>,
+	//IComparer<Term>,
 	IComparer<ComponentInfo>,
 	IEqualityComparer<ulong>,
 	IEqualityComparer<ComponentInfo>
@@ -29,10 +29,10 @@ sealed class ComponentComparer :
 		return CompareTerms(_world, x, y);
 	}
 
-	public int Compare(Term x, Term y)
-	{
-		return CompareTerms(_world, x.ID, y.ID);
-	}
+	// public int Compare(Term x, Term y)
+	// {
+	// 	return CompareTerms(_world, x.ID, y.ID);
+	// }
 
 	public static int CompareTerms(World world, ulong a, ulong b)
 	{

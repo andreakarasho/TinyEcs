@@ -200,7 +200,7 @@ public sealed partial class World : IDisposable
 				_namesToEntity.Remove(name, out var _);
 			}
 
-			QueryRaw([IDOp.Pair(Component<ChildOf>().ID, entity)])
+			QueryRaw([new Term([IDOp.Pair(Component<ChildOf>().ID, entity)], TermOp.With)])
 				.Each((EntityView child) => child.Delete());
 
 			ref var record = ref GetRecord(entity);
@@ -455,7 +455,7 @@ internal static class Hashing
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
 			if (val.Op == TermOp.With)
-				hc = unchecked(hc * 314159 + val.ID);
+				hc = unchecked(hc * 314159 + val.IDs[0]);
 		return hc;
 	}
 }
@@ -512,7 +512,7 @@ internal static class Lookup
 
 				var firstId = GetTerm(tuple[0]!.GetType());
 				var secondId = GetTerm(tuple[1]!.GetType());
-				var pairId = IDOp.Pair(firstId.ID, secondId.ID);
+				var pairId = IDOp.Pair(firstId.IDs[0], secondId.IDs[0]);
 
 				HashCode = pairId;
 				Size = 0;
@@ -530,11 +530,11 @@ internal static class Lookup
 			Value = new ComponentInfo(HashCode, Size);
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 
-			_typesConvertion.Add(typeof(T), Term.With(Value.ID));
-			_typesConvertion.Add(typeof(With<T>), Term.With(Value.ID));
-			_typesConvertion.Add(typeof(Not<T>), Term.Without(Value.ID));
-			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
-			_typesConvertion.Add(typeof(Optional<T>), new Term() { ID = Value.ID, Op = TermOp.Optional });
+			_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.With));
+			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
+			_typesConvertion.Add(typeof(Not<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
 
 			_componentInfosByType.Add(typeof(T), Value);
 
@@ -624,8 +624,8 @@ internal static class Lookup
 			ParseType<TFilter>(list);
 			Terms = list.ToImmutableArray();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.IDs[0], k => k);
+			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.IDs[0], k => k);
 
 			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}
@@ -643,8 +643,8 @@ internal static class Lookup
 			ParseType<T>(list);
 			Terms = list.ToImmutableArray();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
+			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.IDs[0], k => k);
+			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.IDs[0], k => k);
 
 			Hash = Hashing.Calculate(Withs.Values.ToArray());
 		}

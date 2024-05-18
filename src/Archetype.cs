@@ -74,6 +74,7 @@ public sealed class Archetype
     private readonly World _world;
     private readonly ComponentComparer _comparer;
     private readonly Dictionary<ulong, int> _lookup;
+	private readonly EcsID[] _ids;
     private int _count;
     internal List<EcsEdge> _edgesLeft, _edgesRight;
 
@@ -97,6 +98,8 @@ public sealed class Archetype
 		{
 			_lookup.Add(components[i].ID, i);
 		}
+
+		_ids = components.Select(s => s.ID).ToArray();
     }
 
     public World World => _world;
@@ -328,7 +331,7 @@ public sealed class Archetype
 
     internal int FindMatch(ReadOnlySpan<Term> searching)
     {
-		return Match.Validate(_comparer, Components.AsSpan(), searching);
+		return Match.Validate(_comparer, _ids, searching);
     }
 
     public void Print()

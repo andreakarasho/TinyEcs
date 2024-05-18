@@ -62,7 +62,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder With(EcsID id)
 	{
-		_components.Add(Term.With(id));
+		_components.Add(new(id, TermOp.With));
 		return this;
 	}
 
@@ -83,7 +83,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Without(EcsID id)
 	{
-		_components.Add(Term.Without(id));
+		_components.Add(new (id, TermOp.Without));
 		return this;
 	}
 
@@ -92,7 +92,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Optional(EcsID id)
 	{
-		_components.Add(new Term() { ID = id, Op = TermOp.Optional });
+		_components.Add(new (id, TermOp.Optional));
 		return this;
 	}
 
