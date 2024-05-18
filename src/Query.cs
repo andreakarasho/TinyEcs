@@ -150,14 +150,15 @@ public partial class Query : IDisposable
 		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
 			return;
 
-		var terms = _terms.AsSpan();
-		var first = World.FindArchetype(Hashing.Calculate(terms));
+		var ids = _terms.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly).Select(s => s.IDs[0]);
+
+		var first = World.FindArchetype(Hashing.Calculate(ids));
 		if (first == null)
 			return;
 
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
-		World.MatchArchetypes(first, terms, _matchedArchetypes);
+		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
 	}
 
 	public int Count()

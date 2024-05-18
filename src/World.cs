@@ -348,18 +348,18 @@ public sealed partial class World : IDisposable
 			static (world, terms) => new Query(world, terms));
 	}
 
-	public Query<TQuery> Query<TQuery>() where TQuery : struct
+	public Query Query<TQuery>() where TQuery : struct
 	{
-		return (Query<TQuery>) GetQuery(
+		return GetQuery(
 			Lookup.Query<TQuery>.Hash,
 		 	Lookup.Query<TQuery>.Terms,
 		 	static (world, _) => new Query<TQuery>(world)
 		);
 	}
 
-	public Query<TQuery, TFilter> Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
+	public Query Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
 	{
-		return (Query<TQuery, TFilter>) GetQuery(
+		return GetQuery(
 			Lookup.Query<TQuery, TFilter>.Hash,
 			Lookup.Query<TQuery, TFilter>.Terms,
 		 	static (world, _) => new Query<TQuery, TFilter>(world)
@@ -442,11 +442,13 @@ public sealed partial class World : IDisposable
 
 internal static class Hashing
 {
+	const ulong FIXED = 314159;
+
 	public static ulong Calculate(ReadOnlySpan<ComponentInfo> components)
 	{
 		var hc = (ulong)components.Length;
 		foreach (ref readonly var val in components)
-			hc = unchecked(hc * 314159 + val.ID);
+			hc = unchecked(hc * FIXED + val.ID);
 		return hc;
 	}
 
@@ -454,8 +456,15 @@ internal static class Hashing
 	{
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
-			if (val.Op == TermOp.With)
-				hc = unchecked(hc * 314159 + val.IDs[0]);
+			hc = unchecked(hc * FIXED + (ulong)val.IDs.Sum(s => s.ID) + (byte)val.Op);
+		return hc;
+	}
+
+	public static ulong Calculate(IEnumerable<EcsID> terms)
+	{
+		var hc = (ulong)terms.Count();
+		foreach (var val in terms)
+			hc = unchecked(hc * FIXED + val);
 		return hc;
 	}
 }
@@ -571,6 +580,31 @@ internal static class Lookup
 
 	static void ParseTuple(ITuple tuple, SortedSet<Term> terms)
 	{
+		var mainType = tuple.GetType();
+		TermOp? op = null;
+		var tmpTerms = terms;
+
+		if (typeof(IAtLeast).IsAssignableFrom(mainType))
+		{
+			op = TermOp.AtLeastOne;
+			tmpTerms = new ();
+		}
+		else if (typeof(IExactly).IsAssignableFrom(mainType))
+		{
+			op = TermOp.Exactly;
+			tmpTerms = new ();
+		}
+		else if (typeof(INone).IsAssignableFrom(mainType))
+		{
+			op = TermOp.None;
+			tmpTerms = new ();
+		}
+		else if (typeof(IOr).IsAssignableFrom(mainType))
+		{
+			op = TermOp.Or;
+			tmpTerms = new ();
+		}
+
 		for (var i = 0; i < tuple.Length; ++i)
 		{
 			var type = tuple[i]!.GetType();
@@ -582,7 +616,12 @@ internal static class Lookup
 			}
 
 			var term = GetTerm(type);
-			terms.Add(term);
+			tmpTerms.Add(term);
+		}
+
+		if (op.HasValue)
+		{
+			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs).ToArray(), op.Value));
 		}
 	}
 
@@ -611,42 +650,33 @@ internal static class Lookup
 		where TFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableArray<Term> Columns;
-		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
 			var list = new SortedSet<Term>();
+
 			ParseType<TQuery>(list);
-			Columns = list.ToImmutableArray();
-
 			ParseType<TFilter>(list);
+
 			Terms = list.ToImmutableArray();
-
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.IDs[0], k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.IDs[0], k => k);
-
-			Hash = Hashing.Calculate(Withs.Values.ToArray());
+			Hash = Hashing.Calculate(Terms.ToArray());
 		}
 	}
 
-	internal static class Query<T> where T : struct
+	internal static class Query<TQuery> where TQuery : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
 			var list = new SortedSet<Term>();
-			ParseType<T>(list);
+
+			ParseType<TQuery>(list);
+
 			Terms = list.ToImmutableArray();
-
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.IDs[0], k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.IDs[0], k => k);
-
-			Hash = Hashing.Calculate(Withs.Values.ToArray());
+			Hash = Hashing.Calculate(Terms.ToArray());
 		}
 	}
 }

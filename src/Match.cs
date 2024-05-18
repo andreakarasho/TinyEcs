@@ -30,7 +30,7 @@ static class Match
                     }
                     break;
                 case TermOp.Exactly:
-                    if (!ids.OrderBy(id => id).SequenceEqual(term.IDs.OrderBy(tid => tid)))
+                    if (!ids.SequenceEqual(term.IDs))
                     {
                         return 1; // Exact match required but not found
                     }
@@ -41,6 +41,20 @@ static class Match
                         return -1; // None of the specified IDs should be present
                     }
                     break;
+				case TermOp.Or:
+					var match = true;
+					foreach (var tid in term.IDs)
+					{
+						if (!ids.Any(id => comparer.Compare(id, tid) == 0))
+						{
+							match = false;
+							break;
+						}
+					}
+
+					if (match)
+						return 0;
+					break;
             }
         }
 

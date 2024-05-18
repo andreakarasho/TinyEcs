@@ -24,9 +24,6 @@ public readonly struct Term : IComparable<Term>
     {
         return IDs[0].CompareTo(other.IDs[0]);
     }
-
-	public static implicit operator ulong (Term term) => term.IDs[0];
-	public static implicit operator Term (ulong id) => new (id, TermOp.With);
 }
 
 public enum TermOp : byte
@@ -36,17 +33,52 @@ public enum TermOp : byte
     Optional,
     AtLeastOne,
     Exactly,
-    None
+    None,
+	Or
 }
 
 public interface IFilter { }
 
-public readonly struct With<T> : IFilter where T : struct {
-	static readonly Term Term = new (Lookup.Component<T>.Value.ID, TermOp.With);
-
-	public static implicit operator Term(With<T> _) => Term;
-}
+public readonly struct With<T> : IFilter where T : struct { }
 public readonly struct Without<T> : IFilter where T : struct { }
 public readonly struct Not<T> : IFilter where T : struct { }
-public readonly struct Or<T> : IFilter where T : struct { }
 public readonly struct Optional<T> : IFilter where T : struct { }
+public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+public readonly struct None<T> : ITuple, INone, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+
+public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+
+
+public interface IAtLeast {}
+public interface IExactly {}
+public interface INone {}
+public interface IOr { }
