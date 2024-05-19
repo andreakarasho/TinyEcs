@@ -52,7 +52,7 @@ public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
-	public object this[int index] => _value[index];
+	public object? this[int index] => _value[index];
 
 	public int Length => _value.Length;
 }
@@ -60,7 +60,7 @@ public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
-	public object this[int index] => _value[index];
+	public object? this[int index] => _value[index];
 
 	public int Length => _value.Length;
 }
@@ -68,7 +68,7 @@ public readonly struct None<T> : ITuple, INone, IFilter where T : ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
-	public object this[int index] => _value[index];
+	public object? this[int index] => _value[index];
 
 	public int Length => _value.Length;
 }
@@ -76,7 +76,7 @@ public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
-	public object this[int index] => _value[index];
+	public object? this[int index] => _value[index];
 
 	public int Length => _value.Length;
 }

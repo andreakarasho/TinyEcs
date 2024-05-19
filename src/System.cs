@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 using SysParamMap = Dictionary<Type, ISystemParam>;
 
-public sealed partial class FuncSystem<TArg>
+public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
 	private readonly TArg _arg;
     private readonly Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> _fn;
