@@ -5,13 +5,11 @@ namespace TinyEcs;
 public ref struct QueryInternal
 {
 	private readonly ReadOnlySpan<Archetype> _archetypes;
-	private readonly ReadOnlySpan<Term> _terms;
 	private int _index;
 
-	internal QueryInternal(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
+	internal QueryInternal(ReadOnlySpan<Archetype> archetypes)
 	{
 		_archetypes = archetypes;
-		_terms = terms;
 		_index = -1;
 	}
 
@@ -129,28 +127,50 @@ public partial class Query : IDisposable
 	private readonly ImmutableArray<Term> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
+	private Query? _subQuery;
 
 	internal Query(World world, ImmutableArray<Term> terms)
 	{
 		World = world;
-		_terms = terms;
 		_matchedArchetypes = new List<Archetype>();
+
+		_terms = terms.Where(s => s.Op != TermOp.Or)
+			.ToImmutableSortedSet()
+			.ToImmutableArray();
+
+		ref var subQuery = ref _subQuery;
+
+		foreach (var or in terms.Where(s => s.Op == TermOp.Or).Reverse())
+		{
+			var orIds = or.IDs.Select(s => new Term(s, TermOp.With));
+			subQuery = World.GetQuery
+			(
+				Hashing.Calculate(orIds.ToArray()),
+				orIds.ToImmutableArray(),
+				static (world, terms) => new Query(world, terms)
+			);
+
+			subQuery = ref subQuery._subQuery;
+		}
 	}
 
 	public World World { get; internal set; }
-	internal List<Archetype> MatchedArchetypes => _matchedArchetypes;
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
 
 	public void Dispose() => ThreadCounter.Dispose();
 
 	internal void Match()
 	{
+		_subQuery?.Match();
+
 		var allArchetypes = World.Archetypes;
 
 		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
 			return;
 
-		var ids = _terms.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly).Select(s => s.IDs[0]);
+		var ids = _terms
+			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
+			.SelectMany(s => s.IDs);
 
 		var first = World.FindArchetype(Hashing.Calculate(ids));
 		if (first == null)
@@ -164,7 +184,14 @@ public partial class Query : IDisposable
 	public int Count()
 	{
 		Match();
-		return _matchedArchetypes.Sum(static s => s.Count);
+
+		var count = _matchedArchetypes.Sum(static s => s.Count);
+		if (count == 0 && _subQuery != null)
+		{
+			return _subQuery.Count();
+		}
+
+		return count;
 	}
 
 	public ref T Single<T>() where T : struct
@@ -200,7 +227,15 @@ public partial class Query : IDisposable
 	{
 		Match();
 
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes), _terms.AsSpan());
+		if (_subQuery != null)
+		{
+			if (_matchedArchetypes.All(static s => s.Count == 0))
+			{
+				return _subQuery.GetEnumerator();
+			}
+		}
+
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
 
 	public void Each(QueryFilterDelegateWithEntity fn)

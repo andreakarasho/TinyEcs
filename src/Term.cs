@@ -14,7 +14,7 @@ public readonly struct Term : IComparable<Term>
         Op = op;
     }
 
-    public Term(EcsID[] ids, TermOp op)
+    public Term(IEnumerable<EcsID> ids, TermOp op)
     {
         IDs = new SortedSet<EcsID>(ids).ToImmutableSortedSet();
         Op = op;
@@ -22,7 +22,12 @@ public readonly struct Term : IComparable<Term>
 
     public readonly int CompareTo(Term other)
     {
-        return IDs[0].CompareTo(other.IDs[0]);
+		var idComparison = IDs[0].CompareTo(other.IDs[0]);
+        if (idComparison != 0)
+        {
+            return idComparison;
+        }
+        return Op.CompareTo(other.Op);
     }
 }
 
@@ -78,7 +83,7 @@ public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
 }
 
 
-public interface IAtLeast {}
-public interface IExactly {}
-public interface INone {}
+public interface IAtLeast { }
+public interface IExactly { }
+public interface INone { }
 public interface IOr { }

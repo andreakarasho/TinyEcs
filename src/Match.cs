@@ -42,18 +42,7 @@ static class Match
                     }
                     break;
 				case TermOp.Or:
-					var match = true;
-					foreach (var tid in term.IDs)
-					{
-						if (!ids.Any(id => comparer.Compare(id, tid) == 0))
-						{
-							match = false;
-							break;
-						}
-					}
-
-					if (match)
-						return 0;
+					// Or is applied on query side
 					break;
             }
         }

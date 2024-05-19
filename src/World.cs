@@ -578,7 +578,7 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, SortedSet<Term> terms)
+	static void ParseTuple(ITuple tuple, List<Term> terms)
 	{
 		var mainType = tuple.GetType();
 		TermOp? op = null;
@@ -621,11 +621,11 @@ internal static class Lookup
 
 		if (op.HasValue)
 		{
-			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs).ToArray(), op.Value));
+			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), op.Value));
 		}
 	}
 
-	static void ParseType<T>(SortedSet<Term> terms) where T : struct
+	static void ParseType<T>(List<Term> terms) where T : struct
 	{
 		var type = typeof(T);
 		if (_typesConvertion.TryGetValue(type, out var term))
@@ -654,13 +654,15 @@ internal static class Lookup
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
+			var list = new List<Term>();
 
 			ParseType<TQuery>(list);
 			ParseType<TFilter>(list);
 
 			Terms = list.ToImmutableArray();
-			Hash = Hashing.Calculate(Terms.ToArray());
+
+			list.Sort();
+			Hash = Hashing.Calculate(list.ToArray());
 		}
 	}
 
@@ -671,12 +673,14 @@ internal static class Lookup
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
+			var list = new List<Term>();
 
 			ParseType<TQuery>(list);
 
 			Terms = list.ToImmutableArray();
-			Hash = Hashing.Calculate(Terms.ToArray());
+
+			list.Sort();
+			Hash = Hashing.Calculate(list.ToArray());
 		}
 	}
 }
