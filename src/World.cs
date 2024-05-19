@@ -200,8 +200,14 @@ public sealed partial class World : IDisposable
 				_namesToEntity.Remove(name, out var _);
 			}
 
-			QueryRaw([new Term([IDOp.Pair(Component<ChildOf>().ID, entity)], TermOp.With)])
-				.Each((EntityView child) => child.Delete());
+			// TODO: remove the allocations
+			// TODO: check for this interesting flecs approach:
+			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
+			var term0 = new Term(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
+			var term1 = new Term(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
+			QueryRaw([term0]).Each((EntityView child) => child.Delete());
+			QueryRaw([term1]).Each((EntityView child) => child.Delete());
+
 
 			ref var record = ref GetRecord(entity);
 
