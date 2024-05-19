@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System;
 using TinyEcs;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Diagnostics.CodeAnalysis;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
@@ -356,9 +358,6 @@ while (true)
 
 	Console.WriteLine("query done in {0} ms", start - last);
 }
-
-
-
 
 enum TileType
 {

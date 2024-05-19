@@ -155,9 +155,16 @@ public partial class Query : IDisposable
 	}
 
 	public World World { get; internal set; }
+
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
 
-	public void Dispose() => ThreadCounter.Dispose();
+
+
+	public void Dispose()
+	{
+		_subQuery?.Dispose();
+		ThreadCounter.Dispose();
+	}
 
 	internal void Match()
 	{
