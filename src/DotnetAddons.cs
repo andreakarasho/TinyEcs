@@ -155,6 +155,8 @@ namespace System.Runtime.CompilerServices
 		//     The name of the parameter whose expression should be captured as a string.
 		public CallerArgumentExpressionAttribute(string parameterName) { }
 	}
+
+	internal static class IsExternalInit {}
 }
 #endif
 

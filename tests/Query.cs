@@ -236,5 +236,141 @@ namespace TinyEcs.Tests
 
 			Assert.Equal(3, count);
 		}
+
+		[Fact]
+		public void Query_AtLeast()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity();
+			ctx.World.Entity().Set<NormalTag>();
+
+			var ent0 = ctx.World.Entity()
+				.Set<NormalTag2>()
+				.Set(new FloatComponent());
+
+			var ent1 = ctx.World.Entity()
+				.Set(new BoolComponent());
+
+			var entRes = ctx.World
+				.Query<AtLeast<(IntComponent, BoolComponent)>>()
+				.Single();
+
+			Assert.Equal(ent1.ID, entRes.ID);
+		}
+
+		[Fact]
+		public void Query_Exactly()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity();
+			ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set(new BoolComponent());
+
+			var ent0 = ctx.World.Entity()
+				.Set<NormalTag2>()
+				.Set(new IntComponent());
+
+			var ent1 = ctx.World.Entity()
+				.Set(new IntComponent())
+				.Set(new BoolComponent());
+
+			var entRes = ctx.World
+				.Query<Exactly<(IntComponent, BoolComponent)>>()
+				.Single();
+
+			Assert.Equal(ent1.ID, entRes.ID);
+		}
+
+		[Fact]
+		public void Query_None()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set<NormalTag2>()
+				.Set(new BoolComponent());
+
+			ctx.World.Entity()
+				.Set<NormalTag2>()
+				.Set(new BoolComponent());
+
+			ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set(new BoolComponent());
+
+			var count = ctx.World
+				.Query<None<(NormalTag, NormalTag2)>>()
+				.Count();
+
+			var total = ctx.World.EntityCount - 3;
+
+			Assert.Equal(total, count);
+		}
+
+		[Fact]
+		public void Query_Or()
+		{
+			using var ctx = new Context();
+
+			var ent0 = ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set<NormalTag2>();
+
+			var ent1 = ctx.World.Entity()
+				.Set(new BoolComponent())
+				.Set<NormalTag>();
+
+			var ent2 = ctx.World.Entity()
+				.Set(new IntComponent())
+				.Set(new BoolComponent());
+
+			var query = ctx.World
+				.Query<(NormalTag, NormalTag2),
+						Or<(BoolComponent, NormalTag)>>();
+
+			var resEnt = query.Single();
+			Assert.Equal(ent0.ID, resEnt.ID);
+
+			ent0.Delete();
+			resEnt = query.Single();
+			Assert.Equal(ent1.ID, resEnt.ID);
+		}
+
+		[Fact]
+		public void Query_Nested_Or()
+		{
+			using var ctx = new Context();
+
+			var ent0 = ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set<NormalTag2>();
+
+			var ent1 = ctx.World.Entity()
+				.Set(new BoolComponent())
+				.Set<NormalTag>();
+
+			var ent2 = ctx.World.Entity()
+				.Set(new IntComponent())
+				.Set(new BoolComponent());
+
+			var query = ctx.World
+				.Query<(NormalTag, NormalTag2),
+						Or<(BoolComponent, NormalTag, Or<(IntComponent, BoolComponent)>)>>();
+
+			var resEnt = query.Single();
+			Assert.Equal(ent0.ID, resEnt.ID);
+
+			ent0.Delete();
+			resEnt = query.Single();
+			Assert.Equal(ent1.ID, resEnt.ID);
+
+			ent1.Delete();
+			resEnt = query.Single();
+			Assert.Equal(ent2.ID, resEnt.ID);
+		}
     }
 }

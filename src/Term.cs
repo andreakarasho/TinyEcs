@@ -1,64 +1,88 @@
+using System.Collections.Immutable;
+
 namespace TinyEcs;
 
-[DebuggerDisplay("{ID} - {Op}")]
-public struct Term : IComparable<Term>
+[DebuggerDisplay("{IDs} - {Op}")]
+public readonly struct Term : IComparable<Term>
 {
-    public EcsID ID;
-    public TermOp Op;
+	public readonly ImmutableSortedSet<EcsID> IDs;
+    public readonly TermOp Op;
 
-    public static Term With(ulong id) => new() { ID = id, Op = TermOp.With };
+    public Term(EcsID id, TermOp op)
+    {
+        IDs = new SortedSet<EcsID>() { id }.ToImmutableSortedSet();
+        Op = op;
+    }
 
-    public static Term Without(ulong id) => new() { ID = id, Op = TermOp.Without };
+    public Term(IEnumerable<EcsID> ids, TermOp op)
+    {
+        IDs = new SortedSet<EcsID>(ids).ToImmutableSortedSet();
+        Op = op;
+    }
 
     public readonly int CompareTo(Term other)
     {
-        return ID.CompareTo(other.ID);
-    }
-
-    public static implicit operator ulong(Term id) => id.ID;
-
-    public static implicit operator Term(ulong id) => With(id);
-
-    public static Term operator !(Term id) => id.Not();
-
-    public static Term operator -(Term id) => id.Not();
-
-    public static Term operator +(Term id) => With(id);
-}
-
-public static class TermExt
-{
-    public static Term Not(this ref Term term)
-    {
-        term.Op = TermOp.Without;
-        return term;
+		var idComparison = IDs[0].CompareTo(other.IDs[0]);
+        if (idComparison != 0)
+        {
+            return idComparison;
+        }
+        return Op.CompareTo(other.Op);
     }
 }
 
 public enum TermOp : byte
 {
-    With,
+	With,
     Without,
-	Optional
+    Optional,
+    AtLeastOne,
+    Exactly,
+    None,
+	Or
 }
-
-public readonly struct With<T> : IFilter where T : struct
-{
-	public static implicit operator Term(With<T> _) => Term.With(Lookup.Component<T>.Value.ID);
-}
-
-public readonly struct Without<T> : IFilter where T : struct
-{
-	public static implicit operator Term(Without<T> _) => Term.Without(Lookup.Component<T>.Value.ID);
-}
-
-public readonly struct Not<T> : IFilter where T : struct
-{
-	public static implicit operator Term(Not<T> _) => Term.Without(Lookup.Component<T>.Value.ID);
-}
-
-public readonly struct Or<T> : IFilter where T : struct { }
-
-public readonly struct Optional<T> : IFilter where T : struct { }
 
 public interface IFilter { }
+
+public readonly struct With<T> : IFilter where T : struct { }
+public readonly struct Without<T> : IFilter where T : struct { }
+public readonly struct Not<T> : IFilter where T : struct { }
+public readonly struct Optional<T> : IFilter where T : struct { }
+public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object? this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object? this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+public readonly struct None<T> : ITuple, INone, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object? this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
+{
+	static readonly ITuple _value = default(T)!;
+
+	public object? this[int index] => _value[index];
+
+	public int Length => _value.Length;
+}
+
+
+public interface IAtLeast { }
+public interface IExactly { }
+public interface INone { }
+public interface IOr { }

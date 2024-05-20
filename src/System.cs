@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 using SysParamMap = Dictionary<Type, ISystemParam>;
 
-public sealed partial class FuncSystem<TArg>
+public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
 	private readonly TArg _arg;
     private readonly Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> _fn;
@@ -216,7 +216,7 @@ partial class World : ISystemParam
 	void ISystemParam.New(object arguments) { }
 }
 
-partial class Query<TQuery> : ISystemParam
+partial class Query<TQueryData> : ISystemParam
 {
 	public Query() : this (null!) { }
 
@@ -226,7 +226,7 @@ partial class Query<TQuery> : ISystemParam
 	}
 }
 
-partial class Query<TQuery, TFilter> : ISystemParam
+partial class Query<TQueryData, TQueryFilter> : ISystemParam
 {
 	public Query() : this (null!) { }
 

@@ -5,13 +5,11 @@ namespace TinyEcs;
 public ref struct QueryInternal
 {
 	private readonly ReadOnlySpan<Archetype> _archetypes;
-	private readonly ReadOnlySpan<Term> _terms;
 	private int _index;
 
-	internal QueryInternal(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<Term> terms)
+	internal QueryInternal(ReadOnlySpan<Archetype> archetypes)
 	{
 		_archetypes = archetypes;
-		_terms = terms;
 		_index = -1;
 	}
 
@@ -62,7 +60,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder With(EcsID id)
 	{
-		_components.Add(Term.With(id));
+		_components.Add(new(id, TermOp.With));
 		return this;
 	}
 
@@ -83,7 +81,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Without(EcsID id)
 	{
-		_components.Add(Term.Without(id));
+		_components.Add(new (id, TermOp.Without));
 		return this;
 	}
 
@@ -92,7 +90,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Optional(EcsID id)
 	{
-		_components.Add(new Term() { ID = id, Op = TermOp.Optional });
+		_components.Add(new (id, TermOp.Optional));
 		return this;
 	}
 
@@ -108,18 +106,18 @@ public sealed class QueryBuilder
 }
 
 
-public sealed partial class Query<TQuery> : Query
-	where TQuery : struct
+public sealed partial class Query<TQueryData> : Query
+	where TQueryData : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQueryData>.Terms)
 	{
 	}
 }
 
-public sealed partial class Query<TQuery, TFilter> : Query
-	where TQuery : struct where TFilter : struct
+public sealed partial class Query<TQueryData, TQueryFilter> : Query
+	where TQueryData : struct where TQueryFilter : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQueryData, TQueryFilter>.Terms)
 	{
 	}
 }
@@ -129,41 +127,78 @@ public partial class Query : IDisposable
 	private readonly ImmutableArray<Term> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
+	private Query? _subQuery;
 
 	internal Query(World world, ImmutableArray<Term> terms)
 	{
 		World = world;
-		_terms = terms;
 		_matchedArchetypes = new List<Archetype>();
+
+		_terms = terms.Where(s => s.Op != TermOp.Or)
+			.ToImmutableSortedSet()
+			.ToImmutableArray();
+
+		ref var subQuery = ref _subQuery;
+
+		foreach (var or in terms.Where(s => s.Op == TermOp.Or).Reverse())
+		{
+			var orIds = or.IDs.Select(s => new Term(s, TermOp.With));
+			subQuery = World.GetQuery
+			(
+				Hashing.Calculate(orIds.ToArray()),
+				orIds.ToImmutableArray(),
+				static (world, terms) => new Query(world, terms)
+			);
+
+			subQuery = ref subQuery._subQuery;
+		}
 	}
 
 	public World World { get; internal set; }
-	internal List<Archetype> MatchedArchetypes => _matchedArchetypes;
+
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
 
-	public void Dispose() => ThreadCounter.Dispose();
+
+
+	public void Dispose()
+	{
+		_subQuery?.Dispose();
+		ThreadCounter.Dispose();
+	}
 
 	internal void Match()
 	{
+		_subQuery?.Match();
+
 		var allArchetypes = World.Archetypes;
 
 		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
 			return;
 
-		var terms = _terms.AsSpan();
-		var first = World.FindArchetype(Hashing.Calculate(terms));
+		var ids = _terms
+			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
+			.SelectMany(s => s.IDs);
+
+		var first = World.FindArchetype(Hashing.Calculate(ids));
 		if (first == null)
 			return;
 
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
-		World.MatchArchetypes(first, terms, _matchedArchetypes);
+		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
 	}
 
 	public int Count()
 	{
 		Match();
-		return _matchedArchetypes.Sum(static s => s.Count);
+
+		var count = _matchedArchetypes.Sum(static s => s.Count);
+		if (count == 0 && _subQuery != null)
+		{
+			return _subQuery.Count();
+		}
+
+		return count;
 	}
 
 	public ref T Single<T>() where T : struct
@@ -199,7 +234,15 @@ public partial class Query : IDisposable
 	{
 		Match();
 
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes), _terms.AsSpan());
+		if (_subQuery != null)
+		{
+			if (_matchedArchetypes.All(static s => s.Count == 0))
+			{
+				return _subQuery.GetEnumerator();
+			}
+		}
+
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
 
 	public void Each(QueryFilterDelegateWithEntity fn)

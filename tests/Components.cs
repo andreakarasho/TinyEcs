@@ -41,6 +41,8 @@ struct BoolComponent
 
 struct NormalTag { }
 
+struct NormalTag2 { }
+
 public class ComponentTest
 {
     [Fact]

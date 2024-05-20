@@ -200,8 +200,14 @@ public sealed partial class World : IDisposable
 				_namesToEntity.Remove(name, out var _);
 			}
 
-			QueryRaw([IDOp.Pair(Component<ChildOf>().ID, entity)])
-				.Each((EntityView child) => child.Delete());
+			// TODO: remove the allocations
+			// TODO: check for this interesting flecs approach:
+			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
+			var term0 = new Term(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
+			var term1 = new Term(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
+			QueryRaw([term0]).Each((EntityView child) => child.Delete());
+			QueryRaw([term1]).Each((EntityView child) => child.Delete());
+
 
 			ref var record = ref GetRecord(entity);
 
@@ -348,21 +354,21 @@ public sealed partial class World : IDisposable
 			static (world, terms) => new Query(world, terms));
 	}
 
-	public Query<TQuery> Query<TQuery>() where TQuery : struct
+	public Query Query<TQueryData>() where TQueryData : struct
 	{
-		return (Query<TQuery>) GetQuery(
-			Lookup.Query<TQuery>.Hash,
-		 	Lookup.Query<TQuery>.Terms,
-		 	static (world, _) => new Query<TQuery>(world)
+		return GetQuery(
+			Lookup.Query<TQueryData>.Hash,
+		 	Lookup.Query<TQueryData>.Terms,
+		 	static (world, _) => new Query<TQueryData>(world)
 		);
 	}
 
-	public Query<TQuery, TFilter> Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
+	public Query Query<TQueryData, TQueryFilter>() where TQueryData : struct where TQueryFilter : struct
 	{
-		return (Query<TQuery, TFilter>) GetQuery(
-			Lookup.Query<TQuery, TFilter>.Hash,
-			Lookup.Query<TQuery, TFilter>.Terms,
-		 	static (world, _) => new Query<TQuery, TFilter>(world)
+		return GetQuery(
+			Lookup.Query<TQueryData, TQueryFilter>.Hash,
+			Lookup.Query<TQueryData, TQueryFilter>.Terms,
+		 	static (world, _) => new Query<TQueryData, TQueryFilter>(world)
 		);
 	}
 
@@ -442,11 +448,13 @@ public sealed partial class World : IDisposable
 
 internal static class Hashing
 {
+	const ulong FIXED = 314159;
+
 	public static ulong Calculate(ReadOnlySpan<ComponentInfo> components)
 	{
 		var hc = (ulong)components.Length;
 		foreach (ref readonly var val in components)
-			hc = unchecked(hc * 314159 + val.ID);
+			hc = unchecked(hc * FIXED + val.ID);
 		return hc;
 	}
 
@@ -454,8 +462,15 @@ internal static class Hashing
 	{
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
-			if (val.Op == TermOp.With)
-				hc = unchecked(hc * 314159 + val.ID);
+			hc = unchecked(hc * FIXED + (ulong)val.IDs.Sum(s => s.ID) + (byte)val.Op);
+		return hc;
+	}
+
+	public static ulong Calculate(IEnumerable<EcsID> terms)
+	{
+		var hc = (ulong)terms.Count();
+		foreach (var val in terms)
+			hc = unchecked(hc * FIXED + val);
 		return hc;
 	}
 }
@@ -512,7 +527,7 @@ internal static class Lookup
 
 				var firstId = GetTerm(tuple[0]!.GetType());
 				var secondId = GetTerm(tuple[1]!.GetType());
-				var pairId = IDOp.Pair(firstId.ID, secondId.ID);
+				var pairId = IDOp.Pair(firstId.IDs[0], secondId.IDs[0]);
 
 				HashCode = pairId;
 				Size = 0;
@@ -530,11 +545,11 @@ internal static class Lookup
 			Value = new ComponentInfo(HashCode, Size);
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 
-			_typesConvertion.Add(typeof(T), Term.With(Value.ID));
-			_typesConvertion.Add(typeof(With<T>), Term.With(Value.ID));
-			_typesConvertion.Add(typeof(Not<T>), Term.Without(Value.ID));
-			_typesConvertion.Add(typeof(Without<T>), Term.Without(Value.ID));
-			_typesConvertion.Add(typeof(Optional<T>), new Term() { ID = Value.ID, Op = TermOp.Optional });
+			_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.With));
+			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
+			_typesConvertion.Add(typeof(Not<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
 
 			_componentInfosByType.Add(typeof(T), Value);
 
@@ -569,8 +584,33 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, SortedSet<Term> terms)
+	static void ParseTuple(ITuple tuple, List<Term> terms)
 	{
+		var mainType = tuple.GetType();
+		TermOp? op = null;
+		var tmpTerms = terms;
+
+		if (typeof(IAtLeast).IsAssignableFrom(mainType))
+		{
+			op = TermOp.AtLeastOne;
+			tmpTerms = new ();
+		}
+		else if (typeof(IExactly).IsAssignableFrom(mainType))
+		{
+			op = TermOp.Exactly;
+			tmpTerms = new ();
+		}
+		else if (typeof(INone).IsAssignableFrom(mainType))
+		{
+			op = TermOp.None;
+			tmpTerms = new ();
+		}
+		else if (typeof(IOr).IsAssignableFrom(mainType))
+		{
+			op = TermOp.Or;
+			tmpTerms = new ();
+		}
+
 		for (var i = 0; i < tuple.Length; ++i)
 		{
 			var type = tuple[i]!.GetType();
@@ -582,11 +622,16 @@ internal static class Lookup
 			}
 
 			var term = GetTerm(type);
-			terms.Add(term);
+			tmpTerms.Add(term);
+		}
+
+		if (op.HasValue)
+		{
+			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), op.Value));
 		}
 	}
 
-	static void ParseType<T>(SortedSet<Term> terms) where T : struct
+	static void ParseType<T>(List<Term> terms) where T : struct
 	{
 		var type = typeof(T);
 		if (_typesConvertion.TryGetValue(type, out var term))
@@ -606,47 +651,42 @@ internal static class Lookup
 		EcsAssert.Panic(false, $"Type {type} is not registered. Register {type} using world.Entity<T>() or assign it to an entity.");
 	}
 
-    internal static class Query<TQuery, TFilter>
-		where TQuery : struct
-		where TFilter : struct
+    internal static class Query<TQueryData, TQueryFilter>
+		where TQueryData : struct
+		where TQueryFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableArray<Term> Columns;
-		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
-			ParseType<TQuery>(list);
-			Columns = list.ToImmutableArray();
+			var list = new List<Term>();
 
-			ParseType<TFilter>(list);
+			ParseType<TQueryData>(list);
+			ParseType<TQueryFilter>(list);
+
 			Terms = list.ToImmutableArray();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
-
-			Hash = Hashing.Calculate(Withs.Values.ToArray());
+			list.Sort();
+			Hash = Hashing.Calculate(list.ToArray());
 		}
 	}
 
-	internal static class Query<T> where T : struct
+	internal static class Query<TQueryData> where TQueryData : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
-		public static readonly ImmutableDictionary<EcsID, Term> Withs, Withouts;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new SortedSet<Term>();
-			ParseType<T>(list);
+			var list = new List<Term>();
+
+			ParseType<TQueryData>(list);
+
 			Terms = list.ToImmutableArray();
 
-			Withs = list.Where(s => s.Op == TermOp.With).ToImmutableDictionary(s => s.ID, k => k);
-			Withouts = list.Where(s => s.Op == TermOp.Without).ToImmutableDictionary(s => s.ID, k => k);
-
-			Hash = Hashing.Calculate(Withs.Values.ToArray());
+			list.Sort();
+			Hash = Hashing.Calculate(list.ToArray());
 		}
 	}
 }
