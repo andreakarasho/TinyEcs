@@ -189,7 +189,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = Unsafe.IsNullRef(ref t{j}A) ? 0 : 1;");
+				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
 
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
@@ -199,6 +199,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						foreach (var arch in {getQuery})
 						{{
 							{columnIndices}
+							{incFieldList}
 
 							var chunks = arch.Chunks;
 							ref var chunk = ref MemoryMarshal.GetReference(chunks);
@@ -208,7 +209,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{{
 								var done = 0;
 								{fieldList}
-								{incFieldList}
 
 								while (done <= chunk.Count - 4)
 								{{
@@ -255,10 +255,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var signCallback = (withEntityView ? "entityA, " : "") +
 				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
 				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
 
 				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
+				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
 
 				sb.AppendLine($@"
 					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
@@ -270,6 +271,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						foreach (var arch in query)
 						{{
 							{columnIndices}
+							{incFieldList}
 
 							var chunks = arch.MemChunks;
 							cde.AddCount(chunks.Length);
