@@ -216,7 +216,7 @@ partial class World : ISystemParam
 	void ISystemParam.New(object arguments) { }
 }
 
-partial class Query<TQuery> : ISystemParam
+partial class Query<TQueryData> : ISystemParam
 {
 	public Query() : this (null!) { }
 
@@ -226,7 +226,7 @@ partial class Query<TQuery> : ISystemParam
 	}
 }
 
-partial class Query<TQuery, TFilter> : ISystemParam
+partial class Query<TQueryData, TQueryFilter> : ISystemParam
 {
 	public Query() : this (null!) { }
 

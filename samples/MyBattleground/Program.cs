@@ -26,7 +26,6 @@ ecs.Entity().Set(new Velocity());
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3}).Set<Networked>();
 
-
 ecs.Query<(Position, Likes), Or<(Position, Networked)>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);

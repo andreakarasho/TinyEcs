@@ -106,18 +106,18 @@ public sealed class QueryBuilder
 }
 
 
-public sealed partial class Query<TQuery> : Query
-	where TQuery : struct
+public sealed partial class Query<TQueryData> : Query
+	where TQueryData : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQueryData>.Terms)
 	{
 	}
 }
 
-public sealed partial class Query<TQuery, TFilter> : Query
-	where TQuery : struct where TFilter : struct
+public sealed partial class Query<TQueryData, TQueryFilter> : Query
+	where TQueryData : struct where TQueryFilter : struct
 {
-	internal Query(World world) : base(world, Lookup.Query<TQuery, TFilter>.Terms)
+	internal Query(World world) : base(world, Lookup.Query<TQueryData, TQueryFilter>.Terms)
 	{
 	}
 }

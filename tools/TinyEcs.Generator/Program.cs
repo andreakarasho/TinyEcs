@@ -3,6 +3,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+#pragma warning disable IDE0055
+#pragma warning disable IDE0008
+#pragma warning disable IDE0058
 
 namespace TinyEcs.Generator;
 
@@ -184,24 +187,102 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
 				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
 
-				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
+				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
 				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = Unsafe.IsNullRef(ref t{j}A) ? 0 : 1;");
 
 				sb.AppendLine($@"
-						public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+					{{
+						{worldLock}BeginDeferred();
+
+						foreach (var arch in {getQuery})
 						{{
-							{worldLock}BeginDeferred();
+							{columnIndices}
 
-							foreach (var arch in {(withFilter ? getQuery : "this")})
+							var chunks = arch.Chunks;
+							ref var chunk = ref MemoryMarshal.GetReference(chunks);
+							ref var lastChunk = ref Unsafe.Add(ref chunk, chunks.Length);
+
+							while (Unsafe.IsAddressLessThan(ref chunk, ref lastChunk))
 							{{
-								{columnIndices}
+								var done = 0;
+								{fieldList}
+								{incFieldList}
 
-								foreach (ref readonly var chunk in arch)
+								while (done <= chunk.Count - 4)
 								{{
+									fn({signCallback});
+									{advanceField}
+
+									fn({signCallback});
+									{advanceField}
+
+									fn({signCallback});
+									{advanceField}
+
+									fn({signCallback});
+									{advanceField}
+
+									done += 4;
+								}}
+
+								while (done < chunk.Count)
+								{{
+									fn({signCallback});
+									{advanceField}
+
+									done += 1;
+								}}
+
+								chunk = ref Unsafe.Add(ref chunk, 1);
+							}}
+						}}
+
+						{worldLock}EndDeferred();
+					}}
+				");
+			}
+
+			// multi thread
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
+				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
+				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
+				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+				var signCallback = (withEntityView ? "entityA, " : "") +
+				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
+				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
+				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
+
+				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
+				var worldLock = !withFilter ? "World." : "";
+
+				sb.AppendLine($@"
+					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
+					{{
+						{worldLock}BeginDeferred();
+						var query = {getQuery};
+						var cde = query.ThreadCounter;
+						cde.Reset();
+						foreach (var arch in query)
+						{{
+							{columnIndices}
+
+							var chunks = arch.MemChunks;
+							cde.AddCount(chunks.Length);
+
+							for (var i = 0; i < chunks.Length; ++i)
+							{{
+								System.Threading.ThreadPool.QueueUserWorkItem(state => {{
+									ref var index = ref Unsafe.Unbox<int>(state!);
+									ref readonly var chunk = ref chunks.Span[index];
+
 									var done = 0;
+
 									{fieldList}
-									{incFieldList}
 
 									while (done <= chunk.Count - 4)
 									{{
@@ -227,87 +308,15 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 										done += 1;
 									}}
-								}}
+									cde.Signal();
+								}}, i);
 							}}
-
-							{worldLock}EndDeferred();
 						}}
-				");
-			}
 
-			// multi thread
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
-				var signCallback = (withEntityView ? "entityA, " : "") +
-				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, 1);");
-
-				var getQuery = $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()";
-				var worldLock = !withFilter ? "World." : "";
-
-				sb.AppendLine($@"
-						public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-						{{
-							{worldLock}BeginDeferred();
-							var query = {(withFilter ? getQuery : "this")};
-							var cde = query.ThreadCounter;
-							cde.Reset();
-							foreach (var arch in query)
-							{{
-								{columnIndices}
-
-								var chunks = arch.MemChunks;
-								cde.AddCount(chunks.Length);
-
-								for (var i = 0; i < chunks.Length; ++i)
-								{{
-									System.Threading.ThreadPool.QueueUserWorkItem(state => {{
-										ref var index = ref Unsafe.Unbox<int>(state!);
-										ref readonly var chunk = ref chunks.Span[index];
-
-										var done = 0;
-
-										{fieldList}
-
-										while (done <= chunk.Count - 4)
-										{{
-											fn({signCallback});
-											{advanceField}
-
-											fn({signCallback});
-											{advanceField}
-
-											fn({signCallback});
-											{advanceField}
-
-											fn({signCallback});
-											{advanceField}
-
-											done += 4;
-										}}
-
-										while (done < chunk.Count)
-										{{
-											fn({signCallback});
-											{advanceField}
-
-											done += 1;
-										}}
-										cde.Signal();
-									}}, i);
-								}}
-							}}
-
-							cde.Signal();
-							cde.Wait();
-							{worldLock}EndDeferred();
-						}}
+						cde.Signal();
+						cde.Wait();
+						{worldLock}EndDeferred();
+					}}
 				");
 			}
 

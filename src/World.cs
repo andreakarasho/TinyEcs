@@ -354,21 +354,21 @@ public sealed partial class World : IDisposable
 			static (world, terms) => new Query(world, terms));
 	}
 
-	public Query Query<TQuery>() where TQuery : struct
+	public Query Query<TQueryData>() where TQueryData : struct
 	{
 		return GetQuery(
-			Lookup.Query<TQuery>.Hash,
-		 	Lookup.Query<TQuery>.Terms,
-		 	static (world, _) => new Query<TQuery>(world)
+			Lookup.Query<TQueryData>.Hash,
+		 	Lookup.Query<TQueryData>.Terms,
+		 	static (world, _) => new Query<TQueryData>(world)
 		);
 	}
 
-	public Query Query<TQuery, TFilter>() where TQuery : struct where TFilter : struct
+	public Query Query<TQueryData, TQueryFilter>() where TQueryData : struct where TQueryFilter : struct
 	{
 		return GetQuery(
-			Lookup.Query<TQuery, TFilter>.Hash,
-			Lookup.Query<TQuery, TFilter>.Terms,
-		 	static (world, _) => new Query<TQuery, TFilter>(world)
+			Lookup.Query<TQueryData, TQueryFilter>.Hash,
+			Lookup.Query<TQueryData, TQueryFilter>.Terms,
+		 	static (world, _) => new Query<TQueryData, TQueryFilter>(world)
 		);
 	}
 
@@ -651,9 +651,9 @@ internal static class Lookup
 		EcsAssert.Panic(false, $"Type {type} is not registered. Register {type} using world.Entity<T>() or assign it to an entity.");
 	}
 
-    internal static class Query<TQuery, TFilter>
-		where TQuery : struct
-		where TFilter : struct
+    internal static class Query<TQueryData, TQueryFilter>
+		where TQueryData : struct
+		where TQueryFilter : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ulong Hash;
@@ -662,8 +662,8 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQuery>(list);
-			ParseType<TFilter>(list);
+			ParseType<TQueryData>(list);
+			ParseType<TQueryFilter>(list);
 
 			Terms = list.ToImmutableArray();
 
@@ -672,7 +672,7 @@ internal static class Lookup
 		}
 	}
 
-	internal static class Query<TQuery> where TQuery : struct
+	internal static class Query<TQueryData> where TQueryData : struct
 	{
 		public static readonly ImmutableArray<Term> Terms;
 		public static readonly ulong Hash;
@@ -681,7 +681,7 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQuery>(list);
+			ParseType<TQueryData>(list);
 
 			Terms = list.ToImmutableArray();
 
