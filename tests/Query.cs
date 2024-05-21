@@ -183,9 +183,9 @@ namespace TinyEcs.Tests
 				.Set(new IntComponent())
 				.Set<NormalTag>();
 
-			Assert.ThrowsAny<Exception>(() =>
-				ctx.World.Query<ValueTuple, (With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
-			);
+			var query = ctx.World.Query<ValueTuple, (With<FloatComponent>, With<IntComponent>, With<NormalTag>)>();
+
+			Assert.ThrowsAny<Exception>(() => _ = query.Single());
 		}
 
 		[Fact]
