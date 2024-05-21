@@ -171,7 +171,7 @@ var sword = ecs.Entity()
 woodenChest.Set<Contents>(sword);
 
 // Grab all relationships of type (Contents, *)
-ecs.Each<With<(Contents, Wildcard)>>((EntityView entity) =>
+ecs.Each<ValueTuple, With<(Contents, Wildcard)>>((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
 ```
 

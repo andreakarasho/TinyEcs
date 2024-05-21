@@ -65,7 +65,7 @@ ecs.Query<(Position, Velocity)>()
 	});
 
 
-ecs.Query<With<Networked>>()
+ecs.Query<ValueTuple, With<Networked>>()
 	.Each((EntityView asd) => {
 	Console.WriteLine("networked entity {0}", asd.ID);
 });
