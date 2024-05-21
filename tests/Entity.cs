@@ -296,8 +296,8 @@ namespace TinyEcs.Tests
 
 			ent.Delete();
 
-			Assert.Throws<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
-			Assert.Throws<Exception>(() => ctx.World.Delete(Wildcard.ID));
+			Assert.ThrowsAny<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
+			Assert.ThrowsAny<Exception>(() => ctx.World.Delete(Wildcard.ID));
 		}
 
 		[Fact]

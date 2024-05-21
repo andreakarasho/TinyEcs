@@ -506,7 +506,14 @@ internal static class Lookup
 	private static Term GetTerm(Type type)
 	{
 		var ok = _typesConvertion.TryGetValue(type, out var term);
-		EcsAssert.Assert(ok, $"component not found with type {type}");
+		if (!ok)
+		{
+			var exists = _componentInfosByType.ContainsKey(type);
+			if (exists)
+				EcsAssert.Assert(ok, $"The tag '{type}' cannot be used as query data");
+			else
+				EcsAssert.Assert(ok, $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
+		}
 		return term;
 	}
 
@@ -525,9 +532,9 @@ internal static class Lookup
 				var tuple = (ITuple)default(T);
 				EcsAssert.Panic(tuple.Length == 2, "Relations must be composed by 2 arguments only.");
 
-				var firstId = GetTerm(tuple[0]!.GetType());
-				var secondId = GetTerm(tuple[1]!.GetType());
-				var pairId = IDOp.Pair(firstId.IDs[0], secondId.IDs[0]);
+				var firstId = _componentInfosByType[tuple[0]!.GetType()].ID;
+				var secondId = _componentInfosByType[tuple[1]!.GetType()].ID;
+				var pairId = IDOp.Pair(firstId, secondId);
 
 				HashCode = pairId;
 				Size = 0;
@@ -545,11 +552,15 @@ internal static class Lookup
 			Value = new ComponentInfo(HashCode, Size);
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 
-			_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.With));
+			if (Size > 0)
+			{
+				_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.With));
+				_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
+			}
+
 			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
 			_typesConvertion.Add(typeof(Not<T>), new (Value.ID, TermOp.Without));
 			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
-			_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
 
 			_componentInfosByType.Add(typeof(T), Value);
 
@@ -584,7 +595,17 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, List<Term> terms)
+	static void Validate(Type type)
+	{
+		if (typeof(ITuple).IsAssignableFrom(type))
+		{
+
+		}
+
+
+	}
+
+	static void ParseTuple(ITuple tuple, List<Term> terms, Func<Type, (bool, string?)> validate)
 	{
 		var mainType = tuple.GetType();
 		TermOp? op = null;
@@ -617,8 +638,14 @@ internal static class Lookup
 
 			if (typeof(ITuple).IsAssignableFrom(type))
 			{
-				ParseTuple((ITuple)tuple[i]!, terms);
+				ParseTuple((ITuple)tuple[i]!, terms, validate);
 				continue;
+			}
+
+			if (!op.HasValue)
+			{
+				(var isValid, var errorMsg) = validate(type);
+				EcsAssert.Panic(isValid, errorMsg);
 			}
 
 			var term = GetTerm(type);
@@ -631,19 +658,22 @@ internal static class Lookup
 		}
 	}
 
-	static void ParseType<T>(List<Term> terms) where T : struct
+	static void ParseType<T>(List<Term> terms, Func<Type, (bool, string?)> validate) where T : struct
 	{
 		var type = typeof(T);
-		if (_typesConvertion.TryGetValue(type, out var term))
+		if (typeof(ITuple).IsAssignableFrom(type))
 		{
-			terms.Add(term);
+			ParseTuple((ITuple)default(T), terms, validate);
 
 			return;
 		}
 
-		if (typeof(ITuple).IsAssignableFrom(type))
+		(var isValid, var errorMsg) = validate(type);
+		EcsAssert.Panic(isValid, errorMsg);
+
+		if (_typesConvertion.TryGetValue(type, out var term))
 		{
-			ParseTuple((ITuple)default(T), terms);
+			terms.Add(term);
 
 			return;
 		}
@@ -662,8 +692,8 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQueryData>(list);
-			ParseType<TQueryFilter>(list);
+			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), "Filters are not allowed in QueryData"));
+			ParseType<TQueryFilter>(list, s => (typeof(IFilter).IsAssignableFrom(s) && s.GetInterfaces().Any(k => typeof(IFilter) == k), "You must use a IFilter type"));
 
 			Terms = list.ToImmutableArray();
 
@@ -681,7 +711,7 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQueryData>(list);
+			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' not allowed in QueryData"));
 
 			Terms = list.ToImmutableArray();
 

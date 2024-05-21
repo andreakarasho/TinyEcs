@@ -47,7 +47,7 @@ public interface IFilter { }
 public readonly struct With<T> : IFilter where T : struct { }
 public readonly struct Without<T> : IFilter where T : struct { }
 public readonly struct Not<T> : IFilter where T : struct { }
-public readonly struct Optional<T> : IFilter where T : struct { }
+public readonly struct Optional<T> where T : struct { }
 public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
 {
 	static readonly ITuple _value = default(T)!;
@@ -82,7 +82,7 @@ public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
 }
 
 
-public interface IAtLeast { }
-public interface IExactly { }
-public interface INone { }
-public interface IOr { }
+public interface IAtLeast : IFilter { }
+public interface IExactly : IFilter { }
+public interface INone : IFilter { }
+public interface IOr : IFilter { }

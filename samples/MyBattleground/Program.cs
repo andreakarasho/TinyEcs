@@ -1,39 +1,49 @@
 // https://github.com/jasonliang-dev/entity-component-system
 using System.Diagnostics;
-using System;
 using TinyEcs;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Diagnostics.CodeAnalysis;
+
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
+var tt = typeof(AtLeast<(PlayerTag, Networked)>);
+var inter = tt.GetInterfaces();
+
+var f0 = typeof(IFilter).IsAssignableFrom(tt);
+var f1 = tt.GetInterfaces().Any(k => typeof(IFilter) == k);
 
 using var ecs = new World();
+
 
 ecs.Entity<PlayerTag>().Set<Networked>();
 ecs.Entity<Likes>();
 ecs.Entity<Dogs>();
 ecs.Entity<Position>();
+ecs.Entity<ManagedData>();
 ecs.Entity<Velocity>().Set<Networked>();
 
 
 ecs.Entity().Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity());
+ecs.Entity().Set(new Position() { X = 99 }).Set(new Velocity());
+ecs.Entity().Set(new Position() { X = 999 }).Set(new Velocity());
+ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Set<Networked>();
 ecs.Entity().Set(new Velocity());
 
+
+ecs.Query<(Optional<Position>, Velocity)>();
 
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3}).Set<Networked>();
 
-ecs.Query<(Position, Likes), Or<(Position, Networked)>>()
+ecs.Query<(Position, ManagedData), Or<(Position, With<Networked>)>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
 		Console.WriteLine("is null {0} - {1}", isNull, e.Name());
 	});
 
-ecs.Query<(Optional<Position>, With<Velocity>)>()
+ecs.Query<Optional<Position>, With<Velocity>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
@@ -41,7 +51,7 @@ ecs.Query<(Optional<Position>, With<Velocity>)>()
 	});
 
 
-ecs.Query<(With<Position>, With<Velocity>)>()
+ecs.Query<Position, With<Velocity>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
@@ -423,3 +433,4 @@ enum GameStates
 }
 
 struct Networked { }
+delegate void Query2Del<T0, T1>(ref T0 t0, ref T1 t1);

@@ -4,6 +4,9 @@ static class Match
 {
 	public static int Validate(IComparer<ulong> comparer, EcsID[] ids, ReadOnlySpan<Term> terms)
 	{
+		if (terms.IsEmpty)
+			return -1;
+
         foreach (var term in terms)
         {
             switch (term.Op)
