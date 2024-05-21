@@ -82,7 +82,7 @@ public readonly struct Or<T> : ITuple, IOr, IFilter where T : ITuple
 }
 
 
-public interface IAtLeast { }
-public interface IExactly { }
-public interface INone { }
-public interface IOr { }
+public interface IAtLeast : IFilter { }
+public interface IExactly : IFilter { }
+public interface INone : IFilter { }
+public interface IOr : IFilter { }

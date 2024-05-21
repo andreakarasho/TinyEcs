@@ -183,7 +183,7 @@ namespace TinyEcs.Tests
 				.Set(new IntComponent())
 				.Set<NormalTag>();
 
-			Assert.Throws<Exception>(() =>
+			Assert.ThrowsAny<Exception>(() =>
 				ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
 			);
 		}
@@ -371,6 +371,30 @@ namespace TinyEcs.Tests
 			ent1.Delete();
 			resEnt = query.Single();
 			Assert.Equal(ent2.ID, resEnt.ID);
+		}
+
+		[Fact]
+		public void Query_FilterTypes_In_QueryData()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity<IntComponent>();
+			ctx.World.Entity<FloatComponent>();
+
+			Assert.ThrowsAny<Exception>(ctx.World.Query<With<IntComponent>>);
+			Assert.ThrowsAny<Exception>(ctx.World.Query<(FloatComponent, With<IntComponent>)>);
+		}
+
+		[Fact]
+		public void Query_QueryData_In_FilterType()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Entity<IntComponent>();
+			ctx.World.Entity<FloatComponent>();
+
+			Assert.ThrowsAny<Exception>(ctx.World.Query<IntComponent, FloatComponent>);
+			Assert.ThrowsAny<Exception>(ctx.World.Query<(FloatComponent, (IntComponent, With<IntComponent>))>);
 		}
     }
 }
