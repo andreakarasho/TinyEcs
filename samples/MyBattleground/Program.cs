@@ -6,6 +6,11 @@ using System.Runtime.CompilerServices;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
+var tt = typeof(AtLeast<(PlayerTag, Networked)>);
+var inter = tt.GetInterfaces();
+
+var f0 = typeof(IFilter).IsAssignableFrom(tt);
+var f1 = tt.GetInterfaces().Any(k => typeof(IFilter) == k);
 
 using var ecs = new World();
 
@@ -26,7 +31,7 @@ ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Set<Networked>
 ecs.Entity().Set(new Velocity());
 
 
-ecs.Query<Position, Velocity>();
+ecs.Query<(Optional<Position>, Velocity)>();
 
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3}).Set<Networked>();

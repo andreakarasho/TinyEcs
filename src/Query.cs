@@ -140,7 +140,10 @@ public partial class Query : IDisposable
 
 		ref var subQuery = ref _subQuery;
 
-		foreach (var or in terms.Where(s => s.Op == TermOp.Or).Reverse())
+		// NOTE: current Or rule: (Or<..>, Or<..>).
+		//		 Unsupported nested Or<> (Or<.., Or<...>>)
+		// 		 which needs a terms.Where(..).Reverse()
+		foreach (var or in terms.Where(s => s.Op == TermOp.Or))
 		{
 			var orIds = or.IDs.Select(s => new Term(s, TermOp.With));
 			subQuery = World.GetQuery

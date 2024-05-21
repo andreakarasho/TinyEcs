@@ -173,7 +173,7 @@ namespace TinyEcs.Tests
 				.Set(new FloatComponent())
 				.Set(new IntComponent());
 
-			var result = ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>()
+			var result = ctx.World.Query<ValueTuple, (With<FloatComponent>, With<IntComponent>, With<NormalTag>)>()
 				.Single();
 
 			Assert.Equal(singleton.ID, result.ID);
@@ -184,7 +184,7 @@ namespace TinyEcs.Tests
 				.Set<NormalTag>();
 
 			Assert.ThrowsAny<Exception>(() =>
-				ctx.World.Query<(With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
+				ctx.World.Query<ValueTuple, (With<FloatComponent>, With<IntComponent>, With<NormalTag>)>().Single()
 			);
 		}
 
@@ -199,7 +199,7 @@ namespace TinyEcs.Tests
 			ctx.World.Entity().Set(new FloatComponent()).Set(new IntComponent() { Value = 10 });
 
 			var count = 0;
-			ctx.World.Query<(Optional<IntComponent>, With<FloatComponent>)>()
+			ctx.World.Query<Optional<IntComponent>, With<FloatComponent>>()
 				.Each((ref IntComponent maybeInt) => {
 					Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
 					count += 1;
@@ -227,7 +227,7 @@ namespace TinyEcs.Tests
 				.Set<NormalTag>();;
 
 			var count = 0;
-			ctx.World.Query<(Optional<IntComponent>, Optional<FloatComponent>, With<NormalTag>)>()
+			ctx.World.Query<(Optional<IntComponent>, Optional<FloatComponent>), With<NormalTag>>()
 				.Each((ref IntComponent maybeInt, ref FloatComponent maybeFloat) => {
 					Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
 					Assert.True(Unsafe.IsNullRef(ref maybeFloat) || maybeFloat.Value == 0.5f);
@@ -253,7 +253,7 @@ namespace TinyEcs.Tests
 				.Set(new BoolComponent());
 
 			var entRes = ctx.World
-				.Query<AtLeast<(IntComponent, BoolComponent)>>()
+				.Query<ValueTuple, AtLeast<(IntComponent, BoolComponent)>>()
 				.Single();
 
 			Assert.Equal(ent1.ID, entRes.ID);
@@ -303,7 +303,7 @@ namespace TinyEcs.Tests
 				.Set(new BoolComponent());
 
 			var count = ctx.World
-				.Query<None<(NormalTag, NormalTag2)>>()
+				.Query<ValueTuple, None<(With<NormalTag>, With<NormalTag2>)>>()
 				.Count();
 
 			var total = ctx.World.EntityCount - 3;
@@ -329,8 +329,7 @@ namespace TinyEcs.Tests
 				.Set(new BoolComponent());
 
 			var query = ctx.World
-				.Query<(NormalTag, NormalTag2),
-						Or<(BoolComponent, NormalTag)>>();
+				.Query<ValueTuple, (Or<(With<NormalTag>, With<NormalTag2>)>, Or<(BoolComponent, With<NormalTag>)>)>();
 
 			var resEnt = query.Single();
 			Assert.Equal(ent0.ID, resEnt.ID);
@@ -358,8 +357,10 @@ namespace TinyEcs.Tests
 				.Set(new BoolComponent());
 
 			var query = ctx.World
-				.Query<(NormalTag, NormalTag2),
-						Or<(BoolComponent, NormalTag, Or<(IntComponent, BoolComponent)>)>>();
+				.Query<ValueTuple,
+					(Or<(With<NormalTag>, With<NormalTag2>)>,
+					Or<(BoolComponent, With<NormalTag>)>,
+					Or<(IntComponent, BoolComponent)>)>();
 
 			var resEnt = query.Single();
 			Assert.Equal(ent0.ID, resEnt.ID);

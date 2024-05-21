@@ -642,8 +642,11 @@ internal static class Lookup
 				continue;
 			}
 
-			(var isValid, var errorMsg) = validate(type);
-			EcsAssert.Panic(isValid, errorMsg);
+			if (!op.HasValue)
+			{
+				(var isValid, var errorMsg) = validate(type);
+				EcsAssert.Panic(isValid, errorMsg);
+			}
 
 			var term = GetTerm(type);
 			tmpTerms.Add(term);
@@ -658,6 +661,12 @@ internal static class Lookup
 	static void ParseType<T>(List<Term> terms, Func<Type, (bool, string?)> validate) where T : struct
 	{
 		var type = typeof(T);
+		if (typeof(ITuple).IsAssignableFrom(type))
+		{
+			ParseTuple((ITuple)default(T), terms, validate);
+
+			return;
+		}
 
 		(var isValid, var errorMsg) = validate(type);
 		EcsAssert.Panic(isValid, errorMsg);
@@ -665,13 +674,6 @@ internal static class Lookup
 		if (_typesConvertion.TryGetValue(type, out var term))
 		{
 			terms.Add(term);
-
-			return;
-		}
-
-		if (typeof(ITuple).IsAssignableFrom(type))
-		{
-			ParseTuple((ITuple)default(T), terms, validate);
 
 			return;
 		}
@@ -691,7 +693,7 @@ internal static class Lookup
 			var list = new List<Term>();
 
 			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), "Filters are not allowed in QueryData"));
-			ParseType<TQueryFilter>(list, s => (typeof(IFilter).IsAssignableFrom(s) && s.GetInterfaces().All(k => typeof(IFilter).IsAssignableFrom(k)), "You must use a IFilter type"));
+			ParseType<TQueryFilter>(list, s => (typeof(IFilter).IsAssignableFrom(s) && s.GetInterfaces().Any(k => typeof(IFilter) == k), "You must use a IFilter type"));
 
 			Terms = list.ToImmutableArray();
 
@@ -709,7 +711,7 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), "Filters are not allowed in QueryData"));
+			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' not allowed in QueryData"));
 
 			Terms = list.ToImmutableArray();
 
