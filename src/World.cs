@@ -692,8 +692,8 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), "Filters are not allowed in QueryData"));
-			ParseType<TQueryFilter>(list, s => (typeof(IFilter).IsAssignableFrom(s) && s.GetInterfaces().Any(k => typeof(IFilter) == k), "You must use a IFilter type"));
+			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));
+			ParseType<TQueryFilter>(list, s => (typeof(IFilter).IsAssignableFrom(s) && s.GetInterfaces().Any(k => typeof(IFilter) == k), $"You must use a IFilter type for '{s}'"));
 
 			Terms = list.ToImmutableArray();
 
@@ -711,7 +711,7 @@ internal static class Lookup
 		{
 			var list = new List<Term>();
 
-			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' not allowed in QueryData"));
+			ParseType<TQueryData>(list, s => (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));
 
 			Terms = list.ToImmutableArray();
 
