@@ -462,7 +462,7 @@ internal static class Hashing
 	{
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
-			hc = unchecked(hc * FIXED + (ulong)val.IDs.Sum(s => s.ID) + (byte)val.Op);
+			hc = unchecked(hc * FIXED + (ulong)val.IDs.Select(s => s.ID).Sum(s => s.ID) + (byte)val.Op);
 		return hc;
 	}
 
@@ -508,11 +508,10 @@ internal static class Lookup
 		var ok = _typesConvertion.TryGetValue(type, out var term);
 		if (!ok)
 		{
-			var exists = _componentInfosByType.ContainsKey(type);
-			if (exists)
-				EcsAssert.Assert(ok, $"The tag '{type}' cannot be used as query data");
-			else
-				EcsAssert.Assert(ok, $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
+			EcsAssert.Assert(ok,
+				_componentInfosByType.ContainsKey(type)
+					? $"The tag '{type}' cannot be used as query data"
+					: $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
 		}
 		return term;
 	}
@@ -594,16 +593,6 @@ internal static class Lookup
 			return ValueType.Equals(t1, t2) ? 0 : size;
 		}
     }
-
-	static void Validate(Type type)
-	{
-		if (typeof(ITuple).IsAssignableFrom(type))
-		{
-
-		}
-
-
-	}
 
 	static void ParseTuple(ITuple tuple, List<Term> terms, Func<Type, (bool, string?)> validate)
 	{

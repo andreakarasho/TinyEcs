@@ -145,7 +145,7 @@ public partial class Query : IDisposable
 		// 		 which needs a terms.Where(..).Reverse()
 		foreach (var or in terms.Where(s => s.Op == TermOp.Or))
 		{
-			var orIds = or.IDs.Select(s => new Term(s, TermOp.With));
+			var orIds = or.IDs.Select(s => new Term(s.ID, s.Op));
 			subQuery = World.GetQuery
 			(
 				Hashing.Calculate(orIds.ToArray()),
@@ -180,7 +180,8 @@ public partial class Query : IDisposable
 
 		var ids = _terms
 			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
-			.SelectMany(s => s.IDs);
+			.SelectMany(s => s.IDs)
+			.Select(s => s.ID);
 
 		var first = World.FindArchetype(Hashing.Calculate(ids));
 		if (first == null)

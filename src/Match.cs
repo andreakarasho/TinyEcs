@@ -12,13 +12,13 @@ static class Match
             switch (term.Op)
             {
                 case TermOp.With:
-                    if (!ids.Any(id => comparer.Compare(id, term.IDs[0]) == 0))
+                    if (ids.All(id => ComponentComparer.CompareTerms(null, id, term.IDs[0].ID) != 0))
                     {
                         return 1; // Required ID not found
                     }
                     break;
                 case TermOp.Without:
-                    if (ids.Any(id => comparer.Compare(id, term.IDs[0]) == 0))
+                    if (ids.Any(id => ComponentComparer.CompareTerms(null, id, term.IDs[0].ID) == 0))
                     {
                         return -1; // Forbidden ID found
                     }
@@ -27,19 +27,19 @@ static class Match
                     // Do nothing, as presence or absence is acceptable
                     break;
                 case TermOp.AtLeastOne:
-                    if (!ids.Any(id => term.IDs.Any(tid => comparer.Compare(id, tid) == 0)))
+                    if (!ids.Any(id => term.IDs.Any(tid => ComponentComparer.CompareTerms(null, id, tid.ID)== 0)))
                     {
                         return 1; // At least one required ID not found
                     }
                     break;
                 case TermOp.Exactly:
-                    if (!ids.SequenceEqual(term.IDs))
+                    if (!ids.SequenceEqual(term.IDs.Select(s => s.ID)))
                     {
                         return 1; // Exact match required but not found
                     }
                     break;
                 case TermOp.None:
-                    if (ids.Any(id => term.IDs.Any(tid => comparer.Compare(id, tid) == 0)))
+                    if (ids.Any(id => term.IDs.Any(tid => ComponentComparer.CompareTerms(null, id, tid.ID) == 0)))
                     {
                         return -1; // None of the specified IDs should be present
                     }

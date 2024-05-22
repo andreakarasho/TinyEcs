@@ -31,12 +31,10 @@ ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Set<Networked>
 ecs.Entity().Set(new Velocity());
 
 
-ecs.Query<(Optional<Position>, Velocity)>();
-
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3}).Set<Networked>();
 
-ecs.Query<(Position, ManagedData), Or<(Position, With<Networked>)>>()
+ecs.Query<(Position, ManagedData), Or<(Position, Without<Networked>)>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 

@@ -5,24 +5,24 @@ namespace TinyEcs;
 [DebuggerDisplay("{IDs} - {Op}")]
 public readonly struct Term : IComparable<Term>
 {
-	public readonly ImmutableSortedSet<EcsID> IDs;
+	public readonly ImmutableSortedSet<(EcsID ID, TermOp Op)> IDs;
     public readonly TermOp Op;
 
     public Term(EcsID id, TermOp op)
     {
-        IDs = new SortedSet<EcsID>() { id }.ToImmutableSortedSet();
+        IDs = new SortedSet<(EcsID ID, TermOp Op)>() { (id, op) }.ToImmutableSortedSet();
         Op = op;
     }
 
-    public Term(IEnumerable<EcsID> ids, TermOp op)
+    public Term(IEnumerable<(EcsID ID, TermOp Op)> ids, TermOp op)
     {
-        IDs = new SortedSet<EcsID>(ids).ToImmutableSortedSet();
+        IDs = new SortedSet<(EcsID ID, TermOp Op)>(ids).ToImmutableSortedSet();
         Op = op;
     }
 
     public readonly int CompareTo(Term other)
     {
-		var idComparison = IDs[0].CompareTo(other.IDs[0]);
+		var idComparison = IDs[0].ID.CompareTo(other.IDs[0].ID);
         if (idComparison != 0)
         {
             return idComparison;
