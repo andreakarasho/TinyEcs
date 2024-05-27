@@ -32,9 +32,9 @@ ecs.Entity().Set(new Velocity());
 
 
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
-ecs.Entity().Set(new Position() {X = 3}).Set<Networked>();
+ecs.Entity().Set(new Position() {X = 3});
 
-ecs.Query<(Position, ManagedData), Or<(Position, Without<Networked>)>>()
+ecs.Query<(Position, ManagedData), Or<(Position, ManagedData, Or<Without<Networked>>)>>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
@@ -398,13 +398,13 @@ struct ChunkTile;
 class ComplexQuery : ISystemParam
 {
 	public Query<(Position, Velocity)>? Q0;
-	public Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>? Q1;
+	public Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>? Q1;
 
 	void ISystemParam.New(object arguments)
 	{
 		var world = (World) arguments;
 		Q0 = (Query<(Position, Velocity)>)world.Query<(Position, Velocity)>();
-		Q1 = (Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>)world.Query<(Position, Velocity), (With<PlayerTag>, Not<Likes>)>();
+		Q1 = (Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>)world.Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>();
 	}
 }
 
