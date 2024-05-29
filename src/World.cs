@@ -203,8 +203,8 @@ public sealed partial class World : IDisposable
 			// TODO: remove the allocations
 			// TODO: check for this interesting flecs approach:
 			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
-			var term0 = new Term(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
-			var term1 = new Term(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
+			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
+			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
 			QueryRaw([term0]).Each((EntityView child) => child.Delete());
 			QueryRaw([term1]).Each((EntityView child) => child.Delete());
 
@@ -346,7 +346,7 @@ public sealed partial class World : IDisposable
         _archRoot.Print();
     }
 
-	public Query QueryRaw(ImmutableArray<Term> terms)
+	public Query QueryRaw(ImmutableArray<QueryTerm> terms)
 	{
 		return GetQuery(
 			Hashing.Calculate(terms.AsSpan()),
@@ -376,7 +376,7 @@ public sealed partial class World : IDisposable
 	{
 		BeginDeferred();
 
-		foreach (var arch in GetQuery(0, ImmutableArray<Term>.Empty, static (world, terms) => new Query(world, terms)))
+		foreach (var arch in GetQuery(0, ImmutableArray<QueryTerm>.Empty, static (world, terms) => new Query(world, terms)))
 		{
 			foreach (ref readonly var chunk in arch)
 			{
@@ -393,7 +393,7 @@ public sealed partial class World : IDisposable
 		EndDeferred();
 	}
 
-	internal Query GetQuery(ulong hash, ImmutableArray<Term> terms, Func<World, ImmutableArray<Term>, Query> factory)
+	internal Query GetQuery(ulong hash, ImmutableArray<QueryTerm> terms, Func<World, ImmutableArray<QueryTerm>, Query> factory)
 	{
 		if (!_cachedQueries.TryGetValue(hash, out var query))
 		{
@@ -418,7 +418,7 @@ public sealed partial class World : IDisposable
 		return arch;
 	}
 
-	internal void MatchArchetypes(Archetype root, ReadOnlySpan<Term> terms, List<Archetype> matched)
+	internal void MatchArchetypes(Archetype root, ReadOnlySpan<QueryTerm> terms, List<Archetype> matched)
 	{
 		var result = root.FindMatch(terms);
 		if (result < 0)

@@ -36,8 +36,8 @@ ecs.Entity().Set(new Position() {X = 3});
 
 ecs.Query<
 		(Position, ManagedData),
-		Or<(With<Position>, With<Networked>,
-			Or<(Without<Networked>, With<Velocity>)>
+		Or<(With<Position>, With<Networked>, Without<Velocity>,
+			Or<(Without<Networked>, With<Position>)>
 		)>
 	>()
 	.Each((EntityView e, ref Position maybe) => {

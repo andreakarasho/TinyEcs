@@ -4,12 +4,31 @@ using System.Diagnostics.CodeAnalysis;
 namespace TinyEcs;
 
 
+public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
+{
+	public EcsID Id { get; } = id;
+	public TermOp Op { get; } = op;
+
+	public int CompareTo(QueryTerm other)
+	{
+		var res = Id.CompareTo(other.Id);
+		if (res != 0)
+			return res;
+		return Op.CompareTo(other.Op);
+	}
+}
+
+public class OrQueryTerm(QueryTerm[] terms) : QueryTerm(0, TermOp.Or)
+{
+	public QueryTerm[] Terms { get; } = terms;
+}
+
 internal static class Lookup
 {
 	private static ulong _index = 0;
 
 	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
-	private static readonly Dictionary<Type, Term> _typesConvertion = new();
+	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
 
@@ -32,7 +51,7 @@ internal static class Lookup
 		return cmp;
 	}
 
-	private static Term GetTerm(Type type)
+	private static QueryTerm GetTerm(Type type)
 	{
 		var ok = _typesConvertion.TryGetValue(type, out var term);
 		if (!ok)
@@ -89,13 +108,6 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
 			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
 
-
-			//_typesConvertion.Add(typeof(Or<T>), new (Value.ID, TermOp.Or));
-			// _typesConvertion.Add(typeof(Or<With<T>>), new ([ (Value.ID, TermOp.With) ], TermOp.Or));
-			// _typesConvertion.Add(typeof(Or<Without<T>>), new ([ (Value.ID, TermOp.Without) ], TermOp.Or));
-			// _typesConvertion.Add(typeof(Or<Optional<T>>), new ([ (Value.ID, TermOp.Optional) ], TermOp.Or));
-
-
 			_componentInfosByType.Add(typeof(T), Value);
 
 			_components.Add(Value.ID, Value);
@@ -129,7 +141,7 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, List<Term> terms, Func<Type, (bool, string?)> validate)
+	static void ParseTuple(ITuple tuple, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
 	{
 		TermOp? op = tuple switch
 		{
@@ -173,18 +185,24 @@ internal static class Lookup
 
 		if (op.HasValue)
 		{
-			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), op.Value));
+			if (op.Value == TermOp.Or)
+			{
+				terms.Add(new OrQueryTerm(tmpTerms.ToArray()));
+				//terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), op.Value));
+			}
 		}
 	}
 
-	static bool ParseOr(IOr or, List<Term> terms, Func<Type, (bool, string?)> validate)
+	static bool ParseOr(IOr or, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
 	{
 		if (or.Value is ITuple tuple)
 		{
-			var tmpTerms = new List<Term>();
+			var tmpTerms = new List<QueryTerm>();
 			ParseTuple(tuple, tmpTerms, validate);
 
-			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
+			terms.Add(new OrQueryTerm([.. tmpTerms]));
+
+			//terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
 			return true;
 		}
 
@@ -204,7 +222,7 @@ internal static class Lookup
 		return false;
 	}
 
-	static void ParseType<T>(List<Term> terms, Func<Type, (bool, string?)> validate) where T : struct
+	static void ParseType<T>(List<QueryTerm> terms, Func<Type, (bool, string?)> validate) where T : struct
 	{
 		var type = typeof(T);
 		if (typeof(ITuple).IsAssignableFrom(type))
@@ -237,12 +255,12 @@ internal static class Lookup
 		where TQueryData : struct
 		where TQueryFilter : struct
 	{
-		public static readonly ImmutableArray<Term> Terms;
+		public static readonly ImmutableArray<QueryTerm> Terms;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new List<Term>();
+			var list = new List<QueryTerm>();
 
 			ParseType<TQueryData>(list, ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] s)
 				=> (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));
@@ -258,12 +276,12 @@ internal static class Lookup
 
 	internal static class Query<TQueryData> where TQueryData : struct
 	{
-		public static readonly ImmutableArray<Term> Terms;
+		public static readonly ImmutableArray<QueryTerm> Terms;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new List<Term>();
+			var list = new List<QueryTerm>();
 
 			ParseType<TQueryData>(list, ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] s)
 				=> (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));

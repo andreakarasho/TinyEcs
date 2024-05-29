@@ -328,7 +328,7 @@ public sealed class Archetype
 	    return j == other.Length;
     }
 
-    internal int FindMatch(ReadOnlySpan<Term> searching)
+    internal int FindMatch(ReadOnlySpan<QueryTerm> searching)
     {
 		return Match.Validate(_comparer, _ids, searching);
     }

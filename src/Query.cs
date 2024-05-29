@@ -39,7 +39,7 @@ public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 public sealed class QueryBuilder
 {
 	private readonly World _world;
-	private readonly SortedSet<Term> _components = new();
+	private readonly SortedSet<QueryTerm> _components = new();
 
 	internal QueryBuilder(World world) => _world = world;
 
@@ -124,12 +124,12 @@ public sealed partial class Query<TQueryData, TQueryFilter> : Query
 
 public partial class Query : IDisposable
 {
-	private readonly ImmutableArray<Term> _terms;
+	private readonly ImmutableArray<QueryTerm> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
 	private Query? _subQuery;
 
-	internal Query(World world, ImmutableArray<Term> terms)
+	internal Query(World world, ImmutableArray<QueryTerm> terms)
 	{
 		World = world;
 		_matchedArchetypes = new List<Archetype>();
@@ -139,17 +139,12 @@ public partial class Query : IDisposable
 			.ToImmutableArray();
 
 		ref var subQuery = ref _subQuery;
-
-		// NOTE: current Or rule: (Or<..>, Or<..>).
-		//		 Unsupported nested Or<> (Or<.., Or<...>>)
-		// 		 which needs a terms.Where(..).Reverse()
-		foreach (var or in terms.Where(s => s.Op == TermOp.Or))
+		foreach (var or in terms.OfType<OrQueryTerm>())
 		{
-			var orIds = or.IDs.Select(s => new Term(s.ID, s.Op));
 			subQuery = World.GetQuery
 			(
-				Hashing.Calculate(orIds.ToArray()),
-				orIds.ToImmutableArray(),
+				Hashing.Calculate(or.Terms),
+				or.Terms.ToImmutableArray(),
 				static (world, terms) => new Query(world, terms)
 			);
 
@@ -180,8 +175,7 @@ public partial class Query : IDisposable
 
 		var ids = _terms
 			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
-			.SelectMany(s => s.IDs)
-			.Select(s => s.ID);
+			.Select(s => s.Id);
 
 		var first = World.FindArchetype(Hashing.Calculate(ids));
 		if (first == null)
