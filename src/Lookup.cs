@@ -90,10 +90,10 @@ internal static class Lookup
 			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
 
 
-			_typesConvertion.Add(typeof(Or<T>), new (Value.ID, TermOp.Or));
-			_typesConvertion.Add(typeof(Or<With<T>>), new ([ (Value.ID, TermOp.With) ], TermOp.Or));
-			_typesConvertion.Add(typeof(Or<Without<T>>), new ([ (Value.ID, TermOp.Without) ], TermOp.Or));
-			_typesConvertion.Add(typeof(Or<Optional<T>>), new ([ (Value.ID, TermOp.Optional) ], TermOp.Or));
+			//_typesConvertion.Add(typeof(Or<T>), new (Value.ID, TermOp.Or));
+			// _typesConvertion.Add(typeof(Or<With<T>>), new ([ (Value.ID, TermOp.With) ], TermOp.Or));
+			// _typesConvertion.Add(typeof(Or<Without<T>>), new ([ (Value.ID, TermOp.Without) ], TermOp.Or));
+			// _typesConvertion.Add(typeof(Or<Optional<T>>), new ([ (Value.ID, TermOp.Optional) ], TermOp.Or));
 
 
 			_componentInfosByType.Add(typeof(T), Value);
@@ -131,47 +131,36 @@ internal static class Lookup
 
 	static void ParseTuple(ITuple tuple, List<Term> terms, Func<Type, (bool, string?)> validate)
 	{
-		var mainType = tuple.GetType();
-		TermOp? op = null;
-		var tmpTerms = terms;
+		TermOp? op = tuple switch
+		{
+			IAtLeast => TermOp.AtLeastOne,
+			IExactly => TermOp.Exactly,
+			INone => TermOp.None,
+			IOr => TermOp.Or,
+			_ => null
+		};
 
-		if (typeof(IAtLeast).IsAssignableFrom(mainType))
+		var tmpTerms = terms;
+		if (op.HasValue)
 		{
-			op = TermOp.AtLeastOne;
-			tmpTerms = new ();
-		}
-		else if (typeof(IExactly).IsAssignableFrom(mainType))
-		{
-			op = TermOp.Exactly;
-			tmpTerms = new ();
-		}
-		else if (typeof(INone).IsAssignableFrom(mainType))
-		{
-			op = TermOp.None;
-			tmpTerms = new ();
-		}
-		else if (typeof(IOr).IsAssignableFrom(mainType))
-		{
-			op = TermOp.Or;
 			tmpTerms = new ();
 		}
 
 		for (var i = 0; i < tuple.Length; ++i)
 		{
-			var type = tuple[i]!.GetType();
-
-			if (typeof(ITuple).IsAssignableFrom(type))
+			if (tuple[i] is ITuple t)
 			{
-				ParseTuple((ITuple)tuple[i]!, terms, validate);
+				ParseTuple(t, terms, validate);
 				continue;
 			}
 
-			if (typeof(IOr).IsAssignableFrom(type))
+			if (tuple[i] is IOr or)
 			{
-				if (ParseOr((IOr)tuple[i]!, terms, validate))
+				if (ParseOr(or, terms, validate))
 					continue;
 			}
 
+			var type = tuple[i]!.GetType();
 			if (!op.HasValue)
 			{
 				(var isValid, var errorMsg) = validate(type);
@@ -190,27 +179,27 @@ internal static class Lookup
 
 	static bool ParseOr(IOr or, List<Term> terms, Func<Type, (bool, string?)> validate)
 	{
-		var orValue = or.Value;
-		var orValueType = orValue.GetType();
-		var tmpTerms = new List<Term>();
-
-		if (typeof(ITuple).IsAssignableFrom(orValueType))
+		if (or.Value is ITuple tuple)
 		{
-			ParseTuple((ITuple)orValue, tmpTerms, (s) => (true, ""));
+			var tmpTerms = new List<Term>();
+			ParseTuple(tuple, tmpTerms, validate);
 
 			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
 			return true;
 		}
 
-		(var isValid, var errorMsg) = validate(orValueType);
-		EcsAssert.Panic(isValid, errorMsg);
 
-		if (_typesConvertion.TryGetValue(orValueType, out var term))
-		{
-			tmpTerms.Add(term);
-			terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
-			return true;
-		}
+		// TODO: ERROR!
+
+		// (var isValid, var errorMsg) = validate(orValueType);
+		// EcsAssert.Panic(isValid, errorMsg);
+
+		// if (_typesConvertion.TryGetValue(orValueType, out var term))
+		// {
+		// 	tmpTerms.Add(term);
+		// 	terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
+		// 	return true;
+		// }
 
 		return false;
 	}

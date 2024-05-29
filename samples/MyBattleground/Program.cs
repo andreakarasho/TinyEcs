@@ -34,7 +34,12 @@ ecs.Entity().Set(new Velocity());
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3});
 
-ecs.Query<(Position, ManagedData), Or<(Position, ManagedData, Or<Without<Networked>>)>>()
+ecs.Query<
+		(Position, ManagedData),
+		Or<(With<Position>, With<Networked>,
+			Or<(Without<Networked>, With<Velocity>)>
+		)>
+	>()
 	.Each((EntityView e, ref Position maybe) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
@@ -365,6 +370,7 @@ while (true)
 
 	Console.WriteLine("query done in {0} ms", start - last);
 }
+
 
 enum TileType
 {
