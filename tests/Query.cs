@@ -341,7 +341,7 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Query_Nested_Or()
+		public void Query_Adjacent_Or()
 		{
 			using var ctx = new Context();
 
@@ -362,6 +362,43 @@ namespace TinyEcs.Tests
 					(Or<(With<NormalTag>, With<NormalTag2>)>,
 					Or<(With<BoolComponent>, With<NormalTag>)>,
 					Or<(With<IntComponent>, With<BoolComponent>)>)>();
+
+			var resEnt = query.Single();
+			Assert.Equal(ent0.ID, resEnt.ID);
+
+			ent0.Delete();
+			resEnt = query.Single();
+			Assert.Equal(ent1.ID, resEnt.ID);
+
+			ent1.Delete();
+			resEnt = query.Single();
+			Assert.Equal(ent2.ID, resEnt.ID);
+		}
+
+				[Fact]
+		public void Query_Nested_Or()
+		{
+			using var ctx = new Context();
+
+			var ent0 = ctx.World.Entity()
+				.Set<NormalTag>()
+				.Set<NormalTag2>();
+
+			var ent1 = ctx.World.Entity()
+				.Set(new BoolComponent())
+				.Set<NormalTag>();
+
+			var ent2 = ctx.World.Entity()
+				.Set(new IntComponent())
+				.Set(new BoolComponent());
+
+			var query = ctx.World
+				.Query<ValueTuple,
+					Or<(With<NormalTag>, With<NormalTag2>,
+						Or<(With<BoolComponent>, With<NormalTag>,
+							Or<(With<IntComponent>, With<BoolComponent>)>)>
+						)>
+					>();
 
 			var resEnt = query.Single();
 			Assert.Equal(ent0.ID, resEnt.ID);

@@ -139,12 +139,13 @@ public partial class Query : IDisposable
 			.ToImmutableArray();
 
 		ref var subQuery = ref _subQuery;
-		foreach (var or in terms.OfType<OrQueryTerm>())
+		foreach (var or in terms.OfType<ContainerQueryTerm>()
+			.Where(s => s.Op == TermOp.Or))
 		{
 			subQuery = World.GetQuery
 			(
 				Hashing.Calculate(or.Terms),
-				or.Terms.ToImmutableArray(),
+				[.. or.Terms],
 				static (world, terms) => new Query(world, terms)
 			);
 

@@ -4,25 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 namespace TinyEcs;
 
 
-public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
-{
-	public EcsID Id { get; } = id;
-	public TermOp Op { get; } = op;
-
-	public int CompareTo(QueryTerm other)
-	{
-		var res = Id.CompareTo(other.Id);
-		if (res != 0)
-			return res;
-		return Op.CompareTo(other.Op);
-	}
-}
-
-public class OrQueryTerm(QueryTerm[] terms) : QueryTerm(0, TermOp.Or)
-{
-	public QueryTerm[] Terms { get; } = terms;
-}
-
 internal static class Lookup
 {
 	private static ulong _index = 0;
@@ -168,8 +149,8 @@ internal static class Lookup
 
 			if (tuple[i] is IOr or)
 			{
-				if (ParseOr(or, terms, validate))
-					continue;
+				ParseOr(or, terms, validate);
+				continue;
 			}
 
 			var type = tuple[i]!.GetType();
@@ -185,41 +166,15 @@ internal static class Lookup
 
 		if (op.HasValue)
 		{
-			if (op.Value == TermOp.Or)
-			{
-				terms.Add(new OrQueryTerm(tmpTerms.ToArray()));
-				//terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), op.Value));
-			}
+			terms.Add(new ContainerQueryTerm([.. tmpTerms], op.Value));
 		}
 	}
 
-	static bool ParseOr(IOr or, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
+	static void ParseOr(IOr or, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
 	{
-		if (or.Value is ITuple tuple)
-		{
-			var tmpTerms = new List<QueryTerm>();
-			ParseTuple(tuple, tmpTerms, validate);
-
-			terms.Add(new OrQueryTerm([.. tmpTerms]));
-
-			//terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
-			return true;
-		}
-
-
-		// TODO: ERROR!
-
-		// (var isValid, var errorMsg) = validate(orValueType);
-		// EcsAssert.Panic(isValid, errorMsg);
-
-		// if (_typesConvertion.TryGetValue(orValueType, out var term))
-		// {
-		// 	tmpTerms.Add(term);
-		// 	terms.Add(new Term(tmpTerms.SelectMany(s => s.IDs), TermOp.Or));
-		// 	return true;
-		// }
-
-		return false;
+		var tmpTerms = new List<QueryTerm>();
+		ParseTuple(or.Value, tmpTerms, validate);
+		terms.Add(new ContainerQueryTerm([.. tmpTerms], TermOp.Or));
 	}
 
 	static void ParseType<T>(List<QueryTerm> terms, Func<Type, (bool, string?)> validate) where T : struct
@@ -244,8 +199,9 @@ internal static class Lookup
 
 		if (typeof(IOr).IsAssignableFrom(type))
 		{
-			if (ParseOr((IOr)default(T), terms, validate))
-				return;
+			ParseOr((IOr)default(T), terms, validate);
+
+			return;
 		}
 
 		EcsAssert.Panic(false, $"Type '{type}' is not registered. Register '{type}' using world.Entity<T>() or assign it to an entity.");

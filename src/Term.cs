@@ -1,34 +1,26 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-[DebuggerDisplay("{IDs} - {Op}")]
-public readonly struct Term : IComparable<Term>
+[DebuggerDisplay("{Id} - {Op}")]
+public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
 {
-	public readonly ImmutableSortedSet<(EcsID ID, TermOp Op)> IDs;
-    public readonly TermOp Op;
+	public EcsID Id { get; } = id;
+	public TermOp Op { get; } = op;
 
-    public Term(EcsID id, TermOp op)
-    {
-        IDs = new SortedSet<(EcsID ID, TermOp Op)>() { (id, op) }.ToImmutableSortedSet();
-        Op = op;
-    }
+	public int CompareTo([NotNull] QueryTerm? other)
+	{
+		var res = Id.CompareTo(other!.Id);
+		if (res != 0)
+			return res;
+		return Op.CompareTo(other.Op);
+	}
+}
 
-    public Term(IEnumerable<(EcsID ID, TermOp Op)> ids, TermOp op)
-    {
-        IDs = new SortedSet<(EcsID ID, TermOp Op)>(ids).ToImmutableSortedSet();
-        Op = op;
-    }
-
-    public readonly int CompareTo(Term other)
-    {
-		var idComparison = IDs[0].ID.CompareTo(other.IDs[0].ID);
-        if (idComparison != 0)
-        {
-            return idComparison;
-        }
-        return Op.CompareTo(other.Op);
-    }
+public class ContainerQueryTerm(QueryTerm[] terms, TermOp op) : QueryTerm(0, op)
+{
+	public QueryTerm[] Terms { get; } = terms;
 }
 
 public enum TermOp : byte
@@ -48,7 +40,7 @@ public readonly struct With<T> : IFilter where T : struct { }
 public readonly struct Without<T> : IFilter where T : struct { }
 //public readonly struct Not<T> : IFilter where T : struct { }
 public readonly struct Optional<T> where T : struct { }
-public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
+public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
@@ -56,7 +48,7 @@ public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : ITuple
 
 	public int Length => _value.Length;
 }
-public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : ITuple
+public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
@@ -64,7 +56,7 @@ public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : ITuple
 
 	public int Length => _value.Length;
 }
-public readonly struct None<T> : ITuple, INone, IFilter where T : ITuple
+public readonly struct None<T> : ITuple, INone, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
 
@@ -74,14 +66,14 @@ public readonly struct None<T> : ITuple, INone, IFilter where T : ITuple
 }
 public readonly struct Or<T> : IOr, IFilter where T : struct, ITuple
 {
-	static readonly T _value = default(T);
+	static readonly T _value = default;
 
-	object IOr.Value => _value;
+	ITuple IOr.Value => _value;
 }
 
 
 public interface IAtLeast : IFilter { }
 public interface IExactly : IFilter { }
 public interface INone : IFilter { }
-public interface IOr : IFilter { internal object Value { get; } }
+public interface IOr : IFilter { internal ITuple Value { get; } }
 
