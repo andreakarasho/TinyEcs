@@ -112,7 +112,7 @@ namespace System.Diagnostics.CodeAnalysis
         // Parameters:
         //   memberTypes:
         //     The types of the dynamically accessed members.
-        public DynamicallyAccessedMembersAttribute(DynamicallyAccessedMemberTypes memberTypes);
+        public DynamicallyAccessedMembersAttribute(DynamicallyAccessedMemberTypes memberTypes) => MemberTypes = memberTypes;
 
         //
         // Summary:

@@ -4,28 +4,56 @@ namespace TinyEcs;
 
 public ref struct QueryInternal
 {
+#if NET
 	private ref Archetype _value;
 	private readonly ref Archetype _first, _last;
+#else
+	private Ref<Archetype> _value;
+	private readonly Ref<Archetype> _first, _last;
+#endif
+
 
 	internal QueryInternal(Span<Archetype> archetypes)
 	{
+#if NET
 		_first = ref MemoryMarshal.GetReference(archetypes);
 		_last = ref Unsafe.Add(ref _first, archetypes.Length);
 		_value = ref Unsafe.NullRef<Archetype>();
+#else
+		_first = new(ref MemoryMarshal.GetReference(archetypes));
+		_last = new(ref Unsafe.Add(ref _first.Value, archetypes.Length));
+		_value = new(ref Unsafe.NullRef<Archetype>());
+#endif
 	}
 
-	public readonly ref Archetype Current => ref _value;
+	public readonly ref Archetype Current => ref
+		_value
+#if !NET
+		.Value
+#endif
+		;
+
 
 	public bool MoveNext()
 	{
 		while (true)
 		{
+#if NET
 			_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
 			if (!Unsafe.IsAddressLessThan(ref _value, ref _last))
 				break;
 
 			if (_value.Count > 0)
 				return true;
+#else
+			ref var value = ref _value.Value;
+			value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
+			if (!Unsafe.IsAddressLessThan(ref value, ref _last.Value))
+				break;
+
+			if (value.Count > 0)
+				return true;
+#endif
 		}
 
 		return false;
