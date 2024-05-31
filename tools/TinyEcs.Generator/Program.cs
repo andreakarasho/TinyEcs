@@ -190,13 +190,29 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
 				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
+				var validationTypes = GenerateSequence(i + 1, "\n", j => {
+					if (i + 1 <= 1)
+					{
+						return "";
+					}
+
+					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == query.World.Entity<T{j}>().ID," +
+							"$\"'{typeof("+ $"T{j}" + ")}' doesn't match the QueryData sign\");";
+
+					return str;
+				});
 
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 					{{
+						var query = {getQuery};
+
+						{($"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");")}
+						{validationTypes}
+
 						{worldLock}BeginDeferred();
 
-						foreach (var arch in {getQuery})
+						foreach (var arch in query)
 						{{
 							{columnIndices}
 							{incFieldList}
@@ -260,12 +276,26 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
 				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
+				var validationTypes = GenerateSequence(i + 1, "\n", j => {
+					if (i + 1 <= 1)
+					{
+						return "";
+					}
+
+					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == query.World.Entity<T{j}>().ID," +
+							"$\"'{typeof("+ $"T{j}" + ")}' doesn't match the QueryData sign\");";
+
+					return str;
+				});
 
 				sb.AppendLine($@"
 					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 					{{
-						{worldLock}BeginDeferred();
 						var query = {getQuery};
+						{($"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");")}
+						{validationTypes}
+
+						{worldLock}BeginDeferred();
 						var cde = query.ThreadCounter;
 						cde.Reset();
 						foreach (var arch in query)

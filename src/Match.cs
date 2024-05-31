@@ -11,6 +11,7 @@ static class Match
         {
             switch (term.Op)
             {
+				case TermOp.DataAccess:
                 case TermOp.With:
                     if (ids.All(id => ComponentComparer.CompareTerms(null, id, term.Id) != 0))
                     {

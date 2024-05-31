@@ -168,8 +168,12 @@ public partial class Query : IDisposable
 			.ToImmutableSortedSet()
 			.ToImmutableArray();
 
+		TermsAccess = terms.Where(s => s.Op == TermOp.DataAccess || s.Op == TermOp.Optional)
+			.ToImmutableArray();
+
 		ref var subQuery = ref _subQuery;
-		foreach (var or in terms.OfType<ContainerQueryTerm>()
+		foreach (var or in terms
+			.OfType<ContainerQueryTerm>()
 			.Where(s => s.Op == TermOp.Or))
 		{
 			subQuery = World.GetQuery
@@ -186,8 +190,7 @@ public partial class Query : IDisposable
 	public World World { get; internal set; }
 
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
-
-
+	internal ImmutableArray<QueryTerm> TermsAccess { get; }
 
 	public void Dispose()
 	{

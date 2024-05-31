@@ -82,7 +82,7 @@ internal static class Lookup
 
 			if (Size > 0)
 			{
-				_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.With));
+				_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.DataAccess));
 				_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
 			}
 

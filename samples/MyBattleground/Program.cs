@@ -40,7 +40,7 @@ ecs.Query<
 			Or<(Without<Networked>, With<Position>)>
 		)>
 	>()
-	.Each((EntityView e, ref Position maybe) => {
+	.Each((EntityView e, ref Position maybe, ref ManagedData data) => {
 		var isNull = Unsafe.IsNullRef(ref maybe);
 
 		Console.WriteLine("is null {0} - {1}", isNull, e.Name());

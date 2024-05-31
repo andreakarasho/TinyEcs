@@ -25,6 +25,7 @@ public class ContainerQueryTerm(QueryTerm[] terms, TermOp op) : QueryTerm(0, op)
 
 public enum TermOp : byte
 {
+	DataAccess,
 	With,
     Without,
     Optional,
