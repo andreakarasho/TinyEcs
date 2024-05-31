@@ -4,30 +4,32 @@ namespace TinyEcs;
 
 public ref struct QueryInternal
 {
-	private readonly ReadOnlySpan<Archetype> _archetypes;
-	private int _index;
+	private ref Archetype _value;
+	private readonly ref Archetype _first, _last;
 
-	internal QueryInternal(ReadOnlySpan<Archetype> archetypes)
+	internal QueryInternal(Span<Archetype> archetypes)
 	{
-		_archetypes = archetypes;
-		_index = -1;
+		_first = ref MemoryMarshal.GetReference(archetypes);
+		_last = ref Unsafe.Add(ref _first, archetypes.Length);
+		_value = ref Unsafe.NullRef<Archetype>();
 	}
 
-	public readonly Archetype Current => _archetypes[_index];
+	public readonly ref Archetype Current => ref _value;
 
 	public bool MoveNext()
 	{
-		while (++_index < _archetypes.Length)
+		while (true)
 		{
-			var arch = _archetypes[_index];
-			if (arch.Count > 0)
+			_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
+			if (!Unsafe.IsAddressLessThan(ref _value, ref _last))
+				break;
+
+			if (_value.Count > 0)
 				return true;
 		}
 
 		return false;
 	}
-
-	public void Reset() => _index = -1;
 
 	public readonly QueryInternal GetEnumerator() => this;
 }
