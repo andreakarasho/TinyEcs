@@ -223,7 +223,7 @@ public partial class Query : IDisposable
 
 	public RefEnumerator<T0, T1> Each3<T0, T1>() where T0 : struct where T1 : struct
 	{
-		return new RefEnumerator<T0, T1>(_matchedArchetypes);
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
 
 	public int Count()
@@ -305,66 +305,64 @@ public partial class Query : IDisposable
 	}
 }
 
+[SkipLocalsInit]
 public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
 {
-    private readonly List<Archetype> _matchedArchetypes;
+    private readonly Span<Archetype> _matchedArchetypes;
 	private Span<ArchetypeChunk> _chunks;
     private int _archIndex;
     private int _chunkIndex;
-    private int _itemIndex;
     private int _spanLength;
 	private Row<T0, T1> _ref;
-    private int _col0, _col1;
 
-    public RefEnumerator(List<Archetype> matchedArchetypes)
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public RefEnumerator(Span<Archetype> matchedArchetypes)
     {
         _matchedArchetypes = matchedArchetypes;
         _archIndex = -1;
         _chunkIndex = -1;
-        _itemIndex = 0;
-        _spanLength = 0;
+        _spanLength = -1;
     }
 
 	[UnscopedRef]
-    public ref Row<T0, T1> Current => ref _ref;
+    public ref Row<T0, T1> Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref _ref;
+	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
         while (true)
         {
-            if (_chunkIndex >= 0 && _archIndex >= 0)
+			if (_spanLength-- > 0)
+			{
+				_ref.Advance();
+
+				return true;
+			}
+
+            if (++_chunkIndex < _chunks.Length)
             {
-                if (++_itemIndex < _spanLength)
-                {
-					_ref.Advance();
-
-                    return true;
-                }
-            }
-
-            _itemIndex = 0;
-
-            if (_archIndex >= 0 && ++_chunkIndex < _chunks.Length)
-            {
+				var arch = _matchedArchetypes[_archIndex];
 				ref var chunk = ref _chunks[_chunkIndex];
-				ref var span0 = ref chunk.GetReference<T0>(_col0);
-				ref var span1 = ref chunk.GetReference<T1>(_col1);
-				_ref = new Row<T0, T1>(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
+				ref var span0 = ref chunk.GetReference<T0>(arch.GetComponentIndex<T0>());
+				ref var span1 = ref chunk.GetReference<T1>(arch.GetComponentIndex<T1>());
+				_ref.Set(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
 				_spanLength = chunk.Count;
-				_itemIndex = -1;
 
 				continue;
             }
 
             _chunkIndex = -1;
 
-            if (++_archIndex < _matchedArchetypes.Count)
+            if (++_archIndex < _matchedArchetypes.Length)
 			{
 				var arch = _matchedArchetypes[_archIndex];
 				if (arch.Count > 0)
 				{
-					_col0 = arch.GetComponentIndex<T0>();
-					_col1 = arch.GetComponentIndex<T1>();
 					_chunks = arch.Chunks;
 					continue;
 				}
@@ -374,6 +372,7 @@ public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : stru
         }
     }
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly RefEnumerator<T0, T1> GetEnumerator() => this;
 }
 
@@ -393,6 +392,18 @@ public unsafe ref struct Row<T0, T1> where T0 : struct where T1 : struct
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Row(ref T0 value0, ref T1 value1)
+	{
+#if NET
+		Val0 = ref value0;
+		Val1 = ref value1;
+#else
+		_val0 = (IntPtr)Unsafe.AsPointer(ref value0);
+		_val1 = (IntPtr)Unsafe.AsPointer(ref value1);
+#endif
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal void Set(ref T0 value0, ref T1 value1)
 	{
 #if NET
 		Val0 = ref value0;
