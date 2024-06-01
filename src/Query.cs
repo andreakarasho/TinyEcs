@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
@@ -46,7 +47,7 @@ public ref struct QueryInternal
 			if (_value.Count > 0)
 				return true;
 #else
-			ref var value = ref _value.Value;
+			ref Archetype value = ref _value.Value;
 			value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
 			if (!Unsafe.IsAddressLessThan(ref value, ref _last.Value))
 				break;
@@ -220,6 +221,11 @@ public partial class Query : IDisposable
 		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
 	}
 
+	public RefEnumerator<T0, T1> Each3<T0, T1>() where T0 : struct where T1 : struct
+	{
+		return new RefEnumerator<T0, T1>(_matchedArchetypes);
+	}
+
 	public int Count()
 	{
 		Match();
@@ -296,5 +302,116 @@ public partial class Query : IDisposable
 		}
 
 		World.EndDeferred();
+	}
+}
+
+public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
+{
+    private readonly List<Archetype> _matchedArchetypes;
+	private Span<ArchetypeChunk> _chunks;
+    private int _archIndex;
+    private int _chunkIndex;
+    private int _itemIndex;
+    private int _spanLength;
+	private Row<T0, T1> _ref;
+    private int _col0, _col1;
+
+    public RefEnumerator(List<Archetype> matchedArchetypes)
+    {
+        _matchedArchetypes = matchedArchetypes;
+        _archIndex = -1;
+        _chunkIndex = -1;
+        _itemIndex = 0;
+        _spanLength = 0;
+    }
+
+	[UnscopedRef]
+    public ref Row<T0, T1> Current => ref _ref;
+
+    public bool MoveNext()
+    {
+        while (true)
+        {
+            if (_chunkIndex >= 0 && _archIndex >= 0)
+            {
+                if (++_itemIndex < _spanLength)
+                {
+					_ref.Advance();
+
+                    return true;
+                }
+            }
+
+            _itemIndex = 0;
+
+            if (_archIndex >= 0 && ++_chunkIndex < _chunks.Length)
+            {
+				ref var chunk = ref _chunks[_chunkIndex];
+				ref var span0 = ref chunk.GetReference<T0>(_col0);
+				ref var span1 = ref chunk.GetReference<T1>(_col1);
+				_ref = new Row<T0, T1>(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
+				_spanLength = chunk.Count;
+				_itemIndex = -1;
+
+				continue;
+            }
+
+            _chunkIndex = -1;
+
+            if (++_archIndex < _matchedArchetypes.Count)
+			{
+				var arch = _matchedArchetypes[_archIndex];
+				if (arch.Count > 0)
+				{
+					_col0 = arch.GetComponentIndex<T0>();
+					_col1 = arch.GetComponentIndex<T1>();
+					_chunks = arch.Chunks;
+					continue;
+				}
+			}
+
+            return false;
+        }
+    }
+
+    public readonly RefEnumerator<T0, T1> GetEnumerator() => this;
+}
+
+
+[SkipLocalsInit]
+public unsafe ref struct Row<T0, T1> where T0 : struct where T1 : struct
+{
+#if NET
+	public ref T0 Val0;
+	public ref T1 Val1;
+#else
+	private IntPtr _val0;
+	private IntPtr _val1;
+	public ref T0 Val0 => ref Unsafe.AsRef<T0>(_val0.ToPointer());
+	public ref T1 Val1 => ref Unsafe.AsRef<T1>(_val1.ToPointer());
+#endif
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public Row(ref T0 value0, ref T1 value1)
+	{
+#if NET
+		Val0 = ref value0;
+		Val1 = ref value1;
+#else
+		_val0 = (IntPtr)Unsafe.AsPointer(ref value0);
+		_val1 = (IntPtr)Unsafe.AsPointer(ref value1);
+#endif
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal void Advance()
+	{
+#if NET
+		Val0 = ref Unsafe.Add(ref Val0, 1);
+		Val1 = ref Unsafe.Add(ref Val1, 1);
+#else
+		_val0 = (IntPtr)(((T0*)_val0.ToPointer()) + 1);
+		_val1 = (IntPtr)(((T1*)_val1.ToPointer()) + 1);
+#endif
 	}
 }

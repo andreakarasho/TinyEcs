@@ -6,14 +6,7 @@ using System.Runtime.CompilerServices;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
-var tt = typeof(AtLeast<(PlayerTag, Networked)>);
-var inter = tt.GetInterfaces();
-
-var f0 = typeof(IFilter).IsAssignableFrom(tt);
-var f1 = tt.GetInterfaces().Any(k => typeof(IFilter) == k);
-
 using var ecs = new World();
-
 
 ecs.Entity<PlayerTag>().Set<Networked>();
 ecs.Entity<Likes>();
@@ -33,6 +26,19 @@ ecs.Entity().Set(new Velocity());
 
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 ecs.Entity().Set(new Position() {X = 3});
+
+
+var query = ecs.Query<(Position, Velocity)>();
+foreach (ref var row in query.Each3<Position, Velocity>())
+{
+	ref var v0 = ref row.Val0;
+	v0.X += 1;
+}
+
+foreach (ref var row in query.Each3<Position, Velocity>())
+{
+	ref var v0 = ref row.Val0;
+}
 
 ecs.Query<
 		(Position, ManagedData),
@@ -347,6 +353,8 @@ var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
 
+var q = ecs.Query<(Position, Velocity)>();
+
 while (true)
 {
 	for (int i = 0; i < 3600; ++i)
@@ -356,11 +364,17 @@ while (true)
 		// 	pos.Y *= vel.Y;
 		// });
 
-		ecs.Query<(Position, Velocity)>()
-			.Each((ref Position pos, ref Velocity vel) => {
-				pos.X *= vel.X;
-				pos.Y *= vel.Y;
-			});
+		// ecs.Query<(Position, Velocity)>()
+			// q.Each((ref Position pos, ref Velocity vel) => {
+			// 	pos.X *= vel.X;
+			// 	pos.Y *= vel.Y;
+			// });
+
+		foreach (ref var row in q.Each3<Position, Velocity>())
+		{
+			row.Val0.X *= row.Val1.X;
+			row.Val0.Y *= row.Val1.X;
+		}
 
 		//scheduler.Run();
 	}
