@@ -375,7 +375,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(ent2.ID, resEnt.ID);
 		}
 
-				[Fact]
+		[Fact]
 		public void Query_Nested_Or()
 		{
 			using var ctx = new Context();

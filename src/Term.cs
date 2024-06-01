@@ -20,7 +20,7 @@ public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
 
 public class ContainerQueryTerm(QueryTerm[] terms, TermOp op) : QueryTerm(0, op)
 {
-	public QueryTerm[] Terms { get; } = terms;
+	public ImmutableArray<QueryTerm> Terms { get; } = [.. terms];
 }
 
 public enum TermOp : byte

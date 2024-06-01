@@ -178,7 +178,7 @@ public partial class Query : IDisposable
 		{
 			subQuery = World.GetQuery
 			(
-				Hashing.Calculate(or.Terms),
+				Hashing.Calculate(or.Terms.AsSpan()),
 				[.. or.Terms],
 				static (world, terms) => new Query(world, terms)
 			);
