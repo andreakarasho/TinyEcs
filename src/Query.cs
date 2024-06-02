@@ -159,7 +159,7 @@ public partial class Query : IDisposable
 		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
 	}
 
-	public RefEnumerator<T0, T1> Iter<T0, T1>() where T0 : struct where T1 : struct
+	public RefEnumeratorTest<T0, T1> IterTest<T0, T1>() where T0 : struct where T1 : struct
 	{
 		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
@@ -438,17 +438,18 @@ public ref struct QueryArchetypeChunkIterator
 
 
 [SkipLocalsInit]
-public ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
+public ref struct RefEnumeratorTest<T0, T1> where T0 : struct where T1 : struct
 {
 	private QueryInternal _queryIt;
 	private QueryChunkIterator _chunkIt;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal RefEnumerator(Span<Archetype> matchedArchetypes)
+    internal RefEnumeratorTest(Span<Archetype> matchedArchetypes)
     {
 		_queryIt = new QueryInternal(matchedArchetypes);
     }
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Deconstruct(out Span<T0> val0, out Span<T1> val1)
     {
 		ref var arch = ref _queryIt.Current;
@@ -462,7 +463,7 @@ public ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
     }
 
 	[UnscopedRef]
-    public ref RefEnumerator<T0, T1> Current
+    public ref RefEnumeratorTest<T0, T1> Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => ref this;
@@ -487,5 +488,5 @@ public ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly RefEnumerator<T0, T1> GetEnumerator() => this;
+    public readonly RefEnumeratorTest<T0, T1> GetEnumerator() => this;
 }

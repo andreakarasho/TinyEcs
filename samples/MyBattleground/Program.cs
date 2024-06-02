@@ -44,7 +44,7 @@ foreach (var (pos, vel) in query.Iter<Position, Velocity>())
 	}
 }
 
-foreach (var (pos, vel) in query.Iter<Position, Velocity>())
+foreach (var (pos, vel) in query.IterTest<Position, Velocity>())
 {
 	var count = pos.Length;
 
@@ -386,7 +386,7 @@ while (true)
 			// });
 
 
-		foreach ((Span<Position> pos, Span<Velocity> vel) in q.Iter<Position, Velocity>())
+		foreach ((Span<Position> pos, Span<Velocity> vel) in q.IterTest<Position, Velocity>())
 		{
 			ref var p = ref MemoryMarshal.GetReference(pos);
 			ref var v = ref MemoryMarshal.GetReference(vel);

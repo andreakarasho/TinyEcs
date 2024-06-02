@@ -160,6 +160,66 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
 			}
 
+			for (var i = 0; !withEntityView && i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var dctorSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> val{j}");
+				var dctorGetSpan = GenerateSequence(i + 1, "", j => $"val{j} = chunk.GetSpan<T{j}>(arch.GetComponentIndex<T{j}>());");
+
+				sb.AppendLine($@"
+					[System.Runtime.CompilerServices.SkipLocalsInit]
+					public ref struct RefEnumerator<{typeParams}> {whereParams}
+					{{
+						private QueryInternal _queryIt;
+						private QueryChunkIterator _chunkIt;
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						internal RefEnumerator(Span<Archetype> matchedArchetypes)
+						{{
+							_queryIt = new QueryInternal(matchedArchetypes);
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly void Deconstruct({dctorSign})
+						{{
+							ref var arch = ref _queryIt.Current;
+							ref var chunk = ref _chunkIt.Current;
+
+							{dctorGetSpan}
+						}}
+
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						public ref RefEnumerator<{typeParams}> Current
+						{{
+							[MethodImpl(MethodImplOptions.AggressiveInlining)]
+							get => ref this;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public bool MoveNext()
+						{{
+							while (true)
+							{{
+								if (_chunkIt.MoveNext())
+									return true;
+
+								if (_queryIt.MoveNext())
+								{{
+									_chunkIt = new QueryChunkIterator(_queryIt.Current.Chunks);
+									continue;
+								}}
+
+								return false;
+							}}
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly RefEnumerator<{typeParams}> GetEnumerator() => this;
+					}}
+				");
+			}
+
 			return sb.ToString();
 		}
 
@@ -201,6 +261,14 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 					return str;
 				});
+
+
+				if (!withFilter && !withEntityView)
+					sb.AppendLine($@"
+						public RefEnumerator<{typeParams}> Iter<{typeParams}>() {whereParams}
+							=> new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+					");
+
 
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
