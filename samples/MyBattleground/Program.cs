@@ -373,7 +373,7 @@ while (true)
 		foreach (ref var row in q.Each3<Position, Velocity>())
 		{
 			row.Val0.X *= row.Val1.X;
-			row.Val0.Y *= row.Val1.X;
+			row.Val0.Y *= row.Val1.Y;
 		}
 
 		//scheduler.Run();

@@ -3,69 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-public ref struct QueryInternal
-{
-#if NET
-	private ref Archetype _value;
-	private readonly ref Archetype _first, _last;
-#else
-	private Ref<Archetype> _value;
-	private readonly Ref<Archetype> _first, _last;
-#endif
-
-
-	internal QueryInternal(Span<Archetype> archetypes)
-	{
-#if NET
-		_first = ref MemoryMarshal.GetReference(archetypes);
-		_last = ref Unsafe.Add(ref _first, archetypes.Length);
-		_value = ref Unsafe.NullRef<Archetype>();
-#else
-		_first = new(ref MemoryMarshal.GetReference(archetypes));
-		_last = new(ref Unsafe.Add(ref _first.Value, archetypes.Length));
-		_value = new(ref Unsafe.NullRef<Archetype>());
-#endif
-	}
-
-	public readonly ref Archetype Current => ref
-		_value
-#if !NET
-		.Value
-#endif
-		;
-
-
-	public bool MoveNext()
-	{
-		while (true)
-		{
-#if NET
-			_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
-			if (!Unsafe.IsAddressLessThan(ref _value, ref _last))
-				break;
-
-			if (_value.Count > 0)
-				return true;
-#else
-			ref Archetype value = ref _value.Value;
-			value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
-			if (!Unsafe.IsAddressLessThan(ref value, ref _last.Value))
-				break;
-
-			if (value.Count > 0)
-				return true;
-#endif
-		}
-
-		return false;
-	}
-
-	public readonly QueryInternal GetEnumerator() => this;
-}
-
 public delegate void QueryFilterDelegateWithEntity(EntityView entity);
-
-
 
 public sealed class QueryBuilder
 {
@@ -219,9 +157,24 @@ public partial class Query : IDisposable
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
 		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
+
+		// _data = new ArchetypeChunk[_matchedArchetypes.Count][];
+
+		// var archIdx = 0;
+		// foreach (var arch in _matchedArchetypes)
+		// {
+		// 	_data[archIdx++] = new ArchetypeChunk[arch.Chunks.Length];
+		// 	var chunkIdx = 0;
+		// 	foreach (ref var chunk in arch.Chunks)
+		// 	{
+
+		// 	}
+		// }
 	}
 
-	public RefEnumerator<T0, T1> Each3<T0, T1>() where T0 : struct where T1 : struct
+	private ArchetypeChunk[][] _data;
+
+	public unsafe RefEnumerator<T0, T1> Each3<T0, T1>() where T0 : struct where T1 : struct
 	{
 		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
@@ -305,24 +258,214 @@ public partial class Query : IDisposable
 	}
 }
 
+
+
+
+public ref struct QueryInternal
+{
+#if NET
+	private ref Archetype _value;
+	private readonly ref Archetype _first, _last;
+#else
+	private Ref<Archetype> _value;
+	private readonly Ref<Archetype> _first, _last;
+#endif
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal QueryInternal(Span<Archetype> archetypes)
+	{
+#if NET
+		_first = ref MemoryMarshal.GetReference(archetypes);
+		_last = ref Unsafe.Add(ref _first, archetypes.Length);
+		_value = ref Unsafe.NullRef<Archetype>();
+#else
+		_first = new(ref MemoryMarshal.GetReference(archetypes));
+		_last = new(ref Unsafe.Add(ref _first.Value, archetypes.Length));
+		_value = new(ref Unsafe.NullRef<Archetype>());
+#endif
+	}
+
+	public readonly ref Archetype Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref
+		_value
+#if !NET
+		.Value
+#endif
+		;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		while (true)
+		{
+#if NET
+			_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
+			if (!Unsafe.IsAddressLessThan(ref _value, ref _last))
+				break;
+
+			if (_value.Count > 0)
+				return true;
+#else
+			ref Archetype value = ref _value.Value;
+			value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
+			if (!Unsafe.IsAddressLessThan(ref value, ref _last.Value))
+				break;
+
+			if (value.Count > 0)
+				return true;
+#endif
+		}
+
+		return false;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryInternal GetEnumerator() => this;
+}
+
+public ref struct QueryChunkIterator
+{
+#if NET
+	private readonly ref ArchetypeChunk _first, _last;
+	private ref ArchetypeChunk _value;
+#else
+	private readonly Ref<ArchetypeChunk> _first, _last;
+	private Ref<ArchetypeChunk> _value;
+#endif
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal QueryChunkIterator(Span<ArchetypeChunk> chunks)
+	{
+#if NET
+		_first = ref MemoryMarshal.GetReference(chunks);
+		_last = ref Unsafe.Add(ref _first, chunks.Length);
+		_value = ref Unsafe.NullRef<ArchetypeChunk>();
+#else
+		_first = new(ref MemoryMarshal.GetReference(chunks));
+		_last = new(ref Unsafe.Add(ref _first.Value, chunks.Length));
+		_value = new(ref Unsafe.NullRef<ArchetypeChunk>());
+#endif
+	}
+
+	public readonly ref ArchetypeChunk Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref
+		_value
+#if !NET
+		.Value
+#endif
+		;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		while (true)
+		{
+#if NET
+			_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
+			if (!Unsafe.IsAddressLessThan(ref _value, ref _last))
+				break;
+
+			if (_value.Count > 0)
+				return true;
+#else
+			ref var value = ref _value.Value;
+			value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
+			if (!Unsafe.IsAddressLessThan(ref value, ref _last.Value))
+				break;
+
+			if (value.Count > 0)
+				return true;
+#endif
+		}
+
+		return false;
+	}
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryChunkIterator GetEnumerator() => this;
+}
+
+public ref struct QueryArchetypeChunkIterator
+{
+#if NET
+	private readonly ref EntityView _first, _last;
+	private ref EntityView _value;
+#else
+	private readonly Ref<EntityView> _first, _last;
+	private Ref<EntityView> _value;
+#endif
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal QueryArchetypeChunkIterator(ref ArchetypeChunk chunk)
+	{
+#if NET
+		_first = ref chunk.EntityAt(0);
+		_last = ref Unsafe.Add(ref _first, chunk.Count);
+		_value = ref Unsafe.NullRef<EntityView>();
+#else
+		_first = new(ref chunk.EntityAt(0));
+		_last = new(ref Unsafe.Add(ref _first.Value, chunk.Count));
+		_value = new(ref Unsafe.NullRef<EntityView>());
+#endif
+	}
+
+	public readonly ref EntityView Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref
+		_value
+#if !NET
+		.Value
+#endif
+		;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+#if NET
+		_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
+		if (Unsafe.IsAddressLessThan(ref _value, ref _last))
+			return true;
+#else
+		ref var value = ref _value.Value;
+		value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
+		if (Unsafe.IsAddressLessThan(ref value, ref _last.Value))
+			return true;
+#endif
+		return false;
+	}
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryArchetypeChunkIterator GetEnumerator() => this;
+}
+
+
+
+
 [SkipLocalsInit]
 public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
 {
-    private readonly Span<Archetype> _matchedArchetypes;
-	private Span<ArchetypeChunk> _chunks;
-    private int _archIndex;
-    private int _chunkIndex;
     private int _spanLength;
+	private QueryInternal _queryIt;
+	private QueryChunkIterator _chunkIt;
 	private Row<T0, T1> _ref;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public RefEnumerator(Span<Archetype> matchedArchetypes)
+    internal RefEnumerator(Span<Archetype> matchedArchetypes)
     {
-        _matchedArchetypes = matchedArchetypes;
-        _archIndex = -1;
-        _chunkIndex = -1;
-        _spanLength = -1;
+		_queryIt = new QueryInternal(matchedArchetypes);
+        _spanLength = 0;
     }
 
 	[UnscopedRef]
@@ -340,37 +483,38 @@ public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : stru
 			if (_spanLength-- > 0)
 			{
 				_ref.Advance();
-
 				return true;
 			}
 
-            if (++_chunkIndex < _chunks.Length)
-            {
-				var arch = _matchedArchetypes[_archIndex];
-				ref var chunk = ref _chunks[_chunkIndex];
-				ref var span0 = ref chunk.GetReference<T0>(arch.GetComponentIndex<T0>());
-				ref var span1 = ref chunk.GetReference<T1>(arch.GetComponentIndex<T1>());
-				_ref.Set(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
-				_spanLength = chunk.Count;
-
+			if (Move())
 				continue;
-            }
 
-            _chunkIndex = -1;
-
-            if (++_archIndex < _matchedArchetypes.Length)
+			if (_queryIt.MoveNext())
 			{
-				var arch = _matchedArchetypes[_archIndex];
-				if (arch.Count > 0)
-				{
-					_chunks = arch.Chunks;
-					continue;
-				}
+				_chunkIt = new QueryChunkIterator(_queryIt.Current.Chunks);
+				continue;
 			}
 
             return false;
         }
     }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool Move()
+	{
+		if (_chunkIt.MoveNext())
+		{
+			ref var arch = ref _queryIt.Current;
+			ref var chunk = ref _chunkIt.Current;
+			ref var span0 = ref chunk.GetReference<T0>(arch.GetComponentIndex<T0>());
+			ref var span1 = ref chunk.GetReference<T1>(arch.GetComponentIndex<T1>());
+			_ref.Set(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
+			_spanLength = chunk.Count;
+			return true;
+		}
+
+		return false;
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly RefEnumerator<T0, T1> GetEnumerator() => this;
@@ -390,17 +534,12 @@ public unsafe ref struct Row<T0, T1> where T0 : struct where T1 : struct
 	public ref T1 Val1 => ref Unsafe.AsRef<T1>(_val1.ToPointer());
 #endif
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public Row(ref T0 value0, ref T1 value1)
-	{
-#if NET
-		Val0 = ref value0;
-		Val1 = ref value1;
-#else
-		_val0 = (IntPtr)Unsafe.AsPointer(ref value0);
-		_val1 = (IntPtr)Unsafe.AsPointer(ref value1);
-#endif
-	}
+	public void Deconstruct(out T0 val0, out T1 val1)
+    {
+		val0 = Val0;
+		val1 = Val1;
+    }
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal void Set(ref T0 value0, ref T1 value1)
