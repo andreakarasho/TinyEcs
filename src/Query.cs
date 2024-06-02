@@ -157,24 +157,9 @@ public partial class Query : IDisposable
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
 		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
-
-		// _data = new ArchetypeChunk[_matchedArchetypes.Count][];
-
-		// var archIdx = 0;
-		// foreach (var arch in _matchedArchetypes)
-		// {
-		// 	_data[archIdx++] = new ArchetypeChunk[arch.Chunks.Length];
-		// 	var chunkIdx = 0;
-		// 	foreach (ref var chunk in arch.Chunks)
-		// 	{
-
-		// 	}
-		// }
 	}
 
-	private ArchetypeChunk[][] _data;
-
-	public unsafe RefEnumerator<T0, T1> Each3<T0, T1>() where T0 : struct where T1 : struct
+	public RefEnumerator<T0, T1> Iter<T0, T1>() where T0 : struct where T1 : struct
 	{
 		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
@@ -453,26 +438,34 @@ public ref struct QueryArchetypeChunkIterator
 
 
 [SkipLocalsInit]
-public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
+public ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : struct
 {
-    private int _spanLength;
 	private QueryInternal _queryIt;
 	private QueryChunkIterator _chunkIt;
-	private Row<T0, T1> _ref;
-
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal RefEnumerator(Span<Archetype> matchedArchetypes)
     {
 		_queryIt = new QueryInternal(matchedArchetypes);
-        _spanLength = 0;
+    }
+
+	public readonly void Deconstruct(out Span<T0> val0, out Span<T1> val1)
+    {
+		ref var arch = ref _queryIt.Current;
+		ref var chunk = ref _chunkIt.Current;
+
+		var span0 = chunk.GetSpan<T0>(arch.GetComponentIndex<T0>());
+		var span1 = chunk.GetSpan<T1>(arch.GetComponentIndex<T1>());
+
+		val0 = span0;
+		val1 = span1;
     }
 
 	[UnscopedRef]
-    public ref Row<T0, T1> Current
+    public ref RefEnumerator<T0, T1> Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref _ref;
+		get => ref this;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -480,14 +473,8 @@ public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : stru
     {
         while (true)
         {
-			if (_spanLength-- > 0)
-			{
-				_ref.Advance();
+			if (_chunkIt.MoveNext())
 				return true;
-			}
-
-			if (Move())
-				continue;
 
 			if (_queryIt.MoveNext())
 			{
@@ -500,68 +487,5 @@ public unsafe ref struct RefEnumerator<T0, T1> where T0 : struct where T1 : stru
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	bool Move()
-	{
-		if (_chunkIt.MoveNext())
-		{
-			ref var arch = ref _queryIt.Current;
-			ref var chunk = ref _chunkIt.Current;
-			ref var span0 = ref chunk.GetReference<T0>(arch.GetComponentIndex<T0>());
-			ref var span1 = ref chunk.GetReference<T1>(arch.GetComponentIndex<T1>());
-			_ref.Set(ref Unsafe.Subtract(ref span0, 1), ref Unsafe.Subtract(ref span1, 1));
-			_spanLength = chunk.Count;
-			return true;
-		}
-
-		return false;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly RefEnumerator<T0, T1> GetEnumerator() => this;
-}
-
-
-[SkipLocalsInit]
-public unsafe ref struct Row<T0, T1> where T0 : struct where T1 : struct
-{
-#if NET
-	public ref T0 Val0;
-	public ref T1 Val1;
-#else
-	private IntPtr _val0;
-	private IntPtr _val1;
-	public ref T0 Val0 => ref Unsafe.AsRef<T0>(_val0.ToPointer());
-	public ref T1 Val1 => ref Unsafe.AsRef<T1>(_val1.ToPointer());
-#endif
-
-	public void Deconstruct(out T0 val0, out T1 val1)
-    {
-		val0 = Val0;
-		val1 = Val1;
-    }
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal void Set(ref T0 value0, ref T1 value1)
-	{
-#if NET
-		Val0 = ref value0;
-		Val1 = ref value1;
-#else
-		_val0 = (IntPtr)Unsafe.AsPointer(ref value0);
-		_val1 = (IntPtr)Unsafe.AsPointer(ref value1);
-#endif
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal void Advance()
-	{
-#if NET
-		Val0 = ref Unsafe.Add(ref Val0, 1);
-		Val1 = ref Unsafe.Add(ref Val1, 1);
-#else
-		_val0 = (IntPtr)(((T0*)_val0.ToPointer()) + 1);
-		_val1 = (IntPtr)(((T1*)_val1.ToPointer()) + 1);
-#endif
-	}
 }

@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using TinyEcs;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
@@ -28,16 +29,30 @@ ecs.Entity().Set(new Velocity());
 ecs.Entity().Set(new Position() {X = 3});
 
 
-var query = ecs.Query<(Position, Velocity)>();
-foreach (ref var row in query.Each3<Position, Velocity>())
+ var query = ecs.Query<(Position, Velocity)>();
+
+foreach (var (pos, vel) in query.Iter<Position, Velocity>())
 {
-	ref var v0 = ref row.Val0;
-	v0.X += 1;
+	var count = pos.Length;
+
+	for (var i = 0; i < count; ++i)
+	{
+		ref var p = ref pos[i];
+		ref var v = ref vel[i];
+
+		p.X += 1;
+	}
 }
 
-foreach (ref var row in query.Each3<Position, Velocity>())
+foreach (var (pos, vel) in query.Iter<Position, Velocity>())
 {
-	ref var v0 = ref row.Val0;
+	var count = pos.Length;
+
+	for (var i = 0; i < count; ++i)
+	{
+		ref var p = ref pos[i];
+		ref var v = ref vel[i];
+	}
 }
 
 ecs.Query<
@@ -370,10 +385,21 @@ while (true)
 			// 	pos.Y *= vel.Y;
 			// });
 
-		foreach (ref var row in q.Each3<Position, Velocity>())
+
+		foreach ((Span<Position> pos, Span<Velocity> vel) in q.Iter<Position, Velocity>())
 		{
-			row.Val0.X *= row.Val1.X;
-			row.Val0.Y *= row.Val1.Y;
+			ref var p = ref MemoryMarshal.GetReference(pos);
+			ref var v = ref MemoryMarshal.GetReference(vel);
+			ref var lastA = ref Unsafe.Add(ref p, pos.Length);
+
+			while (Unsafe.IsAddressLessThan(ref p, ref lastA))
+			{
+				p.X *= v.X;
+				p.Y *= v.Y;
+
+				p = ref Unsafe.Add(ref p, 1);
+				v = ref Unsafe.Add(ref v, 1);
+			}
 		}
 
 		//scheduler.Run();
