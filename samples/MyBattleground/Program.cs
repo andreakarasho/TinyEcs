@@ -386,7 +386,7 @@ while (true)
 			// });
 
 
-		foreach ((Span<Position> pos, Span<Velocity> vel) in q.IterTest<Position, Velocity>())
+		foreach ((var pos, var vel) in q.Iter<Position, Velocity>())
 		{
 			ref var p = ref MemoryMarshal.GetReference(pos);
 			ref var v = ref MemoryMarshal.GetReference(vel);

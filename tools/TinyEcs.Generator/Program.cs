@@ -18,10 +18,26 @@ public sealed class MyGenerator : IIncrementalGenerator
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
+			postContext.AddSource("TinyEcs.QueryIters.g.cs", CodeFormatter.Format(GenerateQueryIters()));
 			postContext.AddSource("TinyEcs.Queries.g.cs", CodeFormatter.Format(GenerateQueries()));
 			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
 		});
 
+		static string GenerateQueryIters()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					{GenerateQueryRefEnumerator()}
+					{GenerateQueryIter()}
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
 
 		static string GenerateQueries()
 		{
@@ -145,22 +161,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
-		static string GenerateQueryTemplateDelegates(bool withEntityView)
+		static string GenerateQueryRefEnumerator()
 		{
 			var sb = new StringBuilder();
-			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
 
 			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var signParams = (withEntityView ? "EntityView entity, " : "") +
-				                 GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
-
-				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
-			}
-
-			for (var i = 0; !withEntityView && i < MAX_GENERICS; ++i)
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
@@ -223,6 +228,49 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
+		static string GenerateQueryIter()
+		{
+			var sb = new StringBuilder();
+			sb.AppendLine($@"
+				public partial class Query
+				{{
+			");
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+
+				sb.AppendLine($@"
+					public RefEnumerator<{typeParams}> Iter<{typeParams}>() {whereParams}
+						=> new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+				");
+			}
+
+			sb.AppendLine("}");
+
+
+			return sb.ToString();
+		}
+
+		static string GenerateQueryTemplateDelegates(bool withEntityView)
+		{
+			var sb = new StringBuilder();
+			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var signParams = (withEntityView ? "EntityView entity, " : "") +
+				                 GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
+
+				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
+			}
+
+			return sb.ToString();
+		}
+
 		static string GenerateFilterQuery(bool withFilter, bool withEntityView)
 		{
 			var className = withFilter ? "class World" : "class Query";
@@ -261,14 +309,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 					return str;
 				});
-
-
-				if (!withFilter && !withEntityView)
-					sb.AppendLine($@"
-						public RefEnumerator<{typeParams}> Iter<{typeParams}>() {whereParams}
-							=> new (CollectionsMarshal.AsSpan(_matchedArchetypes));
-					");
-
 
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
