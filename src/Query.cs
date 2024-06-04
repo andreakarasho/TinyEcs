@@ -159,11 +159,6 @@ public partial class Query : IDisposable
 		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
 	}
 
-	public RefEnumeratorTest<T0, T1> IterTest<T0, T1>() where T0 : struct where T1 : struct
-	{
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
-	}
-
 	public int Count()
 	{
 		Match();
@@ -437,6 +432,154 @@ public ref struct QueryArchetypeChunkIterator
 
 
 
+public partial class Query
+{
+	public RefEnumeratorTest<T0, T1> IterTest<T0, T1>() where T0 : struct where T1 : struct
+	{
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public RefEnumeratorTest2<T0, T1> IterTest2<T0, T1>() where T0 : struct where T1 : struct
+	{
+		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+	}
+
+	//[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int GetMaxSize(params ReadOnlySpan<int> sizes)
+	{
+		var max = 0;
+		foreach (ref readonly var k in sizes)
+			max = Math.Max(k, max);
+		return max;
+	}
+
+	// public void EachJob2<T0>(QueryFilterDelegate<T0> fn)
+	// 	where T0 : struct
+	// {
+	// 	var query = this;
+	// 	EcsAssert.Panic(query.TermsAccess.Length == 1, "mismatched sign");
+	// 	World.BeginDeferred();
+	// 	var cde = query.ThreadCounter;
+	// 	cde.Reset();
+
+	// 	foreach (var (_, t0AA) in query.Iter<T0>())
+	// 	{
+	// 		cde.AddCount(1);
+	// 		var inc0 = t0AA.IsEmpty ? 0 : 1;
+
+	// 		System.Threading.ThreadPool.QueueUserWorkItem(state =>
+	// 		{
+	// 			ref var index = ref Unsafe.Unbox<int>(state!);
+
+	// 			cde.Signal();
+	// 		}, t0AA);
+	// 	}
+
+	// 	foreach (var arch in query)
+	// 	{
+	// 		var column0 = arch.GetComponentIndex<T0>();
+	// 		var inc0 = column0 < 0 ? 0 : 1;
+	// 		var chunks = arch.MemChunks;
+	// 		cde.AddCount(chunks.Length);
+	// 		for (var i = 0; i < chunks.Length; ++i)
+	// 		{
+	// 			System.Threading.ThreadPool.QueueUserWorkItem(state =>
+	// 			{
+	// 				ref var index = ref Unsafe.Unbox<int>(state!);
+	// 				ref readonly var chunk = ref chunks.Span[index];
+	// 				var done = 0;
+	// 				ref var t0A = ref chunk.GetReference<T0>(column0);
+	// 				while (done <= chunk.Count - 4)
+	// 				{
+	// 					fn(ref t0A);
+	// 					t0A = ref Unsafe.Add(ref t0A, inc0);
+	// 					fn(ref t0A);
+	// 					t0A = ref Unsafe.Add(ref t0A, inc0);
+	// 					fn(ref t0A);
+	// 					t0A = ref Unsafe.Add(ref t0A, inc0);
+	// 					fn(ref t0A);
+	// 					t0A = ref Unsafe.Add(ref t0A, inc0);
+	// 					done += 4;
+	// 				}
+
+	// 				while (done < chunk.Count)
+	// 				{
+	// 					fn(ref t0A);
+	// 					t0A = ref Unsafe.Add(ref t0A, inc0);
+	// 					done += 1;
+	// 				}
+
+	// 				cde.Signal();
+	// 			}, i);
+	// 		}
+	// 	}
+
+	// 	cde.Signal();
+	// 	cde.Wait();
+	// 	World.EndDeferred();
+	// }
+
+	public void Each2<T0, T1, T2>(QueryFilterDelegate<T0, T1, T2> fn)
+		where T0 : struct where T1 : struct where T2 : struct
+	{
+		var query = this;
+		EcsAssert.Panic(query.TermsAccess.Length == 3, "mismatched sign");
+		EcsAssert.Panic(query.TermsAccess[0].Id == query.World.Entity<T0>().ID, $"'{typeof(T0)}' doesn't match the QueryData sign");
+		EcsAssert.Panic(query.TermsAccess[1].Id == query.World.Entity<T1>().ID, $"'{typeof(T1)}' doesn't match the QueryData sign");
+		EcsAssert.Panic(query.TermsAccess[2].Id == query.World.Entity<T2>().ID, $"'{typeof(T2)}' doesn't match the QueryData sign");
+
+		World.BeginDeferred();
+
+		foreach ((var t0AA, var t1AA, var t2AA) in query.Iter<T0, T1, T2>())
+		{
+			var count = query.GetMaxSize(t0AA.Length, t1AA.Length, t2AA.Length);
+			var inc0 = t0AA.IsEmpty ? 0 : 1;
+			var inc1 = t1AA.IsEmpty ? 0 : 1;
+			var inc2 = t2AA.IsEmpty ? 0 : 1;
+
+			ref var t0A = ref MemoryMarshal.GetReference(t0AA);
+			ref var t1A = ref MemoryMarshal.GetReference(t1AA);
+			ref var t2A = ref MemoryMarshal.GetReference(t2AA);
+
+			while (count - 4 > 0)
+			{
+				fn(ref t0A, ref t1A, ref t2A);
+				t0A = ref Unsafe.Add(ref t0A, inc0);
+				t1A = ref Unsafe.Add(ref t1A, inc1);
+				t2A = ref Unsafe.Add(ref t2A, inc2);
+				fn(ref t0A, ref t1A, ref t2A);
+				t0A = ref Unsafe.Add(ref t0A, inc0);
+				t1A = ref Unsafe.Add(ref t1A, inc1);
+				t2A = ref Unsafe.Add(ref t2A, inc2);
+				fn(ref t0A, ref t1A, ref t2A);
+				t0A = ref Unsafe.Add(ref t0A, inc0);
+				t1A = ref Unsafe.Add(ref t1A, inc1);
+				t2A = ref Unsafe.Add(ref t2A, inc2);
+				fn(ref t0A, ref t1A, ref t2A);
+				t0A = ref Unsafe.Add(ref t0A, inc0);
+				t1A = ref Unsafe.Add(ref t1A, inc1);
+				t2A = ref Unsafe.Add(ref t2A, inc2);
+
+				count -= 4;
+			}
+
+			while (count > 0)
+			{
+				fn(ref t0A, ref t1A, ref t2A);
+				t0A = ref Unsafe.Add(ref t0A, inc0);
+				t1A = ref Unsafe.Add(ref t1A, inc1);
+				t2A = ref Unsafe.Add(ref t2A, inc2);
+
+				count -= 1;
+			}
+		}
+
+		World.EndDeferred();
+	}
+
+}
+
 [SkipLocalsInit]
 public ref struct RefEnumeratorTest<T0, T1> where T0 : struct where T1 : struct
 {
@@ -455,11 +598,19 @@ public ref struct RefEnumeratorTest<T0, T1> where T0 : struct where T1 : struct
 		ref var arch = ref _queryIt.Current;
 		ref var chunk = ref _chunkIt.Current;
 
-		var span0 = chunk.GetSpan<T0>(arch.GetComponentIndex<T0>());
-		var span1 = chunk.GetSpan<T1>(arch.GetComponentIndex<T1>());
+		val0 = chunk.GetSpan<T0>(arch.GetComponentIndex<T0>());
+		val1 = chunk.GetSpan<T1>(arch.GetComponentIndex<T1>());
+    }
 
-		val0 = span0;
-		val1 = span1;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly void Deconstruct(out Span<EntityView> entities, out Span<T0> val0, out Span<T1> val1)
+    {
+		ref var arch = ref _queryIt.Current;
+		ref var chunk = ref _chunkIt.Current;
+
+		entities = chunk.Entities.AsSpan(0, chunk.Count);
+		val0 = chunk.GetSpan<T0>(arch.GetComponentIndex<T0>());
+		val1 = chunk.GetSpan<T1>(arch.GetComponentIndex<T1>());
     }
 
 	[UnscopedRef]
@@ -490,3 +641,67 @@ public ref struct RefEnumeratorTest<T0, T1> where T0 : struct where T1 : struct
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly RefEnumeratorTest<T0, T1> GetEnumerator() => this;
 }
+
+[SkipLocalsInit]
+public unsafe ref struct RefEnumeratorTest2<T0, T1> where T0 : struct where T1 : struct
+{
+	private RefEnumerator<T0, T1> _refEnum;
+	private int _count;
+	private T0* _span0;
+	private T1* _span1;
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal RefEnumeratorTest2(Span<Archetype> matchedArchetypes)
+    {
+		_refEnum = new (matchedArchetypes);
+    }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly void Deconstruct(out T0* val0, out T1* val1)
+    {
+		val0 = _span0;
+		val1 = _span1;
+    }
+
+	[UnscopedRef]
+    public ref RefEnumeratorTest2<T0, T1> Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool MoveNext()
+    {
+        while (true)
+        {
+			if (_count-- > 0)
+			{
+				_span0++;
+				_span1++;
+				// _span0 = ref Unsafe.Add(ref _span0, 1);
+				// _span1 = ref Unsafe.Add(ref _span1, 1);
+
+				return true;
+			}
+
+			if (_refEnum.MoveNext())
+			{
+				(var ref0, var ref1) = _refEnum.Current;
+
+				_span0 = (T0*) Unsafe.AsPointer(ref Unsafe.Subtract(ref MemoryMarshal.GetReference(ref0), 1));
+				_span1 = (T1*) Unsafe.AsPointer(ref Unsafe.Subtract(ref MemoryMarshal.GetReference(ref1), 1));
+				_count = ref0.Length;
+
+				continue;
+			}
+
+            return false;
+        }
+    }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly RefEnumeratorTest2<T0, T1> GetEnumerator() => this;
+}
+

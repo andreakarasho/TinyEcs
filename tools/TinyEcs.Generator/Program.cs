@@ -194,6 +194,16 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{dctorGetSpan}
 						}}
 
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly void Deconstruct(out Span<EntityView> entities, {dctorSign})
+						{{
+							ref var arch = ref _queryIt.Current;
+							ref var chunk = ref _chunkIt.Current;
+
+							entities = chunk.Entities.AsSpan(0, chunk.Count);
+							{dctorGetSpan}
+						}}
+
 						[System.Diagnostics.CodeAnalysis.UnscopedRef]
 						public ref RefEnumerator<{typeParams}> Current
 						{{
@@ -287,9 +297,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
+				var fieldList = (withEntityView ? "ref var entityA = ref MemoryMarshal.GetReference(entities);\n" : "") +
+				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref MemoryMarshal.GetReference(t{j}AA);");
 				var signCallback = (withEntityView ? "entityA, " : "") +
 				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
 				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
@@ -297,7 +306,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
 				var worldLock = !withFilter ? "World." : "";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
+				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = t{j}AA.IsEmpty ? 0 : 1;");
 				var validationTypes = GenerateSequence(i + 1, "\n", j => {
 					if (i + 1 <= 1)
 					{
@@ -310,56 +319,51 @@ public sealed class MyGenerator : IIncrementalGenerator
 					return str;
 				});
 
+				var spanTerms = (withEntityView ? "var entities, "  : "") + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
+				if (i == 0 && !withEntityView)
+					spanTerms = $"_, {spanTerms}";
+				var spanTermsLength = GenerateSequence(i + 1, ", ", j => $"t{j}AA.Length");
+
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 					{{
 						var query = {getQuery};
 
-						{($"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");")}
+						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
 						{validationTypes}
 
 						{worldLock}BeginDeferred();
 
-						foreach (var arch in query)
+						foreach (({spanTerms}) in query.Iter<{typeParams}>())
 						{{
-							{columnIndices}
+							var count = query.GetMaxSize({spanTermsLength});
+
 							{incFieldList}
 
-							var chunks = arch.Chunks;
-							ref var chunk = ref MemoryMarshal.GetReference(chunks);
-							ref var lastChunk = ref Unsafe.Add(ref chunk, chunks.Length);
+							{fieldList}
 
-							while (Unsafe.IsAddressLessThan(ref chunk, ref lastChunk))
+							while (count - 4 > 0)
 							{{
-								var done = 0;
-								{fieldList}
+								fn({signCallback});
+								{advanceField}
 
-								while (done <= chunk.Count - 4)
-								{{
-									fn({signCallback});
-									{advanceField}
+								fn({signCallback});
+								{advanceField}
 
-									fn({signCallback});
-									{advanceField}
+								fn({signCallback});
+								{advanceField}
 
-									fn({signCallback});
-									{advanceField}
+								fn({signCallback});
+								{advanceField}
 
-									fn({signCallback});
-									{advanceField}
+								count -= 4;
+							}}
 
-									done += 4;
-								}}
-
-								while (done < chunk.Count)
-								{{
-									fn({signCallback});
-									{advanceField}
-
-									done += 1;
-								}}
-
-								chunk = ref Unsafe.Add(ref chunk, 1);
+							while (count > 0)
+							{{
+								fn({signCallback});
+								{advanceField}
+								count -= 1;
 							}}
 						}}
 

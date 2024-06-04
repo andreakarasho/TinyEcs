@@ -18,7 +18,7 @@ ecs.Entity<Velocity>().Set<Networked>();
 
 
 ecs.Entity().Set(new Velocity());
-ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity());
+ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity()).Set(new ManagedData());
 ecs.Entity().Set(new Position() { X = 99 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 999 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Set<Networked>();
@@ -31,29 +31,29 @@ ecs.Entity().Set(new Position() {X = 3});
 
  var query = ecs.Query<(Position, Velocity)>();
 
-foreach (var (pos, vel) in query.Iter<Position, Velocity>())
-{
-	var count = pos.Length;
+// foreach (var (pos, vel) in query.Iter<Position, Velocity>())
+// {
+// 	var count = pos.Length;
 
-	for (var i = 0; i < count; ++i)
-	{
-		ref var p = ref pos[i];
-		ref var v = ref vel[i];
+// 	for (var i = 0; i < count; ++i)
+// 	{
+// 		ref var p = ref pos[i];
+// 		ref var v = ref vel[i];
 
-		p.X += 1;
-	}
-}
+// 		p.X += 1;
+// 	}
+// }
 
-foreach (var (pos, vel) in query.IterTest<Position, Velocity>())
-{
-	var count = pos.Length;
+// foreach (var (pos, vel) in query.IterTest<Position, Velocity>())
+// {
+// 	var count = pos.Length;
 
-	for (var i = 0; i < count; ++i)
-	{
-		ref var p = ref pos[i];
-		ref var v = ref vel[i];
-	}
-}
+// 	for (var i = 0; i < count; ++i)
+// 	{
+// 		ref var p = ref pos[i];
+// 		ref var v = ref vel[i];
+// 	}
+// }
 
 ecs.Query<
 		(Position, ManagedData),
@@ -368,7 +368,8 @@ var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
 
-var q = ecs.Query<(Position, Velocity)>();
+var q = ecs.Query<(Position, Velocity, Optional<ManagedData>)>();
+
 
 while (true)
 {
@@ -380,27 +381,36 @@ while (true)
 		// });
 
 		// ecs.Query<(Position, Velocity)>()
-			// q.Each((ref Position pos, ref Velocity vel) => {
-			// 	pos.X *= vel.X;
-			// 	pos.Y *= vel.Y;
-			// });
+		q.Each2((ref Position pos, ref Velocity vel, ref ManagedData t) => {
+			pos.X *= vel.X;
+			pos.Y *= vel.Y;
+		});
+
+		// unsafe
+		// {
+		// 	foreach (var (pos,  vel) in q.IterTest2<Position, Velocity>())
+		// 	{
+		// 		pos->X *= vel->X;
+		// 		pos->Y *= vel->Y;
+		// 	}
+		// }
 
 
-		foreach ((var pos, var vel) in q.Iter<Position, Velocity>())
-		{
-			ref var p = ref MemoryMarshal.GetReference(pos);
-			ref var v = ref MemoryMarshal.GetReference(vel);
-			ref var lastA = ref Unsafe.Add(ref p, pos.Length);
-
-			while (Unsafe.IsAddressLessThan(ref p, ref lastA))
-			{
-				p.X *= v.X;
-				p.Y *= v.Y;
-
-				p = ref Unsafe.Add(ref p, 1);
-				v = ref Unsafe.Add(ref v, 1);
-			}
-		}
+		// foreach ((var entiies, var pos, var vel) in q.Iter<Position, Velocity>())
+		// {
+		// 	ref var p = ref MemoryMarshal.GetReference(pos);
+		// 	ref var v = ref MemoryMarshal.GetReference(vel);
+		// 	ref var lastA = ref Unsafe.Add(ref p, pos.Length);
+		//
+		// 	while (Unsafe.IsAddressLessThan(ref p, ref lastA))
+		// 	{
+		// 		p.X *= v.X;
+		// 		p.Y *= v.Y;
+		//
+		// 		p = ref Unsafe.Add(ref p, 1);
+		// 		v = ref Unsafe.Add(ref v, 1);
+		// 	}
+		// }
 
 		//scheduler.Run();
 	}
