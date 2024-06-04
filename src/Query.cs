@@ -445,15 +445,6 @@ public partial class Query
 		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
 	}
 
-	//[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal int GetMaxSize(params ReadOnlySpan<int> sizes)
-	{
-		var max = 0;
-		foreach (ref readonly var k in sizes)
-			max = Math.Max(k, max);
-		return max;
-	}
-
 	// public void EachJob2<T0>(QueryFilterDelegate<T0> fn)
 	// 	where T0 : struct
 	// {
@@ -531,9 +522,9 @@ public partial class Query
 
 		World.BeginDeferred();
 
-		foreach ((var t0AA, var t1AA, var t2AA) in query.Iter<T0, T1, T2>())
+		foreach ((var entities, var t0AA, var t1AA, var t2AA) in query.Iter<T0, T1, T2>())
 		{
-			var count = query.GetMaxSize(t0AA.Length, t1AA.Length, t2AA.Length);
+			var count = entities.Length;
 			var inc0 = t0AA.IsEmpty ? 0 : 1;
 			var inc1 = t1AA.IsEmpty ? 0 : 1;
 			var inc2 = t2AA.IsEmpty ? 0 : 1;

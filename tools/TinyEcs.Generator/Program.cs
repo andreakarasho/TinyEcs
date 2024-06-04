@@ -195,7 +195,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct(out Span<EntityView> entities, {dctorSign})
+						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {dctorSign})
 						{{
 							ref var arch = ref _queryIt.Current;
 							ref var chunk = ref _chunkIt.Current;
@@ -313,15 +313,15 @@ public sealed class MyGenerator : IIncrementalGenerator
 						return "";
 					}
 
-					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == query.World.Entity<T{j}>().ID," +
-							"$\"'{typeof("+ $"T{j}" + ")}' doesn't match the QueryData sign\");";
+					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == Lookup.Component<T{j}>.HashCode," +
+							$"\"param at {j} doesn't match the QueryData sign\");";
 
 					return str;
 				});
 
-				var spanTerms = (withEntityView ? "var entities, "  : "") + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
-				if (i == 0 && !withEntityView)
-					spanTerms = $"_, {spanTerms}";
+				var spanTerms = (withEntityView ? "var entities, "  : "var entities, ") + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
+				// if (i == 0 && !withEntityView)
+				// 	spanTerms = $"_, {spanTerms}";
 				var spanTermsLength = GenerateSequence(i + 1, ", ", j => $"t{j}AA.Length");
 
 				sb.AppendLine($@"
@@ -336,7 +336,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 						foreach (({spanTerms}) in query.Iter<{typeParams}>())
 						{{
-							var count = query.GetMaxSize({spanTermsLength});
+							var count = entities.Length;
 
 							{incFieldList}
 
