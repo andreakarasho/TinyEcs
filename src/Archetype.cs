@@ -32,7 +32,7 @@ public struct ArchetypeChunk
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Components!.Length)
-			return MemoryMarshal.CreateSpan(ref Unsafe.NullRef<T>(), 1);
+			return Span<T>.Empty;
 
 		ref var array = ref Unsafe.As<Array, T[]>(ref Components![column]);
 		return array.AsSpan(0, Count);
