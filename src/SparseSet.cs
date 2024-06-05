@@ -17,7 +17,7 @@ sealed class EntitySparseSet<T>
 
 	public EntitySparseSet()
 	{
-		_dense = Vec<ulong>.Init();
+		_dense = new Vec<ulong>();
 		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
 		_count = 1;
 		_maxID = ulong.MinValue;
@@ -287,69 +287,36 @@ sealed class EntitySparseSet<T>
 
 
 
-public sealed unsafe class Vec<T> : IDisposable where T : unmanaged
+[SkipLocalsInit]
+internal sealed class Vec<T> where T : unmanaged
 {
-	private T* _data;
+	private const int DefaultCapacity = 4;
+
+	private T[] _data;
+
+
+	public Vec(int capacity = 0)
+	{
+		Capacity = Math.Max(capacity, DefaultCapacity);
+		_data = new T[Capacity];
+		Count = 0;
+	}
 
 	public int Capacity { get; private set; }
 	public int Count { get; private set; }
-
-	public Span<T> Span => new Span<T>(_data, Count);
-
-	private const int DefaultCapacity = 4;
-
-	public static Vec<T> Init(int capacity = 0)
-	{
-		if (capacity == 0)
-			capacity = DefaultCapacity;
-
-		return new Vec<T>
-		{
-			_data = (T*) NativeMemory.Alloc((nuint)capacity, (nuint)sizeof(T)),
-			Capacity = capacity,
-			Count = 0
-		};
-	}
-
-	public static Vec<T> InitZero(int capacity = 0)
-	{
-		if (capacity == 0)
-			capacity = DefaultCapacity;
-
-		return new Vec<T>
-		{
-			_data = (T*) NativeMemory.AllocZeroed((nuint)capacity, (nuint)sizeof(T)),
-			Capacity = capacity,
-			Count = 0
-		};
-	}
-
+	public Span<T> Span => _data.AsSpan(0, Count);
 	public ref T this[int i] => ref _data[i];
+
 
 	public void Clear()
 	{
 		Capacity = DefaultCapacity;
 		Count = 0;
-		_data = (T*) NativeMemory.Realloc(_data, (nuint)Capacity * (nuint)sizeof(T));
-	}
-
-	public void Dispose()
-	{
-		if (_data == null)
-			return;
-
-		NativeMemory.Free(_data);
-
-		_data = null;
+		Array.Resize(ref _data, Capacity);
 	}
 
 	public void Add(T item)
-	{
-		if (Count >= Capacity)
-			EnsureCapacity(Capacity * 2);
-
-		_data[Count++] = item;
-	}
+		=> AddRef() = item;
 
 	public ref T AddRef()
 	{
@@ -359,26 +326,12 @@ public sealed unsafe class Vec<T> : IDisposable where T : unmanaged
 		return ref _data[Count++];
 	}
 
-	public void EnsureCapacity(int newCapacity, bool initZero = false)
+	public void EnsureCapacity(int newCapacity)
 	{
 		if (newCapacity <= Capacity)
 			return;
 
-		var ptr = (T*) NativeMemory.Realloc(_data, (nuint) newCapacity * (nuint) sizeof(T));
-
-		if (initZero)
-			Unsafe.InitBlock(&ptr[Count], 0, (uint)((newCapacity - Count) * (uint)sizeof(T)));
-
-		_data = ptr;
+		Array.Resize(ref _data, newCapacity);
 		Capacity = newCapacity;
-	}
-
-	public void SetMinCount(int minCount, bool initZero = false)
-	{
-		if (Count > minCount)
-			return;
-
-		EnsureCapacity(minCount, initZero);
-		Count = minCount;
 	}
 }
