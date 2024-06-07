@@ -180,9 +180,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 						private QueryChunkIterator _chunkIt;
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal RefEnumerator(Span<Archetype> matchedArchetypes)
+						internal RefEnumerator(QueryInternal queryIt)
 						{{
-							_queryIt = new QueryInternal(matchedArchetypes);
+							_queryIt = queryIt;
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -253,7 +253,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				sb.AppendLine($@"
 					public RefEnumerator<{typeParams}> Iter<{typeParams}>() {whereParams}
-						=> new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+						=> new (this.GetEnumerator());
 				");
 			}
 

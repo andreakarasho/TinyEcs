@@ -436,13 +436,13 @@ public partial class Query
 {
 	public RefEnumeratorTest<T0, T1> IterTest<T0, T1>() where T0 : struct where T1 : struct
 	{
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+		return new (GetEnumerator());
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public RefEnumeratorTest2<T0, T1> IterTest2<T0, T1>() where T0 : struct where T1 : struct
 	{
-		return new (CollectionsMarshal.AsSpan(_matchedArchetypes));
+		return new (GetEnumerator());
 	}
 
 	// public void EachJob2<T0>(QueryFilterDelegate<T0> fn)
@@ -578,9 +578,9 @@ public ref struct RefEnumeratorTest<T0, T1> where T0 : struct where T1 : struct
 	private QueryChunkIterator _chunkIt;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal RefEnumeratorTest(Span<Archetype> matchedArchetypes)
+    internal RefEnumeratorTest(QueryInternal queryit)
     {
-		_queryIt = new QueryInternal(matchedArchetypes);
+		_queryIt = queryit;
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -638,21 +638,28 @@ public unsafe ref struct RefEnumeratorTest2<T0, T1> where T0 : struct where T1 :
 {
 	private RefEnumerator<T0, T1> _refEnum;
 	private int _count;
-	private T0* _span0;
-	private T1* _span1;
+	// private T0* _span0;
+	// private T1* _span1;
+
+	private Span<T0> _span0;
+	private Span<T1> _span1;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal RefEnumeratorTest2(Span<Archetype> matchedArchetypes)
+    internal RefEnumeratorTest2(QueryInternal queryIt)
     {
-		_refEnum = new (matchedArchetypes);
+		_refEnum = new (queryIt);
     }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Deconstruct(out T0* val0, out T1* val1)
     {
-		val0 = _span0;
-		val1 = _span1;
+		fixed (T0* v0 = &_span0[_count])
+		fixed (T1* t0 = &_span1[_count])
+		{
+			val0 = v0;
+			val1 = t0;
+		}
     }
 
 	[UnscopedRef]
@@ -662,6 +669,7 @@ public unsafe ref struct RefEnumeratorTest2<T0, T1> where T0 : struct where T1 :
 		get => ref this;
 	}
 
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool MoveNext()
     {
@@ -669,21 +677,25 @@ public unsafe ref struct RefEnumeratorTest2<T0, T1> where T0 : struct where T1 :
         {
 			if (_count-- > 0)
 			{
-				_span0++;
-				_span1++;
-				// _span0 = ref Unsafe.Add(ref _span0, 1);
-				// _span1 = ref Unsafe.Add(ref _span1, 1);
+				// _span0 -= 1;
+				// _span1 -= 1;
 
 				return true;
 			}
 
 			if (_refEnum.MoveNext())
 			{
-				(var ref0, var ref1) = _refEnum.Current;
+				(var entities, var ref0, var ref1) = _refEnum.Current;
+				_count = entities.Length;
 
-				_span0 = (T0*) Unsafe.AsPointer(ref Unsafe.Subtract(ref MemoryMarshal.GetReference(ref0), 1));
-				_span1 = (T1*) Unsafe.AsPointer(ref Unsafe.Subtract(ref MemoryMarshal.GetReference(ref1), 1));
-				_count = ref0.Length;
+				_span0 = ref0;
+				_span1 = ref1;
+
+				// ref var a = ref Unsafe.Add(ref MemoryMarshal.GetReference(ref0), _count);
+				// ref var b = ref Unsafe.Add(ref MemoryMarshal.GetReference(ref1), _count);
+
+				// _span0 = (T0*) Unsafe.AsPointer(ref a);
+				// _span1 = (T1*) Unsafe.AsPointer(ref b);
 
 				continue;
 			}
@@ -696,3 +708,54 @@ public unsafe ref struct RefEnumeratorTest2<T0, T1> where T0 : struct where T1 :
     public readonly RefEnumeratorTest2<T0, T1> GetEnumerator() => this;
 }
 
+// [SkipLocalsInit]
+// public unsafe ref struct Row<T> where T : struct
+// {
+// #if NET
+// 	public ref T Val0;
+// #else
+// 	private IntPtr _val0;
+// 	public ref T Val0 => ref Unsafe.AsRef<T>(_val0.ToPointer());
+// #endif
+
+
+// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	internal void Set(ref T value0)
+// 	{
+// #if NET
+// 		Val0 = ref value0;
+// #else
+// 		_val0 = (IntPtr)Unsafe.AsPointer(ref value0);
+// #endif
+// 	}
+
+// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	internal void Advance()
+// 	{
+// #if NET
+// 		Val0 = ref Unsafe.Add(ref Val0, 1);
+// #else
+// 		_val0 = (IntPtr)(((T*)_val0.ToPointer()) + 1);
+// #endif
+// 	}
+// }
+
+
+[SkipLocalsInit]
+public unsafe struct Row<T> where T : struct
+{
+	private void* _val0;
+	public ref T Val0 => ref *(T*)_val0;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal void Set(ref T value0)
+	{
+		_val0 = Unsafe.AsPointer(ref value0);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal void Advance()
+	{
+		_val0 = ((T*)_val0) + 1;
+	}
+}
