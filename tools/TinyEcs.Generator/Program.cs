@@ -401,7 +401,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
 					{{
 						var query = {getQuery};
-						{($"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");")}
+						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
 						{validationTypes}
 
 						{worldLock}BeginDeferred();
