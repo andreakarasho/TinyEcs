@@ -194,6 +194,9 @@ partial class World
 		// 	//return SetDeferred
 		// }
 
+		if (!pair.IsPair)
+			return EntityView.Invalid.ID.Pair;
+
 		ref var record = ref GetRecord(entity);
 
 		var found = 0;
