@@ -342,7 +342,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 							{fieldList}
 
-							while (count - 4 > 0)
+							for (; count - 4 > 0; count -= 4)
 							{{
 								fn({signCallback});
 								{advanceField}
@@ -355,15 +355,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 								fn({signCallback});
 								{advanceField}
-
-								count -= 4;
 							}}
 
-							while (count > 0)
+							for (; count > 0; count -= 1)
 							{{
 								fn({signCallback});
 								{advanceField}
-								count -= 1;
 							}}
 						}}
 
