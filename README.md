@@ -52,7 +52,7 @@ ecs.Each((EntityView entity, ref Position pos, ref Label label) => {
 });
 
 // Multi-threaded query for entities with Position + Label + Player, without Npc.
-ecs.EachJob<(Position, Label), (With<Player>, Not<Npc>)>((ref Position pos, ref Label label) => {
+ecs.EachJob<(Position, Label), (With<Player>, Without<Npc>)>((ref Position pos, ref Label label) => {
     Console.WriteLine(label.Value);
 });
 
@@ -75,8 +75,10 @@ scheduler.AddSystem((World world) => {
     // Spawn entities
 }, SystemStages.Startup);
 
-scheduler.AddSystem((Query<(Position, Velocity), Not<Npc>> query) => {
-    // Query execution
+scheduler.AddSystem((Query<(Position, Velocity), Without<Npc>> query) => {
+    foreach ((var entities, var posSpan, var velSpan) in query.Iter<Position, Velocity>() {
+        // parse all spans
+    }
 });
 
 scheduler.AddPlugin<MyPlugin>();
@@ -131,12 +133,21 @@ world.BeginDeferred();
 world.EndDeferred();
 
 // Raw queries
-foreach (var archetype in world.Query<(Position, Velocity), Not<Npc>>()) {
+var query = world.Query<(Position, Velocity), Without<Npc>>();
+foreach (var archetype in query) {
+	foreach (ref var chunk in archetype) {
+        // Operations
+	}
+}
+foreach ((var entities, var posSpan, var velSpan) in query.Iter<Position, Velocity>() {
     // Operations
 }
-
-// Multithreading
-world.EachJob<(A, B), (With<C>, Not<D>)>(...);
+query.Each((ref Position pos, ref Velocity vel) => {
+    // Operations
+});
+query.EachJob((ref Position pos, ref Velocity vel) => {
+    // Operations
+});
 ```
 
 ## Unique/Named entities
@@ -144,7 +155,7 @@ world.EachJob<(A, B), (With<C>, Not<D>)>(...);
 ```csharp
 // Get or create an entity named 'Khun' 🐶
 var dog = ecs.Entity("Khun")
-	.Set<Bau>();
+    .Set<Bau>();
 ```
 
 ```csharp
@@ -193,7 +204,7 @@ ref var endPos = ref player.Get<EndPoint, Poisition>();
 // Queries for begin & end positions!
 // Notice that relationships are rappresented by a Tuple(A, B)
 ecs.Each((ref (BeginPoint, Position) begin, ref (EndPoint, Position) end => {
-	// ...
+    // ...
 }));
 
 struct Position { public Vector3 Value; }

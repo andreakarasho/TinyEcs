@@ -7,6 +7,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<PublishAot>true</PublishAot>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
@@ -18,7 +19,6 @@
 		<IlcDisableReflection>true</IlcDisableReflection>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-		<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
 		<NoStdLib>true</NoStdLib>
 		<NoConfig>true</NoConfig>
 		<TrimMode>link</TrimMode>
