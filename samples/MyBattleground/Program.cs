@@ -4,7 +4,6 @@ using TinyEcs;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
@@ -225,88 +224,88 @@ ecs.Query<ValueTuple, With<Networked>>()
 
 // ref var ppp = ref carl.Get<Position>();
 
-// var scheduler = new Scheduler(ecs);
+var scheduler = new Scheduler(ecs);
 
-// scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) => {
-// 	Console.WriteLine(i32.Value++);
-// })
-// .RunIf(() => true)
-// .RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
+scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) => {
+	Console.WriteLine(i32.Value++);
+})
+.RunIf(() => true)
+.RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
 
-// scheduler.AddSystem((Local<int> i32, Res<string> str, SchedulerState schedState) => {
-// 	Console.WriteLine(i32.Value++);
+scheduler.AddSystem((Local<int> i32, Res<string> str, SchedulerState schedState) => {
+	Console.WriteLine(i32.Value++);
 
-// 	schedState.AddResource(23ul);
-// }, Stages.Startup);
-// scheduler.AddSystem((Res<ulong> ul) => {
-// 	Console.WriteLine(ul.Value++);
-// });
-// scheduler.AddState<GameStates>();
-// scheduler.AddSystem(() => Console.WriteLine("playing the game"))
-// 	.RunIf((Res<GameStates> state) => state == GameStates.InGame);
+	schedState.AddResource(23ul);
+}, Stages.Startup);
+scheduler.AddSystem((Res<ulong> ul) => {
+	Console.WriteLine(ul.Value++);
+});
+scheduler.AddState<GameStates>();
+scheduler.AddSystem(() => Console.WriteLine("playing the game"))
+	.RunIf((Res<GameStates> state) => state == GameStates.InGame);
 
-// scheduler.AddSystem(() => Console.WriteLine("game paused"))
-// 	.RunIf((Res<GameStates> state) => state.Value == GameStates.Paused)
-// 	.RunIf((Query<Position, (With<PlayerTag>, Without<ComponentInfo>)> query)
-// 		=> query.Count() > 0 && query.Single<Position>().X > 0);
+scheduler.AddSystem(() => Console.WriteLine("game paused"))
+	.RunIf((Res<GameStates> state) => state.Value == GameStates.Paused)
+	.RunIf((Query<Position, (With<PlayerTag>, Without<ComponentInfo>)> query)
+		=> query.Count() > 0 && query.Single<Position>().X > 0);
 
-// scheduler.AddSystem((Res<GameStates> state) =>
-// 	state.Value = state.Value switch
-// 	{
-// 		GameStates.InGame => GameStates.Paused,
-// 		GameStates.Paused => GameStates.InGame,
-// 		_ => state.Value,
-// 	});
+scheduler.AddSystem((Res<GameStates> state) =>
+	state.Value = state.Value switch
+	{
+		GameStates.InGame => GameStates.Paused,
+		GameStates.Paused => GameStates.InGame,
+		_ => state.Value,
+	});
 
-// scheduler.AddEvent<MyEvent>();
-// scheduler.AddSystem((EventWriter<MyEvent> writer) => {
-// 	writer.Enqueue(new MyEvent() { Value = 1 });
-// 	writer.Enqueue(new MyEvent() { Value = 2 });
-// 	writer.Enqueue(new MyEvent() { Value = 3 });
-// });
-// scheduler.AddSystem((EventReader<MyEvent> reader) => {
-// 	foreach (var val in reader.Read())
-// 	{
-// 		Console.WriteLine(val.Value);
-// 	}
-// });
+scheduler.AddEvent<MyEvent>();
+scheduler.AddSystem((EventWriter<MyEvent> writer) => {
+	writer.Enqueue(new MyEvent() { Value = 1 });
+	writer.Enqueue(new MyEvent() { Value = 2 });
+	writer.Enqueue(new MyEvent() { Value = 3 });
+});
+scheduler.AddSystem((EventReader<MyEvent> reader) => {
+	foreach (var val in reader.Read())
+	{
+		Console.WriteLine(val.Value);
+	}
+});
 
-// scheduler.AddPlugin<MyPlugin>();
+scheduler.AddPlugin<MyPlugin>();
 
-// scheduler.AddSystem((
-// 		Query<(Position, Velocity), (Not<PlayerTag>, Not<Likes>)> query0,
-// 		Query<Position> query1,
-// 		Res<string> myText
-// 	) =>
-// 	{
-// 		query0.Each((ref Position pos, ref Velocity vel) => {
-// 			pos.X *= vel.X;
-// 			pos.Y *= vel.Y;
-// 		});
+scheduler.AddSystem((
+		Query<(Position, Velocity), (Without<PlayerTag>, Without<Likes>)> query0,
+		Query<Position> query1,
+		Res<string> myText
+	) =>
+	{
+		query0.Each((ref Position pos, ref Velocity vel) => {
+			pos.X *= vel.X;
+			pos.Y *= vel.Y;
+		});
 
-// 		query1.Each((ref Position pos) => { });
+		query1.Each((ref Position pos) => { });
 
-// 		Console.WriteLine("What: {0}", myText.Value);
-// 	}
-// );
-// scheduler.AddSystem((World world) => {
+		Console.WriteLine("What: {0}", myText.Value);
+	}
+);
+scheduler.AddSystem((World world) => {
 
-// 	world.BeginDeferred();
-// 	var ff = world.Entity()
-// 		.Set<Position>(default)
-// 		.Set<Velocity>(default);
-// 	world.EndDeferred();
+	world.BeginDeferred();
+	var ff = world.Entity()
+		.Set<Position>(default)
+		.Set<Velocity>(default);
+	world.EndDeferred();
 
-// 	world.Deferred(w => {
-// 		var ff = w.Entity()
-// 			.Set<Position>(default)
-// 			.Set<Velocity>(default)
-// 			.Set<Likes>();
-// 	});
-// });
-// scheduler.AddSystem((World world) => {
-// 	Console.WriteLine("entities in world {0}", world.EntityCount);
-// });
+	world.Deferred(w => {
+		var ff = w.Entity()
+			.Set<Position>(default)
+			.Set<Velocity>(default)
+			.Set<Likes>();
+	});
+});
+scheduler.AddSystem((World world) => {
+	Console.WriteLine("entities in world {0}", world.EntityCount);
+});
 // scheduler.AddSystem((ComplexQuery complex) => {
 // 	complex.Q0!.Each((ref Position pos, ref Velocity vel) => {
 
@@ -317,10 +316,10 @@ ecs.Query<ValueTuple, With<Networked>>()
 // 	});
 // });
 
-// scheduler.AddResource("oh shit i made it");
+scheduler.AddResource("oh shit i made it");
 
-// scheduler.Run();
-// scheduler.Run();
+scheduler.Run();
+scheduler.Run();
 
 
 // var e = ecs.Entity("Main")
@@ -368,7 +367,7 @@ var sw = Stopwatch.StartNew();
 var start = 0f;
 var last = 0f;
 
-var q = ecs.Query<(Position, Velocity, Optional<ManagedData>)>();
+var q = ecs.Query<(Position, Velocity)>();
 
 
 while (true)
@@ -381,14 +380,13 @@ while (true)
 		// });
 
 		// ecs.Query<(Position, Velocity)>()
-		q.Each2((ref Position pos, ref Velocity vel, ref ManagedData t) => {
+		q.Each((ref Position pos, ref Velocity vel) => {
 			pos.X *= vel.X;
 			pos.Y *= vel.Y;
 		});
 
-		// unsafe
-		// {
-		// 	foreach (var (pos,  vel) in q.IterTest2<Position, Velocity>())
+		// unsafe {
+		// 	foreach (var (pos, vel) in q.IterTest2<Position, Velocity>())
 		// 	{
 		// 		pos->X *= vel->X;
 		// 		pos->Y *= vel->Y;
@@ -396,19 +394,43 @@ while (true)
 		// }
 
 
-		// foreach ((var entiies, var pos, var vel) in q.Iter<Position, Velocity>())
+		// foreach (var (entities, posA, velA) in q.Iter<Position, Velocity>())
 		// {
-		// 	ref var p = ref MemoryMarshal.GetReference(pos);
-		// 	ref var v = ref MemoryMarshal.GetReference(vel);
-		// 	ref var lastA = ref Unsafe.Add(ref p, pos.Length);
-		//
-		// 	while (Unsafe.IsAddressLessThan(ref p, ref lastA))
+		// 	var count = entities.Length;
+
+		// 	ref var pos = ref MemoryMarshal.GetReference(posA);
+		// 	ref var vel = ref MemoryMarshal.GetReference(velA);
+
+		// 	for (; count - 4 > 0; count -= 4)
 		// 	{
-		// 		p.X *= v.X;
-		// 		p.Y *= v.Y;
-		//
-		// 		p = ref Unsafe.Add(ref p, 1);
-		// 		v = ref Unsafe.Add(ref v, 1);
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+		// 	}
+
+		// 	for (; count > 0; --count)
+		// 	{
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
+
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
 		// 	}
 		// }
 
@@ -451,18 +473,21 @@ struct Chunk;
 struct ChunkTile;
 
 
-class ComplexQuery : ISystemParam
-{
-	public Query<(Position, Velocity)>? Q0;
-	public Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>? Q1;
+// class ComplexQuery : ISystemParam
+// {
+// 	public Query<(Position, Velocity)>? Q0;
+// 	public Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>? Q1;
 
-	void ISystemParam.New(object arguments)
-	{
-		var world = (World) arguments;
-		Q0 = (Query<(Position, Velocity)>)world.Query<(Position, Velocity)>();
-		Q1 = (Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>)world.Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>();
-	}
-}
+// 	private int _useIndex;
+// 	ref int ISystemParam.UseIndex => ref _useIndex;
+// 	void ISystemParam.New(object arguments)
+// 	{
+// 		var world = (World) arguments;
+// 		Q0 = (Query<(Position, Velocity)>)world.Query<(Position, Velocity)>();
+// 		Q1 = (Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>)
+// 			world.Query<(Position, Velocity), (With<PlayerTag>, Without<Likes>)>();
+// 	}
+// }
 
 
 readonly struct MyPlugin : IPlugin

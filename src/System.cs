@@ -11,14 +11,18 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	private readonly SysParamMap _locals;
 	private readonly List<Func<SysParamMap, SysParamMap, TArg, bool>> _conditions;
 	private readonly Func<SysParamMap, TArg, bool> _validator;
+	private readonly Func<bool> _checkInUse;
+	private readonly ThreadingType _threadingType;
 
-    internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn)
+    internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn, Func<bool> checkInUse, ThreadingType threadingType)
     {
 		_arg = arg;
         _fn = fn;
 		_locals = new ();
 		_conditions = new ();
 		_validator = ValidateConditions;
+		_checkInUse = checkInUse;
+		_threadingType = threadingType;
     }
 
 	internal void Run(SysParamMap resources)
@@ -28,6 +32,14 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	{
 		_conditions.Add((_, _, _) => condition());
 		return this;
+	}
+
+	internal bool IsResourceInUse()
+	{
+		if (_threadingType == ThreadingType.Multi)
+			return false;
+
+		return _checkInUse();
 	}
 
 	private bool ValidateConditions(SysParamMap resources, TArg args)
@@ -47,6 +59,13 @@ public enum Stages
 	Update,
 	AfterUpdate,
 	FrameEnd
+}
+
+public enum ThreadingType
+{
+	Auto,
+	Single,
+	Multi
 }
 
 public sealed partial class Scheduler
@@ -81,13 +100,24 @@ public sealed partial class Scheduler
 
 	private void RunStage(Stages stage)
 	{
-		foreach (var system in _systems[(int) stage])
+		var systems = _systems[(int) stage];
+		var multithreading = systems.Where(s => !s.IsResourceInUse());
+		var singlethreading = systems.Except(multithreading);
+
+		if (multithreading.Any())
+		{
+
+		}
+
+		Parallel.ForEach(multithreading, s => s.Run(_resources));
+
+		foreach (var system in singlethreading)
 			system.Run(_resources);
 	}
 
-	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update)
+	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingType threadingType = ThreadingType.Auto)
 	{
-		var sys = new FuncSystem<World>(_world, (args, globalRes, _, runIf) => { if (runIf?.Invoke(globalRes, args) ?? true) system(); });
+		var sys = new FuncSystem<World>(_world, (args, globalRes, _, runIf) => { if (runIf?.Invoke(globalRes, args) ?? true) system(); }, () => false, threadingType);
 		_systems[(int)stage].Add(sys);
 
 		return sys;
@@ -140,7 +170,11 @@ public interface IPlugin
 
 public interface ISystemParam
 {
+	internal ref int UseIndex { get; }
 	void New(object arguments);
+
+	void Lock() => Interlocked.Increment(ref UseIndex);
+	void Unlock() => Interlocked.Decrement(ref UseIndex);
 
 	internal static T Get<T>(SysParamMap globalRes, SysParamMap localRes, object arguments)
 		where T : ISystemParam, new()
@@ -184,7 +218,16 @@ public sealed class EventWriter<T> : ISystemParam
 	public void Enqueue(T ev)
 		=> _queue!.Enqueue(ev);
 
+
 	public void New(object arguments) { }
+
+
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
+	void ISystemParam.New(object arguments)
+	{
+		throw new NotImplementedException();
+	}
 }
 
 public sealed class EventReader<T> : ISystemParam
@@ -205,6 +248,8 @@ public sealed class EventReader<T> : ISystemParam
 			yield return result;
 	}
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	public void New(object arguments) { }
 }
 
@@ -213,6 +258,8 @@ partial class World : ISystemParam
 {
 	public World() : this(256) { }
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments) { }
 }
 
@@ -220,6 +267,8 @@ partial class Query<TQueryData> : ISystemParam
 {
 	public Query() : this (null!) { }
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments)
 	{
 		World = (World) arguments;
@@ -230,6 +279,8 @@ partial class Query<TQueryData, TQueryFilter> : ISystemParam
 {
 	public Query() : this (null!) { }
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments)
 	{
 		World = (World) arguments;
@@ -249,6 +300,8 @@ public sealed class Res<T> : ISystemParam
 		return reference.Value;
 	}
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments)
 	{
 		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
@@ -268,6 +321,8 @@ public sealed class Local<T> : ISystemParam, ISystemParamExclusive
 		return reference.Value;
 	}
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments)
 	{
 		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
@@ -296,6 +351,8 @@ public sealed class SchedulerState : ISystemParam
 		return _scheduler.ResourceExists<Res<T>>();
 	}
 
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 	void ISystemParam.New(object arguments)
 	{
 
