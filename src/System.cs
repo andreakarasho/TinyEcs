@@ -36,10 +36,12 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 
 	internal bool IsResourceInUse()
 	{
-		if (_threadingType == ThreadingType.Multi)
-			return false;
-
-		return _checkInUse();
+		return _threadingType switch
+		{
+			ThreadingType.Multi => false,
+			ThreadingType.Single => true,
+			_ or ThreadingType.Auto => _checkInUse()
+		};
 	}
 
 	private bool ValidateConditions(SysParamMap resources, TArg args)
@@ -101,15 +103,11 @@ public sealed partial class Scheduler
 	private void RunStage(Stages stage)
 	{
 		var systems = _systems[(int) stage];
-		var multithreading = systems.Where(s => !s.IsResourceInUse());
+		var multithreading = systems.Where(static s => !s.IsResourceInUse());
 		var singlethreading = systems.Except(multithreading);
 
 		if (multithreading.Any())
-		{
-
-		}
-
-		Parallel.ForEach(multithreading, s => s.Run(_resources));
+			Parallel.ForEach(multithreading, s => s.Run(_resources));
 
 		foreach (var system in singlethreading)
 			system.Run(_resources);
