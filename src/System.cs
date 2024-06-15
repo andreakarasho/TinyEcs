@@ -121,7 +121,7 @@ public sealed partial class Scheduler
 		return sys;
 	}
 
-	public Scheduler AddPlugin<T>() where T : IPlugin, new()
+	public Scheduler AddPlugin<T>() where T : notnull, IPlugin, new()
 		=> AddPlugin(new T());
 
 	public Scheduler AddPlugin<T>(T plugin) where T : IPlugin
@@ -131,31 +131,31 @@ public sealed partial class Scheduler
 		return this;
 	}
 
-	public Scheduler AddEvent<T>()
+	public Scheduler AddEvent<T>() where T : notnull
 	{
 		var queue = new Queue<T>();
 		return AddSystemParam(new EventWriter<T>(queue))
 			.AddSystemParam(new EventReader<T>(queue));
 	}
 
-	public Scheduler AddState<T>(T initialState = default!) where T : Enum
+	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
 	{
 		return AddResource(initialState);
 	}
 
-    public Scheduler AddResource<T>(T resource)
+    public Scheduler AddResource<T>(T resource) where T : notnull
     {
 		return AddSystemParam(new Res<T>() { Value = resource });
     }
 
-	internal Scheduler AddSystemParam<T>(T param) where T : ISystemParam
+	internal Scheduler AddSystemParam<T>(T param) where T : notnull, ISystemParam
 	{
 		_resources[typeof(T)] = param;
 
 		return this;
 	}
 
-	internal bool ResourceExists<T>() where T : ISystemParam
+	internal bool ResourceExists<T>() where T : notnull, ISystemParam
 	{
 		return _resources.ContainsKey(typeof(T));
 	}
@@ -175,7 +175,7 @@ public interface ISystemParam
 	void Unlock() => Interlocked.Decrement(ref UseIndex);
 
 	internal static T Get<T>(SysParamMap globalRes, SysParamMap localRes, object arguments)
-		where T : ISystemParam, new()
+		where T : notnull, ISystemParam, new()
 	{
 		if (localRes.TryGetValue(typeof(T), out var value))
 		{
@@ -201,7 +201,7 @@ public interface ISystemParamExclusive
 {
 }
 
-public sealed class EventWriter<T> : ISystemParam
+public sealed class EventWriter<T> : ISystemParam where T : notnull
 {
 	private readonly Queue<T>? _queue;
 
@@ -228,7 +228,7 @@ public sealed class EventWriter<T> : ISystemParam
 	}
 }
 
-public sealed class EventReader<T> : ISystemParam
+public sealed class EventReader<T> : ISystemParam where T : notnull
 {
 	private readonly Queue<T>? _queue;
 
@@ -285,7 +285,7 @@ partial class Query<TQueryData, TQueryFilter> : ISystemParam
 	}
 }
 
-public sealed class Res<T> : ISystemParam
+public sealed class Res<T> : ISystemParam where T : notnull
 {
 	private T? _t;
 
@@ -306,7 +306,7 @@ public sealed class Res<T> : ISystemParam
 	}
 }
 
-public sealed class Local<T> : ISystemParam, ISystemParamExclusive
+public sealed class Local<T> : ISystemParam, ISystemParamExclusive where T : notnull
 {
 	private T? _t;
 
@@ -339,12 +339,12 @@ public sealed class SchedulerState : ISystemParam
 	public SchedulerState()
 		=> throw new Exception("You are not allowed to initialixze this object by yourself!");
 
-	public void AddResource<T>(T resource)
+	public void AddResource<T>(T resource) where T : notnull
 	{
 		_scheduler.AddResource(resource);
 	}
 
-	public bool ResourceExists<T>()
+	public bool ResourceExists<T>() where T : notnull
 	{
 		return _scheduler.ResourceExists<Res<T>>();
 	}
