@@ -95,7 +95,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 				sb.AppendLine($@"
-					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, ThreadingType threadingType = ThreadingType.Auto)
+					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 						{whereGenerics}
 					{{
 						{emptyVars}

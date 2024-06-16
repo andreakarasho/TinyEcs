@@ -12,13 +12,13 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	private readonly List<Func<SysParamMap, SysParamMap, TArg, bool>> _conditions;
 	private readonly Func<SysParamMap, TArg, bool> _validator;
 	private readonly Func<bool> _checkInUse;
-	private readonly ThreadingType _threadingType;
+	private readonly ThreadingMode _threadingType;
 	private readonly LinkedList<FuncSystem<TArg>> _after = new ();
 	private readonly LinkedList<FuncSystem<TArg>> _before = new ();
 	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
 
 
-    internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn, Func<bool> checkInUse, ThreadingType threadingType)
+    internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn, Func<bool> checkInUse, ThreadingMode threadingType)
     {
 		_arg = arg;
         _fn = fn;
@@ -86,9 +86,9 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	{
 		return _threadingType switch
 		{
-			ThreadingType.Multi => false,
-			ThreadingType.Single => true,
-			_ or ThreadingType.Auto => _checkInUse()
+			ThreadingMode.Multi => false,
+			ThreadingMode.Single => true,
+			_ or ThreadingMode.Auto => _checkInUse()
 		};
 	}
 
@@ -111,7 +111,7 @@ public enum Stages
 	FrameEnd
 }
 
-public enum ThreadingType
+public enum ThreadingMode
 {
 	Auto,
 	Single,
@@ -167,7 +167,7 @@ public sealed partial class Scheduler
 		sys.Node = _systems[(int)stage].AddLast(sys);
 	}
 
-	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingType threadingType = ThreadingType.Auto)
+	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
 		var sys = new FuncSystem<World>(_world, (args, globalRes, _, runIf) => { if (runIf?.Invoke(globalRes, args) ?? true) system(); }, () => false, threadingType);
 		Add(sys, stage);

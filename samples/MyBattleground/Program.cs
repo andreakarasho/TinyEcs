@@ -28,7 +28,7 @@ ecs.Entity().Set(new Velocity());
 ecs.Entity().Set(new Position() {X = 3});
 
 
- var query = ecs.Query<(Position, Velocity)>();
+var query = ecs.Query<(Position, Velocity)>();
 
 // foreach (var (pos, vel) in query.Iter<Position, Velocity>())
 // {
@@ -227,12 +227,12 @@ ecs.Query<ValueTuple, With<Networked>>()
 var scheduler = new Scheduler(ecs);
 scheduler.AddResource(0);
 
-scheduler.AddSystem((Res<int> res) => Console.WriteLine("system 0 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
-scheduler.AddSystem(() => Console.WriteLine("system 1 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
+scheduler.AddSystem((Res<int> res) => Console.WriteLine("system 0 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
+scheduler.AddSystem(() => Console.WriteLine("system 1 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
 
 
 var sysAfter = scheduler.AddSystem(() => Console.WriteLine("after"));
-var sys = scheduler.AddSystem(() => Console.WriteLine("system 2 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
+var sys = scheduler.AddSystem(() => Console.WriteLine("system 2 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
 sysAfter.RunAfter(sys);
 sys.RunAfter(sysAfter);
 
