@@ -108,7 +108,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{objsUnlock}
 						}};
 						var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);
-						_systems[(int) stage].Add(sys);
+						Add(sys, stage);
 						return sys;
 					}}
 				");

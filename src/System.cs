@@ -13,6 +13,10 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	private readonly Func<SysParamMap, TArg, bool> _validator;
 	private readonly Func<bool> _checkInUse;
 	private readonly ThreadingType _threadingType;
+	private readonly LinkedList<FuncSystem<TArg>> _after = new ();
+	private readonly LinkedList<FuncSystem<TArg>> _before = new ();
+	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
+
 
     internal FuncSystem(TArg arg, Action<TArg, SysParamMap, SysParamMap, Func<SysParamMap, TArg, bool>> fn, Func<bool> checkInUse, ThreadingType threadingType)
     {
@@ -26,12 +30,56 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
     }
 
 	internal void Run(SysParamMap resources)
-		=> _fn(_arg, resources, _locals, _validator);
+	{
+		foreach (var s in _before)
+			s.Run(resources);
+
+		_fn(_arg, resources, _locals, _validator);
+
+		foreach (var s in _after)
+			s.Run(resources);
+	}
 
 	public FuncSystem<TArg> RunIf(Func<bool> condition)
 	{
 		_conditions.Add((_, _, _) => condition());
 		return this;
+	}
+
+	public FuncSystem<TArg> RunAfter(FuncSystem<TArg> parent)
+	{
+		if (this == parent || Contains(parent, s => s._after))
+			throw new InvalidOperationException("Circular dependency detected");
+
+		Node?.List?.Remove(Node);
+		Node = parent._after.AddLast(this);
+
+		return this;
+	}
+
+	public FuncSystem<TArg> RunBefore(FuncSystem<TArg> parent)
+	{
+		if (this == parent || Contains(parent, s => s._before))
+			throw new InvalidOperationException("Circular dependency detected");
+
+		Node?.List?.Remove(Node);
+		Node = parent._before.AddLast(this);
+
+		return this;
+	}
+
+	private bool Contains(FuncSystem<TArg> system, Func<FuncSystem<TArg>, LinkedList<FuncSystem<TArg>>> direction)
+	{
+		var current = this;
+		while (current != null)
+		{
+			if (current == system)
+				return true;
+
+			var nextNode = direction(current)?.First;
+			current = nextNode?.Value;
+		}
+		return false;
 	}
 
 	internal bool IsResourceInUse()
@@ -73,8 +121,9 @@ public enum ThreadingType
 public sealed partial class Scheduler
 {
 	private readonly World _world;
-    private readonly List<FuncSystem<World>>[] _systems = new List<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
     private readonly SysParamMap _resources = new ();
+	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
+
 
 	public Scheduler(World world)
 	{
@@ -113,10 +162,15 @@ public sealed partial class Scheduler
 			system.Run(_resources);
 	}
 
+	internal void Add(FuncSystem<World> sys, Stages stage)
+	{
+		sys.Node = _systems[(int)stage].AddLast(sys);
+	}
+
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingType threadingType = ThreadingType.Auto)
 	{
 		var sys = new FuncSystem<World>(_world, (args, globalRes, _, runIf) => { if (runIf?.Invoke(globalRes, args) ?? true) system(); }, () => false, threadingType);
-		_systems[(int)stage].Add(sys);
+		Add(sys, stage);
 
 		return sys;
 	}

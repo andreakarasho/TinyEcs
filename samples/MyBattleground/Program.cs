@@ -225,11 +225,23 @@ ecs.Query<ValueTuple, With<Networked>>()
 // ref var ppp = ref carl.Get<Position>();
 
 var scheduler = new Scheduler(ecs);
+scheduler.AddResource(0);
+
+scheduler.AddSystem((Res<int> res) => Console.WriteLine("system 0 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
+scheduler.AddSystem(() => Console.WriteLine("system 1 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
+
+
+var sysAfter = scheduler.AddSystem(() => Console.WriteLine("after"));
+var sys = scheduler.AddSystem(() => Console.WriteLine("system 2 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingType.Auto);
+sysAfter.RunAfter(sys);
+sys.RunAfter(sysAfter);
+
+while (true)
+	scheduler.Run();
 
 scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) => {
 	Console.WriteLine(i32.Value++);
 })
-.RunIf(() => true)
 .RunIf((Res<GameStates> state, Res<GameStates> state1, Res<GameStates> state2, Query<Velocity> velQuery) => state.Value == GameStates.InGame);
 
 scheduler.AddSystem((Local<int> i32, Res<string> str, SchedulerState schedState) => {
