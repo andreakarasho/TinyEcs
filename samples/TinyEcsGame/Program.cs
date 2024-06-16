@@ -32,10 +32,10 @@ scheduler.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime()
 scheduler.AddPlugin<RaylibPlugin>();
 scheduler.AddSystem(fn0);
 scheduler.AddSystem(fn1);
-scheduler.AddSystem(fn2);
-scheduler.AddSystem(fn3);
-scheduler.AddSystem(fn4);
-scheduler.AddSystem(fn5);
+scheduler.AddSystem(fn2, stage: Stages.FrameEnd, threadingType: ThreadingType.Single);
+scheduler.AddSystem(fn3, stage: Stages.FrameEnd, threadingType: ThreadingType.Single);
+scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingType.Single);
+scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingType.Single);
 
 scheduler.AddResource(wndSize);
 scheduler.AddResource(new Time());
