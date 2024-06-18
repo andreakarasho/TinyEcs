@@ -90,19 +90,25 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, _world);");
 				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
+				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 				sb.AppendLine($@"
-					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update)
+					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 						{whereGenerics}
 					{{
 						{emptyVars}
+						var checkInuse = () => {objsCheckInuse};
 						var fn = (World args, SysParamMap globalRes, SysParamMap localRes, Func<SysParamMap, World, bool> runIf) => {{
 							if (runIf != null && !runIf.Invoke(globalRes, args)) return;
 							{objs}
+							{objsLock}
 							system({objsArgs});
+							{objsUnlock}
 						}};
-						var sys = new FuncSystem<World>(_world, fn);
-						_systems[(int) stage].Add(sys);
+						var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);
+						Add(sys, stage);
 						return sys;
 					}}
 				");
