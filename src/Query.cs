@@ -307,7 +307,7 @@ public ref struct QueryInternal
 	public readonly QueryInternal GetEnumerator() => this;
 }
 
-public ref struct QueryChunkIterator
+internal ref struct QueryChunkIterator
 {
 #if NET
 	private readonly ref ArchetypeChunk _first, _last;
@@ -373,7 +373,7 @@ public ref struct QueryChunkIterator
 	public readonly QueryChunkIterator GetEnumerator() => this;
 }
 
-public ref struct QueryArchetypeChunkIterator
+internal ref struct QueryArchetypeChunkIterator
 {
 #if NET
 	private readonly ref EntityView _first, _last;
@@ -568,7 +568,6 @@ public partial class Query
 
 		World.EndDeferred();
 	}
-
 }
 
 [SkipLocalsInit]
