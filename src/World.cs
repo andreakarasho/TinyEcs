@@ -11,8 +11,6 @@ public sealed partial class World : IDisposable
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
-    private Archetype[] _archetypes = new Archetype[16];
-    private int _archetypeCount;
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
@@ -63,7 +61,7 @@ public sealed partial class World : IDisposable
     public int EntityCount => _entities.Length;
 	internal Archetype Root => _archRoot;
 
-    public ReadOnlySpan<Archetype> Archetypes => _archetypes.AsSpan(0, _archetypeCount);
+    public List<Archetype> Archetypes { get; } = new List<Archetype>();
 
 
     public void Dispose()
@@ -77,9 +75,7 @@ public sealed partial class World : IDisposable
 
 		_cachedQueries.Clear();
 		_namesToEntity.Clear();
-
-        Array.Clear(_archetypes, 0, _archetypeCount);
-        _archetypeCount = 0;
+        Archetypes.Clear();
     }
 
     internal ref readonly ComponentInfo Component<T>() where T : struct
@@ -249,10 +245,7 @@ public sealed partial class World : IDisposable
 		if (newArch == null)
 		{
 			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
-
-			if (_archetypeCount >= _archetypes.Length)
-				Array.Resize(ref _archetypes, _archetypes.Length * 2);
-			_archetypes[_archetypeCount++] = newArch;
+			Archetypes.Add(newArch);
 		}
 
 		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
@@ -276,10 +269,7 @@ public sealed partial class World : IDisposable
 		if (newArch == null)
 		{
 			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
-
-			if (_archetypeCount >= _archetypes.Length)
-				Array.Resize(ref _archetypes, _archetypes.Length * 2);
-			_archetypes[_archetypeCount++] = newArch;
+			Archetypes.Add(newArch);
 		}
 
 		record.Row = record.Archetype.MoveEntity(newArch, record.Row);

@@ -143,7 +143,7 @@ public partial class Query : IDisposable
 
 		var allArchetypes = World.Archetypes;
 
-		if (allArchetypes.IsEmpty || _lastArchetypeIdMatched == allArchetypes[^1].Id)
+		if (allArchetypes.Count == 0 || _lastArchetypeIdMatched == allArchetypes[^1].Id)
 			return;
 
 		var ids = _terms
