@@ -135,9 +135,9 @@ world.EndDeferred();
 // Raw queries
 var query = world.Query<(Position, Velocity), Without<Npc>>();
 foreach (var archetype in query) {
-	foreach (ref var chunk in archetype) {
+    foreach (ref var chunk in archetype) {
         // Operations
-	}
+    }
 }
 foreach ((var entities, var posSpan, var velSpan) in query.Iter<Position, Velocity>() {
     // Operations
