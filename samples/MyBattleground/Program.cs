@@ -276,7 +276,7 @@ scheduler.AddSystem((EventWriter<MyEvent> writer) => {
 	writer.Enqueue(new MyEvent() { Value = 3 });
 });
 scheduler.AddSystem((EventReader<MyEvent> reader) => {
-	foreach (var val in reader.Read())
+	foreach (var val in reader)
 	{
 		Console.WriteLine(val.Value);
 	}

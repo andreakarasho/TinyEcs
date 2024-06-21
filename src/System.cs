@@ -294,17 +294,29 @@ public sealed class EventReader<T> : ISystemParam where T : notnull
 
 	public bool IsEmpty => _queue!.Count == 0;
 
-	public IEnumerable<T> Read()
-	{
-		while (_queue!.TryDequeue(out var result))
-			yield return result;
-	}
+
+	public EventReaderIterator<T> GetEnumerator() => new (_queue!);
 
 	private int _useIndex;
 	ref int ISystemParam.UseIndex => ref _useIndex;
 	public void New(object arguments) { }
 }
 
+public ref struct EventReaderIterator<T> where T : notnull
+{
+	private readonly Queue<T> _queue;
+	private T _data;
+
+	internal EventReaderIterator(Queue<T> queue)
+	{
+		_queue = queue;
+		_data = default!;
+	}
+
+	public readonly T Current => _data;
+
+	public bool MoveNext() => _queue.TryDequeue(out _data);
+}
 
 partial class World : ISystemParam
 {
