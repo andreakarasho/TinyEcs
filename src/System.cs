@@ -202,7 +202,7 @@ public sealed partial class Scheduler
 		return AddSystemParam(new Res<T>() { Value = resource });
     }
 
-	internal Scheduler AddSystemParam<T>(T param) where T : notnull, ISystemParam
+	public Scheduler AddSystemParam<T>(T param) where T : notnull, ISystemParam
 	{
 		_resources[typeof(T)] = param;
 
@@ -218,6 +218,17 @@ public sealed partial class Scheduler
 public interface IPlugin
 {
 	void Build(Scheduler scheduler);
+}
+
+public abstract class SystemParam : ISystemParam
+{
+	public virtual void New(object arguments)
+	{
+		throw new Exception("A 'SystemParam' must be initialized using the 'scheduler.AddSystemParam<T>' api");
+	}
+
+	private int _useIndex;
+	ref int ISystemParam.UseIndex => ref _useIndex;
 }
 
 public interface ISystemParam
@@ -255,7 +266,7 @@ public interface ISystemParamExclusive
 {
 }
 
-public sealed class EventWriter<T> : ISystemParam where T : notnull
+public sealed class EventWriter<T> : SystemParam where T : notnull
 {
 	private readonly Queue<T>? _queue;
 
@@ -265,24 +276,17 @@ public sealed class EventWriter<T> : ISystemParam where T : notnull
 	public EventWriter()
 		=> throw new Exception("EventWriter must be initialized using the 'scheduler.AddEvent<T>' api");
 
-	public bool IsEmpty => _queue!.Count == 0;
+	public bool IsEmpty
+		=> _queue!.Count == 0;
+
+	public void Clear()
+		=> _queue?.Clear();
 
 	public void Enqueue(T ev)
 		=> _queue!.Enqueue(ev);
-
-
-	public void New(object arguments) { }
-
-
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	void ISystemParam.New(object arguments)
-	{
-		throw new NotImplementedException();
-	}
 }
 
-public sealed class EventReader<T> : ISystemParam where T : notnull
+public sealed class EventReader<T> : SystemParam where T : notnull
 {
 	private readonly Queue<T>? _queue;
 
@@ -292,44 +296,44 @@ public sealed class EventReader<T> : ISystemParam where T : notnull
 	public EventReader()
 		=> throw new Exception("EventReader must be initialized using the 'scheduler.AddEvent<T>' api");
 
-	public bool IsEmpty => _queue!.Count == 0;
+	public bool IsEmpty
+		=> _queue!.Count == 0;
+
+	public void Clear()
+		=> _queue?.Clear();
+
+	public EventReaderIterator GetEnumerator() => new (_queue!);
 
 
-	public EventReaderIterator<T> GetEnumerator() => new (_queue!);
-
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	public void New(object arguments) { }
-}
-
-public ref struct EventReaderIterator<T> where T : notnull
-{
-	private readonly Queue<T> _queue;
-	private T _data;
-
-	internal EventReaderIterator(Queue<T> queue)
+	public ref struct EventReaderIterator
 	{
-		_queue = queue;
-		_data = default!;
+		private readonly Queue<T> _queue;
+		private T _data;
+
+		internal EventReaderIterator(Queue<T> queue)
+		{
+			_queue = queue;
+			_data = default!;
+		}
+
+		public readonly T Current => _data;
+
+		public bool MoveNext() => _queue.TryDequeue(out _data);
 	}
-
-	public readonly T Current => _data;
-
-	public bool MoveNext() => _queue.TryDequeue(out _data);
 }
 
-partial class World : ISystemParam
+partial class World : SystemParam
 {
 	public World() : this(256) { }
 
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	void ISystemParam.New(object arguments) { }
+	public override void New(object arguments)
+	{
+	}
 }
 
 partial class Query<TQueryData> : ISystemParam
 {
-	public Query() : this (null!) { }
+	public Query() : this(null!) { }
 
 	private int _useIndex;
 	ref int ISystemParam.UseIndex => ref _useIndex;
@@ -341,7 +345,7 @@ partial class Query<TQueryData> : ISystemParam
 
 partial class Query<TQueryData, TQueryFilter> : ISystemParam
 {
-	public Query() : this (null!) { }
+	public Query() : this(null!) { }
 
 	private int _useIndex;
 	ref int ISystemParam.UseIndex => ref _useIndex;
@@ -351,7 +355,7 @@ partial class Query<TQueryData, TQueryFilter> : ISystemParam
 	}
 }
 
-public sealed class Res<T> : ISystemParam where T : notnull
+public sealed class Res<T> : SystemParam where T : notnull
 {
 	private T? _t;
 
@@ -360,19 +364,14 @@ public sealed class Res<T> : ISystemParam where T : notnull
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static implicit operator T?(Res<T> reference)
-	{
-		return reference.Value;
-	}
+		=> reference.Value;
 
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	void ISystemParam.New(object arguments)
+	public override void New(object arguments)
 	{
-		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
 	}
 }
 
-public sealed class Local<T> : ISystemParam, ISystemParamExclusive where T : notnull
+public sealed class Local<T> : SystemParam, ISystemParamExclusive where T : notnull
 {
 	private T? _t;
 
@@ -381,19 +380,14 @@ public sealed class Local<T> : ISystemParam, ISystemParamExclusive where T : not
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static implicit operator T?(Local<T> reference)
-	{
-		return reference.Value;
-	}
+		=> reference.Value;
 
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	void ISystemParam.New(object arguments)
+	public override void New(object arguments)
 	{
-		//throw new Exception("Resources must be initialized using 'scheduler.AddResource<T>' api");
 	}
 }
 
-public sealed class SchedulerState : ISystemParam
+public sealed class SchedulerState : SystemParam
 {
 	private readonly Scheduler _scheduler;
 
@@ -403,22 +397,11 @@ public sealed class SchedulerState : ISystemParam
 	}
 
 	public SchedulerState()
-		=> throw new Exception("You are not allowed to initialixze this object by yourself!");
+		=> throw new Exception("You are not allowed to initialize this object by yourself!");
 
 	public void AddResource<T>(T resource) where T : notnull
-	{
-		_scheduler.AddResource(resource);
-	}
+		=> _scheduler.AddResource(resource);
 
 	public bool ResourceExists<T>() where T : notnull
-	{
-		return _scheduler.ResourceExists<Res<T>>();
-	}
-
-	private int _useIndex;
-	ref int ISystemParam.UseIndex => ref _useIndex;
-	void ISystemParam.New(object arguments)
-	{
-
-	}
+		=> _scheduler.ResourceExists<Res<T>>();
 }
