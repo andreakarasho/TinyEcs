@@ -72,19 +72,20 @@ public sealed partial class World
 		return ref Unsafe.Unbox<T>(cmd.Data);
 	}
 
-	private void SetDeferred(EcsID entity, EcsID id)
+	private object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size)
 	{
-		var cmp = Lookup.GetComponent(id, 0);
+		var cmp = Lookup.GetComponent(id, size);
 
 		var cmd = new DeferredOp()
 		{
 			Op = DeferredOpTypes.SetComponent,
 			Entity = entity,
-			Data = null!,
+			Data = rawCmp,
 			ComponentInfo = cmp
 		};
 
 		_operations.Enqueue(cmd);
+		return rawCmp;
 	}
 
 	private void UnsetDeferred<T>(EcsID entity) where T : struct
@@ -183,7 +184,7 @@ public sealed partial class World
 		public DeferredOpTypes Op;
 		public EcsID Entity;
 		public ComponentInfo ComponentInfo;
-		public object Data;
+		public object? Data;
 	}
 
 	enum DeferredOpTypes : byte

@@ -39,9 +39,10 @@ public struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal readonly Array RawComponentData(int column)
+	internal readonly Array? RawComponentData(int column)
 	{
-		EcsAssert.Assert(column >= 0 && column < Components!.Length);
+		if (column < 0 || column >= Components!.Length)
+			return null;
 		return Components![column];
 	}
 }

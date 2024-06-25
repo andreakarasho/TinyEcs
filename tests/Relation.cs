@@ -5,6 +5,7 @@
 		struct Likes { }
 		struct Dogs { }
 		struct Apples { public int Amount; }
+		struct EquippedItem { public byte Layer; }
 
 
 		[Fact]
@@ -60,6 +61,14 @@
 
 			root.Get<Likes, Apples>().Amount += 10;
 			Assert.Equal(20, root.Get<Likes, Apples>().Amount);
+
+
+			var item = ctx.World.Entity();
+			item.SetAction(root, new EquippedItem() { Layer = 2 });
+			Assert.True(item.Has<EquippedItem>(root));
+			Assert.Equal(2, item.GetAction<EquippedItem>(root).Layer);
+			item.GetAction<EquippedItem>(root).Layer += 2;
+			Assert.Equal(4, item.GetAction<EquippedItem>(root).Layer);
 		}
 
 		[Fact]
