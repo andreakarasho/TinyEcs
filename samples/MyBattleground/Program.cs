@@ -15,6 +15,13 @@ ecs.Entity<Position>();
 ecs.Entity<ManagedData>();
 ecs.Entity<Velocity>().Set<Networked>();
 
+var root = ecs.Entity();
+var child = ecs.Entity();
+child.SetAction(root, new EquippedItem() { Layer = 3 });
+ref var equip2 = ref ecs.Get<EquippedItem>(child);
+ref var equip = ref ecs.GetAction<EquippedItem>(child, root);
+equip.Layer = 8;
+ref var equip3 = ref ecs.GetAction<EquippedItem>(child, root);
 
 ecs.Entity().Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity()).Set(new ManagedData());
@@ -525,3 +532,5 @@ enum GameStates
 
 struct Networked { }
 delegate void Query2Del<T0, T1>(ref T0 t0, ref T1 t1);
+
+struct EquippedItem { public byte Layer; }

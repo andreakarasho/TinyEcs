@@ -8,16 +8,27 @@ internal static class Lookup
 {
 	private static ulong _index = 0;
 
-	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
+	private static readonly Dictionary<EcsID, Func<int, Array>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
 
-	public static Array? GetArray(ulong hashcode, int count)
+	public static Array? GetArray(EcsID hashcode, int count)
 	{
-		var ok = _arrayCreator.TryGetValue(hashcode, out var fn);
-		EcsAssert.Assert(ok, $"component not found with hashcode {hashcode}");
-		return fn?.Invoke(count) ?? null;
+		if (_arrayCreator.TryGetValue(hashcode, out var fn))
+			return fn(count);
+
+		if (hashcode.IsPair)
+		{
+			(var first, var second) = hashcode.Pair;
+			if (_arrayCreator.TryGetValue(first, out fn) && _components.TryGetValue(first, out var cmp) && cmp.Size > 0)
+				return fn(count);
+			if (_arrayCreator.TryGetValue(second, out fn) && _components.TryGetValue(second, out cmp) && cmp.Size > 0)
+				return fn(count);
+		}
+
+		EcsAssert.Panic(false, $"component not found with hashcode {hashcode}");
+		return null;
 	}
 
 	public static ComponentInfo GetComponent(EcsID id, int size)
