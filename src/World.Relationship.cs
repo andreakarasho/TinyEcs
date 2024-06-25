@@ -253,10 +253,10 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	public static EntityView SetAction<TAction>(this EntityView entity, EcsID target, TAction action = default)
+	public static EntityView SetAction<TAction>(this EntityView entity, EcsID target, TAction action)
 		where TAction : struct
 	{
-		entity.World.Set<TAction>(entity.ID, target, action);
+		entity.World.Set(entity.ID, target, action);
 		return entity;
 	}
 
