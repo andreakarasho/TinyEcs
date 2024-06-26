@@ -76,21 +76,7 @@ public sealed partial class World
     public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
-
-		if (IsDeferred && !Has(entity, cmp.ID))
-		{
-			Unsafe.SkipInit<T>(out var val);
-			return ref SetDeferred(entity, val);
-		}
-
-		BeginDeferred();
-        ref var record = ref GetRecord(entity);
-        var column = record.Archetype.GetComponentIndex(cmp.ID);
-        ref var chunk = ref record.GetChunk();
-        ref var value = ref column < 0 ? ref Unsafe.NullRef<T>() : ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & Archetype.CHUNK_THRESHOLD);
-		EndDeferred();
-
-		return ref value;
+		return ref GetUntrusted<T>(entity, cmp.ID, cmp.Size);
     }
 
 	internal ref T GetUntrusted<T>(EcsID entity, EcsID cmpId, int size) where T : struct
@@ -98,7 +84,7 @@ public sealed partial class World
 		if (IsDeferred && !Has(entity, cmpId))
 		{
 			Unsafe.SkipInit<T>(out var val);
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size));
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size)!);
 		}
 
 		BeginDeferred();
