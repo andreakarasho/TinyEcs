@@ -126,8 +126,7 @@ public partial class Query : IDisposable
 		}
 	}
 
-	public World World { get; internal set; }
-
+	internal World World { get; set; }
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
 	internal ImmutableArray<QueryTerm> TermsAccess { get; }
 
