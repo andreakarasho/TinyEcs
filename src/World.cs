@@ -46,10 +46,10 @@ public sealed partial class World : IDisposable
 		setCommon(Entity<Identifier>(), nameof(Identifier));
 		setCommon(Entity<Name>(), nameof(Name));
 		setCommon(Entity<ChildOf>(), nameof(ChildOf))
-			.Set<Unique>();
+			.Add<Unique>();
 
 		static EntityView setCommon(EntityView entity, string name)
-			=> entity.Set<DoNotDelete>().Set<Identifier, Name>(new (name));
+			=> entity.Add<DoNotDelete>().Set<Identifier, Name>(new (name));
 
 		OnPluginInitialization?.Invoke(this);
     }
@@ -94,6 +94,11 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
+	/// <summary>
+	/// Get or create an entity from a component.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <returns></returns>
 	public EntityView Entity<T>() where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -115,11 +120,25 @@ public sealed partial class World : IDisposable
 		return entity;
 	}
 
+	/// <summary>
+	/// Create an entity.<br/>
+	/// When <paramref name="id"/> is specified:<br/>
+	/// - if <paramref name="id"/> exists: return the entity with that <paramref name="id"/><br/>
+	/// - if <paramref name="id"/> doesn't exist: create an entity with that <paramref name="id"/><br/>
+	/// </summary>
+	/// <param name="id"></param>
+	/// <returns></returns>
     public EntityView Entity(EcsID id = default)
     {
         return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
     }
 
+	/// <summary>
+	/// Create or get an entity using the specified <paramref name="name"/>.<br/>
+	/// A relation (Identity, Name) will be automatically added to the entity.
+	/// </summary>
+	/// <param name="name"></param>
+	/// <returns></returns>
 	public EntityView Entity(string name)
 	{
 		if (string.IsNullOrEmpty(name))
@@ -174,6 +193,11 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
+	/// <summary>
+	/// Delete the entity.<br>
+	/// Associated children are deleted too.
+	/// </summary>
+	/// <param name="entity"></param>
     public void Delete(EcsID entity)
     {
 		if (IsDeferred)
@@ -212,6 +236,11 @@ public sealed partial class World : IDisposable
 		}
     }
 
+	/// <summary>
+	/// Check if the entity is valid and alive.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <returns></returns>
     public bool Exists(EcsID entity)
     {
 		// if (IsDeferred && ExistsDeferred(entity))
@@ -323,6 +352,11 @@ public sealed partial class World : IDisposable
 		return id == Wildcard.ID;
     }
 
+	/// <summary>
+	/// The archetype sign. The sign is unique.
+	/// </summary>
+	/// <param name="id"></param>
+	/// <returns></returns>
     public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
     {
         ref var record = ref GetRecord(id);
@@ -342,6 +376,12 @@ public sealed partial class World : IDisposable
 			static (world, terms) => new Query(world, terms));
 	}
 
+	/// <summary>
+	/// Query for specific components.<br/>
+	///
+	/// </summary>
+	/// <typeparam name="TQueryData"></typeparam>
+	/// <returns></returns>
 	public Query Query<TQueryData>() where TQueryData : struct
 	{
 		return GetQuery(

@@ -2,7 +2,12 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-    public void Set<T>(EcsID entity) where T : struct
+	/// <summary>
+	/// Add a Tag to the target entity
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="entity"></param>
+    public void Add<T>(EcsID entity) where T : struct
 	{
         ref readonly var cmp = ref Component<T>();
         EcsAssert.Panic(cmp.Size <= 0, "this is not a tag");

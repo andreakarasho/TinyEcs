@@ -76,7 +76,7 @@ partial class World
 		if (target.HasValue)
 			Set(entity, (default(TAction), target.Value));
 		else
-			Set<(TAction, TTarget)>(entity);
+			Add<(TAction, TTarget)>(entity);
 	}
 
 	public void Set<TAction>(EcsID entity, EcsID target, TAction action = default)
@@ -243,7 +243,15 @@ partial class World
 
 public static class RelationshipEx
 {
-	public static EntityView Set<TAction, TTarget>(this EntityView entity, TTarget? target = default)
+	/// <summary>
+	/// Assign (Action, Target). Target is a component.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
+	public static EntityView Set<TAction, TTarget>(this EntityView entity, TTarget target)
 		where TAction : struct
 		where TTarget : struct
 	{
@@ -251,26 +259,70 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	public static EntityView Set<TAction>(this EntityView entity, EcsID target)
+	/// <summary>
+	/// Assign (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
+	public static EntityView Add<TAction, TTarget>(this EntityView entity)
+		where TAction : struct
+		where TTarget : struct
+	{
+		entity.World.Set<TAction, TTarget>(entity.ID, default);
+		return entity;
+	}
+
+	/// <summary>
+	/// Assign (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
+	public static EntityView Add<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
 		entity.World.Set<TAction>(entity.ID, target);
 		return entity;
 	}
 
-	public static EntityView SetAction<TAction>(this EntityView entity, EcsID target, TAction action)
+	/// <summary>
+	/// Assign (Action, Target). Action is a component. Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <param name="action"></param>
+	/// <returns></returns>
+	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action = default)
 		where TAction : struct
 	{
 		entity.World.Set(entity.ID, target, action);
 		return entity;
 	}
 
-	public static EntityView Set(this EntityView entity, EcsID action, EcsID target)
+	/// <summary>
+	/// Assign (Action, Target). Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
+	public static EntityView Add(this EntityView entity, EcsID action, EcsID target)
 	{
 		entity.World.Set(entity.ID, action, target);
 		return entity;
 	}
 
+	/// <summary>
+	/// Remove (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public static EntityView Unset<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -279,6 +331,13 @@ public static class RelationshipEx
 		return entity;
 	}
 
+	/// <summary>
+	/// Remove (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public static EntityView Unset<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
@@ -286,12 +345,26 @@ public static class RelationshipEx
 		return entity;
 	}
 
+	/// <summary>
+	/// Remove (Action, Target) tag. Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public static EntityView Unset(this EntityView entity, EcsID action, EcsID target)
 	{
 		entity.World.Unset(entity.ID, action, target);
 		return entity;
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public static bool Has<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -299,17 +372,38 @@ public static class RelationshipEx
 		return entity.World.Has<TAction, TTarget>(entity.ID);
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public static bool Has<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
 		return entity.World.Has<TAction>(entity.ID, target);
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target). Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public static bool Has(this EntityView entity, EcsID action, EcsID target)
 	{
 		return entity.World.Has(entity.ID, action, target);
 	}
 
+	/// <summary>
+	/// Retrive Target component value from (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public static ref TTarget Get<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -317,34 +411,78 @@ public static class RelationshipEx
 		return ref entity.World.Get<TAction, TTarget>(entity.ID);
 	}
 
+	/// <summary>
+	/// Retrive Target component value from (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public static ref TAction GetAction<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
 		return ref entity.World.GetAction<TAction>(entity.ID, target);
 	}
 
+	/// <summary>
+	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public static EcsID Target<TAction>(this EntityView entity, int index = 0)
 		where TAction : struct
 	{
 		return entity.World.Target<TAction>(entity.ID, index);
 	}
 
+	/// <summary>
+	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public static EcsID Target(this EntityView entity, EcsID action, int index = 0)
 	{
 		return entity.World.Target(entity.ID, action, index);
 	}
 
+	/// <summary>
+	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public static EcsID Action<TTarget>(this EntityView entity, int index = 0)
 		where TTarget : struct
 	{
 		return entity.World.Action<TTarget>(entity.ID, index);
 	}
 
+	/// <summary>
+	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// Target is an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public static EcsID Action(this EntityView entity, EcsID target, int index = 0)
 	{
 		return entity.World.Action(entity.ID, target, index);
 	}
 
+	/// <summary>
+	/// Find a (Action, Target) pair at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public static (EcsID, EcsID) FindPair<TAction, TTarget>(this EntityView entity, int index = 0)
 		where TAction : struct
 		where TTarget : struct
@@ -355,6 +493,12 @@ public static class RelationshipEx
 
 public static class ChildOfEx
 {
+	/// <summary>
+	/// Shortcut to add ChildOf relation to an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="child"></param>
+	/// <returns></returns>
 	public static EntityView AddChild(this EntityView entity, EcsID child)
 	{
 		entity.World.Set<ChildOf>(child, entity.ID);
@@ -364,6 +508,11 @@ public static class ChildOfEx
 
 public static class NameEx
 {
+	/// <summary>
+	/// Get the name of the entity if exists. Otherwise returns the entity Id as string.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public static string Name(this EntityView entity)
 	{
 		if (entity.Has<Identifier, Name>())
