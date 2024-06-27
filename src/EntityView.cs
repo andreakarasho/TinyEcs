@@ -19,6 +19,9 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         ID = id;
     }
 
+	/// <summary>
+	/// Generation count
+	/// </summary>
 	public readonly int Generation => ID.Generation;
 	//public int RealID => ID.ID;
 
@@ -41,11 +44,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 
 
 
-	/// <summary>
-	/// Add a Tag to the entity.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Add{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Add<T>() where T : struct
 	{
@@ -53,12 +52,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	/// <summary>
-	/// Set a Component to the entity.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="component"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Set{T}(EcsID, T)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Set<T>(T component) where T : struct
 	{
@@ -66,32 +60,20 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	/// <summary>
-	/// Add an Id to the entity.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Add(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EcsID id)
 	{
-		World.Set(ID, id);
+		World.Add(ID, id);
 		return this;
 	}
 
-	/// <summary>
-	/// Add an Id to the entity.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Add(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EntityView id)
-		=> Set(id.ID);
+		=> Add(id.ID);
 
-	/// <summary>
-	/// Remove a component or a tag from the entity.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset<T>() where T : struct
 	{
@@ -99,11 +81,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	/// <summary>
-	/// Remove a component Id or a tag Id from the entity.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset(EcsID id)
 	{
@@ -111,71 +89,42 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         return this;
     }
 
-	/// <summary>
-	/// Remove a component Id or a tag Id from the entity.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly EntityView Unset(EntityView id)
 		=> Unset(id.ID);
 
-	/// <summary>
-	/// The archetype sign. The sign is unique.
-	/// </summary>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.GetType"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ReadOnlySpan<ComponentInfo> Type()
 		=> World.GetType(ID);
 
-	/// <summary>
-	/// Get a component from the entity.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Get{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref T Get<T>() where T : struct
 		=> ref World.Get<T>(ID);
 
-	/// <summary>
-	/// Check if the entity has a component or tag.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has<T>() where T : struct
 		=> World.Has<T>(ID);
 
-	/// <summary>
-	/// Check if the entity has a component Id or tag Id.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has(EcsID id)
 		=> World.Has(ID, id);
 
-	/// <summary>
-	/// Check if the entity has a component Id or tag Id.
-	/// </summary>
-	/// <param name="id"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Has(EntityView id)
 		=> World.Has(ID, id.ID);
 
-	/// <summary>
-	/// Delete the entity.<br>
-	/// Associated children are deleted too.
-	/// </summary>
+	/// <inheritdoc cref="World.Delete"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void Delete()
 		=> World.Delete(ID);
 
-	/// <summary>
-	/// Check if the entity is valid and alive.
-	/// </summary>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Exists"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Exists()
 		=> World.Exists(ID);

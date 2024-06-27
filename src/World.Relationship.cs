@@ -235,20 +235,6 @@ partial class World
 
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
 	{
-		// if (IsDeferred && !Has(entity, pair))
-		// {
-		// 	return (0, 0);
-		// 	// var defPair = GetDeferred(entity, pair);
-
-		// 	// if (defPair.IsPair)
-		// 	// 	return defPair.Pair;
-
-		// 	// if (ExistsDeferred(entity))
-		// 	// 	return (0, 0);
-
-		// 	//return SetDeferred
-		// }
-
 		if (!pair.IsPair)
 			return EntityView.Invalid.ID.Pair;
 
