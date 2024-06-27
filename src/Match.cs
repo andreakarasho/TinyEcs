@@ -2,7 +2,7 @@ namespace TinyEcs;
 
 static class Match
 {
-	public static int Validate(IComparer<ulong> comparer, EcsID[] ids, ReadOnlySpan<QueryTerm> terms)
+	public static int Validate(IComparer<ulong> comparer, EcsID[] ids, ReadOnlySpan<IQueryTerm> terms)
 	{
 		if (terms.IsEmpty)
 			return -1;

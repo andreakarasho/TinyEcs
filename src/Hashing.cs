@@ -12,7 +12,7 @@ internal static class Hashing
 		return hc;
 	}
 
-	public static ulong Calculate(ReadOnlySpan<QueryTerm> terms)
+	public static ulong Calculate(ReadOnlySpan<IQueryTerm> terms)
 	{
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)

@@ -3,13 +3,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-[DebuggerDisplay("{Id} - {Op}")]
-public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
+public interface IQueryTerm : IComparable<IQueryTerm>
 {
-	public EcsID Id { get; } = id;
-	public TermOp Op { get; } = op;
+	EcsID Id { get; init; }
+	TermOp Op { get; init; }
 
-	public int CompareTo([NotNull] QueryTerm? other)
+	int IComparable<IQueryTerm>.CompareTo([NotNull] IQueryTerm? other)
 	{
 		var res = Id.CompareTo(other!.Id);
 		if (res != 0)
@@ -18,9 +17,19 @@ public class QueryTerm(EcsID id, TermOp op) : IComparable<QueryTerm>
 	}
 }
 
-public class ContainerQueryTerm(QueryTerm[] terms, TermOp op) : QueryTerm(0, op)
+[DebuggerDisplay("{Id} - {Op}")]
+public readonly struct QueryTerm(EcsID id, TermOp op) : IQueryTerm
 {
-	public ImmutableArray<QueryTerm> Terms { get; } = [.. terms];
+	public EcsID Id { get; init; } = id;
+	public TermOp Op { get; init; } = op;
+}
+
+[DebuggerDisplay("{Id} - {Op} - {Terms}")]
+public class ContainerQueryTerm(IQueryTerm[] terms, TermOp op) : IQueryTerm
+{
+	public EcsID Id { get; init; } = 0;
+	public TermOp Op { get; init; } = op;
+	public ImmutableArray<IQueryTerm> Terms { get; } = [.. terms];
 }
 
 public enum TermOp : byte
@@ -77,4 +86,3 @@ public interface IAtLeast : IFilter { }
 public interface IExactly : IFilter { }
 public interface INone : IFilter { }
 public interface IOr : IFilter { internal ITuple Value { get; } }
-

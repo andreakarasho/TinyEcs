@@ -196,14 +196,12 @@ public sealed partial class World : IDisposable
 				_namesToEntity.Remove(name, out var _);
 			}
 
-			// TODO: remove the allocations
 			// TODO: check for this interesting flecs approach:
 			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
 			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
 			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
-			QueryRaw([term0]).Each((EntityView child) => child.Delete());
-			QueryRaw([term1]).Each((EntityView child) => child.Delete());
-
+			QueryRaw(term0).Each(static (EntityView child) => child.Delete());
+			QueryRaw(term1).Each(static (EntityView child) => child.Delete());
 
 			ref var record = ref GetRecord(entity);
 
@@ -336,10 +334,10 @@ public sealed partial class World : IDisposable
         _archRoot.Print();
     }
 
-	public Query QueryRaw(ImmutableArray<QueryTerm> terms)
+	public Query QueryRaw(params ReadOnlySpan<IQueryTerm> terms)
 	{
 		return GetQuery(
-			Hashing.Calculate(terms.AsSpan()),
+			Hashing.Calculate(terms),
 			terms,
 			static (world, terms) => new Query(world, terms));
 	}
@@ -348,7 +346,7 @@ public sealed partial class World : IDisposable
 	{
 		return GetQuery(
 			Lookup.Query<TQueryData>.Hash,
-		 	Lookup.Query<TQueryData>.Terms,
+		 	Lookup.Query<TQueryData>.Terms.AsSpan(),
 		 	static (world, _) => new Query<TQueryData>(world)
 		);
 	}
@@ -357,7 +355,7 @@ public sealed partial class World : IDisposable
 	{
 		return GetQuery(
 			Lookup.Query<TQueryData, TQueryFilter>.Hash,
-			Lookup.Query<TQueryData, TQueryFilter>.Terms,
+			Lookup.Query<TQueryData, TQueryFilter>.Terms.AsSpan(),
 		 	static (world, _) => new Query<TQueryData, TQueryFilter>(world)
 		);
 	}
@@ -366,7 +364,7 @@ public sealed partial class World : IDisposable
 	{
 		BeginDeferred();
 
-		foreach (var arch in GetQuery(0, ImmutableArray<QueryTerm>.Empty, static (world, terms) => new Query(world, terms)))
+		foreach (var arch in GetQuery(0, ReadOnlySpan<IQueryTerm>.Empty, static (world, terms) => new Query(world, terms)))
 		{
 			foreach (ref readonly var chunk in arch)
 			{
@@ -383,7 +381,9 @@ public sealed partial class World : IDisposable
 		EndDeferred();
 	}
 
-	internal Query GetQuery(ulong hash, ImmutableArray<QueryTerm> terms, Func<World, ImmutableArray<QueryTerm>, Query> factory)
+	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
+
+	internal Query GetQuery(ulong hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
 	{
 		if (!_cachedQueries.TryGetValue(hash, out var query))
 		{
@@ -408,7 +408,7 @@ public sealed partial class World : IDisposable
 		return arch;
 	}
 
-	internal void MatchArchetypes(Archetype root, ReadOnlySpan<QueryTerm> terms, List<Archetype> matched)
+	internal void MatchArchetypes(Archetype root, ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
 	{
 		var result = root.FindMatch(terms);
 		if (result < 0)

@@ -8,7 +8,7 @@ public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 public sealed class QueryBuilder
 {
 	private readonly World _world;
-	private readonly SortedSet<QueryTerm> _components = new();
+	private readonly SortedSet<IQueryTerm> _components = new();
 
 	internal QueryBuilder(World world) => _world = world;
 
@@ -29,7 +29,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder With(EcsID id)
 	{
-		_components.Add(new(id, TermOp.With));
+		_components.Add(new QueryTerm(id, TermOp.With));
 		return this;
 	}
 
@@ -50,7 +50,7 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Without(EcsID id)
 	{
-		_components.Add(new (id, TermOp.Without));
+		_components.Add(new QueryTerm(id, TermOp.Without));
 		return this;
 	}
 
@@ -59,15 +59,15 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Optional(EcsID id)
 	{
-		_components.Add(new (id, TermOp.Optional));
+		_components.Add(new QueryTerm(id, TermOp.Optional));
 		return this;
 	}
 
 	public Query Build()
 	{
-		var terms = _components.ToImmutableArray();
+		var terms = _components.ToArray();
 		return _world.GetQuery(
-			Hashing.Calculate(terms.AsSpan()),
+			Hashing.Calculate(terms),
 			terms,
 			static (world, terms) => new Query(world, terms)
 		);
@@ -93,12 +93,17 @@ public sealed partial class Query<TQueryData, TQueryFilter> : Query
 
 public partial class Query : IDisposable
 {
-	private readonly ImmutableArray<QueryTerm> _terms;
+	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
 	private Query? _subQuery;
 
-	internal Query(World world, ImmutableArray<QueryTerm> terms)
+	internal Query(World world, ReadOnlySpan<IQueryTerm> terms) : this (world, terms.ToImmutableArray())
+	{
+
+	}
+
+	internal Query(World world, ImmutableArray<IQueryTerm> terms)
 	{
 		World = world;
 		_matchedArchetypes = new List<Archetype>();
@@ -128,7 +133,7 @@ public partial class Query : IDisposable
 
 	internal World World { get; set; }
 	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
-	internal ImmutableArray<QueryTerm> TermsAccess { get; }
+	internal ImmutableArray<IQueryTerm> TermsAccess { get; }
 
 	public void Dispose()
 	{

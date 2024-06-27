@@ -133,7 +133,7 @@ internal static class Lookup
 		}
     }
 
-	static void ParseTuple(ITuple tuple, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
+	static void ParseTuple(ITuple tuple, List<IQueryTerm> terms, Func<Type, (bool, string?)> validate)
 	{
 		TermOp? op = tuple switch
 		{
@@ -181,14 +181,14 @@ internal static class Lookup
 		}
 	}
 
-	static void ParseOr(IOr or, List<QueryTerm> terms, Func<Type, (bool, string?)> validate)
+	static void ParseOr(IOr or, List<IQueryTerm> terms, Func<Type, (bool, string?)> validate)
 	{
-		var tmpTerms = new List<QueryTerm>();
+		var tmpTerms = new List<IQueryTerm>();
 		ParseTuple(or.Value, tmpTerms, validate);
 		terms.Add(new ContainerQueryTerm([.. tmpTerms], TermOp.Or));
 	}
 
-	static void ParseType<T>(List<QueryTerm> terms, Func<Type, (bool, string?)> validate) where T : struct
+	static void ParseType<T>(List<IQueryTerm> terms, Func<Type, (bool, string?)> validate) where T : struct
 	{
 		var type = typeof(T);
 		if (typeof(ITuple).IsAssignableFrom(type))
@@ -222,12 +222,12 @@ internal static class Lookup
 		where TQueryData : struct
 		where TQueryFilter : struct
 	{
-		public static readonly ImmutableArray<QueryTerm> Terms;
+		public static readonly ImmutableArray<IQueryTerm> Terms;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new List<QueryTerm>();
+			var list = new List<IQueryTerm>();
 
 			ParseType<TQueryData>(list, ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] s)
 				=> (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));
@@ -243,12 +243,12 @@ internal static class Lookup
 
 	internal static class Query<TQueryData> where TQueryData : struct
 	{
-		public static readonly ImmutableArray<QueryTerm> Terms;
+		public static readonly ImmutableArray<IQueryTerm> Terms;
 		public static readonly ulong Hash;
 
 		static Query()
 		{
-			var list = new List<QueryTerm>();
+			var list = new List<IQueryTerm>();
 
 			ParseType<TQueryData>(list, ([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] s)
 				=> (!s.GetInterfaces().Any(k => typeof(IFilter).IsAssignableFrom(k)), $"Filter '{s}' is not allowed in QueryData"));

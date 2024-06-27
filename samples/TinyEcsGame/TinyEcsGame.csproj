@@ -8,6 +8,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<LangVersion>preview</LangVersion>
 		<RootNamespace>TinyEcsMonogameSample</RootNamespace>
+		<PublishAot>true</PublishAot>
 	</PropertyGroup>
 
 

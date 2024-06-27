@@ -158,7 +158,6 @@ partial class World
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-
 		return Exists(entity) && Has(entity, pairId);
 	}
 
@@ -167,7 +166,6 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-
 		Unset<(TAction, TTarget)>(entity);
 	}
 
