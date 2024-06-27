@@ -152,7 +152,7 @@ namespace TinyEcs.Tests
             ctx.World.Set(e4, new FloatComponent());
             ctx.World.Set(e4, new IntComponent());
             ctx.World.Set(e4, new BoolComponent());
-            ctx.World.Set<NormalTag>(e4);
+            ctx.World.Add<NormalTag>(e4);
 
             var done = ctx.World.Query<(FloatComponent, IntComponent), (Without<BoolComponent>, Without<NormalTag>)>().Count();
 
@@ -167,7 +167,7 @@ namespace TinyEcs.Tests
 			var singleton = ctx.World.Entity()
 				.Set(new FloatComponent())
 				.Set(new IntComponent())
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 
 			var other = ctx.World.Entity()
 				.Set(new FloatComponent())
@@ -181,7 +181,7 @@ namespace TinyEcs.Tests
 			var singleton2 = ctx.World.Entity()
 				.Set(new FloatComponent())
 				.Set(new IntComponent())
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 
 			var query = ctx.World.Query<ValueTuple, (With<FloatComponent>, With<IntComponent>, With<NormalTag>)>();
 
@@ -217,14 +217,14 @@ namespace TinyEcs.Tests
 			ctx.World.Entity().Set(new IntComponent() { Value = -10 });
 			ctx.World.Entity()
 				.Set(new IntComponent() { Value = 10 })
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 			ctx.World.Entity()
 				.Set(new FloatComponent() { Value = 0.5f })
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 			ctx.World.Entity()
 				.Set(new FloatComponent() { Value = 0.5f })
 				.Set(new IntComponent() { Value = 10 })
-				.Set<NormalTag>();;
+				.Add<NormalTag>();;
 
 			var count = 0;
 			ctx.World.Query<(Optional<IntComponent>, Optional<FloatComponent>), With<NormalTag>>()
@@ -243,10 +243,10 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			ctx.World.Entity();
-			ctx.World.Entity().Set<NormalTag>();
+			ctx.World.Entity().Add<NormalTag>();
 
 			var ent0 = ctx.World.Entity()
-				.Set<NormalTag2>()
+				.Add<NormalTag2>()
 				.Set(new FloatComponent());
 
 			var ent1 = ctx.World.Entity()
@@ -266,12 +266,12 @@ namespace TinyEcs.Tests
 
 			ctx.World.Entity();
 			ctx.World.Entity()
-				.Set<NormalTag>()
+				.Add<NormalTag>()
 				.Set(new BoolComponent())
 				.Set(new IntComponent());
 
 			var ent0 = ctx.World.Entity()
-				.Set<NormalTag2>()
+				.Add<NormalTag2>()
 				.Set(new IntComponent());
 
 			var ent1 = ctx.World.Entity()
@@ -291,16 +291,16 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			ctx.World.Entity()
-				.Set<NormalTag>()
-				.Set<NormalTag2>()
+				.Add<NormalTag>()
+				.Add<NormalTag2>()
 				.Set(new BoolComponent());
 
 			ctx.World.Entity()
-				.Set<NormalTag2>()
+				.Add<NormalTag2>()
 				.Set(new BoolComponent());
 
 			ctx.World.Entity()
-				.Set<NormalTag>()
+				.Add<NormalTag>()
 				.Set(new BoolComponent());
 
 			var count = ctx.World
@@ -318,12 +318,12 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			var ent0 = ctx.World.Entity()
-				.Set<NormalTag>()
-				.Set<NormalTag2>();
+				.Add<NormalTag>()
+				.Add<NormalTag2>();
 
 			var ent1 = ctx.World.Entity()
 				.Set(new BoolComponent())
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 
 			var ent2 = ctx.World.Entity()
 				.Set(new IntComponent())
@@ -346,12 +346,12 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			var ent0 = ctx.World.Entity()
-				.Set<NormalTag>()
-				.Set<NormalTag2>();
+				.Add<NormalTag>()
+				.Add<NormalTag2>();
 
 			var ent1 = ctx.World.Entity()
 				.Set(new BoolComponent())
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 
 			var ent2 = ctx.World.Entity()
 				.Set(new IntComponent())
@@ -381,12 +381,12 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			var ent0 = ctx.World.Entity()
-				.Set<NormalTag>()
-				.Set<NormalTag2>();
+				.Add<NormalTag>()
+				.Add<NormalTag2>();
 
 			var ent1 = ctx.World.Entity()
 				.Set(new BoolComponent())
-				.Set<NormalTag>();
+				.Add<NormalTag>();
 
 			var ent2 = ctx.World.Entity()
 				.Set(new IntComponent())

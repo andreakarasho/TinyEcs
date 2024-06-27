@@ -3,7 +3,7 @@ namespace TinyEcs;
 public sealed partial class World
 {
 	/// <summary>
-	/// Add a Tag to the target entity
+	/// Add a Tag to the entity.
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
@@ -24,6 +24,12 @@ public sealed partial class World
 		EndDeferred();
     }
 
+	/// <summary>
+	/// Set a Component to the entity.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="component"></param>
     [SkipLocalsInit]
     public void Set<T>(EcsID entity, T component) where T : struct
 	{
@@ -44,7 +50,12 @@ public sealed partial class World
 		EndDeferred();
 	}
 
-	public void Set(EcsID entity, EcsID id)
+	/// <summary>
+	/// Add a Tag to the entity. Tag is an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="id"></param>
+	public void Add(EcsID entity, EcsID id)
 	{
 		if (IsDeferred && !Has(entity, id))
 		{
@@ -58,9 +69,19 @@ public sealed partial class World
 		EndDeferred();
 	}
 
+	/// <summary>
+	/// Remove a component or a tag from the entity.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="entity"></param>
     public void Unset<T>(EcsID entity) where T : struct
 		=> Unset(entity, Component<T>().ID);
 
+	/// <summary>
+	/// Remove a component Id or a tag Id from the entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="id"></param>
 	public void Unset(EcsID entity, EcsID id)
 	{
 		if (IsDeferred)
@@ -75,9 +96,21 @@ public sealed partial class World
 		EndDeferred();
 	}
 
+	/// <summary>
+	/// Check if the entity has a component or tag.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
     public bool Has<T>(EcsID entity) where T : struct
 		=> Exists(entity) && Has(entity, Component<T>().ID);
 
+	/// <summary>
+	/// Get a component from the entity.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
     public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -111,6 +144,10 @@ public sealed partial class World
 		return ref value;
     }
 
+	/// <summary>
+	/// Execute a deferred action.
+	/// </summary>
+	/// <param name="fn"></param>
 	public void Deferred(Action<World> fn)
 	{
 		BeginDeferred();

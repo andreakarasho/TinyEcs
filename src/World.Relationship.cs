@@ -64,7 +64,7 @@ partial class World
 		}
 	}
 
-	public void Set<TAction, TTarget>(EcsID entity, TTarget? target = default)
+	public void Add<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
 	{
@@ -73,13 +73,44 @@ partial class World
 		CheckUnique(entity, Entity<TAction>());
 		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
-		if (target.HasValue)
-			Set(entity, (default(TAction), target.Value));
-		else
-			Add<(TAction, TTarget)>(entity);
+		Add<(TAction, TTarget)>(entity);
 	}
 
-	public void Set<TAction>(EcsID entity, EcsID target, TAction action = default)
+	public void Set<TAction, TTarget>(EcsID entity, TTarget target)
+		where TAction : struct
+		where TTarget : struct
+	{
+		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+
+		CheckUnique(entity, Entity<TAction>());
+		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
+
+		Set(entity, (default(TAction), target));
+	}
+
+	public void Add<TAction>(EcsID entity, EcsID target)
+		where TAction : struct
+	{
+		ref readonly var act = ref Component<TAction>();
+
+		var pairId = IDOp.Pair(act.ID, target);
+
+		CheckUnique(entity, act.ID);
+		CheckSymmetric(entity, act.ID, target);
+
+		if (IsDeferred && !Has(entity, act.ID, target))
+		{
+			SetDeferred(entity, pairId);
+
+			return;
+		}
+
+		BeginDeferred();
+		_ = AttachComponent(entity, pairId, act.Size);
+		EndDeferred();
+	}
+
+	public void Set<TAction>(EcsID entity, EcsID target, TAction action)
 		where TAction : struct
 	{
 		ref readonly var act = ref Component<TAction>();
@@ -98,15 +129,12 @@ partial class World
 
 		BeginDeferred();
 		(var array, var row) = AttachComponent(entity, pairId, act.Size);
-		if (act.Size > 0)
-		{
-			ref var cmpArr = ref Unsafe.As<Array, TAction[]>(ref array!);
-			cmpArr[row & Archetype.CHUNK_THRESHOLD] = action;
-		}
+		ref var cmpArr = ref Unsafe.As<Array, TAction[]>(ref array!);
+		cmpArr[row & Archetype.CHUNK_THRESHOLD] = action;
 		EndDeferred();
 	}
 
-	public void Set(EcsID entity, EcsID action, EcsID target)
+	public void Add(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
 
@@ -133,7 +161,7 @@ partial class World
 		return ref Get<(TAction, TTarget)>(entity).Item2;
 	}
 
-	public ref TAction GetAction<TAction>(EcsID entity, EcsID target)
+	public ref TAction Get<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
 		ref readonly var act = ref Component<TAction>();
@@ -270,7 +298,7 @@ public static class RelationshipEx
 		where TAction : struct
 		where TTarget : struct
 	{
-		entity.World.Set<TAction, TTarget>(entity.ID, default);
+		entity.World.Add<TAction, TTarget>(entity.ID);
 		return entity;
 	}
 
@@ -284,7 +312,7 @@ public static class RelationshipEx
 	public static EntityView Add<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
-		entity.World.Set<TAction>(entity.ID, target);
+		entity.World.Add<TAction>(entity.ID, target);
 		return entity;
 	}
 
@@ -296,7 +324,7 @@ public static class RelationshipEx
 	/// <param name="target"></param>
 	/// <param name="action"></param>
 	/// <returns></returns>
-	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action = default)
+	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action)
 		where TAction : struct
 	{
 		entity.World.Set(entity.ID, target, action);
@@ -312,7 +340,7 @@ public static class RelationshipEx
 	/// <returns></returns>
 	public static EntityView Add(this EntityView entity, EcsID action, EcsID target)
 	{
-		entity.World.Set(entity.ID, action, target);
+		entity.World.Add(entity.ID, action, target);
 		return entity;
 	}
 
@@ -418,10 +446,10 @@ public static class RelationshipEx
 	/// <param name="entity"></param>
 	/// <param name="target"></param>
 	/// <returns></returns>
-	public static ref TAction GetAction<TAction>(this EntityView entity, EcsID target)
+	public static ref TAction Get<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
-		return ref entity.World.GetAction<TAction>(entity.ID, target);
+		return ref entity.World.Get<TAction>(entity.ID, target);
 	}
 
 	/// <summary>
@@ -501,7 +529,7 @@ public static class ChildOfEx
 	/// <returns></returns>
 	public static EntityView AddChild(this EntityView entity, EcsID child)
 	{
-		entity.World.Set<ChildOf>(child, entity.ID);
+		entity.World.Add<ChildOf>(child, entity.ID);
 		return entity;
 	}
 }
