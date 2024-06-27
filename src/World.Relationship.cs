@@ -64,6 +64,13 @@ partial class World
 		}
 	}
 
+	/// <summary>
+	/// Assign (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public void Add<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
@@ -76,6 +83,14 @@ partial class World
 		Add<(TAction, TTarget)>(entity);
 	}
 
+	/// <summary>
+	/// Assign (Action, Target). Target is a component.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public void Set<TAction, TTarget>(EcsID entity, TTarget target)
 		where TAction : struct
 		where TTarget : struct
@@ -88,6 +103,13 @@ partial class World
 		Set(entity, (default(TAction), target));
 	}
 
+	/// <summary>
+	/// Assign (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public void Add<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
@@ -110,6 +132,14 @@ partial class World
 		EndDeferred();
 	}
 
+	/// <summary>
+	/// Assign (Action, Target). Action is a component. Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <param name="action"></param>
+	/// <returns></returns>
 	public void Set<TAction>(EcsID entity, EcsID target, TAction action)
 		where TAction : struct
 	{
@@ -134,6 +164,13 @@ partial class World
 		EndDeferred();
 	}
 
+	/// <summary>
+	/// Assign (Action, Target). Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public void Add(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
@@ -153,6 +190,13 @@ partial class World
 		EndDeferred();
 	}
 
+	/// <summary>
+	/// Retrive Target component value from (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public ref TTarget Get<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
@@ -161,6 +205,13 @@ partial class World
 		return ref Get<(TAction, TTarget)>(entity).Item2;
 	}
 
+	/// <summary>
+	/// Retrive Target component value from (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public ref TAction Get<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
@@ -169,6 +220,13 @@ partial class World
 		return ref GetUntrusted<TAction>(entity, pairId, act.Size);
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public bool Has<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
@@ -177,18 +235,39 @@ partial class World
 		return Has<(TAction, TTarget)>(entity);
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public bool Has<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
 		return Has(entity, Component<TAction>().ID, target);
 	}
 
+	/// <summary>
+	/// Check if the entity has (Action, Target). Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
 		return Exists(entity) && Has(entity, pairId);
 	}
 
+	/// <summary>
+	/// Remove (Action, Target).
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <returns></returns>
 	public void Unset<TAction, TTarget>(EcsID entity)
 		where TAction : struct
 		where TTarget : struct
@@ -197,42 +276,93 @@ partial class World
 		Unset<(TAction, TTarget)>(entity);
 	}
 
+	/// <summary>
+	/// Remove (Action, Target). Target is an entity.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public void Unset<TAction>(EcsID entity, EcsID target)
 		where TAction : struct
 	{
 		Unset(entity, Component<TAction>().ID, target);
 	}
 
+	/// <summary>
+	/// Remove (Action, Target) tag. Action and Target are entities.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="target"></param>
+	/// <returns></returns>
 	public void Unset(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
 		Unset(entity, pairId);
 	}
 
+	/// <summary>
+	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public EcsID Target<TAction>(EcsID entity, int index = 0)
 		where TAction : struct
 	{
 		return Target(entity, Component<TAction>().ID, index);
 	}
 
+	/// <summary>
+	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="action"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
 		var pair = IDOp.Pair(action, Wildcard.ID);
 		return FindPair(entity, pair, index).Item2;
 	}
 
+	/// <summary>
+	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public EcsID Action<TTarget>(EcsID entity, int index = 0)
 		where TTarget : struct
 	{
 		return Action(entity, Component<TTarget>().ID, index);
 	}
 
+	/// <summary>
+	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// Target is an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="target"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public EcsID Action(EcsID entity, EcsID target, int index = 0)
 	{
 		var pair = IDOp.Pair(Wildcard.ID, target);
 		return FindPair(entity, pair, index).Item1;
 	}
 
+	/// <summary>
+	/// Find a (Action, Target) pair at a specific index. Default index is 0.
+	/// </summary>
+	/// <typeparam name="TAction"></typeparam>
+	/// <typeparam name="TTarget"></typeparam>
+	/// <param name="entity"></param>
+	/// <param name="index"></param>
+	/// <returns></returns>
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
 	{
 		if (!pair.IsPair)
@@ -257,14 +387,7 @@ partial class World
 
 public static class RelationshipEx
 {
-	/// <summary>
-	/// Assign (Action, Target). Target is a component.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Set{TAction, TTarget}(EcsID, TTarget)"/>
 	public static EntityView Set<TAction, TTarget>(this EntityView entity, TTarget target)
 		where TAction : struct
 		where TTarget : struct
@@ -273,13 +396,15 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <summary>
-	/// Assign (Action, Target).
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Set{TAction}(EcsID, EcsID, TAction)"/>
+	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action)
+		where TAction : struct
+	{
+		entity.World.Set(entity.ID, target, action);
+		return entity;
+	}
+
+	/// <inheritdoc cref="World.Add{TAction, TTarget}(EcsID)"/>
 	public static EntityView Add<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -288,13 +413,7 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <summary>
-	/// Assign (Action, Target). Target is an entity.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Add{TAction}(EcsID, EcsID)"/>
 	public static EntityView Add<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
@@ -302,41 +421,14 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <summary>
-	/// Assign (Action, Target). Action is a component. Target is an entity.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <param name="action"></param>
-	/// <returns></returns>
-	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action)
-		where TAction : struct
-	{
-		entity.World.Set(entity.ID, target, action);
-		return entity;
-	}
-
-	/// <summary>
-	/// Assign (Action, Target). Action and Target are entities.
-	/// </summary>
-	/// <param name="entity"></param>
-	/// <param name="action"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Add(EcsID, EcsID, EcsID)"/>
 	public static EntityView Add(this EntityView entity, EcsID action, EcsID target)
 	{
 		entity.World.Add(entity.ID, action, target);
 		return entity;
 	}
 
-	/// <summary>
-	/// Remove (Action, Target).
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset{TAction, TTarget}(EcsID)"/>
 	public static EntityView Unset<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -345,13 +437,7 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <summary>
-	/// Remove (Action, Target). Target is an entity.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset{TAction}(EcsID, EcsID)"/>
 	public static EntityView Unset<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
@@ -359,26 +445,14 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <summary>
-	/// Remove (Action, Target) tag. Action and Target are entities.
-	/// </summary>
-	/// <param name="entity"></param>
-	/// <param name="action"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Unset(EcsID, EcsID, EcsID)"/>
 	public static EntityView Unset(this EntityView entity, EcsID action, EcsID target)
 	{
 		entity.World.Unset(entity.ID, action, target);
 		return entity;
 	}
 
-	/// <summary>
-	/// Check if the entity has (Action, Target).
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has{TAction, TTarget}(EcsID)"/>
 	public static bool Has<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -386,38 +460,20 @@ public static class RelationshipEx
 		return entity.World.Has<TAction, TTarget>(entity.ID);
 	}
 
-	/// <summary>
-	/// Check if the entity has (Action, Target). Target is an entity.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has{TAction}(EcsID, EcsID)"/>
 	public static bool Has<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
 		return entity.World.Has<TAction>(entity.ID, target);
 	}
 
-	/// <summary>
-	/// Check if the entity has (Action, Target). Action and Target are entities.
-	/// </summary>
-	/// <param name="entity"></param>
-	/// <param name="action"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Has(EcsID, EcsID, EcsID)"/>
 	public static bool Has(this EntityView entity, EcsID action, EcsID target)
 	{
 		return entity.World.Has(entity.ID, action, target);
 	}
 
-	/// <summary>
-	/// Retrive Target component value from (Action, Target).
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Get{TAction, TTarget}(EcsID)"/>
 	public static ref TTarget Get<TAction, TTarget>(this EntityView entity)
 		where TAction : struct
 		where TTarget : struct
@@ -425,78 +481,40 @@ public static class RelationshipEx
 		return ref entity.World.Get<TAction, TTarget>(entity.ID);
 	}
 
-	/// <summary>
-	/// Retrive Target component value from (Action, Target).
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Get{TAction}(EcsID, EcsID)"/>
 	public static ref TAction Get<TAction>(this EntityView entity, EcsID target)
 		where TAction : struct
 	{
 		return ref entity.World.Get<TAction>(entity.ID, target);
 	}
 
-	/// <summary>
-	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="index"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Target{TAction}(EcsID, int)"/>
 	public static EcsID Target<TAction>(this EntityView entity, int index = 0)
 		where TAction : struct
 	{
 		return entity.World.Target<TAction>(entity.ID, index);
 	}
 
-	/// <summary>
-	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
-	/// </summary>
-	/// <param name="entity"></param>
-	/// <param name="action"></param>
-	/// <param name="index"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Target(EcsID, EcsID, int)"/>
 	public static EcsID Target(this EntityView entity, EcsID action, int index = 0)
 	{
 		return entity.World.Target(entity.ID, action, index);
 	}
 
-	/// <summary>
-	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
-	/// </summary>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="index"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Action{TTarget}(EcsID, int)"/>
 	public static EcsID Action<TTarget>(this EntityView entity, int index = 0)
 		where TTarget : struct
 	{
 		return entity.World.Action<TTarget>(entity.ID, index);
 	}
 
-	/// <summary>
-	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
-	/// Target is an entity.
-	/// </summary>
-	/// <param name="entity"></param>
-	/// <param name="target"></param>
-	/// <param name="index"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.Action(EcsID, EcsID, int)"/>
 	public static EcsID Action(this EntityView entity, EcsID target, int index = 0)
 	{
 		return entity.World.Action(entity.ID, target, index);
 	}
 
-	/// <summary>
-	/// Find a (Action, Target) pair at a specific index. Default index is 0.
-	/// </summary>
-	/// <typeparam name="TAction"></typeparam>
-	/// <typeparam name="TTarget"></typeparam>
-	/// <param name="entity"></param>
-	/// <param name="index"></param>
-	/// <returns></returns>
+	/// <inheritdoc cref="World.FindPair(EcsID, EcsID, int)"/>
 	public static (EcsID, EcsID) FindPair<TAction, TTarget>(this EntityView entity, int index = 0)
 		where TAction : struct
 		where TTarget : struct
