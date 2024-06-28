@@ -84,7 +84,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Assign (Action, Target). Target is a component.
+	/// Assign (Action, Target<br/>Target is a component.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <typeparam name="TTarget"></typeparam>
@@ -104,7 +104,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Assign (Action, Target). Target is an entity.
+	/// Assign (Action, Target).<br/>Target is an entity.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
@@ -133,14 +133,15 @@ partial class World
 	}
 
 	/// <summary>
-	/// Assign (Action, Target). Action is a component. Target is an entity.
+	/// Assign (Action, Target).<br/>Action and Target are entities.<para/>
+	/// ⚠️ Do not set EntityView or EcsID here! ⚠️
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
 	/// <param name="target"></param>
 	/// <param name="action"></param>
 	/// <returns></returns>
-	public void Set<TAction>(EcsID entity, EcsID target, TAction action)
+	public void Set<TAction>(EcsID entity, TAction action, EcsID target)
 		where TAction : struct
 	{
 		ref readonly var act = ref Component<TAction>();
@@ -165,7 +166,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Assign (Action, Target). Action and Target are entities.
+	/// Assign (Action, Target).<br/>Action and Target are entities.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="action"></param>
@@ -206,7 +207,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive Target component value from (Action, Target). Target is an entity.
+	/// Retrive Target component value from (Action, Target).<br/>Target is an entity.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
@@ -236,7 +237,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Check if the entity has (Action, Target). Target is an entity.
+	/// Check if the entity has (Action, Target).<br/>Target is an entity.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
@@ -249,7 +250,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Check if the entity has (Action, Target). Action and Target are entities.
+	/// Check if the entity has (Action, Target).<br/>Action and Target are entities.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="action"></param>
@@ -277,7 +278,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Remove (Action, Target). Target is an entity.
+	/// Remove (Action, Target).<br/>Target is an entity.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
@@ -290,7 +291,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Remove (Action, Target) tag. Action and Target are entities.
+	/// Remove (Action, Target) tag.<br/>Action and Target are entities.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="action"></param>
@@ -303,7 +304,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// Retrive the Target entity of (Action, *) at a specific index.<br/>Default index is 0.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>
@@ -316,7 +317,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive the Target entity of (Action, *) at a specific index. Default index is 0.
+	/// Retrive the Target entity of (Action, *) at a specific index.<br/>Default index is 0.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="action"></param>
@@ -329,7 +330,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// Retrive the Action entity of (*, Target) at a specific index.<br/>Default index is 0.
 	/// </summary>
 	/// <typeparam name="TTarget"></typeparam>
 	/// <param name="entity"></param>
@@ -342,7 +343,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive the Action entity of (*, Target) at a specific index. Default index is 0.
+	/// Retrive the Action entity of (*, Target) at a specific index.<br/>Default index is 0.
 	/// Target is an entity.
 	/// </summary>
 	/// <param name="entity"></param>
@@ -356,7 +357,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Find a (Action, Target) pair at a specific index. Default index is 0.
+	/// Find a (Action, Target) pair at a specific index.<br/>Default index is 0.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <typeparam name="TTarget"></typeparam>
@@ -396,11 +397,16 @@ public static class RelationshipEx
 		return entity;
 	}
 
-	/// <inheritdoc cref="World.Set{TAction}(EcsID, EcsID, TAction)"/>
-	public static EntityView Set<TAction>(this EntityView entity, EcsID target, TAction action)
+	/// <inheritdoc cref="World.Set{TAction}(EcsID, TAction, EcsID)"/>
+	public static EntityView Set<TAction>(this EntityView entity, TAction action, EcsID target)
 		where TAction : struct
 	{
-		entity.World.Set(entity.ID, target, action);
+		if (action is EntityView a)
+			entity.World.Add(entity.ID, a, target);
+		else if (action is EcsID b)
+			entity.World.Add(entity.ID, b, target);
+		else
+			entity.World.Set(entity.ID, action, target);
 		return entity;
 	}
 
@@ -541,7 +547,7 @@ public static class ChildOfEx
 public static class NameEx
 {
 	/// <summary>
-	/// Get the name of the entity if exists. Otherwise returns the entity Id as string.
+	/// Get the name of the entity if exists.<br/>Otherwise returns the entity Id as string.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <returns></returns>

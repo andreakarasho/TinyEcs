@@ -82,10 +82,8 @@ public sealed partial class World
     }
 
 	/// <summary>
-	/// Create an entity.<br/>
-	/// When <paramref name="id"/> is specified:<br/>
-	/// - if <paramref name="id"/> exists: return the entity with that <paramref name="id"/><br/>
-	/// - if <paramref name="id"/> doesn't exist: create an entity with that <paramref name="id"/><br/>
+	/// Create or get an entity with the specified <paramref name="id"/>.<br/>
+	/// When <paramref name="id"/> is not specified or is 0 a new entity is spawned.
 	/// </summary>
 	/// <param name="id"></param>
 	/// <returns></returns>
@@ -237,7 +235,7 @@ public sealed partial class World
     }
 
 	/// <summary>
-	/// The archetype sign. The sign is unique.
+	/// The archetype sign.<br/>The sign is unique.
 	/// </summary>
 	/// <param name="id"></param>
 	/// <returns></returns>
@@ -295,7 +293,7 @@ public sealed partial class World
 	}
 
 	/// <summary>
-	/// Add a Tag to the entity. Tag is an entity.
+	/// Add a Tag to the entity.<br/>Tag is an entity.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="id"></param>

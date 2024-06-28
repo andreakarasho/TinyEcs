@@ -64,7 +64,7 @@
 
 
 			var item = ctx.World.Entity();
-			item.Set(root, new EquippedItem() { Layer = 2 });
+			item.Set<EquippedItem>(action: new EquippedItem() { Layer = 2 }, target: root);
 			Assert.True(item.Has<EquippedItem>(root));
 			Assert.Equal(2, item.Get<EquippedItem>(root).Layer);
 			item.Get<EquippedItem>(root).Layer += 2;

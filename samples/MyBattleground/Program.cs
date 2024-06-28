@@ -17,8 +17,17 @@ ecs.Entity<Velocity>().Add<Networked>();
 
 var root = ecs.Entity();
 var child = ecs.Entity();
+
+var child2 = ecs.Entity();
+child2.Set(root, child);
+
+if (child2.Has(root, child))
+{
+
+}
+
 child.Add<EquippedItem>(root);
-child.Set(root, new EquippedItem() { Layer = 3 });
+child.Set(new EquippedItem() { Layer = 3 }, root);
 ref var equip2 = ref ecs.Get<EquippedItem>(child);
 ref var equip = ref ecs.Get<EquippedItem>(child, root);
 equip.Layer = 8;
