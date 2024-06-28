@@ -80,7 +80,7 @@ namespace TinyEcs.Tests
             var entity = ctx.World.Entity();
 
             ctx.World.Set(entity, new FloatComponent());
-            ctx.World.Set<NormalTag>(entity);
+            ctx.World.Add<NormalTag>(entity);
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
             Assert.True(ctx.World.Has<NormalTag>(entity));
@@ -93,7 +93,7 @@ namespace TinyEcs.Tests
             var entity = ctx.World.Entity();
 
             ctx.World.Set(entity, new FloatComponent());
-            ctx.World.Set<NormalTag>(entity);
+            ctx.World.Add<NormalTag>(entity);
             ctx.World.Set(entity, new LargeComponent());
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
@@ -120,7 +120,7 @@ namespace TinyEcs.Tests
             var entity = ctx.World.Entity();
 
             ctx.World.Set(entity, new FloatComponent());
-            ctx.World.Set<NormalTag>(entity);
+            ctx.World.Add<NormalTag>(entity);
 
             Assert.True(ctx.World.Has<FloatComponent>(entity));
             Assert.True(ctx.World.Has<NormalTag>(entity));
@@ -333,7 +333,7 @@ namespace TinyEcs.Tests
 			var dogs = ctx.World.Entity();
 
 			main.Set<BoolComponent>(new ());
-			main.Set(likes, dogs);
+			main.Add(likes, dogs);
 
 			Assert.True(main.Has<Wildcard>());
 			Assert.True(main.Has(likes, Wildcard.ID));

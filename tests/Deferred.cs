@@ -65,7 +65,7 @@ namespace TinyEcs.Tests
 			ctx.World.BeginDeferred();
 			entity.Set(new FloatComponent() { Value = 9f });
 			entity.Set(new IntComponent() { Value = 123 });
-			entity.Set<NormalTag>();
+			entity.Add<NormalTag>();
 			ctx.World.EndDeferred();
 
 			Assert.True(entity.Has<FloatComponent>());
@@ -86,7 +86,7 @@ namespace TinyEcs.Tests
 
 			ctx.World.BeginDeferred();
 			entity.Set(new IntComponent() { Value = 123 });
-			entity.Set<NormalTag>();
+			entity.Add<NormalTag>();
 
 			entity.Unset<FloatComponent>();
 			entity.Unset<IntComponent>();
@@ -111,7 +111,7 @@ namespace TinyEcs.Tests
 
 			entity.Set(new FloatComponent() { Value = 9f });
 			entity.Set(new IntComponent() { Value = 123 });
-			entity.Set<NormalTag>();
+			entity.Add<NormalTag>();
 			Assert.True(entity.Has<BoolComponent>());
 			Assert.False(entity.Has<FloatComponent>());
 			Assert.False(entity.Has<IntComponent>());
@@ -152,7 +152,7 @@ namespace TinyEcs.Tests
 				{
 					Assert.True(ctx.World.IsDeferred);
 					entity.Set(new IntComponent() { Value = 123 });
-					entity.Set<NormalTag>();
+					entity.Add<NormalTag>();
 
 					ctx.World.BeginDeferred();
 					{

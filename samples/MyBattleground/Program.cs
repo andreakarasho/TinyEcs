@@ -8,27 +8,36 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
-ecs.Entity<PlayerTag>().Set<Networked>();
+ecs.Entity<PlayerTag>().Add<Networked>();
 ecs.Entity<Likes>();
 ecs.Entity<Dogs>();
 ecs.Entity<Position>();
 ecs.Entity<ManagedData>();
-ecs.Entity<Velocity>().Set<Networked>();
+ecs.Entity<Velocity>().Add<Networked>();
 
 var root = ecs.Entity();
 var child = ecs.Entity();
-child.Set<EquippedItem>(root);
-child.SetAction(root, new EquippedItem() { Layer = 3 });
+
+var child2 = ecs.Entity();
+child2.Set(root, child);
+
+if (child2.Has(root, child))
+{
+
+}
+
+child.Add<EquippedItem>(root);
+child.Set(new EquippedItem() { Layer = 3 }, root);
 ref var equip2 = ref ecs.Get<EquippedItem>(child);
-ref var equip = ref ecs.GetAction<EquippedItem>(child, root);
+ref var equip = ref ecs.Get<EquippedItem>(child, root);
 equip.Layer = 8;
-ref var equip3 = ref ecs.GetAction<EquippedItem>(child, root);
+ref var equip3 = ref ecs.Get<EquippedItem>(child, root);
 
 ecs.Entity().Set(new Velocity());
-ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity()).Set(new ManagedData());
+ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 99 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 999 }).Set(new Velocity());
-ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Set<Networked>();
+ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Add<Networked>();
 ecs.Entity().Set(new Velocity());
 
 
@@ -241,8 +250,8 @@ scheduler.AddSystem(() => Console.WriteLine("system 1 - thread id {0}", Thread.C
 
 var sysAfter = scheduler.AddSystem(() => Console.WriteLine("after"));
 var sys = scheduler.AddSystem(() => Console.WriteLine("system 2 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
-sysAfter.RunAfter(sys);
-sys.RunAfter(sysAfter);
+// sysAfter.RunAfter(sys);
+// sys.RunAfter(sysAfter);
 
 while (true)
 	scheduler.Run();
@@ -320,7 +329,7 @@ scheduler.AddSystem((World world) => {
 		var ff = w.Entity()
 			.Set<Position>(default)
 			.Set<Velocity>(default)
-			.Set<Likes>();
+			.Add<Likes>();
 	});
 });
 scheduler.AddSystem((World world) => {

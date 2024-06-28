@@ -15,7 +15,7 @@
 
 			var root = ctx.World.Entity();
 
-			root.Set<Likes, Dogs>();
+			root.Add<Likes, Dogs>();
 			Assert.True(root.Has<Likes, Dogs>());
 
 			root.Set<Likes, Apples>(new Apples() { Amount = 10 });
@@ -35,11 +35,11 @@
 			var likes = ctx.World.Entity();
 			var dogs = ctx.World.Entity();
 
-			carl.Set(likes, dogs);
+			carl.Add(likes, dogs);
 			carl.Unset(likes, dogs);
 			Assert.False(carl.Has(likes, dogs));
 
-			carl.Set<Likes, Dogs>();
+			carl.Add<Likes, Dogs>();
 			carl.Unset<Likes, Dogs>();
 			Assert.False(carl.Has<Likes, Dogs>());
 		}
@@ -64,11 +64,11 @@
 
 
 			var item = ctx.World.Entity();
-			item.SetAction(root, new EquippedItem() { Layer = 2 });
+			item.Set<EquippedItem>(action: new EquippedItem() { Layer = 2 }, target: root);
 			Assert.True(item.Has<EquippedItem>(root));
-			Assert.Equal(2, item.GetAction<EquippedItem>(root).Layer);
-			item.GetAction<EquippedItem>(root).Layer += 2;
-			Assert.Equal(4, item.GetAction<EquippedItem>(root).Layer);
+			Assert.Equal(2, item.Get<EquippedItem>(root).Layer);
+			item.Get<EquippedItem>(root).Layer += 2;
+			Assert.Equal(4, item.Get<EquippedItem>(root).Layer);
 		}
 
 		[Fact]
@@ -81,8 +81,8 @@
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 
-			carl.Set(likes, dogs);
-			carl.Set(likes, cats);
+			carl.Add(likes, dogs);
+			carl.Add(likes, cats);
 
 			Assert.Equal(dogs, carl.Target(likes, 0));
 			Assert.Equal(cats, carl.Target(likes, 1));
@@ -98,8 +98,8 @@
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 
-			carl.Set(likes, dogs);
-			carl.Set(likes, cats);
+			carl.Add(likes, dogs);
+			carl.Add(likes, cats);
 
 			using var query = ctx.World.QueryBuilder()
 				.With(likes, Wildcard.ID)
@@ -123,8 +123,8 @@
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 
-			carl.Set(likes, dogs);
-			bob.Set(likes, cats);
+			carl.Add(likes, dogs);
+			bob.Add(likes, cats);
 
 			using var query = ctx.World.QueryBuilder()
 				.With(Wildcard.ID, dogs)
@@ -154,8 +154,8 @@
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 
-			carl.Set(likes, dogs);
-			bob.Set(likes, cats);
+			carl.Add(likes, dogs);
+			bob.Add(likes, cats);
 
 			query = ctx.World.QueryBuilder()
 				.With(Wildcard.ID, Wildcard.ID)
@@ -176,7 +176,7 @@
 
 			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
-			var likes = ctx.World.Entity().Set<Unique>();
+			var likes = ctx.World.Entity().Add<Unique>();
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 			var pasta = ctx.World.Entity();
@@ -187,19 +187,19 @@
 			Assert.True(cats.Exists());
 			Assert.True(pasta.Exists());
 
-			carl.Set(likes, dogs);
+			carl.Add(likes, dogs);
 			Assert.False(carl.Has(likes, dogs));
 
-			carl.Set(likes, pasta);
+			carl.Add(likes, pasta);
 			Assert.False(carl.Has(likes, dogs));
 			Assert.False(carl.Has(likes, pasta));
 
-			josh.Set(likes, dogs);
+			josh.Add(likes, dogs);
 			Assert.False(josh.Has(likes, dogs));
 
 			ctx.World.EndDeferred();
 
-			carl.Set(likes, cats);
+			carl.Add(likes, cats);
 			Assert.False(carl.Has(likes, dogs));
 			Assert.False(carl.Has(likes, pasta));
 			Assert.True(carl.Has(likes, cats));
@@ -212,10 +212,10 @@
 			using var ctx = new Context();
 
 			var carl = ctx.World.Entity();
-			var tradeWith = ctx.World.Entity().Set<Symmetric>();
+			var tradeWith = ctx.World.Entity().Add<Symmetric>();
 			var bob = ctx.World.Entity();
 
-			carl.Set(tradeWith, bob);
+			carl.Add(tradeWith, bob);
 			Assert.True(carl.Has(tradeWith, bob));
 			Assert.True(bob.Has(tradeWith, carl));
 		}
@@ -227,14 +227,14 @@
 
 			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
-			var tradeWith = ctx.World.Entity().Set<Symmetric>();
+			var tradeWith = ctx.World.Entity().Add<Symmetric>();
 			var bob = ctx.World.Entity();
 
 			Assert.True(carl.Exists());
 			Assert.True(tradeWith.Exists());
 			Assert.True(bob.Exists());
 
-			carl.Set(tradeWith, bob);
+			carl.Add(tradeWith, bob);
 			Assert.False(carl.Has(tradeWith, bob));
 			Assert.False(bob.Has(tradeWith, carl));
 			ctx.World.EndDeferred();

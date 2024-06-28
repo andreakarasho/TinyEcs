@@ -39,12 +39,12 @@ using var ecs = new World();
 var player = ecs.Entity()
     .Set<Position>(new Position { X = 2 })
     .Set<Label>(new Label { Value = "Tom" })
-    .Set<Player>();
+    .Add<Player>();
 
 var npc = ecs.Entity()
     .Set<Position>(new Position { X = 75 })
     .Set<Label>(new Label { Value = "Dan" })
-    .Set<Npc>();
+    .Add<Npc>();
 
 // Query entities with Position + Label components
 ecs.Each((EntityView entity, ref Position pos, ref Label label) => {
@@ -155,7 +155,7 @@ query.EachJob((ref Position pos, ref Velocity vel) => {
 ```csharp
 // Get or create an entity named 'Khun' 🐶
 var dog = ecs.Entity("Khun")
-    .Set<Bau>();
+    .Add<Bau>();
 ```
 
 ```csharp
@@ -174,7 +174,7 @@ var woodenChest = ecs.Entity()
     .Set<Container>();
 
 var sword = ecs.Entity()
-    .Set<Weapon>()
+    .Add<Weapon>()
     .Set<Damage>(new Damage { Min = 5, Max = 15 })
     .Set<Amount>(new Amount { Value = 1 });
 
@@ -219,7 +219,7 @@ var bob = ecs.Entity("Bob");
 var likes = ecs.Entity("Likes");
 var pasta = ecs.Entity("Pasta");
 
-bob.Set(likes, pasta);
+bob.Add(likes, pasta);
 ```
 
 ### `ChildOf`
@@ -253,7 +253,7 @@ ecs.Entity<TradingWith>().Set<Symmetric>();
 var playerA = ecs.Entity("Player A");
 var playerB = ecs.Entity("Player B");
 
-playerA.Set<TradingWith>(playerB);
+playerA.Add<TradingWith>(playerB);
 
 // Both returns 'True'
 var resultA = playerA.Has<TradingWith>(playerB);

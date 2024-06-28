@@ -2,12 +2,12 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
-using static TinyEcs.Defaults;
-
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
 {
+	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
+
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
     private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
@@ -18,67 +18,34 @@ public sealed partial class World : IDisposable
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
 
 
-    public World(ulong maxComponentId = 256)
-    {
-        _comparer = new ComponentComparer(this);
-        _archRoot = new Archetype(
-            this,
-            ImmutableArray<ComponentInfo>.Empty,
-            _comparer
-        );
 
-		_maxCmpId = maxComponentId;
-        _entities.MaxID = maxComponentId;
-
-		_ = Component<DoNotDelete>();
-		_ = Component<Unique>();
-		_ = Component<Symmetric>();
-		_ = Component<Wildcard>();
-		_ = Component<(Wildcard, Wildcard)>();
-		_ = Component<Identifier>();
-		_ = Component<Name>();
-		_ = Component<ChildOf>();
-
-		setCommon(Entity<DoNotDelete>(), nameof(DoNotDelete));
-		setCommon(Entity<Unique>(), nameof(Unique));
-		setCommon(Entity<Symmetric>(), nameof(Symmetric));
-		setCommon(Entity<Wildcard>(), nameof(Wildcard));
-		setCommon(Entity<Identifier>(), nameof(Identifier));
-		setCommon(Entity<Name>(), nameof(Name));
-		setCommon(Entity<ChildOf>(), nameof(ChildOf))
-			.Set<Unique>();
-
-		static EntityView setCommon(EntityView entity, string name)
-			=> entity.Set<DoNotDelete>().Set<Identifier, Name>(new (name));
-
-		OnPluginInitialization?.Invoke(this);
-    }
-
-	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
-	public static event Action<World>? OnPluginInitialization;
-
-    public int EntityCount => _entities.Length;
 	internal Archetype Root => _archRoot;
+    internal List<Archetype> Archetypes { get; } = [];
 
-    public List<Archetype> Archetypes { get; } = new List<Archetype>();
 
 
-    public void Dispose()
-    {
-        _entities.Clear();
-        _archRoot.Clear();
-        _typeIndex.Clear();
+	public void Each(QueryFilterDelegateWithEntity fn)
+	{
+		BeginDeferred();
 
-		foreach (var query in _cachedQueries.Values)
-			query.Dispose();
+		foreach (var arch in GetQuery(0, [], static (world, terms) => new Query(world, terms)))
+		{
+			foreach (ref readonly var chunk in arch)
+			{
+				ref var entity = ref chunk.EntityAt(0);
+				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
+				while (Unsafe.IsAddressLessThan(ref entity, ref last))
+				{
+					fn(entity);
+					entity = ref Unsafe.Add(ref entity, 1);
+				}
+			}
+		}
 
-		_cachedQueries.Clear();
-		_namesToEntity.Clear();
-        Archetypes.Clear();
-    }
+		EndDeferred();
+	}
 
-    internal ref readonly ComponentInfo Component<T>() where T : struct
+	internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
@@ -94,135 +61,12 @@ public sealed partial class World : IDisposable
         return ref lookup;
     }
 
-	public EntityView Entity<T>() where T : struct
-	{
-		ref readonly var cmp = ref Component<T>();
-
-		var entity = Entity(cmp.ID);
-
-		var name = Lookup.Component<T>.Name;
-
-		if (_namesToEntity.TryGetValue(name, out var id))
-		{
-			EcsAssert.Panic(entity.ID == id, $"You must declare the component before the entity '{id}' named '{name}'");
-		}
-		else
-		{
-			_namesToEntity[name] = entity;
-			entity.Set<Identifier, Name>(new (name));
-		}
-
-		return entity;
-	}
-
-    public EntityView Entity(EcsID id = default)
-    {
-        return id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
-    }
-
-	public EntityView Entity(string name)
-	{
-		if (string.IsNullOrEmpty(name))
-			return EntityView.Invalid;
-
-		EntityView entity;
-		if (_namesToEntity.TryGetValue(name, out var id))
-		{
-			entity = Entity(id);
-		}
-		else
-		{
-			entity = Entity();
-			_namesToEntity[name] = entity;
-			entity.Set<Identifier, Name>(new (name));
-		}
-
-		return entity;
-	}
-
-    internal EntityView NewEmpty(ulong id = 0)
-    {
-		lock (_newEntLock)
-		{
-			// if (IsDeferred)
-			// {
-			// 	if (id == 0)
-			// 		id = ++_entities.MaxID;
-			// 	CreateDeferred(id);
-			// 	return new EntityView(this, id);
-			// }
-
-			ref var record = ref (
-				id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
-			);
-			record.Archetype = _archRoot;
-			record.Row = _archRoot.Add(id);
-
-			var e = new EntityView(this, id);
-
-			OnEntityCreated?.Invoke(e);
-
-			return e;
-		}
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref EcsRecord GetRecord(EcsID id)
     {
         ref var record = ref _entities.Get(id);
         EcsAssert.Assert(!Unsafe.IsNullRef(ref record), $"entity {id} is dead or doesn't exist!");
         return ref record;
-    }
-
-    public void Delete(EcsID entity)
-    {
-		if (IsDeferred)
-		{
-			if (Exists(entity))
-				DeleteDeferred(entity);
-
-			return;
-		}
-
-		lock (_newEntLock)
-		{
-			OnEntityDeleted?.Invoke(new (this, entity));
-
-			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
-
-			if (Has<Identifier, Name>(entity))
-			{
-				var name = Get<Identifier, Name>(entity).Value;
-				_namesToEntity.Remove(name, out var _);
-			}
-
-			// TODO: check for this interesting flecs approach:
-			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
-			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
-			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
-			QueryRaw(term0).Each(static (EntityView child) => child.Delete());
-			QueryRaw(term1).Each(static (EntityView child) => child.Delete());
-
-			ref var record = ref GetRecord(entity);
-
-			var removedId = record.Archetype.Remove(ref record);
-			EcsAssert.Assert(removedId == entity);
-
-			_entities.Remove(removedId);
-		}
-    }
-
-    public bool Exists(EcsID entity)
-    {
-		// if (IsDeferred && ExistsDeferred(entity))
-		// 	return true;
-
-		if (entity.IsPair)
-        {
-            return _entities.Contains(entity.First) && _entities.Contains(entity.Second);
-        }
-
-        return _entities.Contains(entity);
     }
 
 	private void DetachComponent(EcsID entity, EcsID id)
@@ -298,90 +142,32 @@ public sealed partial class World : IDisposable
 		return ref arch;
 	}
 
-    internal bool Has(EcsID entity, EcsID id)
-    {
-		// if (IsDeferred)
-		// {
-		// 	if (HasDeferred(entity, id))
-		// 		return true;
-
-		// 	if (ExistsDeferred(entity))
-		// 		return false;
-		// }
-
-		ref var record = ref GetRecord(entity);
-        var has = record.Archetype.GetComponentIndex(id) >= 0;
-		if (has) return true;
-
-		if (id.IsPair)
+	internal ref T GetUntrusted<T>(EcsID entity, EcsID cmpId, int size) where T : struct
+	{
+		if (IsDeferred && !Has(entity, cmpId))
 		{
-			(var a, var b) = FindPair(entity, id);
-
-			return a != 0 && b != 0;
+			Unsafe.SkipInit<T>(out var val);
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size)!);
 		}
 
-		return id == Wildcard.ID;
-    }
-
-    public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
-    {
-        ref var record = ref GetRecord(id);
-        return record.Archetype.Components.AsSpan();
-    }
-
-    public void PrintGraph()
-    {
-        _archRoot.Print();
-    }
-
-	public Query QueryRaw(params ReadOnlySpan<IQueryTerm> terms)
-	{
-		return GetQuery(
-			Hashing.Calculate(terms),
-			terms,
-			static (world, terms) => new Query(world, terms));
-	}
-
-	public Query Query<TQueryData>() where TQueryData : struct
-	{
-		return GetQuery(
-			Lookup.Query<TQueryData>.Hash,
-		 	Lookup.Query<TQueryData>.Terms.AsSpan(),
-		 	static (world, _) => new Query<TQueryData>(world)
-		);
-	}
-
-	public Query Query<TQueryData, TQueryFilter>() where TQueryData : struct where TQueryFilter : struct
-	{
-		return GetQuery(
-			Lookup.Query<TQueryData, TQueryFilter>.Hash,
-			Lookup.Query<TQueryData, TQueryFilter>.Terms.AsSpan(),
-		 	static (world, _) => new Query<TQueryData, TQueryFilter>(world)
-		);
-	}
-
-	public void Each(QueryFilterDelegateWithEntity fn)
-	{
 		BeginDeferred();
+        ref var record = ref GetRecord(entity);
+        var column = record.Archetype.GetComponentIndex(cmpId);
 
-		foreach (var arch in GetQuery(0, ReadOnlySpan<IQueryTerm>.Empty, static (world, terms) => new Query(world, terms)))
+		if (column < 0)
 		{
-			foreach (ref readonly var chunk in arch)
-			{
-				ref var entity = ref chunk.EntityAt(0);
-				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
-				while (Unsafe.IsAddressLessThan(ref entity, ref last))
-				{
-					fn(entity);
-					entity = ref Unsafe.Add(ref entity, 1);
-				}
-			}
+			EndDeferred();
+			return ref Unsafe.NullRef<T>();
 		}
 
+        ref var chunk = ref record.GetChunk();
+		var raw = chunk.RawComponentData(column)!;
+		ref var array = ref Unsafe.As<Array, T[]>(ref raw);
+		ref var value = ref array[record.Row & Archetype.CHUNK_THRESHOLD];
 		EndDeferred();
-	}
 
-	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
+		return ref value;
+    }
 
 	internal Query GetQuery(ulong hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
 	{
@@ -395,8 +181,6 @@ public sealed partial class World : IDisposable
 
 		return query;
 	}
-
-    public QueryBuilder QueryBuilder() => new QueryBuilder(this);
 
 	internal Archetype? FindArchetype(ulong hash)
 	{
