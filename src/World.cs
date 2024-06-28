@@ -2,8 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.Collections.Extensions;
 
-using static TinyEcs.Defaults;
-
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -20,13 +18,9 @@ public sealed partial class World : IDisposable
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
 
 
-	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
-	public static event Action<World>? OnPluginInitialization;
-
 
 	internal Archetype Root => _archRoot;
-    internal List<Archetype> Archetypes { get; } = new List<Archetype>();
+    internal List<Archetype> Archetypes { get; } = [];
 
 
 
@@ -34,7 +28,7 @@ public sealed partial class World : IDisposable
 	{
 		BeginDeferred();
 
-		foreach (var arch in GetQuery(0, ReadOnlySpan<IQueryTerm>.Empty, static (world, terms) => new Query(world, terms)))
+		foreach (var arch in GetQuery(0, [], static (world, terms) => new Query(world, terms)))
 		{
 			foreach (ref readonly var chunk in arch)
 			{
@@ -65,32 +59,6 @@ public sealed partial class World : IDisposable
 		}
 
         return ref lookup;
-    }
-
-    internal EntityView NewEmpty(ulong id = 0)
-    {
-		lock (_newEntLock)
-		{
-			// if (IsDeferred)
-			// {
-			// 	if (id == 0)
-			// 		id = ++_entities.MaxID;
-			// 	CreateDeferred(id);
-			// 	return new EntityView(this, id);
-			// }
-
-			ref var record = ref (
-				id > 0 ? ref _entities.Add(id, default!) : ref _entities.CreateNew(out id)
-			);
-			record.Archetype = _archRoot;
-			record.Row = _archRoot.Add(id);
-
-			var e = new EntityView(this, id);
-
-			OnEntityCreated?.Invoke(e);
-
-			return e;
-		}
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

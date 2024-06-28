@@ -206,7 +206,7 @@ partial class World
 	}
 
 	/// <summary>
-	/// Retrive Target component value from (Action, Target).
+	/// Retrive Target component value from (Action, Target). Target is an entity.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <param name="entity"></param>

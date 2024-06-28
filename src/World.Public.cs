@@ -50,10 +50,18 @@ public sealed partial class World
     }
 
 
+
+	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
+	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
+	public static event Action<World>? OnPluginInitialization;
+
+
+
 	/// <summary>
 	/// Count of entities alive.
 	/// </summary>
 	public int EntityCount => _entities.Length;
+
 
 
 	/// <summary>
@@ -81,8 +89,42 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="id"></param>
 	/// <returns></returns>
-    public EntityView Entity(EcsID id = default)
-		=> id == 0 || !Exists(id) ? NewEmpty(id) : new(this, id);
+    public EntityView Entity(ulong id = 0)
+	{
+		EntityView ent;
+		if (id == 0 || !Exists(id))
+		{
+			lock (_newEntLock)
+			{
+				// if (IsDeferred)
+				// {
+				// 	if (id == 0)
+				// 		id = ++_entities.MaxID;
+				// 	CreateDeferred(id);
+				// 	return new EntityView(this, id);
+				// }
+
+				ref var record = ref (
+					id > 0 ?
+					ref _entities.Add(id, default!)
+					:
+					ref _entities.CreateNew(out id)
+				);
+
+				record.Archetype = _archRoot;
+				record.Row = _archRoot.Add(id);
+
+				ent = new EntityView(this, id);
+				OnEntityCreated?.Invoke(ent);
+			}
+		}
+		else
+		{
+			ent = new(this, id);
+		}
+
+		return ent;
+	}
 
 	/// <summary>
 	/// Get or create an entity from a component.
