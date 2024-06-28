@@ -403,9 +403,19 @@ public sealed partial class World
 	}
 
 	/// <summary>
-	/// Query for specific Components.<para/>
-	/// Query for single component or use tuple to target
-	/// multiple components at the same time like (Postion, Velocity, Rotation).
+	/// Query for specific components.<para/>
+	/// <example>
+	/// 	Single component:
+	/// <code>
+	///		var query = world.Query&lt;Position&gt;();
+	///		query.Each((ref Position pos) => { });
+	/// </code>
+	/// 	Multiple components<para/>
+	/// <code>
+	///		var query = world.Query&lt;(Position, Velocity)&gt;();
+	///		query.Each((ref Position pos, ref Velocity vel) => { });
+	/// </code>
+	/// </example>
 	/// </summary>
 	/// <typeparam name="TQueryData"></typeparam>
 	/// <returns></returns>
@@ -419,10 +429,33 @@ public sealed partial class World
 	}
 
 	/// <summary>
-	/// Query for specific Components.<para/>
-	/// Query for single component or use tuple to target
-	/// multiple components at the same time like (Postion, Velocity, Rotation).<para/>
-	/// Use Filters to exclude/include entities with specific tag/components.
+	/// Query for specific components with filters.<para/>
+	/// <example>
+	/// 	Single filter:
+	/// <code>
+	///		var query = world.Query&lt;(Position, Velocity), Without&lt;Rotation&gt;&gt;();
+	///		query.Each((ref Position pos, ref Velocity vel) => { });
+	/// </code>
+	/// 	Multiple filters<para/>
+	/// <code>
+	///		var query = world.Query&lt;(Position, Velocity), (With&lt;IsNpc&gt;, Without&lt;Rotation&gt;)&gt;();
+	///		query.Each((ref Position pos, ref Velocity vel) => { });
+	/// </code>
+	/// 	The 'Or' clausole<para/>
+	/// <code>
+	///		var query = world.Query&lt;(Position, Velocity, Optional&lt;Rotation&gt;),
+	///			(With&lt;IsNpc&gt;, Without&lt;Rotation&gt;,
+	///				Or&lt;(With&lt;IsPlayer&gt;, With&lt;Rotation&gt;)&gt;)&gt;();
+	///
+	///		query.Each((ref Position pos, ref Velocity vel, ref Rotation maybeRot) => {
+	///			if (Unsafe.IsNullRef(ref maybeRot)) {
+	///				// hitting the main query
+	///			} else {
+	///				// hitting the Or clausole
+	///			}
+	///		});
+	/// </code>
+	/// </example>
 	/// </summary>
 	/// <typeparam name="TQueryData"></typeparam>
 	/// <typeparam name="TQueryFilter"></typeparam>

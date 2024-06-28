@@ -34,7 +34,7 @@ equip.Layer = 8;
 ref var equip3 = ref ecs.Get<EquippedItem>(child, root);
 
 ecs.Entity().Set(new Velocity());
-ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity()).Set(new ManagedData());
+ecs.Entity().Set(new Position() { X = 9 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 99 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 999 }).Set(new Velocity());
 ecs.Entity().Set(new Position() { X = 9999 }).Set(new Velocity()).Add<Networked>();

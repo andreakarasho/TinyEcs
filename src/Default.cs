@@ -1,19 +1,5 @@
 namespace TinyEcs;
 
-[DebuggerDisplay("ID: {ID}, Size: {Size}")]
-public readonly struct ComponentInfo
-{
-    public readonly EcsID ID;
-    public readonly int Size;
-
-    internal ComponentInfo(EcsID id, int size)
-    {
-        ID = id;
-        Size = size;
-    }
-}
-
-
 public static class Defaults
 {
 	/// <summary>
