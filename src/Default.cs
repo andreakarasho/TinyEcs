@@ -76,7 +76,6 @@ public static class Defaults
     /// </summary>
 	public struct Symmetric { }
 
-
 	/// <summary>
     /// Built-in tag.<br/>Mark a component/tag to not be deleted<para/>
 	/// <example>
