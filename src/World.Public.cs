@@ -89,10 +89,10 @@ public sealed partial class World
 	/// <returns></returns>
     public EntityView Entity(ulong id = 0)
 	{
-		EntityView ent;
-		if (id == 0 || !Exists(id))
+		lock (_newEntLock)
 		{
-			lock (_newEntLock)
+			EntityView ent;
+			if (id == 0 || !Exists(id))
 			{
 				// if (IsDeferred)
 				// {
@@ -115,13 +115,12 @@ public sealed partial class World
 				ent = new EntityView(this, id);
 				OnEntityCreated?.Invoke(ent);
 			}
+			else
+			{
+				ent = new(this, id);
+			}
+			return ent;
 		}
-		else
-		{
-			ent = new(this, id);
-		}
-
-		return ent;
 	}
 
 	/// <summary>
