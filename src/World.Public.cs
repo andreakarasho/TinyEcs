@@ -133,6 +133,8 @@ public sealed partial class World
 		ref readonly var cmp = ref Component<T>();
 
 		var entity = Entity(cmp.ID);
+		if (entity.ID.IsPair)
+			return entity;
 
 		var name = Lookup.Component<T>.Name;
 
