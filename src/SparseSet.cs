@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class EntitySparseSet<T>
+internal sealed class EntitySparseSet<T>
 {
 	private struct Chunk
 	{
@@ -74,13 +74,12 @@ sealed class EntitySparseSet<T>
 		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
 			return ref Unsafe.NullRef<T>();
 
-		var gen = SplitGeneration(ref outerIdx);
 		var realID = (int)outerIdx & 0xFFF;
-
 		var dense = chunk.Sparse[realID];
 		if (dense == 0 || dense >= _count)
 			return ref Unsafe.NullRef<T>();
 
+		var gen = SplitGeneration(ref outerIdx);
 		var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
 		if (gen != curGen)
 			return ref Unsafe.NullRef<T>();
@@ -89,7 +88,25 @@ sealed class EntitySparseSet<T>
 	}
 
 	public bool Contains(ulong outerIdx)
-		=> !Unsafe.IsNullRef(ref Get(outerIdx));
+	{
+		ref var chunk = ref GetChunkOrCreate((int)outerIdx >> 12);
+		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
+			return false;
+
+		var realID = (int)outerIdx & 0xFFF;
+		var dense = chunk.Sparse[realID];
+		if (dense == 0 || dense >= _count)
+			return false;
+
+		var gen = SplitGeneration(ref outerIdx);
+		var curGen = _dense[dense] & EcsConst.ECS_GENERATION_MASK;
+		if (gen != curGen)
+			return false;
+
+		EcsAssert.Assert(dense == chunk.Sparse[realID]);
+
+		return true;
+	}
 
 	public ref T Add(ulong outerIdx, T value)
 	{
@@ -101,16 +118,22 @@ sealed class EntitySparseSet<T>
 		if (dense != 0)
 		{
 			var count = _count;
-			if (dense == count)
-			{
-				_count++;
-			}
-			else if (dense > count)
+			if (dense >= count)
 			{
 				SwapDense(ref chunk, dense, count);
 				dense = count;
-				_count++;
+				_count += 1;
 			}
+			// if (dense == count)
+			// {
+			// 	_count++;
+			// }
+			// else if (dense > count)
+			// {
+			// 	SwapDense(ref chunk, dense, count);
+			// 	dense = count;
+			// 	_count++;
+			// }
 
 			EcsAssert.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
 		}
@@ -267,7 +290,7 @@ sealed class EntitySparseSet<T>
 		return new SparseSetEnumerator(this);
 	}
 
-	internal ref struct SparseSetEnumerator
+	public ref struct SparseSetEnumerator
 	{
 		private readonly EntitySparseSet<T> _sparseSet;
 		private int _index;
