@@ -5,7 +5,7 @@ public static class Defaults
 	/// <summary>
 	/// Wildcard is used to specify "any component/tag".<br/>It's mostly used for queries.
 	/// </summary>
-	public struct Wildcard { internal static EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
+	public struct Wildcard { public static EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
 
 	/// <summary>
 	/// Built-in tag.<br/>Shortcut for child.Add{ChildOf}(parent);

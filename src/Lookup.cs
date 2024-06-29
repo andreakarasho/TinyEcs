@@ -119,7 +119,9 @@ internal static class Lookup
 
 		private static string GetName()
 		{
-			var name = typeof(T).ToString();
+			var name = typeof(T).ToString()
+				.Replace("[", "")
+				.Replace("]", "");
 
 			var indexOf = name.LastIndexOf('.');
 			if (indexOf >= 0)
