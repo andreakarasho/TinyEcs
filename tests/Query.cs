@@ -435,5 +435,19 @@ namespace TinyEcs.Tests
 			Assert.ThrowsAny<Exception>(ctx.World.Query<IntComponent, FloatComponent>);
 			Assert.ThrowsAny<Exception>(ctx.World.Query<(FloatComponent, (IntComponent, With<IntComponent>))>);
 		}
+
+		[Fact]
+		public void Query_Initialize_UnknownData()
+		{
+			using var ctx = new Context();
+
+			ctx.World.Query<UnkData0>();
+			ctx.World.Query<Optional<UnkData0>, With<UnkData1>>();
+			ctx.World.Query<UnkData0, (With<(UnkData1, Wildcard)>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+		}
+
+		struct UnkData0 { int _moc; }
+		struct UnkData1 { }
+		struct UnkData2 { }
     }
 }

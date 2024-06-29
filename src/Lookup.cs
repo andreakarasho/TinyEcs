@@ -24,6 +24,7 @@ internal static class Lookup
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
+	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
@@ -60,10 +61,12 @@ internal static class Lookup
 		var ok = _typesConvertion.TryGetValue(type, out var term);
 		if (!ok)
 		{
-			EcsAssert.Assert(ok,
-				_componentInfosByType.ContainsKey(type)
-					? $"The tag '{type}' cannot be used as query data"
-					: $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
+			term = CreateUnmatchedTerm(type);
+
+			// EcsAssert.Assert(ok,
+			// 	_componentInfosByType.ContainsKey(type)
+			// 		? $"The tag '{type}' cannot be used as query data"
+			// 		: $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
 		}
 		return term;
 	}
@@ -97,7 +100,13 @@ internal static class Lookup
 			}
 			else
 			{
-				HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
+				if (_unmatchedType.Remove(typeof(T), out var id) ||
+					_unmatchedType.Remove(typeof(Optional<T>), out id) ||
+					_unmatchedType.Remove(typeof(With<T>), out id) ||
+					_unmatchedType.Remove(typeof(Without<T>), out id))
+					HashCode = id;
+				else
+					HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
 			}
 
 			Value = new ComponentInfo(HashCode, Size);
@@ -105,14 +114,14 @@ internal static class Lookup
 
 			if (Size > 0)
 			{
-				_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.DataAccess));
-				_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
+				_typesConvertion[typeof(T)] = new (Value.ID, TermOp.DataAccess);
+				_typesConvertion[typeof(Optional<T>)] = new (Value.ID, TermOp.Optional);
 			}
 
-			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
-			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion[typeof(With<T>)] = new (Value.ID, TermOp.With);
+			_typesConvertion[typeof(Without<T>)] = new (Value.ID, TermOp.Without);
 
-			_componentInfosByType.Add(typeof(T), Value);
+			_componentInfosByType[typeof(T)] = Value;
 
 			_components.Add(Value.ID, Value);
 		}
@@ -229,7 +238,32 @@ internal static class Lookup
 			return;
 		}
 
-		EcsAssert.Panic(false, $"Type '{type}' is not registered. Register '{type}' using world.Entity<T>() or assign it to an entity.");
+		term = CreateUnmatchedTerm(type);
+		terms.Add(term);
+
+		//EcsAssert.Panic(false, $"Type '{type}' is not registered. Register '{type}' using world.Entity<T>() or assign it to an entity.");
+	}
+
+	private static QueryTerm CreateUnmatchedTerm(Type type)
+	{
+		var op = TermOp.DataAccess;
+		if (typeof(IWith).IsAssignableFrom(type))
+		{
+			op = TermOp.With;
+		}
+		else if (typeof(IWithout).IsAssignableFrom(type))
+		{
+			op = TermOp.Without;
+		}
+		else if (typeof(IOptional).IsAssignableFrom(type))
+		{
+			op = TermOp.Optional;
+		}
+
+		var term = new QueryTerm((ulong)++Lookup._index, op);
+		_typesConvertion.Add(type, term);
+		_unmatchedType.Add(type, term.Id);
+		return term;
 	}
 
     internal static class Query<TQueryData, TQueryFilter>
