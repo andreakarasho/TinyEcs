@@ -95,10 +95,7 @@ internal static class Lookup
 			}
 			else
 			{
-				if (_unmatchedType.Remove(typeof(T), out var id) ||
-					_unmatchedType.Remove(typeof(Optional<T>), out id) ||
-					_unmatchedType.Remove(typeof(With<T>), out id) ||
-					_unmatchedType.Remove(typeof(Without<T>), out id))
+				if (_unmatchedType.Remove(typeof(T), out var id))
 					HashCode = id;
 				else
 					HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
