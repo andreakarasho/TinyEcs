@@ -26,7 +26,7 @@ internal static class Lookup
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
 	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
-	public static ulong Index => _index;
+	public static ulong Index => System.Threading.Interlocked.Read(ref _index);
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{

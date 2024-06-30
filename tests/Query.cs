@@ -160,6 +160,20 @@ namespace TinyEcs.Tests
         }
 
 		[Fact]
+		public void Query_RelationalData()
+		{
+			using var ctx = new Context();
+
+			var ent = ctx.World.Entity()
+				.Set<NormalTag, FloatComponent>(new FloatComponent() { Value = 23f });
+
+			var query = ctx.World.Query<Relation<NormalTag, FloatComponent>>();
+			ref var single = ref query.Single<Relation<NormalTag, FloatComponent>>();
+
+			Assert.Equal(23f, single.Target.Value);
+		}
+
+		[Fact]
 		public void Query_Single()
 		{
 			using var ctx = new Context();
@@ -441,28 +455,30 @@ namespace TinyEcs.Tests
 		{
 			using var ctx = new Context();
 
-			var idx = Lookup.Index;
 			var query = ctx.World.Query<UnkData0, (With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
-			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData0>().ID);
-			Assert.Equal<ulong>(idx + 2, ctx.World.Entity<UnkData1>().ID);
-			Assert.Equal<ulong>(idx + 3, ctx.World.Entity<UnkData2>().ID);
-			Assert.Equal(IDOp.Pair(ctx.World.Entity<UnkData1>().ID, Wildcard.ID), ctx.World.Entity<Relation<UnkData1, Wildcard>>());
+			ctx.World.Entity()
+				.Add<UnkData2>()
+				.Set<UnkData1, UnkData0>(new UnkData0());
+			var ent = ctx.World.Entity()
+				.Set(new UnkData0())
+				.Set<UnkData1, UnkData0>(new UnkData0());
 
-			idx = Lookup.Index;
-			var query2 = ctx.World.Query<Relation<UnkData3, Wildcard>>();
-			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData3>().ID);
-			Assert.Equal(IDOp.Pair(ctx.World.Entity<UnkData3>().ID, Wildcard.ID), ctx.World.Entity<Relation<UnkData3, Wildcard>>());
+			var resEnt = query.Single();
+			Assert.Equal(ent.ID, resEnt.ID);
 
-			idx = Lookup.Index;
-			var query3 = ctx.World.Query<Relation<Wildcard, UnkData4>>();
-			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData4>().ID);
-			Assert.Equal(IDOp.Pair(Wildcard.ID, ctx.World.Entity<UnkData4>().ID), ctx.World.Entity<Relation<Wildcard, UnkData4>>());
+
+			var query2 = ctx.World.Query<Relation<UnkData3, UnkData4>>();
+			ent = ctx.World.Entity()
+				.Set<UnkData3, UnkData4>(new UnkData4());
+
+			resEnt = query2.Single();
+			Assert.Equal(ent.ID, resEnt.ID);
 		}
 
 		struct UnkData0 { int _moc; }
 		struct UnkData1 { }
 		struct UnkData2 { }
 		struct UnkData3 { }
-		struct UnkData4 { }
+		struct UnkData4 { int _moc; }
     }
 }
