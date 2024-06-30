@@ -46,9 +46,24 @@ public enum TermOp : byte
 
 public interface IFilter { }
 
-public readonly struct With<T> : IWith where T : struct { }
-public readonly struct Without<T> : IWithout where T : struct { }
-public readonly struct Optional<T> : IOptional where T : struct { }
+public readonly struct With<T> : IWith where T : struct
+{
+	static readonly T _value = default;
+
+	object IWith.Value => _value;
+}
+public readonly struct Without<T> : IWithout where T : struct
+{
+	static readonly T _value = default;
+
+	object IWithout.Value => _value;
+}
+public readonly struct Optional<T> : IOptional where T : struct
+{
+	static readonly T _value = default;
+
+	object IOptional.Value => _value;
+}
 public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
@@ -81,9 +96,9 @@ public readonly struct Or<T> : IOr, IFilter where T : struct, ITuple
 }
 
 
-public interface IOptional { }
-public interface IWith : IFilter { }
-public interface IWithout : IFilter { }
+public interface IOptional { internal object Value { get; } }
+public interface IWith : IFilter { internal object Value { get; } }
+public interface IWithout : IFilter { internal object Value { get; } }
 public interface IAtLeast : IFilter { }
 public interface IExactly : IFilter { }
 public interface INone : IFilter { }

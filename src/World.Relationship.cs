@@ -14,13 +14,13 @@ partial class World
 		ref readonly var secondCmp = ref Component<TTarget>();
 
 		// Create the relation (A, B)
-		ref readonly var linkedCmp = ref Component<(TAction, TTarget)>();
+		ref readonly var linkedCmp = ref Component<Relation<TAction, TTarget>>();
 
 		// Create the relation (*, B)
-		ref readonly var linkedCmpWildcard0 = ref Component<(Wildcard, TTarget)>();
+		ref readonly var linkedCmpWildcard0 = ref Component<Relation<Wildcard, TTarget>>();
 
 		// Create the relation (A, *)
-		ref readonly var linkedCmpWildcard1 = ref Component<(TAction, Wildcard)>();
+		ref readonly var linkedCmpWildcard1 = ref Component<Relation<TAction, Wildcard>>();
 
 		return ref linkedCmp;
 	}
@@ -80,7 +80,7 @@ partial class World
 		CheckUnique(entity, Entity<TAction>());
 		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
-		Add<(TAction, TTarget)>(entity);
+		Add<Relation<TAction, TTarget>>(entity);
 	}
 
 	/// <summary>
@@ -100,7 +100,7 @@ partial class World
 		CheckUnique(entity, Entity<TAction>());
 		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
-		Set(entity, (default(TAction), target));
+		Set(entity, new Relation<TAction, TTarget>() { Action = default, Target = target});
 	}
 
 	/// <summary>
@@ -203,7 +203,7 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		return ref Get<(TAction, TTarget)>(entity).Item2;
+		return ref Get<Relation<TAction, TTarget>>(entity).Target;
 	}
 
 	/// <summary>
@@ -233,7 +233,7 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		return Has<(TAction, TTarget)>(entity);
+		return Has<Relation<TAction, TTarget>>(entity);
 	}
 
 	/// <summary>
@@ -274,7 +274,7 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		Unset<(TAction, TTarget)>(entity);
+		Unset<Relation<TAction, TTarget>>(entity);
 	}
 
 	/// <summary>
@@ -560,4 +560,24 @@ public static class NameEx
 
 		return entity.ID.Value.ToString();
 	}
+}
+
+public interface IRelation
+{
+	internal object Action { get; }
+	internal object Target { get; }
+}
+
+public struct Relation<TAction, TTarget> : IRelation
+	where TAction : struct
+	where TTarget : struct
+{
+	static readonly TAction _action = default;
+	static readonly TTarget _target = default;
+
+	readonly object IRelation.Action => _action;
+	readonly object IRelation.Target => _target;
+
+	public TAction Action;
+	public TTarget Target;
 }
