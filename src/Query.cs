@@ -184,7 +184,7 @@ public partial class Query : IDisposable
 		foreach (var arch in this)
 		{
 			var column = arch.GetComponentIndex<T>();
-			EcsAssert.Panic(column > 0, "component not found");
+			EcsAssert.Panic(column >= 0, "component not found");
 			ref var value = ref arch.GetChunk(0).GetReference<T>(column);
 			return ref value;
 		}
