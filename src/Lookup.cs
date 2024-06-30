@@ -308,7 +308,7 @@ internal static class Lookup
 		}
 		else
 		{
-			if (subObj != null && _unmatchedType.TryGetValue(subObj.GetType(), out var id))
+			if (_unmatchedType.TryGetValue(subObj?.GetType() ?? type, out var id))
 				idx = id;
 		 	else
 				idx = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
