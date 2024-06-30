@@ -245,6 +245,7 @@ internal static class Lookup
 		if (obj is IWith with)
 		{
 			op = TermOp.With;
+			type = with.Value.GetType();
 			if (with.Value is IRelation rel)
 			{
 				relation = rel;
@@ -253,6 +254,7 @@ internal static class Lookup
 		else if (obj is IWithout without)
 		{
 			op = TermOp.Without;
+			type = without.Value.GetType();
 			if (without.Value is IRelation rel)
 			{
 				relation = rel;
@@ -261,6 +263,7 @@ internal static class Lookup
 		else if (obj is IOptional optional)
 		{
 			op = TermOp.Optional;
+			type = optional.Value.GetType();
 			if (optional.Value is IRelation rel)
 			{
 				relation = rel;
@@ -269,6 +272,11 @@ internal static class Lookup
 		else if (obj is IRelation rel)
 		{
 			relation = rel;
+		}
+
+		if (_unmatchedType.TryGetValue(type, out var id))
+		{
+			return new QueryTerm(id, op);
 		}
 
 		ulong idx;
