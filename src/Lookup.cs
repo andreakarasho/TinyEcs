@@ -265,6 +265,10 @@ internal static class Lookup
 				relation = rel;
 			}
 		}
+		else if (obj is IRelation rel)
+		{
+			relation = rel;
+		}
 
 		ulong idx;
 		if (relation != null)

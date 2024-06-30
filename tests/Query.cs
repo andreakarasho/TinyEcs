@@ -437,17 +437,32 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
-		public void Query_Initialize_UnknownData()
+		public void Query_Initialize_UnknownComponents()
 		{
 			using var ctx = new Context();
 
-			ctx.World.Query<UnkData0>();
-			ctx.World.Query<Optional<UnkData0>, With<UnkData1>>();
-			ctx.World.Query<UnkData0, (With<(UnkData1, Wildcard)>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+			var idx = Lookup.Index;
+			var query = ctx.World.Query<UnkData0, (With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData0>().ID);
+			Assert.Equal<ulong>(idx + 2, ctx.World.Entity<UnkData1>().ID);
+			Assert.Equal<ulong>(idx + 3, ctx.World.Entity<UnkData2>().ID);
+			Assert.Equal(IDOp.Pair(ctx.World.Entity<UnkData1>().ID, Wildcard.ID), ctx.World.Entity<Relation<UnkData1, Wildcard>>());
+
+			idx = Lookup.Index;
+			var query2 = ctx.World.Query<Relation<UnkData3, Wildcard>>();
+			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData3>().ID);
+			Assert.Equal(IDOp.Pair(ctx.World.Entity<UnkData3>().ID, Wildcard.ID), ctx.World.Entity<Relation<UnkData3, Wildcard>>());
+
+			idx = Lookup.Index;
+			var query3 = ctx.World.Query<Relation<Wildcard, UnkData4>>();
+			Assert.Equal<ulong>(idx + 1, ctx.World.Entity<UnkData4>().ID);
+			Assert.Equal(IDOp.Pair(Wildcard.ID, ctx.World.Entity<UnkData4>().ID), ctx.World.Entity<Relation<Wildcard, UnkData4>>());
 		}
 
 		struct UnkData0 { int _moc; }
 		struct UnkData1 { }
 		struct UnkData2 { }
+		struct UnkData3 { }
+		struct UnkData4 { }
     }
 }
