@@ -26,7 +26,6 @@ internal static class Lookup
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
 	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
-	public static ulong Index => System.Threading.Interlocked.Read(ref _index);
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
@@ -238,11 +237,12 @@ internal static class Lookup
 		var type = obj.GetType();
 		var op = TermOp.DataAccess;
 		IRelation? relation = null;
+		object? subObj = null;
 
 		if (obj is IWith with)
 		{
 			op = TermOp.With;
-			type = with.Value.GetType();
+			subObj = with.Value;
 			if (with.Value is IRelation rel)
 			{
 				relation = rel;
@@ -251,7 +251,7 @@ internal static class Lookup
 		else if (obj is IWithout without)
 		{
 			op = TermOp.Without;
-			type = without.Value.GetType();
+			subObj = without.Value;
 			if (without.Value is IRelation rel)
 			{
 				relation = rel;
@@ -260,7 +260,7 @@ internal static class Lookup
 		else if (obj is IOptional optional)
 		{
 			op = TermOp.Optional;
-			type = optional.Value.GetType();
+			subObj = optional.Value;
 			if (optional.Value is IRelation rel)
 			{
 				relation = rel;
@@ -269,11 +269,6 @@ internal static class Lookup
 		else if (obj is IRelation rel)
 		{
 			relation = rel;
-		}
-
-		if (_unmatchedType.TryGetValue(type, out var id))
-		{
-			return new QueryTerm(id, op);
 		}
 
 		ulong idx;
@@ -313,12 +308,15 @@ internal static class Lookup
 		}
 		else
 		{
-			idx = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
+			if (subObj != null && _unmatchedType.TryGetValue(subObj.GetType(), out var id))
+				idx = id;
+		 	else
+				idx = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
 		}
 
 		var term = new QueryTerm(idx, op);
 		_typesConvertion.Add(type, term);
-		_unmatchedType.Add(type, term.Id);
+		_unmatchedType[subObj?.GetType() ?? type] = term.Id;
 		return term;
 	}
 
