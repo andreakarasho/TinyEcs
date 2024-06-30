@@ -241,6 +241,7 @@ internal static class Lookup
 		var type = obj.GetType();
 		var op = TermOp.DataAccess;
 		IRelation? relation = null;
+
 		if (obj is IWith with)
 		{
 			op = TermOp.With;
