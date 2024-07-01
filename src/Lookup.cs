@@ -24,6 +24,8 @@ internal static class Lookup
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
+	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
+
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
@@ -55,15 +57,11 @@ internal static class Lookup
 		return cmp;
 	}
 
-	private static QueryTerm GetTerm(Type type)
+	private static QueryTerm GetTerm(object obj)
 	{
-		var ok = _typesConvertion.TryGetValue(type, out var term);
-		if (!ok)
+		if (!_typesConvertion.TryGetValue(obj.GetType(), out var term))
 		{
-			EcsAssert.Assert(ok,
-				_componentInfosByType.ContainsKey(type)
-					? $"The tag '{type}' cannot be used as query data"
-					: $"Component '{type}' not found! Try to register it using 'world.Entity<{type}>()'");
+			term = CreateUnmatchedTerm(obj);
 		}
 		return term;
 	}
@@ -78,26 +76,28 @@ internal static class Lookup
 
 		static Component()
 		{
-			if (typeof(ITuple).IsAssignableFrom(typeof(T)))
+			if (typeof(IRelation).IsAssignableFrom(typeof(T)))
 			{
-				var tuple = (ITuple)default(T);
-				EcsAssert.Panic(tuple.Length == 2, "Relations must be composed by 2 arguments only.");
+				var relation = (IRelation)default(T);
 
-				var firstId = _componentInfosByType[tuple[0]!.GetType()].ID;
-				var secondId = _componentInfosByType[tuple[1]!.GetType()].ID;
+				var firstId = _componentInfosByType[relation.Action.GetType()].ID;
+				var secondId = _componentInfosByType[relation.Target.GetType()].ID;
 				var pairId = IDOp.Pair(firstId, secondId);
 
 				HashCode = pairId;
 				Size = 0;
 
-				if (_componentInfosByType.TryGetValue(tuple[1]!.GetType(), out var secondCmpInfo))
+				if (_componentInfosByType.TryGetValue(relation.Target.GetType(), out var secondCmpInfo))
 				{
 					Size = secondCmpInfo.Size;
 				}
 			}
 			else
 			{
-				HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
+				if (_unmatchedType.Remove(typeof(T), out var id))
+					HashCode = id;
+				else
+					HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
 			}
 
 			Value = new ComponentInfo(HashCode, Size);
@@ -105,14 +105,14 @@ internal static class Lookup
 
 			if (Size > 0)
 			{
-				_typesConvertion.Add(typeof(T), new (Value.ID, TermOp.DataAccess));
-				_typesConvertion.Add(typeof(Optional<T>), new (Value.ID, TermOp.Optional));
+				_typesConvertion[typeof(T)] = new (Value.ID, TermOp.DataAccess);
+				_typesConvertion[typeof(Optional<T>)] = new (Value.ID, TermOp.Optional);
 			}
 
-			_typesConvertion.Add(typeof(With<T>), new (Value.ID, TermOp.With));
-			_typesConvertion.Add(typeof(Without<T>), new (Value.ID, TermOp.Without));
+			_typesConvertion[typeof(With<T>)] = new (Value.ID, TermOp.With);
+			_typesConvertion[typeof(Without<T>)] = new (Value.ID, TermOp.Without);
 
-			_componentInfosByType.Add(typeof(T), Value);
+			_componentInfosByType[typeof(T)] = Value;
 
 			_components.Add(Value.ID, Value);
 		}
@@ -178,14 +178,13 @@ internal static class Lookup
 				continue;
 			}
 
-			var type = tuple[i]!.GetType();
 			if (!op.HasValue)
 			{
-				(var isValid, var errorMsg) = validate(type);
+				(var isValid, var errorMsg) = validate(tuple[i]!.GetType());
 				EcsAssert.Panic(isValid, errorMsg);
 			}
 
-			var term = GetTerm(type);
+			var term = GetTerm(tuple[i]!);
 			tmpTerms.Add(term);
 		}
 
@@ -229,7 +228,96 @@ internal static class Lookup
 			return;
 		}
 
-		EcsAssert.Panic(false, $"Type '{type}' is not registered. Register '{type}' using world.Entity<T>() or assign it to an entity.");
+		term = CreateUnmatchedTerm(default(T));
+		terms.Add(term);
+	}
+
+	private static QueryTerm CreateUnmatchedTerm(object obj)
+	{
+		var type = obj.GetType();
+		var op = TermOp.DataAccess;
+		IRelation? relation = null;
+		object? subObj = null;
+
+		if (obj is IWith with)
+		{
+			op = TermOp.With;
+			subObj = with.Value;
+			if (with.Value is IRelation rel)
+			{
+				relation = rel;
+			}
+		}
+		else if (obj is IWithout without)
+		{
+			op = TermOp.Without;
+			subObj = without.Value;
+			if (without.Value is IRelation rel)
+			{
+				relation = rel;
+			}
+		}
+		else if (obj is IOptional optional)
+		{
+			op = TermOp.Optional;
+			subObj = optional.Value;
+			if (optional.Value is IRelation rel)
+			{
+				relation = rel;
+			}
+		}
+		else if (obj is IRelation rel)
+		{
+			relation = rel;
+		}
+
+		ulong idx;
+		if (relation != null)
+		{
+			EcsID actionId;
+			EcsID targetId;
+
+			if (!_componentInfosByType.TryGetValue(relation.Action.GetType(), out var action))
+			{
+				if (!_unmatchedType.TryGetValue(relation.Action.GetType(), out actionId))
+				{
+					actionId = CreateUnmatchedTerm(relation.Action).Id;
+				}
+			}
+			else
+			{
+				actionId = action.ID;
+			}
+
+			if (!_componentInfosByType.TryGetValue(relation.Target.GetType(), out var target))
+			{
+				if (!_unmatchedType.TryGetValue(relation.Target.GetType(), out targetId))
+				{
+					targetId = CreateUnmatchedTerm(relation.Target).Id;
+				}
+			}
+			else
+			{
+				targetId = target.ID;
+			}
+
+			EcsAssert.Panic(actionId.IsValid, $"invalid action id {actionId.Value}");
+			EcsAssert.Panic(targetId.IsValid, $"invalid target id {targetId.Value}");
+
+			idx = IDOp.Pair(actionId, targetId);
+		}
+		else
+		{
+			if (_unmatchedType.TryGetValue(subObj?.GetType() ?? type, out var id))
+				idx = id;
+		 	else
+				idx = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
+		}
+
+		var term = new QueryTerm(idx, op);
+		_typesConvertion.Add(type, term);
+		_unmatchedType[subObj?.GetType() ?? type] = term.Id;
+		return term;
 	}
 
     internal static class Query<TQueryData, TQueryFilter>

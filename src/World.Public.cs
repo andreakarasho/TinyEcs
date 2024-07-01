@@ -29,7 +29,7 @@ public sealed partial class World
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
 		_ = Component<Wildcard>();
-		_ = Component<(Wildcard, Wildcard)>();
+		_ = Component<Relation<Wildcard, Wildcard>>();
 		_ = Component<Identifier>();
 		_ = Component<Name>();
 		_ = Component<ChildOf>();
@@ -349,7 +349,8 @@ public sealed partial class World
 		=> Exists(entity) && Has(entity, Component<T>().ID);
 
 	/// <summary>
-	/// Check if the entity has a component or tag.
+	/// Check if the entity has a component or tag.<br/>
+	/// Component or tag is an entity.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <param name="id"></param>

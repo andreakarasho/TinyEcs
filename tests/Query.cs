@@ -160,6 +160,20 @@ namespace TinyEcs.Tests
         }
 
 		[Fact]
+		public void Query_RelationalData()
+		{
+			using var ctx = new Context();
+
+			var ent = ctx.World.Entity()
+				.Set<NormalTag, FloatComponent>(new FloatComponent() { Value = 23f });
+
+			var query = ctx.World.Query<Relation<NormalTag, FloatComponent>>();
+			ref var single = ref query.Single<Relation<NormalTag, FloatComponent>>();
+
+			Assert.Equal(23f, single.Target.Value);
+		}
+
+		[Fact]
 		public void Query_Single()
 		{
 			using var ctx = new Context();
@@ -435,5 +449,36 @@ namespace TinyEcs.Tests
 			Assert.ThrowsAny<Exception>(ctx.World.Query<IntComponent, FloatComponent>);
 			Assert.ThrowsAny<Exception>(ctx.World.Query<(FloatComponent, (IntComponent, With<IntComponent>))>);
 		}
+
+		[Fact]
+		public void Query_Initialize_UnknownComponents()
+		{
+			using var ctx = new Context();
+
+			var query = ctx.World.Query<UnkData0, (With<UnkData0>, With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+			ctx.World.Entity()
+				.Add<UnkData2>()
+				.Set<UnkData1, UnkData0>(new UnkData0());
+			var ent = ctx.World.Entity()
+				.Set(new UnkData0())
+				.Set<UnkData1, UnkData0>(new UnkData0());
+
+			var resEnt = query.Single();
+			Assert.Equal(ent.ID, resEnt.ID);
+
+
+			var query2 = ctx.World.Query<Relation<UnkData3, UnkData4>>();
+			ent = ctx.World.Entity()
+				.Set<UnkData3, UnkData4>(new UnkData4());
+
+			resEnt = query2.Single();
+			Assert.Equal(ent.ID, resEnt.ID);
+		}
+
+		struct UnkData0 { int _moc; }
+		struct UnkData1 { }
+		struct UnkData2 { }
+		struct UnkData3 { }
+		struct UnkData4 { int _moc; }
     }
 }

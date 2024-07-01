@@ -1,6 +1,6 @@
 namespace TinyEcs;
 
-sealed class EntitySparseSet<T>
+internal sealed class EntitySparseSet<T>
 {
 	private struct Chunk
 	{
@@ -18,7 +18,7 @@ sealed class EntitySparseSet<T>
 	public EntitySparseSet()
 	{
 		_dense = new Vec<ulong>();
-		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
+		_chunks = Array.Empty<Chunk>();
 		_count = 1;
 		_maxID = ulong.MinValue;
 
@@ -118,15 +118,11 @@ sealed class EntitySparseSet<T>
 		if (dense != 0)
 		{
 			var count = _count;
-			if (dense == count)
-			{
-				_count++;
-			}
-			else if (dense > count)
+			if (dense >= count)
 			{
 				SwapDense(ref chunk, dense, count);
 				dense = count;
-				_count++;
+				_count += 1;
 			}
 
 			EcsAssert.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
@@ -284,7 +280,7 @@ sealed class EntitySparseSet<T>
 		return new SparseSetEnumerator(this);
 	}
 
-	internal ref struct SparseSetEnumerator
+	public ref struct SparseSetEnumerator
 	{
 		private readonly EntitySparseSet<T> _sparseSet;
 		private int _index;

@@ -1,5 +1,8 @@
 namespace TinyEcs;
 
+/// <summary>
+/// A wrapper around an EcsID which contains shortcuts methods.
+/// </summary>
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
 #endif
@@ -9,8 +12,13 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {
     public static readonly EntityView Invalid = new(null!, 0);
 
+
+	/// <inheritdoc cref="EcsID"/>
     public readonly EcsID ID;
+
+	/// <inheritdoc cref="TinyEcs.World"/>
     public readonly World World;
+
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal EntityView(World world, EcsID id)
@@ -19,11 +27,8 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
         ID = id;
     }
 
-	/// <summary>
-	/// Generation count
-	/// </summary>
+	/// <inheritdoc cref="EcsID.Generation"/>
 	public readonly int Generation => ID.Generation;
-	//public int RealID => ID.ID;
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

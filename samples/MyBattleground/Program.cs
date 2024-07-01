@@ -8,6 +8,9 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
+ecs.Query<Optional<Position>>();
+ecs.Query<(Position, Velocity), (With<Networked>, Without<Likes>, Or<(With<Position>, Without<ManagedData>)>)>();
+
 ecs.Entity<PlayerTag>().Add<Networked>();
 ecs.Entity<Likes>();
 ecs.Entity<Dogs>();
@@ -42,8 +45,8 @@ ecs.Entity().Set(new Velocity());
 
 
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
-ecs.Entity().Set(new Position() {X = 3});
-
+var xx = ecs.Entity().Set(new Position() {X = 3});
+ref var qq = ref xx.Get<Position>();
 
 var query = ecs.Query<(Position, Velocity)>();
 
