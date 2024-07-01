@@ -455,7 +455,7 @@ namespace TinyEcs.Tests
 		{
 			using var ctx = new Context();
 
-			var query = ctx.World.Query<UnkData0, (With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+			var query = ctx.World.Query<UnkData0, (With<UnkData0>, With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
 			ctx.World.Entity()
 				.Add<UnkData2>()
 				.Set<UnkData1, UnkData0>(new UnkData0());
