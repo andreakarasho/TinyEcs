@@ -18,7 +18,7 @@ internal sealed class EntitySparseSet<T>
 	public EntitySparseSet()
 	{
 		_dense = new Vec<ulong>();
-		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
+		_chunks = Array.Empty<Chunk>();
 		_count = 1;
 		_maxID = ulong.MinValue;
 
@@ -124,16 +124,6 @@ internal sealed class EntitySparseSet<T>
 				dense = count;
 				_count += 1;
 			}
-			// if (dense == count)
-			// {
-			// 	_count++;
-			// }
-			// else if (dense > count)
-			// {
-			// 	SwapDense(ref chunk, dense, count);
-			// 	dense = count;
-			// 	_count++;
-			// }
 
 			EcsAssert.Assert(gen == 0 || _dense[dense] == (outerIdx | gen));
 		}
