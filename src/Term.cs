@@ -46,24 +46,44 @@ public enum TermOp : byte
 
 public interface IFilter { }
 
+/// <summary>
+/// Used in query filters to find entities with the corrisponding component/tag.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct With<T> : IWith where T : struct
 {
 	static readonly T _value = default;
 
 	object IWith.Value => _value;
 }
+
+/// <summary>
+/// Used in query filters to find entities without the corrisponding component/tag.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct Without<T> : IWithout where T : struct
 {
 	static readonly T _value = default;
 
 	object IWithout.Value => _value;
 }
+
+/// <summary>
+/// Used in query filters to find entities with or without the corrisponding component/tag.<br/>
+/// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct Optional<T> : IOptional where T : struct
 {
 	static readonly T _value = default;
 
 	object IOptional.Value => _value;
 }
+
+/// <summary>
+/// Used in query filters to find entities with any of the corrisponding components/tag.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
@@ -72,6 +92,11 @@ public readonly struct AtLeast<T> : ITuple, IAtLeast, IFilter where T : struct, 
 
 	public int Length => _value.Length;
 }
+
+/// <summary>
+/// Used in query filters to find entities with exactly the corrisponding components/tag.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
@@ -80,6 +105,11 @@ public readonly struct Exactly<T> : ITuple, IExactly, IFilter where T : struct, 
 
 	public int Length => _value.Length;
 }
+
+/// <summary>
+/// Used in query filters to find entities with none the corrisponding components/tag.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct None<T> : ITuple, INone, IFilter where T : struct, ITuple
 {
 	static readonly ITuple _value = default(T)!;
@@ -88,6 +118,11 @@ public readonly struct None<T> : ITuple, INone, IFilter where T : struct, ITuple
 
 	public int Length => _value.Length;
 }
+
+/// <summary>
+/// Used in query filters to accomplish the 'or' logic.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public readonly struct Or<T> : IOr, IFilter where T : struct, ITuple
 {
 	static readonly T _value = default;
