@@ -1,5 +1,8 @@
 namespace TinyEcs;
 
+/// <summary>
+/// The ecs entity rappresentation which is a wrapper around an ulong
+/// </summary>
 [StructLayout(LayoutKind.Explicit)]
 public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable<EcsID>, IComparable<EcsID>
 {
@@ -7,12 +10,22 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 	internal EcsID(ulong value) => Value = value;
 
 
+	/// <summary>
+	/// ID + Generation
+	/// </summary>
 	[FieldOffset(0)]
 	public readonly ulong Value;
 
+	/// <summary>
+	/// ID only
+	/// </summary>
 	[FieldOffset(0)]
 	internal readonly int ID;
 
+	/// <summary>
+	/// Generation count.<br/>
+	/// This number rappresent how many times the real ID has been recycled.
+	/// </summary>
 	[FieldOffset(4)]
 	internal readonly int Generation;
 
