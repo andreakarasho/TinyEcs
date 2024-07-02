@@ -319,7 +319,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						return "";
 					}
 
-					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == Lookup.Component<T{j}>.HashCode," +
+					var str = $"EcsAssert.Panic(ComponentComparer.CompareTerms(null!, query.TermsAccess[{j}].Id, Lookup.Component<T{j}>.HashCode) == 0," +
 							$"\"param at {j} doesn't match the QueryData sign\");";
 
 					return str;
