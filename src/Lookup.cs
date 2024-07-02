@@ -80,17 +80,33 @@ internal static class Lookup
 			{
 				var relation = (IRelation)default(T);
 
-				var firstId = _componentInfosByType[relation.Action.GetType()].ID;
-				var secondId = _componentInfosByType[relation.Target.GetType()].ID;
-				var pairId = IDOp.Pair(firstId, secondId);
+				EcsID actionId = 0;
+				EcsID targeId = 0;
+				var actionType = relation.Action.GetType();
+				var targetType = relation.Target.GetType();
+
+				if (!_componentInfosByType.TryGetValue(actionType, out var actionCmp))
+				{
+					actionId = _unmatchedType[actionType];
+				}
+				else
+				{
+					actionId = actionCmp.ID;
+				}
+
+				if (!_componentInfosByType.TryGetValue(targetType, out var targetCmp))
+				{
+					targeId = _unmatchedType[targetType];
+				}
+				else
+				{
+					targeId = targetCmp.ID;
+				}
+
+				var pairId = IDOp.Pair(actionId, targeId);
 
 				HashCode = pairId;
-				Size = 0;
-
-				if (_componentInfosByType.TryGetValue(relation.Target.GetType(), out var secondCmpInfo))
-				{
-					Size = secondCmpInfo.Size;
-				}
+				Size = Math.Max(actionCmp.Size, targetCmp.Size);
 			}
 			else
 			{
