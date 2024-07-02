@@ -32,8 +32,8 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 
 	public readonly bool IsValid => Value != 0;
 	public readonly bool IsPair => IDOp.IsPair(Value);
-	public readonly EcsID First => IDOp.GetPairFirst(Value);
-	public readonly EcsID Second => IDOp.GetPairSecond(Value);
+	public readonly EcsID First => IsPair ? IDOp.GetPairFirst(Value) : 0;
+	public readonly EcsID Second => IsPair ? IDOp.GetPairSecond(Value) : 0;
 	public readonly (EcsID, EcsID) Pair => (First, Second);
 
 
