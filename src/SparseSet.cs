@@ -87,6 +87,20 @@ internal sealed class EntitySparseSet<T>
 		return ref chunk.Values[realID];
 	}
 
+	public ulong GetNoGeneration(ulong outerIdx)
+	{
+		ref var chunk = ref GetChunk((int)outerIdx >> 12);
+		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
+			return 0;
+
+		var realID = (int)outerIdx & 0xFFF;
+		var dense = chunk.Sparse[realID];
+		if (dense == 0 || dense >= _count)
+			return 0;
+
+		return _dense[dense];
+	}
+
 	public bool Contains(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunkOrCreate((int)outerIdx >> 12);

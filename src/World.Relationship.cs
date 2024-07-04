@@ -326,7 +326,7 @@ partial class World
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
 		var pair = IDOp.Pair(action, Wildcard.ID);
-		return FindPair(entity, pair, index).Item2;
+		return GetAlive(FindPair(entity, pair, index).Item2);
 	}
 
 	/// <summary>
@@ -339,7 +339,7 @@ partial class World
 	public EcsID Action<TTarget>(EcsID entity, int index = 0)
 		where TTarget : struct
 	{
-		return Action(entity, Component<TTarget>().ID, index);
+		return GetAlive(Action(entity, Component<TTarget>().ID, index));
 	}
 
 	/// <summary>
@@ -353,7 +353,7 @@ partial class World
 	public EcsID Action(EcsID entity, EcsID target, int index = 0)
 	{
 		var pair = IDOp.Pair(Wildcard.ID, target);
-		return FindPair(entity, pair, index).Item1;
+		return GetAlive(FindPair(entity, pair, index).Item1);
 	}
 
 	/// <summary>

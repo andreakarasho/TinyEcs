@@ -89,6 +89,27 @@
 		}
 
 		[Fact]
+		public void Relation_GetAlive()
+		{
+			using var ctx = new Context();
+
+			var a0 = ctx.World.Entity();
+			var b0 = ctx.World.Entity();
+			a0.AddChild(b0);
+			a0.Delete();
+
+			var a1 = ctx.World.Entity();
+			var b1 = ctx.World.Entity();
+			a1.AddChild(b1);
+
+			var target = b1.Target<ChildOf>();
+			var targetRaw = IDOp.GetPairSecond(IDOp.Pair(ctx.World.Entity<ChildOf>(), a1));
+
+			Assert.True(ctx.World.Exists(target));
+			Assert.False(ctx.World.Exists(targetRaw));
+		}
+
+		[Fact]
 		public void Relation_ComponentWildcard()
 		{
 			using var ctx = new Context();

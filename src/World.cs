@@ -69,6 +69,24 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
+	public EcsID GetAlive(EcsID id)
+	{
+		if (Exists(id))
+			return id;
+
+		if ((uint)id != id)
+			return 0;
+
+		var current = _entities.GetNoGeneration(id);
+		if (current == 0)
+			return 0;
+
+		if (!Exists(current))
+			return 0;
+
+		return current;
+	}
+
 	private void DetachComponent(EcsID entity, EcsID id)
 	{
 		ref var record = ref GetRecord(entity);
