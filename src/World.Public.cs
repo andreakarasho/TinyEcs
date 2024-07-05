@@ -396,8 +396,9 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="terms"></param>
 	/// <returns></returns>
-	public Query QueryRaw(params ReadOnlySpan<IQueryTerm> terms)
+	public Query QueryRaw(params Span<IQueryTerm> terms)
 	{
+		terms.Sort();
 		return GetQuery(
 			Hashing.Calculate(terms),
 			terms,

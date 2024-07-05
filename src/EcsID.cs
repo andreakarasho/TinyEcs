@@ -51,5 +51,10 @@ public readonly struct EcsID : IEquatable<ulong>, IComparable<ulong>, IEquatable
 
 	public readonly override bool Equals(object? obj) => obj is EcsID ent && Equals(ent);
 	public readonly override int GetHashCode() => Value.GetHashCode();
-	public readonly override string ToString() => Value.ToString();
+	public readonly override string ToString()
+	{
+		if (IsPair)
+			return $"({First}, {Second}) | {Value}";
+		return $"[{ID} - @{Generation} | {Value}]";
+	}
 }
