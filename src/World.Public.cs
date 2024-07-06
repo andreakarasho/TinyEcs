@@ -229,7 +229,7 @@ public sealed partial class World
     {
 		if (entity.IsPair)
         {
-            return _entities.Contains(entity.First) && _entities.Contains(entity.Second);
+            return GetAlive(entity.First).IsValid && GetAlive(entity.Second).IsValid;
         }
 
         return _entities.Contains(entity);
