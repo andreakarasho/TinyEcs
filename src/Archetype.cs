@@ -65,7 +65,7 @@ public ref struct ChunkEnumerator
 
 public sealed class Archetype
 {
-    const int ARCHETYPE_INITIAL_CAPACITY = 16;
+    const int ARCHETYPE_INITIAL_CAPACITY = 4;
 
     private ArchetypeChunk[] _chunks;
     internal const int CHUNK_THRESHOLD = 0xFFF;
