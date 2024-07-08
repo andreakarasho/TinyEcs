@@ -50,7 +50,7 @@ public interface IFilter { }
 /// Used in query filters to find entities with the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct With<T> : IWith where T : struct
+public readonly struct With<T> : IFilter, IWith where T : struct
 {
 	static readonly T _value = default;
 
@@ -61,7 +61,7 @@ public readonly struct With<T> : IWith where T : struct
 /// Used in query filters to find entities without the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct Without<T> : IWithout where T : struct
+public readonly struct Without<T> : IFilter, IWithout where T : struct
 {
 	static readonly T _value = default;
 
