@@ -263,5 +263,50 @@
 			Assert.True(carl.Has(tradeWith, bob));
 			Assert.True(bob.Has(tradeWith, carl));
 		}
+
+		[Fact]
+		public void Relation_OnDelete_Delete()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity();
+			var relation = ctx.World.Entity().Add<OnDelete, Delete>();
+			var b = ctx.World.Entity();
+
+			a.Add(relation, b);
+			b.Delete();
+
+			Assert.False(a.Exists());
+			Assert.False(b.Exists());
+		}
+
+		[Fact]
+		public void Relation_OnDelete_Unset()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity();
+			var relation = ctx.World.Entity().Add<OnDelete, Unset>();
+			var b = ctx.World.Entity();
+
+			a.Add(relation, b);
+			b.Delete();
+
+			Assert.True(a.Exists());
+			Assert.False(a.Has(relation, b));
+		}
+
+		[Fact]
+		public void Relation_OnDelete_Panic()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity();
+			var relation = ctx.World.Entity().Add<OnDelete, Panic>();
+			var b = ctx.World.Entity();
+
+			a.Add(relation, b);
+			Assert.ThrowsAny<Exception>(() => b.Delete());
+		}
     }
 }

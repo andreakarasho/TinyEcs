@@ -8,6 +8,10 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
+
+var asd = ecs.Entity().Set(new Position());
+var name = ecs.Entity<Position>().Name();
+
 ecs.Query<Optional<Position>>();
 ecs.Query<(Position, Velocity), (With<Networked>, Without<Likes>, Or<(With<Position>, Without<ManagedData>)>)>();
 
@@ -21,16 +25,15 @@ ecs.Entity<Velocity>().Add<Networked>();
 var root = ecs.Entity();
 var child = ecs.Entity();
 
-var child2 = ecs.Entity();
-child2.Set(root, child);
 
-if (child2.Has(root, child))
-{
+var eqiupId = ecs.Entity<EquippedItem>().Add<Defaults.OnDelete, Defaults.Unset>();
 
-}
-
-child.Add<EquippedItem>(root);
 child.Set(new EquippedItem() { Layer = 3 }, root);
+child.Set(new EquippedItem() { Layer = 3 }, root);
+
+// root.AddChild(child);
+root.Delete();
+
 ref var equip2 = ref ecs.Get<EquippedItem>(child);
 ref var equip = ref ecs.Get<EquippedItem>(child, root);
 equip.Layer = 8;

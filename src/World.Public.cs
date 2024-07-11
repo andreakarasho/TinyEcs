@@ -34,6 +34,11 @@ public sealed partial class World
 		_ = Component<Name>();
 		_ = Component<ChildOf>();
 
+		_ = Component<OnDelete>();
+		_ = Component<Delete>();
+		_ = Component<Panic>();
+		_ = Component<Unset>();
+
 		setCommon(Entity<DoNotDelete>(), nameof(DoNotDelete));
 		setCommon(Entity<Unique>(), nameof(Unique));
 		setCommon(Entity<Symmetric>(), nameof(Symmetric));
@@ -41,7 +46,13 @@ public sealed partial class World
 		setCommon(Entity<Identifier>(), nameof(Identifier));
 		setCommon(Entity<Name>(), nameof(Name));
 		setCommon(Entity<ChildOf>(), nameof(ChildOf))
+			.Add<OnDelete, Delete>()
 			.Add<Unique>();
+		setCommon(Entity<OnDelete>(), nameof(OnDelete))
+			.Add<Unique>();
+		setCommon(Entity<Delete>(), nameof(Delete));
+		setCommon(Entity<Panic>(), nameof(Panic));
+		setCommon(Entity<Unset>(), nameof(Unset));
 
 		static EntityView setCommon(EntityView entity, string name)
 			=> entity.Add<DoNotDelete>().Set<Identifier, Name>(new (name));
@@ -208,11 +219,20 @@ public sealed partial class World
 			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
 			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
 			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
-			QueryRaw(term0).Each(static (EntityView child) => child.Delete());
-			QueryRaw(term1).Each(static (EntityView child) => child.Delete());
+
+			QueryFilterDelegateWithEntity onQuery = (EntityView child) => {
+				var action = Action(child.ID, entity);
+				if (Has<OnDelete, Delete>(action))
+					child.Delete();
+				if (Has<OnDelete, Unset>(action))
+					child.Unset(action, entity);
+				if (Has<OnDelete, Panic>(action))
+					EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
+			};
+			QueryRaw(term0).Each(onQuery);
+			QueryRaw(term1).Each(onQuery);
 
 			ref var record = ref GetRecord(entity);
-
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);
 

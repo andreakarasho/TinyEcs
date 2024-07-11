@@ -78,4 +78,70 @@ public static class Defaults
 	/// </example>
     /// </summary>
 	public struct DoNotDelete { }
+
+	/// <summary>
+    /// Built-in tag.<br/>Cleanup rule<para/>
+	/// <example>
+	/// 	Example:
+	/// <code>
+	/// 	var a = world.Entity();
+	///		var relation = world.Entity().Add&lt;OnDelete, Delete&gt;();
+	///		var b = world.Entity();
+	///
+	///		a.Add(relation, b);
+	///		b.Delete(); // --> a get deleted too
+	/// </code>
+	/// </example>
+    /// </summary>
+	public struct OnDelete { }
+
+
+	/// <summary>
+    /// Built-in tag.<br/>Cleanup rule for Delete<para/>
+	/// <example>
+	/// 	Example:
+	/// <code>
+	/// 	var a = world.Entity();
+	///		var relation = world.Entity().Add&lt;OnDelete, Delete&gt;();
+	///		var b = world.Entity();
+	///
+	///		a.Add(relation, b);
+	///		b.Delete(); // --> 'a' get deleted too
+	/// </code>
+	/// </example>
+    /// </summary>
+	public struct Delete { }
+
+	/// <summary>
+    /// Built-in tag.<br/>Cleanup rule for Delete<para/>
+	/// <example>
+	/// 	Example:
+	/// <code>
+	/// 	var a = world.Entity();
+	///		var relation = world.Entity().Add&lt;OnDelete, Panic&gt;();
+	///		var b = world.Entity();
+	///
+	///		a.Add(relation, b);
+	///		b.Delete(); // --> runtime error!
+	/// </code>
+	/// </example>
+    /// </summary>
+	public struct Panic { }
+
+
+	/// <summary>
+    /// Built-in tag.<br/>Cleanup rule for Delete<para/>
+	/// <example>
+	/// 	Example:
+	/// <code>
+	/// 	var a = world.Entity();
+	///		var relation = world.Entity().Add&lt;OnDelete, Unset&gt;();
+	///		var b = world.Entity();
+	///
+	///		a.Add(relation, b);
+	///		b.Delete(); // --> relation get removed from 'a'
+	/// </code>
+	/// </example>
+    /// </summary>
+	public struct Unset { }
 }
