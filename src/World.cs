@@ -99,8 +99,15 @@ public sealed partial class World : IDisposable
 		var cmp = Lookup.GetComponent(id, -1);
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
-		var newSign = oldArch.Components.Remove(cmp, _comparer);
-		EcsAssert.Assert(newSign.Length < oldArch.Components.Length, "bad");
+		BeginDeferred();
+		var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.Components.Length - 1);
+		var newSign = tmp.AsSpan(0, oldArch.Components.Length - 1);
+
+		for (int i = 0, j = 0; i < oldArch.Components.Length; ++i)
+		{
+			if (oldArch.Components[i].ID != id)
+				newSign[j++] = oldArch.Components[i];
+		}
 
 		ref var newArch = ref GetArchetype(newSign, true);
 		if (newArch == null)
@@ -109,8 +116,11 @@ public sealed partial class World : IDisposable
 			Archetypes.Add(newArch);
 		}
 
+		ArrayPool<ComponentInfo>.Shared.Return(tmp);
+
 		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
         record.Archetype = newArch!;
+		EndDeferred();
 	}
 
 	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size)
@@ -123,8 +133,13 @@ public sealed partial class World : IDisposable
             return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
 
 		var cmp = Lookup.GetComponent(id, size);
-		var newSign = oldArch.Components.Add(cmp).Sort(_comparer);
-		EcsAssert.Assert(newSign.Length > oldArch.Components.Length, "bad");
+
+		BeginDeferred();
+		var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.Components.Length + 1);
+		var newSign = tmp.AsSpan(0, oldArch.Components.Length + 1);
+		oldArch.Components.CopyTo(newSign);
+		newSign[^1] = cmp;
+		newSign.Sort(_comparer);
 
 		ref var newArch = ref GetArchetype(newSign, true);
 		if (newArch == null)
@@ -133,17 +148,20 @@ public sealed partial class World : IDisposable
 			Archetypes.Add(newArch);
 		}
 
+		ArrayPool<ComponentInfo>.Shared.Return(tmp);
+
 		record.Row = record.Archetype.MoveEntity(newArch, record.Row);
         record.Archetype = newArch!;
+		EndDeferred();
 
 		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
 
 		return (size > 0 ? record.GetChunk().RawComponentData(newArch.GetComponentIndex(cmp.ID)) : null, record.Row);
 	}
 
-    private ref Archetype? GetArchetype(ImmutableArray<ComponentInfo> components, bool create)
+    private ref Archetype? GetArchetype(ReadOnlySpan<ComponentInfo> components, bool create)
 	{
-		var hash = Hashing.Calculate(components.AsSpan());
+		var hash = Hashing.Calculate(components);
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 		if (create)
 		{
@@ -169,22 +187,10 @@ public sealed partial class World : IDisposable
 			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size)!);
 		}
 
-		BeginDeferred();
         ref var record = ref GetRecord(entity);
-        var column = record.Archetype.GetComponentIndex(cmpId);
-
-		if (column < 0)
-		{
-			EndDeferred();
-			return ref Unsafe.NullRef<T>();
-		}
-
+		var column = record.Archetype.GetComponentIndex(cmpId);
         ref var chunk = ref record.GetChunk();
-		var raw = chunk.RawComponentData(column)!;
-		ref var array = ref Unsafe.As<Array, T[]>(ref raw);
-		ref var value = ref array[record.Row & Archetype.CHUNK_THRESHOLD];
-		EndDeferred();
-
+		ref var value = ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & Archetype.CHUNK_THRESHOLD);
 		return ref value;
     }
 
@@ -244,5 +250,6 @@ struct EcsRecord
 	public Archetype Archetype;
     public int Row;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 }

@@ -6,7 +6,6 @@ namespace TinyEcs;
 #if NET5_0_OR_GREATER
 [SkipLocalsInit]
 #endif
-[StructLayout(LayoutKind.Sequential)]
 [DebuggerDisplay("ID: {ID}")]
 public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 {

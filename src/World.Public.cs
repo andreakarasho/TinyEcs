@@ -18,7 +18,7 @@ public sealed partial class World
         _comparer = new ComponentComparer(this);
         _archRoot = new Archetype(
             this,
-            ImmutableArray<ComponentInfo>.Empty,
+            [],
             _comparer
         );
 
@@ -283,9 +283,7 @@ public sealed partial class World
 			return;
 		}
 
-		BeginDeferred();
         _ = AttachComponent(entity, cmp.ID, cmp.Size);
-		EndDeferred();
     }
 
 	/// <summary>
@@ -306,11 +304,9 @@ public sealed partial class World
 			return;
 		}
 
-		BeginDeferred();
         (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size);
         ref var array = ref Unsafe.As<Array, T[]>(ref raw!);
         array[row & Archetype.CHUNK_THRESHOLD] = component;
-		EndDeferred();
 	}
 
 	/// <summary>
@@ -327,9 +323,7 @@ public sealed partial class World
 			return;
 		}
 
-		BeginDeferred();
 		_ = AttachComponent(entity, id, 0);
-		EndDeferred();
 	}
 
 	/// <summary>
@@ -354,9 +348,7 @@ public sealed partial class World
 			return;
 		}
 
-		BeginDeferred();
 		DetachComponent(entity, id);
-		EndDeferred();
 	}
 
 	/// <summary>

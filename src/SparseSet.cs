@@ -46,7 +46,6 @@ internal sealed class EntitySparseSet<T>
 			id = NewID(count);
 		}
 
-
 		ref var chunk = ref GetChunk((int)id >> 12);
 
 		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
@@ -214,11 +213,11 @@ internal sealed class EntitySparseSet<T>
 
 		_maxID = uint.MinValue;
 
-		for (int i = 0; i < _chunks.Length; ++i)
-		{
-			ref var chunk = ref _chunks[i];
-			chunk = ref Unsafe.NullRef<Chunk>();
-		}
+		// for (int i = 0; i < _chunks.Length; ++i)
+		// {
+		// 	ref var chunk = ref _chunks[i];
+		// 	chunk = ref Unsafe.NullRef<Chunk>();
+		// }
 
 		_chunks = Array.Empty<EntitySparseSet<T>.Chunk>();
 		_dense.Clear();
@@ -350,7 +349,11 @@ internal sealed class Vec<T> where T : unmanaged
 		if (Count >= Capacity)
 			EnsureCapacity(Capacity * 2);
 
-		return ref _data[Count++];
+#if NET
+		return ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data), Count++);
+#else
+		return ref Unsafe.Add(ref MemoryMarshal.GetReference(_data.AsSpan()), Count++);
+#endif
 	}
 
 	public void EnsureCapacity(int newCapacity)

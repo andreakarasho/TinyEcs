@@ -6,8 +6,6 @@ public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
 	private WorldState _worldState = new () { State = WorldStateTypes.Normal, Locks = 0 };
-	private readonly object _worldStateLock = new object();
-
 
 	public bool IsDeferred => _worldState.State == WorldStateTypes.Deferred;
 
@@ -15,27 +13,26 @@ public sealed partial class World
 
 	public void BeginDeferred()
 	{
-		lock (_worldStateLock)
-		{
-			_worldState.State = WorldStateTypes.Deferred;
-			_worldState.Locks += 1;
-		}
+		if (_worldState.State == WorldStateTypes.Merging)
+			return;
+
+		_worldState.State = WorldStateTypes.Deferred;
+		Interlocked.Increment(ref _worldState.Locks);
 	}
 
 	public void EndDeferred()
 	{
-		lock (_worldStateLock)
+		if (_worldState.State == WorldStateTypes.Merging)
+			return;
+
+		Interlocked.Decrement(ref _worldState.Locks);
+		EcsAssert.Assert(_worldState.Locks >= 0, "begin/end deferred calls mismatch");
+
+		if (_worldState.Locks == 0)
 		{
-			_worldState.Locks -= 1;
-
-			EcsAssert.Assert(_worldState.Locks >= 0, "begin/end deferred calls mismatch");
-
-			if (_worldState.Locks == 0)
-			{
-				_worldState.State = WorldStateTypes.Merging;
-				Merge();
-				_worldState.State = WorldStateTypes.Normal;
-			}
+			_worldState.State = WorldStateTypes.Merging;
+			Merge();
+			_worldState.State = WorldStateTypes.Normal;
 		}
 	}
 
@@ -130,7 +127,7 @@ public sealed partial class World
 
 	private void Merge()
 	{
-		while (_operations.TryDequeue(out var op))
+		while (!_operations.IsEmpty && _operations.TryDequeue(out var op))
 		{
 			switch (op.Op)
 			{

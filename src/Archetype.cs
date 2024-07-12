@@ -80,7 +80,7 @@ public sealed class Archetype
 
 	internal Archetype(
         World world,
-        ImmutableArray<ComponentInfo> components,
+        ReadOnlySpan<ComponentInfo> components,
         ComponentComparer comparer
     )
     {
@@ -88,9 +88,9 @@ public sealed class Archetype
         _world = world;
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
-        Components = components;
-		Pairs = components.Where(x => x.ID.IsPair).ToImmutableArray();
-		Id = Hashing.Calculate(components.AsSpan());
+        Components = [ .. components];
+		Pairs = Components.Where(x => x.ID.IsPair).ToImmutableArray();
+		Id = Hashing.Calculate(Components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
        	_lookup = new Dictionary<ulong, int>(/*_comparer*/);
 
@@ -99,7 +99,7 @@ public sealed class Archetype
 			_lookup.Add(components[i].ID, i);
 		}
 
-		_ids = components.Select(s => s.ID).ToArray();
+		_ids = Components.Select(s => s.ID).ToArray();
     }
 
     public World World => _world;
@@ -165,14 +165,16 @@ public sealed class Archetype
 
 		ref var chunk = ref GetChunk(row);
 		ref var lastChunk = ref GetChunk(_count);
-		var removed = chunk.EntityAt(row);
+		var removed = chunk.EntityAt(row).ID;
 
 		if (row < _count)
 		{
-			EcsAssert.Assert(lastChunk.EntityAt(_count) != EntityView.Invalid, "Entity is invalid. This should never happen!");
+			EcsAssert.Assert(lastChunk.EntityAt(_count).ID.IsValid, "Entity is invalid. This should never happen!");
 
 			chunk.EntityAt(row) = lastChunk.EntityAt(_count);
 
+			var srcIdx = _count & CHUNK_THRESHOLD;
+			var dstIdx = row & CHUNK_THRESHOLD;
 			for (var i = 0; i < Components.Length; ++i)
 			{
 				if (Components[i].Size <= 0)
@@ -181,22 +183,22 @@ public sealed class Archetype
 				var arrayToBeRemoved = chunk.RawComponentData(i);
 				var lastValidArray = lastChunk.RawComponentData(i);
 
-				Array.Copy(lastValidArray, _count & CHUNK_THRESHOLD, arrayToBeRemoved, row & CHUNK_THRESHOLD, 1);
+				Array.Copy(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1);
 			}
 
 			_world.GetRecord(chunk.EntityAt(row)).Row = row;
 		}
 
-		lastChunk.EntityAt(_count) = EntityView.Invalid;
-
-		for (var i = 0; i < Components.Length; ++i)
-		{
-			if (Components[i].Size <= 0)
-				continue;
-
-			var lastValidArray = lastChunk.RawComponentData(i);
-			Array.Clear(lastValidArray, _count & CHUNK_THRESHOLD, 1);
-		}
+		// lastChunk.EntityAt(_count) = EntityView.Invalid;
+		//
+		// for (var i = 0; i < Components.Length; ++i)
+		// {
+		// 	if (Components[i].Size <= 0)
+		// 		continue;
+		//
+		// 	var lastValidArray = lastChunk.RawComponentData(i);
+		// 	Array.Clear(lastValidArray, _count & CHUNK_THRESHOLD, 1);
+		// }
 
 		lastChunk.Count -= 1;
 		EcsAssert.Assert(lastChunk.Count >= 0, "Negative chunk count");
@@ -211,7 +213,7 @@ public sealed class Archetype
 
 	internal Archetype InsertVertex(
         Archetype left,
-        ImmutableArray<ComponentInfo> components,
+        ReadOnlySpan<ComponentInfo> components,
         EcsID id
     )
     {

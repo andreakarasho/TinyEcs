@@ -58,9 +58,7 @@ partial class World
 				return;
 			}
 
-			BeginDeferred();
 			_ = AttachComponent(target, pairId, 0);
-			EndDeferred();
 		}
 	}
 
@@ -127,9 +125,7 @@ partial class World
 			return;
 		}
 
-		BeginDeferred();
 		_ = AttachComponent(entity, pairId, act.Size);
-		EndDeferred();
 	}
 
 	/// <summary>
@@ -158,11 +154,9 @@ partial class World
 			return;
 		}
 
-		BeginDeferred();
 		(var array, var row) = AttachComponent(entity, pairId, act.Size);
 		ref var cmpArr = ref Unsafe.As<Array, TAction[]>(ref array!);
 		cmpArr[row & Archetype.CHUNK_THRESHOLD] = action;
-		EndDeferred();
 	}
 
 	/// <summary>
@@ -186,9 +180,7 @@ partial class World
 			return;
 		}
 
-		BeginDeferred();
 		_ = AttachComponent(entity, pairId, 0);
-		EndDeferred();
 	}
 
 	/// <summary>

@@ -20,10 +20,10 @@ internal static class Lookup
 {
 	private static ulong _index = 0;
 
-	private static readonly Dictionary<EcsID, Func<int, Array>> _arrayCreator = new ();
+	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
-	private static readonly Dictionary<EcsID, ComponentInfo> _components = new ();
+	private static readonly Dictionary<ulong, ComponentInfo> _components = new ();
 	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
 
