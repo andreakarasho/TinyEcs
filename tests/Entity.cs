@@ -21,7 +21,7 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			var entity = ctx.World.Entity(4000);
-			Assert.Equal(4000ul, entity.ID.Value);
+			Assert.Equal(4000ul, entity.ID);
 		}
 
         [Fact]

@@ -144,7 +144,7 @@ public sealed partial class World
 		ref readonly var cmp = ref Component<T>();
 
 		var entity = Entity(cmp.ID);
-		if (entity.ID.IsPair)
+		if (entity.ID.IsPair())
 			return entity;
 
 		var name = Lookup.Component<T>.Name;
@@ -247,9 +247,9 @@ public sealed partial class World
 	/// <returns></returns>
     public bool Exists(EcsID entity)
     {
-		if (entity.IsPair)
+		if (entity.IsPair())
         {
-            return GetAlive(entity.First).IsValid && GetAlive(entity.Second).IsValid;
+            return GetAlive(entity.First()).IsValid() && GetAlive(entity.Second()).IsValid();
         }
 
         return _entities.Contains(entity);
@@ -373,7 +373,7 @@ public sealed partial class World
         var has = record.Archetype.GetComponentIndex(id) >= 0;
 		if (has) return true;
 
-		if (id.IsPair)
+		if (id.IsPair())
 		{
 			(var a, var b) = FindPair(entity, id);
 

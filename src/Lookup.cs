@@ -32,9 +32,9 @@ internal static class Lookup
 		if (_arrayCreator.TryGetValue(hashcode, out var fn))
 			return fn(count);
 
-		if (hashcode.IsPair)
+		if (hashcode.IsPair())
 		{
-			(var first, var second) = hashcode.Pair;
+			(var first, var second) = hashcode.Pair();
 			if (_arrayCreator.TryGetValue(first, out fn) && _components.TryGetValue(first, out var cmp) && cmp.Size > 0)
 				return fn(count);
 			if (_arrayCreator.TryGetValue(second, out fn) && _components.TryGetValue(second, out cmp) && cmp.Size > 0)
@@ -317,8 +317,8 @@ internal static class Lookup
 				targetId = target.ID;
 			}
 
-			EcsAssert.Panic(actionId.IsValid, $"invalid action id {actionId.Value}");
-			EcsAssert.Panic(targetId.IsValid, $"invalid target id {targetId.Value}");
+			EcsAssert.Panic(actionId.IsValid(), $"invalid action id {actionId}");
+			EcsAssert.Panic(targetId.IsValid(), $"invalid target id {targetId}");
 
 			idx = IDOp.Pair(actionId, targetId);
 		}

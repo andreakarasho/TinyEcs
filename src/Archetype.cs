@@ -12,7 +12,11 @@ public struct ArchetypeChunk
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref EntityView EntityAt(int row)
-		=> ref Entities[row & Archetype.CHUNK_THRESHOLD];
+#if NET
+		=> ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Entities), row & Archetype.CHUNK_THRESHOLD);
+#else
+		=> ref Unsafe.Add(ref MemoryMarshal.GetReference(Entities.AsSpan()), row & Archetype.CHUNK_THRESHOLD);
+#endif
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
@@ -24,7 +28,7 @@ public struct ArchetypeChunk
 #if NET
 		return ref MemoryMarshal.GetArrayDataReference(array);
 #else
-		return ref array[0];
+		return ref MemoryMarshal.GetReference(array.AsSpan());
 #endif
 	}
 
@@ -89,7 +93,7 @@ public sealed class Archetype
         _edgesLeft = new List<EcsEdge>();
         _edgesRight = new List<EcsEdge>();
         Components = [ .. components];
-		Pairs = Components.Where(x => x.ID.IsPair).ToImmutableArray();
+		Pairs = Components.Where(x => x.ID.IsPair()).ToImmutableArray();
 		Id = Hashing.Calculate(Components.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
        	_lookup = new Dictionary<ulong, int>(/*_comparer*/);
@@ -141,7 +145,7 @@ public sealed class Archetype
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int GetComponentIndex(EcsID id)
 	{
-		return _lookup.TryGetValue(id.Value, out var v) ? v : -1;
+		return _lookup.TryGetValue(id, out var v) ? v : -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -169,7 +173,7 @@ public sealed class Archetype
 
 		if (row < _count)
 		{
-			EcsAssert.Assert(lastChunk.EntityAt(_count).ID.IsValid, "Entity is invalid. This should never happen!");
+			EcsAssert.Assert(lastChunk.EntityAt(_count).ID.IsValid(), "Entity is invalid. This should never happen!");
 
 			chunk.EntityAt(row) = lastChunk.EntityAt(_count);
 

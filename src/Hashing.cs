@@ -17,7 +17,7 @@ internal static class Hashing
 		var hc = (ulong)terms.Length;
 		foreach (ref readonly var val in terms)
 			hc = unchecked(hc * FIXED + (ulong)val.Id + (byte)val.Op +
-				(val is ContainerQueryTerm container ? container.Terms.Aggregate(0Ul, static (a, b) => a + b.Id.Value) : 0));
+				(val is ContainerQueryTerm container ? container.Terms.Aggregate(0Ul, static (a, b) => a + b.Id) : 0));
 		return hc;
 	}
 

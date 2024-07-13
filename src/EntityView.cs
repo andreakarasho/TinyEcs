@@ -27,7 +27,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     }
 
 	/// <inheritdoc cref="EcsID.Generation"/>
-	public readonly int Generation => ID.Generation;
+	public readonly int Generation => ID.Generation();
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

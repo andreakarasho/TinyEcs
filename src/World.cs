@@ -49,10 +49,10 @@ public sealed partial class World : IDisposable
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
-		EcsAssert.Panic(lookup.ID.IsPair || lookup.ID < _maxCmpId,
+		EcsAssert.Panic(lookup.ID.IsPair() || lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		if (!lookup.ID.IsPair && !Exists(lookup.ID))
+		if (!lookup.ID.IsPair() && !Exists(lookup.ID))
 		{
 			var e = Entity(lookup.ID)
 				.Set(lookup);

@@ -5,34 +5,32 @@ namespace TinyEcs;
 public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
-	private WorldState _worldState = new () { State = WorldStateTypes.Normal, Locks = 0 };
+	private WorldState _worldState = new () { Locks = 0 };
 
-	public bool IsDeferred => _worldState.State == WorldStateTypes.Deferred;
+	public bool IsDeferred => _worldState.Locks > 0;
 
 
 
 	public void BeginDeferred()
 	{
-		if (_worldState.State == WorldStateTypes.Merging)
+		if (_worldState.Locks < 0)
 			return;
 
-		_worldState.State = WorldStateTypes.Deferred;
-		Interlocked.Increment(ref _worldState.Locks);
+		_worldState.Locks += 1;
 	}
 
 	public void EndDeferred()
 	{
-		if (_worldState.State == WorldStateTypes.Merging)
+		if (_worldState.Locks < 0)
 			return;
 
-		Interlocked.Decrement(ref _worldState.Locks);
-		EcsAssert.Assert(_worldState.Locks >= 0, "begin/end deferred calls mismatch");
+		_worldState.Locks -= 1;
 
 		if (_worldState.Locks == 0)
 		{
-			_worldState.State = WorldStateTypes.Merging;
+			_worldState.Locks = -1;
 			Merge();
-			_worldState.State = WorldStateTypes.Normal;
+			_worldState.Locks = 0;
 		}
 	}
 
@@ -137,11 +135,9 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 				{
-					if (op.ComponentInfo.ID.IsPair)
+					if (op.ComponentInfo.ID.IsPair())
 					{
-						var first = op.ComponentInfo.ID.First;
-						var second = op.ComponentInfo.ID.Second;
-
+						(var first, var second) = op.ComponentInfo.ID.Pair();
 						CheckUnique(op.Entity, first);
 						CheckSymmetric(op.Entity, first, second);
 					}
@@ -163,16 +159,9 @@ public sealed partial class World
 
 	}
 
-	enum WorldStateTypes
-	{
-		Normal,
-		Deferred,
-		Merging
-	}
 
 	struct WorldState
 	{
-		public WorldStateTypes State;
 		public int Locks;
 	}
 

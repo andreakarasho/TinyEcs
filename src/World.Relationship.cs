@@ -358,22 +358,22 @@ partial class World
 	/// <returns></returns>
 	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
 	{
-		if (!pair.IsPair)
-			return EntityView.Invalid.ID.Pair;
+		if (!pair.IsPair())
+			return EntityView.Invalid.ID.Pair();
 
 		ref var record = ref GetRecord(entity);
 
 		var found = 0;
 		foreach (ref readonly var cmp in record.Archetype.Pairs.AsSpan())
 		{
-			if (_comparer.Compare(cmp.ID.Value, pair.Value) != 0) continue;
+			if (_comparer.Compare(cmp.ID, pair) != 0) continue;
 
 			if (found++ < index) continue;
 
-			return cmp.ID.Pair;
+			return cmp.ID.Pair();
 		}
 
-		return EntityView.Invalid.ID.Pair;
+		return EntityView.Invalid.ID.Pair();
 	}
 }
 
@@ -550,7 +550,7 @@ public static class NameEx
 			return entity.Get<Identifier, Name>().Value;
 		}
 
-		return entity.ID.Value.ToString();
+		return entity.ID.ToString();
 	}
 }
 
