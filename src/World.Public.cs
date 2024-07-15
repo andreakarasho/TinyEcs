@@ -153,7 +153,8 @@ public sealed partial class World
 
 		if (_namesToEntity.TryGetValue(name, out var id))
 		{
-			EcsAssert.Panic(entity.ID == id, $"You must declare the component before the entity '{id}' named '{name}'");
+			if (entity.ID != id)
+				EcsAssert.Panic(false, $"You must declare the component before the entity '{id}' named '{name}'");
 		}
 		else
 		{
