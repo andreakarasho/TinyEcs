@@ -383,18 +383,19 @@ public sealed class Archetype
 
 	private static void CopyFast(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize)
 	{
-#if NET
-		ref var srcB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(src), (uint)(srcIdx * elementSize));
-		ref var dstB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(dst), (uint)(dstIdx * elementSize));
-
-		// var span0 = MemoryMarshal.CreateSpan(ref srcB, count * elementSize);
-		// var span1 = MemoryMarshal.CreateSpan(ref dstB, count * elementSize);
-		// span0.CopyTo(span1);
-
-		Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
-#else
 		Array.Copy(src, srcIdx, dst, dstIdx, count);
-#endif
+// #if NET
+// 		ref var srcB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(src), (uint)(srcIdx * elementSize));
+// 		ref var dstB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(dst), (uint)(dstIdx * elementSize));
+
+// 		var span0 = MemoryMarshal.CreateSpan(ref srcB, count * elementSize);
+// 		var span1 = MemoryMarshal.CreateSpan(ref dstB, count * elementSize);
+// 		span0.CopyTo(span1);
+
+// 		// Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
+// #else
+// 		Array.Copy(src, srcIdx, dst, dstIdx, count);
+// #endif
 	}
 }
 
