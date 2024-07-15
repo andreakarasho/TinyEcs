@@ -219,7 +219,7 @@ public sealed partial class World : IDisposable
 		}
 		else
 		{
-			arch = ref _typeIndex.Get(hash)!;
+			arch = ref _typeIndex.TryGet(hash, out _)!;
 		}
 
 		return ref arch;

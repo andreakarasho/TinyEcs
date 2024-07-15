@@ -240,9 +240,10 @@ namespace Microsoft.Collections.Extensions
             return ref AddKey(key, bucketIndex);
         }
 
-		public ref TValue GetOrNullRef(TKey key)
+		public ref TValue GetOrNullRef(TKey key, out bool exists)
         {
             if (key == null) ThrowHelper.ThrowKeyArgumentNullException();
+            exists = true;
             Entry[] entries = _entries;
             int collisionCount = 0;
             int bucketIndex = key.GetHashCode() & (_buckets.Length - 1);
@@ -260,6 +261,7 @@ namespace Microsoft.Collections.Extensions
                 collisionCount++;
             }
 
+            exists = false;
 			return ref Unsafe.NullRef<TValue>();
         }
 

@@ -414,20 +414,21 @@ internal sealed class FastIdLookup<TValue>
 		}
 		return ref val!;
 	}
-
-	public ref TValue Get(EcsID id)
-	{
-		if (id < COMPONENT_MAX_ID)
-			return ref _fastLookupAdded[id] ? ref _fastLookup[id] : ref Unsafe.NullRef<TValue>();
-
-		return ref _slowLookup.GetOrNullRef(id);
-	}
-
 	public ref TValue TryGet(EcsID id, out bool exists)
 	{
-		ref var val = ref Get(id);
-		exists = !Unsafe.IsNullRef(ref val) && val != null;
-		return ref val!;
+		if (id < COMPONENT_MAX_ID)
+		{
+			if (_fastLookupAdded[id])
+			{
+				exists = true;
+				return ref _fastLookup[id];
+			}
+
+			exists = false;
+			return ref Unsafe.NullRef<TValue>();
+		}
+
+		return ref _slowLookup.GetOrNullRef(id, out exists);
 	}
 
 	public void Clear()
