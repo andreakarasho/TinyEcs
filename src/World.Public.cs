@@ -83,6 +83,7 @@ public sealed partial class World
         _entities.Clear();
         _archRoot.Clear();
         _typeIndex.Clear();
+		_cacheIndex.Clear();
 
 		foreach (var query in _cachedQueries.Values)
 			query.Dispose();
@@ -437,8 +438,9 @@ public sealed partial class World
 	public Query QueryRaw(params Span<IQueryTerm> terms)
 	{
 		terms.Sort();
+		var roll = IQueryTerm.GetHash(terms);
 		return GetQuery(
-			Hashing.Calculate(terms),
+			roll.Hash,
 			terms,
 			static (world, terms) => new Query(world, terms));
 	}

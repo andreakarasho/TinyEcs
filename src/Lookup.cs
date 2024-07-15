@@ -363,7 +363,8 @@ internal static class Lookup
 			Terms = list.ToImmutableArray();
 
 			list.Sort();
-			Hash = Hashing.Calculate(list.ToArray());
+			var roll = IQueryTerm.GetHash(CollectionsMarshal.AsSpan(list));
+			Hash = roll.Hash;
 		}
 	}
 
@@ -382,7 +383,8 @@ internal static class Lookup
 			Terms = list.ToImmutableArray();
 
 			list.Sort();
-			Hash = Hashing.Calculate(list.ToArray());
+			var roll = IQueryTerm.GetHash(CollectionsMarshal.AsSpan(list));
+			Hash = roll.Hash;
 		}
 	}
 }
@@ -409,8 +411,8 @@ internal sealed class FastIdLookup<TValue>
 		ref var val = ref TryGet(id, out exists);
 		if (!exists)
 		{
-			AddToFast(id, ref val);
 			val = ref _slowLookup.GetOrAddValueRef(id, out _)!;
+			val = ref AddToFast(id, ref val)!;
 		}
 		return ref val!;
 	}
@@ -438,13 +440,18 @@ internal sealed class FastIdLookup<TValue>
 		_slowLookup.Clear();
 	}
 
-	private void AddToFast(EcsID id, ref TValue value)
+	private ref TValue AddToFast(EcsID id, ref TValue value)
 	{
 		if (id < COMPONENT_MAX_ID)
 		{
-			_fastLookup[id] = value;
+			ref var p = ref _fastLookup[id];
+			p = value;
 			_fastLookupAdded[id] = true;
+
+			return ref p!;
 		}
+
+		return ref value;
 	}
 
 	public IEnumerator<KeyValuePair<EcsID, TValue>> GetEnumerator()

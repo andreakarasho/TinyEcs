@@ -66,8 +66,10 @@ public sealed class QueryBuilder
 	public Query Build()
 	{
 		var terms = _components.ToArray();
+		var roll = IQueryTerm.GetHash(terms.AsSpan());
+
 		return _world.GetQuery(
-			Hashing.Calculate(terms),
+			roll.Hash,
 			terms,
 			static (world, terms) => new Query(world, terms)
 		);
@@ -120,9 +122,10 @@ public partial class Query : IDisposable
 			.OfType<ContainerQueryTerm>()
 			.Where(s => s.Op == TermOp.Or))
 		{
+			var roll = IQueryTerm.GetHash(or.Terms.AsSpan());
 			subQuery = World.GetQuery
 			(
-				Hashing.Calculate(or.Terms.AsSpan()),
+				roll.Hash,
 				[.. or.Terms],
 				static (world, terms) => new Query(world, terms)
 			);
@@ -151,10 +154,10 @@ public partial class Query : IDisposable
 			return;
 
 		var ids = _terms
-			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
-			.Select(s => s.Id);
+			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly);
 
-		var first = World.FindArchetype(Hashing.Calculate(ids));
+		var roll = IQueryTerm.GetHash(ids);
+		var first = World.FindArchetype(roll.Hash);
 		if (first == null)
 			return;
 

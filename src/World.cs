@@ -16,6 +16,7 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
 	private readonly object _newEntLock = new object();
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
+	private readonly FastIdLookup<EcsID> _cacheIndex = new ();
 
 
 	internal Archetype Root => _archRoot;
@@ -48,16 +49,21 @@ public sealed partial class World : IDisposable
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
-		EcsAssert.Panic(lookup.ID.IsPair() || lookup.ID < _maxCmpId,
+		var isPair = lookup.ID.IsPair();
+		EcsAssert.Panic(isPair || lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		if (!lookup.ID.IsPair() && !Exists(lookup.ID))
+		if (!isPair /*!Exists(lookup.ID)*/)
 		{
-			var e = Entity(lookup.ID)
-				.Set(lookup);
+			ref var idx = ref _cacheIndex.GetOrCreate(lookup.ID, out var exists);
+
+			if (!exists)
+			{
+				idx = Entity(lookup.ID).Set(lookup).ID;
+			}
 		}
 
-        return ref lookup;
+		return ref lookup;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -105,12 +111,15 @@ public sealed partial class World : IDisposable
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1));
 
 		BeginDeferred();
-		var remove = oldArch._remove;
+		var roll = oldArch.Rolling;
+		roll.Remove(id);
+
 		Archetype? found = null;
-		ref var edge = ref remove.TryGet(id, out var exists);
+		ref var arch = ref _typeIndex.TryGet(roll.Hash, out var exists);
+
 		if (exists)
 		{
-			found = edge.Archetype;
+			found = arch;
 		}
 
 		if (!exists)
@@ -168,12 +177,16 @@ public sealed partial class World : IDisposable
 		}
 
 		BeginDeferred();
-		var add = oldArch._add;
+		var roll = oldArch.Rolling;
+		roll.Add(id);
+
 		Archetype? found = null;
-		ref var edge = ref add.TryGet(id, out var exists);
+
+		ref var archFound = ref _typeIndex.TryGet(roll.Hash, out var exists);
+
 		if (exists)
 		{
-			found = edge.Archetype;
+			found = archFound;
 		}
 
 		if (!exists)
@@ -210,16 +223,19 @@ public sealed partial class World : IDisposable
 
     private ref Archetype? GetArchetype(ReadOnlySpan<ComponentInfo> components, bool create)
 	{
-		var hash = Hashing.Calculate(components);
+		var rolling = new RollingHash();
+		foreach (ref readonly var cmp in components)
+			rolling.Add(cmp.ID);
+
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 
 		if (create)
 		{
-			arch = ref _typeIndex.GetOrCreate(hash, out _)!;
+			arch = ref _typeIndex.GetOrCreate(rolling.Hash, out _)!;
 		}
 		else
 		{
-			arch = ref _typeIndex.TryGet(hash, out _)!;
+			arch = ref _typeIndex.TryGet(rolling.Hash, out _)!;
 		}
 
 		return ref arch;

@@ -74,6 +74,7 @@ public sealed class Archetype
     private ArchetypeChunk[] _chunks;
     internal const int CHUNK_THRESHOLD = 0xFFF;
 	internal const int CHUNK_SIZE = 4096;
+	private const int CHUNK_LOG2 = 12;
 
     private readonly World _world;
     private readonly ComponentComparer _comparer;
@@ -97,12 +98,15 @@ public sealed class Archetype
         Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
 
-		Id = Hashing.Calculate(All.AsSpan());
+		// Id = Hashing.Calculate(All.AsSpan());
         _chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
+
+		_rolling = new RollingHash();
        	for (var i = 0; i < sign.Length; ++i)
 		{
 			_lookup.Add(sign[i].ID, i);
+			_rolling.Add(sign[i].ID);
 		}
 
 		_ids = All.Select(s => s.ID).ToArray();
@@ -111,10 +115,13 @@ public sealed class Archetype
 		_remove = new FastIdLookup<EcsEdge>();
     }
 
+	private RollingHash _rolling;
+
     public World World => _world;
     public int Count => _count;
     public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
-	public ulong Id { get; }
+	public ulong Id => _rolling.Hash;
+	public RollingHash Rolling => _rolling;
     internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
@@ -123,7 +130,7 @@ public sealed class Archetype
     // [SkipLocalsInit]
     internal ref ArchetypeChunk GetChunk(int index)
     {
-		index /= CHUNK_SIZE;
+		index >>= CHUNK_LOG2;
 
 	    if (index >= _chunks.Length)
 		    Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
@@ -196,10 +203,10 @@ public sealed class Archetype
 				var arrayToBeRemoved = chunk.RawComponentData(i);
 				var lastValidArray = lastChunk.RawComponentData(i);
 
-				Array.Copy(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1);
+				CopyFast(lastValidArray!, srcIdx, arrayToBeRemoved!, dstIdx, 1, All[i].Size);
 			}
 
-			_world.GetRecord(chunk.EntityAt(row)).Row = row;
+			_world.GetRecord(chunk.EntityAt(row).ID).Row = row;
 		}
 
 		// lastChunk.EntityAt(_count) = EntityView.Invalid;
@@ -259,14 +266,15 @@ public sealed class Archetype
 				++y;
 			}
 
-			if (All[i].Size <= 0)
+			var size = All[i].Size;
+			if (size <= 0)
 				continue;
 
 			var fromArray = fromChunk.RawComponentData(i);
 			var toArray = toChunk.RawComponentData(j);
 
 			// copy the moved entity to the target archetype
-			Array.Copy(fromArray, oldRow & CHUNK_THRESHOLD, toArray, newRow & CHUNK_THRESHOLD, 1);
+			CopyFast(fromArray!, oldRow & CHUNK_THRESHOLD, toArray!, newRow & CHUNK_THRESHOLD, 1, size);
 		}
 
 		_ = RemoveByRow(oldRow);
@@ -372,6 +380,22 @@ public sealed class Archetype
             }
         }
     }
+
+	private static void CopyFast(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize)
+	{
+#if NET
+		ref var srcB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(src), (uint)(srcIdx * elementSize));
+		ref var dstB = ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(dst), (uint)(dstIdx * elementSize));
+
+		// var span0 = MemoryMarshal.CreateSpan(ref srcB, count * elementSize);
+		// var span1 = MemoryMarshal.CreateSpan(ref dstB, count * elementSize);
+		// span0.CopyTo(span1);
+
+		Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
+#else
+		Array.Copy(src, srcIdx, dst, dstIdx, count);
+#endif
+	}
 }
 
 struct EcsEdge
