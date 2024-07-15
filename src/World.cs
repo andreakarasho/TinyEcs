@@ -10,13 +10,12 @@ public sealed partial class World : IDisposable
 
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new();
-    private readonly DictionarySlim<ulong, Archetype> _typeIndex = new();
+    private readonly FastIdLookup<Archetype> _typeIndex = new();
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
-	private readonly Dictionary<ulong, Query> _cachedQueries = new ();
+	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
 	private readonly object _newEntLock = new object();
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
-
 
 
 	internal Archetype Root => _archRoot;
@@ -96,32 +95,54 @@ public sealed partial class World : IDisposable
 		if (oldArch.GetComponentIndex(id) < 0)
             return;
 
-		var cmp = Lookup.GetComponent(id, -1);
-		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
+		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1));
 
 		BeginDeferred();
-		var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.Components.Length - 1);
-		var newSign = tmp.AsSpan(0, oldArch.Components.Length - 1);
-
-		for (int i = 0, j = 0; i < oldArch.Components.Length; ++i)
+		var remove = oldArch._remove;
+		Archetype? found = null;
+		ref var edge = ref remove.TryGet(id, out var exists);
+		if (exists)
 		{
-			if (oldArch.Components[i].ID != id)
-				newSign[j++] = oldArch.Components[i];
+			found = edge.Archetype;
 		}
 
-		ref var newArch = ref GetArchetype(newSign, true);
-		if (newArch == null)
+		if (!exists)
 		{
-			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
-			Archetypes.Add(newArch);
+			var count = oldArch.All.Length - 1;
+			if (count <= 0)
+			{
+				found = _archRoot;
+			}
+			else
+			{
+				var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.All.Length - 1);
+				var newSign = tmp.AsSpan(0, oldArch.All.Length - 1);
+
+				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
+				{
+					if (oldArch.All[i].ID != id)
+						newSign[j++] = oldArch.All[i];
+				}
+
+				ref var newArch = ref GetArchetype(newSign, true);
+				if (newArch == null)
+				{
+					newArch = _archRoot.InsertVertex(oldArch, newSign, id);
+					Archetypes.Add(newArch);
+				}
+
+				ArrayPool<ComponentInfo>.Shared.Return(tmp);
+
+				found = newArch;
+			}
 		}
 
-		ArrayPool<ComponentInfo>.Shared.Return(tmp);
-
-		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
-        record.Archetype = newArch!;
+		record.Row = record.Archetype.MoveEntity(found!, record.Row);
+        record.Archetype = found!;
 		EndDeferred();
 	}
+
+	static readonly Comparison<ComponentInfo> _comparison = (a, b) => ComponentComparer.CompareTerms(null!, a.ID, b.ID);
 
 	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size)
 	{
@@ -132,48 +153,59 @@ public sealed partial class World : IDisposable
 		if (index >= 0)
             return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
 
-		var cmp = Lookup.GetComponent(id, size);
-
 		BeginDeferred();
-		var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.Components.Length + 1);
-		var newSign = tmp.AsSpan(0, oldArch.Components.Length + 1);
-		oldArch.Components.CopyTo(newSign);
-		newSign[^1] = cmp;
-		newSign.Sort(_comparer);
-
-		ref var newArch = ref GetArchetype(newSign, true);
-		if (newArch == null)
+		var add = oldArch._add;
+		Archetype? found = null;
+		ref var edge = ref add.TryGet(id, out var exists);
+		if (exists)
 		{
-			newArch = _archRoot.InsertVertex(oldArch, newSign, cmp.ID);
-			Archetypes.Add(newArch);
+			found = edge.Archetype;
 		}
 
-		ArrayPool<ComponentInfo>.Shared.Return(tmp);
+		if (!exists)
+		{
+			var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.All.Length + 1);
+			var newSign = tmp.AsSpan(0, oldArch.All.Length + 1);
+			oldArch.All.CopyTo(newSign);
+			newSign[^1] = new ComponentInfo(id, size);
+#if NET
+			MemoryExtensions.Sort(newSign, _comparison);
+#else
+			newSign.Sort(_comparer);
+#endif
 
-		record.Row = record.Archetype.MoveEntity(newArch, record.Row);
-        record.Archetype = newArch!;
+			ref var newArch = ref GetArchetype(newSign, true);
+			if (newArch == null)
+			{
+				newArch = _archRoot.InsertVertex(oldArch, newSign, id);
+				Archetypes.Add(newArch);
+			}
+
+			ArrayPool<ComponentInfo>.Shared.Return(tmp);
+			found = newArch;
+		}
+
+		record.Row = record.Archetype.MoveEntity(found!, record.Row);
+        record.Archetype = found!;
 		EndDeferred();
 
-		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), cmp);
+		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, size));
 
-		return (size > 0 ? record.GetChunk().RawComponentData(newArch.GetComponentIndex(cmp.ID)) : null, record.Row);
+		return (size > 0 ? record.GetChunk().RawComponentData(found!.GetComponentIndex(id)) : null, record.Row);
 	}
 
     private ref Archetype? GetArchetype(ReadOnlySpan<ComponentInfo> components, bool create)
 	{
 		var hash = Hashing.Calculate(components);
 		ref var arch = ref Unsafe.NullRef<Archetype>();
+
 		if (create)
 		{
-			arch = ref _typeIndex.GetOrAddValueRef(hash, out var exists)!;
-			if (!exists)
-			{
-
-			}
+			arch = ref _typeIndex.GetOrCreate(hash, out _)!;
 		}
-		else if (_typeIndex.TryGetValue(hash, out arch))
+		else
 		{
-
+			arch = ref _typeIndex.Get(hash)!;
 		}
 
 		return ref arch;
@@ -194,7 +226,7 @@ public sealed partial class World : IDisposable
 		return ref value;
     }
 
-	internal Query GetQuery(ulong hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
+	internal Query GetQuery(EcsID hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
 	{
 		if (!_cachedQueries.TryGetValue(hash, out var query))
 		{
@@ -207,13 +239,11 @@ public sealed partial class World : IDisposable
 		return query;
 	}
 
-	internal Archetype? FindArchetype(ulong hash)
+	internal Archetype? FindArchetype(EcsID hash)
 	{
-		if (!_typeIndex.TryGetValue(hash, out var arch))
-		{
-			arch = _archRoot;
-		}
-
+		ref var arch = ref _typeIndex.TryGet(hash, out var exists);
+		if (!exists)
+			return _archRoot;
 		return arch;
 	}
 
@@ -230,17 +260,13 @@ public sealed partial class World : IDisposable
 			matched.Add(root);
 		}
 
-		var span = CollectionsMarshal.AsSpan(root._edgesRight);
-		if (span.IsEmpty)
+		var add = root._add;
+		if (add.Count <= 0)
 			return;
 
-		ref var start = ref MemoryMarshal.GetReference(span);
-		ref var end = ref Unsafe.Add(ref start, span.Length);
-
-		while (Unsafe.IsAddressLessThan(ref start, ref end))
+		foreach ((var id, var edge) in add)
 		{
-			MatchArchetypes(start.Archetype, terms, matched);
-			start = ref Unsafe.Add(ref start, 1);
+			MatchArchetypes(edge.Archetype, terms, matched);
 		}
 	}
 }

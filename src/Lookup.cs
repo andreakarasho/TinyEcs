@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
 
@@ -20,41 +21,49 @@ internal static class Lookup
 {
 	private static ulong _index = 0;
 
-	private static readonly Dictionary<ulong, Func<int, Array>> _arrayCreator = new ();
+	private static readonly FastIdLookup<Func<int, Array>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
-	private static readonly Dictionary<ulong, ComponentInfo> _components = new ();
+	private static readonly FastIdLookup<ComponentInfo> _components = new ();
 	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
-
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
-		if (_arrayCreator.TryGetValue(hashcode, out var fn))
+		ref var fn = ref _arrayCreator.TryGet(hashcode, out var exists);
+		if (exists)
 			return fn(count);
 
 		if (hashcode.IsPair())
 		{
 			(var first, var second) = hashcode.Pair();
-			if (_arrayCreator.TryGetValue(first, out fn) && _components.TryGetValue(first, out var cmp) && cmp.Size > 0)
-				return fn(count);
-			if (_arrayCreator.TryGetValue(second, out fn) && _components.TryGetValue(second, out cmp) && cmp.Size > 0)
-				return fn(count);
+
+			fn = ref _arrayCreator.TryGet(first, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(first, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
+
+			fn = ref _arrayCreator.TryGet(second, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(second, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
 		}
 
 		EcsAssert.Panic(false, $"component not found with hashcode {hashcode}");
 		return null;
 	}
 
-	public static ComponentInfo GetComponent(EcsID id, int size)
+	public static ref ComponentInfo GetComponent(EcsID id, int size)
 	{
-		if (!_components.TryGetValue(id, out var cmp))
-		{
-			cmp = new ComponentInfo(id, size);
-			// TODO: i don't want to store non generics stuff
-			//_components.Add(id, cmp);
-		}
-
-		return cmp;
+		ref var result = ref _components.TryGet(id, out var exists);
+		if (exists)
+			return ref result;
+		return ref Unsafe.NullRef<ComponentInfo>();
 	}
 
 	private static QueryTerm GetTerm(object obj)
@@ -129,7 +138,6 @@ internal static class Lookup
 			_typesConvertion[typeof(Without<T>)] = new (Value.ID, TermOp.Without);
 
 			_componentInfosByType[typeof(T)] = Value;
-
 			_components.Add(Value.ID, Value);
 		}
 
@@ -377,4 +385,67 @@ internal static class Lookup
 			Hash = Hashing.Calculate(list.ToArray());
 		}
 	}
+}
+
+internal sealed class FastIdLookup<TValue>
+{
+	const int COMPONENT_MAX_ID = 1024;
+
+
+	private readonly DictionarySlim<EcsID, TValue> _slowLookup = new();
+	private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
+	private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
+
+	public int Count => _slowLookup.Count;
+
+	public void Add(EcsID id, TValue value)
+	{
+		AddToFast(id, ref value);
+		_slowLookup.GetOrAddValueRef(id, out _) = value;
+	}
+
+	public ref TValue GetOrCreate(EcsID id, out bool exists)
+	{
+		ref var val = ref TryGet(id, out exists);
+		if (!exists)
+		{
+			AddToFast(id, ref val);
+			val = ref _slowLookup.GetOrAddValueRef(id, out _)!;
+		}
+		return ref val!;
+	}
+
+	public ref TValue Get(EcsID id)
+	{
+		if (id < COMPONENT_MAX_ID)
+			return ref _fastLookupAdded[id] ? ref _fastLookup[id] : ref Unsafe.NullRef<TValue>();
+
+		return ref _slowLookup.GetOrNullRef(id);
+	}
+
+	public ref TValue TryGet(EcsID id, out bool exists)
+	{
+		ref var val = ref Get(id);
+		exists = !Unsafe.IsNullRef(ref val) && val != null;
+		return ref val!;
+	}
+
+	public void Clear()
+	{
+		Array.Clear(_fastLookup, 0, _fastLookup.Length);
+		_fastLookupAdded.AsSpan().Fill(false);
+		_slowLookup.Clear();
+	}
+
+	private void AddToFast(EcsID id, ref TValue value)
+	{
+		if (id < COMPONENT_MAX_ID)
+		{
+			_fastLookup[id] = value;
+			_fastLookupAdded[id] = true;
+		}
+	}
+
+	public IEnumerator<KeyValuePair<EcsID, TValue>> GetEnumerator()
+		=> _slowLookup.GetEnumerator();
 }

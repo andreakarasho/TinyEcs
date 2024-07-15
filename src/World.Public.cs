@@ -263,7 +263,7 @@ public sealed partial class World
     public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
     {
         ref var record = ref GetRecord(id);
-        return record.Archetype.Components.AsSpan();
+        return record.Archetype.All.AsSpan();
     }
 
 	/// <summary>
