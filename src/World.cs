@@ -95,6 +95,13 @@ public sealed partial class World : IDisposable
 		if (oldArch.GetComponentIndex(id) < 0)
             return;
 
+		if (id.IsPair())
+		{
+			(var first, var second) = id.Pair();
+			GetRecord(GetAlive(first)).Flags &= ~EntityFlags.IsAction;
+			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
+		}
+
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1));
 
 		BeginDeferred();
@@ -152,6 +159,13 @@ public sealed partial class World : IDisposable
 		var index = oldArch.GetComponentIndex(id);
 		if (index >= 0)
             return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
+
+		if (id.IsPair())
+		{
+			(var first, var second) = id.Pair();
+			GetRecord(GetAlive(first)).Flags |= EntityFlags.IsAction;
+			GetRecord(GetAlive(second)).Flags |= EntityFlags.IsTarget;
+		}
 
 		BeginDeferred();
 		var add = oldArch._add;
@@ -275,7 +289,17 @@ struct EcsRecord
 {
 	public Archetype Archetype;
     public int Row;
+	public EntityFlags Flags;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
+}
+
+[Flags]
+enum EntityFlags
+{
+	None = 1 << 0,
+	IsAction = 1 << 1,
+	IsTarget = 1 << 2,
+	IsUnique = 1 << 3
 }

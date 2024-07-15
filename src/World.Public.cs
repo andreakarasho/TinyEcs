@@ -122,6 +122,7 @@ public sealed partial class World
 
 				record.Archetype = _archRoot;
 				record.Row = _archRoot.Add(id);
+				record.Flags = EntityFlags.None;
 
 				ent = new EntityView(this, id);
 				OnEntityCreated?.Invoke(ent);
@@ -157,6 +158,7 @@ public sealed partial class World
 		{
 			_namesToEntity[name] = entity;
 			entity.Set<Identifier, Name>(new (name));
+			GetRecord(entity).Flags |= EntityFlags.IsUnique;
 		}
 
 		return entity;
@@ -183,6 +185,7 @@ public sealed partial class World
 			entity = Entity();
 			_namesToEntity[name] = entity;
 			entity.Set<Identifier, Name>(new (name));
+			GetRecord(entity).Flags |= EntityFlags.IsUnique;
 		}
 
 		return entity;
@@ -207,35 +210,58 @@ public sealed partial class World
 		{
 			OnEntityDeleted?.Invoke(new (this, entity));
 
+			ref var record = ref GetRecord(entity);
+
 			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
 
-			if (Has<Identifier, Name>(entity))
+			if (record.Flags != EntityFlags.None)
 			{
-				var name = Get<Identifier, Name>(entity).Value;
-				_namesToEntity.Remove(name, out var _);
+				if ((record.Flags & EntityFlags.IsUnique) != 0)
+				{
+					if (Has<Identifier, Name>(entity))
+					{
+						var name = Get<Identifier, Name>(entity).Value;
+						_namesToEntity.Remove(name, out var _);
+					}
+				}
+
+				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
+				{
+					world.BeginDeferred();
+					foreach (var arch in world.QueryRaw(terms))
+					{
+						foreach (ref readonly var chunk in arch)
+						{
+							foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
+							{
+								var action = world.Action(child.ID, entity);
+								if (world.Has<OnDelete, Delete>(action))
+									child.Delete();
+								if (world.Has<OnDelete, Unset>(action))
+									child.Unset(action, entity);
+								if (world.Has<OnDelete, Panic>(action))
+									EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
+							}
+						}
+					}
+					world.EndDeferred();
+				}
+
+				if ((record.Flags & EntityFlags.IsAction) != 0)
+				{
+					var term = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
+					applyDeleteRules(this, entity, term);
+				}
+
+				if ((record.Flags & EntityFlags.IsTarget) != 0)
+				{
+					var term = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
+					applyDeleteRules(this, entity, term);
+				}
 			}
 
-			// TODO: check for this interesting flecs approach:
-			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
-			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
-			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
-
-			QueryFilterDelegateWithEntity onQuery = (EntityView child) => {
-				var action = Action(child.ID, entity);
-				if (Has<OnDelete, Delete>(action))
-					child.Delete();
-				if (Has<OnDelete, Unset>(action))
-					child.Unset(action, entity);
-				if (Has<OnDelete, Panic>(action))
-					EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
-			};
-			QueryRaw(term0).Each(onQuery);
-			QueryRaw(term1).Each(onQuery);
-
-			ref var record = ref GetRecord(entity);
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);
-
 			_entities.Remove(removedId);
 		}
     }
