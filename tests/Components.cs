@@ -39,6 +39,18 @@ struct BoolComponent
     public bool Value;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+struct ManagedComponent
+{
+	int _padding0;
+	public object Obj;
+	short _padding1;
+
+	public string Text;
+
+	ulong _padding2;
+}
+
 struct NormalTag { }
 
 struct NormalTag2 { }

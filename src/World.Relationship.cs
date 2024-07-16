@@ -53,12 +53,12 @@ partial class World
 				// if (HasDeferred(target, pairId))
 				// 	return;
 
-				SetDeferred(target, pairId, null, 0);
+				SetDeferred(target, pairId, null, 0, false);
 
 				return;
 			}
 
-			_ = AttachComponent(target, pairId, 0);
+			_ = AttachComponent(target, pairId, 0, false);
 		}
 	}
 
@@ -125,7 +125,7 @@ partial class World
 			return;
 		}
 
-		_ = AttachComponent(entity, pairId, act.Size);
+		_ = AttachComponent(entity, pairId, act.Size, act.IsManaged);
 	}
 
 	/// <summary>
@@ -154,9 +154,9 @@ partial class World
 			return;
 		}
 
-		(var array, var row) = AttachComponent(entity, pairId, act.Size);
+		(var array, var row) = AttachComponent(entity, pairId, act.Size, act.IsManaged);
 		ref var cmpArr = ref Unsafe.As<Array, TAction[]>(ref array!);
-		cmpArr[row & Archetype.CHUNK_THRESHOLD] = action;
+		cmpArr[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = action;
 	}
 
 	/// <summary>
@@ -175,12 +175,12 @@ partial class World
 
 		if (IsDeferred && !Has(entity, action, target))
 		{
-			SetDeferred(entity, pairId, null, 0);
+			SetDeferred(entity, pairId, null, 0, false);
 
 			return;
 		}
 
-		_ = AttachComponent(entity, pairId, 0);
+		_ = AttachComponent(entity, pairId, 0, false);
 	}
 
 	/// <summary>

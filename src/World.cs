@@ -17,12 +17,31 @@ public sealed partial class World : IDisposable
 	private readonly object _newEntLock = new object();
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
 	private readonly FastIdLookup<EcsID> _cacheIndex = new ();
+	private readonly ComponentInfo[] _cache = new ComponentInfo[128];
+
+	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
+		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
+	private static readonly Comparison<EcsID> _comparisonIds = (a, b)
+		=> ComponentComparer.CompareTerms(null!, a, b);
+
 
 
 	internal Archetype Root => _archRoot;
     internal List<Archetype> Archetypes { get; } = [];
 
 
+	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
+	{
+		ref var record = ref (
+			id > 0 ?
+			ref _entities.Add(id, default!)
+			:
+			ref _entities.CreateNew(out id)
+		);
+
+		newId = id;
+		return ref record;
+	}
 
 	public void Each(QueryFilterDelegateWithEntity fn)
 	{
@@ -75,24 +94,6 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
-	public EcsID GetAlive(EcsID id)
-	{
-		if (Exists(id))
-			return id;
-
-		if ((uint)id != id)
-			return 0;
-
-		var current = _entities.GetNoGeneration(id);
-		if (current == 0)
-			return 0;
-
-		if (!Exists(current))
-			return 0;
-
-		return current;
-	}
-
 	private void DetachComponent(EcsID entity, EcsID id)
 	{
 		ref var record = ref GetRecord(entity);
@@ -108,11 +109,13 @@ public sealed partial class World : IDisposable
 			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
 		}
 
-		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1));
+		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1, false));
 
 		BeginDeferred();
-		var roll = oldArch.Rolling;
-		roll.Remove(id);
+		var roll = new RollingHash();
+		foreach (ref readonly var oldId in oldArch.All.AsSpan())
+			if (oldId.ID != id)
+				roll.Add(oldId.ID);
 
 		Archetype? found = null;
 		ref var arch = ref _typeIndex.TryGet(roll.Hash, out var exists);
@@ -131,23 +134,19 @@ public sealed partial class World : IDisposable
 			}
 			else
 			{
-				var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.All.Length - 1);
-				var newSign = tmp.AsSpan(0, oldArch.All.Length - 1);
-
-				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
-				{
-					if (oldArch.All[i].ID != id)
-						newSign[j++] = oldArch.All[i];
-				}
-
-				ref var newArch = ref GetArchetype(newSign, true);
+				ref var newArch = ref GetArchetype(roll.Hash, true);
 				if (newArch == null)
 				{
-					newArch = _archRoot.InsertVertex(oldArch, newSign, id);
+					var tmp = _cache;
+					for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
+					{
+						if (oldArch.All[i].ID != id)
+							tmp[j++] = oldArch.All[i];
+					}
+
+					newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length -1), id);
 					Archetypes.Add(newArch);
 				}
-
-				ArrayPool<ComponentInfo>.Shared.Return(tmp);
 
 				found = newArch;
 			}
@@ -158,9 +157,7 @@ public sealed partial class World : IDisposable
 		EndDeferred();
 	}
 
-	static readonly Comparison<ComponentInfo> _comparison = (a, b) => ComponentComparer.CompareTerms(null!, a.ID, b.ID);
-
-	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size)
+	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size, bool isManaged)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
@@ -177,8 +174,26 @@ public sealed partial class World : IDisposable
 		}
 
 		BeginDeferred();
-		var roll = oldArch.Rolling;
+
+		var roll = new RollingHash();
+		var allSpan = oldArch.All.AsSpan();
+
+		var i = 0;
+		for (; i < allSpan.Length; ++i)
+		{
+			ref readonly var cmp = ref allSpan[i];
+			if (cmp.ID > id)
+				break;
+
+			roll.Add(cmp.ID);
+		}
+
 		roll.Add(id);
+
+		for (; i < allSpan.Length; ++i)
+		{
+			roll.Add(allSpan[i].ID);
+		}
 
 		Archetype? found = null;
 
@@ -191,24 +206,16 @@ public sealed partial class World : IDisposable
 
 		if (!exists)
 		{
-			var tmp = ArrayPool<ComponentInfo>.Shared.Rent(oldArch.All.Length + 1);
-			var newSign = tmp.AsSpan(0, oldArch.All.Length + 1);
-			oldArch.All.CopyTo(newSign);
-			newSign[^1] = new ComponentInfo(id, size);
-#if NET
-			MemoryExtensions.Sort(newSign, _comparison);
-#else
-			newSign.Sort(_comparer);
-#endif
-
-			ref var newArch = ref GetArchetype(newSign, true);
+			ref var newArch = ref GetArchetype(roll.Hash, true);
 			if (newArch == null)
 			{
-				newArch = _archRoot.InsertVertex(oldArch, newSign, id);
+				var tmp = _cache;
+				oldArch.All.CopyTo(tmp);
+				tmp[oldArch.All.Length] = new ComponentInfo(id, size, isManaged);
+				newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length + 1), id);
 				Archetypes.Add(newArch);
 			}
 
-			ArrayPool<ComponentInfo>.Shared.Return(tmp);
 			found = newArch;
 		}
 
@@ -216,26 +223,22 @@ public sealed partial class World : IDisposable
         record.Archetype = found!;
 		EndDeferred();
 
-		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, size));
+		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, size, isManaged));
 
 		return (size > 0 ? record.GetChunk().RawComponentData(found!.GetComponentIndex(id)) : null, record.Row);
 	}
 
-    private ref Archetype? GetArchetype(ReadOnlySpan<ComponentInfo> components, bool create)
+    private ref Archetype? GetArchetype(EcsID hash, bool create)
 	{
-		var rolling = new RollingHash();
-		foreach (ref readonly var cmp in components)
-			rolling.Add(cmp.ID);
-
 		ref var arch = ref Unsafe.NullRef<Archetype>();
 
 		if (create)
 		{
-			arch = ref _typeIndex.GetOrCreate(rolling.Hash, out _)!;
+			arch = ref _typeIndex.GetOrCreate(hash, out _)!;
 		}
 		else
 		{
-			arch = ref _typeIndex.TryGet(rolling.Hash, out _)!;
+			arch = ref _typeIndex.TryGet(hash, out _)!;
 		}
 
 		return ref arch;
@@ -246,13 +249,14 @@ public sealed partial class World : IDisposable
 		if (IsDeferred && !Has(entity, cmpId))
 		{
 			Unsafe.SkipInit<T>(out var val);
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size)!);
+			var isManaged = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size, isManaged)!);
 		}
 
         ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(cmpId);
         ref var chunk = ref record.GetChunk();
-		ref var value = ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & Archetype.CHUNK_THRESHOLD);
+		ref var value = ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 		return ref value;
     }
 
@@ -308,7 +312,7 @@ struct EcsRecord
 	public EntityFlags Flags;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
+    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetOrCreateChunk(Row);
 }
 
 [Flags]

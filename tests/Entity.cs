@@ -340,5 +340,32 @@ namespace TinyEcs.Tests
 			Assert.True(main.Has(Wildcard.ID, dogs));
 			Assert.True(main.Has(Wildcard.ID, Wildcard.ID));
 		}
+
+		[Fact]
+		public void Entity_Attach_ManagedComponent()
+		{
+			using var ctx = new Context();
+
+			var ent = ctx.World.Entity();
+
+			ent.Set(new FloatComponent() { Value = 99 });
+			ent.Set(new ManagedComponent() { Obj = new { a = "asd", b = 3, c = new List<object>() }, Text = "hello" });
+			ent.Set(new IntComponent() { Value = 69 });
+
+			Assert.True(ent.Has<FloatComponent>());
+			Assert.True(ent.Has<ManagedComponent>());
+			Assert.True(ent.Has<IntComponent>());
+
+			ref var managed = ref ent.Get<ManagedComponent>();
+			ref var fl = ref ent.Get<FloatComponent>();
+			Assert.Equal("hello", managed.Text);
+
+			var target = ctx.World.Entity();
+			ent.Set(new ManagedComponent() { Obj = new { a = "asd", b = 3, c = new List<object>() }, Text = "hello 2" }, target);
+			ent.Set(new BoolComponent());
+
+			managed = ref ent.Get<ManagedComponent>(target);
+			Assert.Equal("hello 2", managed.Text);
+		}
     }
 }

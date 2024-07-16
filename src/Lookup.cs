@@ -4,16 +4,18 @@ using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
 
-[DebuggerDisplay("ID: {ID}, Size: {Size}")]
+[DebuggerDisplay("ID: {ID}, Size: {Size}, IsManaged: {IsManaged}")]
 public readonly struct ComponentInfo
 {
     public readonly EcsID ID;
     public readonly int Size;
+    public readonly bool IsManaged;
 
-    internal ComponentInfo(EcsID id, int size)
+    internal ComponentInfo(EcsID id, int size, bool isManaged)
     {
         ID = id;
         Size = size;
+        IsManaged = isManaged;
     }
 }
 
@@ -21,7 +23,7 @@ internal static class Lookup
 {
 	private static ulong _index = 0;
 
-	private static readonly FastIdLookup<Func<int, Array>> _arrayCreator = new ();
+	private static readonly FastIdLookup<Func<int, Array?>> _arrayCreator = new ();
 	private static readonly Dictionary<Type, QueryTerm> _typesConvertion = new();
 	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
@@ -125,7 +127,7 @@ internal static class Lookup
 					HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
 			}
 
-			Value = new ComponentInfo(HashCode, Size);
+			Value = new ComponentInfo(HashCode, Size, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 
 			if (Size > 0)
@@ -416,6 +418,8 @@ internal sealed class FastIdLookup<TValue>
 		}
 		return ref val!;
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ref TValue TryGet(EcsID id, out bool exists)
 	{
 		if (id < COMPONENT_MAX_ID)
@@ -440,6 +444,7 @@ internal sealed class FastIdLookup<TValue>
 		_slowLookup.Clear();
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private ref TValue AddToFast(EcsID id, ref TValue value)
 	{
 		if (id < COMPONENT_MAX_ID)

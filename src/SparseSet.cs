@@ -67,6 +67,7 @@ internal sealed class EntitySparseSet<T>
 		return index;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ref T Get(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunk((int)outerIdx >> 12);
@@ -344,6 +345,7 @@ internal sealed class Vec<T> where T : unmanaged
 	public void Add(T item)
 		=> AddRef() = item;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ref T AddRef()
 	{
 		if (Count >= Capacity)

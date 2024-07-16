@@ -188,7 +188,7 @@ public partial class Query : IDisposable
 		{
 			var column = arch.GetComponentIndex<T>();
 			EcsAssert.Panic(column >= 0, "component not found");
-			ref var value = ref arch.GetChunk(0).GetReference<T>(column);
+			ref var value = ref arch.GetOrCreateChunk(0).GetReference<T>(column);
 			return ref value;
 		}
 
@@ -202,7 +202,7 @@ public partial class Query : IDisposable
 
 		foreach (var arch in this)
 		{
-			return arch.GetChunk(0).EntityAt(0);
+			return arch.GetOrCreateChunk(0).EntityAt(0);
 		}
 
 		return EntityView.Invalid;

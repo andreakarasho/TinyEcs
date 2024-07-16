@@ -69,7 +69,9 @@ public sealed partial class World
 
 
 	/// <summary>
-	/// Count of entities alive.
+	/// Count of entities alive.<br/>
+	/// ⚠️ If the count doesn't match with your expectations it's because
+	/// in TinyEcs components are also entities!
 	/// </summary>
 	public int EntityCount => _entities.Length;
 
@@ -94,6 +96,49 @@ public sealed partial class World
     }
 
 	/// <summary>
+	/// Get or create an archetype with the specified components.
+	/// </summary>
+	/// <param name="ids"></param>
+	/// <returns></returns>
+	public Archetype Archetype(params Span<EcsID> ids)
+	{
+		if (ids.IsEmpty)
+			return _archRoot;
+
+		ids.SortNoAlloc(_comparisonIds);
+
+		var hash = RollingHash.Calculate(ids);
+		ref var newArch = ref GetArchetype(hash, true);
+		if (newArch == null)
+		{
+			var tmp = _cache;
+			var newSign = tmp.AsSpan(0, ids.Length);
+			var archLessOne = Archetype(ids[..^1]);
+			archLessOne.All.AsSpan().CopyTo(newSign);
+			newSign.SortNoAlloc(_comparisonCmps);
+			newArch = _archRoot.InsertVertex(archLessOne, newSign, ids[^1]);
+			Archetypes.Add(newArch);
+		}
+
+		return newArch;
+	}
+
+	/// <summary>
+	/// Create an entity with the specified components attached.
+	/// </summary>
+	/// <param name="arch"></param>
+	/// <returns></returns>
+	public EntityView Entity(Archetype arch)
+	{
+		ref var record = ref NewId(out var id);
+		record.Archetype = arch;
+		record.Row = arch.Add(id);
+		record.Flags = EntityFlags.None;
+
+		return new EntityView(this, id);
+	}
+
+	/// <summary>
 	/// Create or get an entity with the specified <paramref name="id"/>.<br/>
 	/// When <paramref name="id"/> is not specified or is 0 a new entity is spawned.
 	/// </summary>
@@ -114,13 +159,7 @@ public sealed partial class World
 				// 	return new EntityView(this, id);
 				// }
 
-				ref var record = ref (
-					id > 0 ?
-					ref _entities.Add(id, default!)
-					:
-					ref _entities.CreateNew(out id)
-				);
-
+				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
 				record.Row = _archRoot.Add(id);
 				record.Flags = EntityFlags.None;
@@ -284,6 +323,30 @@ public sealed partial class World
     }
 
 	/// <summary>
+	/// Use this function to analyze pairs members.<br/>
+	/// Pairs members lose their generation count. This function will bring it back!.
+	/// </summary>
+	/// <param name="id"></param>
+	/// <returns></returns>
+	public EcsID GetAlive(EcsID id)
+	{
+		if (Exists(id))
+			return id;
+
+		if ((uint)id != id)
+			return 0;
+
+		var current = _entities.GetNoGeneration(id);
+		if (current == 0)
+			return 0;
+
+		if (!Exists(current))
+			return 0;
+
+		return current;
+	}
+
+	/// <summary>
 	/// The archetype sign.<br/>The sign is unique.
 	/// </summary>
 	/// <param name="id"></param>
@@ -311,7 +374,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = AttachComponent(entity, cmp.ID, cmp.Size);
+        _ = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
     }
 
 	/// <summary>
@@ -332,9 +395,9 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size);
+        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
         ref var array = ref Unsafe.As<Array, T[]>(ref raw!);
-        array[row & Archetype.CHUNK_THRESHOLD] = component;
+        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
 
 	/// <summary>
@@ -346,12 +409,12 @@ public sealed partial class World
 	{
 		if (IsDeferred && !Has(entity, id))
 		{
-			SetDeferred(entity, id, null, 0);
+			SetDeferred(entity, id, null, 0, false);
 
 			return;
 		}
 
-		_ = AttachComponent(entity, id, 0);
+		_ = AttachComponent(entity, id, 0, false);
 	}
 
 	/// <summary>
