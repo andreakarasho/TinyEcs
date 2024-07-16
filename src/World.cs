@@ -99,7 +99,8 @@ public sealed partial class World : IDisposable
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
-		if (oldArch.GetComponentIndex(id) < 0)
+		var column = oldArch.GetComponentIndex(id);
+		if (column < 0)
             return;
 
 		if (id.IsPair())
@@ -109,7 +110,7 @@ public sealed partial class World : IDisposable
 			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
 		}
 
-		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1, false));
+		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
 
 		BeginDeferred();
 
@@ -118,43 +119,22 @@ public sealed partial class World : IDisposable
 			if (oldId.ID != id)
 				roll.Add(oldId.ID);
 
-		Archetype? found = null;
-		ref var arch = ref _typeIndex.TryGet(roll.Hash, out var exists);
-
-		if (exists)
+		ref var newArch = ref GetArchetype(roll.Hash, create: true);
+		if (newArch == null)
 		{
-			found = arch;
+			var tmp = _cache;
+			for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
+			{
+				if (oldArch.All[i].ID != id)
+					tmp[j++] = oldArch.All[i];
+			}
+
+			newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length - 1), id);
+			Archetypes.Add(newArch);
 		}
 
-		if (!exists)
-		{
-			var count = oldArch.All.Length - 1;
-			if (count <= 0)
-			{
-				found = _archRoot;
-			}
-			else
-			{
-				ref var newArch = ref GetArchetype(roll.Hash, true);
-				if (newArch == null)
-				{
-					var tmp = _cache;
-					for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
-					{
-						if (oldArch.All[i].ID != id)
-							tmp[j++] = oldArch.All[i];
-					}
-
-					newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length -1), id);
-					Archetypes.Add(newArch);
-				}
-
-				found = newArch;
-			}
-		}
-
-		record.Row = record.Archetype.MoveEntity(found!, record.Row);
-        record.Archetype = found!;
+		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
+        record.Archetype = newArch!;
 		EndDeferred();
 	}
 
@@ -163,9 +143,9 @@ public sealed partial class World : IDisposable
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
-		var index = oldArch.GetComponentIndex(id);
-		if (index >= 0)
-            return (size > 0 ? record.GetChunk().RawComponentData(index) : null, record.Row);
+		var column = oldArch.GetComponentIndex(id);
+		if (column >= 0)
+            return (size > 0 ? record.GetChunk().RawComponentData(column) : null, record.Row);
 
 		if (id.IsPair())
 		{
@@ -176,57 +156,43 @@ public sealed partial class World : IDisposable
 
 		BeginDeferred();
 
-		var roll = new RollingHash();
 		var allSpan = oldArch.All.AsSpan();
+		var roll = new RollingHash();
+		var found = false;
 
-		var i = 0;
-		for (; i < allSpan.Length; ++i)
+		foreach (ref readonly var cmp in allSpan)
 		{
-			ref readonly var cmp = ref allSpan[i];
-			if (cmp.ID > id)
-				break;
+			if (!found && cmp.ID > id)
+			{
+				roll.Add(id);
+				found = true;
+			}
 
 			roll.Add(cmp.ID);
 		}
 
-		roll.Add(id);
+		if (!found)
+			roll.Add(id);
 
-		for (; i < allSpan.Length; ++i)
+		ref var newArch = ref GetArchetype(roll.Hash, create: true);
+		if (newArch == null)
 		{
-			roll.Add(allSpan[i].ID);
+			var tmp = _cache;
+			oldArch.All.CopyTo(tmp);
+			var span = tmp.AsSpan(0, oldArch.All.Length + 1);
+			span[^1] = new ComponentInfo(id, size, isManaged);
+			span.SortNoAlloc(_comparisonCmps);
+			newArch = _archRoot.InsertVertex(oldArch, span, id);
+			Archetypes.Add(newArch);
 		}
 
-		Archetype? found = null;
-
-		ref var archFound = ref _typeIndex.TryGet(roll.Hash, out var exists);
-
-		if (exists)
-		{
-			found = archFound;
-		}
-
-		if (!exists)
-		{
-			ref var newArch = ref GetArchetype(roll.Hash, true);
-			if (newArch == null)
-			{
-				var tmp = _cache;
-				oldArch.All.CopyTo(tmp);
-				tmp[oldArch.All.Length] = new ComponentInfo(id, size, isManaged);
-				newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length + 1), id);
-				Archetypes.Add(newArch);
-			}
-
-			found = newArch;
-		}
-
-		record.Row = record.Archetype.MoveEntity(found!, record.Row);
-        record.Archetype = found!;
+		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
+        record.Archetype = newArch!;
 		EndDeferred();
 
-		OnComponentSet?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, size, isManaged));
+		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
 
-		return (size > 0 ? record.GetChunk().RawComponentData(found!.GetComponentIndex(id)) : null, record.Row);
+		return (size > 0 ? record.GetChunk().RawComponentData(newArch!.GetComponentIndex(id)) : null, record.Row);
 	}
 
     private ref Archetype? GetArchetype(EcsID hash, bool create)
@@ -314,6 +280,9 @@ struct EcsRecord
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetOrCreateChunk(Row);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly EntityView EntityView() => ref Archetype.GetOrCreateChunk(Row).EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
 [Flags]

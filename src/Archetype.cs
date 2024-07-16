@@ -124,7 +124,6 @@ public sealed class Archetype
 	internal FastIdLookup<EcsEdge> _add, _remove;
 
 
-
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal ref ArchetypeChunk GetOrCreateChunk(int index)
 	{

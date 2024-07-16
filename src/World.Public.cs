@@ -21,6 +21,8 @@ public sealed partial class World
             [],
             _comparer
         );
+		_typeIndex.Add(_archRoot.Id, _archRoot);
+		Archetypes.Add(_archRoot);
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
@@ -108,8 +110,8 @@ public sealed partial class World
 		ids.SortNoAlloc(_comparisonCmps);
 
 		var hash = RollingHash.Calculate(ids);
-		ref var newArch = ref GetArchetype(hash, true);
-		if (newArch == null)
+		ref var archetype = ref GetArchetype(hash, true);
+		if (archetype == null)
 		{
 			var archLessOne = Archetype(ids[..^1]);
 			var tmp = _cache;
@@ -117,11 +119,11 @@ public sealed partial class World
 			archLessOne.All.AsSpan().CopyTo(newSign);
 			newSign[^1] = ids[^1];
 			newSign.SortNoAlloc(_comparisonCmps);
-			newArch = _archRoot.InsertVertex(archLessOne, newSign, ids[^1].ID);
-			Archetypes.Add(newArch);
+			archetype = _archRoot.InsertVertex(archLessOne, newSign, ids[^1].ID);
+			Archetypes.Add(archetype);
 		}
 
-		return newArch;
+		return archetype;
 	}
 
 	/// <summary>
