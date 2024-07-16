@@ -103,7 +103,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var objsArgs = GenerateSequence(i + 1, ", ", j => $"Component<T{j}>().ID");
+				var objsArgs = GenerateSequence(i + 1, ", ", j => $"Component<T{j}>()");
 
 				sb.AppendLine($@"
 					/// <inheritdoc cref=""World.Archetype(Span{{EcsID}})""/>

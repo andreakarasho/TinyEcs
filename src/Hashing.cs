@@ -72,4 +72,18 @@ public struct RollingHash
 
 		return hash;
 	}
+
+	public static ulong Calculate(params Span<ComponentInfo> values)
+	{
+		var hash = 0ul;
+		var product = 1ul;
+
+		foreach (ref var value in values)
+		{
+			hash = (hash + value.ID * product) % Modulus;
+        	product = (product * Base) % Modulus;
+		}
+
+		return hash;
+	}
 }

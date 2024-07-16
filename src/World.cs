@@ -112,6 +112,7 @@ public sealed partial class World : IDisposable
 		OnComponentUnset?.Invoke(record.GetChunk().EntityAt(record.Row), new ComponentInfo(id, -1, false));
 
 		BeginDeferred();
+
 		var roll = new RollingHash();
 		foreach (ref readonly var oldId in oldArch.All.AsSpan())
 			if (oldId.ID != id)

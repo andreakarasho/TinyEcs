@@ -100,23 +100,24 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="ids"></param>
 	/// <returns></returns>
-	public Archetype Archetype(params Span<EcsID> ids)
+	public Archetype Archetype(params Span<ComponentInfo> ids)
 	{
 		if (ids.IsEmpty)
 			return _archRoot;
 
-		ids.SortNoAlloc(_comparisonIds);
+		ids.SortNoAlloc(_comparisonCmps);
 
 		var hash = RollingHash.Calculate(ids);
 		ref var newArch = ref GetArchetype(hash, true);
 		if (newArch == null)
 		{
+			var archLessOne = Archetype(ids[..^1]);
 			var tmp = _cache;
 			var newSign = tmp.AsSpan(0, ids.Length);
-			var archLessOne = Archetype(ids[..^1]);
 			archLessOne.All.AsSpan().CopyTo(newSign);
+			newSign[^1] = ids[^1];
 			newSign.SortNoAlloc(_comparisonCmps);
-			newArch = _archRoot.InsertVertex(archLessOne, newSign, ids[^1]);
+			newArch = _archRoot.InsertVertex(archLessOne, newSign, ids[^1].ID);
 			Archetypes.Add(newArch);
 		}
 
