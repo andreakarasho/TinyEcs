@@ -396,7 +396,11 @@ internal sealed class FastIdLookup<TValue>
 	const int COMPONENT_MAX_ID = 1024;
 
 
+#if NET
+	private readonly Dictionary<EcsID, TValue> _slowLookup = new();
+#else
 	private readonly DictionarySlim<EcsID, TValue> _slowLookup = new();
+#endif
 	private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
 	private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
 
@@ -405,17 +409,34 @@ internal sealed class FastIdLookup<TValue>
 	public void Add(EcsID id, TValue value)
 	{
 		AddToFast(id, ref value);
+
+#if NET
+		CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out _) = value;
+#else
 		_slowLookup.GetOrAddValueRef(id, out _) = value;
+#endif
 	}
 
 	public ref TValue GetOrCreate(EcsID id, out bool exists)
 	{
-		ref var val = ref TryGet(id, out exists);
-		if (!exists)
+		if (id < COMPONENT_MAX_ID)
 		{
-			val = ref _slowLookup.GetOrAddValueRef(id, out _)!;
-			val = ref AddToFast(id, ref val)!;
+			if (_fastLookupAdded[id])
+			{
+				exists = true;
+				return ref _fastLookup[id];
+			}
 		}
+
+#if NET
+		ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out exists);
+#else
+		ref var val = ref _slowLookup.GetOrAddValueRef(id, out exists)!;
+#endif
+
+		if (!exists)
+			val = ref AddToFast(id, ref val)!;
+		
 		return ref val!;
 	}
 
@@ -434,7 +455,13 @@ internal sealed class FastIdLookup<TValue>
 			return ref Unsafe.NullRef<TValue>();
 		}
 
+#if NET
+		ref var val = ref CollectionsMarshal.GetValueRefOrNullRef(_slowLookup, id);
+		exists = !Unsafe.IsNullRef(ref val);
+		return ref val;
+#else
 		return ref _slowLookup.GetOrNullRef(id, out exists);
+#endif
 	}
 
 	public void Clear()

@@ -133,7 +133,7 @@ public sealed partial class World : IDisposable
 			Archetypes.Add(newArch);
 		}
 
-		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
+		record.Row = record.Archetype.MoveEntity(newArch!, record.Row, true);
         record.Archetype = newArch!;
 		EndDeferred();
 	}
@@ -186,7 +186,7 @@ public sealed partial class World : IDisposable
 			Archetypes.Add(newArch);
 		}
 
-		record.Row = record.Archetype.MoveEntity(newArch!, record.Row);
+		record.Row = record.Archetype.MoveEntity(newArch!, record.Row, false);
         record.Archetype = newArch!;
 		EndDeferred();
 
@@ -279,10 +279,10 @@ struct EcsRecord
 	public EntityFlags Flags;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetOrCreateChunk(Row);
+    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly EntityView EntityView() => ref Archetype.GetOrCreateChunk(Row).EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+    public readonly ref readonly EntityView EntityView() => ref Archetype.GetChunk(Row).EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
 [Flags]

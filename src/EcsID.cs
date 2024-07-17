@@ -2,25 +2,25 @@ namespace TinyEcs;
 
 public static class EcsIdEx
 {
-	public static bool IsPair(this ref readonly EcsID id)
+	public static bool IsPair(this EcsID id)
 		=> IDOp.IsPair(id);
 
-	public static EcsID First(this ref readonly EcsID id)
+	public static EcsID First(this EcsID id)
 		=> id.IsPair() ? IDOp.GetPairFirst(id) : 0;
 
-	public static EcsID Second(this ref readonly EcsID id)
+	public static EcsID Second(this EcsID id)
 		=> id.IsPair() ? IDOp.GetPairSecond(id) : 0;
 
-	public static (EcsID, EcsID) Pair(this ref readonly EcsID id)
+	public static (EcsID, EcsID) Pair(this EcsID id)
 		=> (id.First(), id.Second());
 
-	public static bool IsValid(this ref readonly EcsID id)
+	public static bool IsValid(this EcsID id)
 		=> id != 0;
 
-	public static EcsID RealId(this ref readonly EcsID id)
+	public static EcsID RealId(this EcsID id)
 		=> IDOp.RealID(id);
 
-	public static int Generation(this ref readonly EcsID id)
+	public static int Generation(this EcsID id)
 		=> (int) IDOp.GetGeneration(id);
 }
 
