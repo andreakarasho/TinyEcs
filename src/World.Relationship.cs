@@ -155,7 +155,7 @@ partial class World
 		}
 
 		(var array, var row) = AttachComponent(entity, pairId, act.Size, act.IsManaged);
-		ref var cmpArr = ref Unsafe.As<Array, TAction[]>(ref array!);
+		var cmpArr = Unsafe.As<TAction[]>(array!);
 		cmpArr[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = action;
 	}
 
