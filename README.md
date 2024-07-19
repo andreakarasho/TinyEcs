@@ -47,14 +47,16 @@ var npc = ecs.Entity()
     .Add<Npc>();
 
 // Query entities with Position + Label components
-ecs.Each((EntityView entity, ref Position pos, ref Label label) => {
-    Console.WriteLine(label.Value);
-});
+ecs.Query<(Position, Label)>()
+    .Each((EntityView entity, ref Position pos, ref Label label) => {
+        Console.WriteLine(label.Value);
+    });
 
 // Multi-threaded query for entities with Position + Label + Player, without Npc.
-ecs.EachJob<(Position, Label), (With<Player>, Without<Npc>)>((ref Position pos, ref Label label) => {
-    Console.WriteLine(label.Value);
-});
+ecs.Query<(Position, Label), (With<Player>, Without<Npc>)>()
+    .EachJob((ref Position pos, ref Label label) => {
+        Console.WriteLine(label.Value);
+    });
 
 // Component structs
 struct Position { public float X, Y, Z; }
@@ -182,7 +184,7 @@ var sword = ecs.Entity()
 woodenChest.Set<Contents>(sword);
 
 // Grab all relationships of type (Contents, *)
-ecs.Each<ValueTuple, With<(Contents, Wildcard)>>((EntityView entity) =>
+ecs.Query<ValueTuple, With<(Contents, Wildcard)>>().Each((EntityView entity) =>
     Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
 ```
 
@@ -203,7 +205,8 @@ ref var endPos = ref player.Get<EndPoint, Poisition>();
 
 // Queries for begin & end positions!
 // Notice that relationships are rappresented by a Tuple(A, B)
-ecs.Each((ref Relation<BeginPoint, Position> begin, ref Relation<EndPoint, Position> end) => {
+ecs.Query<(Relation<BeginPoint, Position>, Relation<EndPoint, Position>)>()
+    .Each((ref Relation<BeginPoint, Position> begin, ref Relation<EndPoint, Position> end) => {
     // ...
 });
 
