@@ -163,7 +163,7 @@ public sealed partial class World : IDisposable
 
 		var column = oldArch.GetComponentIndex(id);
 		if (column >= 0)
-            return (size > 0 ? record.GetChunk().RawComponentData(column) : null, record.Row);
+            return (size > 0 ? record.GetChunk().Data![column] : null, record.Row);
 
 		if (id.IsPair())
 		{
@@ -214,7 +214,7 @@ public sealed partial class World : IDisposable
 
 		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
 
-		return (size > 0 ? record.GetChunk().RawComponentData(foundArch!.GetComponentIndex(id)) : null, record.Row);
+		return (size > 0 ? record.GetChunk().Data![foundArch!.GetComponentIndex(id)] : null, record.Row);
 	}
 
 	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)

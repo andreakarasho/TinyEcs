@@ -52,14 +52,6 @@ public struct ArchetypeChunk
 		var array = Unsafe.As<T[]>(Data![column]);
 		return array.AsSpan(0, Count);
 	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal readonly Array? RawComponentData(int column)
-	{
-		if (column < 0 || column >= Data!.Length)
-			return null;
-		return Data![column];
-	}
 }
 
 public ref struct ChunkEnumerator
@@ -93,6 +85,7 @@ public sealed class Archetype
 	private readonly ComponentComparer _comparer;
 	private readonly FrozenDictionary<EcsID, int> _lookup;
 	private readonly EcsID[] _ids;
+	private readonly List<EcsEdge> _add, _remove;
 	private int _count;
 
 
@@ -132,10 +125,9 @@ public sealed class Archetype
 	public int Count => _count;
 	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
 	public EcsID Id { get; }
-	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
-	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
-	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
-	internal List<EcsEdge> _add, _remove;
+	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
+	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
+	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 
 
 	private ref ArchetypeChunk GetOrCreateChunk(int index)
