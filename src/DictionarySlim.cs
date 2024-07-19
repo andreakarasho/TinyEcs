@@ -240,6 +240,31 @@ namespace Microsoft.Collections.Extensions
             return ref AddKey(key, bucketIndex);
         }
 
+		public ref TValue GetOrNullRef(TKey key, out bool exists)
+        {
+            if (key == null) ThrowHelper.ThrowKeyArgumentNullException();
+            exists = true;
+            Entry[] entries = _entries;
+            int collisionCount = 0;
+            int bucketIndex = key.GetHashCode() & (_buckets.Length - 1);
+            for (int i = _buckets[bucketIndex] - 1;
+                    (uint)i < (uint)entries.Length; i = entries[i].next)
+            {
+                if (key.Equals(entries[i].key))
+                    return ref entries[i].value;
+                if (collisionCount == entries.Length)
+                {
+                    // The chain of entries forms a loop; which means a concurrent update has happened.
+                    // Break out of the loop and throw, rather than looping forever.
+                    ThrowHelper.ThrowInvalidOperationException_ConcurrentOperationsNotSupported();
+                }
+                collisionCount++;
+            }
+
+            exists = false;
+			return ref Unsafe.NullRef<TValue>();
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private ref TValue AddKey(TKey key, int bucketIndex)
         {

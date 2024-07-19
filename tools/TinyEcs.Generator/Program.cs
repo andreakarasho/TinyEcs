@@ -21,7 +21,23 @@ public sealed class MyGenerator : IIncrementalGenerator
 			postContext.AddSource("TinyEcs.QueryIters.g.cs", CodeFormatter.Format(GenerateQueryIters()));
 			postContext.AddSource("TinyEcs.Queries.g.cs", CodeFormatter.Format(GenerateQueries()));
 			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
+			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
 		});
+
+		static string GenerateArchetypes()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					{GenerateArchetypeSigns()}
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
 
 		static string GenerateQueryIters()
 		{
@@ -75,6 +91,31 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 #pragma warning restore 1591
             ";
+		}
+
+		static string GenerateArchetypeSigns()
+		{
+			var sb = new StringBuilder();
+
+			sb.AppendLine("public partial class World {");
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var objsArgs = GenerateSequence(i + 1, ", ", j => $"Component<T{j}>()");
+
+				sb.AppendLine($@"
+					/// <inheritdoc cref=""World.Archetype(Span{{EcsID}})""/>
+					public Archetype Archetype<{generics}>()
+						{whereGenerics}
+						=> Archetype({objsArgs});
+				");
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
 		}
 
 		static string GenerateSchedulerSystems()

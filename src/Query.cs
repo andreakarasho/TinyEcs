@@ -66,8 +66,10 @@ public sealed class QueryBuilder
 	public Query Build()
 	{
 		var terms = _components.ToArray();
+		var roll = IQueryTerm.GetHash(terms.AsSpan());
+
 		return _world.GetQuery(
-			Hashing.Calculate(terms),
+			roll.Hash,
 			terms,
 			static (world, terms) => new Query(world, terms)
 		);
@@ -120,9 +122,10 @@ public partial class Query : IDisposable
 			.OfType<ContainerQueryTerm>()
 			.Where(s => s.Op == TermOp.Or))
 		{
+			var roll = IQueryTerm.GetHash(or.Terms.AsSpan());
 			subQuery = World.GetQuery
 			(
-				Hashing.Calculate(or.Terms.AsSpan()),
+				roll.Hash,
 				[.. or.Terms],
 				static (world, terms) => new Query(world, terms)
 			);
@@ -146,21 +149,12 @@ public partial class Query : IDisposable
 		_subQuery?.Match();
 
 		var allArchetypes = World.Archetypes;
-
 		if (allArchetypes.Count == 0 || _lastArchetypeIdMatched == allArchetypes[^1].Id)
-			return;
-
-		var ids = _terms
-			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly)
-			.Select(s => s.Id);
-
-		var first = World.FindArchetype(Hashing.Calculate(ids));
-		if (first == null)
 			return;
 
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
-		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
+		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
 	}
 
 	public int Count()

@@ -1,31 +1,89 @@
 namespace TinyEcs;
 
-internal static class Hashing
+
+public struct RollingHash
 {
-	const ulong FIXED = 314159;
+	private const ulong Base = 31; // A prime base for hashing
+    private const ulong Modulus = 1_000_000_007; // A large prime modulus
 
-	public static ulong Calculate(ReadOnlySpan<ComponentInfo> components)
+    private ulong _hash;
+    private ulong _product;
+
+	private static readonly ulong _inverseCache = ModInverse2(Base, Modulus);
+
+
+    public RollingHash()
+    {
+        _hash = 0;
+        _product = 1;
+    }
+
+	public readonly ulong Hash => _hash;
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Add(ulong value)
+    {
+		_hash = (_hash + value * _product) % Modulus;
+        _product = (_product * Base) % Modulus;
+    }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Remove(ulong value)
+    {
+		var inverseBase = _inverseCache;
+        _product = (_product * inverseBase) % Modulus;
+        _hash = (_hash + Modulus - (value * _product % Modulus)) % Modulus;
+    }
+
+
+    // Compute modular inverse of a with respect to m using Extended Euclidean Algorithm
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ModInverse2(ulong a, ulong m)
+    {
+	    ulong m0 = m, x0 = 0, x1 = 1;
+
+	    while (a > 1)
+	    {
+		    ulong q = a / m;
+		    ulong t = m;
+
+		    m = a % m;
+		    a = t;
+		    t = x0;
+
+		    x0 = x1 - q * x0;
+		    x1 = t;
+	    }
+
+	    return (x1 + m0) % m0;
+    }
+
+	public static ulong Calculate(params ReadOnlySpan<EcsID> values)
 	{
-		var hc = (ulong)components.Length;
-		foreach (ref readonly var val in components)
-			hc = unchecked(hc * FIXED + val.ID);
-		return hc;
+		var hash = 0ul;
+		var product = 1ul;
+
+		foreach (ref readonly var value in values)
+		{
+			hash = (hash + value * product) % Modulus;
+        	product = (product * Base) % Modulus;
+		}
+
+		return hash;
 	}
 
-	public static ulong Calculate(ReadOnlySpan<IQueryTerm> terms)
+	public static ulong Calculate(params ReadOnlySpan<ComponentInfo> values)
 	{
-		var hc = (ulong)terms.Length;
-		foreach (ref readonly var val in terms)
-			hc = unchecked(hc * FIXED + (ulong)val.Id + (byte)val.Op +
-				(val is ContainerQueryTerm container ? container.Terms.Aggregate(0Ul, static (a, b) => a + b.Id) : 0));
-		return hc;
-	}
+		var hash = 0ul;
+		var product = 1ul;
 
-	public static ulong Calculate(IEnumerable<EcsID> terms)
-	{
-		var hc = (ulong)terms.Count();
-		foreach (var val in terms)
-			hc = unchecked(hc * FIXED + val);
-		return hc;
+		foreach (ref readonly var value in values)
+		{
+			hash = (hash + value.ID * product) % Modulus;
+        	product = (product * Base) % Modulus;
+		}
+
+		return hash;
 	}
 }

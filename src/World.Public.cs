@@ -21,6 +21,8 @@ public sealed partial class World
             [],
             _comparer
         );
+		_typeIndex.Add(_archRoot.Id, _archRoot);
+		Archetypes.Add(_archRoot);
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
@@ -69,7 +71,9 @@ public sealed partial class World
 
 
 	/// <summary>
-	/// Count of entities alive.
+	/// Count of entities alive.<br/>
+	/// ⚠️ If the count doesn't match with your expectations it's because
+	/// in TinyEcs components are also entities!
 	/// </summary>
 	public int EntityCount => _entities.Length;
 
@@ -83,6 +87,7 @@ public sealed partial class World
         _entities.Clear();
         _archRoot.Clear();
         _typeIndex.Clear();
+		_cachedComponents.Clear();
 
 		foreach (var query in _cachedQueries.Values)
 			query.Dispose();
@@ -91,6 +96,48 @@ public sealed partial class World
 		_namesToEntity.Clear();
         Archetypes.Clear();
     }
+
+	/// <summary>
+	/// Get or create an archetype with the specified components.
+	/// </summary>
+	/// <param name="ids"></param>
+	/// <returns></returns>
+	public Archetype Archetype(params Span<ComponentInfo> ids)
+	{
+		if (ids.IsEmpty)
+			return _archRoot;
+
+		ids.SortNoAlloc(_comparisonCmps);
+
+		var hash = RollingHash.Calculate(ids);
+		ref var archetype = ref _typeIndex.GetOrCreate(hash, out var exists);
+		if (!exists)
+		{
+			var archLessOne = Archetype(ids[..^1]);
+			var arr = new ComponentInfo[ids.Length];
+			archLessOne.All.CopyTo(arr);
+			arr[^1] = ids[^1];
+			arr.AsSpan().SortNoAlloc(_comparisonCmps);
+			archetype = NewArchetype(archLessOne, arr, arr[^1].ID);
+		}
+
+		return archetype;
+	}
+
+	/// <summary>
+	/// Create an entity with the specified components attached.
+	/// </summary>
+	/// <param name="arch"></param>
+	/// <returns></returns>
+	public EntityView Entity(Archetype arch)
+	{
+		ref var record = ref NewId(out var id);
+		record.Archetype = arch;
+		record.Row = arch.Add(id);
+		record.Flags = EntityFlags.None;
+
+		return new EntityView(this, id);
+	}
 
 	/// <summary>
 	/// Create or get an entity with the specified <paramref name="id"/>.<br/>
@@ -113,15 +160,10 @@ public sealed partial class World
 				// 	return new EntityView(this, id);
 				// }
 
-				ref var record = ref (
-					id > 0 ?
-					ref _entities.Add(id, default!)
-					:
-					ref _entities.CreateNew(out id)
-				);
-
+				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
 				record.Row = _archRoot.Add(id);
+				record.Flags = EntityFlags.None;
 
 				ent = new EntityView(this, id);
 				OnEntityCreated?.Invoke(ent);
@@ -151,12 +193,14 @@ public sealed partial class World
 
 		if (_namesToEntity.TryGetValue(name, out var id))
 		{
-			EcsAssert.Panic(entity.ID == id, $"You must declare the component before the entity '{id}' named '{name}'");
+			if (entity.ID != id)
+				EcsAssert.Panic(false, $"You must declare the component before the entity '{id}' named '{name}'");
 		}
 		else
 		{
 			_namesToEntity[name] = entity;
 			entity.Set<Identifier, Name>(new (name));
+			GetRecord(entity).Flags |= EntityFlags.IsUnique;
 		}
 
 		return entity;
@@ -183,6 +227,7 @@ public sealed partial class World
 			entity = Entity();
 			_namesToEntity[name] = entity;
 			entity.Set<Identifier, Name>(new (name));
+			GetRecord(entity).Flags |= EntityFlags.IsUnique;
 		}
 
 		return entity;
@@ -207,35 +252,58 @@ public sealed partial class World
 		{
 			OnEntityDeleted?.Invoke(new (this, entity));
 
+			ref var record = ref GetRecord(entity);
+
 			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
 
-			if (Has<Identifier, Name>(entity))
+			if (record.Flags != EntityFlags.None)
 			{
-				var name = Get<Identifier, Name>(entity).Value;
-				_namesToEntity.Remove(name, out var _);
+				if ((record.Flags & EntityFlags.IsUnique) != 0)
+				{
+					if (Has<Identifier, Name>(entity))
+					{
+						var name = Get<Identifier, Name>(entity).Value;
+						_namesToEntity.Remove(name, out var _);
+					}
+				}
+
+				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
+				{
+					world.BeginDeferred();
+					foreach (var arch in world.QueryRaw(terms))
+					{
+						foreach (ref readonly var chunk in arch)
+						{
+							foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
+							{
+								var action = world.Action(child.ID, entity);
+								if (world.Has<OnDelete, Delete>(action))
+									child.Delete();
+								if (world.Has<OnDelete, Unset>(action))
+									child.Unset(action, entity);
+								if (world.Has<OnDelete, Panic>(action))
+									EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
+							}
+						}
+					}
+					world.EndDeferred();
+				}
+
+				if ((record.Flags & EntityFlags.IsAction) != 0)
+				{
+					var term = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
+					applyDeleteRules(this, entity, term);
+				}
+
+				if ((record.Flags & EntityFlags.IsTarget) != 0)
+				{
+					var term = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
+					applyDeleteRules(this, entity, term);
+				}
 			}
 
-			// TODO: check for this interesting flecs approach:
-			// 		 https://github.com/SanderMertens/flecs/blob/master/include/flecs/private/api_defines.h#L289
-			var term0 = new QueryTerm(IDOp.Pair(Wildcard.ID, entity), TermOp.With);
-			var term1 = new QueryTerm(IDOp.Pair(entity, Wildcard.ID), TermOp.With);
-
-			QueryFilterDelegateWithEntity onQuery = (EntityView child) => {
-				var action = Action(child.ID, entity);
-				if (Has<OnDelete, Delete>(action))
-					child.Delete();
-				if (Has<OnDelete, Unset>(action))
-					child.Unset(action, entity);
-				if (Has<OnDelete, Panic>(action))
-					EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
-			};
-			QueryRaw(term0).Each(onQuery);
-			QueryRaw(term1).Each(onQuery);
-
-			ref var record = ref GetRecord(entity);
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);
-
 			_entities.Remove(removedId);
 		}
     }
@@ -249,11 +317,36 @@ public sealed partial class World
     {
 		if (entity.IsPair())
         {
-            return GetAlive(entity.First()).IsValid() && GetAlive(entity.Second()).IsValid();
+			(var first, var second) = entity.Pair();
+            return GetAlive(first).IsValid() && GetAlive(second).IsValid();
         }
 
         return _entities.Contains(entity);
     }
+
+	/// <summary>
+	/// Use this function to analyze pairs members.<br/>
+	/// Pairs members lose their generation count. This function will bring it back!.
+	/// </summary>
+	/// <param name="id"></param>
+	/// <returns></returns>
+	public EcsID GetAlive(EcsID id)
+	{
+		if (Exists(id))
+			return id;
+
+		if ((uint)id != id)
+			return 0;
+
+		var current = _entities.GetNoGeneration(id);
+		if (current == 0)
+			return 0;
+
+		if (!Exists(current))
+			return 0;
+
+		return current;
+	}
 
 	/// <summary>
 	/// The archetype sign.<br/>The sign is unique.
@@ -263,7 +356,7 @@ public sealed partial class World
     public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
     {
         ref var record = ref GetRecord(id);
-        return record.Archetype.Components.AsSpan();
+        return record.Archetype.All.AsSpan();
     }
 
 	/// <summary>
@@ -283,7 +376,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = AttachComponent(entity, cmp.ID, cmp.Size);
+        _ = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
     }
 
 	/// <summary>
@@ -304,9 +397,9 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size);
-        ref var array = ref Unsafe.As<Array, T[]>(ref raw!);
-        array[row & Archetype.CHUNK_THRESHOLD] = component;
+        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        var array = Unsafe.As<T[]>(raw!);
+        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
 
 	/// <summary>
@@ -318,12 +411,12 @@ public sealed partial class World
 	{
 		if (IsDeferred && !Has(entity, id))
 		{
-			SetDeferred(entity, id, null, 0);
+			SetDeferred(entity, id, null, 0, false);
 
 			return;
 		}
 
-		_ = AttachComponent(entity, id, 0);
+		_ = AttachComponent(entity, id, 0, false);
 	}
 
 	/// <summary>
@@ -400,7 +493,7 @@ public sealed partial class World
 	/// </summary>
 	public void PrintGraph()
     {
-        _archRoot.Print();
+        _archRoot.Print(0);
     }
 
 	/// <summary>
@@ -411,8 +504,9 @@ public sealed partial class World
 	public Query QueryRaw(params Span<IQueryTerm> terms)
 	{
 		terms.Sort();
+		var roll = IQueryTerm.GetHash(terms);
 		return GetQuery(
-			Hashing.Calculate(terms),
+			roll.Hash,
 			terms,
 			static (world, terms) => new Query(world, terms));
 	}

@@ -369,6 +369,23 @@ public static class DotnetExtensions
 		}
 	}
 
+	public static void Sort<T>(this Span<T> span, Comparison<T> comparison)
+	{
+		for (int i = 0; i < span.Length - 1; i++)
+		{
+			for (int j = 0; j < span.Length - i - 1; j++)
+			{
+				if (comparison(span[j], span[j + 1]) > 0)
+				{
+					// Swap the elements
+					T temp = span[j];
+					span[j] = span[j + 1];
+					span[j + 1] = temp;
+				}
+			}
+		}
+	}
+
 	// public static System.Collections.Immutable.ImmutableArray<TSource> ToImmutableArray<TSource>(this IEnumerable<TSource> items)
 	// {
 	// 	return System.Collections.Immutable.ImmutableArray.CreateRange(items);

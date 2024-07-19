@@ -4,29 +4,32 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-	private readonly ConcurrentQueue<DeferredOp> _operations = new();
+	private readonly Queue<DeferredOp> _operations = new();
 	private WorldState _worldState = new () { Locks = 0 };
 
 	public bool IsDeferred => _worldState.Locks > 0;
+	public bool IsMerging => _worldState.Locks < 0;
 
 
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void BeginDeferred()
 	{
-		if (_worldState.Locks < 0)
+		if (IsMerging)
 			return;
 
 		_worldState.Locks += 1;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void EndDeferred()
 	{
-		if (_worldState.Locks < 0)
+		if (IsMerging)
 			return;
 
 		_worldState.Locks -= 1;
 
-		if (_worldState.Locks == 0)
+		if (_worldState.Locks == 0 && _operations.Count > 0)
 		{
 			_worldState.Locks = -1;
 			Merge();
@@ -67,9 +70,10 @@ public sealed partial class World
 		return ref Unsafe.Unbox<T>(cmd.Data);
 	}
 
-	private object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size)
+	private object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size, bool isManaged)
 	{
-		var cmp = Lookup.GetComponent(id, size);
+		// ref readonly var cmp = ref Lookup.GetComponent(id, size);
+		var cmp = new ComponentInfo(id, size, isManaged);
 
 		var cmd = new DeferredOp()
 		{
@@ -99,7 +103,7 @@ public sealed partial class World
 
 	private void UnsetDeferred(EcsID entity, EcsID id)
 	{
-		var cmp = new ComponentInfo(id, 0);
+		var cmp = new ComponentInfo(id, 0, false);
 
 		var cmd = new DeferredOp()
 		{
@@ -125,7 +129,7 @@ public sealed partial class World
 
 	private void Merge()
 	{
-		while (!_operations.IsEmpty && _operations.TryDequeue(out var op))
+		while (_operations.TryDequeue(out var op))
 		{
 			switch (op.Op)
 			{
@@ -142,8 +146,8 @@ public sealed partial class World
 						CheckSymmetric(op.Entity, first, second);
 					}
 
-					(var array, var row) = AttachComponent(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
-					array?.SetValue(op.Data, row & Archetype.CHUNK_THRESHOLD);
+					(var array, var row) = AttachComponent(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
+					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 
 					break;
 				}
