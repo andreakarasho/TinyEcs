@@ -1,11 +1,22 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 
 namespace TinyEcs;
 
+[SkipLocalsInit]
 public struct ArchetypeChunk
 {
-	internal Array[]? Data;
-	internal EntityView[] Entities;
+	internal readonly Array[]? Data;
+	internal readonly EntityView[] Entities;
+
+
+	internal ArchetypeChunk(ImmutableArray<ComponentInfo> sign, int chunkSize)
+	{
+		Entities = new EntityView[chunkSize];
+		Data = new Array[sign.Length];
+		for (var i = 0; i < sign.Length; ++i)
+			Data[i] = sign[i].Size > 0 ? Lookup.GetArray(sign[i].ID, chunkSize)! : null!;
+	}
 
 	public int Count { get; internal set; }
 
@@ -79,10 +90,9 @@ public sealed class Archetype
 	private readonly World _world;
 	private ArchetypeChunk[] _chunks;
 	private readonly ComponentComparer _comparer;
-	private readonly FastIdLookup<int> _lookup = new();
+	private readonly FrozenDictionary<EcsID, int> _lookup;
 	private readonly EcsID[] _ids;
 	private int _count;
-	private RollingHash _rolling;
 
 
 	internal Archetype(
@@ -93,36 +103,40 @@ public sealed class Archetype
 	{
 		_comparer = comparer;
 		_world = world;
-
 		All = [.. sign];
 		Components = All.Where(x => x.Size > 0).ToImmutableArray();
 		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
 		_chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
-		_rolling = new RollingHash();
+		var roll = new RollingHash();
+		var dict = new Dictionary<EcsID, int>();
 		for (var i = 0; i < sign.Length; ++i)
 		{
-			_lookup.Add(sign[i].ID, i);
-			_rolling.Add(sign[i].ID);
+			dict.Add(sign[i].ID, i);
+			roll.Add(sign[i].ID);
 		}
 
-		_ids = All.Select(s => s.ID).ToArray();
-		_add = new FastIdLookup<EcsEdge>();
-		_remove = new FastIdLookup<EcsEdge>();
+		Id = roll.Hash;
 
-		_ = ref GetOrCreateChunk(0);
+		_lookup = dict.ToFrozenDictionary();
+
+		_ids = All.Select(s => s.ID).ToArray();
+		_add = new ();
+		_remove = new ();
+
+		// _ = ref GetOrCreateChunk(0);
 	}
 
 
 	public World World => _world;
 	public int Count => _count;
 	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
-	public EcsID Id => _rolling.Hash;
+	public EcsID Id { get; }
 	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) / CHUNK_SIZE);
-	internal FastIdLookup<EcsEdge> _add, _remove;
+	internal List<EcsEdge> _add, _remove;
 
 
 	private ref ArchetypeChunk GetOrCreateChunk(int index)
@@ -135,10 +149,7 @@ public sealed class Archetype
 		ref var chunk = ref _chunks[index];
 		if (chunk.Data == null)
 		{
-			chunk.Entities = new EntityView[CHUNK_SIZE];
-			chunk.Data = new Array[All.Length];
-			for (var i = 0; i < All.Length; ++i)
-				chunk.Data[i] = All[i].Size > 0 ? Lookup.GetArray(All[i].ID, CHUNK_SIZE)! : null!;
+			chunk = new ArchetypeChunk(All, CHUNK_SIZE);
 		}
 
 		return ref chunk;
@@ -156,8 +167,8 @@ public sealed class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EcsID id)
 	{
-		ref var idx = ref _lookup.TryGet(id, out var exists);
-		return exists ? idx : -1;
+		ref readonly var idx = ref _lookup.GetValueRefOrNullRef(id);
+		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx))? -1 : idx;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -202,16 +213,17 @@ public sealed class Archetype
 
 			var srcIdx = _count & CHUNK_THRESHOLD;
 			var dstIdx = row & CHUNK_THRESHOLD;
-			for (var i = 0; i < All.Length; ++i)
+			var items = All;
+			for (var i = 0; i < items.Length; ++i)
 			{
-				var size = All[i].Size;
+				var size = items[i].Size;
 				if (size <= 0)
 					continue;
 
 				var arrayToBeRemoved = chunk.Data![i];
 				var lastValidArray = lastChunk.Data![i];
 
-				CopyFast(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, size, All[i].IsManaged);
+				CopyFast(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, size, items[i].IsManaged);
 			}
 
 			_world.GetRecord(chunk.EntityAt(row).ID).Row = row;
@@ -246,7 +258,9 @@ public sealed class Archetype
 	)
 	{
 		var vertex = new Archetype(left._world, sign, _comparer);
-		MakeEdges(left, vertex, id);
+		var a = left.All.Length < vertex.All.Length ? left : vertex;
+		var b = left.All.Length < vertex.All.Length ? vertex : left;
+		MakeEdges(a, b, id);
 		InsertVertex(vertex);
 		return vertex;
 	}
@@ -264,16 +278,17 @@ public sealed class Archetype
 
 		var srcIdx = oldRow & CHUNK_THRESHOLD;
 		var dstIdx = newRow & CHUNK_THRESHOLD;
-
+		var items = All;
+		var newItems = newArch.All;
 		for (; x < count; ++x, ++y)
 		{
-			while (All[i].ID != newArch.All[j].ID)
+			while (items[i].ID != newItems[j].ID)
 			{
 				// advance the sign with less components!
 				++y;
 			}
 
-			var size = All[i].Size;
+			var size = items[i].Size;
 			if (size <= 0)
 				continue;
 
@@ -281,7 +296,7 @@ public sealed class Archetype
 			var toArray = toChunk.Data![j];
 
 			// copy the moved entity to the target archetype
-			CopyFast(fromArray!, srcIdx, toArray!, dstIdx, 1, size, All[i].IsManaged);
+			CopyFast(fromArray!, srcIdx, toArray!, dstIdx, 1, size, items[i].IsManaged);
 		}
 
 		_ = RemoveByRow(oldRow);
@@ -307,8 +322,8 @@ public sealed class Archetype
 
 	private static void MakeEdges(Archetype left, Archetype right, EcsID id)
 	{
-		left._add.Add(id, new EcsEdge() { Archetype = right, ComponentID = id });
-		right._remove.Add(id, new EcsEdge() { Archetype = left, ComponentID = id });
+		left._add.Add(new EcsEdge() { Archetype = right, ComponentID = id });
+		right._remove.Add(new EcsEdge() { Archetype = left, ComponentID = id });
 	}
 
 	private void InsertVertex(Archetype newNode)
@@ -318,12 +333,17 @@ public sealed class Archetype
 
 		if (nodeTypeLen > newTypeLen - 1)
 		{
+			foreach (ref var edge in CollectionsMarshal.AsSpan(_remove))
+			{
+				edge.Archetype.InsertVertex(newNode);
+			}
+
 			return;
 		}
 
 		if (nodeTypeLen < newTypeLen - 1)
 		{
-			foreach ((var id, var edge) in _add)
+			foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
 			{
 				edge.Archetype.InsertVertex(newNode);
 			}
@@ -366,26 +386,37 @@ public sealed class Archetype
 
 	public void Print()
 	{
-		PrintRec(this, 0, 0);
+		// using var output = File.CreateText("./graph.txt");
 
-		static void PrintRec(Archetype root, int depth, ulong rootComponent)
-		{
-			Console.WriteLine(
-				"{0}- Parent [{1}] common ID: {2}",
-				new string('\t', depth),
-				string.Join(", ", root.All.Select(s => Lookup.GetArray(s.ID, 0)!.ToString())),
-				rootComponent
-			);
+		// PrintRec(output, this, 0, 0);
 
-			var add = root._add;
-			if (add.Count > 0)
-				Console.WriteLine("{0}  Children: ", new string('\t', depth));
+		// static void PrintRec(StreamWriter writer, Archetype root, int depth, ulong rootComponent)
+		// {
+		// 	writer.WriteLine(
+		// 		"{0}- Parent [{1}] common ID: {2}",
+		// 		new string('\t', depth),
+		// 		string.Join(", ", root.All.Select(s => Lookup.GetArray(s.ID, 0)!.ToString())),
+		// 		rootComponent
+		// 	);
 
-			foreach ((var id, var edge) in add)
-			{
-				PrintRec(edge.Archetype, depth + 1, edge.ComponentID);
-			}
-		}
+		// 	// var add = right ? root._add : root._remove;
+		// 	// if (add.Count > 0)
+		// 	// 	writer.WriteLine("{0}  Children: ", new string('\t', depth));
+
+		// 	writer.WriteLine("--- RIGHT ---");
+		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
+		// 	{
+		// 		PrintRec(writer, edge.Archetype, depth + 1, edge.ComponentID);
+		// 	}
+		// 	writer.WriteLine("---  ---");
+
+		// 	writer.WriteLine("--- LEFT ---");
+		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
+		// 	{
+		// 		PrintRec(writer, edge.Archetype, depth + 1, edge.ComponentID);
+		// 	}
+		// 	writer.WriteLine("---  ---");
+		// }
 	}
 
 	internal sealed class RawArrayData

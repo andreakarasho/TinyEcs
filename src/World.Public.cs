@@ -116,7 +116,7 @@ public sealed partial class World
 			var archLessOne = Archetype(ids[..^1]);
 			var tmp = _cache;
 			var newSign = tmp.AsSpan(0, ids.Length);
-			archLessOne.All.AsSpan().CopyTo(newSign);
+			archLessOne.All.CopyTo(newSign);
 			newSign[^1] = ids[^1];
 			newSign.SortNoAlloc(_comparisonCmps);
 			archetype = _archRoot.InsertVertex(archLessOne, newSign, ids[^1].ID);

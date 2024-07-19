@@ -82,6 +82,11 @@ public sealed partial class World : IDisposable
 			}
 		}
 
+		// if (!isPair && !Exists(lookup.ID))
+		// {
+		// 	Entity(lookup.ID).Set(lookup);
+		// }
+
 		return ref lookup;
     }
 
@@ -93,6 +98,81 @@ public sealed partial class World : IDisposable
         	EcsAssert.Panic(false, $"entity {id} is dead or doesn't exist!");
         return ref record;
     }
+
+	private Archetype? TraverseLeft(Archetype root, EcsID toFind)
+	{
+		foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
+		{
+			if (edge.ComponentID == toFind)
+			{
+				return edge.Archetype;
+			}
+
+			// var found = TraverseLeft(edge.Archetype, toFind);
+			// // var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
+			// if (found != null)
+			// 	return found;
+		}
+
+		// foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
+		// {
+		// 	var found = TraverseLeft(edge.Archetype, toFind);
+		// 	// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
+		// 	if (found != null)
+		// 		return found;
+		// }
+
+		return null;
+	}
+
+	private Archetype? TraverseRight(Archetype root, EcsID toFind)
+	{
+		foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
+		{
+			if (edge.ComponentID == toFind)
+			{
+				return edge.Archetype;
+			}
+
+			// var found = TraverseRight(edge.Archetype, toFind);
+			// // var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
+			// if (found != null)
+			// 	return found;
+		}
+
+		// foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
+		// {
+		// 	// if (edge.ComponentID == toFind)
+		// 	// {
+		// 	// 	return edge.Archetype;
+		// 	// }
+
+		// 	var found = TraverseRight(edge.Archetype, toFind);
+		// 	// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
+		// 	if (found != null)
+		// 		return found;
+		// }
+
+		return null;
+	}
+
+	private Archetype? TraverseEdges(Archetype root, EcsID toFind, bool left)
+	{
+		foreach (ref var edge in CollectionsMarshal.AsSpan(!left ? root._remove : root._add))
+		{
+			if (edge.ComponentID == toFind)
+			{
+				return edge.Archetype;
+			}
+
+			var found = TraverseEdges(edge.Archetype, toFind, left);
+			// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
+			if (found != null)
+				return found;
+		}
+
+		return null;
+	}
 
 	private void DetachComponent(EcsID entity, EcsID id)
 	{
@@ -114,27 +194,47 @@ public sealed partial class World : IDisposable
 
 		BeginDeferred();
 
-		var roll = new RollingHash();
-		foreach (ref readonly var oldId in oldArch.All.AsSpan())
-			if (oldId.ID != id)
-				roll.Add(oldId.ID);
+		var foundArch = TraverseLeft(oldArch, id);
 
-		ref var newArch = ref GetArchetype(roll.Hash, create: true);
-		if (newArch == null)
+		if (foundArch != null)
 		{
-			var tmp = _cache;
-			for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
-			{
-				if (oldArch.All[i].ID != id)
-					tmp[j++] = oldArch.All[i];
-			}
 
-			newArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, oldArch.All.Length - 1), id);
-			Archetypes.Add(newArch);
+		}
+		else
+		{
+			if (oldArch.All.Length - 1 <= 0)
+			{
+				foundArch = _archRoot;
+			}
 		}
 
-		record.Row = record.Archetype.MoveEntity(newArch!, record.Row, true);
-        record.Archetype = newArch!;
+		// var roll = new RollingHash();
+		// foreach (ref readonly var oldId in oldArch.All.AsSpan())
+		// 	if (oldId.ID != id)
+		// 		roll.Add(oldId.ID);
+		// ref var newArch = ref GetArchetype(roll.Hash, create: true);
+
+		if (foundArch == null)
+		{
+			var tmp = _cache;
+			var items = oldArch.All;
+			for (int i = 0, j = 0; i < items.Length; ++i)
+			{
+				if (items[i].ID != id)
+					tmp[j++] = items[i];
+			}
+
+			foundArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, items.Length - 1), id);
+			Archetypes.Add(foundArch);
+		}
+
+		// if (foundArch != null && foundArch.Id != newArch.Id)
+		// {
+
+		// }
+
+		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
+        record.Archetype = foundArch!;
 		EndDeferred();
 	}
 
@@ -156,43 +256,58 @@ public sealed partial class World : IDisposable
 
 		BeginDeferred();
 
-		var allSpan = oldArch.All.AsSpan();
-		var roll = new RollingHash();
-		var found = false;
 
-		foreach (ref readonly var cmp in allSpan)
+		var foundArch = TraverseRight(oldArch, id);
+		if (foundArch != null)
 		{
-			if (!found && cmp.ID > id)
-			{
-				roll.Add(id);
-				found = true;
-			}
 
-			roll.Add(cmp.ID);
+		}
+		else
+		{
+
 		}
 
-		if (!found)
-			roll.Add(id);
+		// var roll = new RollingHash();
+		// var found = false;
 
-		ref var newArch = ref GetArchetype(roll.Hash, create: true);
-		if (newArch == null)
+		// foreach (ref readonly var cmp in oldArch.All.AsSpan())
+		// {
+		// 	if (!found && cmp.ID > id)
+		// 	{
+		// 		roll.Add(id);
+		// 		found = true;
+		// 	}
+
+		// 	roll.Add(cmp.ID);
+		// }
+
+		// if (!found)
+		// 	roll.Add(id);
+
+		// ref var newArch = ref GetArchetype(roll.Hash, create: true);
+		if (foundArch == null)
 		{
 			var tmp = _cache;
 			oldArch.All.CopyTo(tmp);
 			var span = tmp.AsSpan(0, oldArch.All.Length + 1);
 			span[^1] = new ComponentInfo(id, size, isManaged);
 			span.SortNoAlloc(_comparisonCmps);
-			newArch = _archRoot.InsertVertex(oldArch, span, id);
-			Archetypes.Add(newArch);
+			foundArch = _archRoot.InsertVertex(oldArch, span, id);
+			Archetypes.Add(foundArch);
 		}
 
-		record.Row = record.Archetype.MoveEntity(newArch!, record.Row, false);
-        record.Archetype = newArch!;
+		// if (foundArch != null && foundArch.Id != newArch.Id)
+		// {
+		// 	foundArch = TraverseRight(oldArch, id);
+		// }
+
+		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, false);
+        record.Archetype = foundArch!;
 		EndDeferred();
 
 		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
 
-		return (size > 0 ? record.GetChunk().RawComponentData(newArch!.GetComponentIndex(id)) : null, record.Row);
+		return (size > 0 ? record.GetChunk().RawComponentData(foundArch!.GetComponentIndex(id)) : null, record.Row);
 	}
 
     private ref Archetype? GetArchetype(EcsID hash, bool create)
@@ -265,7 +380,7 @@ public sealed partial class World : IDisposable
 		if (add.Count <= 0)
 			return;
 
-		foreach ((var id, var edge) in add)
+		foreach (ref var edge in CollectionsMarshal.AsSpan(add))
 		{
 			MatchArchetypes(edge.Archetype, terms, matched);
 		}

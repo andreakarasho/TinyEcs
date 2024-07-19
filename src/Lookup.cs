@@ -395,6 +395,12 @@ internal sealed class FastIdLookup<TValue>
 {
 	const int COMPONENT_MAX_ID = 1024;
 
+	struct Entry
+	{
+		public int Index;
+		public EcsID Id;
+	}
+
 
 #if NET
 	private readonly Dictionary<EcsID, TValue> _slowLookup = new();
@@ -403,6 +409,11 @@ internal sealed class FastIdLookup<TValue>
 #endif
 	private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
 	private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
+
+	// private readonly List<Entry> _indices = new();
+	// private readonly List<TValue> _values = new ();
+	// private readonly Dictionary<EcsID, TValue> _dict = new();
+
 
 	public int Count => _slowLookup.Count;
 
@@ -436,7 +447,7 @@ internal sealed class FastIdLookup<TValue>
 
 		if (!exists)
 			val = ref AddToFast(id, ref val)!;
-		
+
 		return ref val!;
 	}
 
