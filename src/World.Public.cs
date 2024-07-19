@@ -87,7 +87,7 @@ public sealed partial class World
         _entities.Clear();
         _archRoot.Clear();
         _typeIndex.Clear();
-		_cacheIndex.Clear();
+		_cachedComponents.Clear();
 
 		foreach (var query in _cachedQueries.Values)
 			query.Dispose();
@@ -110,17 +110,15 @@ public sealed partial class World
 		ids.SortNoAlloc(_comparisonCmps);
 
 		var hash = RollingHash.Calculate(ids);
-		ref var archetype = ref GetArchetype(hash, true);
-		if (archetype == null)
+		ref var archetype = ref _typeIndex.GetOrCreate(hash, out var exists);
+		if (!exists)
 		{
 			var archLessOne = Archetype(ids[..^1]);
-			var tmp = _cache;
-			var newSign = tmp.AsSpan(0, ids.Length);
-			archLessOne.All.CopyTo(newSign);
-			newSign[^1] = ids[^1];
-			newSign.SortNoAlloc(_comparisonCmps);
-			archetype = _archRoot.InsertVertex(archLessOne, newSign, ids[^1].ID);
-			Archetypes.Add(archetype);
+			var arr = new ComponentInfo[ids.Length];
+			archLessOne.All.CopyTo(arr);
+			arr[^1] = ids[^1];
+			arr.AsSpan().SortNoAlloc(_comparisonCmps);
+			archetype = NewArchetype(archLessOne, arr, arr[^1].ID);
 		}
 
 		return archetype;
@@ -495,7 +493,7 @@ public sealed partial class World
 	/// </summary>
 	public void PrintGraph()
     {
-        _archRoot.Print();
+        _archRoot.Print(0);
     }
 
 	/// <summary>

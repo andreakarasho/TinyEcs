@@ -78,6 +78,7 @@ public ref struct ChunkEnumerator
 	public bool MoveNext() => ++_index < _chunks.Length;
 }
 
+
 public sealed class Archetype
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 4;
@@ -97,13 +98,13 @@ public sealed class Archetype
 
 	internal Archetype(
 		World world,
-		ReadOnlySpan<ComponentInfo> sign,
+		ComponentInfo[] sign,
 		ComponentComparer comparer
 	)
 	{
 		_comparer = comparer;
 		_world = world;
-		All = [.. sign];
+		All = sign.ToImmutableArray();
 		Components = All.Where(x => x.Size > 0).ToImmutableArray();
 		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
@@ -124,8 +125,6 @@ public sealed class Archetype
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
 		_remove = new ();
-
-		// _ = ref GetOrCreateChunk(0);
 	}
 
 
@@ -253,7 +252,7 @@ public sealed class Archetype
 
 	internal Archetype InsertVertex(
 		Archetype left,
-		ReadOnlySpan<ComponentInfo> sign,
+		ComponentInfo[] sign,
 		EcsID id
 	)
 	{
@@ -322,8 +321,8 @@ public sealed class Archetype
 
 	private static void MakeEdges(Archetype left, Archetype right, EcsID id)
 	{
-		left._add.Add(new EcsEdge() { Archetype = right, ComponentID = id });
-		right._remove.Add(new EcsEdge() { Archetype = left, ComponentID = id });
+		left._add.Add(new EcsEdge() { Archetype = right, Id = id });
+		right._remove.Add(new EcsEdge() { Archetype = left, Id = id });
 	}
 
 	private void InsertVertex(Archetype newNode)
@@ -331,15 +330,15 @@ public sealed class Archetype
 		var nodeTypeLen = All.Length;
 		var newTypeLen = newNode.All.Length;
 
-		if (nodeTypeLen > newTypeLen - 1)
-		{
-			foreach (ref var edge in CollectionsMarshal.AsSpan(_remove))
-			{
-				edge.Archetype.InsertVertex(newNode);
-			}
+		// if (nodeTypeLen > newTypeLen - 1)
+		// {
+		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(_remove))
+		// 	{
+		// 		edge.Archetype.InsertVertex(newNode);
+		// 	}
 
-			return;
-		}
+		// 	return;
+		// }
 
 		if (nodeTypeLen < newTypeLen - 1)
 		{
@@ -379,45 +378,63 @@ public sealed class Archetype
 		return j == other.Length;
 	}
 
-	internal int FindMatch(ReadOnlySpan<IQueryTerm> searching)
+	internal Archetype? TraverseLeft(EcsID nodeId)
+		=> Traverse(this, nodeId, false);
+
+	internal Archetype? TraverseRight(EcsID nodeId)
+		=> Traverse(this, nodeId, true);
+
+	private static Archetype? Traverse(Archetype root, EcsID nodeId, bool onAdd)
 	{
-		return Match.Validate(_comparer, _ids, searching);
-	}
+		foreach (ref var edge in CollectionsMarshal.AsSpan(onAdd ? root._add : root._remove))
+		{
+			if (edge.Id == nodeId)
+				return edge.Archetype;
+		}
 
-	public void Print()
-	{
-		// using var output = File.CreateText("./graph.txt");
-
-		// PrintRec(output, this, 0, 0);
-
-		// static void PrintRec(StreamWriter writer, Archetype root, int depth, ulong rootComponent)
+		// foreach (ref var edge in CollectionsMarshal.AsSpan(onAdd ? root._add : root._remove))
 		// {
-		// 	writer.WriteLine(
-		// 		"{0}- Parent [{1}] common ID: {2}",
-		// 		new string('\t', depth),
-		// 		string.Join(", ", root.All.Select(s => Lookup.GetArray(s.ID, 0)!.ToString())),
-		// 		rootComponent
-		// 	);
-
-		// 	// var add = right ? root._add : root._remove;
-		// 	// if (add.Count > 0)
-		// 	// 	writer.WriteLine("{0}  Children: ", new string('\t', depth));
-
-		// 	writer.WriteLine("--- RIGHT ---");
-		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
-		// 	{
-		// 		PrintRec(writer, edge.Archetype, depth + 1, edge.ComponentID);
-		// 	}
-		// 	writer.WriteLine("---  ---");
-
-		// 	writer.WriteLine("--- LEFT ---");
-		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
-		// 	{
-		// 		PrintRec(writer, edge.Archetype, depth + 1, edge.ComponentID);
-		// 	}
-		// 	writer.WriteLine("---  ---");
+		// 	var found = onAdd ? edge.Archetype.TraverseRight(nodeId) : edge.Archetype.TraverseLeft(nodeId);
+		// 	if (found != null)
+		// 		return found;
 		// }
+
+		return null;
 	}
+
+	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
+	{
+		var result = Match.Validate(_comparer, _ids, terms);
+		if (result < 0)
+		{
+			return;
+		}
+
+		if (result == 0)
+		{
+			matched.Add(this);
+		}
+
+		var add = _add;
+		if (add.Count <= 0)
+			return;
+
+		foreach (ref var edge in CollectionsMarshal.AsSpan(add))
+		{
+			edge.Archetype.GetSuperSets(terms, matched);
+		}
+	}
+
+	public void Print(int depth)
+    {
+        Console.WriteLine(new string(' ', depth * 2) + $"Node: [{string.Join(", ", All.Select(s => s.ID))}]");
+
+        foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
+        {
+            Console.WriteLine(new string(' ', (depth + 1) * 2) + $"Edge: {edge.Id}");
+            edge.Archetype.Print(depth + 2);
+        }
+    }
 
 	internal sealed class RawArrayData
 	{
@@ -448,6 +465,6 @@ public sealed class Archetype
 
 struct EcsEdge
 {
-	public EcsID ComponentID;
+	public EcsID Id;
 	public Archetype Archetype;
 }

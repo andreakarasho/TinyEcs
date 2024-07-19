@@ -16,8 +16,8 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
 	private readonly object _newEntLock = new object();
 	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
-	private readonly FastIdLookup<EcsID> _cacheIndex = new ();
-	private readonly ComponentInfo[] _cache = new ComponentInfo[128];
+	private readonly FastIdLookup<EcsID> _cachedComponents = new ();
+	private readonly ComponentInfo[] _cache = new ComponentInfo[1024];
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
@@ -74,7 +74,7 @@ public sealed partial class World : IDisposable
 
 		if (!isPair /*!Exists(lookup.ID)*/)
 		{
-			ref var idx = ref _cacheIndex.GetOrCreate(lookup.ID, out var exists);
+			ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
 
 			if (!exists)
 			{
@@ -99,81 +99,6 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
-	private Archetype? TraverseLeft(Archetype root, EcsID toFind)
-	{
-		foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
-		{
-			if (edge.ComponentID == toFind)
-			{
-				return edge.Archetype;
-			}
-
-			// var found = TraverseLeft(edge.Archetype, toFind);
-			// // var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
-			// if (found != null)
-			// 	return found;
-		}
-
-		// foreach (ref var edge in CollectionsMarshal.AsSpan(root._remove))
-		// {
-		// 	var found = TraverseLeft(edge.Archetype, toFind);
-		// 	// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
-		// 	if (found != null)
-		// 		return found;
-		// }
-
-		return null;
-	}
-
-	private Archetype? TraverseRight(Archetype root, EcsID toFind)
-	{
-		foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
-		{
-			if (edge.ComponentID == toFind)
-			{
-				return edge.Archetype;
-			}
-
-			// var found = TraverseRight(edge.Archetype, toFind);
-			// // var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
-			// if (found != null)
-			// 	return found;
-		}
-
-		// foreach (ref var edge in CollectionsMarshal.AsSpan(root._add))
-		// {
-		// 	// if (edge.ComponentID == toFind)
-		// 	// {
-		// 	// 	return edge.Archetype;
-		// 	// }
-
-		// 	var found = TraverseRight(edge.Archetype, toFind);
-		// 	// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
-		// 	if (found != null)
-		// 		return found;
-		// }
-
-		return null;
-	}
-
-	private Archetype? TraverseEdges(Archetype root, EcsID toFind, bool left)
-	{
-		foreach (ref var edge in CollectionsMarshal.AsSpan(!left ? root._remove : root._add))
-		{
-			if (edge.ComponentID == toFind)
-			{
-				return edge.Archetype;
-			}
-
-			var found = TraverseEdges(edge.Archetype, toFind, left);
-			// var found = TraverseEdges(edge.Archetype, toFind, edge.ComponentID > toFind);
-			if (found != null)
-				return found;
-		}
-
-		return null;
-	}
-
 	private void DetachComponent(EcsID entity, EcsID id)
 	{
 		ref var record = ref GetRecord(entity);
@@ -194,44 +119,37 @@ public sealed partial class World : IDisposable
 
 		BeginDeferred();
 
-		var foundArch = TraverseLeft(oldArch, id);
-
-		if (foundArch != null)
+		var foundArch = oldArch.TraverseLeft(id);
+		if (foundArch == null && oldArch.All.Length - 1 <= 0)
 		{
-
+			foundArch = _archRoot;
 		}
-		else
-		{
-			if (oldArch.All.Length - 1 <= 0)
-			{
-				foundArch = _archRoot;
-			}
-		}
-
-		// var roll = new RollingHash();
-		// foreach (ref readonly var oldId in oldArch.All.AsSpan())
-		// 	if (oldId.ID != id)
-		// 		roll.Add(oldId.ID);
-		// ref var newArch = ref GetArchetype(roll.Hash, create: true);
 
 		if (foundArch == null)
 		{
-			var tmp = _cache;
-			var items = oldArch.All;
-			for (int i = 0, j = 0; i < items.Length; ++i)
+			var hash = new RollingHash();
+			foreach (ref readonly var cmp in oldArch.All.AsSpan())
 			{
-				if (items[i].ID != id)
-					tmp[j++] = items[i];
+				if (cmp.ID != id)
+					hash.Add(cmp.ID);
 			}
 
-			foundArch = _archRoot.InsertVertex(oldArch, tmp.AsSpan(0, items.Length - 1), id);
-			Archetypes.Add(foundArch);
+			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
+			if (!exists)
+			{
+				var arr = new ComponentInfo[oldArch.All.Length - 1];
+				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
+				{
+					ref readonly var item = ref oldArch.All.ItemRef(i);
+					if (item.ID != id)
+						arr[j++] = item;
+				}
+
+				arch = NewArchetype(oldArch, arr, id);
+			}
+
+			foundArch = arch;
 		}
-
-		// if (foundArch != null && foundArch.Id != newArch.Id)
-		// {
-
-		// }
 
 		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
         record.Archetype = foundArch!;
@@ -256,50 +174,39 @@ public sealed partial class World : IDisposable
 
 		BeginDeferred();
 
-
-		var foundArch = TraverseRight(oldArch, id);
-		if (foundArch != null)
-		{
-
-		}
-		else
-		{
-
-		}
-
-		// var roll = new RollingHash();
-		// var found = false;
-
-		// foreach (ref readonly var cmp in oldArch.All.AsSpan())
-		// {
-		// 	if (!found && cmp.ID > id)
-		// 	{
-		// 		roll.Add(id);
-		// 		found = true;
-		// 	}
-
-		// 	roll.Add(cmp.ID);
-		// }
-
-		// if (!found)
-		// 	roll.Add(id);
-
-		// ref var newArch = ref GetArchetype(roll.Hash, create: true);
+		var foundArch = oldArch.TraverseRight(id);
 		if (foundArch == null)
 		{
-			var tmp = _cache;
-			oldArch.All.CopyTo(tmp);
-			var span = tmp.AsSpan(0, oldArch.All.Length + 1);
-			span[^1] = new ComponentInfo(id, size, isManaged);
-			span.SortNoAlloc(_comparisonCmps);
-			foundArch = _archRoot.InsertVertex(oldArch, span, id);
-			Archetypes.Add(foundArch);
-		}
+			var hash = new RollingHash();
 
-		// if (foundArch != null && foundArch.Id != newArch.Id)
-		// {
-		// 	foundArch = TraverseRight(oldArch, id);
-		// }
+			var found = false;
+			foreach (ref readonly var cmp in oldArch.All.AsSpan())
+			{
+				if (!found && cmp.ID > id)
+				{
+					hash.Add(id);
+					found = true;
+				}
+
+				hash.Add(cmp.ID);
+			}
+
+			if (!found)
+				hash.Add(id);
+
+			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
+			if (!exists)
+			{
+				var arr = new ComponentInfo[oldArch.All.Length + 1];
+				oldArch.All.CopyTo(arr);
+				arr[^1] = new ComponentInfo(id, size, isManaged);
+				arr.AsSpan().SortNoAlloc(_comparisonCmps);
+
+				arch = NewArchetype(oldArch, arr, id);
+			}
+
+			foundArch = arch;
+		}
 
 		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, false);
         record.Archetype = foundArch!;
@@ -310,20 +217,11 @@ public sealed partial class World : IDisposable
 		return (size > 0 ? record.GetChunk().RawComponentData(foundArch!.GetComponentIndex(id)) : null, record.Row);
 	}
 
-    private ref Archetype? GetArchetype(EcsID hash, bool create)
+	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)
 	{
-		ref var arch = ref Unsafe.NullRef<Archetype>();
-
-		if (create)
-		{
-			arch = ref _typeIndex.GetOrCreate(hash, out _)!;
-		}
-		else
-		{
-			arch = ref _typeIndex.TryGet(hash, out _)!;
-		}
-
-		return ref arch;
+		var archetype = _archRoot.InsertVertex(oldArch, sign, id);
+		Archetypes.Add(archetype);
+		return archetype;
 	}
 
 	internal ref T GetUntrusted<T>(EcsID entity, EcsID cmpId, int size) where T : struct
@@ -353,37 +251,6 @@ public sealed partial class World : IDisposable
 		query.Match();
 
 		return query;
-	}
-
-	internal Archetype? FindArchetype(EcsID hash)
-	{
-		ref var arch = ref _typeIndex.TryGet(hash, out var exists);
-		if (!exists)
-			return _archRoot;
-		return arch;
-	}
-
-	internal void MatchArchetypes(Archetype root, ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
-	{
-		var result = root.FindMatch(terms);
-		if (result < 0)
-		{
-			return;
-		}
-
-		if (result == 0)
-		{
-			matched.Add(root);
-		}
-
-		var add = root._add;
-		if (add.Count <= 0)
-			return;
-
-		foreach (ref var edge in CollectionsMarshal.AsSpan(add))
-		{
-			MatchArchetypes(edge.Archetype, terms, matched);
-		}
 	}
 }
 

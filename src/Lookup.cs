@@ -395,11 +395,11 @@ internal sealed class FastIdLookup<TValue>
 {
 	const int COMPONENT_MAX_ID = 1024;
 
-	struct Entry
-	{
-		public int Index;
-		public EcsID Id;
-	}
+	// struct Entry
+	// {
+	// 	public int Index;
+	// 	public EcsID Id;
+	// }
 
 
 #if NET
@@ -422,9 +422,9 @@ internal sealed class FastIdLookup<TValue>
 		AddToFast(id, ref value);
 
 #if NET
-		CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out _) = value;
+		CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out var exists) = value;
 #else
-		_slowLookup.GetOrAddValueRef(id, out _) = value;
+		_slowLookup.GetOrAddValueRef(id, out var exists) = value;
 #endif
 	}
 
@@ -446,7 +446,7 @@ internal sealed class FastIdLookup<TValue>
 #endif
 
 		if (!exists)
-			val = ref AddToFast(id, ref val)!;
+			val = ref AddToFast(id, ref val!)!;
 
 		return ref val!;
 	}
@@ -469,7 +469,7 @@ internal sealed class FastIdLookup<TValue>
 #if NET
 		ref var val = ref CollectionsMarshal.GetValueRefOrNullRef(_slowLookup, id);
 		exists = !Unsafe.IsNullRef(ref val);
-		return ref val;
+		return ref val!;
 #else
 		return ref _slowLookup.GetOrNullRef(id, out exists);
 #endif

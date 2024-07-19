@@ -59,12 +59,12 @@ public struct RollingHash
 	    return (x1 + m0) % m0;
     }
 
-	public static ulong Calculate(params Span<ulong> values)
+	public static ulong Calculate(params ReadOnlySpan<EcsID> values)
 	{
 		var hash = 0ul;
 		var product = 1ul;
 
-		foreach (ref var value in values)
+		foreach (ref readonly var value in values)
 		{
 			hash = (hash + value * product) % Modulus;
         	product = (product * Base) % Modulus;
@@ -73,12 +73,12 @@ public struct RollingHash
 		return hash;
 	}
 
-	public static ulong Calculate(params Span<ComponentInfo> values)
+	public static ulong Calculate(params ReadOnlySpan<ComponentInfo> values)
 	{
 		var hash = 0ul;
 		var product = 1ul;
 
-		foreach (ref var value in values)
+		foreach (ref readonly var value in values)
 		{
 			hash = (hash + value.ID * product) % Modulus;
         	product = (product * Base) % Modulus;

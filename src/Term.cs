@@ -29,20 +29,6 @@ public interface IQueryTerm : IComparable<IQueryTerm>
 		}
 		return roll;
 	}
-
-	public static RollingHash GetHash(params IEnumerable<IQueryTerm> terms)
-	{
-		var roll = new RollingHash();
-		foreach (var term in terms)
-		{
-			roll.Add(term.Id);
-			roll.Add((ulong)term.Op);
-
-			if (term is ContainerQueryTerm container)
-				roll.Add(container.Terms.Aggregate(0Ul, static (a, b) => a + b.Id));
-		}
-		return roll;
-	}
 }
 
 [DebuggerDisplay("{Id} - {Op}")]

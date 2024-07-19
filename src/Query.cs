@@ -149,21 +149,12 @@ public partial class Query : IDisposable
 		_subQuery?.Match();
 
 		var allArchetypes = World.Archetypes;
-
 		if (allArchetypes.Count == 0 || _lastArchetypeIdMatched == allArchetypes[^1].Id)
-			return;
-
-		var ids = _terms
-			.Where(s => s.Op == TermOp.With || s.Op == TermOp.Exactly);
-
-		var roll = IQueryTerm.GetHash(ids);
-		var first = World.FindArchetype(roll.Hash);
-		if (first == null)
 			return;
 
 		_lastArchetypeIdMatched = allArchetypes[^1].Id;
 		_matchedArchetypes.Clear();
-		World.MatchArchetypes(first, _terms.AsSpan(), _matchedArchetypes);
+		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
 	}
 
 	public int Count()
