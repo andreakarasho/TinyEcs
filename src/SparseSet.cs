@@ -249,12 +249,6 @@ internal sealed class EntitySparseSet<T>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ulong SplitGeneration(ref ulong index)
 	{
-		if (IDOp.IsPair(index))
-		{
-			index &= ~EcsConst.ECS_ID_FLAGS_MASK;
-			//index &= ~(EcsConst.ECS_GENERATION_MASK /*| EcsConst.ECS_ID_FLAGS_MASK*/);
-		}
-
 		var gen = index & EcsConst.ECS_GENERATION_MASK;
 		EcsAssert.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
 		index -= gen;
