@@ -23,6 +23,7 @@
 		<PackageProjectUrl>https://github.com/andreakarasho/TinyEcs</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/andreakarasho/TinyEcs</RepositoryUrl>
         <RepositoryType>Github</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 	</PropertyGroup>
 
 	<ItemGroup>
