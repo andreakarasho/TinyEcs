@@ -534,6 +534,18 @@ public static class ChildOfEx
 		entity.World.Add<ChildOf>(child, entity.ID);
 		return entity;
 	}
+
+	/// <summary>
+	/// Shortcut to remove ChildOf relation from an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="child"></param>
+	/// <returns></returns>
+	public static EntityView RemoveChild(this EntityView entity, EcsID child)
+	{
+		entity.World.Unset<ChildOf>(child, entity.ID);
+		return entity;
+	}
 }
 
 public static class NameEx
