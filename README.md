@@ -265,6 +265,9 @@ var resultB = playerB.Has<TradingWith>(playerA);
 struct TradingWith { }
 ```
 
+## Bechmarks:
+-   [friflo - ECS.CSharp.Benchmark-common-use-cases](https://github.com/friflo/ECS.CSharp.Benchmark-common-use-cases/tree/main?tab=readme-ov-file#feature-matrix)
+
 ## Credits
 
 Inspired by:
