@@ -167,8 +167,8 @@ namespace TinyEcs.Tests
 			var ent = ctx.World.Entity()
 				.Set<NormalTag, FloatComponent>(new FloatComponent() { Value = 23f });
 
-			var query = ctx.World.Query<Relation<NormalTag, FloatComponent>>();
-			ref var single = ref query.Single<Relation<NormalTag, FloatComponent>>();
+			var query = ctx.World.Query<Pair<NormalTag, FloatComponent>>();
+			ref var single = ref query.Single<Pair<NormalTag, FloatComponent>>();
 
 			Assert.Equal(23f, single.Target.Value);
 		}
@@ -455,7 +455,7 @@ namespace TinyEcs.Tests
 		{
 			using var ctx = new Context();
 
-			var query = ctx.World.Query<UnkData0, (With<UnkData0>, With<Relation<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
+			var query = ctx.World.Query<UnkData0, (With<UnkData0>, With<Pair<UnkData1, Wildcard>>, Or<(Without<UnkData2>, Without<UnkData1>)>)>();
 			ctx.World.Entity()
 				.Add<UnkData2>()
 				.Set<UnkData1, UnkData0>(new UnkData0());
@@ -467,7 +467,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(ent.ID, resEnt.ID);
 
 
-			var query2 = ctx.World.Query<Relation<UnkData3, UnkData4>>();
+			var query2 = ctx.World.Query<Pair<UnkData3, UnkData4>>();
 			ent = ctx.World.Entity()
 				.Set<UnkData3, UnkData4>(new UnkData4());
 

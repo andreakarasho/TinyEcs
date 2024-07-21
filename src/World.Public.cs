@@ -31,7 +31,7 @@ public sealed partial class World
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
 		_ = Component<Wildcard>();
-		_ = Component<Relation<Wildcard, Wildcard>>();
+		_ = Component<Pair<Wildcard, Wildcard>>();
 		_ = Component<Identifier>();
 		_ = Component<Name>();
 		_ = Component<ChildOf>();

@@ -87,9 +87,9 @@ internal static class Lookup
 
 		static Component()
 		{
-			if (typeof(IRelation).IsAssignableFrom(typeof(T)))
+			if (typeof(IPair).IsAssignableFrom(typeof(T)))
 			{
-				var relation = (IRelation)default(T);
+				var relation = (IPair)default(T);
 
 				EcsID actionId = 0;
 				EcsID targeId = 0;
@@ -262,14 +262,14 @@ internal static class Lookup
 	{
 		var type = obj.GetType();
 		var op = TermOp.DataAccess;
-		IRelation? relation = null;
+		IPair? relation = null;
 		object? subObj = null;
 
 		if (obj is IWith with)
 		{
 			op = TermOp.With;
 			subObj = with.Value;
-			if (with.Value is IRelation rel)
+			if (with.Value is IPair rel)
 			{
 				relation = rel;
 			}
@@ -278,7 +278,7 @@ internal static class Lookup
 		{
 			op = TermOp.Without;
 			subObj = without.Value;
-			if (without.Value is IRelation rel)
+			if (without.Value is IPair rel)
 			{
 				relation = rel;
 			}
@@ -287,12 +287,12 @@ internal static class Lookup
 		{
 			op = TermOp.Optional;
 			subObj = optional.Value;
-			if (optional.Value is IRelation rel)
+			if (optional.Value is IPair rel)
 			{
 				relation = rel;
 			}
 		}
-		else if (obj is IRelation rel)
+		else if (obj is IPair rel)
 		{
 			relation = rel;
 		}

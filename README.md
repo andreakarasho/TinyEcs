@@ -205,8 +205,8 @@ ref var endPos = ref player.Get<EndPoint, Poisition>();
 
 // Queries for begin & end positions!
 // Notice that relationships are rappresented by a Tuple(A, B)
-ecs.Query<(Relation<BeginPoint, Position>, Relation<EndPoint, Position>)>()
-    .Each((ref Relation<BeginPoint, Position> begin, ref Relation<EndPoint, Position> end) => {
+ecs.Query<(Pair<BeginPoint, Position>, Pair<EndPoint, Position>)>()
+    .Each((ref Pair<BeginPoint, Position> begin, ref Pair<EndPoint, Position> end) => {
     // ...
 });
 
@@ -266,6 +266,7 @@ struct TradingWith { }
 ```
 
 ## Bechmarks
+
 -   [friflo - ECS.CSharp.Benchmark-common-use-cases](https://github.com/friflo/ECS.CSharp.Benchmark-common-use-cases/tree/main?tab=readme-ov-file#feature-matrix)
 
 ## Credits

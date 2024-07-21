@@ -14,13 +14,13 @@ partial class World
 		ref readonly var secondCmp = ref Component<TTarget>();
 
 		// Create the relation (A, B)
-		ref readonly var linkedCmp = ref Component<Relation<TAction, TTarget>>();
+		ref readonly var linkedCmp = ref Component<Pair<TAction, TTarget>>();
 
 		// Create the relation (*, B)
-		ref readonly var linkedCmpWildcard0 = ref Component<Relation<Wildcard, TTarget>>();
+		ref readonly var linkedCmpWildcard0 = ref Component<Pair<Wildcard, TTarget>>();
 
 		// Create the relation (A, *)
-		ref readonly var linkedCmpWildcard1 = ref Component<Relation<TAction, Wildcard>>();
+		ref readonly var linkedCmpWildcard1 = ref Component<Pair<TAction, Wildcard>>();
 
 		return ref linkedCmp;
 	}
@@ -75,7 +75,7 @@ partial class World
 		CheckUnique(entity, Entity<TAction>());
 		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
-		Add<Relation<TAction, TTarget>>(entity);
+		Add<Pair<TAction, TTarget>>(entity);
 	}
 
 	/// <summary>
@@ -95,7 +95,20 @@ partial class World
 		CheckUnique(entity, Entity<TAction>());
 		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
-		Set(entity, new Relation<TAction, TTarget>() { Action = default, Target = target});
+		// Set(entity, new Pair<TAction, TTarget>() { Action = default, Target = target});
+
+		EcsAssert.Panic(linkedCmp.Size > 0, "this is not a component");
+
+		if (IsDeferred && !Has(entity, linkedCmp.ID))
+		{
+			SetDeferred(entity, linkedCmp.ID, new Pair<TAction, TTarget>() { Action = default, Target = target}, linkedCmp.Size, linkedCmp.IsManaged);
+
+			return;
+		}
+
+        (var raw, var row) = AttachComponent(entity, linkedCmp.ID, linkedCmp.Size, linkedCmp.IsManaged);
+        var array = Unsafe.As<Pair<TAction, TTarget>[]>(raw!);
+        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD].Target = target;
 	}
 
 	/// <summary>
@@ -191,8 +204,10 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		return ref Get<Relation<TAction, TTarget>>(entity).Target;
+		ref readonly var targetCmp = ref Component<TTarget>();
+		var pairId = IDOp.Pair(Component<TAction>().ID, targetCmp.ID);
+		return ref GetUntrusted<Pair<TAction, TTarget>>(entity, pairId, targetCmp.Size).Target;
+		// return ref Get<Pair<TAction, TTarget>>(entity).Target;
 	}
 
 	/// <summary>
@@ -221,8 +236,7 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		return Has<Relation<TAction, TTarget>>(entity);
+		return Has(entity, Component<TAction>().ID, Component<TTarget>().ID);
 	}
 
 	/// <summary>
@@ -262,10 +276,7 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		var first = Component<TAction>().ID;
-		var second = Component<TTarget>().ID;
-		var pairId = IDOp.Pair(first, second);
-		Unset(entity, pairId);
+		Unset(entity, Component<TAction>().ID, Component<TTarget>().ID);
 	}
 
 	/// <summary>
@@ -560,21 +571,21 @@ public static class NameEx
 	}
 }
 
-public interface IRelation
+public interface IPair
 {
 	internal object Action { get; }
 	internal object Target { get; }
 }
 
-public struct Relation<TAction, TTarget> : IRelation
+public struct Pair<TAction, TTarget> : IPair
 	where TAction : struct
 	where TTarget : struct
 {
 	static readonly TAction _action = default;
 	static readonly TTarget _target = default;
 
-	readonly object IRelation.Action => _action;
-	readonly object IRelation.Target => _target;
+	readonly object IPair.Action => _action;
+	readonly object IPair.Target => _target;
 
 	public TAction Action;
 	public TTarget Target;
