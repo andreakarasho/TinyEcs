@@ -19,7 +19,7 @@ public static class Defaults
 	{
 		public static readonly EcsID ID = Lookup.Component<Identifier>.Value.ID;
 
-		public Identifier(string name) => Data = name;
+		internal Identifier(string name) => Data = name;
 
 		public readonly string Data;
 	}
