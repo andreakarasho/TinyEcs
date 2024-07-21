@@ -5,7 +5,7 @@ public static class Defaults
 	/// <summary>
 	/// Wildcard is used to specify "any component/tag".<br/>It's mostly used for queries.
 	/// </summary>
-	public struct Wildcard { public static EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
+	public readonly struct Wildcard { public static readonly EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
 
 	/// <summary>
 	/// Built-in tag.<br/>Shortcut for child.Add{ChildOf}(parent);
@@ -13,14 +13,24 @@ public static class Defaults
 	public struct ChildOf { }
 
 	/// <summary>
-	/// Built-in tag.<br/>Used in combination with <see cref="Name"/>
+	/// Built-in component.<br/>Used in combination with <see cref="Name"/>
 	/// </summary>
-	public struct Identifier { }
+	public readonly struct Identifier
+	{
+		public static readonly EcsID ID = Lookup.Component<Identifier>.Value.ID;
+
+		public Identifier(string name) => Data = name;
+
+		public readonly string Data;
+	}
 
 	/// <summary>
 	/// Built-in tag.<br/>Used in combination with <see cref="Identifier"/>
 	/// </summary>
-	public readonly struct Name { internal Name(string value) => Value = value; public readonly string Value; }
+	public readonly struct Name
+	{
+		public static readonly EcsID ID = Lookup.Component<Name>.Value.ID;
+	}
 
     /// <summary>
     /// Built-in tag.<br/>Used to make a component/tag unique when adding a Pair.<para/>

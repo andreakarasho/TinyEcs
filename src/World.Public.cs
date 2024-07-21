@@ -57,7 +57,7 @@ public sealed partial class World
 		setCommon(Entity<Unset>(), nameof(Unset));
 
 		static EntityView setCommon(EntityView entity, string name)
-			=> entity.Add<DoNotDelete>().Set<Identifier, Name>(new (name));
+			=> entity.Add<DoNotDelete>().Set<Identifier>(new (name), Defaults.Name.ID);
 
 		OnPluginInitialization?.Invoke(this);
     }
@@ -88,12 +88,12 @@ public sealed partial class World
         _archRoot.Clear();
         _typeIndex.Clear();
 		_cachedComponents.Clear();
+		_names.Clear();
 
 		foreach (var query in _cachedQueries.Values)
 			query.Dispose();
 
 		_cachedQueries.Clear();
-		_namesToEntity.Clear();
         Archetypes.Clear();
     }
 
@@ -185,25 +185,22 @@ public sealed partial class World
 	{
 		ref readonly var cmp = ref Component<T>();
 
-		var entity = Entity(cmp.ID);
-		if (entity.ID.IsPair())
-			return entity;
+		var entId = cmp.ID;
 
-		var name = Lookup.Component<T>.Name;
+		if (!entId.IsPair())
+		{
+			ref var record = ref GetRecord(entId);
 
-		if (_namesToEntity.TryGetValue(name, out var id))
-		{
-			if (entity.ID != id)
-				EcsAssert.Panic(false, $"You must declare the component before the entity '{id}' named '{name}'");
-		}
-		else
-		{
-			_namesToEntity[name] = entity;
-			entity.Set<Identifier, Name>(new (name));
-			GetRecord(entity).Flags |= EntityFlags.IsUnique;
+			if ((record.Flags & EntityFlags.HasName) == 0)
+			{
+				record.Flags |= EntityFlags.HasName;
+				var name = Lookup.Component<T>.Name;
+				_names[name] = entId;
+				Set<Identifier>(entId, new (name), Defaults.Name.ID);
+			}
 		}
 
-		return entity;
+		return new EntityView(this, entId);
 	}
 
 	/// <summary>
@@ -214,20 +211,20 @@ public sealed partial class World
 	/// <returns></returns>
 	public EntityView Entity(string name)
 	{
-		if (string.IsNullOrEmpty(name))
+		if (string.IsNullOrWhiteSpace(name))
 			return EntityView.Invalid;
 
 		EntityView entity;
-		if (_namesToEntity.TryGetValue(name, out var id))
+		if (_names.TryGetValue(name, out var id) && (GetRecord(id).Flags & EntityFlags.HasName) != 0)
 		{
 			entity = Entity(id);
 		}
 		else
 		{
 			entity = Entity();
-			_namesToEntity[name] = entity;
-			entity.Set<Identifier, Name>(new (name));
-			GetRecord(entity).Flags |= EntityFlags.IsUnique;
+			GetRecord(entity).Flags |= EntityFlags.HasName;
+			_names[name] = entity;
+			entity.Set<Identifier>(new (name), Defaults.Name.ID);
 		}
 
 		return entity;
@@ -258,12 +255,12 @@ public sealed partial class World
 
 			if (record.Flags != EntityFlags.None)
 			{
-				if ((record.Flags & EntityFlags.IsUnique) != 0)
+				if ((record.Flags & EntityFlags.HasName) != 0)
 				{
 					if (Has<Identifier, Name>(entity))
 					{
-						var name = Get<Identifier, Name>(entity).Value;
-						_namesToEntity.Remove(name, out var _);
+						var name = Get<Identifier>(entity, Defaults.Name.ID).Data;
+						_names.Remove(name, out var _);
 					}
 				}
 
@@ -371,7 +368,7 @@ public sealed partial class World
 
 		if (IsDeferred && !Has(entity, cmp.ID))
 		{
-			SetDeferred<T>(entity);
+			AddDeferred<T>(entity);
 
 			return;
 		}
@@ -451,7 +448,7 @@ public sealed partial class World
 	/// <param name="entity"></param>
 	/// <returns></returns>
     public bool Has<T>(EcsID entity) where T : struct
-		=> Exists(entity) && Has(entity, Component<T>().ID);
+		=> Has(entity, Component<T>().ID);
 
 	/// <summary>
 	/// Check if the entity has a component or tag.<br/>
@@ -487,6 +484,19 @@ public sealed partial class World
 		ref readonly var cmp = ref Component<T>();
 		return ref GetUntrusted<T>(entity, cmp.ID, cmp.Size);
     }
+
+	/// <summary>
+	/// Get the name associated to the entity.
+	/// </summary>
+	/// <param name="id"></param>
+	/// <returns></returns>
+	public string Name(EcsID id)
+	{
+		ref var record = ref GetRecord(id);
+		if ((record.Flags & EntityFlags.HasName) != 0)
+			return Get<Identifier>(id, Defaults.Name.ID).Data;
+		return string.Empty;
+	}
 
 	/// <summary>
 	/// Print the archetype graph.

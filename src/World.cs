@@ -9,15 +9,14 @@ public sealed partial class World : IDisposable
 	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
 
     private readonly Archetype _archRoot;
-    private readonly EntitySparseSet<EcsRecord> _entities = new();
-    private readonly FastIdLookup<Archetype> _typeIndex = new();
+    private readonly EntitySparseSet<EcsRecord> _entities = new ();
+    private readonly FastIdLookup<Archetype> _typeIndex = new ();
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
-	private readonly object _newEntLock = new object();
-	private readonly ConcurrentDictionary<string, EcsID> _namesToEntity = new ();
 	private readonly FastIdLookup<EcsID> _cachedComponents = new ();
-	private readonly ComponentInfo[] _cache = new ComponentInfo[1024];
+	private readonly Dictionary<string, EcsID> _names = new ();
+	private readonly object _newEntLock = new ();
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
@@ -111,9 +110,20 @@ public sealed partial class World : IDisposable
 		if (id.IsPair())
 		{
 			(var first, var second) = id.Pair();
+			if ((record.Flags & EntityFlags.HasName) != 0)
+			{
+				if (first == Defaults.Identifier.ID && second == Defaults.Name.ID)
+				{
+
+
+					record.Flags &= ~EntityFlags.HasName;
+				}
+			}
+
 			GetRecord(GetAlive(first)).Flags &= ~EntityFlags.IsAction;
 			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
 		}
+
 
 		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
 
@@ -273,5 +283,7 @@ enum EntityFlags
 	None = 1 << 0,
 	IsAction = 1 << 1,
 	IsTarget = 1 << 2,
-	IsUnique = 1 << 3
+	IsUnique = 1 << 3,
+	IsSymmetric = 1 << 4,
+	HasName = 1 << 5
 }

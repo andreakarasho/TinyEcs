@@ -324,6 +324,23 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void Entity_Name()
+		{
+			using var ctx = new Context();
+
+			var a = ctx.World.Entity("a");
+			Assert.Equal("a", a.Name());
+
+			a.Unset<Defaults.Identifier, Defaults.Name>();
+			Assert.Equal("", a.Name());
+
+			var aa = ctx.World.Entity("a");
+			Assert.True(a.ID != aa.ID);
+
+			Assert.Equal("a", aa.Name());
+		}
+
+		[Fact]
 		public void Entity_Has_Wildcard()
 		{
 			using var ctx = new Context();

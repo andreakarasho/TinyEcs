@@ -38,7 +38,7 @@ public sealed partial class World
 	}
 
 
-	private void SetDeferred<T>(EcsID entity) where T : struct
+	private void AddDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 

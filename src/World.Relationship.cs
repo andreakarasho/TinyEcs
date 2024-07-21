@@ -27,16 +27,13 @@ partial class World
 
 	private void CheckUnique(EcsID entity, EcsID action)
 	{
-		if (Exists(action))
+		// only one (A, *)
+		if (Entity(action).Has<Unique>())
 		{
-			// only one (A, *)
-			if (Entity(action).Has<Unique>())
+			var targetId = Target(entity, action);
+			if (targetId != 0)
 			{
-				var targetId = Target(entity, action);
-				if (targetId != 0)
-				{
-					Unset(entity, action, targetId);
-				}
+				Unset(entity, action, targetId);
 			}
 		}
 	}
@@ -44,7 +41,7 @@ partial class World
 	private void CheckSymmetric(EcsID entity, EcsID action, EcsID target)
 	{
 		// (R, B) to A will also add (R, A) to B.
-		if (Exists(action) && Entity(action).Has<Symmetric>() && !Has(target, action, entity))
+		if (Entity(action).Has<Symmetric>() && !Has(target, action, entity))
 		{
 			var pairId = IDOp.Pair(action, entity);
 
@@ -120,12 +117,12 @@ partial class World
 
 		if (IsDeferred && !Has(entity, act.ID, target))
 		{
-			SetDeferred(entity, pairId);
+			SetDeferred(entity, pairId, null, 0, false);
 
 			return;
 		}
 
-		_ = AttachComponent(entity, pairId, act.Size, act.IsManaged);
+		_ = AttachComponent(entity, pairId, 0, false);
 	}
 
 	/// <summary>
@@ -149,7 +146,7 @@ partial class World
 
 		if (IsDeferred && !Has(entity, act.ID, target))
 		{
-			SetDeferred(entity, pairId);
+			SetDeferred(entity, pairId, action, act.Size, act.IsManaged);
 
 			return;
 		}
@@ -251,7 +248,7 @@ partial class World
 	public bool Has(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-		return Exists(entity) && Has(entity, pairId);
+		return Has(entity, pairId);
 	}
 
 	/// <summary>
@@ -265,8 +262,10 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-		Unset<Relation<TAction, TTarget>>(entity);
+		var first = Component<TAction>().ID;
+		var second = Component<TTarget>().ID;
+		var pairId = IDOp.Pair(first, second);
+		Unset(entity, pairId);
 	}
 
 	/// <summary>
@@ -557,12 +556,7 @@ public static class NameEx
 	/// <returns></returns>
 	public static string Name(this EntityView entity)
 	{
-		if (entity.Has<Identifier, Name>())
-		{
-			return entity.Get<Identifier, Name>().Value;
-		}
-
-		return entity.ID.ToString();
+		return entity.World.Name(entity.ID);
 	}
 }
 
