@@ -197,7 +197,7 @@
 
 			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
-			var likes = ctx.World.Entity().Add<Unique>();
+			var likes = ctx.World.Entity().Rule<Unique>();
 			var dogs = ctx.World.Entity();
 			var cats = ctx.World.Entity();
 			var pasta = ctx.World.Entity();
@@ -233,7 +233,7 @@
 			using var ctx = new Context();
 
 			var carl = ctx.World.Entity();
-			var tradeWith = ctx.World.Entity().Add<Symmetric>();
+			var tradeWith = ctx.World.Entity().Rule<Symmetric>();
 			var bob = ctx.World.Entity();
 
 			carl.Add(tradeWith, bob);
@@ -248,7 +248,7 @@
 
 			ctx.World.BeginDeferred();
 			var carl = ctx.World.Entity();
-			var tradeWith = ctx.World.Entity().Add<Symmetric>();
+			var tradeWith = ctx.World.Entity().Rule<Symmetric>();
 			var bob = ctx.World.Entity();
 
 			Assert.True(carl.Exists());

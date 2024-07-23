@@ -25,40 +25,6 @@ partial class World
 		return ref linkedCmp;
 	}
 
-	private void CheckUnique(EcsID entity, EcsID action)
-	{
-		// only one (A, *)
-		if (Entity(action).Has<Unique>())
-		{
-			var targetId = Target(entity, action);
-			if (targetId != 0)
-			{
-				Unset(entity, action, targetId);
-			}
-		}
-	}
-
-	private void CheckSymmetric(EcsID entity, EcsID action, EcsID target)
-	{
-		// (R, B) to A will also add (R, A) to B.
-		if (Entity(action).Has<Symmetric>() && !Has(target, action, entity))
-		{
-			var pairId = IDOp.Pair(action, entity);
-
-			if (IsDeferred)
-			{
-				// if (HasDeferred(target, pairId))
-				// 	return;
-
-				SetDeferred(target, pairId, null, 0, false);
-
-				return;
-			}
-
-			_ = AttachComponent(target, pairId, 0, false);
-		}
-	}
-
 	/// <summary>
 	/// Assign (Action, Target).
 	/// </summary>
@@ -71,9 +37,6 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-
-		CheckUnique(entity, Entity<TAction>());
-		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
 		Add<Pair<TAction, TTarget>>(entity);
 	}
@@ -91,9 +54,6 @@ partial class World
 		where TTarget : struct
 	{
 		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
-
-		CheckUnique(entity, Entity<TAction>());
-		CheckSymmetric(entity, Entity<TAction>(), Entity<TTarget>());
 
 		// Set(entity, new Pair<TAction, TTarget>() { Action = default, Target = target});
 
@@ -125,9 +85,6 @@ partial class World
 
 		var pairId = IDOp.Pair(act.ID, target);
 
-		CheckUnique(entity, act.ID);
-		CheckSymmetric(entity, act.ID, target);
-
 		if (IsDeferred && !Has(entity, act.ID, target))
 		{
 			SetDeferred(entity, pairId, null, 0, false);
@@ -154,9 +111,6 @@ partial class World
 
 		var pairId = IDOp.Pair(act.ID, target);
 
-		CheckUnique(entity, act.ID);
-		CheckSymmetric(entity, act.ID, target);
-
 		if (IsDeferred && !Has(entity, act.ID, target))
 		{
 			SetDeferred(entity, pairId, action, act.Size, act.IsManaged);
@@ -179,9 +133,6 @@ partial class World
 	public void Add(EcsID entity, EcsID action, EcsID target)
 	{
 		var pairId = IDOp.Pair(action, target);
-
-		CheckUnique(entity, action);
-		CheckSymmetric(entity, action, target);
 
 		if (IsDeferred && !Has(entity, action, target))
 		{
@@ -327,8 +278,7 @@ partial class World
 	/// <returns></returns>
 	public EcsID Target(EcsID entity, EcsID action, int index = 0)
 	{
-		var pair = IDOp.Pair(action, Wildcard.ID);
-		return GetAlive(FindPair(entity, pair, index).Item2);
+		return GetAlive(FindPair(ref GetRecord(entity), action, Wildcard.ID, index).second);
 	}
 
 	/// <summary>
@@ -354,8 +304,7 @@ partial class World
 	/// <returns></returns>
 	public EcsID Action(EcsID entity, EcsID target, int index = 0)
 	{
-		var pair = IDOp.Pair(Wildcard.ID, target);
-		return GetAlive(FindPair(entity, pair, index).Item1);
+		return GetAlive(FindPair(ref GetRecord(entity), Wildcard.ID, target, index).first);
 	}
 
 	/// <summary>
@@ -366,19 +315,53 @@ partial class World
 	/// <param name="entity"></param>
 	/// <param name="index"></param>
 	/// <returns></returns>
-	public (EcsID, EcsID) FindPair(EcsID entity, EcsID pair, int index = 0)
+	internal (EcsID first, EcsID second) FindPair(ref EcsRecord record, EcsID first, EcsID second, int index = 0)
 	{
-		if (!pair.IsPair())
+		if (first == Wildcard.ID)
+		{
+			return FindPairFromSecond(ref record, second, index);
+		}
+		else if (second == Wildcard.ID)
+		{
+			return FindPairFromFirst(ref record, first, index);
+		}
+		else
+		{
+			var pair = IDOp.Pair(first, second);
+			if (record.Archetype.GetComponentIndex(pair) >= 0)
+				return (first, second);
+		}
+
+		return EntityView.Invalid.ID.Pair();
+	}
+
+	internal (EcsID first, EcsID second) FindPairFromFirst(ref EcsRecord record, EcsID first, int index = 0)
+	{
+		var idx = record.Archetype.GetPairIndex(first);
+		if (idx < 0 || idx + index >= record.Archetype.Sign.Length)
 			return EntityView.Invalid.ID.Pair();
+		var result = record.Archetype.Sign[idx + index].Pair();
+		if (result.first == first)
+			return result;
+		return EntityView.Invalid.ID.Pair();
+	}
 
-		ref var record = ref GetRecord(entity);
-
+	internal (EcsID first, EcsID second) FindPairFromSecond(ref EcsRecord record, EcsID second, int index = 0)
+	{
+		var pair = IDOp.Pair(Wildcard.ID, second);
 		var found = 0;
 		foreach (ref readonly var cmp in record.Archetype.Pairs.AsSpan())
 		{
-			if (_comparer.Compare(cmp.ID, pair) != 0) continue;
+			var result = _comparer.Compare(cmp.ID, pair);
 
-			if (found++ < index) continue;
+			if (result < 0)
+				break;
+
+			if (result != 0)
+				continue;
+
+			if (found++ < index)
+				continue;
 
 			return cmp.ID.Pair();
 		}
@@ -527,7 +510,7 @@ public static class RelationshipEx
 		where TAction : struct
 		where TTarget : struct
 	{
-		return entity.World.FindPair(entity.ID, IDOp.Pair(entity.World.Component<TAction>().ID, entity.World.Component<TTarget>().ID), index);
+		return entity.World.FindPair(ref entity.World.GetRecord(entity.ID), entity.World.Component<TAction>().ID, entity.World.Component<TTarget>().ID, index);
 	}
 }
 

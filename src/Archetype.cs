@@ -75,15 +75,15 @@ public sealed class Archetype
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 4;
 
-	internal const int CHUNK_THRESHOLD = 0xFFF;
 	internal const int CHUNK_SIZE = 4096;
 	private const int CHUNK_LOG2 = 12;
+	internal const int CHUNK_THRESHOLD = CHUNK_SIZE - 1;
 
 
 	private readonly World _world;
 	private ArchetypeChunk[] _chunks;
 	private readonly ComponentComparer _comparer;
-	private readonly FrozenDictionary<EcsID, int> _lookup;
+	private readonly FrozenDictionary<EcsID, int> _lookup, _pairsLookup;
 	private readonly EcsID[] _ids;
 	private readonly List<EcsEdge> _add, _remove;
 	private int _count;
@@ -114,6 +114,7 @@ public sealed class Archetype
 		Id = roll.Hash;
 
 		_lookup = dict.ToFrozenDictionary();
+		_pairsLookup = dict.Where(s => s.Key.IsPair()).GroupBy(s => s.Key.First()).ToFrozenDictionary(s => s.Key, v => v.First().Value);
 
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
@@ -128,7 +129,7 @@ public sealed class Archetype
 	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
-
+	internal EcsID[] Sign => _ids;
 
 	private ref ArchetypeChunk GetOrCreateChunk(int index)
 	{
@@ -159,6 +160,13 @@ public sealed class Archetype
 	internal int GetComponentIndex(EcsID id)
 	{
 		ref readonly var idx = ref _lookup.GetValueRefOrNullRef(id);
+		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx))? -1 : idx;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal int GetPairIndex(EcsID id)
+	{
+		ref readonly var idx = ref _pairsLookup.GetValueRefOrNullRef(id);
 		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx))? -1 : idx;
 	}
 

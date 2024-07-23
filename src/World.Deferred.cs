@@ -139,13 +139,6 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 				{
-					if (op.ComponentInfo.ID.IsPair())
-					{
-						(var first, var second) = op.ComponentInfo.ID.Pair();
-						CheckUnique(op.Entity, first);
-						CheckSymmetric(op.Entity, first, second);
-					}
-
 					(var array, var row) = AttachComponent(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
 					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 

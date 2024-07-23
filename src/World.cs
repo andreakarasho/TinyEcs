@@ -1,7 +1,3 @@
-using System.Collections.Concurrent;
-using System.Collections.Immutable;
-using Microsoft.Collections.Extensions;
-
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -107,24 +103,6 @@ public sealed partial class World : IDisposable
 		if (column < 0)
             return;
 
-		if (id.IsPair())
-		{
-			(var first, var second) = id.Pair();
-			if ((record.Flags & EntityFlags.HasName) != 0)
-			{
-				if (first == Defaults.Identifier.ID && second == Defaults.Name.ID)
-				{
-
-
-					record.Flags &= ~EntityFlags.HasName;
-				}
-			}
-
-			GetRecord(GetAlive(first)).Flags &= ~EntityFlags.IsAction;
-			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
-		}
-
-
 		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
 
 		BeginDeferred();
@@ -164,6 +142,27 @@ public sealed partial class World : IDisposable
 		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
         record.Archetype = foundArch!;
 		EndDeferred();
+
+
+		if (id.IsPair())
+		{
+			(var first, var second) = id.Pair();
+			(first, second) = (GetAlive(first), GetAlive(second));
+
+			ref var firstRec = ref GetRecord(first);
+			ref var secondRec = ref GetRecord(second);
+			firstRec.Flags &= ~EntityFlags.IsAction;
+			secondRec.Flags &= ~EntityFlags.IsTarget;
+
+			if ((firstRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref firstRec, first, id, false);
+			}
+			else if ((secondRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref secondRec, second, id, false);
+			}
+		}
 	}
 
 	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size, bool isManaged)
@@ -174,13 +173,6 @@ public sealed partial class World : IDisposable
 		var column = oldArch.GetComponentIndex(id);
 		if (column >= 0)
             return (size > 0 ? record.GetChunk().Data![column] : null, record.Row);
-
-		if (id.IsPair())
-		{
-			(var first, var second) = id.Pair();
-			GetRecord(GetAlive(first)).Flags |= EntityFlags.IsAction;
-			GetRecord(GetAlive(second)).Flags |= EntityFlags.IsTarget;
-		}
 
 		BeginDeferred();
 
@@ -224,7 +216,81 @@ public sealed partial class World : IDisposable
 
 		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
 
+		if (id.IsPair())
+		{
+			(var first, var second) = id.Pair();
+			(first, second) = (GetAlive(first), GetAlive(second));
+
+			ref var firstRec = ref GetRecord(first);
+			ref var secondRec = ref GetRecord(second);
+			firstRec.Flags |= EntityFlags.IsAction;
+			secondRec.Flags |= EntityFlags.IsTarget;
+
+			if ((firstRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref firstRec, first, id, true);
+			}
+			else if ((secondRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref secondRec, second, id, true);
+			}
+		}
+
 		return (size > 0 ? record.GetChunk().Data![foundArch!.GetComponentIndex(id)] : null, record.Row);
+	}
+
+	private void ExecuteRule(ref EcsRecord entityRecord, EcsID entity, ref EcsRecord ruleRecord, EcsID ruleId, EcsID id, bool onSet)
+	{
+		var i = 0;
+		EcsID target;
+		while ((target = FindPairFromFirst(ref ruleRecord, Defaults.Rule.ID, i++).second).IsValid())
+		{
+			if (target == Defaults.Symmetric.ID)
+			{
+				(var first, var second) = id.Pair();
+
+				var has = Has(second, first, entity);
+				if (!onSet)
+					has = !has;
+
+				if (!has)
+				{
+					if (onSet)
+						Add(second, first, entity);
+					else
+						Unset(second, first, entity);
+				}
+			}
+			else if (target == Defaults.Unique.ID)
+			{
+				if (onSet)
+				{
+					(var first, var second) = id.Pair();
+					var idx = 0;
+					EcsID targetId;
+					while ((targetId = FindPairFromFirst(ref entityRecord, first, idx++).second).IsValid())
+					{
+						if (targetId != second)
+						{
+							Unset(entity, first, targetId);
+						}
+					}
+				}
+			}
+			else if (target == Defaults.Unset.ID)
+			{
+				if (!onSet)
+				{
+					if (ruleId == Defaults.Identifier.ID)
+					{
+						var second = GetAlive(id.Second());
+
+						if (second == Defaults.Name.ID)
+							GetRecord(entity).Flags &= ~EntityFlags.HasName;
+					}
+				}
+			}
+		}
 	}
 
 	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)
@@ -270,6 +336,7 @@ struct EcsRecord
     public int Row;
 	public EntityFlags Flags;
 
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 
@@ -285,5 +352,7 @@ enum EntityFlags
 	IsTarget = 1 << 2,
 	IsUnique = 1 << 3,
 	IsSymmetric = 1 << 4,
-	HasName = 1 << 5
+	HasName = 1 << 5,
+
+	HasRules = 1 << 6,
 }

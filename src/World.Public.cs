@@ -27,6 +27,7 @@ public sealed partial class World
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
+		_ = Component<Rule>();
 		_ = Component<DoNotDelete>();
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
@@ -41,6 +42,7 @@ public sealed partial class World
 		_ = Component<Panic>();
 		_ = Component<Unset>();
 
+		setCommon(Entity<Rule>(), nameof(Rule));
 		setCommon(Entity<DoNotDelete>(), nameof(DoNotDelete));
 		setCommon(Entity<Unique>(), nameof(Unique));
 		setCommon(Entity<Symmetric>(), nameof(Symmetric));
@@ -49,12 +51,15 @@ public sealed partial class World
 		setCommon(Entity<Name>(), nameof(Name));
 		setCommon(Entity<ChildOf>(), nameof(ChildOf))
 			.Add<OnDelete, Delete>()
-			.Add<Unique>();
+			.Rule<Unique>();
 		setCommon(Entity<OnDelete>(), nameof(OnDelete))
-			.Add<Unique>();
+			.Rule<Unique>();
 		setCommon(Entity<Delete>(), nameof(Delete));
 		setCommon(Entity<Panic>(), nameof(Panic));
 		setCommon(Entity<Unset>(), nameof(Unset));
+
+		Entity<Identifier>()
+			.Rule<Unset>();
 
 		static EntityView setCommon(EntityView entity, string name)
 			=> entity.Add<DoNotDelete>().Set<Identifier>(new (name), Defaults.Name.ID);
@@ -465,7 +470,7 @@ public sealed partial class World
 
 		if (id.IsPair())
 		{
-			(var a, var b) = FindPair(entity, id);
+			(var a, var b) = FindPair(ref record, id.First(), id.Second());
 
 			return a != 0 && b != 0;
 		}
@@ -496,6 +501,25 @@ public sealed partial class World
 		if ((record.Flags & EntityFlags.HasName) != 0)
 			return Get<Identifier>(id, Defaults.Name.ID).Data;
 		return string.Empty;
+	}
+
+	/// <inheritdoc cref="Rule(EcsID, EcsID)"/>
+	public void Rule<TRule>(EcsID entity) where TRule : struct
+	{
+		Rule(entity, Component<TRule>().ID);
+	}
+
+	/// <summary>
+	/// Set a rule to an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="ruleId"></param>
+	public void Rule(EcsID entity, EcsID ruleId)
+	{
+		ref var ruleRecord = ref GetRecord(entity);
+		ruleRecord.Flags |= EntityFlags.HasRules;
+
+		Add(entity, Defaults.Rule.ID, ruleId);
 	}
 
 	/// <summary>
