@@ -393,110 +393,166 @@ internal static class Lookup
 
 internal sealed class FastIdLookup<TValue>
 {
-	const int COMPONENT_MAX_ID = 1024;
+	// private readonly EntitySparseSet<TValue> _set = new ();
+	// private readonly DictionarySlim<EcsID, TValue> _slowLookup = new ();
 
-	// struct Entry
+	// public void Add(EcsID id, TValue value)
 	// {
-	// 	public int Index;
-	// 	public EcsID Id;
+	// 	if (id.IsPair())
+	// 	{
+	// 		_slowLookup.GetOrAddValueRef(id, out _) = value;
+	// 	}
+	// 	else
+	// 	{
+	// 		_set.Add(id, value);
+	// 	}
 	// }
 
+	// public ref TValue GetOrCreate(EcsID id, out bool exists)
+	// {
+	// 	if (id.IsPair())
+	// 	{
+	// 		return ref _slowLookup.GetOrAddValueRef(id, out exists);
+	// 	}
+
+	// 	ref var val = ref _set.Get(id);
+	// 	exists = !Unsafe.IsNullRef(ref val);
+
+	// 	if (!exists)
+	// 		return ref _set.Add(id, default);
+	// 	return ref val;
+	// }
+
+	// public ref TValue TryGet(EcsID id, out bool exists)
+	// {
+	// 	if (id.IsPair())
+	// 	{
+	// 		return ref _slowLookup.GetOrNullRef(id, out exists);
+	// 	}
+
+	// 	ref var val = ref _set.Get(id);
+	// 	exists = !Unsafe.IsNullRef(ref val);
+	// 	return ref val;
+	// }
+
+	// public void Clear()
+	// {
+	// 	_set.Clear();
+	// 	_slowLookup.Clear();
+	// }
+
+    private const int COMPONENT_MAX_ID = 1024;
 
 #if NET
-	private readonly Dictionary<EcsID, TValue> _slowLookup = new();
+    private readonly Dictionary<ulong, TValue> _slowLookup = new();
 #else
-	private readonly DictionarySlim<EcsID, TValue> _slowLookup = new();
+    private readonly DictionarySlim<ulong, TValue> _slowLookup = new();
 #endif
-	private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
-	private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
+    private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
+    private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
 
-	// private readonly List<Entry> _indices = new();
-	// private readonly List<TValue> _values = new ();
-	// private readonly Dictionary<EcsID, TValue> _dict = new();
+    public int Count => _slowLookup.Count + CountFastLookup();
 
+    public void Add(ulong id, TValue value)
+    {
+        if (id < (ulong)COMPONENT_MAX_ID)
+        {
+            _fastLookup[id] = value;
+            _fastLookupAdded[id] = true;
+        }
+        else
+        {
+#if NET
+            CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out _) = value;
+#else
+            _slowLookup.GetOrAddValueRef(id, out _) = value;
+#endif
+        }
+    }
 
-	public int Count => _slowLookup.Count;
+    public ref TValue GetOrCreate(ulong id, out bool exists)
+    {
+        if (id < (ulong)COMPONENT_MAX_ID)
+        {
+            if (_fastLookupAdded[id])
+            {
+                exists = true;
+                return ref _fastLookup[id];
+            }
 
-	public void Add(EcsID id, TValue value)
-	{
-		AddToFast(id, ref value);
+            exists = false;
+            return ref AddToFast(id);
+        }
 
 #if NET
-		CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out var exists) = value;
+        ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out exists);
 #else
-		_slowLookup.GetOrAddValueRef(id, out var exists) = value;
+        ref var val = ref _slowLookup.GetOrAddValueRef(id, out exists)!;
 #endif
-	}
 
-	public ref TValue GetOrCreate(EcsID id, out bool exists)
-	{
-		if (id < COMPONENT_MAX_ID)
-		{
-			if (_fastLookupAdded[id])
-			{
-				exists = true;
-				return ref _fastLookup[id];
-			}
-		}
+        return ref val;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref TValue TryGet(ulong id, out bool exists)
+    {
+        if (id < (ulong)COMPONENT_MAX_ID)
+        {
+            if (_fastLookupAdded[id])
+            {
+                exists = true;
+                return ref _fastLookup[id];
+            }
+
+            exists = false;
+            return ref Unsafe.NullRef<TValue>();
+        }
 
 #if NET
-		ref var val = ref CollectionsMarshal.GetValueRefOrAddDefault(_slowLookup, id, out exists);
+        ref var val = ref CollectionsMarshal.GetValueRefOrNullRef(_slowLookup, id);
+        exists = !Unsafe.IsNullRef(ref val);
+        return ref val;
 #else
-		ref var val = ref _slowLookup.GetOrAddValueRef(id, out exists)!;
+        return ref _slowLookup.GetOrNullRef(id, out exists);
 #endif
+    }
 
-		if (!exists)
-			val = ref AddToFast(id, ref val!)!;
+    public void Clear()
+    {
+        Array.Clear(_fastLookup, 0, _fastLookup.Length);
+        Array.Fill(_fastLookupAdded, false);
+        _slowLookup.Clear();
+    }
 
-		return ref val!;
-	}
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ref TValue AddToFast(ulong id)
+    {
+        ref var value = ref _fastLookup[id];
+        _fastLookupAdded[id] = true;
+        return ref value;
+    }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ref TValue TryGet(EcsID id, out bool exists)
-	{
-		if (id < COMPONENT_MAX_ID)
-		{
-			if (_fastLookupAdded[id])
-			{
-				exists = true;
-				return ref _fastLookup[id];
-			}
+    private int CountFastLookup()
+    {
+        int count = 0;
+        for (int i = 0; i < _fastLookupAdded.Length; i++)
+        {
+            if (_fastLookupAdded[i])
+                count++;
+        }
+        return count;
+    }
 
-			exists = false;
-			return ref Unsafe.NullRef<TValue>();
-		}
+    public IEnumerator<KeyValuePair<ulong, TValue>> GetEnumerator()
+    {
+        foreach (var pair in _slowLookup)
+            yield return pair;
 
-#if NET
-		ref var val = ref CollectionsMarshal.GetValueRefOrNullRef(_slowLookup, id);
-		exists = !Unsafe.IsNullRef(ref val);
-		return ref val!;
-#else
-		return ref _slowLookup.GetOrNullRef(id, out exists);
-#endif
-	}
-
-	public void Clear()
-	{
-		Array.Clear(_fastLookup, 0, _fastLookup.Length);
-		_fastLookupAdded.AsSpan().Fill(false);
-		_slowLookup.Clear();
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private ref TValue AddToFast(EcsID id, ref TValue value)
-	{
-		if (id < COMPONENT_MAX_ID)
-		{
-			ref var p = ref _fastLookup[id];
-			p = value;
-			_fastLookupAdded[id] = true;
-
-			return ref p!;
-		}
-
-		return ref value;
-	}
-
-	public IEnumerator<KeyValuePair<EcsID, TValue>> GetEnumerator()
-		=> _slowLookup.GetEnumerator();
+        for (ulong i = 0; i < (ulong)COMPONENT_MAX_ID; i++)
+        {
+            if (_fastLookupAdded[i])
+                yield return new KeyValuePair<ulong, TValue>(i, _fastLookup[i]);
+        }
+    }
 }
+

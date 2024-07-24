@@ -66,7 +66,7 @@ partial class World
 			return;
 		}
 
-        (var raw, var row) = AttachComponent(entity, linkedCmp.ID, linkedCmp.Size, linkedCmp.IsManaged);
+        (var raw, var row) = Attach(entity, linkedCmp.ID, linkedCmp.Size, linkedCmp.IsManaged);
         var array = Unsafe.As<Pair<TAction, TTarget>[]>(raw!);
         array[row & TinyEcs.Archetype.CHUNK_THRESHOLD].Target = target;
 	}
@@ -92,7 +92,7 @@ partial class World
 			return;
 		}
 
-		_ = AttachComponent(entity, pairId, 0, false);
+		_ = Attach(entity, pairId, 0, false);
 	}
 
 	/// <summary>
@@ -118,7 +118,7 @@ partial class World
 			return;
 		}
 
-		(var array, var row) = AttachComponent(entity, pairId, act.Size, act.IsManaged);
+		(var array, var row) = Attach(entity, pairId, act.Size, act.IsManaged);
 		var cmpArr = Unsafe.As<TAction[]>(array!);
 		cmpArr[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = action;
 	}
@@ -141,7 +141,7 @@ partial class World
 			return;
 		}
 
-		_ = AttachComponent(entity, pairId, 0, false);
+		_ = Attach(entity, pairId, 0, false);
 	}
 
 	/// <summary>
@@ -328,7 +328,7 @@ partial class World
 		else
 		{
 			var pair = IDOp.Pair(first, second);
-			if (record.Archetype.GetComponentIndex(pair) >= 0)
+			if (record.Archetype.HasIndex(pair))
 				return (first, second);
 		}
 

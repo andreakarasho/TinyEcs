@@ -94,13 +94,12 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
-	private void DetachComponent(EcsID entity, EcsID id)
+	private void Detach(EcsID entity, EcsID id)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
-		var column = oldArch.GetComponentIndex(id);
-		if (column < 0)
+		if (oldArch.GetAnyIndex(id) < 0)
             return;
 
 		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
@@ -139,7 +138,7 @@ public sealed partial class World : IDisposable
 			foundArch = arch;
 		}
 
-		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
+		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
         record.Archetype = foundArch!;
 		EndDeferred();
 
@@ -165,14 +164,14 @@ public sealed partial class World : IDisposable
 		}
 	}
 
-	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size, bool isManaged)
+	private (Array?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
-		var column = oldArch.GetComponentIndex(id);
+		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
 		if (column >= 0)
-            return (size > 0 ? record.GetChunk().Data![column] : null, record.Row);
+            return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
 
 		BeginDeferred();
 
@@ -210,7 +209,7 @@ public sealed partial class World : IDisposable
 			foundArch = arch;
 		}
 
-		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, false);
+		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
         record.Archetype = foundArch!;
 		EndDeferred();
 
@@ -236,7 +235,23 @@ public sealed partial class World : IDisposable
 			}
 		}
 
-		return (size > 0 ? record.GetChunk().Data![foundArch!.GetComponentIndex(id)] : null, record.Row);
+		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
+		return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+	}
+
+	internal bool IsAttached(ref EcsRecord record, EcsID id)
+	{
+		if (record.Archetype.HasIndex(id))
+			return true;
+
+		if (id.IsPair())
+		{
+			(var a, var b) = FindPair(ref record, id.First(), id.Second());
+
+			return a.IsValid() && b.IsValid();
+		}
+
+		return id == Defaults.Wildcard.ID;
 	}
 
 	private void ExecuteRule(ref EcsRecord entityRecord, EcsID entity, ref EcsRecord ruleRecord, EcsID ruleId, EcsID id, bool onSet)
@@ -300,20 +315,21 @@ public sealed partial class World : IDisposable
 		return archetype;
 	}
 
-	internal ref T GetUntrusted<T>(EcsID entity, EcsID cmpId, int size) where T : struct
+	internal ref T GetUntrusted<T>(EcsID entity, EcsID id, int size) where T : struct
 	{
-		if (IsDeferred && !Has(entity, cmpId))
+		if (IsDeferred && !Has(entity, id))
 		{
 			Unsafe.SkipInit<T>(out var val);
 			var isManaged = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size, isManaged)!);
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size, isManaged)!);
 		}
 
         ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(cmpId);
-        ref var chunk = ref record.GetChunk();
-		ref var value = ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
-		return ref value;
+		var column = record.Archetype.GetComponentIndex(id);
+		if (column < 0)
+			return ref Unsafe.NullRef<T>();
+
+		return ref Unsafe.As<T[]>(record.Chunk.Data![column])[record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD];
     }
 
 	internal Query GetQuery(EcsID hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
@@ -336,12 +352,14 @@ struct EcsRecord
     public int Row;
 	public EntityFlags Flags;
 
+	public ArchetypeChunk Chunk;
+
+
+	// [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    // public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly EntityView EntityView() => ref Archetype.GetChunk(Row).EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+    public readonly ref readonly EntityView EntityView() => ref Chunk.EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
 [Flags]

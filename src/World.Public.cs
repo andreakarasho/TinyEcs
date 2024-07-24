@@ -138,7 +138,7 @@ public sealed partial class World
 	{
 		ref var record = ref NewId(out var id);
 		record.Archetype = arch;
-		record.Row = arch.Add(id);
+		record.Chunk = arch.Add(id, out record.Row);
 		record.Flags = EntityFlags.None;
 
 		return new EntityView(this, id);
@@ -167,7 +167,7 @@ public sealed partial class World
 
 				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
-				record.Row = _archRoot.Add(id);
+				record.Chunk = _archRoot.Add(id, out record.Row);
 				record.Flags = EntityFlags.None;
 
 				ent = new EntityView(this, id);
@@ -378,7 +378,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        _ = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
     }
 
 	/// <summary>
@@ -399,7 +399,7 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        (var raw, var row) = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
         var array = Unsafe.As<T[]>(raw!);
         array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
@@ -418,7 +418,7 @@ public sealed partial class World
 			return;
 		}
 
-		_ = AttachComponent(entity, id, 0, false);
+		_ = Attach(entity, id, 0, false);
 	}
 
 	/// <summary>
@@ -443,7 +443,7 @@ public sealed partial class World
 			return;
 		}
 
-		DetachComponent(entity, id);
+		Detach(entity, id);
 	}
 
 	/// <summary>
@@ -464,18 +464,7 @@ public sealed partial class World
 	/// <returns></returns>
 	public bool Has(EcsID entity, EcsID id)
     {
-		ref var record = ref GetRecord(entity);
-        var has = record.Archetype.GetComponentIndex(id) >= 0;
-		if (has) return true;
-
-		if (id.IsPair())
-		{
-			(var a, var b) = FindPair(ref record, id.First(), id.Second());
-
-			return a != 0 && b != 0;
-		}
-
-		return id == Wildcard.ID;
+		return IsAttached(ref GetRecord(entity), id);
     }
 
 	/// <summary>

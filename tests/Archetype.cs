@@ -14,7 +14,7 @@ namespace TinyEcs.Tests
 			var arch = ctx.World.Root;
 
 			for (var i = 0; i < amount; ++i)
-				arch.Add((ulong)(i + 1));
+				arch.Add((ulong)(i + 1), out _);
 
 
 			var total = 0;

@@ -139,7 +139,7 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 				{
-					(var array, var row) = AttachComponent(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
+					(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
 					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 
 					break;
@@ -147,7 +147,7 @@ public sealed partial class World
 
 				case DeferredOpTypes.UnsetComponent:
 				{
-					DetachComponent(op.Entity, op.ComponentInfo.ID);
+					Detach(op.Entity, op.ComponentInfo.ID);
 
 					break;
 				}
