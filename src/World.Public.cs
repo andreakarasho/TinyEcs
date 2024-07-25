@@ -400,8 +400,8 @@ public sealed partial class World
 		}
 
         (var raw, var row) = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
-        var array = Unsafe.As<T[]>(raw!);
-        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
+		var storage = (StorageBuffer<T>)raw!;
+        storage.Span[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
 
 	/// <summary>

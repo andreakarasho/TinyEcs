@@ -164,14 +164,14 @@ public sealed partial class World : IDisposable
 		}
 	}
 
-	private (Array?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
+	private (StorageBuffer?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
 		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
 		if (column >= 0)
-            return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+            return (size > 0 ? record.Chunk.Storage![column] : null, record.Row);
 
 		BeginDeferred();
 
@@ -236,7 +236,7 @@ public sealed partial class World : IDisposable
 		}
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
-		return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+		return (size > 0 ? record.Chunk.Storage![column] : null, record.Row);
 	}
 
 	internal bool IsAttached(ref EcsRecord record, EcsID id)
@@ -329,7 +329,8 @@ public sealed partial class World : IDisposable
 		if (column < 0)
 			return ref Unsafe.NullRef<T>();
 
-		return ref Unsafe.As<T[]>(record.Chunk.Data![column])[record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD];
+		var storage = (StorageBuffer<T>)record.Chunk.Storage![column];
+		return ref storage.Span[record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD];
     }
 
 	internal Query GetQuery(EcsID hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)

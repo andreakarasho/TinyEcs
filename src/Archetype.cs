@@ -6,16 +6,18 @@ namespace TinyEcs;
 [SkipLocalsInit]
 public struct ArchetypeChunk
 {
-	internal readonly Array[]? Data;
+	internal readonly StorageBuffer[] Storage;
 	internal readonly EntityView[] Entities;
 
 
 	internal ArchetypeChunk(ImmutableArray<ComponentInfo> sign, int chunkSize)
 	{
 		Entities = new EntityView[chunkSize];
-		Data = new Array[sign.Length];
+		Storage = new StorageBuffer[sign.Length];
 		for (var i = 0; i < sign.Length; ++i)
-			Data[i] = Lookup.GetArray(sign[i].ID, chunkSize)!;
+		{
+			Storage[i] = Lookup.GetStorage(sign[i].ID, chunkSize);
+		}
 	}
 
 	public int Count { get; internal set; }
@@ -32,25 +34,21 @@ public struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
-		if (column < 0 || column >= Data!.Length)
+		if (column < 0 || column >= Storage!.Length)
 			return ref Unsafe.NullRef<T>();
 
-		var array = Unsafe.As<T[]>(Data![column]);
-#if NET
-		return ref MemoryMarshal.GetArrayDataReference(array);
-#else
-		return ref MemoryMarshal.GetReference(array.AsSpan());
-#endif
+		var storage = (StorageBuffer<T>)Storage[column];
+		return ref MemoryMarshal.GetReference(storage.Span);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
-		if (column < 0 || column >= Data!.Length)
+		if (column < 0 || column >= Storage!.Length)
 			return Span<T>.Empty;
 
-		var array = Unsafe.As<T[]>(Data![column]);
-		return array.AsSpan(0, Count);
+		var storage = (StorageBuffer<T>)Storage[column];
+		return storage.Span.Slice(0, Count);
 	}
 }
 
@@ -70,6 +68,36 @@ public ref struct ChunkEnumerator
 	public bool MoveNext() => ++_index < _chunks.Length;
 }
 
+
+internal abstract class StorageBuffer
+{
+	public abstract void CopyTo(int oldRow, StorageBuffer buffer, int newRow);
+
+	public abstract void SetValue(int row, object value);
+}
+
+
+internal sealed class StorageBuffer<T> : StorageBuffer where T : struct
+{
+	private readonly T[] _buffer;
+
+	public StorageBuffer(T[] array)
+	{
+		_buffer = array;
+	}
+
+	public Span<T> Span => _buffer.AsSpan();
+
+	public override void CopyTo(int oldRow, StorageBuffer buffer, int newRow)
+	{
+		((StorageBuffer<T>)buffer)._buffer[newRow] = _buffer[oldRow];
+	}
+
+	public override void SetValue(int row, object value)
+	{
+		_buffer[row] = (T)value;
+	}
+}
 
 public sealed class Archetype
 {
@@ -150,7 +178,7 @@ public sealed class Archetype
 			Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
 
 		ref var chunk = ref _chunks[index];
-		if (chunk.Data == null)
+		if (chunk.Storage == null)
 		{
 			chunk = new ArchetypeChunk(Components, CHUNK_SIZE);
 		}
@@ -217,7 +245,6 @@ public sealed class Archetype
 		_count -= 1;
 		EcsAssert.Assert(_count >= 0, "Negative count");
 
-		// ref var chunk = ref GetChunk(row);
 		ref var lastChunk = ref GetChunk(_count);
 		var removed = chunk.EntityAt(row).ID;
 
@@ -229,13 +256,9 @@ public sealed class Archetype
 
 			var srcIdx = _count & CHUNK_THRESHOLD;
 			var dstIdx = row & CHUNK_THRESHOLD;
-			var items = Components;
-			for (var i = 0; i < items.Length; ++i)
+			for (var i = 0; i < Components.Length; ++i)
 			{
-				var arrayToBeRemoved = chunk.Data![i];
-				var lastValidArray = lastChunk.Data![i];
-
-				CopyFast(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
+				lastChunk.Storage[i].CopyTo(srcIdx, chunk.Storage[i], dstIdx);
 			}
 
 			ref var rec = ref _world.GetRecord(chunk.EntityAt(row).ID);
@@ -301,11 +324,7 @@ public sealed class Archetype
 				++y;
 			}
 
-			var fromArray = fromChunk.Data![i];
-			var toArray = toChunk.Data![j];
-
-			// copy the moved entity to the target archetype
-			CopyFast(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
+			fromChunk.Storage[i].CopyTo(srcIdx, toChunk.Storage[j], dstIdx);
 		}
 
 		_ = RemoveByRow(ref fromChunk, oldRow);

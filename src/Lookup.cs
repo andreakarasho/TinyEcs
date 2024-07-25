@@ -29,6 +29,40 @@ internal static class Lookup
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
 	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
+
+	private static readonly FastIdLookup<Func<int, StorageBuffer>> _initializeStorage = new ();
+
+	public static StorageBuffer GetStorage(EcsID hashcode, int count)
+	{
+		ref var fn = ref _initializeStorage.TryGet(hashcode, out var exists);
+		if (exists)
+			return fn(count);
+
+		if (hashcode.IsPair())
+		{
+			(var first, var second) = hashcode.Pair();
+
+			fn = ref _initializeStorage.TryGet(first, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(first, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
+
+			fn = ref _initializeStorage.TryGet(second, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(second, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
+		}
+
+		EcsAssert.Panic(false, $"component not found with hashcode {hashcode}");
+		return null!;
+	}
+
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
 		ref var fn = ref _arrayCreator.TryGet(hashcode, out var exists);
@@ -129,6 +163,9 @@ internal static class Lookup
 
 			Value = new ComponentInfo(HashCode, Size, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
+
+			// if (Size > 0)
+			_initializeStorage.Add(Value.ID, count => new StorageBuffer<T>(new T[count]));
 
 			if (Size > 0)
 			{
