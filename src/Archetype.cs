@@ -87,6 +87,7 @@ public sealed class Archetype
 	private readonly EcsID[] _ids;
 	private readonly List<EcsEdge> _add, _remove;
 	private int _count;
+	private readonly int[] _fastLookup;
 
 	internal Archetype(
 		World world,
@@ -106,8 +107,8 @@ public sealed class Archetype
 		var roll = new RollingHash();
 		var dict = new Dictionary<EcsID, int>();
 		var allDict = new Dictionary<EcsID, int>();
-		var cur = 0;
-		for (var i = 0; i < sign.Length; ++i)
+		var maxId = -1;
+		for (int i = 0, cur = 0; i < sign.Length; ++i)
 		{
 			roll.Add(sign[i].ID);
 
@@ -115,12 +116,20 @@ public sealed class Archetype
 			{
 				dict.Add(sign[i].ID, cur);
 				cur += 1;
+				maxId = Math.Max(maxId, (int)sign[i].ID);
 			}
 
 			allDict.Add(sign[i].ID, i);
 		}
 
 		Id = roll.Hash;
+
+		_fastLookup = new int[maxId + 1];
+		_fastLookup.AsSpan().Fill(-1);
+		foreach ((var id, var i) in dict)
+		{
+			_fastLookup[(int)id] = i;
+		}
 
 		_componentsLookup = dict.ToFrozenDictionary();
 		_allLookup = allDict.ToFrozenDictionary();
@@ -129,7 +138,6 @@ public sealed class Archetype
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
 		_remove = new ();
-
 	}
 
 
@@ -170,8 +178,10 @@ public sealed class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EcsID id)
 	{
-		ref readonly var idx = ref _componentsLookup.GetValueRefOrNullRef(id);
-		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx)) ? -1 : idx;
+		// ref readonly var idx = ref _componentsLookup.GetValueRefOrNullRef(id);
+		// return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx)) ? -1 : idx;
+
+		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
