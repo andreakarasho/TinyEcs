@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-	private readonly Queue<DeferredOp> _operations = new();
+	private readonly ConcurrentQueue<DeferredOp> _operations = new();
 	private WorldState _worldState = new () { Locks = 0 };
 
 	public bool IsDeferred => _worldState.Locks > 0;
