@@ -71,7 +71,7 @@ public ref struct ChunkEnumerator
 
 internal abstract class StorageBuffer
 {
-	public abstract void CopyTo(int oldRow, StorageBuffer buffer, int newRow);
+	public abstract void CopyTo(int oldRow, StorageBuffer storageTarget, int newRow);
 
 	public abstract void SetValue(int row, object value);
 }
@@ -88,9 +88,9 @@ internal sealed class StorageBuffer<T> : StorageBuffer where T : struct
 
 	public Span<T> Span => _buffer.AsSpan();
 
-	public override void CopyTo(int oldRow, StorageBuffer buffer, int newRow)
+	public override void CopyTo(int oldRow, StorageBuffer storageTarget, int newRow)
 	{
-		((StorageBuffer<T>)buffer)._buffer[newRow] = _buffer[oldRow];
+		((StorageBuffer<T>)storageTarget)._buffer[newRow] = _buffer[oldRow];
 	}
 
 	public override void SetValue(int row, object value)
