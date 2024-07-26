@@ -6,7 +6,7 @@ public sealed partial class World : IDisposable
 
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new ();
-    private readonly FastIdLookup<Archetype> _typeIndex = new ();
+    private readonly Dictionary<EcsID, Archetype> _typeIndex = new ();
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
@@ -121,8 +121,7 @@ public sealed partial class World : IDisposable
 					hash.Add(cmp.ID);
 			}
 
-			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
-			if (!exists)
+			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length - 1];
 				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
@@ -132,10 +131,8 @@ public sealed partial class World : IDisposable
 						arr[j++] = item;
 				}
 
-				arch = NewArchetype(oldArch, arr, id);
+				foundArch = NewArchetype(oldArch, arr, id);
 			}
-
-			foundArch = arch;
 		}
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
@@ -195,18 +192,15 @@ public sealed partial class World : IDisposable
 			if (!found)
 				hash.Add(id);
 
-			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
-			if (!exists)
+			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
 				oldArch.All.CopyTo(arr);
 				arr[^1] = new ComponentInfo(id, size, isManaged);
 				arr.AsSpan().SortNoAlloc(_comparisonCmps);
 
-				arch = NewArchetype(oldArch, arr, id);
+				foundArch = NewArchetype(oldArch, arr, id);
 			}
-
-			foundArch = arch;
 		}
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
@@ -311,6 +305,7 @@ public sealed partial class World : IDisposable
 	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)
 	{
 		var archetype = _archRoot.InsertVertex(oldArch, sign, id);
+		_typeIndex.Add(archetype.Id, archetype);
 		Archetypes.Add(archetype);
 		return archetype;
 	}
@@ -351,12 +346,7 @@ struct EcsRecord
 	public Archetype Archetype;
     public int Row;
 	public EntityFlags Flags;
-
 	public ArchetypeChunk Chunk;
-
-
-	// [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    // public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref readonly EntityView EntityView() => ref Chunk.EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);

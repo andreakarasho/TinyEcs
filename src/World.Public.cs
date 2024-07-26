@@ -115,8 +115,7 @@ public sealed partial class World
 		ids.SortNoAlloc(_comparisonCmps);
 
 		var hash = RollingHash.Calculate(ids);
-		ref var archetype = ref _typeIndex.GetOrCreate(hash, out var exists);
-		if (!exists)
+		if (!_typeIndex.TryGetValue(hash, out var archetype))
 		{
 			var archLessOne = Archetype(ids[..^1]);
 			var arr = new ComponentInfo[ids.Length];

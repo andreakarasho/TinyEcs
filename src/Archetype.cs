@@ -178,8 +178,12 @@ public sealed class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EcsID id)
 	{
-		// ref readonly var idx = ref _componentsLookup.GetValueRefOrNullRef(id);
-		// return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx)) ? -1 : idx;
+		if (id.IsPair())
+		{
+			if (_componentsLookup.TryGetValue(id, out var index))
+				return index;
+			return -1;
+		}
 
 		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
 	}
@@ -187,15 +191,17 @@ public sealed class Archetype
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetPairIndex(EcsID id)
 	{
-		ref readonly var idx = ref _pairsLookup.GetValueRefOrNullRef(id);
-		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx)) ? -1 : idx;
+		if (_pairsLookup.TryGetValue(id, out var index))
+			return index;
+		return -1;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetAnyIndex(EcsID id)
 	{
-		ref readonly var idx = ref _allLookup.GetValueRefOrNullRef(id);
-		return Unsafe.IsNullRef(ref Unsafe.AsRef(in idx)) ? -1 : idx;
+		if (_allLookup.TryGetValue(id, out var index))
+			return index;
+		return -1;
 	}
 
 	internal bool HasIndex(EcsID id)
