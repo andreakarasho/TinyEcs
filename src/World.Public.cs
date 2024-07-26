@@ -22,7 +22,7 @@ public sealed partial class World
             _comparer
         );
 		_typeIndex.Add(_archRoot.Id, _archRoot);
-		Archetypes.Add(_archRoot);
+		LastArchetypeId = _archRoot.Id;
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
@@ -99,7 +99,6 @@ public sealed partial class World
 			query.Dispose();
 
 		_cachedQueries.Clear();
-        Archetypes.Clear();
     }
 
 	/// <summary>

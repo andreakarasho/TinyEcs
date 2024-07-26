@@ -22,7 +22,7 @@ public sealed partial class World : IDisposable
 
 
 	internal Archetype Root => _archRoot;
-    internal List<Archetype> Archetypes { get; } = [];
+	internal EcsID LastArchetypeId { get; set; }
 
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
@@ -306,7 +306,7 @@ public sealed partial class World : IDisposable
 	{
 		var archetype = _archRoot.InsertVertex(oldArch, sign, id);
 		_typeIndex.Add(archetype.Id, archetype);
-		Archetypes.Add(archetype);
+		LastArchetypeId = archetype.Id;
 		return archetype;
 	}
 

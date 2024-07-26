@@ -148,11 +148,10 @@ public partial class Query : IDisposable
 	{
 		_subQuery?.Match();
 
-		var allArchetypes = World.Archetypes;
-		if (allArchetypes.Count == 0 || _lastArchetypeIdMatched == allArchetypes[^1].Id)
+		if (_lastArchetypeIdMatched == World.LastArchetypeId)
 			return;
 
-		_lastArchetypeIdMatched = allArchetypes[^1].Id;
+		_lastArchetypeIdMatched = World.LastArchetypeId;
 		_matchedArchetypes.Clear();
 		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
 	}
