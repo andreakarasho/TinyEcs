@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 public sealed partial class World
 {
-	private readonly Queue<DeferredOp> _operations = new();
+	private readonly ConcurrentQueue<DeferredOp> _operations = new();
 	private WorldState _worldState = new () { Locks = 0 };
 
 	public bool IsDeferred => _worldState.Locks > 0;
@@ -139,14 +139,7 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 				{
-					if (op.ComponentInfo.ID.IsPair())
-					{
-						(var first, var second) = op.ComponentInfo.ID.Pair();
-						CheckUnique(op.Entity, first);
-						CheckSymmetric(op.Entity, first, second);
-					}
-
-					(var array, var row) = AttachComponent(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
+					(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
 					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 
 					break;
@@ -154,7 +147,7 @@ public sealed partial class World
 
 				case DeferredOpTypes.UnsetComponent:
 				{
-					DetachComponent(op.Entity, op.ComponentInfo.ID);
+					Detach(op.Entity, op.ComponentInfo.ID);
 
 					break;
 				}

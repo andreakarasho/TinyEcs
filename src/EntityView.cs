@@ -134,6 +134,21 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 		=> World.Exists(ID);
 
 
+	/// <inheritdoc cref="World.Rule{TRule}"/>
+	public readonly EntityView Rule<TRule>() where TRule : struct
+	{
+		World.Rule<TRule>(ID);
+		return this;
+	}
+
+	/// <inheritdoc cref="World.Rule(EcsID, EcsID)"/>
+	public readonly EntityView Rule(EcsID ruleId)
+	{
+		World.Rule(ID, ruleId);
+		return this;
+	}
+
+
 	public static implicit operator EcsID(EntityView d) => d.ID;
 
     public static bool operator ==(EntityView a, EntityView b) => a.ID.Equals(b.ID);

@@ -22,11 +22,12 @@ public sealed partial class World
             _comparer
         );
 		_typeIndex.Add(_archRoot.Id, _archRoot);
-		Archetypes.Add(_archRoot);
+		LastArchetypeId = _archRoot.Id;
 
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
+		_ = Component<Rule>();
 		_ = Component<DoNotDelete>();
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
@@ -41,6 +42,7 @@ public sealed partial class World
 		_ = Component<Panic>();
 		_ = Component<Unset>();
 
+		setCommon(Entity<Rule>(), nameof(Rule));
 		setCommon(Entity<DoNotDelete>(), nameof(DoNotDelete));
 		setCommon(Entity<Unique>(), nameof(Unique));
 		setCommon(Entity<Symmetric>(), nameof(Symmetric));
@@ -49,12 +51,15 @@ public sealed partial class World
 		setCommon(Entity<Name>(), nameof(Name));
 		setCommon(Entity<ChildOf>(), nameof(ChildOf))
 			.Add<OnDelete, Delete>()
-			.Add<Unique>();
+			.Rule<Unique>();
 		setCommon(Entity<OnDelete>(), nameof(OnDelete))
-			.Add<Unique>();
+			.Rule<Unique>();
 		setCommon(Entity<Delete>(), nameof(Delete));
 		setCommon(Entity<Panic>(), nameof(Panic));
 		setCommon(Entity<Unset>(), nameof(Unset));
+
+		Entity<Identifier>()
+			.Rule<Unset>();
 
 		static EntityView setCommon(EntityView entity, string name)
 			=> entity.Add<DoNotDelete>().Set<Identifier>(new (name), Defaults.Name.ID);
@@ -94,7 +99,6 @@ public sealed partial class World
 			query.Dispose();
 
 		_cachedQueries.Clear();
-        Archetypes.Clear();
     }
 
 	/// <summary>
@@ -110,8 +114,7 @@ public sealed partial class World
 		ids.SortNoAlloc(_comparisonCmps);
 
 		var hash = RollingHash.Calculate(ids);
-		ref var archetype = ref _typeIndex.GetOrCreate(hash, out var exists);
-		if (!exists)
+		if (!_typeIndex.TryGetValue(hash, out var archetype))
 		{
 			var archLessOne = Archetype(ids[..^1]);
 			var arr = new ComponentInfo[ids.Length];
@@ -133,7 +136,7 @@ public sealed partial class World
 	{
 		ref var record = ref NewId(out var id);
 		record.Archetype = arch;
-		record.Row = arch.Add(id);
+		record.Chunk = arch.Add(id, out record.Row);
 		record.Flags = EntityFlags.None;
 
 		return new EntityView(this, id);
@@ -162,7 +165,7 @@ public sealed partial class World
 
 				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
-				record.Row = _archRoot.Add(id);
+				record.Chunk = _archRoot.Add(id, out record.Row);
 				record.Flags = EntityFlags.None;
 
 				ent = new EntityView(this, id);
@@ -373,7 +376,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        _ = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
     }
 
 	/// <summary>
@@ -394,7 +397,7 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = AttachComponent(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        (var raw, var row) = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
         var array = Unsafe.As<T[]>(raw!);
         array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
@@ -413,7 +416,7 @@ public sealed partial class World
 			return;
 		}
 
-		_ = AttachComponent(entity, id, 0, false);
+		_ = Attach(entity, id, 0, false);
 	}
 
 	/// <summary>
@@ -438,7 +441,7 @@ public sealed partial class World
 			return;
 		}
 
-		DetachComponent(entity, id);
+		Detach(entity, id);
 	}
 
 	/// <summary>
@@ -459,18 +462,7 @@ public sealed partial class World
 	/// <returns></returns>
 	public bool Has(EcsID entity, EcsID id)
     {
-		ref var record = ref GetRecord(entity);
-        var has = record.Archetype.GetComponentIndex(id) >= 0;
-		if (has) return true;
-
-		if (id.IsPair())
-		{
-			(var a, var b) = FindPair(entity, id);
-
-			return a != 0 && b != 0;
-		}
-
-		return id == Wildcard.ID;
+		return IsAttached(ref GetRecord(entity), id);
     }
 
 	/// <summary>
@@ -496,6 +488,25 @@ public sealed partial class World
 		if ((record.Flags & EntityFlags.HasName) != 0)
 			return Get<Identifier>(id, Defaults.Name.ID).Data;
 		return string.Empty;
+	}
+
+	/// <inheritdoc cref="Rule(EcsID, EcsID)"/>
+	public void Rule<TRule>(EcsID entity) where TRule : struct
+	{
+		Rule(entity, Component<TRule>().ID);
+	}
+
+	/// <summary>
+	/// Set a rule to an entity.
+	/// </summary>
+	/// <param name="entity"></param>
+	/// <param name="ruleId"></param>
+	public void Rule(EcsID entity, EcsID ruleId)
+	{
+		ref var ruleRecord = ref GetRecord(entity);
+		ruleRecord.Flags |= EntityFlags.HasRules;
+
+		Add(entity, Defaults.Rule.ID, ruleId);
 	}
 
 	/// <summary>

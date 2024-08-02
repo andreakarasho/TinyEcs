@@ -1,7 +1,3 @@
-using System.Collections.Concurrent;
-using System.Collections.Immutable;
-using Microsoft.Collections.Extensions;
-
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -10,7 +6,7 @@ public sealed partial class World : IDisposable
 
     private readonly Archetype _archRoot;
     private readonly EntitySparseSet<EcsRecord> _entities = new ();
-    private readonly FastIdLookup<Archetype> _typeIndex = new ();
+    private readonly Dictionary<EcsID, Archetype> _typeIndex = new ();
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
@@ -26,7 +22,7 @@ public sealed partial class World : IDisposable
 
 
 	internal Archetype Root => _archRoot;
-    internal List<Archetype> Archetypes { get; } = [];
+	internal EcsID LastArchetypeId { get; set; }
 
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
@@ -98,32 +94,13 @@ public sealed partial class World : IDisposable
         return ref record;
     }
 
-	private void DetachComponent(EcsID entity, EcsID id)
+	private void Detach(EcsID entity, EcsID id)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
 
-		var column = oldArch.GetComponentIndex(id);
-		if (column < 0)
+		if (oldArch.GetAnyIndex(id) < 0)
             return;
-
-		if (id.IsPair())
-		{
-			(var first, var second) = id.Pair();
-			if ((record.Flags & EntityFlags.HasName) != 0)
-			{
-				if (first == Defaults.Identifier.ID && second == Defaults.Name.ID)
-				{
-
-
-					record.Flags &= ~EntityFlags.HasName;
-				}
-			}
-
-			GetRecord(GetAlive(first)).Flags &= ~EntityFlags.IsAction;
-			GetRecord(GetAlive(second)).Flags &= ~EntityFlags.IsTarget;
-		}
-
 
 		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
 
@@ -144,8 +121,7 @@ public sealed partial class World : IDisposable
 					hash.Add(cmp.ID);
 			}
 
-			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
-			if (!exists)
+			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length - 1];
 				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
@@ -155,32 +131,44 @@ public sealed partial class World : IDisposable
 						arr[j++] = item;
 				}
 
-				arch = NewArchetype(oldArch, arr, id);
+				foundArch = NewArchetype(oldArch, arr, id);
 			}
-
-			foundArch = arch;
 		}
 
-		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
+		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
         record.Archetype = foundArch!;
 		EndDeferred();
-	}
 
-	private (Array?, int) AttachComponent(EcsID entity, EcsID id, int size, bool isManaged)
-	{
-		ref var record = ref GetRecord(entity);
-		var oldArch = record.Archetype;
-
-		var column = oldArch.GetComponentIndex(id);
-		if (column >= 0)
-            return (size > 0 ? record.GetChunk().Data![column] : null, record.Row);
 
 		if (id.IsPair())
 		{
 			(var first, var second) = id.Pair();
-			GetRecord(GetAlive(first)).Flags |= EntityFlags.IsAction;
-			GetRecord(GetAlive(second)).Flags |= EntityFlags.IsTarget;
+			(first, second) = (GetAlive(first), GetAlive(second));
+
+			ref var firstRec = ref GetRecord(first);
+			ref var secondRec = ref GetRecord(second);
+			firstRec.Flags &= ~EntityFlags.IsAction;
+			secondRec.Flags &= ~EntityFlags.IsTarget;
+
+			if ((firstRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref firstRec, first, id, false);
+			}
+			else if ((secondRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref secondRec, second, id, false);
+			}
 		}
+	}
+
+	private (Array?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
+	{
+		ref var record = ref GetRecord(entity);
+		var oldArch = record.Archetype;
+
+		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
+		if (column >= 0)
+            return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
 
 		BeginDeferred();
 
@@ -204,50 +192,139 @@ public sealed partial class World : IDisposable
 			if (!found)
 				hash.Add(id);
 
-			ref var arch = ref _typeIndex.GetOrCreate(hash.Hash, out var exists);
-			if (!exists)
+			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
 				oldArch.All.CopyTo(arr);
 				arr[^1] = new ComponentInfo(id, size, isManaged);
 				arr.AsSpan().SortNoAlloc(_comparisonCmps);
 
-				arch = NewArchetype(oldArch, arr, id);
+				foundArch = NewArchetype(oldArch, arr, id);
 			}
-
-			foundArch = arch;
 		}
 
-		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, false);
+		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
         record.Archetype = foundArch!;
 		EndDeferred();
 
 		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
 
-		return (size > 0 ? record.GetChunk().Data![foundArch!.GetComponentIndex(id)] : null, record.Row);
+		if (id.IsPair())
+		{
+			(var first, var second) = id.Pair();
+			(first, second) = (GetAlive(first), GetAlive(second));
+
+			ref var firstRec = ref GetRecord(first);
+			ref var secondRec = ref GetRecord(second);
+			firstRec.Flags |= EntityFlags.IsAction;
+			secondRec.Flags |= EntityFlags.IsTarget;
+
+			if ((firstRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref firstRec, first, id, true);
+			}
+			else if ((secondRec.Flags & EntityFlags.HasRules) != 0)
+			{
+				ExecuteRule(ref record, entity, ref secondRec, second, id, true);
+			}
+		}
+
+		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
+		return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+	}
+
+	internal bool IsAttached(ref EcsRecord record, EcsID id)
+	{
+		if (record.Archetype.HasIndex(id))
+			return true;
+
+		if (id.IsPair())
+		{
+			(var a, var b) = FindPair(ref record, id.First(), id.Second());
+
+			return a.IsValid() && b.IsValid();
+		}
+
+		return id == Defaults.Wildcard.ID;
+	}
+
+	private void ExecuteRule(ref EcsRecord entityRecord, EcsID entity, ref EcsRecord ruleRecord, EcsID ruleId, EcsID id, bool onSet)
+	{
+		var i = 0;
+		EcsID target;
+		while ((target = FindPairFromFirst(ref ruleRecord, Defaults.Rule.ID, i++).second).IsValid())
+		{
+			if (target == Defaults.Symmetric.ID)
+			{
+				(var first, var second) = id.Pair();
+
+				var has = Has(second, first, entity);
+				if (!onSet)
+					has = !has;
+
+				if (!has)
+				{
+					if (onSet)
+						Add(second, first, entity);
+					else
+						Unset(second, first, entity);
+				}
+			}
+			else if (target == Defaults.Unique.ID)
+			{
+				if (onSet)
+				{
+					(var first, var second) = id.Pair();
+					var idx = 0;
+					EcsID targetId;
+					while ((targetId = FindPairFromFirst(ref entityRecord, first, idx++).second).IsValid())
+					{
+						if (targetId != second)
+						{
+							Unset(entity, first, targetId);
+						}
+					}
+				}
+			}
+			else if (target == Defaults.Unset.ID)
+			{
+				if (!onSet)
+				{
+					if (ruleId == Defaults.Identifier.ID)
+					{
+						var second = GetAlive(id.Second());
+
+						if (second == Defaults.Name.ID)
+							GetRecord(entity).Flags &= ~EntityFlags.HasName;
+					}
+				}
+			}
+		}
 	}
 
 	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)
 	{
 		var archetype = _archRoot.InsertVertex(oldArch, sign, id);
-		Archetypes.Add(archetype);
+		_typeIndex.Add(archetype.Id, archetype);
+		LastArchetypeId = archetype.Id;
 		return archetype;
 	}
 
-	internal ref T GetUntrusted<T>(EcsID entity, EcsID cmpId, int size) where T : struct
+	internal ref T GetUntrusted<T>(EcsID entity, EcsID id, int size) where T : struct
 	{
-		if (IsDeferred && !Has(entity, cmpId))
+		if (IsDeferred && !Has(entity, id))
 		{
 			Unsafe.SkipInit<T>(out var val);
 			var isManaged = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, cmpId, val, size, isManaged)!);
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size, isManaged)!);
 		}
 
         ref var record = ref GetRecord(entity);
-		var column = record.Archetype.GetComponentIndex(cmpId);
-        ref var chunk = ref record.GetChunk();
-		ref var value = ref Unsafe.Add(ref chunk.GetReference<T>(column), record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
-		return ref value;
+		var column = record.Archetype.GetComponentIndex(id);
+		if (column < 0)
+			return ref Unsafe.NullRef<T>();
+
+		return ref Unsafe.As<T[]>(record.Chunk.Data![column])[record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD];
     }
 
 	internal Query GetQuery(EcsID hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
@@ -269,12 +346,10 @@ struct EcsRecord
 	public Archetype Archetype;
     public int Row;
 	public EntityFlags Flags;
+	public ArchetypeChunk Chunk;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref ArchetypeChunk GetChunk() => ref Archetype.GetChunk(Row);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly EntityView EntityView() => ref Archetype.GetChunk(Row).EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+    public readonly ref readonly EntityView EntityView() => ref Chunk.EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
 [Flags]
@@ -285,5 +360,7 @@ enum EntityFlags
 	IsTarget = 1 << 2,
 	IsUnique = 1 << 3,
 	IsSymmetric = 1 << 4,
-	HasName = 1 << 5
+	HasName = 1 << 5,
+
+	HasRules = 1 << 6,
 }

@@ -10,7 +10,7 @@ public static class Defaults
 	/// <summary>
 	/// Built-in tag.<br/>Shortcut for child.Add{ChildOf}(parent);
 	/// </summary>
-	public struct ChildOf { }
+	public readonly struct ChildOf { public static readonly EcsID ID = Lookup.Component<ChildOf>.Value.ID; }
 
 	/// <summary>
 	/// Built-in component.<br/>Used in combination with <see cref="Name"/>
@@ -50,7 +50,7 @@ public static class Defaults
 	/// </code>
 	/// </example>
     /// </summary>
-	public struct Unique { }
+	public readonly struct Unique { public static readonly EcsID ID = Lookup.Component<Unique>.Value.ID; }
 
     /// <summary>
     /// Built-in tag.<br/>Used to add the same rule to the target entity.<para/>
@@ -70,7 +70,7 @@ public static class Defaults
 	/// </code>
 	/// </example>
     /// </summary>
-	public struct Symmetric { }
+	public readonly struct Symmetric { public static readonly EcsID ID = Lookup.Component<Symmetric>.Value.ID; }
 
 	/// <summary>
     /// Built-in tag.<br/>Mark a component/tag to not be deleted<para/>
@@ -153,5 +153,10 @@ public static class Defaults
 	/// </code>
 	/// </example>
     /// </summary>
-	public struct Unset { }
+	public readonly struct Unset { public static readonly EcsID ID = Lookup.Component<Unset>.Value.ID; }
+
+
+
+
+	internal readonly struct Rule { public static readonly EcsID ID = Lookup.Component<Rule>.Value.ID; }
 }
