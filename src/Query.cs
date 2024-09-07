@@ -233,10 +233,55 @@ public partial class Query : IDisposable
 
 		World.EndDeferred();
 	}
+
+	public RefEnumerator Iter() => new(this.GetEnumerator());
 }
 
 
+[System.Runtime.CompilerServices.SkipLocalsInit]
+public ref struct RefEnumerator
+{
+	private QueryInternal _queryIt;
 
+	private QueryChunkIterator _chunkIt;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal RefEnumerator(QueryInternal queryIt)
+	{
+		_queryIt = queryIt;
+	}
+
+	[System.Diagnostics.CodeAnalysis.UnscopedRef]
+	public ReadOnlySpan<EntityView> Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get
+		{
+			ref var chunk = ref _chunkIt.Current;
+			return chunk.Entities.AsSpan(0, chunk.Count);
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		while (true)
+		{
+			if (_chunkIt.MoveNext())
+				return true;
+			if (_queryIt.MoveNext())
+			{
+				_chunkIt = new QueryChunkIterator(_queryIt.Current.Chunks);
+				continue;
+			}
+
+			return false;
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly RefEnumerator GetEnumerator() => this;
+}
 
 public ref struct QueryInternal
 {
