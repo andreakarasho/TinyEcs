@@ -7,23 +7,38 @@ static class Match
 		if (terms.IsEmpty)
 			return -1;
 
-        foreach (var term in terms)
+        foreach (ref readonly var term in terms)
         {
             switch (term.Op)
             {
 				case TermOp.DataAccess:
                 case TermOp.With:
-                    if (ids.All(id => ComponentComparer.CompareTerms(null, id, term.Id) != 0))
+	                var all = true;
+	                foreach (var id in ids)
+	                {
+		                if (ComponentComparer.CompareTerms(null, id, term.Id) == 0)
+		                {
+			                all = false;
+			                break;
+		                }
+	                }
+
+	                if (all)
                     {
                         return 1; // Required ID not found
                     }
+
                     break;
                 case TermOp.Without:
-                    if (ids.Any(id => ComponentComparer.CompareTerms(null, id, term.Id) == 0))
-                    {
-                        return -1; // Forbidden ID found
-                    }
-                    break;
+	                foreach (var id in ids)
+	                {
+		                if (ComponentComparer.CompareTerms(null, id, term.Id) == 0)
+		                {
+			                return -1; // Forbidden ID found
+		                }
+	                }
+
+	                break;
                 case TermOp.Optional:
                     // Do nothing, as presence or absence is acceptable
                     break;
