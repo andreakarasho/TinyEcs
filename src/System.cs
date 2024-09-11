@@ -123,7 +123,8 @@ public sealed partial class Scheduler
 	private readonly World _world;
     private readonly SysParamMap _resources = new ();
 	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
-
+	private readonly List<FuncSystem<World>> _singleThreads = new ();
+	private readonly List<FuncSystem<World>> _multiThreads = new ();
 
 	public Scheduler(World world)
 	{
@@ -151,9 +152,28 @@ public sealed partial class Scheduler
 
 	private void RunStage(Stages stage)
 	{
+		_singleThreads.Clear();
+		_multiThreads.Clear();
+
 		var systems = _systems[(int) stage];
-		var multithreading = systems.Where(static s => !s.IsResourceInUse());
-		var singlethreading = systems.Except(multithreading);
+
+		foreach (var sys in systems)
+		{
+			if (sys.IsResourceInUse())
+			{
+				_singleThreads.Add(sys);
+			}
+			else
+			{
+				_multiThreads.Add(sys);
+			}
+		}
+
+		var multithreading = _multiThreads;
+		var singlethreading = _singleThreads;
+
+		// var multithreading = systems.Where(static s => !s.IsResourceInUse());
+		// var singlethreading = systems.Except(multithreading);
 
 		if (multithreading.Any())
 			Parallel.ForEach(multithreading, s => s.Run(_resources));
