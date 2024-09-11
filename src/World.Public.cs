@@ -102,6 +102,19 @@ public sealed partial class World
     }
 
 	/// <summary>
+	/// Remove all empty archetypes.
+	/// </summary>
+	/// <returns></returns>
+	public int RemoveEmptyArchetypes()
+	{
+		var removed = 0;
+		_archRoot?.RemoveEmptyArchetypes(ref removed, _typeIndex);
+		if (removed > 0)
+			LastArchetypeId = ulong.MaxValue;
+		return removed;
+	}
+
+	/// <summary>
 	/// Get or create an archetype with the specified components.
 	/// </summary>
 	/// <param name="ids"></param>

@@ -346,6 +346,24 @@ public sealed class Archetype
 			Array.Resize(ref _chunks, half);
 	}
 
+	internal void RemoveEmptyArchetypes(ref int removed, Dictionary<EcsID, Archetype> cache)
+	{
+		for (var i = _add.Count - 1; i >= 0; --i)
+		{
+			var edge = _add[i];
+			edge.Archetype.RemoveEmptyArchetypes(ref removed, cache);
+
+			if (edge.Archetype.Count == 0 && edge.Archetype._add.Count == 0)
+			{
+				cache.Remove(edge.Archetype.Id);
+				_remove.Clear();
+				_add.RemoveAt(i);
+
+				removed += 1;
+			}
+		}
+	}
+
 	private static void MakeEdges(Archetype left, Archetype right, EcsID id)
 	{
 		left._add.Add(new EcsEdge() { Archetype = right, Id = id });

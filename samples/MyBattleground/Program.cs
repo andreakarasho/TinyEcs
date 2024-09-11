@@ -8,6 +8,34 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 
+var entities = new EntityView[1];
+for (var i = 0; i < entities.Length; ++i)
+	entities[i] = ecs.Entity();
+
+foreach (var e in entities)
+{
+	e.Set(new Component1());
+	e.Set(new Component2());
+	e.Set(new Component3());
+	e.Set(new Component4());
+	e.Set(new Component5());
+}
+
+// while (true)
+// {
+// 	foreach (var e in entities)
+// 		e.Get<Component1>() = new Component1();
+
+// 	// foreach (var e in entities)
+// 	// {
+// 	// 	e.Unset<Component1>();
+// 	// 	e.Unset<Component2>();
+// 	// 	e.Unset<Component3>();
+// 	// 	e.Unset<Component4>();
+// 	// 	e.Unset<Component5>();
+// 	// }
+// }
+
 
 var asd = ecs.Entity().Set(new Position());
 var name = ecs.Entity<Position>().Name();
@@ -32,7 +60,7 @@ child.Set(new EquippedItem() { Layer = 3 }, root);
 child.Set(new EquippedItem() { Layer = 3 }, root);
 
 // root.AddChild(child);
-root.Delete();
+// root.Delete();
 
 ref var equip2 = ref ecs.Get<EquippedItem>(child);
 ref var equip = ref ecs.Get<EquippedItem>(child, root);
@@ -50,6 +78,9 @@ ecs.Entity().Set(new Velocity());
 //ecs.Entity().Set(new Position() {X = 2}).Set<Likes>();
 var xx = ecs.Entity().Set(new Position() {X = 3});
 ref var qq = ref xx.Get<Position>();
+
+
+ecs.RemoveEmptyArchetypes();
 
 var query = ecs.Query<(Position, Velocity)>();
 
@@ -250,6 +281,13 @@ ecs.Query<ValueTuple, With<Networked>>()
 var scheduler = new Scheduler(ecs);
 scheduler.AddResource(0);
 
+void initWnd(Query<int> query)
+{
+
+}
+
+scheduler.AddSystem<Query<int>>(initWnd, stage: Stages.Startup);
+
 scheduler.AddSystem((Res<int> res) => Console.WriteLine("system 0 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
 scheduler.AddSystem(() => Console.WriteLine("system 1 - thread id {0}", Thread.CurrentThread.ManagedThreadId), threadingType: ThreadingMode.Auto);
 
@@ -259,8 +297,8 @@ var sys = scheduler.AddSystem(() => Console.WriteLine("system 2 - thread id {0}"
 // sysAfter.RunAfter(sys);
 // sys.RunAfter(sysAfter);
 
-while (true)
-	scheduler.Run();
+// while (true)
+// 	scheduler.Run();
 
 scheduler.AddSystem((Local<int> i32, Res<string> str, Local<string> strLocal) => {
 	Console.WriteLine(i32.Value++);
@@ -550,3 +588,15 @@ struct Networked { }
 delegate void Query2Del<T0, T1>(ref T0 t0, ref T1 t1);
 
 struct EquippedItem { public byte Layer; }
+
+
+
+public record struct Component1(int Value);
+
+public record struct Component2(int Value);
+
+public record struct Component3(int Value);
+
+public record struct Component4(int Value);
+
+public record struct Component5(int Value);
