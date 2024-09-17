@@ -282,22 +282,25 @@ public sealed partial class World
 				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
 				{
 					world.BeginDeferred();
-					foreach (var arch in world.QueryRaw(terms))
+					world.UncachedQuery(terms, (ref QueryInternal it) =>
 					{
-						foreach (ref readonly var chunk in arch)
+						foreach (var arch in it)
 						{
-							foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
+							foreach (ref readonly var chunk in arch)
 							{
-								var action = world.Action(child.ID, entity);
-								if (world.Has<OnDelete, Delete>(action))
-									child.Delete();
-								if (world.Has<OnDelete, Unset>(action))
-									child.Unset(action, entity);
-								if (world.Has<OnDelete, Panic>(action))
-									EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
+								foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
+								{
+									var action = world.Action(child.ID, entity);
+									if (world.Has<OnDelete, Delete>(action))
+										child.Delete();
+									if (world.Has<OnDelete, Unset>(action))
+										child.Unset(action, entity);
+									if (world.Has<OnDelete, Panic>(action))
+										EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
+								}
 							}
 						}
-					}
+					});
 					world.EndDeferred();
 				}
 
