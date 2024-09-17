@@ -172,6 +172,7 @@ public partial class Query : IDisposable
 	public ref T Single<T>() where T : struct
 	{
 		var count = Count();
+		EcsAssert.Panic(count == 0, "No entity found");
 		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
 
 		foreach (var arch in this)
@@ -196,6 +197,24 @@ public partial class Query : IDisposable
 		}
 
 		return EntityView.Invalid;
+	}
+
+	public ref T Get<T>(EcsID entity) where T : struct
+	{
+		ref var record = ref World.GetRecord(entity);
+
+		foreach (var arch in this)
+		{
+			if (arch.Id != record.Archetype.Id)
+				continue;
+
+			var column = arch.GetComponentIndex<T>();
+			EcsAssert.Panic(column >= 0, "component not found");
+			ref var value = ref record.Chunk.GetReference<T>(column);
+			return ref value;
+		}
+
+		return ref Unsafe.NullRef<T>();
 	}
 
 	public QueryInternal GetEnumerator()
