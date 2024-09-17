@@ -172,8 +172,7 @@ public partial class Query : IDisposable
 	public ref T Single<T>() where T : struct
 	{
 		var count = Count();
-		EcsAssert.Panic(count == 0, "No entity found");
-		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
+		EcsAssert.Panic(count == 1, "'Single' must match one and only one entity.");
 
 		foreach (var arch in this)
 		{
