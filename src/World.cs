@@ -352,7 +352,7 @@ public sealed partial class World : IDisposable
 		if (result <= -1)
 			return;
 
-		if (result == 0)
+		if (result == 0 && root.Count > 0)
 		{
 			var it = new QueryInternal([root]);
 			fn(ref it);
