@@ -54,26 +54,9 @@ public struct ArchetypeChunk
 	}
 }
 
-public ref struct ChunkEnumerator
-{
-	private readonly Span<ArchetypeChunk> _chunks;
-	private int _index;
-
-	internal ChunkEnumerator(Span<ArchetypeChunk> chunks)
-	{
-		_chunks = chunks;
-		_index = -1;
-	}
-
-	public readonly ref readonly ArchetypeChunk Current => ref _chunks[_index];
-
-	public bool MoveNext() => ++_index < _chunks.Length;
-}
-
-
 public sealed class Archetype
 {
-	const int ARCHETYPE_INITIAL_CAPACITY = 4;
+	const int ARCHETYPE_INITIAL_CAPACITY = 1;
 
 	internal const int CHUNK_SIZE = 4096;
 	private const int CHUNK_LOG2 = 12;
@@ -85,7 +68,7 @@ public sealed class Archetype
 	private readonly ComponentComparer _comparer;
 	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _pairsLookup, _allLookup;
 	private readonly EcsID[] _ids;
-	private readonly List<EcsEdge> _add, _remove;
+	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
 	private readonly int[] _fastLookup;
 
@@ -133,7 +116,10 @@ public sealed class Archetype
 
 		_componentsLookup = dict.ToFrozenDictionary();
 		_allLookup = allDict.ToFrozenDictionary();
-		_pairsLookup = allDict.Where(s => s.Key.IsPair()).GroupBy(s => s.Key.First()).ToFrozenDictionary(s => s.Key, v => v.First().Value);
+		_pairsLookup = allDict
+			.Where(s => s.Key.IsPair())
+				.GroupBy(s => s.Key.First())
+			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
 
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
@@ -170,38 +156,29 @@ public sealed class Archetype
 	internal ref ArchetypeChunk GetChunk(int index)
 		=> ref _chunks[index >> CHUNK_LOG2];
 
-	public ChunkEnumerator GetEnumerator()
+	public QueryChunkIterator GetEnumerator()
 	{
-		return new ChunkEnumerator(Chunks);
+		return new QueryChunkIterator(Chunks);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetComponentIndex(EcsID id)
 	{
 		if (id.IsPair())
 		{
-			if (_componentsLookup.TryGetValue(id, out var index))
-				return index;
-			return -1;
+			return _componentsLookup.GetValueOrDefault(id, -1);
 		}
 
 		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetPairIndex(EcsID id)
 	{
-		if (_pairsLookup.TryGetValue(id, out var index))
-			return index;
-		return -1;
+		return _pairsLookup.GetValueOrDefault(id, -1);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal int GetAnyIndex(EcsID id)
 	{
-		if (_allLookup.TryGetValue(id, out var index))
-			return index;
-		return -1;
+		return _allLookup.GetValueOrDefault(id, -1);
 	}
 
 	internal bool HasIndex(EcsID id)
@@ -468,6 +445,15 @@ public sealed class Archetype
 		{
 			edge.Archetype.GetSuperSets(terms, matched);
 		}
+	}
+
+	internal int MatchWith(ReadOnlySpan<IQueryTerm> terms)
+	{
+		var result = Match.Validate(_comparer, _ids, terms);
+		// if (result < 0)
+		// 	return -1;
+
+		return result;
 	}
 
 	public void Print(int depth)

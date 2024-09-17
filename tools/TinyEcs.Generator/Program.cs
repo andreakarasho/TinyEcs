@@ -48,7 +48,23 @@ public sealed class MyGenerator : IIncrementalGenerator
                 namespace TinyEcs
                 {{
 					{GenerateQueryRefEnumerator()}
-					{GenerateQueryIter()}
+					{GenerateQueryIter("partial class Query")}
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateUncachedQueryIters()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					{GenerateQueryRefEnumerator()}
+					{GenerateQueryIter("ref partial struct UncachedQuery")}
                 }}
 
                 #pragma warning restore 1591
@@ -65,10 +81,10 @@ public sealed class MyGenerator : IIncrementalGenerator
                 {{
 					{GenerateQueryTemplateDelegates(false)}
 					{GenerateQueryTemplateDelegates(true)}
-					{GenerateFilterQuery(false, false)}
-					{GenerateFilterQuery(true, false)}
-					{GenerateFilterQuery(false, true)}
-					{GenerateFilterQuery(true, true)}
+					{GenerateFilterQuery("class World", true, false)}
+					{GenerateFilterQuery("class World", true, true)}
+					{GenerateFilterQuery("class Query", false, false)}
+					{GenerateFilterQuery("class Query", false, true)}
                 }}
 
                 #pragma warning restore 1591
@@ -285,11 +301,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
-		static string GenerateQueryIter()
+		static string GenerateQueryIter(string className)
 		{
 			var sb = new StringBuilder();
 			sb.AppendLine($@"
-				public partial class Query
+				public {className}
 				{{
 			");
 
@@ -328,9 +344,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
-		static string GenerateFilterQuery(bool withFilter, bool withEntityView)
+		static string GenerateFilterQuery(string className, bool withFilter, bool withEntityView)
 		{
-			var className = withFilter ? "class World" : "class Query";
+			// var className = withFilter ? "class World" : "class Query";
 			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
 
 			var sb = new StringBuilder();
@@ -366,10 +382,10 @@ public sealed class MyGenerator : IIncrementalGenerator
 					return str;
 				});
 
-				var spanTerms = (withEntityView ? "var entities, "  : "var entities, ") + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
+				var spanTerms = "var entities, " + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
 				// if (i == 0 && !withEntityView)
 				// 	spanTerms = $"_, {spanTerms}";
-				var spanTermsLength = GenerateSequence(i + 1, ", ", j => $"t{j}AA.Length");
+				// var spanTermsLength = GenerateSequence(i + 1, ", ", j => $"t{j}AA.Length");
 
 				sb.AppendLine($@"
 					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
@@ -452,7 +468,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{validationTypes}
 
 						{worldLock}BeginDeferred();
-						var cde = query.ThreadCounter;
+						var cde = query.ThreadCounter.Value;
 						cde.Reset();
 						foreach (var arch in query)
 						{{

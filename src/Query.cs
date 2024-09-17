@@ -1,16 +1,19 @@
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
 public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 
-public sealed class QueryBuilder
+public sealed class QueryBuilder : IDisposable
 {
 	private readonly World _world;
 	private readonly SortedSet<IQueryTerm> _components = new();
+	private Query? _query;
 
 	internal QueryBuilder(World world) => _world = world;
+
+	public QueryBuilder Data<T>() where T : struct
+		=> Term(new QueryTerm(_world.Component<T>().ID, TermOp.DataAccess));
 
 	public QueryBuilder With<T>() where T : struct
 		=> With(_world.Component<T>().ID);
@@ -28,10 +31,7 @@ public sealed class QueryBuilder
 		=> With(IDOp.Pair(action, target));
 
 	public QueryBuilder With(EcsID id)
-	{
-		_components.Add(new QueryTerm(id, TermOp.With));
-		return this;
-	}
+		=> Term(new QueryTerm(id, TermOp.With));
 
 	public QueryBuilder Without<T>() where T : struct
 		=> Without(_world.Component<T>().ID);
@@ -49,31 +49,30 @@ public sealed class QueryBuilder
 		=> Without(IDOp.Pair(action, target));
 
 	public QueryBuilder Without(EcsID id)
-	{
-		_components.Add(new QueryTerm(id, TermOp.Without));
-		return this;
-	}
+		=> Term(new QueryTerm(id, TermOp.Without));
 
 	public QueryBuilder Optional<T>() where T :struct
 		=> Optional(_world.Component<T>().ID);
 
 	public QueryBuilder Optional(EcsID id)
+		=> Term(new QueryTerm(id, TermOp.Optional));
+
+	public QueryBuilder Term(IQueryTerm term)
 	{
-		_components.Add(new QueryTerm(id, TermOp.Optional));
+		_components.Add(term);
 		return this;
 	}
 
 	public Query Build()
 	{
+		_query?.Dispose();
+		_query = null;
 		var terms = _components.ToArray();
-		var roll = IQueryTerm.GetHash(terms.AsSpan());
-
-		return _world.GetQuery(
-			roll.Hash,
-			terms,
-			static (world, terms) => new Query(world, terms)
-		);
+		_query ??= new Query(_world, terms);
+		return _query;
 	}
+
+	public void Dispose() => _query?.Dispose();
 }
 
 
@@ -135,13 +134,14 @@ public partial class Query : IDisposable
 	}
 
 	internal World World { get; set; }
-	internal CountdownEvent ThreadCounter { get; } = new CountdownEvent(1);
+	internal Lazy<CountdownEvent> ThreadCounter { get; } = new(() => new CountdownEvent(1));
 	internal ImmutableArray<IQueryTerm> TermsAccess { get; }
 
 	public void Dispose()
 	{
 		_subQuery?.Dispose();
-		ThreadCounter.Dispose();
+		if (ThreadCounter.IsValueCreated)
+			ThreadCounter.Value.Dispose();
 	}
 
 	internal void Match()
@@ -367,7 +367,7 @@ public ref struct QueryInternal
 	public readonly QueryInternal GetEnumerator() => this;
 }
 
-internal ref struct QueryChunkIterator
+public ref struct QueryChunkIterator
 {
 #if NET
 	private readonly ref ArchetypeChunk _first, _last;

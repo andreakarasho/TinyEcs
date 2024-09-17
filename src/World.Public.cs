@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using static TinyEcs.Defaults;
 
 namespace TinyEcs;
