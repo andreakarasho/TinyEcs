@@ -282,8 +282,7 @@ public sealed partial class World
 				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
 				{
 					world.BeginDeferred();
-					var it = world.GetQueryIterator(terms);
-
+					using var it = world.GetQueryIterator(terms);
 					while (it.Next(out var arch) && arch != null)
 					{
 						foreach (ref readonly var chunk in arch)
@@ -675,9 +674,13 @@ public sealed partial class World
 			}
 
 			archetype = null;
+			return false; // No more archetypes to iterate over
+		}
+
+		public void Dispose()
+		{
 			_archetypeStack.Clear();
 			Renting<Stack<Archetype>>.Return(_archetypeStack);
-			return false; // No more archetypes to iterate over
 		}
 	}
 }
