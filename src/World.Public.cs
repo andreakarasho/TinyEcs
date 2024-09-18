@@ -282,25 +282,24 @@ public sealed partial class World
 				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
 				{
 					world.BeginDeferred();
-					world.UncachedQuery(terms, (ref QueryInternal it) =>
+					var it = world.GetQueryIterator(terms);
+
+					while (it.Next(out var arch) && arch != null)
 					{
-						foreach (var arch in it)
+						foreach (ref readonly var chunk in arch)
 						{
-							foreach (ref readonly var chunk in arch)
+							foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
 							{
-								foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
-								{
-									var action = world.Action(child.ID, entity);
-									if (world.Has<OnDelete, Delete>(action))
-										child.Delete();
-									if (world.Has<OnDelete, Unset>(action))
-										child.Unset(action, entity);
-									if (world.Has<OnDelete, Panic>(action))
-										EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
-								}
+								var action = world.Action(child.ID, entity);
+								if (world.Has<OnDelete, Delete>(action))
+									child.Delete();
+								if (world.Has<OnDelete, Unset>(action))
+									child.Unset(action, entity);
+								if (world.Has<OnDelete, Panic>(action))
+									EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
 							}
 						}
-					});
+					}
 					world.EndDeferred();
 				}
 
@@ -629,5 +628,56 @@ public sealed partial class World
 		BeginDeferred();
 		fn(this);
 		EndDeferred();
+	}
+
+	/// <summary>
+	/// Uncached query iterator
+	/// </summary>
+	/// <param name="terms"></param>
+	/// <returns></returns>
+	public QueryIterator GetQueryIterator(Span<IQueryTerm> terms)
+	{
+		terms.SortNoAlloc(_comparisonTerms);
+		return new QueryIterator(_archRoot, terms);
+	}
+
+	public readonly ref struct QueryIterator
+	{
+		private readonly ReadOnlySpan<IQueryTerm> _terms;
+		private readonly Stack<Archetype> _archetypeStack;
+
+		internal QueryIterator(Archetype root, ReadOnlySpan<IQueryTerm> terms)
+		{
+			_terms = terms;
+			_archetypeStack = Renting<Stack<Archetype>>.Rent();
+			_archetypeStack.Clear();
+			_archetypeStack.Push(root);
+		}
+
+		public bool Next(out Archetype? archetype)
+		{
+			while (_archetypeStack.TryPop(out archetype))
+			{
+				var result = archetype.MatchWith(_terms);
+
+				if (result <= -1)
+					break;
+
+				foreach (var edge in archetype._add)
+				{
+					_archetypeStack.Push(edge.Archetype);
+				}
+
+				if (result == 0 && archetype.Count > 0)
+				{
+					return true;
+				}
+			}
+
+			archetype = null;
+			_archetypeStack.Clear();
+			Renting<Stack<Archetype>>.Return(_archetypeStack);
+			return false; // No more archetypes to iterate over
+		}
 	}
 }

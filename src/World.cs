@@ -18,6 +18,8 @@ public sealed partial class World : IDisposable
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
 	private static readonly Comparison<EcsID> _comparisonIds = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a, b);
+	private static readonly Comparison<IQueryTerm> _comparisonTerms = (a, b)
+		=> ComponentComparer.CompareTerms(null!, a.Id, b.Id);
 
 
 
@@ -338,28 +340,6 @@ public sealed partial class World : IDisposable
 		query.Match();
 
 		return query;
-	}
-
-	public void UncachedQuery(Span<IQueryTerm> terms, OnQueryDelegate fn)
-	{
-		UncachedQuery(_archRoot, terms, fn);
-	}
-
-	public delegate void OnQueryDelegate(ref QueryInternal queryIt);
-	private static void UncachedQuery(Archetype root, ReadOnlySpan<IQueryTerm> terms, OnQueryDelegate fn)
-	{
-		var result = root.MatchWith(terms);
-		if (result <= -1)
-			return;
-
-		if (result == 0 && root.Count > 0)
-		{
-			var it = new QueryInternal([root]);
-			fn(ref it);
-		}
-
-		foreach (var edge in root._add)
-			UncachedQuery(edge.Archetype, terms, fn);
 	}
 }
 
