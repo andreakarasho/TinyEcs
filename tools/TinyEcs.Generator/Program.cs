@@ -47,24 +47,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					{GenerateQueryRefEnumerator()}
+					{GenerateQueryComponentsSpanIterator()}
 					{GenerateQueryIter("partial class Query")}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateUncachedQueryIters()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					{GenerateQueryRefEnumerator()}
-					{GenerateQueryIter("ref partial struct UncachedQuery")}
                 }}
 
                 #pragma warning restore 1591
@@ -224,7 +208,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
-		static string GenerateQueryRefEnumerator()
+		static string GenerateQueryComponentsSpanIterator()
 		{
 			var sb = new StringBuilder();
 
@@ -237,13 +221,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				sb.AppendLine($@"
 					[System.Runtime.CompilerServices.SkipLocalsInit]
-					public ref struct RefEnumerator<{typeParams}> {whereParams}
+					public ref struct ComponentsSpanIterator<{typeParams}> {whereParams}
 					{{
 						private QueryInternal _queryIt;
 						private QueryChunkIterator _chunkIt;
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal RefEnumerator(QueryInternal queryIt)
+						internal ComponentsSpanIterator(QueryInternal queryIt)
 						{{
 							_queryIt = queryIt;
 						}}
@@ -268,7 +252,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						public ref RefEnumerator<{typeParams}> Current
+						public ref ComponentsSpanIterator<{typeParams}> Current
 						{{
 							[MethodImpl(MethodImplOptions.AggressiveInlining)]
 							get => ref this;
@@ -293,7 +277,68 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly RefEnumerator<{typeParams}> GetEnumerator() => this;
+						public readonly ComponentsSpanIterator<{typeParams}> GetEnumerator() => this;
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly ComponentsIterator<{typeParams}> Each() => new (this);
+					}}
+				");
+			}
+
+			for (var i = 1; i < MAX_GENERICS; ++i)
+			{
+				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var ptrTypes = GenerateSequence(i + 1, ", ", j => $"Ptr<T{j}>");
+				var deconstructors = GenerateSequence(i + 1, ", ", j => $"out var s{j}");
+				var setFirstPointers = GenerateSequence(i + 1, "\n", j => $"_current.Item{j + 1}.Pointer = (T{j}*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s{j}));");
+				var setLastPointers = GenerateSequence(i + 1, "\n", j => $"_last.Item{j + 1}.Pointer = _current.Item{j + 1}.Pointer + entities.Length - 1;");
+				var increasePointers = GenerateSequence(i + 1, "\n", j => $"_current.Item{j + 1}.Pointer += 1;");
+
+				sb.AppendLine($@"
+					[System.Runtime.CompilerServices.SkipLocalsInit]
+					public ref struct ComponentsIterator<{typeParams}> {whereParams}
+					{{
+						private ComponentsSpanIterator<{typeParams}> _iterator;
+						private ({ptrTypes}) _current, _last;
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						internal ComponentsIterator(ComponentsSpanIterator<{typeParams}> refIterator)
+						{{
+							_iterator = refIterator;
+						}}
+
+
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						public ref ({ptrTypes}) Current
+						{{
+							[MethodImpl(MethodImplOptions.AggressiveInlining)]
+							get => ref _current;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public unsafe bool MoveNext()
+						{{
+							if (!Unsafe.IsAddressLessThan(ref _current.Item2.Ref, ref _last.Item2.Ref))
+							{{
+								if (!_iterator.MoveNext())
+									return false;
+
+								_iterator.Deconstruct(out var entities, {deconstructors});
+
+								{setFirstPointers}
+								{setLastPointers}
+							}}
+							else
+							{{
+								{increasePointers}
+							}}
+
+							return true;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly ComponentsIterator<{typeParams}> GetEnumerator() => this;
 					}}
 				");
 			}
@@ -315,7 +360,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
 
 				sb.AppendLine($@"
-					public RefEnumerator<{typeParams}> Iter<{typeParams}>() {whereParams}
+					public ComponentsSpanIterator<{typeParams}> Iter<{typeParams}>() {whereParams}
 						=> new (this.GetEnumerator());
 				");
 			}

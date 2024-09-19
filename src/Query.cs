@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
@@ -252,19 +253,19 @@ public partial class Query : IDisposable
 		World.EndDeferred();
 	}
 
-	public RefEnumerator Iter() => new(this.GetEnumerator());
+	public ComponentsSpanIterator Iter() => new(this.GetEnumerator());
 }
 
 
 [System.Runtime.CompilerServices.SkipLocalsInit]
-public ref struct RefEnumerator
+public ref struct ComponentsSpanIterator
 {
 	private QueryInternal _queryIt;
 
 	private QueryChunkIterator _chunkIt;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal RefEnumerator(QueryInternal queryIt)
+	internal ComponentsSpanIterator(QueryInternal queryIt)
 	{
 		_queryIt = queryIt;
 	}
@@ -298,7 +299,57 @@ public ref struct RefEnumerator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly RefEnumerator GetEnumerator() => this;
+	public readonly ComponentsSpanIterator GetEnumerator() => this;
+}
+
+public ref struct ComponentsIterator<T0>
+	where T0 : struct
+{
+	private ComponentsSpanIterator<T0> _iterator;
+	private (EntityView, Ptr<T0>) _current, _last;
+	private int _index;
+	private ReadOnlySpan<EntityView> _entities;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal ComponentsIterator(ComponentsSpanIterator<T0> queryIterator)
+	{
+		_iterator = queryIterator;
+	}
+
+	[UnscopedRef]
+	public ref (EntityView, Ptr<T0>) Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref _current;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public unsafe bool MoveNext()
+	{
+		if (!Unsafe.IsAddressLessThan(ref _current.Item2.Ref, ref _last.Item2.Ref))
+		{
+			if (!_iterator.MoveNext())
+				return false;
+
+			_iterator.Deconstruct(out var entities, out var s0);
+
+			_current.Item2.Pointer = (T0*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s0));
+			_last.Item2.Pointer = _current.Item2.Pointer + entities.Length - 1;
+			_index = 0;
+			_entities = entities;
+			_current.Item1 = _entities[_index];
+		}
+		else
+		{
+			_index += 1;
+			_current.Item2.Pointer += 1;
+			_current.Item1 = _entities[_index];
+		}
+
+		return true;
+	}
+
+	public ComponentsIterator<T0> GetEnumerator() => this;
 }
 
 public ref struct QueryInternal

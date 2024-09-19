@@ -18,6 +18,8 @@ public sealed partial class World : IDisposable
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
 	private static readonly Comparison<EcsID> _comparisonIds = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a, b);
+	private static readonly Comparison<IQueryTerm> _comparisonTerms = (a, b)
+		=> a.CompareTo(b);
 
 
 
@@ -340,26 +342,73 @@ public sealed partial class World : IDisposable
 		return query;
 	}
 
-	public void UncachedQuery(Span<IQueryTerm> terms, OnQueryDelegate fn)
+	public QueryIterator GetQueryIterator(Span<IQueryTerm> terms)
 	{
-		UncachedQuery(_archRoot, terms, fn);
+		terms.SortNoAlloc(_comparisonTerms);
+		return new QueryIterator(_archRoot, terms);
 	}
 
-	public delegate void OnQueryDelegate(ref QueryInternal queryIt);
-	private static void UncachedQuery(Archetype root, ReadOnlySpan<IQueryTerm> terms, OnQueryDelegate fn)
+	static class Renting<T> where T : new()
 	{
-		var result = root.MatchWith(terms);
-		if (result <= -1)
-			return;
+		private static readonly Stack<T> _stack = new Stack<T>();
 
-		if (result == 0 && root.Count > 0)
+		public static T Rent()
 		{
-			var it = new QueryInternal([root]);
-			fn(ref it);
+			if (_stack.TryPop(out var val))
+			{
+				return val;
+			}
+
+			val = new T();
+			return val;
 		}
 
-		foreach (var edge in root._add)
-			UncachedQuery(edge.Archetype, terms, fn);
+		public static void Return(T val)
+		{
+			_stack.Push(val);
+		}
+	}
+
+	public ref struct QueryIterator
+	{
+		private readonly ReadOnlySpan<IQueryTerm> _terms;
+		private readonly Stack<Archetype> _archetypeStack;
+
+		internal QueryIterator(Archetype root, ReadOnlySpan<IQueryTerm> terms)
+		{
+			_terms = terms;
+			_archetypeStack = Renting<Stack<Archetype>>.Rent();
+			_archetypeStack.Clear();
+			_archetypeStack.Push(root);
+		}
+
+		public bool Next(out Archetype archetype)
+		{
+			while (_archetypeStack.Count > 0)
+			{
+				var currentArchetype = _archetypeStack.Pop();
+				var result = currentArchetype.MatchWith(_terms);
+
+				if (result <= -1)
+					continue;
+
+				if (result == 0 && currentArchetype.Count > 0)
+				{
+					archetype = currentArchetype;
+					return true;
+				}
+
+				foreach (var edge in currentArchetype._add)
+				{
+					_archetypeStack.Push(edge.Archetype);
+				}
+			}
+
+			archetype = null;
+			_archetypeStack.Clear();
+			Renting<Stack<Archetype>>.Return(_archetypeStack);
+			return false; // No more archetypes to iterate over
+		}
 	}
 }
 
