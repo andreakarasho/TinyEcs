@@ -282,8 +282,8 @@ public sealed partial class World
 				static void applyDeleteRules(World world, EcsID entity, params Span<IQueryTerm> terms)
 				{
 					world.BeginDeferred();
-					var it = world.GetQueryIterator(terms);
-					while (it.Next(out var arch))
+					using var it = world.GetQueryIterator(terms);
+					while (it.Next(out var arch) && arch != null)
 					{
 						foreach (ref readonly var chunk in arch)
 						{
@@ -627,5 +627,60 @@ public sealed partial class World
 		BeginDeferred();
 		fn(this);
 		EndDeferred();
+	}
+
+	/// <summary>
+	/// Uncached query iterator
+	/// </summary>
+	/// <param name="terms"></param>
+	/// <returns></returns>
+	public QueryIterator GetQueryIterator(Span<IQueryTerm> terms)
+	{
+		terms.SortNoAlloc(_comparisonTerms);
+		return new QueryIterator(_archRoot, terms);
+	}
+
+	public readonly ref struct QueryIterator
+	{
+		private readonly ReadOnlySpan<IQueryTerm> _terms;
+		private readonly Stack<Archetype> _archetypeStack;
+
+		internal QueryIterator(Archetype root, ReadOnlySpan<IQueryTerm> terms)
+		{
+			_terms = terms;
+			_archetypeStack = Renting<Stack<Archetype>>.Rent();
+			_archetypeStack.Clear();
+			_archetypeStack.Push(root);
+		}
+
+		public bool Next(out Archetype? archetype)
+		{
+			while (_archetypeStack.TryPop(out archetype))
+			{
+				var result = archetype.MatchWith(_terms);
+
+				if (result <= -1)
+					break;
+
+				foreach (var edge in archetype._add)
+				{
+					_archetypeStack.Push(edge.Archetype);
+				}
+
+				if (result == 0 && archetype.Count > 0)
+				{
+					return true;
+				}
+			}
+
+			archetype = null;
+			return false; // No more archetypes to iterate over
+		}
+
+		public void Dispose()
+		{
+			_archetypeStack.Clear();
+			Renting<Stack<Archetype>>.Return(_archetypeStack);
+		}
 	}
 }
