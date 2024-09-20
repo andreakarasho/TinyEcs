@@ -306,9 +306,7 @@ public ref struct ComponentsIterator<T0>
 	where T0 : struct
 {
 	private ComponentsSpanIterator<T0> _iterator;
-	private (EntityView, Ptr<T0>) _current, _last;
-	private int _index;
-	private ReadOnlySpan<EntityView> _entities;
+	private Ptr<T0> _current, _last;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal ComponentsIterator(ComponentsSpanIterator<T0> queryIterator)
@@ -317,7 +315,7 @@ public ref struct ComponentsIterator<T0>
 	}
 
 	[UnscopedRef]
-	public ref (EntityView, Ptr<T0>) Current
+	public ref Ptr<T0> Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => ref _current;
@@ -326,24 +324,19 @@ public ref struct ComponentsIterator<T0>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public unsafe bool MoveNext()
 	{
-		if (!Unsafe.IsAddressLessThan(ref _current.Item2.Ref, ref _last.Item2.Ref))
+		if (!Unsafe.IsAddressLessThan(ref _current.Ref, ref _last.Ref))
 		{
 			if (!_iterator.MoveNext())
 				return false;
 
 			_iterator.Deconstruct(out var entities, out var s0);
 
-			_current.Item2.Pointer = (T0*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s0));
-			_last.Item2.Pointer = _current.Item2.Pointer + entities.Length - 1;
-			_index = 0;
-			_entities = entities;
-			_current.Item1 = _entities[_index];
+			_current.Pointer = (T0*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s0));
+			_last.Pointer = _current.Pointer + entities.Length - 1;
 		}
 		else
 		{
-			_index += 1;
-			_current.Item2.Pointer += 1;
-			_current.Item1 = _entities[_index];
+			_current.Pointer += 1;
 		}
 
 		return true;

@@ -289,11 +289,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var ptrTypes = GenerateSequence(i + 1, ", ", j => $"Ptr<T{j}>");
+				var ptrTypes = GenerateSequence(i + 1, ", ", j => $"Ptr<T{j}> ptr{j}");
 				var deconstructors = GenerateSequence(i + 1, ", ", j => $"out var s{j}");
-				var setFirstPointers = GenerateSequence(i + 1, "\n", j => $"_current.Item{j + 1}.Pointer = (T{j}*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s{j}));");
-				var setLastPointers = GenerateSequence(i + 1, "\n", j => $"_last.Item{j + 1}.Pointer = _current.Item{j + 1}.Pointer + entities.Length - 1;");
-				var increasePointers = GenerateSequence(i + 1, "\n", j => $"_current.Item{j + 1}.Pointer += 1;");
+				var setFirstPointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer = (T{j}*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s{j}));");
+				var setLastPointers = GenerateSequence(i + 1, "\n", j => $"_last.ptr{j}.Pointer = _current.ptr{j}.Pointer + entities.Length - 1;");
+				var increasePointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer += 1;");
 
 				sb.AppendLine($@"
 					[System.Runtime.CompilerServices.SkipLocalsInit]
@@ -319,7 +319,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public unsafe bool MoveNext()
 						{{
-							if (!Unsafe.IsAddressLessThan(ref _current.Item2.Ref, ref _last.Item2.Ref))
+							if (!Unsafe.IsAddressLessThan(ref _current.ptr0.Ref, ref _last.ptr0.Ref))
 							{{
 								if (!_iterator.MoveNext())
 									return false;
