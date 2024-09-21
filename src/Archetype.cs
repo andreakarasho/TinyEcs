@@ -35,7 +35,7 @@ public struct ArchetypeChunk
 		if (column < 0 || column >= Data!.Length)
 			return ref Unsafe.NullRef<T>();
 
-		var array = Unsafe.As<T[]>(Data![column]);
+		var array = (T[])Data![column];
 #if NET
 		return ref MemoryMarshal.GetArrayDataReference(array);
 #else
@@ -49,7 +49,7 @@ public struct ArchetypeChunk
 		if (column < 0 || column >= Data!.Length)
 			return Span<T>.Empty;
 
-		var array = Unsafe.As<T[]>(Data![column]);
+		var array = (T[])Data![column];
 		return array.AsSpan(0, Count);
 	}
 }
