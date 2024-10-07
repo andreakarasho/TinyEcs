@@ -8,7 +8,7 @@ public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 public sealed class QueryBuilder : IDisposable
 {
 	private readonly World _world;
-	private readonly SortedSet<IQueryTerm> _components = new();
+	private readonly HashSet<IQueryTerm> _components = new();
 	private Query? _query;
 
 	internal QueryBuilder(World world) => _world = world;
@@ -74,23 +74,6 @@ public sealed class QueryBuilder : IDisposable
 	}
 
 	public void Dispose() => _query?.Dispose();
-}
-
-
-public sealed partial class Query<TQueryData> : Query
-	where TQueryData : struct
-{
-	internal Query(World world) : base(world, Lookup.Query<TQueryData>.Terms)
-	{
-	}
-}
-
-public sealed partial class Query<TQueryData, TQueryFilter> : Query
-	where TQueryData : struct where TQueryFilter : struct
-{
-	internal Query(World world) : base(world, Lookup.Query<TQueryData, TQueryFilter>.Terms)
-	{
-	}
 }
 
 public partial class Query : IDisposable

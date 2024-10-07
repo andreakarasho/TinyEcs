@@ -40,27 +40,6 @@ public sealed partial class World : IDisposable
 		return ref record;
 	}
 
-	public void Each(QueryFilterDelegateWithEntity fn)
-	{
-		BeginDeferred();
-
-		foreach (var arch in GetQuery(0, [], static (world, terms) => new Query(world, terms)))
-		{
-			foreach (ref readonly var chunk in arch)
-			{
-				ref var entity = ref chunk.EntityAt(0);
-				ref var last = ref Unsafe.Add(ref entity, chunk.Count);
-				while (Unsafe.IsAddressLessThan(ref entity, ref last))
-				{
-					fn(entity);
-					entity = ref Unsafe.Add(ref entity, 1);
-				}
-			}
-		}
-
-		EndDeferred();
-	}
-
 	internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;

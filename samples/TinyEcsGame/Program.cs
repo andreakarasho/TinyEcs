@@ -50,7 +50,7 @@ Raylib.CloseWindow();
 
 
 
-static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> query)
+static void MoveSystem(Res<Time> time, Query<Data<Position, Velocity, Rotation>> query)
 {
 	query.EachJob((ref Position pos, ref Velocity vel, ref Rotation rot) =>
 	{
@@ -59,7 +59,7 @@ static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> que
 	});
 }
 
-static void CheckBounds(Query<(Position, Velocity)> query, Res<WindowSize> windowSize)
+static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 {
 	query.EachJob((ref Position pos, ref Velocity vel) =>
 	{
@@ -98,7 +98,7 @@ static void EndRenderer()
 	Raylib.EndDrawing();
 }
 
-static void RenderEntities(Query<(Sprite, Position, Rotation)> query, Res<Texture2D> texture)
+static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
 {
 	query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
 	{
@@ -167,22 +167,22 @@ struct Time
 	public float Value;
 }
 
-struct WindowSize
+struct WindowSize : IComponent
 {
 	public Vector2 Value;
 }
 
-struct Position
+struct Position : IComponent
 {
     public Vector2 Value;
 }
 
-struct Velocity
+struct Velocity : IComponent
 {
     public Vector2 Value;
 }
 
-struct Sprite
+struct Sprite : IComponent
 {
     public Color Color;
     public float Scale;
@@ -190,7 +190,7 @@ struct Sprite
     //public Texture2D Texture;
 }
 
-struct Rotation
+struct Rotation : IComponent
 {
     public float Value;
     public float Acceleration;
