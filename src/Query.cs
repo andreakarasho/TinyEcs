@@ -13,8 +13,14 @@ public sealed class QueryBuilder : IDisposable
 
 	internal QueryBuilder(World world) => _world = world;
 
+	public World World => _world;
+
 	public QueryBuilder Data<T>() where T : struct
-		=> Term(new QueryTerm(_world.Component<T>().ID, TermOp.DataAccess));
+	{
+		ref readonly var cmp = ref _world.Component<T>();
+		EcsAssert.Panic(cmp.Size > 0, "You can't access Tag as Component");
+		return Term(new QueryTerm(cmp.ID, TermOp.DataAccess));
+	}
 
 	public QueryBuilder With<T>() where T : struct
 		=> With(_world.Component<T>().ID);
@@ -52,11 +58,18 @@ public sealed class QueryBuilder : IDisposable
 	public QueryBuilder Without(EcsID id)
 		=> Term(new QueryTerm(id, TermOp.Without));
 
-	public QueryBuilder Optional<T>() where T :struct
-		=> Optional(_world.Component<T>().ID);
+	public QueryBuilder Optional<T>() where T : struct
+	{
+		ref readonly var cmp = ref _world.Component<T>();
+		EcsAssert.Panic(cmp.Size > 0, "You can't access Tag as Component");
+		return Optional(cmp.ID);
+	}
 
 	public QueryBuilder Optional(EcsID id)
 		=> Term(new QueryTerm(id, TermOp.Optional));
+
+	public QueryBuilder AtLeast(params EcsID[] ids)
+		=> Term(new ContainerQueryTerm(ids.Select(s => new QueryTerm(s, TermOp.Optional)).Cast<IQueryTerm>().ToArray(), TermOp.AtLeastOne));
 
 	public QueryBuilder Term(IQueryTerm term)
 	{
@@ -103,7 +116,7 @@ public partial class Query : IDisposable
 		ref var subQuery = ref _subQuery;
 		foreach (var or in terms
 			.OfType<ContainerQueryTerm>()
-			.Where(s => s.Op == TermOp.Or))
+			.Where(s => s.Op == TermOp.Or || s.Op == TermOp.AtLeastOne))
 		{
 			var roll = IQueryTerm.GetHash(or.Terms.AsSpan());
 			subQuery = World.GetQuery

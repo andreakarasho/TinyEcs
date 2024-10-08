@@ -14,11 +14,19 @@ ecs.Entity().Set(new Position());
 ecs.Entity().Set(new Position());
 
 var scheduler = new Scheduler(ecs);
-scheduler.AddSystem((Query<Data<Position>, Without<Velocity>> q, World world, Res<int> i32) =>
+scheduler.AddEvent<Position>();
+scheduler.AddSystem((Query<Data<Position, Optional<Velocity>>> q, World world, Res<int> i32, EventWriter<Position> writer) =>
 {
-	q.EachJob((ref Position p) =>
+	q.Each((ref Position p, ref Velocity v) =>
 	{
+		if (Unsafe.IsNullRef(ref v))
+		{
 
+		}
+		else
+		{
+
+		}
 	});
 
 	foreach (var posPtr in q.Iter<Position>().Each())
@@ -632,3 +640,5 @@ struct Velocity : IComponent
 {
 	public float X, Y;
 }
+
+struct Mass : IComponent { public float Value; }

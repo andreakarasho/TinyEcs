@@ -197,9 +197,7 @@ public sealed partial class Scheduler
 
 	public Scheduler AddEvent<T>() where T : notnull
 	{
-		var queue = new Queue<T>();
-		return AddSystemParam(new EventWriter<T>(queue))
-			.AddSystemParam(new EventReader<T>(queue));
+		return AddSystemParam(new EventParam<T>());
 	}
 
 	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
@@ -233,7 +231,7 @@ public interface IPlugin
 	void Build(Scheduler scheduler);
 }
 
-public abstract class SystemParam : ISystemParam<World>
+public abstract class SystemParam<T> : ISystemParam<T>
 {
 	private int _useIndex;
 	ref int ISystemParam.UseIndex => ref _useIndex;
@@ -257,62 +255,77 @@ public interface IIntoSystemParam<TArg>
 	public static abstract ISystemParam<TArg> Generate(TArg arg);
 }
 
-public sealed class EventWriter<T> : SystemParam, IIntoSystemParam<World> where T : notnull
+internal sealed class EventParam<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
-	private readonly Queue<T>? _queue;
+	private readonly Queue<T> _queue = new();
+
+	internal EventParam()
+	{
+		Writer = new EventWriter<T>(_queue);
+		Reader = new EventReader<T>(_queue);
+	}
+
+	public EventWriter<T> Writer { get; }
+	public EventReader<T> Reader { get; }
+
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value;
+
+		var ev = new EventParam<T>();
+		arg.Entity<Placeholder<EventParam<T>>>().Set(new Placeholder<EventParam<T>>() { Value = ev });
+		return ev;
+	}
+}
+
+public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+{
+	private readonly Queue<T> _queue;
 
 	internal EventWriter(Queue<T> queue)
 		=> _queue = queue;
 
-	public EventWriter()
-		=> throw new Exception("EventWriter must be initialized using the 'scheduler.AddEvent<T>' api");
-
 	public bool IsEmpty
-		=> _queue!.Count == 0;
+		=> _queue.Count == 0;
 
 	public void Clear()
-		=> _queue?.Clear();
+		=> _queue.Clear();
 
 	public void Enqueue(T ev)
-		=> _queue!.Enqueue(ev);
+		=> _queue.Enqueue(ev);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
-		if (arg.Entity<Placeholder<EventWriter<T>>>().Has<Placeholder<EventWriter<T>>>())
-			return arg.Entity<Placeholder<EventWriter<T>>>().Get<Placeholder<EventWriter<T>>>().Value;
+		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Writer;
 
-		var writer = new EventWriter<T>();
-		arg.Entity<Placeholder<EventWriter<T>>>().Set(new Placeholder<EventWriter<T>>() { Value = writer });
-		return writer;
+		throw new NotImplementedException("EventWriter<T> must be created using the scheduler.AddEvent<T>() method");
 	}
 }
 
-public sealed class EventReader<T> : SystemParam, IIntoSystemParam<World> where T : notnull
+public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
-	private readonly Queue<T>? _queue;
+	private readonly Queue<T> _queue;
 
 	internal EventReader(Queue<T> queue)
 		=> _queue = queue;
 
-	public EventReader()
-		=> throw new Exception("EventReader must be initialized using the 'scheduler.AddEvent<T>' api");
-
 	public bool IsEmpty
-		=> _queue!.Count == 0;
+		=> _queue.Count == 0;
 
 	public void Clear()
-		=> _queue?.Clear();
+		=> _queue.Clear();
 
 	public EventReaderIterator GetEnumerator() => new (_queue!);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
-		if (arg.Entity<Placeholder<EventReader<T>>>().Has<Placeholder<EventReader<T>>>())
-			return arg.Entity<Placeholder<EventReader<T>>>().Get<Placeholder<EventReader<T>>>().Value;
+		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Reader;
 
-		var reader = new EventReader<T>();
-		arg.Entity<Placeholder<EventReader<T>>>().Set(new Placeholder<EventReader<T>>() { Value = reader });
-		return reader;
+		throw new NotImplementedException("EventReader<T> must be created using the scheduler.AddEvent<T>() method");
 	}
 
 	public ref struct EventReaderIterator
@@ -332,7 +345,7 @@ public sealed class EventReader<T> : SystemParam, IIntoSystemParam<World> where 
 	}
 }
 
-partial class World : SystemParam, IIntoSystemParam<World>
+partial class World : SystemParam<World>, IIntoSystemParam<World>
 {
 	public World() : this(256) { }
 
@@ -360,7 +373,7 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	}
 }
 
-public partial class Query<TQueryData, TQueryFilter> : SystemParam, IIntoSystemParam<World>
+public partial class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
 	where TQueryData : IData
 	where TQueryFilter : IFilter
 {
@@ -387,7 +400,7 @@ public partial class Query<TQueryData, TQueryFilter> : SystemParam, IIntoSystemP
 	public QueryInternal GetEnumerator() => _query.GetEnumerator();
 }
 
-public sealed class Res<T> : SystemParam, IIntoSystemParam<World> where T : notnull
+public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
 	private T? _t;
 
@@ -408,7 +421,7 @@ public sealed class Res<T> : SystemParam, IIntoSystemParam<World> where T : notn
 		=> reference.Value;
 }
 
-public sealed class Local<T> : SystemParam, IIntoSystemParam<World> where T : notnull
+public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
 	private T? _t;
 
@@ -424,7 +437,7 @@ public sealed class Local<T> : SystemParam, IIntoSystemParam<World> where T : no
 		=> reference.Value;
 }
 
-public sealed class SchedulerState : SystemParam, IIntoSystemParam<World>
+public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 {
 	private readonly Scheduler _scheduler;
 
@@ -460,7 +473,7 @@ public interface IFilter : ITermCreator { }
 
 public interface INestedFilter
 {
-	void BuildAsParam(ref QueryBuilder builder);
+	void BuildAsParam(QueryBuilder builder);
 }
 
 internal static class FilterBuilder<T> where T : struct
@@ -469,7 +482,7 @@ internal static class FilterBuilder<T> where T : struct
 	{
 		if (default(T) is INestedFilter nestedFilter)
 		{
-			nestedFilter.BuildAsParam(ref builder);
+			nestedFilter.BuildAsParam(builder);
 			return true;
 		}
 
@@ -497,7 +510,7 @@ public readonly struct With<T> : IFilter, INestedFilter
 		builder.With<T>();
 	}
 
-	public void BuildAsParam(ref QueryBuilder builder)
+	public void BuildAsParam(QueryBuilder builder)
 	{
 		Build(builder);
 	}
@@ -516,7 +529,7 @@ public readonly struct Without<T> : IFilter, INestedFilter
 			builder.Without<T>();
 	}
 
-	public void BuildAsParam(ref QueryBuilder builder)
+	public void BuildAsParam(QueryBuilder builder)
 	{
 		Build(builder);
 	}
@@ -527,76 +540,94 @@ public readonly struct Without<T> : IFilter, INestedFilter
 /// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct Optional<T> : IData
+public readonly struct Optional<T> : IComponent, IFilter, INestedFilter
 	where T : struct, IComponent
 {
 	public static void Build(QueryBuilder builder)
 	{
 		builder.Optional<T>();
 	}
-}
 
-/// <summary>
-/// Used in query filters to find entities with any of the corrisponding components/tag.
-/// </summary>
-/// <typeparam name="T"></typeparam>
-public readonly struct AtLeast<T> : ITuple, IFilter where T : struct, ITuple
-{
-	static readonly ITuple _value = default(T)!;
-
-	public object? this[int index] => _value[index];
-
-	public int Length => _value.Length;
-	public static void Build(QueryBuilder builder)
+	public void BuildAsParam(QueryBuilder builder)
 	{
-		throw new NotImplementedException();
+		Build(builder);
 	}
 }
 
-/// <summary>
-/// Used in query filters to find entities with exactly the corrisponding components/tag.
-/// </summary>
-/// <typeparam name="T"></typeparam>
-public readonly struct Exactly<T> : ITuple, IFilter where T : struct, ITuple
-{
-	static readonly ITuple _value = default(T)!;
+///// <summary>
+///// Used in query filters to find entities with any of the corrisponding components/tag.
+///// </summary>
+///// <typeparam name="T"></typeparam>
+//public readonly struct AtLeast<T> : ITuple, IFilter where T : struct, ITuple
+//{
+//	static readonly ITuple _value = default(T)!;
 
-	public object? this[int index] => _value[index];
+//	public object? this[int index] => _value[index];
 
-	public int Length => _value.Length;
-	public static void Build(QueryBuilder builder)
-	{
-		throw new NotImplementedException();
-	}
-}
+//	public int Length => _value.Length;
+//	public static void Build(QueryBuilder builder)
+//	{
+//		throw new NotImplementedException();
+//	}
+//}
 
-/// <summary>
-/// Used in query filters to find entities with none the corrisponding components/tag.
-/// </summary>
-/// <typeparam name="T"></typeparam>
-public readonly struct None<T> : ITuple, IFilter where T : struct, ITuple
-{
-	static readonly ITuple _value = default(T)!;
+///// <summary>
+///// Used in query filters to find entities with exactly the corrisponding components/tag.
+///// </summary>
+///// <typeparam name="T"></typeparam>
+//public readonly struct Exactly<T> : ITuple, IFilter where T : struct, ITuple
+//{
+//	static readonly ITuple _value = default(T)!;
 
-	public object? this[int index] => _value[index];
+//	public object? this[int index] => _value[index];
 
-	public int Length => _value.Length;
-	public static void Build(QueryBuilder builder)
-	{
-		throw new NotImplementedException();
-	}
-}
+//	public int Length => _value.Length;
+//	public static void Build(QueryBuilder builder)
+//	{
+//		throw new NotImplementedException();
+//	}
+//}
 
-/// <summary>
-/// Used in query filters to accomplish the 'or' logic.
-/// </summary>
-/// <typeparam name="T"></typeparam>
-public readonly struct Or<T> : IFilter where T : struct, ITuple
-{
-	public static void Build(QueryBuilder builder)
-	{
-		throw new NotImplementedException();
-	}
-}
+///// <summary>
+///// Used in query filters to find entities with none the corrisponding components/tag.
+///// </summary>
+///// <typeparam name="T"></typeparam>
+//public readonly struct None<T> : ITuple, IFilter where T : struct, ITuple
+//{
+//	static readonly ITuple _value = default(T)!;
+
+//	public object? this[int index] => _value[index];
+
+//	public int Length => _value.Length;
+//	public static void Build(QueryBuilder builder)
+//	{
+//		throw new NotImplementedException();
+//	}
+//}
+
+///// <summary>
+///// Used in query filters to accomplish the 'or' logic.
+///// </summary>
+///// <typeparam name="T"></typeparam>
+//public readonly struct Or<TFirst, TSecond> : IComponent, IFilter, INestedFilter
+//	where TFirst : struct, IComponent
+//	where TSecond : struct, IComponent
+//{
+//	public static void Build(QueryBuilder builder)
+//	{
+//		//builder.Optional<TFirst>();
+//		//builder.Optional<TSecond>();
+
+//		var ok0 = FilterBuilder<TFirst>.Build(builder);
+//		var ok1 = FilterBuilder<TSecond>.Build(builder);
+
+//		builder.AtLeast(builder.World.Component<TFirst>().ID, builder.World.Component<TSecond>().ID);
+//	}
+
+//	public void BuildAsParam(QueryBuilder builder)
+//	{
+//		Build(builder);
+//	}
+//}
 
 #endif
