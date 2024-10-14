@@ -187,7 +187,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 						{objsGen}
 						{objsLock}
+						args.BeginDeferred();
 						system({systemCall});
+						args.EndDeferred();
 						{objsUnlock}
 					}};
 					var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);

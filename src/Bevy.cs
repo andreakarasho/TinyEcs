@@ -132,6 +132,7 @@ public sealed partial class Scheduler
 
 		AddSystemParam(world);
 		AddSystemParam(new SchedulerState(this));
+		AddSystemParam(new Commands(world));
 	}
 
     public void Run()
@@ -460,6 +461,56 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 	}
 }
 
+public sealed class Commands : SystemParam<World>, IIntoSystemParam<World>
+{
+	private readonly World _world;
+
+	internal Commands(World world)
+	{
+		_world = world;
+	}
+
+	public EntityCommand Entity()
+	{
+		var ent = _world.Entity();
+		return new EntityCommand(_world, ent.ID);
+	}
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Commands>>().Has<Placeholder<Commands>>())
+			return arg.Entity<Placeholder<Commands>>().Get<Placeholder<Commands>>().Value;
+		throw new NotImplementedException();
+	}
+}
+
+public readonly ref struct EntityCommand
+{
+	private readonly World _world;
+
+	internal EntityCommand(World world, EcsID id) =>(_world, ID) = (world, id);
+
+
+	public readonly EcsID ID;
+
+	public readonly EntityCommand Set<T>(T component) where T : struct
+	{
+		_world.SetDeferred(ID, component);
+		return this;
+	}
+
+	public readonly EntityCommand Add<T>() where T : struct
+	{
+		_world.AddDeferred<T>(ID);
+		return this;
+	}
+
+	public readonly EntityCommand Unset<T>() where T : struct
+	{
+		_world.UnsetDeferred<T>(ID);
+		return this;
+	}
+}
 
 
 public interface ITermCreator

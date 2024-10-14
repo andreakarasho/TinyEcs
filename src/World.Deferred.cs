@@ -38,7 +38,7 @@ public sealed partial class World
 	}
 
 
-	private void AddDeferred<T>(EcsID entity) where T : struct
+	internal void AddDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 
@@ -53,7 +53,7 @@ public sealed partial class World
 		_operations.Enqueue(cmd);
 	}
 
-	private ref T SetDeferred<T>(EcsID entity, T component) where T : struct
+	internal ref T SetDeferred<T>(EcsID entity, T component) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 
@@ -70,7 +70,7 @@ public sealed partial class World
 		return ref Unsafe.Unbox<T>(cmd.Data);
 	}
 
-	private object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size, bool isManaged)
+	internal object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size, bool isManaged)
 	{
 		// ref readonly var cmp = ref Lookup.GetComponent(id, size);
 		var cmp = new ComponentInfo(id, size, isManaged);
@@ -87,7 +87,7 @@ public sealed partial class World
 		return rawCmp;
 	}
 
-	private void UnsetDeferred<T>(EcsID entity) where T : struct
+	internal void UnsetDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 
@@ -101,7 +101,7 @@ public sealed partial class World
 		_operations.Enqueue(cmd);
 	}
 
-	private void UnsetDeferred(EcsID entity, EcsID id)
+	internal void UnsetDeferred(EcsID entity, EcsID id)
 	{
 		var cmp = new ComponentInfo(id, 0, false);
 
@@ -115,7 +115,7 @@ public sealed partial class World
 		_operations.Enqueue(cmd);
 	}
 
-	private void DeleteDeferred(EcsID entity)
+	internal void DeleteDeferred(EcsID entity)
 	{
 		var cmd = new DeferredOp()
 		{
