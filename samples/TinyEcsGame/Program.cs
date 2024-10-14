@@ -52,39 +52,52 @@ Raylib.CloseWindow();
 
 static void MoveSystem(Res<Time> time, Query<Data<Position, Velocity, Rotation>> query)
 {
-	query.EachJob((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+	foreach ((var entities, var posA, var velA, var rotA) in query.Iter())
 	{
-		pos.Value += vel.Value * time.Value.Value;
-		rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
-	});
+		for (var i = 0; i < entities.Length; ++i)
+		{
+			ref var pos = ref posA[i];
+			ref var vel = ref velA[i];
+			ref var rot = ref rotA[i];
+
+			pos.Value += vel.Value * time.Value.Value;
+			rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
+		}
+	}
 }
 
 static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 {
-	query.EachJob((ref Position pos, ref Velocity vel) =>
+	foreach ((var entities, var posA, var velA) in query.Iter())
 	{
-		if (pos.Value.X < 0.0f)
+		for (var i = 0; i < entities.Length; ++i)
 		{
-			pos.Value.X = 0;
-			vel.Value.X *= -1;
-		}
-		else if (pos.Value.X > windowSize.Value.Value.X)
-		{
-			pos.Value.X = windowSize.Value.Value.X;
-			vel.Value.X *= -1;
-		}
+			ref var pos = ref posA[i];
+			ref var vel = ref velA[i];
 
-		if (pos.Value.Y < 0.0f)
-		{
-			pos.Value.Y = 0;
-			vel.Value.Y *= -1;
+			if (pos.Value.X < 0.0f)
+			{
+				pos.Value.X = 0;
+				vel.Value.X *= -1;
+			}
+			else if (pos.Value.X > windowSize.Value.Value.X)
+			{
+				pos.Value.X = windowSize.Value.Value.X;
+				vel.Value.X *= -1;
+			}
+
+			if (pos.Value.Y < 0.0f)
+			{
+				pos.Value.Y = 0;
+				vel.Value.Y *= -1;
+			}
+			else if (pos.Value.Y > windowSize.Value.Value.Y)
+			{
+				pos.Value.Y = windowSize.Value.Value.Y;
+				vel.Value.Y *= -1;
+			}
 		}
-		else if (pos.Value.Y > windowSize.Value.Value.Y)
-		{
-			pos.Value.Y = windowSize.Value.Value.Y;
-			vel.Value.Y *= -1;
-		}
-	});
+	}
 }
 
 static void BeginRenderer()
@@ -100,10 +113,17 @@ static void EndRenderer()
 
 static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
 {
-	query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+	foreach ((var entities, var spriteA, var posA, var rotA) in query.Iter())
 	{
-		Raylib.DrawTextureEx(texture.Value, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
-	});
+		for (var i = 0; i < entities.Length; ++i)
+		{
+			ref var sprite = ref spriteA[i];
+			ref var pos = ref posA[i];
+			ref var rotation = ref rotA[i];
+
+			Raylib.DrawTextureEx(texture.Value, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
+		}
+	}
 }
 
 static void DrawText(World ecs, Res<Time> time)
