@@ -128,9 +128,16 @@
 
 			Assert.Equal(1, query.Count());
 
-			query.Each((EntityView ent) => {
-				Assert.Equal(carl.ID, ent.ID);
-			});
+			foreach (var arch in query)
+			{
+				foreach (ref readonly var chunk in arch)
+				{
+					foreach (ref readonly var ent in chunk.Entities.AsSpan(0, chunk.Count))
+					{
+						Assert.Equal(carl.ID, ent.ID);
+					}
+				}
+			}
 		}
 
 		[Fact]
@@ -153,9 +160,16 @@
 
 			Assert.Equal(1, query.Count());
 
-			query.Each((EntityView ent) => {
-				Assert.Equal(carl.ID, ent.ID);
-			});
+			foreach (var arch in query)
+			{
+				foreach (ref readonly var chunk in arch)
+				{
+					foreach (ref readonly var ent in chunk.Entities.AsSpan(0, chunk.Count))
+					{
+						Assert.Equal(carl.ID, ent.ID);
+					}
+				}
+			}
 		}
 
 		[Fact]

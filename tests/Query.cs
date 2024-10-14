@@ -259,10 +259,20 @@ namespace TinyEcs.Tests
 				.With<FloatComponent>()
 				.Build();
 
-			query.Each((ref IntComponent maybeInt) => {
-				Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
-				count += 1;
-			});
+
+			foreach (var arch in query)
+			{
+				var index = arch.GetComponentIndex<IntComponent>();
+				foreach (ref readonly var chunk in arch)
+				{
+					var span0 = chunk.GetSpan<IntComponent>(index);
+					for (var i = 0; i < chunk.Count; ++i)
+					{
+						Assert.True(span0.IsEmpty || span0[i].Value == 10);
+						count += 1;
+					}
+				}
+			}
 
 			Assert.Equal(2, count);
 		}
@@ -283,7 +293,7 @@ namespace TinyEcs.Tests
 			ctx.World.Entity()
 				.Set(new FloatComponent() { Value = 0.5f })
 				.Set(new IntComponent() { Value = 10 })
-				.Add<NormalTag>();;
+				.Add<NormalTag>();
 
 			var count = 0;
 			var query = ctx.World.QueryBuilder()
@@ -292,11 +302,24 @@ namespace TinyEcs.Tests
 				.With<NormalTag>()
 				.Build();
 
-			query.Each((ref IntComponent maybeInt, ref FloatComponent maybeFloat) => {
-				Assert.True(Unsafe.IsNullRef(ref maybeInt) || maybeInt.Value == 10);
-				Assert.True(Unsafe.IsNullRef(ref maybeFloat) || maybeFloat.Value == 0.5f);
-				count += 1;
-			});
+
+			foreach (var arch in query)
+			{
+				var index0 = arch.GetComponentIndex<IntComponent>();
+				var index1 = arch.GetComponentIndex<FloatComponent>();
+				foreach (ref readonly var chunk in arch)
+				{
+					var span0 = chunk.GetSpan<IntComponent>(index0);
+					var span1 = chunk.GetSpan<FloatComponent>(index1);
+
+					for (var i = 0; i < chunk.Count; ++i)
+					{
+						Assert.True(span0.IsEmpty || span0[i].Value == 10);
+						Assert.True(span1.IsEmpty || span1[i].Value == 0.5f);
+						count += 1;
+					}
+				}
+			}
 
 			Assert.Equal(3, count);
 		}

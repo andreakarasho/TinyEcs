@@ -18,8 +18,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
-			postContext.AddSource("TinyEcs.QueryIters.g.cs", CodeFormatter.Format(GenerateQueryIters()));
-			postContext.AddSource("TinyEcs.Queries.g.cs", CodeFormatter.Format(GenerateQueries()));
 			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
 			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
 		});
@@ -33,49 +31,6 @@ public sealed class MyGenerator : IIncrementalGenerator
                 namespace TinyEcs
                 {{
 					{GenerateArchetypeSigns()}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateQueryIters()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					{GenerateQueryComponentsSpanIterator()}
-					{GenerateQueryIter("partial class Query")}
-
-					#if NET
-					{GenerateQueryIter("partial class Query<TQueryData, TQueryFilter>")}
-					#endif
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateQueries()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					{GenerateQueryTemplateDelegates(false)}
-					{GenerateQueryTemplateDelegates(true)}
-
-					{GenerateQueryEach("class Query", false, false)}
-					{GenerateQueryEach("class Query", false, true)}
-					#if NET
-					{GenerateQueryEach("class Query<TQueryData, TQueryFilter>", true, false)}
-					{GenerateQueryEach("class Query<TQueryData, TQueryFilter>", true, true)}
-					#endif
                 }}
 
                 #pragma warning restore 1591
@@ -135,15 +90,48 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IComponent");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
+				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = chunk.GetSpan<T{j}>(arch.GetComponentIndex<T{j}>());");
 
 				sb.AppendLine($@"
-					public readonly struct Data<{genericsArgs}> : IData
+					public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
 						{genericsArgsWhere}
 					{{
+						private ComponentsSpanIterator _iterator;
+
+						internal Data(ComponentsSpanIterator iterator) => _iterator = iterator;
+
 						public static void Build(QueryBuilder builder)
 						{{
 							{queryBuilderCalls}
 						}}
+
+						public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(ComponentsSpanIterator iterator)
+							=> new Data<{genericsArgs}>(iterator);
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public void Deconstruct({fieldSign})
+						{{
+							var arch = _iterator.Archetype;
+							ref readonly var chunk = ref _iterator.Current;
+							{fieldAssignments}
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public unsafe void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
+						{{
+							var arch = _iterator.Archetype;
+							ref readonly var chunk = ref _iterator.Current;
+							entities = chunk.Entities.AsSpan(0, chunk.Count);
+							{fieldAssignments}
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public bool MoveNext() => _iterator.MoveNext();
+
+						readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;
+
+						readonly IQueryIterator<Data<{genericsArgs}>> IQueryIterator<Data<{genericsArgs}>>.GetEnumerator() => this;
 					}}
 				");
 			}
@@ -241,371 +229,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}};
 						_conditions.Add(fn);
 						return this;
-					}}
-				");
-			}
-
-			sb.AppendLine("}");
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryComponentsSpanIterator()
-		{
-			var sb = new StringBuilder();
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var dctorSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> val{j}");
-				var dctorGetSpan = GenerateSequence(i + 1, "", j => $"val{j} = chunk.GetSpan<T{j}>(arch.GetComponentIndex<T{j}>());");
-
-				sb.AppendLine($@"
-					[System.Runtime.CompilerServices.SkipLocalsInit]
-					public ref struct ComponentsSpanIterator<{typeParams}> {whereParams}
-					{{
-						private QueryInternal _queryIt;
-						private QueryChunkIterator _chunkIt;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal ComponentsSpanIterator(QueryInternal queryIt)
-						{{
-							_queryIt = queryIt;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct({dctorSign})
-						{{
-							ref var arch = ref _queryIt.Current;
-							ref var chunk = ref _chunkIt.Current;
-
-							{dctorGetSpan}
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {dctorSign})
-						{{
-							ref var arch = ref _queryIt.Current;
-							ref var chunk = ref _chunkIt.Current;
-
-							entities = chunk.Entities.AsSpan(0, chunk.Count);
-							{dctorGetSpan}
-						}}
-
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						public ref ComponentsSpanIterator<{typeParams}> Current
-						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
-							get => ref this;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public bool MoveNext()
-						{{
-							while (true)
-							{{
-								if (_chunkIt.MoveNext())
-									return true;
-
-								if (_queryIt.MoveNext())
-								{{
-									_chunkIt = new QueryChunkIterator(_queryIt.Current.Chunks);
-									continue;
-								}}
-
-								return false;
-							}}
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsSpanIterator<{typeParams}> GetEnumerator() => this;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsIterator<{typeParams}> Each() => new (this);
-					}}
-				");
-			}
-
-			for (var i = 1; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var ptrTypes = GenerateSequence(i + 1, ", ", j => $"Ptr<T{j}> ptr{j}");
-				var deconstructors = GenerateSequence(i + 1, ", ", j => $"out var s{j}");
-				var setFirstPointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer = (T{j}*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s{j}));");
-				var setLastPointers = GenerateSequence(i + 1, "\n", j => $"_last.ptr{j}.Pointer = _current.ptr{j}.Pointer + entities.Length - 1;");
-				var increasePointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer += 1;");
-
-				sb.AppendLine($@"
-					[System.Runtime.CompilerServices.SkipLocalsInit]
-					public ref struct ComponentsIterator<{typeParams}> {whereParams}
-					{{
-						private ComponentsSpanIterator<{typeParams}> _iterator;
-						private ({ptrTypes}) _current, _last;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal ComponentsIterator(ComponentsSpanIterator<{typeParams}> refIterator)
-						{{
-							_iterator = refIterator;
-						}}
-
-
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						public ref ({ptrTypes}) Current
-						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
-							get => ref _current;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public unsafe bool MoveNext()
-						{{
-							if (!Unsafe.IsAddressLessThan(ref _current.ptr0.Ref, ref _last.ptr0.Ref))
-							{{
-								if (!_iterator.MoveNext())
-									return false;
-
-								_iterator.Deconstruct(out var entities, {deconstructors});
-
-								{setFirstPointers}
-								{setLastPointers}
-							}}
-							else
-							{{
-								{increasePointers}
-							}}
-
-							return true;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsIterator<{typeParams}> GetEnumerator() => this;
-					}}
-				");
-			}
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryIter(string className)
-		{
-			var sb = new StringBuilder();
-			sb.AppendLine($@"
-				public {className}
-				{{
-			");
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-
-				sb.AppendLine($@"
-					public ComponentsSpanIterator<{typeParams}> Iter<{typeParams}>() {whereParams}
-						=> new (this.GetEnumerator());
-				");
-			}
-
-			sb.AppendLine("}");
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryTemplateDelegates(bool withEntityView)
-		{
-			var sb = new StringBuilder();
-			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var signParams = (withEntityView ? "EntityView entity, " : "") +
-				                 GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
-
-				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
-			}
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryEach(string className, bool isDerivated, bool withEntityView)
-		{
-			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
-
-			var sb = new StringBuilder();
-			sb.AppendLine($@"
-				public partial {className}
-				{{
-			");
-
-			// single thread
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var fieldList = (withEntityView ? "ref var entityA = ref MemoryMarshal.GetReference(entities);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref MemoryMarshal.GetReference(t{j}AA);");
-				var signCallback = (withEntityView ? "entityA, " : "") +
-				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
-				var getQuery = isDerivated ? "_query" : "this";
-				var worldLock = isDerivated ? "_query.World" : "World";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = t{j}AA.IsEmpty ? 0 : 1;");
-				var validationTypes = GenerateSequence(i + 1, "\n", j => {
-					if (i + 1 <= 1)
-					{
-						return "";
-					}
-
-					var str = $"EcsAssert.Panic(ComponentComparer.CompareTerms(null!, query.TermsAccess[{j}].Id, Lookup.Component<T{j}>.HashCode) == 0," +
-							$"\"param at {j} doesn't match the QueryData sign\");";
-
-					return str;
-				});
-
-				var spanTerms = "var entities, " + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
-				// if (i == 0 && !withEntityView)
-				// 	spanTerms = $"_, {spanTerms}";
-
-				sb.AppendLine($@"
-					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-					{{
-						var query = {getQuery};
-						query.Match();
-
-						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
-						{validationTypes}
-
-						{worldLock}.BeginDeferred();
-
-						foreach (({spanTerms}) in query.Iter<{typeParams}>())
-						{{
-							var count = entities.Length;
-
-							{incFieldList}
-
-							{fieldList}
-
-							for (; count - 4 > 0; count -= 4)
-							{{
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-							}}
-
-							for (; count > 0; count -= 1)
-							{{
-								fn({signCallback});
-								{advanceField}
-							}}
-						}}
-
-						{worldLock}.EndDeferred();
-					}}
-				");
-			}
-
-			// multi thread
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
-				var signCallback = (withEntityView ? "entityA, " : "") +
-				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
-
-				var getQuery = isDerivated ? "_query" : "this";
-				var worldLock = isDerivated ? "_query.World" : "World";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
-				var validationTypes = GenerateSequence(i + 1, "\n", j => {
-					if (i + 1 <= 1)
-					{
-						return "";
-					}
-
-					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == query.World.Entity<T{j}>().ID," +
-							"$\"'{typeof("+ $"T{j}" + ")}' doesn't match the QueryData sign\");";
-
-					return str;
-				});
-
-				sb.AppendLine($@"
-					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-					{{
-						var query = {getQuery};
-						query.Match();
-
-						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
-						{validationTypes}
-
-						{worldLock}.BeginDeferred();
-						var cde = query.ThreadCounter.Value;
-						cde.Reset();
-						foreach (var arch in query)
-						{{
-							{columnIndices}
-							{incFieldList}
-
-							var chunks = arch.MemChunks;
-							cde.AddCount(chunks.Length);
-
-							for (var i = 0; i < chunks.Length; ++i)
-							{{
-								System.Threading.ThreadPool.QueueUserWorkItem(state => {{
-									ref var index = ref Unsafe.Unbox<int>(state!);
-									ref readonly var chunk = ref chunks.Span[index];
-
-									var done = 0;
-
-									{fieldList}
-
-									while (done <= chunk.Count - 4)
-									{{
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										done += 4;
-									}}
-
-									while (done < chunk.Count)
-									{{
-										fn({signCallback});
-										{advanceField}
-
-										done += 1;
-									}}
-									cde.Signal();
-								}}, i);
-							}}
-						}}
-
-						cde.Signal();
-						cde.Wait();
-						{worldLock}.EndDeferred();
 					}}
 				");
 			}

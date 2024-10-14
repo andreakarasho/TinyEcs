@@ -356,7 +356,7 @@ partial class World : SystemParam<World>, IIntoSystemParam<World>
 }
 
 public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<World>
-	where TQueryData : IData
+	where TQueryData : IData<TQueryData>
 {
 	internal Query(Query query) : base(query) { }
 
@@ -373,8 +373,8 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	}
 }
 
-public partial class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
-	where TQueryData : IData
+public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
+	where TQueryData : IData<TQueryData>
 	where TQueryFilter : IFilter
 {
 	private readonly Query _query;
@@ -397,7 +397,7 @@ public partial class Query<TQueryData, TQueryFilter> : SystemParam<World>, IInto
 		return q;
 	}
 
-	public QueryInternal GetEnumerator() => _query.GetEnumerator();
+	public IQueryIterator<TQueryData> Iter() => TQueryData.CreateIterator(_query.Iter());
 }
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
@@ -466,9 +466,21 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
+public interface IQueryIterator<TData> where TData : IData<TData>
+{
+	public IQueryIterator<TData> GetEnumerator();
+	public TData Current { get; }
+	public bool MoveNext();
+}
 
-public interface IComponent { }
-public interface IData : ITermCreator { }
+public interface IComponent
+{
+}
+
+public interface IData<TData> : ITermCreator where TData : IData<TData>
+{
+	public static abstract IQueryIterator<TData> CreateIterator(ComponentsSpanIterator iterator);
+}
 public interface IFilter : ITermCreator { }
 
 public interface INestedFilter
@@ -476,7 +488,7 @@ public interface INestedFilter
 	void BuildAsParam(QueryBuilder builder);
 }
 
-internal static class FilterBuilder<T> where T : struct
+public static class FilterBuilder<T> where T : struct
 {
 	public static bool Build(QueryBuilder builder)
 	{
@@ -491,11 +503,37 @@ internal static class FilterBuilder<T> where T : struct
 }
 
 
-public readonly struct Empty : IFilter, IData, IComponent
+public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 {
-	public static void Build(QueryBuilder builder)
+	private ComponentsSpanIterator _iterator;
+
+	internal Empty(ComponentsSpanIterator iterator) => _iterator = iterator;
+
+
+    public static void Build(QueryBuilder builder)
+    {
+
+    }
+
+    public static IQueryIterator<Empty> CreateIterator(ComponentsSpanIterator iterator)
+    {
+		return new Empty(iterator);
+    }
+
+	public readonly Empty Current => this;
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
+		ref readonly var chunk = ref _iterator.Current;
+		entities = chunk.Entities.AsSpan(0, chunk.Count);
+		count = chunk.Count;
 	}
+
+	public readonly IQueryIterator<Empty> GetEnumerator() => this;
+
+    public bool MoveNext() => _iterator.MoveNext();
 }
 
 /// <summary>
@@ -540,7 +578,7 @@ public readonly struct Without<T> : IFilter, INestedFilter
 /// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct Optional<T> : IComponent, IFilter, INestedFilter
+public readonly struct Optional<T> : IFilter, INestedFilter
 	where T : struct, IComponent
 {
 	public static void Build(QueryBuilder builder)

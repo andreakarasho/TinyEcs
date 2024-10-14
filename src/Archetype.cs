@@ -158,7 +158,7 @@ public sealed class Archetype
 
 	public QueryChunkIterator GetEnumerator()
 	{
-		return new QueryChunkIterator(Chunks);
+		return new QueryChunkIterator(MemChunks);
 	}
 
 	internal int GetComponentIndex(EcsID id)
