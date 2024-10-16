@@ -228,6 +228,7 @@ public partial class Query : IDisposable
 		return new (_matchedArchetypes);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public ComponentsSpanIterator Iter() => new(this.GetEnumerator());
 }
 
@@ -250,11 +251,7 @@ public struct ComponentsSpanIterator
 	public readonly ref readonly ArchetypeChunk Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get
-		{
-			ref readonly var chunk = ref _chunkIt.Current;
-			return ref chunk;
-		}
+		get => ref _chunkIt.Current;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -362,11 +359,11 @@ public struct QueryInternal
 
 public struct QueryChunkIterator
 {
-	private readonly Memory<ArchetypeChunk> _chunks;
+	private readonly ReadOnlyMemory<ArchetypeChunk> _chunks;
 	private int _index;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryChunkIterator(Memory<ArchetypeChunk> chunks)
+	internal QueryChunkIterator(ReadOnlyMemory<ArchetypeChunk> chunks)
 	{
 		_chunks = chunks;
 		_index = -1;
@@ -386,8 +383,7 @@ public struct QueryChunkIterator
 			if (++_index >= _chunks.Length)
 				break;
 
-			ref readonly var chunk = ref _chunks.Span[_index];
-			if (chunk.Count > 0)
+			if (_chunks.Span[_index].Count > 0)
 				return true;
 		}
 
@@ -397,60 +393,4 @@ public struct QueryChunkIterator
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly QueryChunkIterator GetEnumerator() => this;
-}
-
-internal ref struct QueryArchetypeChunkIterator
-{
-#if NET
-	private readonly ref EntityView _first, _last;
-	private ref EntityView _value;
-#else
-	private readonly Ref<EntityView> _first, _last;
-	private Ref<EntityView> _value;
-#endif
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryArchetypeChunkIterator(ref ArchetypeChunk chunk)
-	{
-#if NET
-		_first = ref chunk.EntityAt(0);
-		_last = ref Unsafe.Add(ref _first, chunk.Count);
-		_value = ref Unsafe.NullRef<EntityView>();
-#else
-		_first = new(ref chunk.EntityAt(0));
-		_last = new(ref Unsafe.Add(ref _first.Value, chunk.Count));
-		_value = new(ref Unsafe.NullRef<EntityView>());
-#endif
-	}
-
-	public readonly ref EntityView Current
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref
-		_value
-#if !NET
-		.Value
-#endif
-		;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool MoveNext()
-	{
-#if NET
-		_value = ref Unsafe.IsNullRef(ref _value) ? ref _first : ref Unsafe.Add(ref _value, 1);
-		if (Unsafe.IsAddressLessThan(ref _value, ref _last))
-			return true;
-#else
-		ref var value = ref _value.Value;
-		value = ref Unsafe.IsNullRef(ref value) ? ref _first.Value : ref Unsafe.Add(ref value, 1);
-		if (Unsafe.IsAddressLessThan(ref value, ref _last.Value))
-			return true;
-#endif
-		return false;
-	}
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryArchetypeChunkIterator GetEnumerator() => this;
 }
