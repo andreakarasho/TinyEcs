@@ -26,12 +26,13 @@ public sealed partial class World
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
+#if USE_PAIR
 		_ = Component<Rule>();
 		_ = Component<DoNotDelete>();
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
 		_ = Component<Wildcard>();
-		_ = Component<Pair<Wildcard, Wildcard>>();
+		// _ = Component<Pair<Wildcard, Wildcard>>();
 		_ = Component<Identifier>();
 		_ = Component<Name>();
 		_ = Component<ChildOf>();
@@ -62,14 +63,18 @@ public sealed partial class World
 
 		static EntityView setCommon(EntityView entity, string name)
 			=> entity.Add<DoNotDelete>().Set<Identifier>(new (name), Defaults.Name.ID);
+#endif
+
+		RelationshipEntityMapper = new(this);
+		NamingEntityMapper = new(this);
 
 		OnPluginInitialization?.Invoke(this);
     }
 
 
 
-	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
+	public event Action<World, EcsID>? OnEntityCreated, OnEntityDeleted;
+	public event Action<World, EcsID, ComponentInfo>? OnComponentSet, OnComponentUnset;
 	public static event Action<World>? OnPluginInitialization;
 
 
@@ -92,13 +97,15 @@ public sealed partial class World
         _archRoot.Clear();
         _typeIndex.Clear();
 		_cachedComponents.Clear();
-		_names.Clear();
 
 		foreach (var query in _cachedQueries.Values)
 			query.Dispose();
 
 		_cachedQueries.Clear();
-    }
+		RelationshipEntityMapper.Clear();
+		NamingEntityMapper.Clear();
+
+	}
 
 	/// <summary>
 	/// Remove all empty archetypes.
@@ -149,7 +156,9 @@ public sealed partial class World
 		ref var record = ref NewId(out var id);
 		record.Archetype = arch;
 		record.Chunk = arch.Add(id, out record.Row);
+#if USE_PAIR
 		record.Flags = EntityFlags.None;
+#endif
 
 		return new EntityView(this, id);
 	}
@@ -178,10 +187,12 @@ public sealed partial class World
 				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
 				record.Chunk = _archRoot.Add(id, out record.Row);
+#if USE_PAIR
 				record.Flags = EntityFlags.None;
+#endif
 
 				ent = new EntityView(this, id);
-				OnEntityCreated?.Invoke(ent);
+				OnEntityCreated?.Invoke(this, id);
 			}
 			else
 			{
@@ -198,24 +209,7 @@ public sealed partial class World
 	/// <returns></returns>
 	public EntityView Entity<T>() where T : struct
 	{
-		ref readonly var cmp = ref Component<T>();
-
-		var entId = cmp.ID;
-
-		if (!entId.IsPair())
-		{
-			ref var record = ref GetRecord(entId);
-
-			if ((record.Flags & EntityFlags.HasName) == 0)
-			{
-				record.Flags |= EntityFlags.HasName;
-				var name = Lookup.Component<T>.Name;
-				_names[name] = entId;
-				Set<Identifier>(entId, new (name), Defaults.Name.ID);
-			}
-		}
-
-		return new EntityView(this, entId);
+		return new EntityView(this, Component<T>().ID);
 	}
 
 	/// <summary>
@@ -229,6 +223,7 @@ public sealed partial class World
 		if (string.IsNullOrWhiteSpace(name))
 			return EntityView.Invalid;
 
+#if USE_PAIR
 		EntityView entity;
 		if (_names.TryGetValue(name, out var id) && (GetRecord(id).Flags & EntityFlags.HasName) != 0)
 		{
@@ -241,6 +236,9 @@ public sealed partial class World
 			_names[name] = entity;
 			entity.Set<Identifier>(new (name), Defaults.Name.ID);
 		}
+#else
+		var entity = new EntityView(this, NamingEntityMapper.SetName(0, name));
+#endif
 
 		return entity;
 	}
@@ -262,10 +260,11 @@ public sealed partial class World
 
 		lock (_newEntLock)
 		{
-			OnEntityDeleted?.Invoke(new (this, entity));
+			OnEntityDeleted?.Invoke(this, entity);
 
 			ref var record = ref GetRecord(entity);
 
+#if USE_PAIR
 			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
 
 			if (record.Flags != EntityFlags.None)
@@ -314,6 +313,7 @@ public sealed partial class World
 					applyDeleteRules(this, entity, term);
 				}
 			}
+#endif
 
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);
@@ -328,11 +328,13 @@ public sealed partial class World
 	/// <returns></returns>
     public bool Exists(EcsID entity)
     {
+#if USE_PAIR
 		if (entity.IsPair())
         {
 			(var first, var second) = entity.Pair();
             return GetAlive(first).IsValid() && GetAlive(second).IsValid();
         }
+#endif
 
         return _entities.Contains(entity);
     }
@@ -498,11 +500,18 @@ public sealed partial class World
 	public string Name(EcsID id)
 	{
 		ref var record = ref GetRecord(id);
+#if USE_PAIR
 		if ((record.Flags & EntityFlags.HasName) != 0)
 			return Get<Identifier>(id, Defaults.Name.ID).Data;
+#else
+		var name = NamingEntityMapper.GetName(id);
+		if (!string.IsNullOrEmpty(name))
+			return name;
+#endif
 		return string.Empty;
 	}
 
+#if USE_PAIR
 	/// <inheritdoc cref="Rule(EcsID, EcsID)"/>
 	public void Rule<TRule>(EcsID entity) where TRule : struct
 	{
@@ -521,6 +530,7 @@ public sealed partial class World
 
 		Add(entity, Defaults.Rule.ID, ruleId);
 	}
+#endif
 
 	/// <summary>
 	/// Print the archetype graph.

@@ -66,7 +66,11 @@ public sealed class Archetype
 	private readonly World _world;
 	private ArchetypeChunk[] _chunks;
 	private readonly ComponentComparer _comparer;
-	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _pairsLookup, _allLookup;
+	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _allLookup
+#if USE_PAIR
+		, _pairsLookup
+#endif
+		;
 	private readonly EcsID[] _ids;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
@@ -83,7 +87,9 @@ public sealed class Archetype
 		All = sign.ToImmutableArray();
 		Components = All.Where(x => x.Size > 0).ToImmutableArray();
 		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
+#if USE_PAIR
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
+#endif
 		_chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
 
@@ -97,8 +103,7 @@ public sealed class Archetype
 
 			if (sign[i].Size > 0)
 			{
-				dict.Add(sign[i].ID, cur);
-				cur += 1;
+				dict.Add(sign[i].ID, cur++);
 				maxId = Math.Max(maxId, (int)sign[i].ID);
 			}
 
@@ -111,15 +116,20 @@ public sealed class Archetype
 		_fastLookup.AsSpan().Fill(-1);
 		foreach ((var id, var i) in dict)
 		{
+#if USE_PAIR
+			if (!id.IsPair())
+#endif
 			_fastLookup[(int)id] = i;
 		}
 
 		_componentsLookup = dict.ToFrozenDictionary();
 		_allLookup = allDict.ToFrozenDictionary();
+#if USE_PAIR
 		_pairsLookup = allDict
 			.Where(s => s.Key.IsPair())
 				.GroupBy(s => s.Key.First())
 			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
+#endif
 
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
@@ -163,18 +173,21 @@ public sealed class Archetype
 
 	internal int GetComponentIndex(EcsID id)
 	{
+#if USE_PAIR
 		if (id.IsPair())
 		{
 			return _componentsLookup.GetValueOrDefault(id, -1);
 		}
-
+#endif
 		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
 	}
 
+#if USE_PAIR
 	internal int GetPairIndex(EcsID id)
 	{
 		return _pairsLookup.GetValueOrDefault(id, -1);
 	}
+#endif
 
 	internal int GetAnyIndex(EcsID id)
 	{

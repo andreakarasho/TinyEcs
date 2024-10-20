@@ -7,9 +7,7 @@ namespace TinyEcs;
 sealed class ComponentComparer :
 	IComparer<ulong>,
 	//IComparer<Term>,
-	IComparer<ComponentInfo>,
-	IEqualityComparer<ulong>,
-	IEqualityComparer<ComponentInfo>
+	IComparer<ComponentInfo>
 {
 	private readonly World _world;
 
@@ -36,6 +34,7 @@ sealed class ComponentComparer :
 
 	public static int CompareTerms(World world, ulong a, ulong b)
 	{
+#if USE_PAIR
 		if (IDOp.IsPair(a) && IDOp.IsPair(b))
 		{
 			var actionA = IDOp.GetPairFirst(a);
@@ -56,29 +55,8 @@ sealed class ComponentComparer :
 				}
 			}
 		}
+#endif
 
 		return a.CompareTo(b);
-	}
-
-	public bool Equals(ulong x, ulong y)
-	{
-		return CompareTerms(_world, x, y) == 0;
-	}
-
-	public int GetHashCode([DisallowNull] ulong obj)
-	{
-		return IDOp.IsPair(obj) &&
-			(IDOp.GetPairFirst(obj) == Wildcard.ID || IDOp.GetPairSecond(obj) == Wildcard.ID) ?
-			 1 : obj.GetHashCode();
-	}
-
-	public bool Equals(ComponentInfo x, ComponentInfo y)
-	{
-		return CompareTerms(_world, x.ID, y.ID) == 0;
-	}
-
-	public int GetHashCode([DisallowNull] ComponentInfo obj)
-	{
-		return obj.ID.GetHashCode();
 	}
 }

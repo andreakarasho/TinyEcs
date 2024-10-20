@@ -11,7 +11,6 @@ public sealed partial class World : IDisposable
 	private readonly EcsID _maxCmpId;
 	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
 	private readonly FastIdLookup<EcsID> _cachedComponents = new ();
-	private readonly Dictionary<string, EcsID> _names = new ();
 	private readonly object _newEntLock = new ();
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
@@ -25,6 +24,8 @@ public sealed partial class World : IDisposable
 
 	internal Archetype Root => _archRoot;
 	internal EcsID LastArchetypeId { get; set; }
+	internal RelationshipEntityMapper RelationshipEntityMapper { get; }
+	internal NamingEntityMapper NamingEntityMapper { get; }
 
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
@@ -44,24 +45,29 @@ public sealed partial class World : IDisposable
 	{
         ref readonly var lookup = ref Lookup.Component<T>.Value;
 
-		var isPair = lookup.ID.IsPair();
-		EcsAssert.Panic(isPair || lookup.ID < _maxCmpId,
+		EcsAssert.Panic(lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		if (!isPair /*!Exists(lookup.ID)*/)
+		ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
+		if (!exists)
 		{
-			ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
+			idx = Entity(lookup.ID).Set(lookup).ID;
 
-			if (!exists)
+#if USE_PAIR
+			if (!lookup.ID.IsPair())
 			{
-				idx = Entity(lookup.ID).Set(lookup).ID;
-			}
-		}
+				ref var record = ref GetRecord(lookup.ID);
 
-		// if (!isPair && !Exists(lookup.ID))
-		// {
-		// 	Entity(lookup.ID).Set(lookup);
-		// }
+				if ((record.Flags & EntityFlags.HasName) == 0)
+				{
+					record.Flags |= EntityFlags.HasName;
+					var name = Lookup.Component<T>.Name;
+					_names[name] = lookup.ID;
+					Set<Identifier>(lookup.ID, new (name), Defaults.Name.ID);
+				}
+			}
+#endif
+		}
 
 		return ref lookup;
     }
@@ -83,7 +89,7 @@ public sealed partial class World : IDisposable
 		if (oldArch.GetAnyIndex(id) < 0)
             return;
 
-		OnComponentUnset?.Invoke(record.EntityView(), new ComponentInfo(id, -1, false));
+		OnComponentUnset?.Invoke(this, entity, new ComponentInfo(id, -1, false));
 
 		BeginDeferred();
 
@@ -120,7 +126,7 @@ public sealed partial class World : IDisposable
         record.Archetype = foundArch!;
 		EndDeferred();
 
-
+#if USE_PAIR
 		if (id.IsPair())
 		{
 			(var first, var second) = id.Pair();
@@ -140,6 +146,7 @@ public sealed partial class World : IDisposable
 				ExecuteRule(ref record, entity, ref secondRec, second, id, false);
 			}
 		}
+#endif
 	}
 
 	private (Array?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
@@ -188,8 +195,9 @@ public sealed partial class World : IDisposable
         record.Archetype = foundArch!;
 		EndDeferred();
 
-		OnComponentSet?.Invoke(record.EntityView(), new ComponentInfo(id, size, isManaged));
+		OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size, isManaged));
 
+#if USE_PAIR
 		if (id.IsPair())
 		{
 			(var first, var second) = id.Pair();
@@ -209,6 +217,7 @@ public sealed partial class World : IDisposable
 				ExecuteRule(ref record, entity, ref secondRec, second, id, true);
 			}
 		}
+#endif
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
 		return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
@@ -219,16 +228,19 @@ public sealed partial class World : IDisposable
 		if (record.Archetype.HasIndex(id))
 			return true;
 
+#if USE_PAIR
 		if (id.IsPair())
 		{
 			(var a, var b) = FindPair(ref record, id.First(), id.Second());
 
 			return a.IsValid() && b.IsValid();
 		}
+#endif
 
 		return id == Defaults.Wildcard.ID;
 	}
 
+#if USE_PAIR
 	private void ExecuteRule(ref EcsRecord entityRecord, EcsID entity, ref EcsRecord ruleRecord, EcsID ruleId, EcsID id, bool onSet)
 	{
 		var i = 0;
@@ -282,6 +294,7 @@ public sealed partial class World : IDisposable
 			}
 		}
 	}
+#endif
 
 	private Archetype NewArchetype(Archetype oldArch, ComponentInfo[] sign, EcsID id)
 	{
@@ -326,13 +339,16 @@ struct EcsRecord
 {
 	public Archetype Archetype;
     public int Row;
+#if USE_PAIR
 	public EntityFlags Flags;
+#endif
 	public ArchetypeChunk Chunk;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref readonly EntityView EntityView() => ref Chunk.EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
+#if USE_PAIR
 [Flags]
 enum EntityFlags
 {
@@ -345,3 +361,4 @@ enum EntityFlags
 
 	HasRules = 1 << 6,
 }
+#endif

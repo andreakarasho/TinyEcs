@@ -25,6 +25,7 @@ public sealed class QueryBuilder : IDisposable
 	public QueryBuilder With<T>() where T : struct
 		=> With(_world.Component<T>().ID);
 
+#if USE_PAIR
 	public QueryBuilder With<TAction, TTarget>()
 		where TAction : struct
 		where TTarget : struct
@@ -36,6 +37,7 @@ public sealed class QueryBuilder : IDisposable
 
 	public QueryBuilder With(EcsID action, EcsID target)
 		=> With(IDOp.Pair(action, target));
+#endif
 
 	public QueryBuilder With(EcsID id)
 		=> Term(new QueryTerm(id, TermOp.With));
@@ -43,6 +45,7 @@ public sealed class QueryBuilder : IDisposable
 	public QueryBuilder Without<T>() where T : struct
 		=> Without(_world.Component<T>().ID);
 
+#if USE_PAIR
 	public QueryBuilder Without<TAction, TTarget>()
 		where TAction : struct
 		where TTarget : struct
@@ -54,6 +57,7 @@ public sealed class QueryBuilder : IDisposable
 
 	public QueryBuilder Without(EcsID action, EcsID target)
 		=> Without(IDOp.Pair(action, target));
+#endif
 
 	public QueryBuilder Without(EcsID id)
 		=> Term(new QueryTerm(id, TermOp.Without));
@@ -89,7 +93,7 @@ public sealed class QueryBuilder : IDisposable
 	public void Dispose() => _query?.Dispose();
 }
 
-public partial class Query : IDisposable
+public sealed class Query : IDisposable
 {
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
@@ -130,7 +134,7 @@ public partial class Query : IDisposable
 		}
 	}
 
-	internal World World { get; set; }
+	internal World World { get; }
 	// internal Lazy<CountdownEvent> ThreadCounter { get; } = new(() => new CountdownEvent(1));
 	internal ImmutableArray<IQueryTerm> TermsAccess { get; }
 

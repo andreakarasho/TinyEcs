@@ -398,7 +398,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return q;
 	}
 
-	public IQueryIterator<TQueryData> Iter() => TQueryData.CreateIterator(_query.Iter());
+	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 }
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
@@ -470,9 +470,9 @@ public sealed class Commands : SystemParam<World>, IIntoSystemParam<World>
 		_world = world;
 	}
 
-	public EntityCommand Entity()
+	public EntityCommand Entity(EcsID id)
 	{
-		var ent = _world.Entity();
+		var ent = _world.Entity(id);
 		return new EntityCommand(_world, ent.ID);
 	}
 
@@ -553,6 +553,30 @@ public static class FilterBuilder<T> where T : struct
 	}
 }
 
+//public struct Pair2<TAction, TTarget> : IData<Pair2<TAction, TTarget>>, IFilter, IComponent, INestedFilter
+//	where TAction : struct, IComponent
+//	where TTarget : struct, IComponent
+//{
+//	private ComponentsSpanIterator _iterator;
+
+//	internal Pair2(ComponentsSpanIterator iterator) => _iterator = iterator;
+
+//	public static void Build(QueryBuilder builder)
+//	{
+//		builder.With<TAction, TTarget>();
+//	}
+
+//	public static IQueryIterator<Pair2<TAction, TTarget>> CreateIterator(ComponentsSpanIterator iterator)
+//	{
+//		return default;
+//	}
+
+//	public void BuildAsParam(QueryBuilder builder)
+//	{
+//		Build(builder);
+//	}
+//}
+
 
 public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 {
@@ -596,7 +620,8 @@ public readonly struct With<T> : IFilter, INestedFilter
 {
 	public static void Build(QueryBuilder builder)
 	{
-		builder.With<T>();
+		if (!FilterBuilder<T>.Build(builder))
+			builder.With<T>();
 	}
 
 	public void BuildAsParam(QueryBuilder builder)
@@ -614,7 +639,7 @@ public readonly struct Without<T> : IFilter, INestedFilter
 {
 	public static void Build(QueryBuilder builder)
 	{
-		// if (!FilterBuilder<T>.Build(builder))
+		 if (!FilterBuilder<T>.Build(builder))
 			builder.Without<T>();
 	}
 
@@ -718,5 +743,9 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 //		Build(builder);
 //	}
 //}
+
+
+public partial struct Parent : IComponent { }
+public partial interface IChildrenComponent : IComponent {  }
 
 #endif

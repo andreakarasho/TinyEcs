@@ -21,12 +21,10 @@ public readonly struct ComponentInfo
 
 internal static class Lookup
 {
-	private static ulong _index = 0;
+	private static int _index = 0;
 
 	private static readonly FastIdLookup<Func<int, Array?>> _arrayCreator = new ();
-	private static readonly Dictionary<Type, ComponentInfo> _componentInfosByType = new();
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
-	private static readonly Dictionary<Type, EcsID> _unmatchedType = new();
 
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
@@ -34,6 +32,7 @@ internal static class Lookup
 		if (exists)
 			return fn(count);
 
+#if USE_PAIR
 		if (hashcode.IsPair())
 		{
 			(var first, var second) = hashcode.Pair();
@@ -54,6 +53,7 @@ internal static class Lookup
 					return fn(count);
 			}
 		}
+#endif
 
 		EcsAssert.Panic(false, $"component not found with hashcode {hashcode}");
 		return null;
@@ -65,55 +65,12 @@ internal static class Lookup
 	{
         public static readonly int Size = GetSize();
         public static readonly string Name = GetName();
-        public static readonly ulong HashCode;
-		public static readonly ComponentInfo Value;
+        public static readonly ulong HashCode = (ulong)System.Threading.Interlocked.Increment(ref _index);
+		public static readonly ComponentInfo Value = new (HashCode, Size, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 
 		static Component()
 		{
-			if (typeof(IPair).IsAssignableFrom(typeof(T)))
-			{
-				var relation = (IPair)default(T);
-
-				EcsID actionId = 0;
-				EcsID targeId = 0;
-				var actionType = relation.Action.GetType();
-				var targetType = relation.Target.GetType();
-
-				if (!_componentInfosByType.TryGetValue(actionType, out var actionCmp))
-				{
-					actionId = _unmatchedType[actionType];
-				}
-				else
-				{
-					actionId = actionCmp.ID;
-				}
-
-				if (!_componentInfosByType.TryGetValue(targetType, out var targetCmp))
-				{
-					targeId = _unmatchedType[targetType];
-				}
-				else
-				{
-					targeId = targetCmp.ID;
-				}
-
-				var pairId = IDOp.Pair(actionId, targeId);
-
-				HashCode = pairId;
-				Size = Math.Max(actionCmp.Size, targetCmp.Size);
-			}
-			else
-			{
-				if (_unmatchedType.Remove(typeof(T), out var id))
-					HashCode = id;
-				else
-					HashCode = (ulong)System.Threading.Interlocked.Increment(ref Unsafe.As<ulong, int>(ref _index));
-			}
-
-			Value = new ComponentInfo(HashCode, Size, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
-
-			_componentInfosByType[typeof(T)] = Value;
 			_components.Add(Value.ID, Value);
 		}
 

@@ -2,6 +2,7 @@ using System.Numerics;
 using TinyEcs;
 using Raylib_cs;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 
 const int WINDOW_WIDTH = 800;
@@ -13,8 +14,8 @@ const int ENTITIES_TO_SPAWN = 1_000_00;
 Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TinyEcs sample");
 
 using var ecs = new World();
-
 var scheduler = new Scheduler(ecs);
+
 var wndSize = new WindowSize() { Value = { X = WINDOW_WIDTH, Y = WINDOW_HEIGHT } };
 
 // bleh
@@ -49,32 +50,35 @@ while (!Raylib.WindowShouldClose())
 Raylib.CloseWindow();
 
 
-
 static void MoveSystem(Res<Time> time, Query<Data<Position, Velocity, Rotation>> query)
 {
-	foreach ((var entities, var posA, var velA, var rotA) in query.Iter())
+	foreach ((var entities, var posA, var velA, var rotA) in query)
 	{
+		ref var pos = ref posA.Ref();
+		ref var vel = ref velA.Ref();
+		ref var rot = ref rotA.Ref();
+
 		for (var i = 0; i < entities.Length; ++i)
 		{
-			ref var pos = ref posA[i];
-			ref var vel = ref velA[i];
-			ref var rot = ref rotA[i];
-
 			pos.Value += vel.Value * time.Value.Value;
 			rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
+
+			pos = ref Unsafe.Add(ref pos, 1);
+			vel = ref Unsafe.Add(ref vel, 1);
+			rot = ref Unsafe.Add(ref rot, 1);
 		}
 	}
 }
 
 static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 {
-	foreach ((var entities, var posA, var velA) in query.Iter())
+	foreach ((var entities, var posA, var velA) in query)
 	{
+		ref var pos = ref posA.Ref();
+		ref var vel = ref velA.Ref();
+
 		for (var i = 0; i < entities.Length; ++i)
 		{
-			ref var pos = ref posA[i];
-			ref var vel = ref velA[i];
-
 			if (pos.Value.X < 0.0f)
 			{
 				pos.Value.X = 0;
@@ -96,6 +100,9 @@ static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> w
 				pos.Value.Y = windowSize.Value.Value.Y;
 				vel.Value.Y *= -1;
 			}
+
+			pos = ref Unsafe.Add(ref pos, 1);
+			vel = ref Unsafe.Add(ref vel, 1);
 		}
 	}
 }
@@ -113,15 +120,19 @@ static void EndRenderer()
 
 static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
 {
-	foreach ((var entities, var spriteA, var posA, var rotA) in query.Iter())
+	foreach ((var entities, var spriteA, var posA, var rotA) in query)
 	{
+		ref var sprite = ref spriteA.Ref();
+		ref var pos = ref posA.Ref();
+		ref var rot = ref rotA.Ref();
+
 		for (var i = 0; i < entities.Length; ++i)
 		{
-			ref var sprite = ref spriteA[i];
-			ref var pos = ref posA[i];
-			ref var rotation = ref rotA[i];
+			Raylib.DrawTextureEx(texture.Value, pos.Value, rot.Value, sprite.Scale, sprite.Color);
 
-			Raylib.DrawTextureEx(texture.Value, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
+			sprite = ref Unsafe.Add(ref sprite, 1);
+			pos = ref Unsafe.Add(ref pos, 1);
+			rot = ref Unsafe.Add(ref rot, 1);
 		}
 	}
 }
@@ -245,4 +256,10 @@ readonly struct RaylibPlugin : IPlugin
 	{
 		private KeyboardKey _k0;
 	}
+}
+
+
+public static class SpanEx
+{
+	public static ref T Ref<T>(this Span<T> span) => ref MemoryMarshal.GetReference(span);
 }

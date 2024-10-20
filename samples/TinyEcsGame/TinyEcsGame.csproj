@@ -13,7 +13,7 @@
 
 
 	<ItemGroup>
-		<PackageReference Include="Raylib-cs" Version="6.0.0" />
+		<PackageReference Include="Raylib-cs" Version="6.1.1" />
 	</ItemGroup>
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
