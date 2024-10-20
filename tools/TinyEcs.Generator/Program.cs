@@ -110,7 +110,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 							=> new Data<{genericsArgs}>(iterator);
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public void Deconstruct({fieldSign})
+						public readonly void Deconstruct({fieldSign})
 						{{
 							var arch = _iterator.Archetype;
 							ref readonly var chunk = ref _iterator.Current;
@@ -118,7 +118,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public unsafe void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
+						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
 						{{
 							var arch = _iterator.Archetype;
 							ref readonly var chunk = ref _iterator.Current;

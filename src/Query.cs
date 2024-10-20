@@ -217,6 +217,7 @@ public sealed class Query : IDisposable
 		return ref Unsafe.NullRef<T>();
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public QueryInternal GetEnumerator()
 	{
 		Match();
@@ -233,7 +234,7 @@ public sealed class Query : IDisposable
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ComponentsSpanIterator Iter() => new(this.GetEnumerator());
+	public ComponentsSpanIterator Iter() => new(GetEnumerator());
 }
 
 

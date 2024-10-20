@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
@@ -166,7 +168,9 @@ public sealed partial class Scheduler
 		var multithreading = _multiThreads;
 		var singlethreading = _singleThreads;
 
-		if (multithreading.Any())
+		if (multithreading.Count == 1 && singlethreading.Count == 0)
+			singlethreading = multithreading;
+		else if (multithreading.Count > 1)
 			Parallel.ForEach(multithreading, static s => s.Run());
 
 		foreach (var system in singlethreading)
@@ -357,7 +361,7 @@ partial class World : SystemParam<World>, IIntoSystemParam<World>
 }
 
 public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<World>
-	where TQueryData : IData<TQueryData>
+	where TQueryData : struct, IData<TQueryData>
 {
 	internal Query(Query query) : base(query) { }
 
@@ -375,7 +379,7 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 }
 
 public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
-	where TQueryData : IData<TQueryData>
+	where TQueryData : struct, IData<TQueryData>
 	where TQueryFilter : IFilter
 {
 	private readonly Query _query;
@@ -398,7 +402,18 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return q;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
+
+
+	public ref T Single<T>() where T : struct, IComponent
+		=> ref _query.Single<T>();
+
+	public EntityView Single()
+		=> _query.Single();
+
+	public int Count()
+		=> _query.Count();
 }
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
@@ -517,9 +532,10 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
-public interface IQueryIterator<TData> where TData : IData<TData>
+public interface IQueryIterator<TData> where TData : struct, IData<TData>
 {
 	public IQueryIterator<TData> GetEnumerator();
+
 	public TData Current { get; }
 	public bool MoveNext();
 }
@@ -528,7 +544,7 @@ public interface IComponent
 {
 }
 
-public interface IData<TData> : ITermCreator where TData : IData<TData>
+public interface IData<TData> : ITermCreator where TData : struct, IData<TData>
 {
 	public static abstract IQueryIterator<TData> CreateIterator(ComponentsSpanIterator iterator);
 }
@@ -599,7 +615,7 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
+	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
 		ref readonly var chunk = ref _iterator.Current;
 		entities = chunk.Entities.AsSpan(0, chunk.Count);
