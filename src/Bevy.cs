@@ -9,25 +9,25 @@ namespace TinyEcs;
 public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
 	private readonly TArg _arg;
-    private readonly Action<TArg, Func<TArg, bool>> _fn;
+	private readonly Action<TArg, Func<TArg, bool>> _fn;
 	private readonly List<Func<TArg, bool>> _conditions;
 	private readonly Func<TArg, bool> _validator;
 	private readonly Func<bool> _checkInUse;
 	private readonly ThreadingMode _threadingType;
-	private readonly LinkedList<FuncSystem<TArg>> _after = new ();
-	private readonly LinkedList<FuncSystem<TArg>> _before = new ();
+	private readonly LinkedList<FuncSystem<TArg>> _after = new();
+	private readonly LinkedList<FuncSystem<TArg>> _before = new();
 	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
 
 
-    internal FuncSystem(TArg arg, Action<TArg,Func<TArg, bool>> fn, Func<bool> checkInUse, ThreadingMode threadingType)
-    {
+	internal FuncSystem(TArg arg, Action<TArg, Func<TArg, bool>> fn, Func<bool> checkInUse, ThreadingMode threadingType)
+	{
 		_arg = arg;
-        _fn = fn;
-		_conditions = new ();
+		_fn = fn;
+		_conditions = new();
 		_validator = ValidateConditions;
 		_checkInUse = checkInUse;
 		_threadingType = threadingType;
-    }
+	}
 
 	internal void Run()
 	{
@@ -122,36 +122,36 @@ public sealed partial class Scheduler
 {
 	private readonly World _world;
 	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
-	private readonly List<FuncSystem<World>> _singleThreads = new ();
-	private readonly List<FuncSystem<World>> _multiThreads = new ();
+	private readonly List<FuncSystem<World>> _singleThreads = new();
+	private readonly List<FuncSystem<World>> _multiThreads = new();
 
 	public Scheduler(World world)
 	{
 		_world = world;
 
 		for (var i = 0; i < _systems.Length; ++i)
-			_systems[i] = new ();
+			_systems[i] = new();
 
 		AddSystemParam(world);
 		AddSystemParam(new SchedulerState(this));
 		AddSystemParam(new Commands(world));
 	}
 
-    public void Run()
-    {
+	public void Run()
+	{
 		RunStage(Stages.Startup);
-		_systems[(int) Stages.Startup].Clear();
+		_systems[(int)Stages.Startup].Clear();
 
 		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
-        	RunStage(stage);
-    }
+			RunStage(stage);
+	}
 
 	private void RunStage(Stages stage)
 	{
 		_singleThreads.Clear();
 		_multiThreads.Clear();
 
-		var systems = _systems[(int) stage];
+		var systems = _systems[(int)stage];
 
 		foreach (var sys in systems)
 		{
@@ -168,9 +168,7 @@ public sealed partial class Scheduler
 		var multithreading = _multiThreads;
 		var singlethreading = _singleThreads;
 
-		if (multithreading.Count == 1 && singlethreading.Count == 0)
-			singlethreading = multithreading;
-		else if (multithreading.Count > 1)
+		if (multithreading.Count > 0)
 			Parallel.ForEach(multithreading, static s => s.Run());
 
 		foreach (var system in singlethreading)
@@ -184,7 +182,10 @@ public sealed partial class Scheduler
 
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
-		var sys = new FuncSystem<World>(_world, (args, runIf) => { if (runIf?.Invoke(args) ?? true) system(); }, () => false, threadingType);
+		var sys = new FuncSystem<World>(_world, (args, runIf) => {
+			if (runIf?.Invoke(args) ?? true)
+				system();
+		}, () => false, threadingType);
 		Add(sys, stage);
 
 		return sys;
@@ -210,10 +211,10 @@ public sealed partial class Scheduler
 		return AddResource(initialState);
 	}
 
-    public Scheduler AddResource<T>(T resource) where T : notnull
-    {
+	public Scheduler AddResource<T>(T resource) where T : notnull
+	{
 		return AddSystemParam(new Res<T>() { Value = resource });
-    }
+	}
 
 	public Scheduler AddSystemParam<T>(T param) where T : notnull, ISystemParam<World>
 	{
@@ -323,7 +324,7 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public void Clear()
 		=> _queue.Clear();
 
-	public EventReaderIterator GetEnumerator() => new (_queue!);
+	public EventReaderIterator GetEnumerator() => new(_queue!);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -420,7 +421,7 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T
 {
 	private T? _t;
 
-    public ref T? Value => ref _t;
+	public ref T? Value => ref _t;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -441,7 +442,7 @@ public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where
 {
 	private T? _t;
 
-    public ref T? Value => ref _t;
+	public ref T? Value => ref _t;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -503,7 +504,7 @@ public readonly ref struct EntityCommand
 {
 	private readonly World _world;
 
-	internal EntityCommand(World world, EcsID id) =>(_world, ID) = (world, id);
+	internal EntityCommand(World world, EcsID id) => (_world, ID) = (world, id);
 
 
 	public readonly EcsID ID;
@@ -601,15 +602,15 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 	internal Empty(ComponentsSpanIterator iterator) => _iterator = iterator;
 
 
-    public static void Build(QueryBuilder builder)
-    {
+	public static void Build(QueryBuilder builder)
+	{
 
-    }
+	}
 
-    public static IQueryIterator<Empty> CreateIterator(ComponentsSpanIterator iterator)
-    {
+	public static IQueryIterator<Empty> CreateIterator(ComponentsSpanIterator iterator)
+	{
 		return new Empty(iterator);
-    }
+	}
 
 	public readonly Empty Current => this;
 
@@ -624,7 +625,7 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 
 	public readonly IQueryIterator<Empty> GetEnumerator() => this;
 
-    public bool MoveNext() => _iterator.MoveNext();
+	public bool MoveNext() => _iterator.MoveNext();
 }
 
 /// <summary>
@@ -655,7 +656,7 @@ public readonly struct Without<T> : IFilter, INestedFilter
 {
 	public static void Build(QueryBuilder builder)
 	{
-		 if (!FilterBuilder<T>.Build(builder))
+		if (!FilterBuilder<T>.Build(builder))
 			builder.Without<T>();
 	}
 
@@ -762,6 +763,6 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 
 
 public partial struct Parent : IComponent { }
-public partial interface IChildrenComponent : IComponent {  }
+public partial interface IChildrenComponent : IComponent { }
 
 #endif
