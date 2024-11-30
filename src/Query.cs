@@ -5,7 +5,7 @@ namespace TinyEcs;
 
 public delegate void QueryFilterDelegateWithEntity(EntityView entity);
 
-public sealed class QueryBuilder : IDisposable
+public sealed class QueryBuilder
 {
 	private readonly World _world;
 	private readonly Dictionary<EcsID, IQueryTerm> _components = new();
@@ -83,22 +83,19 @@ public sealed class QueryBuilder : IDisposable
 
 	public Query Build()
 	{
-		_query?.Dispose();
 		_query = null;
 		var terms = _components.Values.ToArray();
 		_query ??= new Query(_world, terms);
 		return _query;
 	}
-
-	public void Dispose() => _query?.Dispose();
 }
 
-public sealed class Query : IDisposable
+public sealed class Query
 {
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private ulong _lastArchetypeIdMatched = 0;
-	private Query? _subQuery;
+	private readonly int[] _indices;
 
 	internal Query(World world, ReadOnlySpan<IQueryTerm> terms) : this (world, terms.ToImmutableArray())
 	{
@@ -117,38 +114,17 @@ public sealed class Query : IDisposable
 		TermsAccess = terms.Where(s => s.Op == TermOp.DataAccess || s.Op == TermOp.Optional)
 			.ToImmutableArray();
 
-		ref var subQuery = ref _subQuery;
-		foreach (var or in terms
-			.OfType<ContainerQueryTerm>()
-			.Where(s => s.Op == TermOp.Or || s.Op == TermOp.AtLeastOne))
-		{
-			var roll = IQueryTerm.GetHash(or.Terms.AsSpan());
-			subQuery = World.GetQuery
-			(
-				roll.Hash,
-				[.. or.Terms],
-				static (world, terms) => new Query(world, terms)
-			);
-
-			subQuery = ref subQuery._subQuery;
-		}
+		_indices = new int[TermsAccess.Length];
+		_indices.AsSpan().Fill(-1);
 	}
 
 	internal World World { get; }
-	// internal Lazy<CountdownEvent> ThreadCounter { get; } = new(() => new CountdownEvent(1));
 	internal ImmutableArray<IQueryTerm> TermsAccess { get; }
 
-	public void Dispose()
-	{
-		_subQuery?.Dispose();
-		// if (ThreadCounter.IsValueCreated)
-		// 	ThreadCounter.Value.Dispose();
-	}
+
 
 	internal void Match()
 	{
-		_subQuery?.Match();
-
 		if (_lastArchetypeIdMatched == World.LastArchetypeId)
 			return;
 
@@ -160,14 +136,7 @@ public sealed class Query : IDisposable
 	public int Count()
 	{
 		Match();
-
-		var count = _matchedArchetypes.Sum(static s => s.Count);
-		if (count == 0 && _subQuery != null)
-		{
-			return _subQuery.Count();
-		}
-
-		return count;
+		return _matchedArchetypes.Sum(static s => s.Count);
 	}
 
 	public ref T Single<T>() where T : struct
@@ -175,14 +144,9 @@ public sealed class Query : IDisposable
 		var count = Count();
 		EcsAssert.Panic(count == 1, "'Single' must match one and only one entity.");
 
-		foreach (var arch in this)
-		{
-			var column = arch.GetComponentIndex<T>();
-			EcsAssert.Panic(column >= 0, "component not found");
-			ref var value = ref arch.GetChunk(0).GetReference<T>(column);
-			return ref value;
-		}
-
+		var it = GetEnumerator();
+		if (it.MoveNext())
+			return ref it.Current.GetReference<T>(it.IndexAt(0));
 		return ref Unsafe.NullRef<T>();
 	}
 
@@ -191,50 +155,29 @@ public sealed class Query : IDisposable
 		var count = Count();
 		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
 
-		foreach (var arch in this)
-		{
-			return arch.GetChunk(0).EntityAt(0);
-		}
-
+		var it = GetEnumerator();
+		if (it.MoveNext())
+			return it.Current.EntityAt(0);
 		return EntityView.Invalid;
 	}
 
 	public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref var record = ref World.GetRecord(entity);
-
-		foreach (var arch in this)
-		{
-			if (arch.Id != record.Archetype.Id)
-				continue;
-
-			var column = arch.GetComponentIndex<T>();
-			EcsAssert.Panic(column >= 0, "component not found");
-			ref var value = ref record.Chunk.GetReference<T>(column);
-			return ref value;
-		}
-
-		return ref Unsafe.NullRef<T>();
+		var idx = record.Archetype.GetComponentIndex<T>();
+		if (idx < 0)
+			return ref Unsafe.NullRef<T>();
+		return ref record.Chunk.GetReferenceAt<T>(idx, record.Row);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public QueryInternal GetEnumerator()
+	public ComponentsSpanIterator GetEnumerator()
 	{
 		Match();
 
-		if (_subQuery != null)
-		{
-			if (_matchedArchetypes.All(static s => s.Count == 0))
-			{
-				return _subQuery.GetEnumerator();
-			}
-		}
-
-		return new (_matchedArchetypes);
+		var qryInternal = new QueryInternal(_matchedArchetypes);
+		return new(qryInternal, TermsAccess, _indices);
 	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ComponentsSpanIterator Iter() => new(GetEnumerator());
 }
 
 
@@ -243,20 +186,42 @@ public struct ComponentsSpanIterator
 {
 	private QueryInternal _queryIt;
 	private QueryChunkIterator _chunkIt;
+	private readonly ImmutableArray<IQueryTerm> _terms;
+	private readonly int[] _indices;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ComponentsSpanIterator(QueryInternal queryIt)
+	internal ComponentsSpanIterator(QueryInternal queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
 	{
 		_queryIt = queryIt;
+		_terms = terms;
+		_indices = indices;
 	}
 
-	public readonly Archetype Archetype => _queryIt.Current;
+	public readonly int Count => _chunkIt.Current.Count;
 
-	public readonly ref readonly ArchetypeChunk Current
+	internal readonly ref readonly ArchetypeChunk Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => ref _chunkIt.Current;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly int IndexAt(int index)
+	{
+		return _indices[index];
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly Span<T> Data<T>(int index) where T : struct
+	{
+		return _chunkIt.Current.GetSpan<T>(IndexAt(index));
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ReadOnlySpan<EntityView> Entities()
+	{
+		return _chunkIt.Current.GetEntities();
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -268,6 +233,9 @@ public struct ComponentsSpanIterator
 				return true;
 			if (_queryIt.MoveNext())
 			{
+				var arch = _queryIt.Current;
+				for (var i = 0; i < _indices.Length; ++i)
+					_indices[i] = arch.GetComponentIndex(_terms[i].Id);
 				_chunkIt = new QueryChunkIterator(_queryIt.Current.MemChunks);
 				continue;
 			}

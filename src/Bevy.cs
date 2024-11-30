@@ -404,7 +404,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
+	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.GetEnumerator());
 
 
 	public ref T Single<T>() where T : struct, IComponent

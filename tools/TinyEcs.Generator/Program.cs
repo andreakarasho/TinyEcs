@@ -91,7 +91,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IComponent");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
 				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
-				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = chunk.GetSpan<T{j}>(arch.GetComponentIndex<T{j}>());");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = _iterator.Data<T{j}>({j});");
 
 				sb.AppendLine($@"
 					public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
@@ -112,17 +112,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public readonly void Deconstruct({fieldSign})
 						{{
-							var arch = _iterator.Archetype;
-							ref readonly var chunk = ref _iterator.Current;
 							{fieldAssignments}
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
 						{{
-							var arch = _iterator.Archetype;
-							ref readonly var chunk = ref _iterator.Current;
-							entities = chunk.Entities.AsSpan(0, chunk.Count);
+							entities = _iterator.Entities();
 							{fieldAssignments}
 						}}
 
