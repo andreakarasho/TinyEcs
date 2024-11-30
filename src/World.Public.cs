@@ -97,11 +97,6 @@ public sealed partial class World
         _archRoot.Clear();
         _typeIndex.Clear();
 		_cachedComponents.Clear();
-
-		foreach (var query in _cachedQueries.Values)
-			query.Dispose();
-
-		_cachedQueries.Clear();
 		RelationshipEntityMapper.Clear();
 		NamingEntityMapper.Clear();
 
@@ -499,8 +494,9 @@ public sealed partial class World
 	/// <returns></returns>
 	public string Name(EcsID id)
 	{
-		ref var record = ref GetRecord(id);
 #if USE_PAIR
+		ref var record = ref GetRecord(id);
+
 		if ((record.Flags & EntityFlags.HasName) != 0)
 			return Get<Identifier>(id, Defaults.Name.ID).Data;
 #else
@@ -509,6 +505,11 @@ public sealed partial class World
 			return name;
 #endif
 		return string.Empty;
+	}
+
+	public void UnsetName(EcsID id)
+	{
+		NamingEntityMapper.UnsetName(id);
 	}
 
 #if USE_PAIR

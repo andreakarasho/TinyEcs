@@ -5,11 +5,10 @@ public sealed partial class World : IDisposable
 	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
 
     private readonly Archetype _archRoot;
-    private readonly EntitySparseSet<EcsRecord> _entities = new ();
-    private readonly Dictionary<EcsID, Archetype> _typeIndex = new ();
+	private readonly EntitySparseSet<EcsRecord> _entities = new ();
+	private readonly Dictionary<EcsID, Archetype> _typeIndex = new ();
     private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
-	private readonly Dictionary<EcsID, Query> _cachedQueries = new ();
 	private readonly FastIdLookup<EcsID> _cachedComponents = new ();
 	private readonly object _newEntLock = new ();
 
@@ -315,24 +314,8 @@ public sealed partial class World : IDisposable
 
         ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(id);
-		if (column < 0)
-			return ref Unsafe.NullRef<T>();
-
-		return ref Unsafe.As<T[]>(record.Chunk.Data![column])[record.Row & TinyEcs.Archetype.CHUNK_THRESHOLD];
+		return ref record.Chunk.GetReferenceAt<T>(column, record.Row);
     }
-
-	internal Query GetQuery(EcsID hash, ReadOnlySpan<IQueryTerm> terms, QueryFactoryDel factory)
-	{
-		if (!_cachedQueries.TryGetValue(hash, out var query))
-		{
-			query = factory(this, terms);
-			_cachedQueries.Add(hash, query);
-		}
-
-		query.Match();
-
-		return query;
-	}
 }
 
 struct EcsRecord

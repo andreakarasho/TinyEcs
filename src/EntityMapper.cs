@@ -141,6 +141,7 @@ public sealed class NamingEntityMapper
 
 	public EcsID SetName(EcsID id, string name)
 	{
+		UnsetName(id);
 		if (_names.TryGetValue(name, out var entity))
 		{
 			if (entity != id)
@@ -159,6 +160,12 @@ public sealed class NamingEntityMapper
 		return id;
 	}
 
+	public void UnsetName(EcsID id)
+	{
+		if (_entitiesWithName.Remove(id, out var name))
+			_names.Remove(name);
+	}
+
 	public string? GetName(EcsID id)
 	{
 		if (!id.IsValid() || !_entitiesWithName.TryGetValue(id, out var name))
@@ -175,8 +182,7 @@ public sealed class NamingEntityMapper
 
 	private void OnEntityDelete(World world, EcsID id)
 	{
-		if (_entitiesWithName.Remove(id, out var name))
-			_names.Remove(name);
+		UnsetName(id);
 	}
 }
 
@@ -216,7 +222,6 @@ public partial interface IChildrenComponent
 	HashSet<EcsID> Value { get; set; }
 
 	public HashSet<EcsID>.Enumerator GetEnumerator() => Value.GetEnumerator();
-
 }
 
 
@@ -227,8 +232,6 @@ public struct Children : IChildrenComponent
 	HashSet<EcsID> IChildrenComponent.Value { get; set; }
 }
 
-
-public partial struct Identifier { }
 
 public struct Name
 {
