@@ -44,6 +44,15 @@ public struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref T GetReferenceAt<T>(int column, int row) where T : struct
+	{
+		ref var reference = ref GetReference<T>(column);
+		if (Unsafe.IsNullRef(ref reference))
+			return ref reference;
+		return ref Unsafe.Add(ref reference, row & Archetype.CHUNK_THRESHOLD);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
@@ -52,6 +61,10 @@ public struct ArchetypeChunk
 		var array = (T[])Data![column];
 		return array.AsSpan(0, Count);
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly Span<EntityView> GetEntities()
+		=> Entities.AsSpan(0, Count);
 }
 
 public sealed class Archetype
