@@ -143,7 +143,7 @@ public sealed class Query
 
 		var it = Iter();
 		if (it.Next())
-			return ref it.Data<T>(0)[0];
+			return ref it.Data<T>()[0];
 		return ref Unsafe.NullRef<T>();
 	}
 
@@ -201,7 +201,13 @@ public struct QueryIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>(int index) where T : struct
 	{
-		return _chunkIterator.Current.GetSpan<T>( _indices[index]);
+		return _chunkIterator.Current.GetSpan<T>(_indices[index]);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly Span<T> Data<T>() where T : struct
+	{
+		return _chunkIterator.Current.GetSpan<T>(_archetypeIterator.Current.GetComponentIndex<T>());
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
