@@ -97,16 +97,16 @@ public sealed class MyGenerator : IIncrementalGenerator
 					public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
 						{genericsArgsWhere}
 					{{
-						private ComponentsSpanIterator _iterator;
+						private QueryIterator _iterator;
 
-						internal Data(ComponentsSpanIterator iterator) => _iterator = iterator;
+						internal Data(QueryIterator iterator) => _iterator = iterator;
 
 						public static void Build(QueryBuilder builder)
 						{{
 							{queryBuilderCalls}
 						}}
 
-						public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(ComponentsSpanIterator iterator)
+						public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(QueryIterator iterator)
 							=> new Data<{genericsArgs}>(iterator);
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -123,7 +123,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public bool MoveNext() => _iterator.MoveNext();
+						public bool MoveNext() => _iterator.Next();
 
 						readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;
 

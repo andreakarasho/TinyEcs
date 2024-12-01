@@ -347,7 +347,7 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 
 		public readonly T Current => _data;
 
-		public bool MoveNext() => _queue.TryDequeue(out _data);
+		public bool MoveNext() => _queue.TryDequeue(out _data!);
 	}
 }
 
@@ -404,7 +404,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.GetEnumerator());
+	public IQueryIterator<TQueryData> GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
 
 	public ref T Single<T>() where T : struct, IComponent
@@ -547,7 +547,7 @@ public interface IComponent
 
 public interface IData<TData> : ITermCreator where TData : struct, IData<TData>
 {
-	public static abstract IQueryIterator<TData> CreateIterator(ComponentsSpanIterator iterator);
+	public static abstract IQueryIterator<TData> CreateIterator(QueryIterator iterator);
 }
 public interface IFilter : ITermCreator { }
 
@@ -574,16 +574,16 @@ public static class FilterBuilder<T> where T : struct
 //	where TAction : struct, IComponent
 //	where TTarget : struct, IComponent
 //{
-//	private ComponentsSpanIterator _iterator;
+//	private QueryIterator _iterator;
 
-//	internal Pair2(ComponentsSpanIterator iterator) => _iterator = iterator;
+//	internal Pair2(QueryIterator iterator) => _iterator = iterator;
 
 //	public static void Build(QueryBuilder builder)
 //	{
 //		builder.With<TAction, TTarget>();
 //	}
 
-//	public static IQueryIterator<Pair2<TAction, TTarget>> CreateIterator(ComponentsSpanIterator iterator)
+//	public static IQueryIterator<Pair2<TAction, TTarget>> CreateIterator(QueryIterator iterator)
 //	{
 //		return default;
 //	}
@@ -597,9 +597,9 @@ public static class FilterBuilder<T> where T : struct
 
 public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 {
-	private ComponentsSpanIterator _iterator;
+	private QueryIterator _iterator;
 
-	internal Empty(ComponentsSpanIterator iterator) => _iterator = iterator;
+	internal Empty(QueryIterator iterator) => _iterator = iterator;
 
 
 	public static void Build(QueryBuilder builder)
@@ -607,7 +607,7 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 
 	}
 
-	public static IQueryIterator<Empty> CreateIterator(ComponentsSpanIterator iterator)
+	public static IQueryIterator<Empty> CreateIterator(QueryIterator iterator)
 	{
 		return new Empty(iterator);
 	}
@@ -618,14 +618,13 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
-		ref readonly var chunk = ref _iterator.Current;
-		entities = chunk.Entities.AsSpan(0, chunk.Count);
-		count = chunk.Count;
+		entities = _iterator.Entities();
+		count = entities.Length;
 	}
 
 	public readonly IQueryIterator<Empty> GetEnumerator() => this;
 
-	public bool MoveNext() => _iterator.MoveNext();
+	public bool MoveNext() => _iterator.Next();
 }
 
 /// <summary>

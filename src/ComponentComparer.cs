@@ -32,6 +32,7 @@ sealed class ComponentComparer :
 	// 	return CompareTerms(_world, x.ID, y.ID);
 	// }
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static int CompareTerms(World world, ulong a, ulong b)
 	{
 #if USE_PAIR

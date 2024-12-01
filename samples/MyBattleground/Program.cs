@@ -48,40 +48,24 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		scheduler.Run();
+		// scheduler.Run();
 
-		// var it = query.GetEnumerator();
+		var it = query.Iter();
+		while (it.Next())
+		{
+			var count = it.Count;
 
-		// while (it.MoveNext())
-		// {
-		// 	var count = it.Count;
-		// 	var posA = it.Data<Position>(0);
-		// 	var velA = it.Data<Velocity>(1);
+			var posA = it.Data<Position>(0);
+			var velA = it.Data<Velocity>(1);
 
-		// 	// for (var j = 0; j < count; ++j)
-		// 	// {
-		// 	// 	ref var pos = ref posA[j];
-		// 	// 	ref var vel = ref velA[j];
-
-		// 	// 	pos.X *= vel.X;
-		// 	// 	pos.Y *= vel.Y;
-		// 	// }
-
-		// 	// it.
-
-		// 	ref var pos = ref MemoryMarshal.GetReference(posA);
-		// 	ref var vel = ref MemoryMarshal.GetReference(velA);
-
-		// 	ref var lastPos = ref Unsafe.Add(ref pos, count);
-		// 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
-		// 	{
-		// 		pos.X *= vel.X;
-		// 		pos.Y *= vel.Y;
-
-		// 		pos = ref Unsafe.Add(ref pos, 1);
-		// 		vel = ref Unsafe.Add(ref vel, 1);
-		// 	}
-		// }
+			for (var j = 0; j < count; ++j)
+			{
+				ref var pos = ref posA[j];
+				ref var vel = ref velA[j];
+				pos.X *= vel.X;
+				pos.Y *= vel.Y;
+			}
+		}
 	}
 
 	last = start;

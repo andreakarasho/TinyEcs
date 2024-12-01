@@ -3,8 +3,6 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
 
-public delegate void QueryFilterDelegateWithEntity(EntityView entity);
-
 public sealed class QueryBuilder
 {
 	private readonly World _world;
@@ -84,8 +82,7 @@ public sealed class QueryBuilder
 	public Query Build()
 	{
 		_query = null;
-		var terms = _components.Values.ToArray();
-		_query ??= new Query(_world, terms);
+		_query ??= new Query(_world, _components.Values.ToArray());
 		return _query;
 	}
 }
@@ -144,9 +141,9 @@ public sealed class Query
 		var count = Count();
 		EcsAssert.Panic(count == 1, "'Single' must match one and only one entity.");
 
-		var it = GetEnumerator();
-		if (it.MoveNext())
-			return ref it.Current.GetReference<T>(it.IndexAt(0));
+		var it = Iter();
+		if (it.Next())
+			return ref it.Data<T>(0)[0];
 		return ref Unsafe.NullRef<T>();
 	}
 
@@ -155,9 +152,9 @@ public sealed class Query
 		var count = Count();
 		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
 
-		var it = GetEnumerator();
-		if (it.MoveNext())
-			return it.Current.EntityAt(0);
+		var it = Iter();
+		if (it.Next())
+			return it.Entities()[0];
 		return EntityView.Invalid;
 	}
 
@@ -170,92 +167,78 @@ public sealed class Query
 		return ref record.Chunk.GetReferenceAt<T>(idx, record.Row);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public ComponentsSpanIterator GetEnumerator()
+	public QueryIterator Iter()
 	{
 		Match();
 
-		var qryInternal = new QueryInternal(_matchedArchetypes);
+		var qryInternal = new ArchetypeIterator(_matchedArchetypes);
 		return new(qryInternal, TermsAccess, _indices);
 	}
 }
 
 
+
 [System.Runtime.CompilerServices.SkipLocalsInit]
-public struct ComponentsSpanIterator
+public struct QueryIterator
 {
-	private QueryInternal _queryIt;
-	private QueryChunkIterator _chunkIt;
+	private ArchetypeIterator _archetypeIterator;
+	private QueryChunkIterator _chunkIterator;
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly int[] _indices;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ComponentsSpanIterator(QueryInternal queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
+	internal QueryIterator(ArchetypeIterator queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
 	{
-		_queryIt = queryIt;
+		_archetypeIterator = queryIt;
 		_terms = terms;
 		_indices = indices;
 	}
 
-	public readonly int Count => _chunkIt.Current.Count;
+	public readonly int Count => _chunkIterator.Current.Count;
 
-	internal readonly ref readonly ArchetypeChunk Current
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref _chunkIt.Current;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly int IndexAt(int index)
-	{
-		return _indices[index];
-	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>(int index) where T : struct
 	{
-		return _chunkIt.Current.GetSpan<T>(IndexAt(index));
+		return _chunkIterator.Current.GetSpan<T>( _indices[index]);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ReadOnlySpan<EntityView> Entities()
 	{
-		return _chunkIt.Current.GetEntities();
+		return _chunkIterator.Current.GetEntities();
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool MoveNext()
+	public bool Next()
 	{
 		while (true)
 		{
-			if (_chunkIt.MoveNext())
+			if (_chunkIterator.MoveNext())
 				return true;
-			if (_queryIt.MoveNext())
+			if (_archetypeIterator.MoveNext())
 			{
-				var arch = _queryIt.Current;
+				var arch = _archetypeIterator.Current;
 				for (var i = 0; i < _indices.Length; ++i)
 					_indices[i] = arch.GetComponentIndex(_terms[i].Id);
-				_chunkIt = new QueryChunkIterator(_queryIt.Current.MemChunks);
+				_chunkIterator = new QueryChunkIterator(_archetypeIterator.Current.MemChunks);
 				continue;
 			}
 
 			return false;
 		}
 	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ComponentsSpanIterator GetEnumerator() => this;
 }
 
 // public ref struct ComponentsIterator<T0>
 // 	where T0 : struct
 // {
-// 	private ComponentsSpanIterator<T0> _iterator;
+// 	private QueryIterator<T0> _iterator;
 // 	private Ptr<T0> _current, _last;
 
 // 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	internal ComponentsIterator(ComponentsSpanIterator<T0> queryIterator)
+// 	internal ComponentsIterator(QueryIterator<T0> queryIterator)
 // 	{
 // 		_iterator = queryIterator;
 // 	}
@@ -291,23 +274,21 @@ public struct ComponentsSpanIterator
 // 	public ComponentsIterator<T0> GetEnumerator() => this;
 // }
 
-public struct QueryInternal
+public struct ArchetypeIterator
 {
-	private readonly List<Archetype> _archetypes;
-	private int _index;
+	private List<Archetype>.Enumerator _listIterator;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryInternal(List<Archetype> archetypes)
+	internal ArchetypeIterator(List<Archetype> archetypes)
 	{
-		_archetypes = archetypes;
-		_index = -1;
+		_listIterator = archetypes.GetEnumerator();
 	}
 
 	public readonly Archetype Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => _archetypes[_index];
+		get => _listIterator.Current;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -315,19 +296,15 @@ public struct QueryInternal
 	{
 		while (true)
 		{
-			if (++_index >= _archetypes.Count)
+			if (!_listIterator.MoveNext())
 				break;
 
-			var archetype = _archetypes[_index];
-			if (archetype != null && archetype.Count > 0)
+			if (_listIterator.Current.Count > 0)
 				return true;
 		}
 
 		return false;
 	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryInternal GetEnumerator() => this;
 }
 
 public struct QueryChunkIterator
@@ -342,7 +319,7 @@ public struct QueryChunkIterator
 		_index = -1;
 	}
 
-	public readonly ref readonly ArchetypeChunk Current
+	internal readonly ref readonly ArchetypeChunk Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => ref _chunks.Span[_index];
@@ -362,8 +339,4 @@ public struct QueryChunkIterator
 
 		return false;
 	}
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly QueryChunkIterator GetEnumerator() => this;
 }

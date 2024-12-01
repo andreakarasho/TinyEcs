@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public struct ArchetypeChunk
+internal struct ArchetypeChunk
 {
 	internal readonly Array[]? Data;
 	internal readonly EntityView[] Entities;
