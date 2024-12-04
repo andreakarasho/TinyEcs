@@ -141,7 +141,6 @@ public sealed class NamingEntityMapper
 
 	public EcsID SetName(EcsID id, string name)
 	{
-		UnsetName(id);
 		if (_names.TryGetValue(name, out var entity))
 		{
 			if (entity != id)
@@ -153,7 +152,7 @@ public sealed class NamingEntityMapper
 		if (string.IsNullOrEmpty(name))
 			return 0;
 
-		id = _world.Entity();
+		id = _world.Entity(id);
 		_names.Add(name, id);
 		_entitiesWithName.Add(id, name);
 		_world.Set(id, new Name() { Value = name });
@@ -190,25 +189,25 @@ public sealed class NamingEntityMapper
 
 public static class EntityMapperEx
 {
-	public static void AddChild2(this World world, EcsID parent, EcsID child)
+	public static void AddChild(this World world, EcsID parent, EcsID child)
 	{
 		world.RelationshipEntityMapper.Add(parent, child);
 	}
 
-	public static void RemoveChild2(this World world, EcsID child)
+	public static void RemoveChild(this World world, EcsID child)
 	{
 		world.RelationshipEntityMapper.Remove(child);
 	}
 
-	public static EntityView AddChild2(this EntityView entity, EcsID childId)
+	public static EntityView AddChild(this EntityView entity, EcsID childId)
 	{
-		entity.World.AddChild2(entity.ID, childId);
+		entity.World.AddChild(entity.ID, childId);
 		return entity;
 	}
 
-	public static EntityView RemoveChild2(this EntityView entity, EcsID childId)
+	public static EntityView RemoveChild(this EntityView entity, EcsID childId)
 	{
-		entity.World.RemoveChild2(childId);
+		entity.World.RemoveChild(childId);
 		return entity;
 	}
 
