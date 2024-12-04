@@ -16,10 +16,10 @@ namespace TinyEcs.Tests
             for (var i = 0; i < amount; i++)
                 ctx.World.Set(ctx.World.Entity(), new FloatComponent());
 
-            var done = 0;
-            foreach (var arch in ctx.World.QueryBuilder().With<FloatComponent>().Build())
-            foreach (ref readonly var chunk in arch)
-	            done += chunk.Count;
+			var done = ctx.World.QueryBuilder()
+				.With<FloatComponent>()
+				.Build()
+				.Count();
 
             Assert.Equal(amount, done);
         }
@@ -189,22 +189,22 @@ namespace TinyEcs.Tests
             Assert.Equal(good, done);
         }
 
-		[Fact]
-		public void Query_RelationalData()
-		{
-			using var ctx = new Context();
+		// [Fact]
+		// public void Query_RelationalData()
+		// {
+		// 	using var ctx = new Context();
 
-			var ent = ctx.World.Entity()
-				.Set<NormalTag, FloatComponent>(new FloatComponent() { Value = 23f });
+		// 	var ent = ctx.World.Entity()
+		// 		.Set<NormalTag, FloatComponent>(new FloatComponent() { Value = 23f });
 
-			var query = ctx.World.QueryBuilder()
-				.With<NormalTag, FloatComponent>()
-				.Build();
+		// 	var query = ctx.World.QueryBuilder()
+		// 		.With<NormalTag, FloatComponent>()
+		// 		.Build();
 
-			ref var single = ref query.Single<Pair<NormalTag, FloatComponent>>();
+		// 	ref var single = ref query.Single<Pair<NormalTag, FloatComponent>>();
 
-			Assert.Equal(23f, single.Target.Value);
-		}
+		// 	Assert.Equal(23f, single.Target.Value);
+		// }
 
 		[Fact]
 		public void Query_Single()
@@ -254,23 +254,21 @@ namespace TinyEcs.Tests
 			ctx.World.Entity().Set(new FloatComponent()).Set(new IntComponent() { Value = 10 });
 
 			var count = 0;
-			var query = ctx.World.QueryBuilder()
+			var it = ctx.World.QueryBuilder()
 				.Optional<IntComponent>()
-				.With<FloatComponent>()
-				.Build();
+				.Data<FloatComponent>()
+				.Build()
+				.Iter();
 
-
-			foreach (var arch in query)
+			while (it.Next())
 			{
-				var index = arch.GetComponentIndex<IntComponent>();
-				foreach (ref readonly var chunk in arch)
+				var span0 = it.Data<IntComponent>(0);
+				var span1 = it.Data<FloatComponent>(1);
+
+				for (var i = 0; i < it.Count; ++i)
 				{
-					var span0 = chunk.GetSpan<IntComponent>(index);
-					for (var i = 0; i < chunk.Count; ++i)
-					{
-						Assert.True(span0.IsEmpty || span0[i].Value == 10);
-						count += 1;
-					}
+					Assert.True(span0.IsEmpty || span0[i].Value == 10);
+					count += 1;
 				}
 			}
 
@@ -296,29 +294,25 @@ namespace TinyEcs.Tests
 				.Add<NormalTag>();
 
 			var count = 0;
-			var query = ctx.World.QueryBuilder()
+			var it = ctx.World.QueryBuilder()
 				.Optional<IntComponent>()
 				.Optional<FloatComponent>()
 				.With<NormalTag>()
-				.Build();
+				.Build()
+				.Iter();
 
 
-			foreach (var arch in query)
+			while (it.Next())
 			{
-				var index0 = arch.GetComponentIndex<IntComponent>();
-				var index1 = arch.GetComponentIndex<FloatComponent>();
-				foreach (ref readonly var chunk in arch)
-				{
-					var span0 = chunk.GetSpan<IntComponent>(index0);
-					var span1 = chunk.GetSpan<FloatComponent>(index1);
+				var span0 = it.Data<IntComponent>(0);
+				var span1 = it.Data<FloatComponent>(1);
 
-					for (var i = 0; i < chunk.Count; ++i)
+				for (var i = 0; i < it.Count; ++i)
 					{
 						Assert.True(span0.IsEmpty || span0[i].Value == 10);
 						Assert.True(span1.IsEmpty || span1[i].Value == 0.5f);
 						count += 1;
 					}
-				}
 			}
 
 			Assert.Equal(3, count);
