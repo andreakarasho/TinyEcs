@@ -52,6 +52,8 @@ public sealed partial class World : IDisposable
 		{
 			idx = Entity(lookup.ID).Set(lookup).ID;
 
+			NamingEntityMapper.SetName(idx, Lookup.Component<T>.Name);
+
 #if USE_PAIR
 			if (!lookup.ID.IsPair())
 			{
