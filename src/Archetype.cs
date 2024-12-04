@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Numerics;
 
 namespace TinyEcs;
 
@@ -254,7 +255,7 @@ public sealed class Archetype
 				var arrayToBeRemoved = chunk.Data![i];
 				var lastValidArray = lastChunk.Data![i];
 
-				CopyFast(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
+				CopyData(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
 			}
 
 			ref var rec = ref _world.GetRecord(chunk.EntityAt(row).ID);
@@ -324,7 +325,7 @@ public sealed class Archetype
 			var toArray = toChunk.Data![j];
 
 			// copy the moved entity to the target archetype
-			CopyFast(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
+			CopyData(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
 		}
 
 		_ = RemoveByRow(ref fromChunk, oldRow);
@@ -500,7 +501,7 @@ public sealed class Archetype
 		public byte Data;
 	}
 
-	private static void CopyFast(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
+	private static void CopyData(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
 	{
 		if (isManaged)
 		{
@@ -511,11 +512,43 @@ public sealed class Archetype
 			ref var srcB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(src).Data, (uint)(srcIdx * elementSize));
 			ref var dstB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(dst).Data, (uint)(dstIdx * elementSize));
 
-			// var span0 = MemoryMarshal.CreateSpan(ref srcB, count * elementSize);
-			// var span1 = MemoryMarshal.CreateSpan(ref dstB, count * elementSize);
-			// span0.CopyTo(span1);
+			if (Vector.IsHardwareAccelerated)
+			{
+				CopySimd(ref srcB, ref dstB, elementSize * count);
+				return;
+			}
 
 			Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
+		}
+	}
+
+	private static unsafe void CopySimd(ref byte src, ref byte dst, int totalBytes)
+	{
+		int vectorSize = Vector<byte>.Count; // SIMD chunk size
+		int offset = 0;
+
+		// Perform vectorized copy
+		while (offset + vectorSize <= totalBytes)
+		{
+			var vector = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref src, offset));
+			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), vector);
+			offset += vectorSize;
+		}
+
+		// Process remaining bytes in chunks of 8 (long)
+		const int wordSize = sizeof(long); // 8 bytes
+		while (offset + wordSize <= totalBytes)
+		{
+			long word = Unsafe.ReadUnaligned<long>(ref Unsafe.Add(ref src, offset));
+			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), word);
+			offset += wordSize;
+		}
+
+		// Process remaining bytes one by one
+		while (offset < totalBytes)
+		{
+			Unsafe.Add(ref dst, offset) = Unsafe.Add(ref src, offset);
+			offset++;
 		}
 	}
 }
