@@ -180,11 +180,6 @@ public sealed class Archetype
 	internal ref ArchetypeChunk GetChunk(int index)
 		=> ref _chunks[index >> CHUNK_LOG2];
 
-	public QueryChunkIterator GetEnumerator()
-	{
-		return new QueryChunkIterator(MemChunks);
-	}
-
 	internal int GetComponentIndex(EcsID id)
 	{
 #if USE_PAIR

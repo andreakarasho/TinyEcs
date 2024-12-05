@@ -280,7 +280,7 @@ public struct QueryIterator
 // 	public ComponentsIterator<T0> GetEnumerator() => this;
 // }
 
-public struct ArchetypeIterator
+internal struct ArchetypeIterator
 {
 	private List<Archetype>.Enumerator _listIterator;
 
@@ -313,7 +313,7 @@ public struct ArchetypeIterator
 	}
 }
 
-public struct QueryChunkIterator
+internal struct QueryChunkIterator
 {
 	private readonly ReadOnlyMemory<ArchetypeChunk> _chunks;
 	private int _index;
