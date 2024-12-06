@@ -4,9 +4,9 @@
 		<OutputType>Library</OutputType>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-		<LangVersion>preview</LangVersion>
+		<LangVersion>13.0</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<TargetFrameworks>net9.0;net8.0;netstandard2.1</TargetFrameworks>
+		<TargetFrameworks>net9.0</TargetFrameworks>
 		<IsAotCompatible>true</IsAotCompatible>
 		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 		<CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\Generated</CompilerGeneratedFilesOutputPath>

@@ -20,6 +20,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 		{
 			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
 			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
+			postContext.AddSource("TinyEcs.QueryIteratorEach.g.cs", CodeFormatter.Format(GenerateQueryIteratorEach()));
 		});
 
 		static string GenerateArchetypes()
@@ -56,6 +57,105 @@ public sealed class MyGenerator : IIncrementalGenerator
             ";
 		}
 
+		static string GenerateQueryIteratorEach()
+		{
+			return $@"
+			#pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateIterators()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+			";
+		}
+
+		static string GenerateIterators()
+		{
+			var sb = new StringBuilder();
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var ptrList = GenerateSequence(i + 1, "\n", j => $"private Ptr<T{j}> _current{j};");
+				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.SetRef(ref _iterator.DataRef<T{j}>({j}));");
+				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Pointer += 1;");
+				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"ptr{j} = _current{j};");
+				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
+
+				sb.AppendLine($@"
+					[SkipLocalsInit]
+					public unsafe struct Data<{generics}> : IData<Data<{generics}>>, IQueryIterator<Data<{generics}>>
+						{whereGenerics}
+					{{
+						private QueryIterator _iterator;
+						private int _index;
+						private Ptr<T0> _last0;
+						{ptrList}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						internal Data(QueryIterator queryIterator)
+						{{
+							_iterator = queryIterator;
+						}}
+
+						public static void Build(QueryBuilder builder)
+						{{
+							{queryBuilderCalls}
+						}}
+
+						public static IQueryIterator<Data<{generics}>> CreateIterator(QueryIterator iterator)
+							=> new Data<{generics}>(iterator);
+
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						ref Data<{generics}> IQueryIterator<Data<{generics}>>.Current
+						{{
+							[MethodImpl(MethodImplOptions.AggressiveInlining)]
+							get => ref this;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly void Deconstruct({fieldSign})
+						{{
+							{fieldAssignments}
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public bool MoveNext()
+						{{
+							if (!Unsafe.IsAddressLessThan(ref _current0.Ref, ref _last0.Ref))
+							{{
+								if (!_iterator.Next())
+									return false;
+
+								{ptrSet}
+								_last0.SetRef(ref Unsafe.Add(ref _current0.Ref, _iterator.Count - 1));
+								_index = 0;
+							}}
+							else
+							{{
+								{ptrAdvance}
+								_index += 1;
+							}}
+
+							return true;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						readonly IQueryIterator<Data<{generics}>> IQueryIterator<Data<{generics}>>.GetEnumerator() => this;
+					}}
+				");
+			}
+
+			return sb.ToString();
+		}
+
 		static string GenerateArchetypeSigns()
 		{
 			var sb = new StringBuilder();
@@ -85,52 +185,52 @@ public sealed class MyGenerator : IIncrementalGenerator
 		{
 			var sb = new StringBuilder();
 
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IComponent");
-				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
-				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
-				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = _iterator.Data<T{j}>({j});");
+			// for (var i = 0; i < MAX_GENERICS; ++i)
+			// {
+			// 	var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+			// 	var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IComponent");
+			// 	var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
+			// 	var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
+			// 	var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = _iterator.Data<T{j}>({j});");
 
-				sb.AppendLine($@"
-					public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
-						{genericsArgsWhere}
-					{{
-						private QueryIterator _iterator;
+			// 	sb.AppendLine($@"
+			// 		public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
+			// 			{genericsArgsWhere}
+			// 		{{
+			// 			private QueryIteratorEach<{genericsArgs}> _iterator;
 
-						internal Data(QueryIterator iterator) => _iterator = iterator;
+			// 			internal Data(QueryIterator iterator) => _iterator = new (iterator);
 
-						public static void Build(QueryBuilder builder)
-						{{
-							{queryBuilderCalls}
-						}}
+			// 			public static void Build(QueryBuilder builder)
+			// 			{{
+			// 				{queryBuilderCalls}
+			// 			}}
 
-						public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(QueryIterator iterator)
-							=> new Data<{genericsArgs}>(iterator);
+			// 			public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(QueryIterator iterator)
+			// 				=> new Data<{genericsArgs}>(iterator);
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct({fieldSign})
-						{{
-							{fieldAssignments}
-						}}
+			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			// 			public readonly void Deconstruct({fieldSign})
+			// 			{{
+			// 				{fieldAssignments}
+			// 			}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
-						{{
-							entities = _iterator.Entities();
-							{fieldAssignments}
-						}}
+			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			// 			public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
+			// 			{{
+			// 				entities = _iterator.Entities();
+			// 				{fieldAssignments}
+			// 			}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public bool MoveNext() => _iterator.Next();
+			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			// 			public bool MoveNext() => _iterator.Next();
 
-						readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;
+			// 			readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;
 
-						readonly IQueryIterator<Data<{genericsArgs}>> IQueryIterator<Data<{genericsArgs}>>.GetEnumerator() => this;
-					}}
-				");
-			}
+			// 			readonly IQueryIterator<Data<{genericsArgs}>> IQueryIterator<Data<{genericsArgs}>>.GetEnumerator() => this;
+			// 		}}
+			// 	");
+			// }
 
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{

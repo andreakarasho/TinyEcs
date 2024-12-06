@@ -533,11 +533,12 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
-public interface IQueryIterator<TData> where TData : struct, IData<TData>
+public interface IQueryIterator<TData> where TData : allows ref struct
 {
 	public IQueryIterator<TData> GetEnumerator();
 
-	public TData Current { get; }
+	[UnscopedRef]
+	public ref TData Current { get; }
 	public bool MoveNext();
 }
 
@@ -545,7 +546,7 @@ public interface IComponent
 {
 }
 
-public interface IData<TData> : ITermCreator where TData : struct, IData<TData>
+public interface IData<TData> : ITermCreator where TData : allows ref struct
 {
 	public static abstract IQueryIterator<TData> CreateIterator(QueryIterator iterator);
 }
@@ -612,8 +613,8 @@ public struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 		return new Empty(iterator);
 	}
 
-	public readonly Empty Current => this;
-
+	[UnscopedRef]
+	ref Empty IQueryIterator<Empty>.Current => ref this;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
@@ -763,5 +764,75 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 
 public partial struct Parent : IComponent { }
 public partial interface IChildrenComponent : IComponent { }
+
+
+
+
+
+[SkipLocalsInit]
+public unsafe struct Data2<T0, T1> : IData<Data2<T0, T1>>, IQueryIterator<Data2<T0, T1>>
+	where T0 : struct where T1 : struct
+{
+	private QueryIterator _iterator;
+	private int _index;
+	private Ptr<T0> _last0;
+	private Ptr<T0> _current0;
+	private Ptr<T1> _current1;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Data2(QueryIterator queryIterator)
+	{
+		_iterator = queryIterator;
+	}
+
+	public static void Build(QueryBuilder builder)
+	{
+		if (!FilterBuilder<T0>.Build(builder)) builder.Data<T0>();
+		if (!FilterBuilder<T1>.Build(builder)) builder.Data<T1>();
+	}
+
+	public static IQueryIterator<Data2<T0, T1>> CreateIterator(QueryIterator iterator)
+		=> new Data2<T0, T1>(iterator);
+
+	[System.Diagnostics.CodeAnalysis.UnscopedRef]
+	ref Data2<T0, T1> IQueryIterator<Data2<T0, T1>>.Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly void Deconstruct(out Ptr<T0> ptr0, out Ptr<T1> ptr1)
+	{
+		ptr0 = _current0;
+		ptr1 = _current1;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		if (!Unsafe.IsAddressLessThan(ref _current0.Ref, ref _last0.Ref))
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_current0.SetRef(ref _iterator.DataRef<T0>(0));
+			_current1.SetRef(ref _iterator.DataRef<T1>(1));
+			_last0.SetRef(ref Unsafe.Add(ref _current0.Ref, _iterator.Count - 1));
+			_index = 0;
+		}
+		else
+		{
+			_current0.SetRef(ref Unsafe.AddByteOffset(ref _current0.Ref, Unsafe.SizeOf<T0>()));
+			_current1.SetRef(ref Unsafe.AddByteOffset(ref _current1.Ref, Unsafe.SizeOf<T0>()));
+			_index += 1;
+		}
+
+		return true;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly IQueryIterator<Data2<T0, T1>> IQueryIterator<Data2<T0, T1>>.GetEnumerator() => this;
+}
 
 #endif

@@ -174,6 +174,13 @@ public sealed class Query
 		var qryInternal = new ArchetypeIterator(_matchedArchetypes);
 		return new(qryInternal, TermsAccess, _indices);
 	}
+
+	// public QueryIteratorEach<T0, T1> Each<T0, T1>()
+	// 	where T0 : unmanaged
+	// 	where T1 : unmanaged
+	// {
+	// 	return new (Iter());
+	// }
 }
 
 
@@ -197,6 +204,12 @@ public struct QueryIterator
 
 	public readonly int Count => _chunkIterator.Current.Count;
 
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref T DataRef<T>(int index) where T : struct
+	{
+		return ref _chunkIterator.Current.GetReference<T>(_indices[index]);
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>(int index) where T : struct
@@ -237,47 +250,74 @@ public struct QueryIterator
 	}
 }
 
-// public ref struct ComponentsIterator<T0>
+// [SkipLocalsInit]
+// public unsafe struct QueryIteratorEach<T0, T1>
 // 	where T0 : struct
+// 	where T1 : struct
 // {
-// 	private QueryIterator<T0> _iterator;
-// 	private Ptr<T0> _current, _last;
+// 	private QueryIterator _iterator;
+// 	private Ptr<T0> _current0, _last0;
+// 	private Ptr<T1> _current1;
+// 	private int _index;
+// 	private Memory<EntityView> _entities;
+
 
 // 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	internal ComponentsIterator(QueryIterator<T0> queryIterator)
+// 	internal QueryIteratorEach(QueryIterator queryIterator)
 // 	{
 // 		_iterator = queryIterator;
 // 	}
 
 // 	[UnscopedRef]
-// 	public ref Ptr<T0> Current
+// 	public ref QueryIteratorEach<T0, T1> Current
 // 	{
 // 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 		get => ref _current;
+// 		get => ref this;
 // 	}
 
 // 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	public unsafe bool MoveNext()
+// 	public readonly void Deconstruct(out Ptr<T0> s0, out Ptr<T1> s1)
 // 	{
-// 		if (!Unsafe.IsAddressLessThan(ref _current.Ref, ref _last.Ref))
+// 		s0 = _current0;
+// 		s1 = _current1;
+// 	}
+
+// 	// [MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	// public readonly void Deconstruct(out EcsID entity, out Ptr<T0> s0, out Ptr<T1> s1)
+// 	// {
+// 	// 	entity = _entities[_index];
+// 	// 	s0 = _current0;
+// 	// 	s1 = _current1;
+// 	// }
+
+// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	public bool MoveNext()
+// 	{
+// 		if (!Unsafe.IsAddressLessThan(ref _current0.Ref, ref _last0.Ref))
 // 		{
-// 			if (!_iterator.MoveNext())
+// 			if (!_iterator.Next())
 // 				return false;
 
-// 			_iterator.Deconstruct(out var entities, out var s0);
+// 			_current0.SetRef(ref _iterator.DataRef<T0>(0));
+// 			_current1.SetRef(ref _iterator.DataRef<T1>(1));
+// 			_last0.SetRef(ref Unsafe.Add(ref _current0.Ref, _iterator.Count - 1));
 
-// 			_current.Pointer = (T0*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s0));
-// 			_last.Pointer = _current.Pointer + entities.Length - 1;
+// 			// _entities = _iterator.Entities();
+// 			_index = 0;
 // 		}
 // 		else
 // 		{
-// 			_current.Pointer += 1;
+// 			_current0.Pointer += 1;
+// 			_current1.Pointer += 1;
+
+// 			_index += 1;
 // 		}
 
 // 		return true;
 // 	}
 
-// 	public ComponentsIterator<T0> GetEnumerator() => this;
+// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+// 	public readonly QueryIteratorEach<T0, T1> GetEnumerator() => this;
 // }
 
 internal struct ArchetypeIterator
