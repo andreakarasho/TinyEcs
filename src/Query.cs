@@ -230,6 +230,18 @@ public struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly Span<EntityView> EntitiesDangerous()
+	{
+		return _chunkIterator.Current.Entities.AsSpan(0, Count);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly ref readonly EntityView EntityAt(int index)
+	{
+		return ref _chunkIterator.Current.EntityAt(index);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool Next()
 	{
 		while (true)
@@ -249,76 +261,6 @@ public struct QueryIterator
 		}
 	}
 }
-
-// [SkipLocalsInit]
-// public unsafe struct QueryIteratorEach<T0, T1>
-// 	where T0 : struct
-// 	where T1 : struct
-// {
-// 	private QueryIterator _iterator;
-// 	private Ptr<T0> _current0, _last0;
-// 	private Ptr<T1> _current1;
-// 	private int _index;
-// 	private Memory<EntityView> _entities;
-
-
-// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	internal QueryIteratorEach(QueryIterator queryIterator)
-// 	{
-// 		_iterator = queryIterator;
-// 	}
-
-// 	[UnscopedRef]
-// 	public ref QueryIteratorEach<T0, T1> Current
-// 	{
-// 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 		get => ref this;
-// 	}
-
-// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	public readonly void Deconstruct(out Ptr<T0> s0, out Ptr<T1> s1)
-// 	{
-// 		s0 = _current0;
-// 		s1 = _current1;
-// 	}
-
-// 	// [MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	// public readonly void Deconstruct(out EcsID entity, out Ptr<T0> s0, out Ptr<T1> s1)
-// 	// {
-// 	// 	entity = _entities[_index];
-// 	// 	s0 = _current0;
-// 	// 	s1 = _current1;
-// 	// }
-
-// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	public bool MoveNext()
-// 	{
-// 		if (!Unsafe.IsAddressLessThan(ref _current0.Ref, ref _last0.Ref))
-// 		{
-// 			if (!_iterator.Next())
-// 				return false;
-
-// 			_current0.SetRef(ref _iterator.DataRef<T0>(0));
-// 			_current1.SetRef(ref _iterator.DataRef<T1>(1));
-// 			_last0.SetRef(ref Unsafe.Add(ref _current0.Ref, _iterator.Count - 1));
-
-// 			// _entities = _iterator.Entities();
-// 			_index = 0;
-// 		}
-// 		else
-// 		{
-// 			_current0.Pointer += 1;
-// 			_current1.Pointer += 1;
-
-// 			_index += 1;
-// 		}
-
-// 		return true;
-// 	}
-
-// 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-// 	public readonly QueryIteratorEach<T0, T1> GetEnumerator() => this;
-// }
 
 internal struct ArchetypeIterator
 {

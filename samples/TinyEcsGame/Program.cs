@@ -52,57 +52,37 @@ Raylib.CloseWindow();
 
 static void MoveSystem(Res<Time> time, Query<Data<Position, Velocity, Rotation>> query)
 {
-	foreach ((var entities, var posA, var velA, var rotA) in query)
+	foreach ((var pos, var vel, var rot) in query)
 	{
-		ref var pos = ref posA.Ref();
-		ref var vel = ref velA.Ref();
-		ref var rot = ref rotA.Ref();
-
-		for (var i = 0; i < entities.Length; ++i)
-		{
-			pos.Value += vel.Value * time.Value.Value;
-			rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
-
-			pos = ref Unsafe.Add(ref pos, 1);
-			vel = ref Unsafe.Add(ref vel, 1);
-			rot = ref Unsafe.Add(ref rot, 1);
-		}
+		pos.Ref.Value += vel.Ref.Value * time.Value.Value;
+		rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Value.Value)) % 360;
 	}
 }
 
 static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 {
-	foreach ((var entities, var posA, var velA) in query)
+	foreach ((var pos, var vel) in query)
 	{
-		ref var pos = ref posA.Ref();
-		ref var vel = ref velA.Ref();
-
-		for (var i = 0; i < entities.Length; ++i)
+		if (pos.Ref.Value.X < 0.0f)
 		{
-			if (pos.Value.X < 0.0f)
-			{
-				pos.Value.X = 0;
-				vel.Value.X *= -1;
-			}
-			else if (pos.Value.X > windowSize.Value.Value.X)
-			{
-				pos.Value.X = windowSize.Value.Value.X;
-				vel.Value.X *= -1;
-			}
+			pos.Ref.Value.X = 0;
+			vel.Ref.Value.X *= -1;
+		}
+		else if (pos.Ref.Value.X > windowSize.Value.Value.X)
+		{
+			pos.Ref.Value.X = windowSize.Value.Value.X;
+			vel.Ref.Value.X *= -1;
+		}
 
-			if (pos.Value.Y < 0.0f)
-			{
-				pos.Value.Y = 0;
-				vel.Value.Y *= -1;
-			}
-			else if (pos.Value.Y > windowSize.Value.Value.Y)
-			{
-				pos.Value.Y = windowSize.Value.Value.Y;
-				vel.Value.Y *= -1;
-			}
-
-			pos = ref Unsafe.Add(ref pos, 1);
-			vel = ref Unsafe.Add(ref vel, 1);
+		if (pos.Ref.Value.Y < 0.0f)
+		{
+			pos.Ref.Value.Y = 0;
+			vel.Ref.Value.Y *= -1;
+		}
+		else if (pos.Ref.Value.Y > windowSize.Value.Value.Y)
+		{
+			pos.Ref.Value.Y = windowSize.Value.Value.Y;
+			vel.Ref.Value.Y *= -1;
 		}
 	}
 }
@@ -120,20 +100,9 @@ static void EndRenderer()
 
 static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
 {
-	foreach ((var entities, var spriteA, var posA, var rotA) in query)
+	foreach ((var sprite, var pos, var rot) in query)
 	{
-		ref var sprite = ref spriteA.Ref();
-		ref var pos = ref posA.Ref();
-		ref var rot = ref rotA.Ref();
-
-		for (var i = 0; i < entities.Length; ++i)
-		{
-			Raylib.DrawTextureEx(texture.Value, pos.Value, rot.Value, sprite.Scale, sprite.Color);
-
-			sprite = ref Unsafe.Add(ref sprite, 1);
-			pos = ref Unsafe.Add(ref pos, 1);
-			rot = ref Unsafe.Add(ref rot, 1);
-		}
+		Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
 	}
 }
 
@@ -256,10 +225,4 @@ readonly struct RaylibPlugin : IPlugin
 	{
 		private KeyboardKey _k0;
 	}
-}
-
-
-public static class SpanEx
-{
-	public static ref T Ref<T>(this Span<T> span) => ref MemoryMarshal.GetReference(span);
 }

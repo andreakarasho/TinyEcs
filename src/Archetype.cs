@@ -64,7 +64,7 @@ internal struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly Span<EntityView> GetEntities()
+	public readonly ReadOnlySpan<EntityView> GetEntities()
 		=> Entities.AsSpan(0, Count);
 }
 

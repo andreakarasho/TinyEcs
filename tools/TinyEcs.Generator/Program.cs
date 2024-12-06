@@ -83,20 +83,19 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
 				var ptrList = GenerateSequence(i + 1, "\n", j => $"private Ptr<T{j}> _current{j};");
-				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.SetRef(ref _iterator.DataRef<T{j}>({j}));");
-				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Pointer += 1;");
+				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref _iterator.DataRef<T{j}>({j});");
+				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.AddByteOffset(ref _current{j}.Ref, Unsafe.SizeOf<T{j}>());");
 				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
 				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"ptr{j} = _current{j};");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
 
 				sb.AppendLine($@"
 					[SkipLocalsInit]
-					public unsafe struct Data<{generics}> : IData<Data<{generics}>>, IQueryIterator<Data<{generics}>>
+					public unsafe ref struct Data<{generics}> : IData<Data<{generics}>>, IQueryIterator<Data<{generics}>>
 						{whereGenerics}
 					{{
 						private QueryIterator _iterator;
-						private int _index;
-						private Ptr<T0> _last0;
+						private Ptr<EntityView> _entity, _last;
 						{ptrList}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -110,11 +109,18 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{queryBuilderCalls}
 						}}
 
-						public static IQueryIterator<Data<{generics}>> CreateIterator(QueryIterator iterator)
+						public static Data<{generics}> CreateIterator(QueryIterator iterator)
 							=> new Data<{generics}>(iterator);
 
 						[System.Diagnostics.CodeAnalysis.UnscopedRef]
 						ref Data<{generics}> IQueryIterator<Data<{generics}>>.Current
+						{{
+							[MethodImpl(MethodImplOptions.AggressiveInlining)]
+							get => ref this;
+						}}
+
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						public ref Data<{generics}> Current
 						{{
 							[MethodImpl(MethodImplOptions.AggressiveInlining)]
 							get => ref this;
@@ -127,28 +133,36 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						public readonly void Deconstruct(out PtrRO<EntityView> entity, {fieldSign})
+						{{
+							entity = new (ref _entity.Ref);
+							{fieldAssignments}
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public bool MoveNext()
 						{{
-							if (!Unsafe.IsAddressLessThan(ref _current0.Ref, ref _last0.Ref))
+							if (!Unsafe.IsAddressLessThan(ref _entity.Ref, ref _last.Ref))
 							{{
 								if (!_iterator.Next())
 									return false;
 
 								{ptrSet}
-								_last0.SetRef(ref Unsafe.Add(ref _current0.Ref, _iterator.Count - 1));
-								_index = 0;
+
+								_entity.Ref = ref _iterator.EntitiesDangerous()[0];
+								_last.Ref = ref Unsafe.Add(ref _entity.Ref, _iterator.Count - 1);
 							}}
 							else
 							{{
 								{ptrAdvance}
-								_index += 1;
+								_entity.Ref = ref Unsafe.Add(ref _entity.Ref, 1);
 							}}
 
 							return true;
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						readonly IQueryIterator<Data<{generics}>> IQueryIterator<Data<{generics}>>.GetEnumerator() => this;
+						readonly Data<{generics}> IQueryIterator<Data<{generics}>>.GetEnumerator() => this;
 					}}
 				");
 			}
