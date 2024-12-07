@@ -171,31 +171,24 @@ public sealed class Query
 	{
 		Match();
 
-		var qryInternal = new ArchetypeIterator(_matchedArchetypes);
+		var qryInternal = new ReadOnlySpanIterator<Archetype>(CollectionsMarshal.AsSpan(_matchedArchetypes));
 		return new(qryInternal, TermsAccess, _indices);
 	}
-
-	// public QueryIteratorEach<T0, T1> Each<T0, T1>()
-	// 	where T0 : unmanaged
-	// 	where T1 : unmanaged
-	// {
-	// 	return new (Iter());
-	// }
 }
 
 
 
-[System.Runtime.CompilerServices.SkipLocalsInit]
-public struct QueryIterator
+[SkipLocalsInit]
+public ref struct QueryIterator
 {
-	private ArchetypeIterator _archetypeIterator;
-	private QueryChunkIterator _chunkIterator;
+	private ReadOnlySpanIterator<Archetype> _archetypeIterator;
+	private ReadOnlySpanIterator<ArchetypeChunk> _chunkIterator;
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly int[] _indices;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ArchetypeIterator queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
+	internal QueryIterator(ReadOnlySpanIterator<Archetype> queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
 	{
 		_archetypeIterator = queryIt;
 		_terms = terms;
@@ -209,6 +202,12 @@ public struct QueryIterator
 	public readonly ref T DataRef<T>(int index) where T : struct
 	{
 		return ref _chunkIterator.Current.GetReference<T>(_indices[index]);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref T DataRefWithSize<T>(int index, out int sizeInByes) where T : struct
+	{
+		return ref _chunkIterator.Current.GetReferenceWithSize<T>(_indices[index], out sizeInByes);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -246,85 +245,51 @@ public struct QueryIterator
 	{
 		while (true)
 		{
-			if (_chunkIterator.MoveNext())
-				return true;
-			if (_archetypeIterator.MoveNext())
+			while (_chunkIterator.MoveNext())
 			{
-				var arch = _archetypeIterator.Current;
-				for (var i = 0; i < _indices.Length; ++i)
-					_indices[i] = arch.GetComponentIndex(_terms[i].Id);
-				_chunkIterator = new QueryChunkIterator(_archetypeIterator.Current.MemChunks);
-				continue;
+				if (_chunkIterator.Current.Count > 0)
+					return true;
 			}
 
-			return false;
-		}
-	}
-}
+			while (true)
+			{
+				if (!_archetypeIterator.MoveNext())
+					return false;
 
-internal struct ArchetypeIterator
-{
-	private List<Archetype>.Enumerator _listIterator;
+				if (_archetypeIterator.Current.Count <= 0)
+					continue;
 
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ArchetypeIterator(List<Archetype> archetypes)
-	{
-		_listIterator = archetypes.GetEnumerator();
-	}
-
-	public readonly Archetype Current
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => _listIterator.Current;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool MoveNext()
-	{
-		while (true)
-		{
-			if (!_listIterator.MoveNext())
 				break;
+			}
 
-			if (_listIterator.Current.Count > 0)
-				return true;
+			var arch = _archetypeIterator.Current;
+			for (var i = 0; i < _indices.Length; ++i)
+				_indices[i] = arch.GetComponentIndex(_terms[i].Id);
+			_chunkIterator = new (arch.Chunks);
 		}
-
-		return false;
 	}
 }
 
-internal struct QueryChunkIterator
+[SkipLocalsInit]
+internal ref struct ReadOnlySpanIterator<T>
 {
-	private readonly ReadOnlyMemory<ArchetypeChunk> _chunks;
+	private readonly ReadOnlySpan<T> _list;
 	private int _index;
 
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryChunkIterator(ReadOnlyMemory<ArchetypeChunk> chunks)
+	internal ReadOnlySpanIterator(ReadOnlySpan<T> span)
 	{
-		_chunks = chunks;
+		_list = span;
 		_index = -1;
 	}
 
-	internal readonly ref readonly ArchetypeChunk Current
+	public readonly ref readonly T Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref _chunks.Span[_index];
+		get => ref _list[_index];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool MoveNext()
-	{
-		while (true)
-		{
-			if (++_index >= _chunks.Length)
-				break;
-
-			if (_chunks.Span[_index].Count > 0)
-				return true;
-		}
-
-		return false;
-	}
+	public bool MoveNext() => ++_index < _list.Length;
 }

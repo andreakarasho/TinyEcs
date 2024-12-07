@@ -83,8 +83,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
 				var ptrList = GenerateSequence(i + 1, "\n", j => $"private Ptr<T{j}> _current{j};");
-				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref _iterator.DataRef<T{j}>({j});");
-				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.AddByteOffset(ref _current{j}.Ref, Unsafe.SizeOf<T{j}>());");
+				var sizeDeclarations = GenerateSequence(i + 1, "\n", j => $"private int _size{j};");
+				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref _iterator.DataRefWithSize<T{j}>({j}, out _size{j});");
+				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.AddByteOffset(ref _current{j}.Ref, _size{j});");
 				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
 				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"ptr{j} = _current{j};");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
@@ -97,6 +98,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						private QueryIterator _iterator;
 						private Ptr<EntityView> _entity, _last;
 						{ptrList}
+						{sizeDeclarations}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						internal Data(QueryIterator queryIterator)
@@ -111,13 +113,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 						public static Data<{generics}> CreateIterator(QueryIterator iterator)
 							=> new Data<{generics}>(iterator);
-
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						ref Data<{generics}> IQueryIterator<Data<{generics}>>.Current
-						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
-							get => ref this;
-						}}
 
 						[System.Diagnostics.CodeAnalysis.UnscopedRef]
 						public ref Data<{generics}> Current
@@ -162,7 +157,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						readonly Data<{generics}> IQueryIterator<Data<{generics}>>.GetEnumerator() => this;
+						public readonly Data<{generics}> GetEnumerator() => this;
 					}}
 				");
 			}

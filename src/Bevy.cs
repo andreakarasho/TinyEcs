@@ -535,11 +535,12 @@ public interface ITermCreator
 }
 public interface IQueryIterator<TData> where TData : allows ref struct
 {
-	public TData GetEnumerator();
+	TData GetEnumerator();
 
 	[UnscopedRef]
-	public ref TData Current { get; }
-	public bool MoveNext();
+	ref TData Current { get; }
+
+	bool MoveNext();
 }
 
 public interface IComponent
@@ -571,31 +572,6 @@ public static class FilterBuilder<T> where T : struct
 	}
 }
 
-//public struct Pair2<TAction, TTarget> : IData<Pair2<TAction, TTarget>>, IFilter, IComponent, INestedFilter
-//	where TAction : struct, IComponent
-//	where TTarget : struct, IComponent
-//{
-//	private QueryIterator _iterator;
-
-//	internal Pair2(QueryIterator iterator) => _iterator = iterator;
-
-//	public static void Build(QueryBuilder builder)
-//	{
-//		builder.With<TAction, TTarget>();
-//	}
-
-//	public static IQueryIterator<Pair2<TAction, TTarget>> CreateIterator(QueryIterator iterator)
-//	{
-//		return default;
-//	}
-
-//	public void BuildAsParam(QueryBuilder builder)
-//	{
-//		Build(builder);
-//	}
-//}
-
-
 public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
 {
 	private QueryIterator _iterator;
@@ -614,7 +590,11 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilt
 	}
 
 	[UnscopedRef]
-	ref Empty IQueryIterator<Empty>.Current => ref this;
+	public ref Empty Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref this;
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
@@ -623,8 +603,10 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilt
 		count = entities.Length;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Empty GetEnumerator() => this;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool MoveNext() => _iterator.Next();
 }
 

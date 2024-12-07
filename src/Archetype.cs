@@ -45,6 +45,24 @@ internal struct ArchetypeChunk
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
+	{
+		if (column < 0 || column >= Data!.Length)
+		{
+			sizeInBytes = 0;
+			return ref Unsafe.NullRef<T>();
+		}
+
+		sizeInBytes = Unsafe.SizeOf<T>();
+		var array = (T[])Data![column];
+#if NET
+		return ref MemoryMarshal.GetArrayDataReference(array);
+#else
+		return ref MemoryMarshal.GetReference(array.AsSpan());
+#endif
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReferenceAt<T>(int column, int row) where T : struct
 	{
 		ref var reference = ref GetReference<T>(column);
@@ -155,8 +173,7 @@ public sealed class Archetype
 	public int Count => _count;
 	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
 	public EcsID Id { get; }
-	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
-	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
+	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal EcsID[] Sign => _ids;
 
