@@ -82,13 +82,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 			{
 				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var ptrList = GenerateSequence(i + 1, "\n", j => $"private Ptr<T{j}> _current{j};");
+				var ptrList = GenerateSequence(i + 1, "\n", j => $"private ref T{j} _current{j};");
 				var sizeDeclarations = GenerateSequence(i + 1, "\n", j => $"private int _size{j};");
-				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref _iterator.DataRefWithSize<T{j}>({j}, out _size{j});");
-				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.AddByteOffset(ref _current{j}.Ref, _size{j});");
+				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j} = ref _iterator.DataRefWithSize<T{j}>({j}, out _size{j});");
+				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j} = ref Unsafe.AddByteOffset(ref _current{j}, _size{j});");
 				// var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.Add(ref _current{j}.Ref, _size{j});");
 				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
-				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"Unsafe.SkipInit<Ptr<T{j}>>(out ptr{j}); ptr{j}.Ref = ref _current{j}.Ref;");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"Unsafe.SkipInit<Ptr<T{j}>>(out ptr{j}); ptr{j}.Ref = ref _current{j};");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
 
 				sb.AppendLine($@"
