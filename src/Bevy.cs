@@ -362,7 +362,7 @@ partial class World : SystemParam<World>, IIntoSystemParam<World>
 }
 
 public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<World>
-	where TQueryData : IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
 {
 	internal Query(Query query) : base(query) { }
 
@@ -380,8 +380,8 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 }
 
 public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
-	where TQueryData : IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
-	where TQueryFilter : IFilter, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryFilter : struct, IFilter, allows ref struct
 {
 	private readonly Query _query;
 
@@ -407,7 +407,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
 
-	public ref T Single<T>() where T : struct, IComponent
+	public ref T Single<T>() where T : struct
 		=> ref _query.Single<T>();
 
 	public EntityView Single()
@@ -533,7 +533,7 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
-public interface IQueryIterator<TData> where TData : allows ref struct
+public interface IQueryIterator<TData> where TData : struct, allows ref struct
 {
 	TData GetEnumerator();
 
@@ -543,11 +543,7 @@ public interface IQueryIterator<TData> where TData : allows ref struct
 	bool MoveNext();
 }
 
-public interface IComponent
-{
-}
-
-public interface IData<TData> : ITermCreator where TData : allows ref struct
+public interface IData<TData> : ITermCreator where TData : struct, allows ref struct
 {
 	public static abstract TData CreateIterator(QueryIterator iterator);
 }
@@ -572,7 +568,7 @@ public static class FilterBuilder<T> where T : struct
 	}
 }
 
-public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilter
+public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
 {
 	private QueryIterator _iterator;
 
@@ -615,7 +611,7 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IComponent, IFilt
 /// </summary>
 /// <typeparam name="T"></typeparam>
 public readonly struct With<T> : IFilter, INestedFilter
-	where T : struct, IComponent
+	where T : struct
 {
 	public static void Build(QueryBuilder builder)
 	{
@@ -634,7 +630,7 @@ public readonly struct With<T> : IFilter, INestedFilter
 /// </summary>
 /// <typeparam name="T"></typeparam>
 public readonly struct Without<T> : IFilter, INestedFilter
-	where T : struct, IComponent
+	where T : struct
 {
 	public static void Build(QueryBuilder builder)
 	{
@@ -654,7 +650,7 @@ public readonly struct Without<T> : IFilter, INestedFilter
 /// </summary>
 /// <typeparam name="T"></typeparam>
 public readonly struct Optional<T> : IFilter, INestedFilter
-	where T : struct, IComponent
+	where T : struct
 {
 	public static void Build(QueryBuilder builder)
 	{
@@ -722,7 +718,7 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 ///// Used in query filters to accomplish the 'or' logic.
 ///// </summary>
 ///// <typeparam name="T"></typeparam>
-//public readonly struct Or<TFirst, TSecond> : IComponent, IFilter, INestedFilter
+//public readonly struct Or<TFirst, TSecond>, IFilter, INestedFilter
 //	where TFirst : struct, IComponent
 //	where TSecond : struct, IComponent
 //{
@@ -744,7 +740,7 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 //}
 
 
-public partial struct Parent : IComponent { }
-public partial interface IChildrenComponent : IComponent { }
+public partial struct Parent { }
+public partial interface IChildrenComponent { }
 
 #endif

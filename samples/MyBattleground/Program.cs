@@ -3,6 +3,7 @@ using System.Diagnostics;
 using TinyEcs;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Numerics;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
@@ -21,7 +22,7 @@ scheduler.AddSystem((Query<Data<Position, Velocity>> q)=>
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;
 	}
-});
+}, threadingType: ThreadingMode.Single);
 
 
 var query = ecs.QueryBuilder()
@@ -39,20 +40,24 @@ while (true)
 	{
 		scheduler.Run();
 
+		// Execute(query);
+
 		// var it = query.Iter();
 		// while (it.Next())
 		// {
 		// 	var count = it.Count;
 
-		// 	var posA = it.Data<Position>(0);
-		// 	var velA = it.Data<Velocity>(1);
+		// 	ref var pos = ref it.DataRef<Position>(0);
+		// 	ref var vel = ref it.DataRef<Velocity>(1);
+		// 	ref var lastPos = ref Unsafe.Add(ref pos, count);
 
-		// 	for (var j = 0; j < count; ++j)
+		// 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
 		// 	{
-		// 		ref var pos = ref posA[j];
-		// 		ref var vel = ref velA[j];
 		// 		pos.X *= vel.X;
 		// 		pos.Y *= vel.Y;
+
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
 		// 	}
 		// }
 	}
@@ -63,16 +68,26 @@ while (true)
 	Console.WriteLine("query done in {0} ms", start - last);
 }
 
-struct Position : IComponent
+
+static void Execute(Query query)
+{
+	foreach ((var pos, var vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
+	{
+		pos.Ref.X *= vel.Ref.X;
+		pos.Ref.Y *= vel.Ref.Y;
+	}
+}
+
+struct Position
 {
 	public float X, Y, Z;
 }
 
-struct Velocity : IComponent
+struct Velocity
 {
 	public float X, Y;
 }
 
-struct Mass : IComponent { public float Value; }
+struct Mass { public float Value; }
 
-struct Tag : IComponent { }
+struct Tag { }

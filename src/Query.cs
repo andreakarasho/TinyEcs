@@ -171,8 +171,7 @@ public sealed class Query
 	{
 		Match();
 
-		var qryInternal = new ReadOnlySpanIterator<Archetype>(CollectionsMarshal.AsSpan(_matchedArchetypes));
-		return new(qryInternal, TermsAccess, _indices);
+		return new(CollectionsMarshal.AsSpan(_matchedArchetypes), TermsAccess, _indices);
 	}
 }
 
@@ -181,22 +180,25 @@ public sealed class Query
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
-	private ReadOnlySpanIterator<Archetype> _archetypeIterator;
-	private ReadOnlySpanIterator<ArchetypeChunk> _chunkIterator;
+	private ReadOnlySpan<Archetype>.Enumerator _archetypeIterator;
+	private ReadOnlySpan<ArchetypeChunk>.Enumerator _chunkIterator;
 	private readonly ImmutableArray<IQueryTerm> _terms;
-	private readonly int[] _indices;
+	private readonly Span<int> _indices;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpanIterator<Archetype> queryIt, ImmutableArray<IQueryTerm> terms, int[] indices)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ImmutableArray<IQueryTerm> terms, Span<int> indices)
 	{
-		_archetypeIterator = queryIt;
+		_archetypeIterator = archetypes.GetEnumerator();
 		_terms = terms;
 		_indices = indices;
 	}
 
-	public readonly int Count => _chunkIterator.Current.Count;
-
+	public readonly int Count
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => _chunkIterator.Current.Count;
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T DataRef<T>(int index) where T : struct
@@ -262,34 +264,10 @@ public ref struct QueryIterator
 				break;
 			}
 
-			var arch = _archetypeIterator.Current;
+			ref readonly var arch = ref _archetypeIterator.Current;
 			for (var i = 0; i < _indices.Length; ++i)
 				_indices[i] = arch.GetComponentIndex(_terms[i].Id);
-			_chunkIterator = new (arch.Chunks);
+			_chunkIterator = arch.Chunks.GetEnumerator();
 		}
 	}
-}
-
-[SkipLocalsInit]
-internal ref struct ReadOnlySpanIterator<T>
-{
-	private readonly ReadOnlySpan<T> _list;
-	private int _index;
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ReadOnlySpanIterator(ReadOnlySpan<T> span)
-	{
-		_list = span;
-		_index = -1;
-	}
-
-	public readonly ref readonly T Current
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref _list[_index];
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool MoveNext() => ++_index < _list.Length;
 }

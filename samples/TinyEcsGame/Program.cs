@@ -167,22 +167,22 @@ struct Time
 	public float Value;
 }
 
-struct WindowSize : IComponent
+struct WindowSize
 {
 	public Vector2 Value;
 }
 
-struct Position : IComponent
+struct Position
 {
     public Vector2 Value;
 }
 
-struct Velocity : IComponent
+struct Velocity
 {
     public Vector2 Value;
 }
 
-struct Sprite : IComponent
+struct Sprite
 {
     public Color Color;
     public float Scale;
@@ -190,7 +190,7 @@ struct Sprite : IComponent
     //public Texture2D Texture;
 }
 
-struct Rotation : IComponent
+struct Rotation
 {
     public float Value;
     public float Acceleration;

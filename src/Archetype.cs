@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Numerics;
+using Microsoft.VisualBasic;
 
 namespace TinyEcs;
 
@@ -24,11 +25,7 @@ internal struct ArchetypeChunk
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref EntityView EntityAt(int row)
-#if NET
-		=> ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Entities), row & Archetype.CHUNK_THRESHOLD);
-#else
-		=> ref Unsafe.Add(ref MemoryMarshal.GetReference(Entities.AsSpan()), row & Archetype.CHUNK_THRESHOLD);
-#endif
+		=> ref Unsafe.Add(ref Entities.AsSpan(0, Count)[0], row & Archetype.CHUNK_THRESHOLD);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
@@ -36,12 +33,8 @@ internal struct ArchetypeChunk
 		if (column < 0 || column >= Data!.Length)
 			return ref Unsafe.NullRef<T>();
 
-		var array = (T[])Data![column];
-#if NET
-		return ref MemoryMarshal.GetArrayDataReference(array);
-#else
-		return ref MemoryMarshal.GetReference(array.AsSpan());
-#endif
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return ref MemoryMarshal.GetReference(span);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -54,12 +47,9 @@ internal struct ArchetypeChunk
 		}
 
 		sizeInBytes = Unsafe.SizeOf<T>();
-		var array = (T[])Data![column];
-#if NET
-		return ref MemoryMarshal.GetArrayDataReference(array);
-#else
-		return ref MemoryMarshal.GetReference(array.AsSpan());
-#endif
+
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return ref MemoryMarshal.GetReference(span);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -77,8 +67,8 @@ internal struct ArchetypeChunk
 		if (column < 0 || column >= Data!.Length)
 			return Span<T>.Empty;
 
-		var array = (T[])Data![column];
-		return array.AsSpan(0, Count);
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return span;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

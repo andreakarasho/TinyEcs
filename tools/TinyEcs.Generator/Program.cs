@@ -86,8 +86,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var sizeDeclarations = GenerateSequence(i + 1, "\n", j => $"private int _size{j};");
 				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref _iterator.DataRefWithSize<T{j}>({j}, out _size{j});");
 				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.AddByteOffset(ref _current{j}.Ref, _size{j});");
+				// var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.Add(ref _current{j}.Ref, _size{j});");
 				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
-				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"ptr{j} = _current{j};");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"Unsafe.SkipInit<Ptr<T{j}>>(out ptr{j}); ptr{j}.Ref = ref _current{j}.Ref;");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
 
 				sb.AppendLine($@"
@@ -96,7 +97,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{whereGenerics}
 					{{
 						private QueryIterator _iterator;
-						private Ptr<EntityView> _entity, _last;
+						private ref EntityView _entity, _last;
 						{ptrList}
 						{sizeDeclarations}
 
@@ -130,27 +131,27 @@ public sealed class MyGenerator : IIncrementalGenerator
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public readonly void Deconstruct(out PtrRO<EntityView> entity, {fieldSign})
 						{{
-							entity = new (ref _entity.Ref);
+							entity = new (ref _entity);
 							{fieldAssignments}
 						}}
 
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public bool MoveNext()
 						{{
-							if (!Unsafe.IsAddressLessThan(ref _entity.Ref, ref _last.Ref))
+							if (!Unsafe.IsAddressLessThan(ref _entity, ref _last))
 							{{
 								if (!_iterator.Next())
 									return false;
 
 								{ptrSet}
 
-								_entity.Ref = ref _iterator.EntitiesDangerous()[0];
-								_last.Ref = ref Unsafe.Add(ref _entity.Ref, _iterator.Count - 1);
+								_entity = ref _iterator.EntitiesDangerous()[0];
+								_last = ref Unsafe.Add(ref _entity, _iterator.Count - 1);
 							}}
 							else
 							{{
 								{ptrAdvance}
-								_entity.Ref = ref Unsafe.Add(ref _entity.Ref, 1);
+								_entity = ref Unsafe.Add(ref _entity, 1);
 							}}
 
 							return true;
@@ -197,7 +198,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 			// for (var i = 0; i < MAX_GENERICS; ++i)
 			// {
 			// 	var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
-			// 	var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IComponent");
+			// 	var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct");
 			// 	var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
 			// 	var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
 			// 	var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = _iterator.Data<T{j}>({j});");
