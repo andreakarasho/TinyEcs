@@ -21,14 +21,14 @@ public struct RollingHash
 	public readonly ulong Hash => _hash;
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     public void Add(ulong value)
     {
 		_hash = (_hash + value * _product) % Modulus;
         _product = (_product * Base) % Modulus;
     }
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     public void Remove(ulong value)
     {
 		var inverseBase = _inverseCache;
@@ -38,7 +38,7 @@ public struct RollingHash
 
 
     // Compute modular inverse of a with respect to m using Extended Euclidean Algorithm
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     private static ulong ModInverse2(ulong a, ulong m)
     {
 	    ulong m0 = m, x0 = 0, x1 = 1;

@@ -67,7 +67,7 @@ internal sealed class EntitySparseSet<T>
 		return index;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public ref T Get(ulong outerIdx)
 	{
 		ref var chunk = ref GetChunk((int)outerIdx >> 12);
@@ -239,14 +239,14 @@ internal sealed class EntitySparseSet<T>
 		SparseAssignIndex(ref chunkB, idxB, a);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	private void SparseAssignIndex(ref Chunk chunk, ulong index, int dense)
 	{
 		chunk.Sparse![(int)index & 0xFFF] = dense;
 		_dense[dense] = index;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	private static ulong SplitGeneration(ref ulong index)
 	{
 		var gen = index & EcsConst.ECS_GENERATION_MASK;
@@ -256,7 +256,7 @@ internal sealed class EntitySparseSet<T>
 		return gen;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	private ref Chunk GetChunk(int index)
 		=> ref (index >= _chunks.Length ? ref Unsafe.NullRef<Chunk>() : ref _chunks[index]);
 
@@ -339,7 +339,7 @@ internal sealed class Vec<T> where T : unmanaged
 	public void Add(T item)
 		=> AddRef() = item;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public ref T AddRef()
 	{
 		if (Count >= Capacity)

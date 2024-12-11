@@ -73,7 +73,7 @@ public sealed partial class World : IDisposable
 		return ref lookup;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     internal ref EcsRecord GetRecord(EcsID id)
     {
         ref var record = ref _entities.Get(id);
@@ -328,9 +328,6 @@ struct EcsRecord
 	public EntityFlags Flags;
 #endif
 	public ArchetypeChunk Chunk;
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ref readonly EntityView EntityView() => ref Chunk.EntityAt(Row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 }
 
 #if USE_PAIR

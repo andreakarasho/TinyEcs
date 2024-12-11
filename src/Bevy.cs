@@ -403,7 +403,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return q;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
 
@@ -433,7 +433,7 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T
 		return res;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public static implicit operator T?(Res<T> reference)
 		=> reference.Value;
 }
@@ -449,7 +449,7 @@ public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where
 		return new Local<T>();
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public static implicit operator T?(Local<T> reference)
 		=> reference.Value;
 }
@@ -588,21 +588,21 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
 	[UnscopedRef]
 	public ref Empty Current
 	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 		get => ref this;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
 		entities = _iterator.Entities();
 		count = entities.Length;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public readonly Empty GetEnumerator() => this;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public bool MoveNext() => _iterator.Next();
 }
 

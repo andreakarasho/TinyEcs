@@ -12,7 +12,7 @@ public sealed partial class World
 
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public void BeginDeferred()
 	{
 		if (IsMerging)
@@ -21,7 +21,7 @@ public sealed partial class World
 		_worldState.Locks += 1;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public void EndDeferred()
 	{
 		if (IsMerging)

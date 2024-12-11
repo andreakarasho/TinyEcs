@@ -207,7 +207,7 @@ internal sealed class FastIdLookup<TValue>
         return ref val;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     public ref TValue TryGet(ulong id, out bool exists)
     {
         if (id < (ulong)COMPONENT_MAX_ID)
@@ -238,7 +238,7 @@ internal sealed class FastIdLookup<TValue>
         _slowLookup.Clear();
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
     private ref TValue AddToFast(ulong id)
     {
         ref var value = ref _fastLookup[id];

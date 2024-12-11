@@ -14,7 +14,7 @@ namespace TinyEcs
 		//     instance.
 		public ref T Value
 		{
-			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 			get
 			{
 				return ref MemoryMarshal.GetReference(Span);
@@ -29,7 +29,7 @@ namespace TinyEcs
 		// Parameters:
 		//   value:
 		//     The reference to the target T value.
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 		public Ref(ref T value)
 		{
 			Span = MemoryMarshal.CreateSpan(ref value, 1);
@@ -43,7 +43,7 @@ namespace TinyEcs
 		// Parameters:
 		//   pointer:
 		//     The pointer to the target value.
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 		public unsafe Ref(void* pointer)
 			: this(ref Unsafe.AsRef<T>(pointer))
 		{
@@ -57,7 +57,7 @@ namespace TinyEcs
 		// Parameters:
 		//   reference:
 		//     The input CommunityToolkit.HighPerformance.Ref`1 instance.
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 		public static implicit operator T(Ref<T> reference)
 		{
 			return reference.Value;

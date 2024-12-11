@@ -101,7 +101,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{ptrList}
 						{sizeDeclarations}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 						internal Data(QueryIterator queryIterator)
 						{{
 							_iterator = queryIterator;
@@ -118,24 +118,24 @@ public sealed class MyGenerator : IIncrementalGenerator
 						[System.Diagnostics.CodeAnalysis.UnscopedRef]
 						public ref Data<{generics}> Current
 						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 							get => ref this;
 						}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 						public readonly void Deconstruct({fieldSign})
 						{{
 							{fieldAssignments}
 						}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 						public readonly void Deconstruct(out PtrRO<EntityView> entity, {fieldSign})
 						{{
 							entity = new (ref _entity);
 							{fieldAssignments}
 						}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 						public bool MoveNext()
 						{{
 							if (!Unsafe.IsAddressLessThan(ref _entity, ref _last))
@@ -157,7 +157,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 							return true;
 						}}
 
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 						public readonly Data<{generics}> GetEnumerator() => this;
 					}}
 				");
@@ -219,20 +219,20 @@ public sealed class MyGenerator : IIncrementalGenerator
 			// 			public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(QueryIterator iterator)
 			// 				=> new Data<{genericsArgs}>(iterator);
 
-			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			//
 			// 			public readonly void Deconstruct({fieldSign})
 			// 			{{
 			// 				{fieldAssignments}
 			// 			}}
 
-			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			//
 			// 			public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
 			// 			{{
 			// 				entities = _iterator.Entities();
 			// 				{fieldAssignments}
 			// 			}}
 
-			// 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			//
 			// 			public bool MoveNext() => _iterator.Next();
 
 			// 			readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;

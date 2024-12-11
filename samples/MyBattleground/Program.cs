@@ -38,9 +38,9 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		scheduler.Run();
+		// scheduler.Run();
 
-		// Execute(query);
+		Execute(query);
 
 		// var it = query.Iter();
 		// while (it.Next())

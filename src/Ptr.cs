@@ -9,7 +9,7 @@ public ref struct Ptr<T> where T : struct
 [SkipLocalsInit]
 public readonly ref struct PtrRO<T> where T : struct
 {
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public PtrRO(ref T r) => Ref = ref r;
 
 	public readonly ref T Ref;
