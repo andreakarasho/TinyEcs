@@ -37,7 +37,7 @@ This is a very basic example and doens't show the whole features set of this lib
 using var world = new World();
 var scheduler = new Scheduler(world);
 
-// create the Time variable accessible globlly by any system which stay fixed at 60fps
+// create the Time variable accessible globally by any system which stays fixed at 60fps
 scheduler.AddResource(new Time() { FrameTime = 1000.0f / 60.0f });
 scheduler.AddResource(new AssetManager());
 
