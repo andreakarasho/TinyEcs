@@ -31,7 +31,7 @@ dotnet run -c Release
 
 ## Sample code
 
-This is a very basic example and doen't show the whole features set of this library.
+This is a very basic example and doens't show the whole features set of this library.
 
 ```csharp
 using var world = new World();
