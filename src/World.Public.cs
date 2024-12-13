@@ -26,12 +26,13 @@ public sealed partial class World
 		_maxCmpId = maxComponentId;
         _entities.MaxID = maxComponentId;
 
+#if USE_PAIR
 		_ = Component<Rule>();
 		_ = Component<DoNotDelete>();
 		_ = Component<Unique>();
 		_ = Component<Symmetric>();
 		_ = Component<Wildcard>();
-		_ = Component<Pair<Wildcard, Wildcard>>();
+		// _ = Component<Pair<Wildcard, Wildcard>>();
 		_ = Component<Identifier>();
 		_ = Component<Name>();
 		_ = Component<ChildOf>();
@@ -62,14 +63,18 @@ public sealed partial class World
 
 		static EntityView setCommon(EntityView entity, string name)
 			=> entity.Add<DoNotDelete>().Set<Identifier>(new (name), Defaults.Name.ID);
+#endif
+
+		RelationshipEntityMapper = new(this);
+		NamingEntityMapper = new(this);
 
 		OnPluginInitialization?.Invoke(this);
     }
 
 
 
-	public event Action<EntityView>? OnEntityCreated, OnEntityDeleted;
-	public event Action<EntityView, ComponentInfo>? OnComponentSet, OnComponentUnset;
+	public event Action<World, EcsID>? OnEntityCreated, OnEntityDeleted;
+	public event Action<World, EcsID, ComponentInfo>? OnComponentSet, OnComponentUnset;
 	public static event Action<World>? OnPluginInitialization;
 
 
@@ -92,13 +97,10 @@ public sealed partial class World
         _archRoot.Clear();
         _typeIndex.Clear();
 		_cachedComponents.Clear();
-		_names.Clear();
+		RelationshipEntityMapper.Clear();
+		NamingEntityMapper.Clear();
 
-		foreach (var query in _cachedQueries.Values)
-			query.Dispose();
-
-		_cachedQueries.Clear();
-    }
+	}
 
 	/// <summary>
 	/// Remove all empty archetypes.
@@ -149,7 +151,9 @@ public sealed partial class World
 		ref var record = ref NewId(out var id);
 		record.Archetype = arch;
 		record.Chunk = arch.Add(id, out record.Row);
+#if USE_PAIR
 		record.Flags = EntityFlags.None;
+#endif
 
 		return new EntityView(this, id);
 	}
@@ -178,10 +182,12 @@ public sealed partial class World
 				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
 				record.Chunk = _archRoot.Add(id, out record.Row);
+#if USE_PAIR
 				record.Flags = EntityFlags.None;
+#endif
 
 				ent = new EntityView(this, id);
-				OnEntityCreated?.Invoke(ent);
+				OnEntityCreated?.Invoke(this, id);
 			}
 			else
 			{
@@ -198,24 +204,7 @@ public sealed partial class World
 	/// <returns></returns>
 	public EntityView Entity<T>() where T : struct
 	{
-		ref readonly var cmp = ref Component<T>();
-
-		var entId = cmp.ID;
-
-		if (!entId.IsPair())
-		{
-			ref var record = ref GetRecord(entId);
-
-			if ((record.Flags & EntityFlags.HasName) == 0)
-			{
-				record.Flags |= EntityFlags.HasName;
-				var name = Lookup.Component<T>.Name;
-				_names[name] = entId;
-				Set<Identifier>(entId, new (name), Defaults.Name.ID);
-			}
-		}
-
-		return new EntityView(this, entId);
+		return new EntityView(this, Component<T>().ID);
 	}
 
 	/// <summary>
@@ -229,6 +218,7 @@ public sealed partial class World
 		if (string.IsNullOrWhiteSpace(name))
 			return EntityView.Invalid;
 
+#if USE_PAIR
 		EntityView entity;
 		if (_names.TryGetValue(name, out var id) && (GetRecord(id).Flags & EntityFlags.HasName) != 0)
 		{
@@ -241,6 +231,9 @@ public sealed partial class World
 			_names[name] = entity;
 			entity.Set<Identifier>(new (name), Defaults.Name.ID);
 		}
+#else
+		var entity = new EntityView(this, NamingEntityMapper.SetName(0, name));
+#endif
 
 		return entity;
 	}
@@ -262,10 +255,11 @@ public sealed partial class World
 
 		lock (_newEntLock)
 		{
-			OnEntityDeleted?.Invoke(new (this, entity));
+			OnEntityDeleted?.Invoke(this, entity);
 
 			ref var record = ref GetRecord(entity);
 
+#if USE_PAIR
 			EcsAssert.Panic(!Has<DoNotDelete>(entity), "You can't delete this entity!");
 
 			if (record.Flags != EntityFlags.None)
@@ -314,6 +308,7 @@ public sealed partial class World
 					applyDeleteRules(this, entity, term);
 				}
 			}
+#endif
 
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);
@@ -328,11 +323,13 @@ public sealed partial class World
 	/// <returns></returns>
     public bool Exists(EcsID entity)
     {
+#if USE_PAIR
 		if (entity.IsPair())
         {
 			(var first, var second) = entity.Pair();
             return GetAlive(first).IsValid() && GetAlive(second).IsValid();
         }
+#endif
 
         return _entities.Contains(entity);
     }
@@ -497,12 +494,25 @@ public sealed partial class World
 	/// <returns></returns>
 	public string Name(EcsID id)
 	{
+#if USE_PAIR
 		ref var record = ref GetRecord(id);
+
 		if ((record.Flags & EntityFlags.HasName) != 0)
 			return Get<Identifier>(id, Defaults.Name.ID).Data;
+#else
+		var name = NamingEntityMapper.GetName(id);
+		if (!string.IsNullOrEmpty(name))
+			return name;
+#endif
 		return string.Empty;
 	}
 
+	public void UnsetName(EcsID id)
+	{
+		NamingEntityMapper.UnsetName(id);
+	}
+
+#if USE_PAIR
 	/// <inheritdoc cref="Rule(EcsID, EcsID)"/>
 	public void Rule<TRule>(EcsID entity) where TRule : struct
 	{
@@ -521,6 +531,7 @@ public sealed partial class World
 
 		Add(entity, Defaults.Rule.ID, ruleId);
 	}
+#endif
 
 	/// <summary>
 	/// Print the archetype graph.
@@ -529,88 +540,6 @@ public sealed partial class World
     {
         _archRoot.Print(0);
     }
-
-	/// <summary>
-	/// Create a raw query specifing the terms directly.
-	/// </summary>
-	/// <param name="terms"></param>
-	/// <returns></returns>
-	public Query QueryRaw(params Span<IQueryTerm> terms)
-	{
-		terms.Sort();
-		var roll = IQueryTerm.GetHash(terms);
-		return GetQuery(
-			roll.Hash,
-			terms,
-			static (world, terms) => new Query(world, terms));
-	}
-
-	/// <summary>
-	/// Query for specific components.<para/>
-	/// <example>
-	/// 	Single component:
-	/// <code>
-	///		var query = world.Query&lt;Position&gt;();
-	///		query.Each((ref Position pos) => { });
-	/// </code>
-	/// 	Multiple components<para/>
-	/// <code>
-	///		var query = world.Query&lt;(Position, Velocity)&gt;();
-	///		query.Each((ref Position pos, ref Velocity vel) => { });
-	/// </code>
-	/// </example>
-	/// </summary>
-	/// <typeparam name="TQueryData"></typeparam>
-	/// <returns></returns>
-	public Query Query<TQueryData>() where TQueryData : struct
-	{
-		return GetQuery(
-			Lookup.Query<TQueryData>.Hash,
-		 	Lookup.Query<TQueryData>.Terms.AsSpan(),
-		 	static (world, _) => new Query<TQueryData>(world)
-		);
-	}
-
-	/// <summary>
-	/// Query for specific components with filters.<para/>
-	/// <example>
-	/// 	Single filter:
-	/// <code>
-	///		var query = world.Query&lt;(Position, Velocity), Without&lt;Rotation&gt;&gt;();
-	///		query.Each((ref Position pos, ref Velocity vel) => { });
-	/// </code>
-	/// 	Multiple filters<para/>
-	/// <code>
-	///		var query = world.Query&lt;(Position, Velocity), (With&lt;IsNpc&gt;, Without&lt;Rotation&gt;)&gt;();
-	///		query.Each((ref Position pos, ref Velocity vel) => { });
-	/// </code>
-	/// 	The 'Or' clausole<para/>
-	/// <code>
-	///		var query = world.Query&lt;(Position, Velocity, Optional&lt;Rotation&gt;),
-	///			(With&lt;IsNpc&gt;, Without&lt;Rotation&gt;,
-	///				Or&lt;(With&lt;IsPlayer&gt;, With&lt;Rotation&gt;)&gt;)&gt;();
-	///
-	///		query.Each((ref Position pos, ref Velocity vel, ref Rotation maybeRot) => {
-	///			if (Unsafe.IsNullRef(ref maybeRot)) {
-	///				// hitting the main query
-	///			} else {
-	///				// hitting the Or clausole
-	///			}
-	///		});
-	/// </code>
-	/// </example>
-	/// </summary>
-	/// <typeparam name="TQueryData"></typeparam>
-	/// <typeparam name="TQueryFilter"></typeparam>
-	/// <returns></returns>
-	public Query Query<TQueryData, TQueryFilter>() where TQueryData : struct where TQueryFilter : struct
-	{
-		return GetQuery(
-			Lookup.Query<TQueryData, TQueryFilter>.Hash,
-			Lookup.Query<TQueryData, TQueryFilter>.Terms.AsSpan(),
-		 	static (world, _) => new Query<TQueryData, TQueryFilter>(world)
-		);
-	}
 
 	/// <summary>
 	///

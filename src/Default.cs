@@ -7,6 +7,7 @@ public static class Defaults
 	/// </summary>
 	public readonly struct Wildcard { public static readonly EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
 
+#if USE_PAIR
 	/// <summary>
 	/// Built-in tag.<br/>Shortcut for child.Add{ChildOf}(parent);
 	/// </summary>
@@ -159,4 +160,5 @@ public static class Defaults
 
 
 	internal readonly struct Rule { public static readonly EcsID ID = Lookup.Component<Rule>.Value.ID; }
+#endif
 }

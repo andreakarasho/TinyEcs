@@ -133,7 +133,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     public readonly bool Exists()
 		=> World.Exists(ID);
 
-
+#if USE_PAIR
 	/// <inheritdoc cref="World.Rule{TRule}"/>
 	public readonly EntityView Rule<TRule>() where TRule : struct
 	{
@@ -147,7 +147,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
 		World.Rule(ID, ruleId);
 		return this;
 	}
-
+#endif
 
 	public static implicit operator EcsID(EntityView d) => d.ID;
 

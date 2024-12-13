@@ -1,12 +1,16 @@
 ﻿namespace TinyEcs;
 
-public unsafe struct Ptr<T> where T : struct
+[SkipLocalsInit]
+public ref struct Ptr<T> where T : struct
 {
-	public T* Pointer;
+	public ref T Ref;
+}
 
-	public ref T Ref
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref *Pointer;
-	}
+[SkipLocalsInit]
+public readonly ref struct PtrRO<T> where T : struct
+{
+
+	public PtrRO(ref T r) => Ref = ref r;
+
+	public readonly ref T Ref;
 }

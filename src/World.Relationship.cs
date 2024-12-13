@@ -1,30 +1,10 @@
+#if USE_PAIR
 using static TinyEcs.Defaults;
 
 namespace TinyEcs;
 
 partial class World
 {
-	// This is an hack to make queries working using With<(A, B)>
-	private ref readonly ComponentInfo Hack<TAction, TTarget>()
-		where TAction : struct
-		where TTarget : struct
-	{
-		// Spawn components
-		ref readonly var firstCmp = ref Component<TAction>();
-		ref readonly var secondCmp = ref Component<TTarget>();
-
-		// Create the relation (A, B)
-		ref readonly var linkedCmp = ref Component<Pair<TAction, TTarget>>();
-
-		// Create the relation (*, B)
-		ref readonly var linkedCmpWildcard0 = ref Component<Pair<Wildcard, TTarget>>();
-
-		// Create the relation (A, *)
-		ref readonly var linkedCmpWildcard1 = ref Component<Pair<TAction, Wildcard>>();
-
-		return ref linkedCmp;
-	}
-
 	/// <summary>
 	/// Assign (Action, Target).
 	/// </summary>
@@ -36,13 +16,19 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+		ref readonly var first = ref Component<TAction>();
+		ref readonly var second = ref Component<TTarget>();
 
-		Add<Pair<TAction, TTarget>>(entity);
+		EcsAssert.Assert(first.Size == 0, "Action is not a tag.");
+		EcsAssert.Assert(second.Size == 0, "Target is not a tag.");
+
+		var id = IDOp.Pair(first.ID, second.ID);
+
+		Add(entity, id);
 	}
 
 	/// <summary>
-	/// Assign (Action, Target<br/>Target is a component.
+	/// Assign (Action, Target).<br/>Target is a component.
 	/// </summary>
 	/// <typeparam name="TAction"></typeparam>
 	/// <typeparam name="TTarget"></typeparam>
@@ -53,22 +39,24 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var linkedCmp = ref Hack<TAction, TTarget>();
+		ref readonly var first = ref Component<TAction>();
+		ref readonly var second = ref Component<TTarget>();
 
-		// Set(entity, new Pair<TAction, TTarget>() { Action = default, Target = target});
+		EcsAssert.Assert(first.Size == 0, "Action is not a tag.");
+		EcsAssert.Assert(second.Size > 0, "Target is not a component.");
 
-		EcsAssert.Panic(linkedCmp.Size > 0, "this is not a component");
+		var id = IDOp.Pair(first.ID, second.ID);
 
-		if (IsDeferred && !Has(entity, linkedCmp.ID))
+		if (IsDeferred && !Has(entity, id))
 		{
-			SetDeferred(entity, linkedCmp.ID, new Pair<TAction, TTarget>() { Action = default, Target = target}, linkedCmp.Size, linkedCmp.IsManaged);
+			SetDeferred(entity, id, target, second.Size, second.IsManaged);
 
 			return;
 		}
 
-        (var raw, var row) = Attach(entity, linkedCmp.ID, linkedCmp.Size, linkedCmp.IsManaged);
-        var array = Unsafe.As<Pair<TAction, TTarget>[]>(raw!);
-        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD].Target = target;
+        (var raw, var row) = Attach(entity, id, second.Size, second.IsManaged);
+        var array = (TTarget[])raw!;
+        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = target;
 	}
 
 	/// <summary>
@@ -155,10 +143,14 @@ partial class World
 		where TAction : struct
 		where TTarget : struct
 	{
-		ref readonly var targetCmp = ref Component<TTarget>();
-		var pairId = IDOp.Pair(Component<TAction>().ID, targetCmp.ID);
-		return ref GetUntrusted<Pair<TAction, TTarget>>(entity, pairId, targetCmp.Size).Target;
-		// return ref Get<Pair<TAction, TTarget>>(entity).Target;
+		ref readonly var first = ref Component<TAction>();
+		ref readonly var second = ref Component<TTarget>();
+
+		EcsAssert.Assert(first.Size == 0, "Action is not a tag.");
+		EcsAssert.Assert(second.Size > 0, "Target is not a component.");
+
+		var id = IDOp.Pair(first.ID, second.ID);
+		return ref GetUntrusted<TTarget>(entity, id, second.Size);
 	}
 
 	/// <summary>
@@ -172,6 +164,8 @@ partial class World
 		where TAction : struct
 	{
 		ref readonly var act = ref Component<TAction>();
+		EcsAssert.Assert(act.Size > 0, "Action is not a component.");
+
 		var pairId = IDOp.Pair(act.ID, target);
 		return ref GetUntrusted<TAction>(entity, pairId, act.Size);
 	}
@@ -554,22 +548,4 @@ public static class NameEx
 	}
 }
 
-public interface IPair
-{
-	internal object Action { get; }
-	internal object Target { get; }
-}
-
-public struct Pair<TAction, TTarget> : IPair
-	where TAction : struct
-	where TTarget : struct
-{
-	static readonly TAction _action = default;
-	static readonly TTarget _target = default;
-
-	readonly object IPair.Action => _action;
-	readonly object IPair.Target => _target;
-
-	public TAction Action;
-	public TTarget Target;
-}
+#endif

@@ -2,6 +2,7 @@ namespace TinyEcs;
 
 public static class EcsIdEx
 {
+#if USE_PAIR
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static bool IsPair(this EcsID id)
 		=> IDOp.IsPair(id);
@@ -18,6 +19,7 @@ public static class EcsIdEx
 	public static (EcsID first, EcsID second) Pair(this EcsID id)
 		=> (IDOp.GetPairFirst(id), IDOp.GetPairSecond(id));
 		// => id.IsPair() ? (IDOp.GetPairFirst(id), IDOp.GetPairSecond(id)) : (0, 0);
+#endif
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static bool IsValid(this EcsID id)

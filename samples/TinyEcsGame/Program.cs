@@ -2,6 +2,7 @@ using System.Numerics;
 using TinyEcs;
 using Raylib_cs;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 
 const int WINDOW_WIDTH = 800;
@@ -13,8 +14,8 @@ const int ENTITIES_TO_SPAWN = 1_000_00;
 Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TinyEcs sample");
 
 using var ecs = new World();
-
 var scheduler = new Scheduler(ecs);
+
 var wndSize = new WindowSize() { Value = { X = WINDOW_WIDTH, Y = WINDOW_HEIGHT } };
 
 // bleh
@@ -28,7 +29,7 @@ var fn5 = EndRenderer;
 
 
 scheduler.AddSystem(init, Stages.Startup);
-scheduler.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
+scheduler.AddSystem((Time time) => time.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
 scheduler.AddPlugin<RaylibPlugin>();
 scheduler.AddSystem(fn0);
 scheduler.AddSystem(fn1);
@@ -38,7 +39,7 @@ scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingMode.Si
 scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
 
 scheduler.AddResource(wndSize);
-scheduler.AddResource(new Time());
+scheduler.AddSystemParam(new Time());
 
 
 while (!Raylib.WindowShouldClose())
@@ -49,42 +50,41 @@ while (!Raylib.WindowShouldClose())
 Raylib.CloseWindow();
 
 
-
-static void MoveSystem(Res<Time> time, Query<(Position, Velocity, Rotation)> query)
+static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
 {
-	query.EachJob((ref Position pos, ref Velocity vel, ref Rotation rot) =>
+	foreach ((var pos, var vel, var rot) in query)
 	{
-		pos.Value += vel.Value * time.Value.Value;
-		rot.Value = (rot.Value + (rot.Acceleration * time.Value.Value)) % 360;
-	});
+		pos.Ref.Value += vel.Ref.Value * time.Value;
+		rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Value)) % 360;
+	}
 }
 
-static void CheckBounds(Query<(Position, Velocity)> query, Res<WindowSize> windowSize)
+static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 {
-	query.EachJob((ref Position pos, ref Velocity vel) =>
+	foreach ((var pos, var vel) in query)
 	{
-		if (pos.Value.X < 0.0f)
+		if (pos.Ref.Value.X < 0.0f)
 		{
-			pos.Value.X = 0;
-			vel.Value.X *= -1;
+			pos.Ref.Value.X = 0;
+			vel.Ref.Value.X *= -1;
 		}
-		else if (pos.Value.X > windowSize.Value.Value.X)
+		else if (pos.Ref.Value.X > windowSize.Value.Value.X)
 		{
-			pos.Value.X = windowSize.Value.Value.X;
-			vel.Value.X *= -1;
+			pos.Ref.Value.X = windowSize.Value.Value.X;
+			vel.Ref.Value.X *= -1;
 		}
 
-		if (pos.Value.Y < 0.0f)
+		if (pos.Ref.Value.Y < 0.0f)
 		{
-			pos.Value.Y = 0;
-			vel.Value.Y *= -1;
+			pos.Ref.Value.Y = 0;
+			vel.Ref.Value.Y *= -1;
 		}
-		else if (pos.Value.Y > windowSize.Value.Value.Y)
+		else if (pos.Ref.Value.Y > windowSize.Value.Value.Y)
 		{
-			pos.Value.Y = windowSize.Value.Value.Y;
-			vel.Value.Y *= -1;
+			pos.Ref.Value.Y = windowSize.Value.Value.Y;
+			vel.Ref.Value.Y *= -1;
 		}
-	});
+	}
 }
 
 static void BeginRenderer()
@@ -98,22 +98,22 @@ static void EndRenderer()
 	Raylib.EndDrawing();
 }
 
-static void RenderEntities(Query<(Sprite, Position, Rotation)> query, Res<Texture2D> texture)
+static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
 {
-	query.Each((ref Sprite sprite, ref Position pos, ref Rotation rotation) =>
+	foreach ((var sprite, var pos, var rot) in query)
 	{
-		Raylib.DrawTextureEx(texture.Value, pos.Value, rotation.Value, sprite.Scale, sprite.Color);
-	});
+		Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
+	}
 }
 
-static void DrawText(World ecs, Res<Time> time)
+static void DrawText(World ecs, Time time)
 {
 	var dbgText =
 		$"""
 			[Debug]
 			FPS: {Raylib.GetFPS()}
 			Entities: {ecs.EntityCount}
-			DeltaTime: {time.Value.Value}
+			DeltaTime: {time.Value}
 			""".Replace("\r", "\n");
 	var textSize = 24;
 	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
@@ -162,9 +162,21 @@ static void SpawnEntities(World ecs, Res<WindowSize> size, SchedulerState schedu
 	}
 }
 
-struct Time
+sealed class Time : SystemParam<World>, IIntoSystemParam<World>
 {
 	public float Value;
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Time>>().Has<Placeholder<Time>>())
+			return arg.Entity<Placeholder<Time>>().Get<Placeholder<Time>>().Value;
+
+		var ev = new Time();
+		arg.Entity<Placeholder<Time>>().Set(new Placeholder<Time>() { Value = ev });
+		return ev;
+	}
+
+	struct Placeholder<T> { public T Value; }
 }
 
 struct WindowSize

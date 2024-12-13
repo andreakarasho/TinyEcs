@@ -8,5 +8,8 @@ static class EcsConst
 	public const ulong ECS_COMPONENT_MASK = ~ECS_ID_FLAGS_MASK;
 
 	public const ulong ECS_TOGGLE = 1ul << 61;
+
+#if USE_PAIR
 	public const ulong ECS_PAIR = 1ul << 63;
+#endif
 }

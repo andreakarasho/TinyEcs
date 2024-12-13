@@ -18,10 +18,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
-			postContext.AddSource("TinyEcs.QueryIters.g.cs", CodeFormatter.Format(GenerateQueryIters()));
-			postContext.AddSource("TinyEcs.Queries.g.cs", CodeFormatter.Format(GenerateQueries()));
 			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
 			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
+			postContext.AddSource("TinyEcs.QueryIteratorEach.g.cs", CodeFormatter.Format(GenerateQueryIteratorEach()));
 		});
 
 		static string GenerateArchetypes()
@@ -39,42 +38,6 @@ public sealed class MyGenerator : IIncrementalGenerator
             ";
 		}
 
-		static string GenerateQueryIters()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					{GenerateQueryComponentsSpanIterator()}
-					{GenerateQueryIter("partial class Query")}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateQueries()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					{GenerateQueryTemplateDelegates(false)}
-					{GenerateQueryTemplateDelegates(true)}
-					{GenerateFilterQuery("class World", true, false)}
-					{GenerateFilterQuery("class World", true, true)}
-					{GenerateFilterQuery("class Query", false, false)}
-					{GenerateFilterQuery("class Query", false, true)}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
 		static string GenerateSystems()
 		{
 			return $@"
@@ -83,14 +46,124 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					using SysParamMap = Dictionary<Type, ISystemParam>;
-
+					#if NET
 					{GenerateSchedulerSystems()}
 					{GenerateSystemsInterfaces()}
+					{CreateDataAndFilterStructs()}
+					#endif
                 }}
 
                 #pragma warning restore 1591
             ";
+		}
+
+		static string GenerateQueryIteratorEach()
+		{
+			return $@"
+			#pragma warning disable 1591
+                #nullable enable
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateIterators()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+			";
+		}
+
+		static string GenerateIterators()
+		{
+			var sb = new StringBuilder();
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+				var ptrList = GenerateSequence(i + 1, "\n", j => $"private ref T{j} _current{j};");
+				var sizeDeclarations = GenerateSequence(i + 1, "\n", j => $"private int _size{j};");
+				var ptrSet = GenerateSequence(i + 1, "\n", j => $"_current{j} = ref _iterator.DataRefWithSize<T{j}>({j}, out _size{j});");
+				var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j} = ref Unsafe.AddByteOffset(ref _current{j}, _size{j});");
+				// var ptrAdvance = GenerateSequence(i + 1, "\n", j => $"_current{j}.Ref = ref Unsafe.Add(ref _current{j}.Ref, _size{j});");
+				var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
+				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"Unsafe.SkipInit<Ptr<T{j}>>(out ptr{j}); ptr{j}.Ref = ref _current{j};");
+				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
+
+				sb.AppendLine($@"
+					[SkipLocalsInit]
+					public unsafe ref struct Data<{generics}> : IData<Data<{generics}>>, IQueryIterator<Data<{generics}>>
+						{whereGenerics}
+					{{
+						private QueryIterator _iterator;
+						private ref EntityView _entity, _last;
+						{ptrList}
+						{sizeDeclarations}
+
+
+						internal Data(QueryIterator queryIterator)
+						{{
+							_iterator = queryIterator;
+						}}
+
+						public static void Build(QueryBuilder builder)
+						{{
+							{queryBuilderCalls}
+						}}
+
+						public static Data<{generics}> CreateIterator(QueryIterator iterator)
+							=> new Data<{generics}>(iterator);
+
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						public ref Data<{generics}> Current
+						{{
+
+							get => ref this;
+						}}
+
+
+						public readonly void Deconstruct({fieldSign})
+						{{
+							{fieldAssignments}
+						}}
+
+
+						public readonly void Deconstruct(out PtrRO<EntityView> entity, {fieldSign})
+						{{
+							entity = new (ref _entity);
+							{fieldAssignments}
+						}}
+
+
+						public bool MoveNext()
+						{{
+							if (!Unsafe.IsAddressLessThan(ref _entity, ref _last))
+							{{
+								if (!_iterator.Next())
+									return false;
+
+								{ptrSet}
+
+								_entity = ref _iterator.EntitiesDangerous()[0];
+								_last = ref Unsafe.Add(ref _entity, _iterator.Count - 1);
+							}}
+							else
+							{{
+								{ptrAdvance}
+								_entity = ref Unsafe.Add(ref _entity, 1);
+							}}
+
+							return true;
+						}}
+
+
+						public readonly Data<{generics}> GetEnumerator() => this;
+					}}
+				");
+			}
+
+			return sb.ToString();
 		}
 
 		static string GenerateArchetypeSigns()
@@ -118,6 +191,78 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
+		static string CreateDataAndFilterStructs()
+		{
+			var sb = new StringBuilder();
+
+			// for (var i = 0; i < MAX_GENERICS; ++i)
+			// {
+			// 	var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+			// 	var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct");
+			// 	var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.Data<T{j}>();");
+			// 	var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> field{j}");
+			// 	var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"field{j} = _iterator.Data<T{j}>({j});");
+
+			// 	sb.AppendLine($@"
+			// 		public struct Data<{genericsArgs}> : IData<Data<{genericsArgs}>>, IQueryIterator<Data<{genericsArgs}>>
+			// 			{genericsArgsWhere}
+			// 		{{
+			// 			private QueryIteratorEach<{genericsArgs}> _iterator;
+
+			// 			internal Data(QueryIterator iterator) => _iterator = new (iterator);
+
+			// 			public static void Build(QueryBuilder builder)
+			// 			{{
+			// 				{queryBuilderCalls}
+			// 			}}
+
+			// 			public static IQueryIterator<Data<{genericsArgs}>> CreateIterator(QueryIterator iterator)
+			// 				=> new Data<{genericsArgs}>(iterator);
+
+			//
+			// 			public readonly void Deconstruct({fieldSign})
+			// 			{{
+			// 				{fieldAssignments}
+			// 			}}
+
+			//
+			// 			public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {fieldSign})
+			// 			{{
+			// 				entities = _iterator.Entities();
+			// 				{fieldAssignments}
+			// 			}}
+
+			//
+			// 			public bool MoveNext() => _iterator.Next();
+
+			// 			readonly Data<{genericsArgs}> IQueryIterator<Data<{genericsArgs}>>.Current => this;
+
+			// 			readonly IQueryIterator<Data<{genericsArgs}>> IQueryIterator<Data<{genericsArgs}>>.GetEnumerator() => this;
+			// 		}}
+			// 	");
+			// }
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IFilter");
+				var appendTermsCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) T{j}.Build(builder);");
+
+				sb.AppendLine($@"
+					public readonly struct Filter<{genericsArgs}> : IFilter
+						{genericsArgsWhere}
+					{{
+						public static void Build(QueryBuilder builder)
+						{{
+							{appendTermsCalls}
+						}}
+					}}
+				");
+			}
+
+			return sb.ToString();
+		}
+
 		static string GenerateSchedulerSystems()
 		{
 			var sb = new StringBuilder();
@@ -126,32 +271,37 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
-				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
-				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, _world);");
-				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
-				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
+				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
 				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
 				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
+				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 				sb.AppendLine($@"
-					public FuncSystem<World> AddSystem<{generics}>(Action<{generics}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
-						{whereGenerics}
+				public FuncSystem<World> AddSystem<{genericsArgs}>(Action<{genericsArgs}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+					{genericsArgsWhere}
+				{{
+					{objs}
+					var checkInuse = () => {objsCheckInuse};
+					var fn = (World args, Func<World, bool> runIf) =>
 					{{
-						{emptyVars}
-						var checkInuse = () => {objsCheckInuse};
-						var fn = (World args, SysParamMap globalRes, SysParamMap localRes, Func<SysParamMap, World, bool> runIf) => {{
-							if (runIf != null && !runIf.Invoke(globalRes, args)) return;
-							{objs}
-							{objsLock}
-							system({objsArgs});
-							{objsUnlock}
-						}};
-						var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);
-						Add(sys, stage);
-						return sys;
-					}}
+						if (runIf != null && !runIf.Invoke(args))
+							return;
+
+						{objsGen}
+						{objsLock}
+						args.BeginDeferred();
+						system({systemCall});
+						args.EndDeferred();
+						{objsUnlock}
+					}};
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);
+					Add(sys, stage);
+					return sys;
+				}}
 				");
 			}
 
@@ -163,408 +313,30 @@ public sealed class MyGenerator : IIncrementalGenerator
 		static string GenerateSystemsInterfaces()
 		{
 			var sb = new StringBuilder();
-
-			// sb.AppendLine("public partial interface ISystem {");
-
-			// for (var i = 0; i < MAX_GENERICS; ++i)
-			// {
-			// 	var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
-			// 	var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
-
-			// 	sb.AppendLine($@"
-			// 		public ISystem RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics};
-			// 	");
-			// }
-
-			// sb.AppendLine("}");
-
-
 			sb.AppendLine("public sealed partial class FuncSystem<TArg> {");
 
 			for (var i = 0; i < 16; ++i)
 			{
-				var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var objs = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= ISystemParam.Get<T{j}>(globalRes, localRes, args);");
-				var objsArgs = GenerateSequence(i + 1, ", ", j => $"obj{j}");
-				var emptyVars = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
-				var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : class, ISystemParam, new()");
+				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<TArg>, IIntoSystemParam<TArg>");
+				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
+				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 				sb.AppendLine($@"
-					public FuncSystem<TArg> RunIf<{generics}>(Func<{generics}, bool> condition) {whereGenerics}
+					public FuncSystem<TArg> RunIf<{genericsArgs}>(Func<{genericsArgs}, bool> condition)
+						{genericsArgsWhere}
 					{{
-						{emptyVars}
-						var fn = (SysParamMap globalRes, SysParamMap localRes, TArg args) => {{
-							{objs}
-							return condition({objsArgs});
+						{objs}
+						var fn = (TArg args) => {{
+							{objsGen}
+							return condition({systemCall});
 						}};
 						_conditions.Add(fn);
 						return this;
-					}}
-				");
-			}
-
-			sb.AppendLine("}");
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryComponentsSpanIterator()
-		{
-			var sb = new StringBuilder();
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var dctorSign = GenerateSequence(i + 1, ", ", j => $"out Span<T{j}> val{j}");
-				var dctorGetSpan = GenerateSequence(i + 1, "", j => $"val{j} = chunk.GetSpan<T{j}>(arch.GetComponentIndex<T{j}>());");
-
-				sb.AppendLine($@"
-					[System.Runtime.CompilerServices.SkipLocalsInit]
-					public ref struct ComponentsSpanIterator<{typeParams}> {whereParams}
-					{{
-						private QueryInternal _queryIt;
-						private QueryChunkIterator _chunkIt;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal ComponentsSpanIterator(QueryInternal queryIt)
-						{{
-							_queryIt = queryIt;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct({dctorSign})
-						{{
-							ref var arch = ref _queryIt.Current;
-							ref var chunk = ref _chunkIt.Current;
-
-							{dctorGetSpan}
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, {dctorSign})
-						{{
-							ref var arch = ref _queryIt.Current;
-							ref var chunk = ref _chunkIt.Current;
-
-							entities = chunk.Entities.AsSpan(0, chunk.Count);
-							{dctorGetSpan}
-						}}
-
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						public ref ComponentsSpanIterator<{typeParams}> Current
-						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
-							get => ref this;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public bool MoveNext()
-						{{
-							while (true)
-							{{
-								if (_chunkIt.MoveNext())
-									return true;
-
-								if (_queryIt.MoveNext())
-								{{
-									_chunkIt = new QueryChunkIterator(_queryIt.Current.Chunks);
-									continue;
-								}}
-
-								return false;
-							}}
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsSpanIterator<{typeParams}> GetEnumerator() => this;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsIterator<{typeParams}> Each() => new (this);
-					}}
-				");
-			}
-
-			for (var i = 1; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var ptrTypes = GenerateSequence(i + 1, ", ", j => $"Ptr<T{j}> ptr{j}");
-				var deconstructors = GenerateSequence(i + 1, ", ", j => $"out var s{j}");
-				var setFirstPointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer = (T{j}*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(s{j}));");
-				var setLastPointers = GenerateSequence(i + 1, "\n", j => $"_last.ptr{j}.Pointer = _current.ptr{j}.Pointer + entities.Length - 1;");
-				var increasePointers = GenerateSequence(i + 1, "\n", j => $"_current.ptr{j}.Pointer += 1;");
-
-				sb.AppendLine($@"
-					[System.Runtime.CompilerServices.SkipLocalsInit]
-					public ref struct ComponentsIterator<{typeParams}> {whereParams}
-					{{
-						private ComponentsSpanIterator<{typeParams}> _iterator;
-						private ({ptrTypes}) _current, _last;
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						internal ComponentsIterator(ComponentsSpanIterator<{typeParams}> refIterator)
-						{{
-							_iterator = refIterator;
-						}}
-
-
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						public ref ({ptrTypes}) Current
-						{{
-							[MethodImpl(MethodImplOptions.AggressiveInlining)]
-							get => ref _current;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public unsafe bool MoveNext()
-						{{
-							if (!Unsafe.IsAddressLessThan(ref _current.ptr0.Ref, ref _last.ptr0.Ref))
-							{{
-								if (!_iterator.MoveNext())
-									return false;
-
-								_iterator.Deconstruct(out var entities, {deconstructors});
-
-								{setFirstPointers}
-								{setLastPointers}
-							}}
-							else
-							{{
-								{increasePointers}
-							}}
-
-							return true;
-						}}
-
-						[MethodImpl(MethodImplOptions.AggressiveInlining)]
-						public readonly ComponentsIterator<{typeParams}> GetEnumerator() => this;
-					}}
-				");
-			}
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryIter(string className)
-		{
-			var sb = new StringBuilder();
-			sb.AppendLine($@"
-				public {className}
-				{{
-			");
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-
-				sb.AppendLine($@"
-					public ComponentsSpanIterator<{typeParams}> Iter<{typeParams}>() {whereParams}
-						=> new (this.GetEnumerator());
-				");
-			}
-
-			sb.AppendLine("}");
-
-
-			return sb.ToString();
-		}
-
-		static string GenerateQueryTemplateDelegates(bool withEntityView)
-		{
-			var sb = new StringBuilder();
-			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
-
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-				var signParams = (withEntityView ? "EntityView entity, " : "") +
-				                 GenerateSequence(i + 1, ", ", j => $"ref T{j} t{j}");
-
-				sb.AppendLine($"public delegate void {delegateName}<{typeParams}>({signParams}) {whereParams};");
-			}
-
-			return sb.ToString();
-		}
-
-		static string GenerateFilterQuery(string className, bool withFilter, bool withEntityView)
-		{
-			// var className = withFilter ? "class World" : "class Query";
-			var delegateName = withEntityView ? "QueryFilterDelegateWithEntity" : "QueryFilterDelegate";
-
-			var sb = new StringBuilder();
-			sb.AppendLine($@"
-				public partial {className}
-				{{
-			");
-
-			// single thread
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var fieldList = (withEntityView ? "ref var entityA = ref MemoryMarshal.GetReference(entities);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref MemoryMarshal.GetReference(t{j}AA);");
-				var signCallback = (withEntityView ? "entityA, " : "") +
-				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
-
-				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
-				var worldLock = !withFilter ? "World." : "";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = t{j}AA.IsEmpty ? 0 : 1;");
-				var validationTypes = GenerateSequence(i + 1, "\n", j => {
-					if (i + 1 <= 1)
-					{
-						return "";
-					}
-
-					var str = $"EcsAssert.Panic(ComponentComparer.CompareTerms(null!, query.TermsAccess[{j}].Id, Lookup.Component<T{j}>.HashCode) == 0," +
-							$"\"param at {j} doesn't match the QueryData sign\");";
-
-					return str;
-				});
-
-				var spanTerms = "var entities, " + GenerateSequence(i + 1, ", ", j => $"var t{j}AA");
-				// if (i == 0 && !withEntityView)
-				// 	spanTerms = $"_, {spanTerms}";
-				// var spanTermsLength = GenerateSequence(i + 1, ", ", j => $"t{j}AA.Length");
-
-				sb.AppendLine($@"
-					public void Each<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-					{{
-						var query = {getQuery};
-
-						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
-						{validationTypes}
-
-						{worldLock}BeginDeferred();
-
-						foreach (({spanTerms}) in query.Iter<{typeParams}>())
-						{{
-							var count = entities.Length;
-
-							{incFieldList}
-
-							{fieldList}
-
-							for (; count - 4 > 0; count -= 4)
-							{{
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-
-								fn({signCallback});
-								{advanceField}
-							}}
-
-							for (; count > 0; count -= 1)
-							{{
-								fn({signCallback});
-								{advanceField}
-							}}
-						}}
-
-						{worldLock}EndDeferred();
-					}}
-				");
-			}
-
-			// multi thread
-			for (var i = 0; i < MAX_GENERICS; ++i)
-			{
-				var typeParams = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var whereParams = GenerateSequence(i + 1, " ",j => $"where T{j} : struct");
-				var columnIndices = GenerateSequence(i + 1, "\n" , j => $"var column{j} = arch.GetComponentIndex<T{j}>();");
-				var fieldList = (withEntityView ? "ref var entityA = ref chunk.EntityAt(0);\n" : "") +
-				                GenerateSequence(i + 1, "\n" , j => $"ref var t{j}A = ref chunk.GetReference<T{j}>(column{j});");
-				var signCallback = (withEntityView ? "entityA, " : "") +
-				                   GenerateSequence(i + 1, ", " , j => $"ref t{j}A");
-				var advanceField = (withEntityView ? "entityA = ref Unsafe.Add(ref entityA, 1);\n" : "") +
-				                   GenerateSequence(i + 1, "\n" , j => $"t{j}A = ref Unsafe.Add(ref t{j}A, inc{j});");
-
-				var getQuery = withFilter ? $"Query<{(i > 0 ? "(" : "")}{typeParams}{(i > 0 ? ")" : "")}>()" : "this";
-				var worldLock = !withFilter ? "World." : "";
-				var incFieldList = GenerateSequence(i + 1, "\n", j => $"var inc{j} = column{j} < 0 ? 0 : 1;");
-				var validationTypes = GenerateSequence(i + 1, "\n", j => {
-					if (i + 1 <= 1)
-					{
-						return "";
-					}
-
-					var str = $"EcsAssert.Panic(query.TermsAccess[{j}].Id == query.World.Entity<T{j}>().ID," +
-							"$\"'{typeof("+ $"T{j}" + ")}' doesn't match the QueryData sign\");";
-
-					return str;
-				});
-
-				sb.AppendLine($@"
-					public void EachJob<{typeParams}>({delegateName}<{typeParams}> fn) {whereParams}
-					{{
-						var query = {getQuery};
-						{$"EcsAssert.Panic(query.TermsAccess.Length == {i + 1}, \"mismatched sign\");"}
-						{validationTypes}
-
-						{worldLock}BeginDeferred();
-						var cde = query.ThreadCounter.Value;
-						cde.Reset();
-						foreach (var arch in query)
-						{{
-							{columnIndices}
-							{incFieldList}
-
-							var chunks = arch.MemChunks;
-							cde.AddCount(chunks.Length);
-
-							for (var i = 0; i < chunks.Length; ++i)
-							{{
-								System.Threading.ThreadPool.QueueUserWorkItem(state => {{
-									ref var index = ref Unsafe.Unbox<int>(state!);
-									ref readonly var chunk = ref chunks.Span[index];
-
-									var done = 0;
-
-									{fieldList}
-
-									while (done <= chunk.Count - 4)
-									{{
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										fn({signCallback});
-										{advanceField}
-
-										done += 4;
-									}}
-
-									while (done < chunk.Count)
-									{{
-										fn({signCallback});
-										{advanceField}
-
-										done += 1;
-									}}
-									cde.Signal();
-								}}, i);
-							}}
-						}}
-
-						cde.Signal();
-						cde.Wait();
-						{worldLock}EndDeferred();
 					}}
 				");
 			}

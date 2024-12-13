@@ -14,7 +14,6 @@ namespace TinyEcs.Tests
 			World.Entity<IntComponent>();
 			World.Entity<BoolComponent>();
 			World.Entity<NormalTag>();
-			World.Entity<Pair<NormalTag, FloatComponent>>();
 		}
 
 		public void Dispose()

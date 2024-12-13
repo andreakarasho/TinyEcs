@@ -43,6 +43,7 @@ public static class IDOp
 		return id |= EcsConst.ECS_ID_FLAGS_MASK;
 	}
 
+#if USE_PAIR
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID Pair(EcsID first, EcsID second)
 	{
@@ -66,4 +67,5 @@ public static class IDOp
 	{
 		return (uint)id;
 	}
+#endif
 }

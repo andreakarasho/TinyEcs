@@ -1,10 +1,12 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.Numerics;
+using Microsoft.VisualBasic;
 
 namespace TinyEcs;
 
 [SkipLocalsInit]
-public struct ArchetypeChunk
+internal struct ArchetypeChunk
 {
 	internal readonly Array[]? Data;
 	internal readonly EntityView[] Entities;
@@ -21,37 +23,57 @@ public struct ArchetypeChunk
 	public int Count { get; internal set; }
 
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref EntityView EntityAt(int row)
-#if NET
-		=> ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Entities), row & Archetype.CHUNK_THRESHOLD);
-#else
-		=> ref Unsafe.Add(ref MemoryMarshal.GetReference(Entities.AsSpan()), row & Archetype.CHUNK_THRESHOLD);
-#endif
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref EntityView EntityAt(int row)
+		=> ref Unsafe.Add(ref Entities.AsSpan(0, Count)[0], row & Archetype.CHUNK_THRESHOLD);
+
+
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
 			return ref Unsafe.NullRef<T>();
 
-		var array = (T[])Data![column];
-#if NET
-		return ref MemoryMarshal.GetArrayDataReference(array);
-#else
-		return ref MemoryMarshal.GetReference(array.AsSpan());
-#endif
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return ref MemoryMarshal.GetReference(span);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+	public readonly ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
+	{
+		if (column < 0 || column >= Data!.Length)
+		{
+			sizeInBytes = 0;
+			return ref Unsafe.NullRef<T>();
+		}
+
+		sizeInBytes = Unsafe.SizeOf<T>();
+
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return ref MemoryMarshal.GetReference(span);
+	}
+
+
+	public readonly ref T GetReferenceAt<T>(int column, int row) where T : struct
+	{
+		ref var reference = ref GetReference<T>(column);
+		if (Unsafe.IsNullRef(ref reference))
+			return ref reference;
+		return ref Unsafe.Add(ref reference, row & Archetype.CHUNK_THRESHOLD);
+	}
+
+
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
 			return Span<T>.Empty;
 
-		var array = (T[])Data![column];
-		return array.AsSpan(0, Count);
+		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		return span;
 	}
+
+
+	public readonly ReadOnlySpan<EntityView> GetEntities()
+		=> Entities.AsSpan(0, Count);
 }
 
 public sealed class Archetype
@@ -66,7 +88,11 @@ public sealed class Archetype
 	private readonly World _world;
 	private ArchetypeChunk[] _chunks;
 	private readonly ComponentComparer _comparer;
-	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _pairsLookup, _allLookup;
+	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _allLookup
+#if USE_PAIR
+		, _pairsLookup
+#endif
+		;
 	private readonly EcsID[] _ids;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
@@ -83,7 +109,9 @@ public sealed class Archetype
 		All = sign.ToImmutableArray();
 		Components = All.Where(x => x.Size > 0).ToImmutableArray();
 		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
+#if USE_PAIR
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
+#endif
 		_chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
 
@@ -97,8 +125,7 @@ public sealed class Archetype
 
 			if (sign[i].Size > 0)
 			{
-				dict.Add(sign[i].ID, cur);
-				cur += 1;
+				dict.Add(sign[i].ID, cur++);
 				maxId = Math.Max(maxId, (int)sign[i].ID);
 			}
 
@@ -111,15 +138,20 @@ public sealed class Archetype
 		_fastLookup.AsSpan().Fill(-1);
 		foreach ((var id, var i) in dict)
 		{
+#if USE_PAIR
+			if (!id.IsPair())
+#endif
 			_fastLookup[(int)id] = i;
 		}
 
 		_componentsLookup = dict.ToFrozenDictionary();
 		_allLookup = allDict.ToFrozenDictionary();
+#if USE_PAIR
 		_pairsLookup = allDict
 			.Where(s => s.Key.IsPair())
 				.GroupBy(s => s.Key.First())
 			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
+#endif
 
 		_ids = All.Select(s => s.ID).ToArray();
 		_add = new ();
@@ -131,8 +163,7 @@ public sealed class Archetype
 	public int Count => _count;
 	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
 	public EcsID Id { get; }
-	internal Span<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
-	internal Memory<ArchetypeChunk> MemChunks => _chunks.AsMemory(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
+	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal EcsID[] Sign => _ids;
 
@@ -152,29 +183,27 @@ public sealed class Archetype
 		return ref chunk;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	internal ref ArchetypeChunk GetChunk(int index)
 		=> ref _chunks[index >> CHUNK_LOG2];
 
-	public QueryChunkIterator GetEnumerator()
-	{
-		return new QueryChunkIterator(Chunks);
-	}
-
 	internal int GetComponentIndex(EcsID id)
 	{
+#if USE_PAIR
 		if (id.IsPair())
 		{
 			return _componentsLookup.GetValueOrDefault(id, -1);
 		}
-
+#endif
 		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
 	}
 
+#if USE_PAIR
 	internal int GetPairIndex(EcsID id)
 	{
 		return _pairsLookup.GetValueOrDefault(id, -1);
 	}
+#endif
 
 	internal int GetAnyIndex(EcsID id)
 	{
@@ -186,7 +215,7 @@ public sealed class Archetype
 		return _allLookup.ContainsKey(id);
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+
 	public int GetComponentIndex<T>() where T : struct
 	{
 		var id = Lookup.Component<T>.HashCode;
@@ -228,7 +257,7 @@ public sealed class Archetype
 				var arrayToBeRemoved = chunk.Data![i];
 				var lastValidArray = lastChunk.Data![i];
 
-				CopyFast(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
+				CopyData(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
 			}
 
 			ref var rec = ref _world.GetRecord(chunk.EntityAt(row).ID);
@@ -298,7 +327,7 @@ public sealed class Archetype
 			var toArray = toChunk.Data![j];
 
 			// copy the moved entity to the target archetype
-			CopyFast(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
+			CopyData(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
 		}
 
 		_ = RemoveByRow(ref fromChunk, oldRow);
@@ -474,7 +503,7 @@ public sealed class Archetype
 		public byte Data;
 	}
 
-	private static void CopyFast(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
+	private static void CopyData(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
 	{
 		if (isManaged)
 		{
@@ -485,11 +514,43 @@ public sealed class Archetype
 			ref var srcB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(src).Data, (uint)(srcIdx * elementSize));
 			ref var dstB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(dst).Data, (uint)(dstIdx * elementSize));
 
-			// var span0 = MemoryMarshal.CreateSpan(ref srcB, count * elementSize);
-			// var span1 = MemoryMarshal.CreateSpan(ref dstB, count * elementSize);
-			// span0.CopyTo(span1);
+			if (Vector.IsHardwareAccelerated)
+			{
+				CopySimd(ref srcB, ref dstB, elementSize * count);
+				return;
+			}
 
 			Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
+		}
+	}
+
+	private static unsafe void CopySimd(ref byte src, ref byte dst, int totalBytes)
+	{
+		int vectorSize = Vector<byte>.Count; // SIMD chunk size
+		int offset = 0;
+
+		// Perform vectorized copy
+		while (offset + vectorSize <= totalBytes)
+		{
+			var vector = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref src, offset));
+			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), vector);
+			offset += vectorSize;
+		}
+
+		// Process remaining bytes in chunks of 8 (long)
+		const int wordSize = sizeof(long); // 8 bytes
+		while (offset + wordSize <= totalBytes)
+		{
+			long word = Unsafe.ReadUnaligned<long>(ref Unsafe.Add(ref src, offset));
+			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), word);
+			offset += wordSize;
+		}
+
+		// Process remaining bytes one by one
+		while (offset < totalBytes)
+		{
+			Unsafe.Add(ref dst, offset) = Unsafe.Add(ref src, offset);
+			offset++;
 		}
 	}
 }

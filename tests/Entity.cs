@@ -288,17 +288,17 @@ namespace TinyEcs.Tests
 			Assert.False(ctx.World.Has<IntComponent>(e0));
 		}
 
-		[Fact]
-		public void UndeletableEntity()
-		{
-			using var ctx = new Context();
-			var ent = ctx.World.Entity();
+		// [Fact]
+		// public void UndeletableEntity()
+		// {
+		// 	using var ctx = new Context();
+		// 	var ent = ctx.World.Entity();
 
-			ent.Delete();
+		// 	ent.Delete();
 
-			Assert.ThrowsAny<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
-			Assert.ThrowsAny<Exception>(() => ctx.World.Delete(Wildcard.ID));
-		}
+		// 	Assert.ThrowsAny<Exception>(() => ctx.World.Delete(ctx.World.Entity<DoNotDelete>()));
+		// 	Assert.ThrowsAny<Exception>(() => ctx.World.Delete(Wildcard.ID));
+		// }
 
 		[Fact]
 		public void Declare_Tag_Before_NamedEntity()
@@ -331,7 +331,8 @@ namespace TinyEcs.Tests
 			var a = ctx.World.Entity("a");
 			Assert.Equal("a", a.Name());
 
-			a.Unset<Defaults.Identifier, Defaults.Name>();
+			ctx.World.UnsetName(a);
+			// a.Unset<Defaults.Identifier, Defaults.Name>();
 			Assert.Equal("", a.Name());
 
 			var aa = ctx.World.Entity("a");
@@ -340,23 +341,23 @@ namespace TinyEcs.Tests
 			Assert.Equal("a", aa.Name());
 		}
 
-		[Fact]
-		public void Entity_Has_Wildcard()
-		{
-			using var ctx = new Context();
+		// [Fact]
+		// public void Entity_Has_Wildcard()
+		// {
+		// 	using var ctx = new Context();
 
-			var main = ctx.World.Entity();
-			var likes = ctx.World.Entity();
-			var dogs = ctx.World.Entity();
+		// 	var main = ctx.World.Entity();
+		// 	var likes = ctx.World.Entity();
+		// 	var dogs = ctx.World.Entity();
 
-			main.Set<BoolComponent>(new());
-			main.Add(likes, dogs);
+		// 	main.Set<BoolComponent>(new());
+		// 	main.Add(likes, dogs);
 
-			Assert.True(main.Has<Wildcard>());
-			Assert.True(main.Has(likes, Wildcard.ID));
-			Assert.True(main.Has(Wildcard.ID, dogs));
-			Assert.True(main.Has(Wildcard.ID, Wildcard.ID));
-		}
+		// 	Assert.True(main.Has<Wildcard>());
+		// 	Assert.True(main.Has(likes, Wildcard.ID));
+		// 	Assert.True(main.Has(Wildcard.ID, dogs));
+		// 	Assert.True(main.Has(Wildcard.ID, Wildcard.ID));
+		// }
 
 		[Fact]
 		public void Entity_Attach_ManagedComponent()
@@ -377,12 +378,12 @@ namespace TinyEcs.Tests
 			ref var fl = ref ent.Get<FloatComponent>();
 			Assert.Equal("hello", managed.Text);
 
-			var target = ctx.World.Entity();
-			ent.Set(new ManagedComponent() { Obj = new { a = "asd", b = 3, c = new List<object>() }, Text = "hello 2" }, target);
-			ent.Set(new BoolComponent());
+			// var target = ctx.World.Entity();
+			// ent.Set(new ManagedComponent() { Obj = new { a = "asd", b = 3, c = new List<object>() }, Text = "hello 2" }, target);
+			// ent.Set(new BoolComponent());
 
-			managed = ref ent.Get<ManagedComponent>(target);
-			Assert.Equal("hello 2", managed.Text);
+			// managed = ref ent.Get<ManagedComponent>(target);
+			// Assert.Equal("hello 2", managed.Text);
 		}
 
 		[Fact]
