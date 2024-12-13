@@ -29,7 +29,7 @@ var fn5 = EndRenderer;
 
 
 scheduler.AddSystem(init, Stages.Startup);
-scheduler.AddSystem((Res<Time> time) => time.Value.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
+scheduler.AddSystem((Time time) => time.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
 scheduler.AddPlugin<RaylibPlugin>();
 scheduler.AddSystem(fn0);
 scheduler.AddSystem(fn1);
@@ -39,7 +39,7 @@ scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingMode.Si
 scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
 
 scheduler.AddResource(wndSize);
-scheduler.AddResource(new Time());
+scheduler.AddSystemParam(new Time());
 
 
 while (!Raylib.WindowShouldClose())
@@ -50,12 +50,12 @@ while (!Raylib.WindowShouldClose())
 Raylib.CloseWindow();
 
 
-static void MoveSystem(Res<Time> time, Query<Data<Position, Velocity, Rotation>> query)
+static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
 {
 	foreach ((var pos, var vel, var rot) in query)
 	{
-		pos.Ref.Value += vel.Ref.Value * time.Value.Value;
-		rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Value.Value)) % 360;
+		pos.Ref.Value += vel.Ref.Value * time.Value;
+		rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Value)) % 360;
 	}
 }
 
@@ -106,14 +106,14 @@ static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Te
 	}
 }
 
-static void DrawText(World ecs, Res<Time> time)
+static void DrawText(World ecs, Time time)
 {
 	var dbgText =
 		$"""
 			[Debug]
 			FPS: {Raylib.GetFPS()}
 			Entities: {ecs.EntityCount}
-			DeltaTime: {time.Value.Value}
+			DeltaTime: {time.Value}
 			""".Replace("\r", "\n");
 	var textSize = 24;
 	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
@@ -162,9 +162,21 @@ static void SpawnEntities(World ecs, Res<WindowSize> size, SchedulerState schedu
 	}
 }
 
-struct Time
+sealed class Time : SystemParam<World>, IIntoSystemParam<World>
 {
 	public float Value;
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Time>>().Has<Placeholder<Time>>())
+			return arg.Entity<Placeholder<Time>>().Get<Placeholder<Time>>().Value;
+
+		var ev = new Time();
+		arg.Entity<Placeholder<Time>>().Set(new Placeholder<Time>() { Value = ev });
+		return ev;
+	}
+
+	struct Placeholder<T> { public T Value; }
 }
 
 struct WindowSize

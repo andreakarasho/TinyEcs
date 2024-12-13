@@ -16,8 +16,7 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 ## Requirements
 
--   `netstandard2.1`
--   `net8.0`
+-   `net9.0`
 
 ## Status
 
@@ -30,239 +29,107 @@ cd samples/TinyEcsGame
 dotnet run -c Release
 ```
 
-## Basic Samples
+## Sample code
+
+This is a very basic example and doen't show the whole features set of this library.
 
 ```csharp
-using var ecs = new World();
+using var world = new World();
+var scheduler = new Scheduler(world);
 
-// Generate entities
-var player = ecs.Entity()
-    .Set<Position>(new Position { X = 2 })
-    .Set<Label>(new Label { Value = "Tom" })
-    .Add<Player>();
+// create the Time variable accessible globlly by any system which stay fixed at 60fps
+scheduler.AddResource(new Time() { FrameTime = 1000.0f / 60.0f });
+scheduler.AddResource(new AssetManager());
 
-var npc = ecs.Entity()
-    .Set<Position>(new Position { X = 75 })
-    .Set<Label>(new Label { Value = "Dan" })
-    .Add<Npc>();
+var setupSysFn = Setup;
+scheduler.AddSystem(setupSysFn);
 
-// Query entities with Position + Label components
-ecs.Query<(Position, Label)>()
-    .Each((EntityView entity, ref Position pos, ref Label label) => {
-        Console.WriteLine(label.Value);
-    });
+var moveSysFn = MoveEntities;
+scheduler.AddSystem(moveSysFn);
 
-// Multi-threaded query for entities with Position + Label + Player, without Npc.
-ecs.Query<(Position, Label), (With<Player>, Without<Npc>)>()
-    .EachJob((ref Position pos, ref Label label) => {
-        Console.WriteLine(label.Value);
-    });
-
-// Component structs
-struct Position { public float X, Y, Z; }
-struct Label { public string Value; }
-struct Player { }
-struct Npc { }
-```
-
-## Bevy Systems
-
-Organize your application using the "Bevy systems" concept.
-
-```csharp
-using var ecs = new World();
-var scheduler = new Scheduler(ecs);
-
-scheduler.AddSystem((World world) => {
-    // Spawn entities
-}, SystemStages.Startup);
-
-scheduler.AddSystem((Query<(Position, Velocity), Without<Npc>> query) => {
-    foreach ((var entities, var posSpan, var velSpan) in query.Iter<Position, Velocity>() {
-        // parse all spans
-    }
-});
-
-scheduler.AddPlugin<MyPlugin>();
-
-scheduler.AddSystem((Res<string> myText) => Console.WriteLine(myText.Value))
-    .RunIf((SchedulerState schedState) => schedState.ResourceExists<string>());
-scheduler.AddResource("My text");
-
-// Run all systems once
-scheduler.Run();
+var countSomethingSysFn = CountSomething;
+scheduler.AddSystem(countSomethingSysFn);
 
 
-struct MyPlugin : IPlugin
+while (true)
+    scheduler.Run();
+
+
+// the variable 'assets' is globally accessible by any system
+void Setup(World world, Res<AssetManager> assets)
 {
-    public void Build(Scheduler scheduler)
+    // spawn an entity and attach some components to it
+    world.Entity()
+        .Set(new Position() { X = 20f, Y = 9f  })
+        .Set(new Velocity() { X = 1f, Y = 1.3f });
+
+    var texture = new Texture(0, 2, 2);
+    texture.SetData(new byte[] { 0, 0, 0, 0 });
+    assets.Register("image.png", texture);
+}
+
+// query for [Position + Velocity] components
+// the variable 'time' is globally accessible by any system
+void MoveEntities(Query<Data<Position, Velocity>> query, Res<Time> time)
+{
+    foreach ((Ptr<Position> pos, Ptr<Velocity> vel) in query)
     {
-        scheduler.AddSystem((World world, Local<int> i32) => {
-            // Do something
-        });
-
-        scheduler.AddSystem((EventWriter<MyEvent> writer) => {
-            // Write events
-        });
-
-        scheduler.AddSystem((EventReader<MyEvent> reader) => {
-            // Read events
-        });
-
-        scheduler.AddEvent<MyEvent>();
-    }
-
-    struct MyEvent { }
-}
-```
-
-## More Functionalities
-
-Access entity data, deferred operations, raw queries, and multithreading.
-
-```csharp
-// Entity data access
-ref var pos = ref entity.Get<Position>();
-bool hasPos = entity.Has<Position>();
-entity.Unset<Position>();
-
-// Deferred operations
-world.Deferred(w => {
-    // Operations
-});
-world.BeginDeferred();
-// Operations
-world.EndDeferred();
-
-// Raw queries
-var query = world.Query<(Position, Velocity), Without<Npc>>();
-foreach (var archetype in query) {
-    foreach (ref var chunk in archetype) {
-        // Operations
+        pos.Ref.X += vel.Ref.X * time.Value.FrameTime;
+        pos.Ref.X += vel.Ref.Y * time.Value.FrameTime;
     }
 }
-foreach ((var entities, var posSpan, var velSpan) in query.Iter<Position, Velocity>() {
-    // Operations
+
+// the variable 'localCounter' will exist only in this system context,
+// which means declaring a `Local<int>` into another system will create a new variable.
+void CountSomething(Local<int> localCounter, Res<Time> time)
+{
+    localCounter.Value += 1;
 }
-query.Each((ref Position pos, ref Velocity vel) => {
-    // Operations
-});
-query.EachJob((ref Position pos, ref Velocity vel) => {
-    // Operations
-});
-```
 
-## Unique/Named entities
 
-```csharp
-// Get or create an entity named 'Khun' 🐶
-var dog = ecs.Entity("Khun")
-    .Add<Bau>();
-```
+struct Position { public float X, Y; }
+struct Velocity { public float X, Y; }
 
-```csharp
-// Retrive already-registered components using their names
-// [Might not work on NativeAOT!]
-var entity = ecs.Entity<Apples>();
-var applesComponent = ecs.Entity("Apples");
+class Time
+{
+    public float FrameTime;
+}
 
-struct Apples { public int Amount; }
-```
+class Texture
+{
+    public Texture(int id, int width, int height)
+    {
+        Id = id;
+        Width = width;
+        Height = height;
+    }
 
-## Relationships
+    public int Id { get; }
+    public int Width { get; }
+    public int Height { get; }
 
-```csharp
-var woodenChest = ecs.Entity()
-    .Set<Container>();
+    public void SetData(byte[] data)
+    {
+        // ...
+    }
+}
 
-var sword = ecs.Entity()
-    .Add<Weapon>()
-    .Set<Damage>(new Damage { Min = 5, Max = 15 })
-    .Set<Amount>(new Amount { Value = 1 });
+class AssetManager
+{
+    private readonly Dictionary<string, Texture> _assets = new ();
 
-// This will create a relationship like (Contents, sword)
-woodenChest.Set<Contents>(sword);
+    public void Register(string name, Texture texture)
+    {
+        _assets[name] = texture;
+    }
 
-// Grab all relationships of type (Contents, *)
-ecs.Query<ValueTuple, With<(Contents, Wildcard)>>().Each((EntityView entity) =>
-    Console.WriteLine($"I'm {entity.ID} and I'm a child of the wooden chest!"));
-```
+    public Texture? Get(string name)
+    {
+        _assets.TryGetValue(name, out var texture);
+        return texture;
+    }
+}
 
-### Add same component multiple times
-
-Relations open the scenario to assign the same component more than a single time
-
-```csharp
-var player = ecs.Entity();
-player.Set<BeginPoint, Position>(new Position() { Value = Vector3.Zero; });
-player.Set<EndPoint, Position>(new Position() { Value = { X = 10, Y = 35, Z = 0 }; });
-
-// Will retrive the begin position {0, 0, 0}
-ref var beginPos = ref player.Get<BeginPoint, Poisition>();
-
-// Will retrive the end position {10, 35, 0}
-ref var endPos = ref player.Get<EndPoint, Poisition>();
-
-// Queries for begin & end positions!
-// Notice that relationships are rappresented by a Tuple(A, B)
-ecs.Query<(Pair<BeginPoint, Position>, Pair<EndPoint, Position>)>()
-    .Each((ref Pair<BeginPoint, Position> begin, ref Pair<EndPoint, Position> end) => {
-    // ...
-});
-
-struct Position { public Vector3 Value; }
-struct BeginPoint { }
-struct EndPoint { }
-```
-
-### Assign entities to entities
-
-```csharp
-var bob = ecs.Entity("Bob");
-var likes = ecs.Entity("Likes");
-var pasta = ecs.Entity("Pasta");
-
-bob.Add(likes, pasta);
-```
-
-### `ChildOf`
-
-Use the pre-build `ChildOf` relationship.
-This tag is marked as 'Unique' which means cannot exists more than one `(ChildOf, *)` relation attached to the child entity.
-The `parent.AddChild(child)` function it's a shortcut of `child.Set<ChildOf>(parent)`;
-
-```csharp
-var parent0 = ecs.Entity();
-var parent1 = ecs.Entity();
-var child = ecs.Entity();
-
-// Attach (ChildOf, parent0) to child
-parent0.AddChild(child);
-
-// Detach any (ChildOf, *) from child
-// and attach (ChildOf, parent1) to child
-parent1.AddChild(child);
-```
-
-### `Symmetric`
-
-`Symmetric` is a pre-build relationship which assign the relation to the target too:
-`A.Set(Rel, B) <=> B.Set(Rel, A)`
-
-```csharp
-// Set the tag as symmetric
-ecs.Entity<TradingWith>().Set<Symmetric>();
-
-var playerA = ecs.Entity("Player A");
-var playerB = ecs.Entity("Player B");
-
-playerA.Add<TradingWith>(playerB);
-
-// Both returns 'True'
-var resultA = playerA.Has<TradingWith>(playerB);
-var resultB = playerB.Has<TradingWith>(playerA);
-
-struct TradingWith { }
 ```
 
 ## Bechmarks
