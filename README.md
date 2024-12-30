@@ -70,7 +70,7 @@ void MoveEntities(Query<Data<Position, Velocity>> query, Res<Time> time)
     foreach ((Ptr<Position> pos, Ptr<Velocity> vel) in query)
     {
         pos.Ref.X += vel.Ref.X * time.Value.FrameTime;
-        pos.Ref.X += vel.Ref.Y * time.Value.FrameTime;
+        pos.Ref.Y += vel.Ref.Y * time.Value.FrameTime;
     }
 }
 
