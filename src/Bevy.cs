@@ -118,7 +118,7 @@ public enum ThreadingMode
 	Multi
 }
 
-public sealed partial class Scheduler
+public partial class Scheduler
 {
 	private readonly World _world;
 	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
@@ -137,7 +137,15 @@ public sealed partial class Scheduler
 		AddSystemParam(new Commands(world));
 	}
 
-	public void Run()
+	public void Run(Func<bool> checkForExitFn, Action? cleanupFn = null)
+	{
+		while (!checkForExitFn())
+			RunOnce();
+
+		cleanupFn?.Invoke();
+	}
+
+	public void RunOnce()
 	{
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();

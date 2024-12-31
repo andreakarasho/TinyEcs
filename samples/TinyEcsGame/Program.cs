@@ -1,170 +1,259 @@
 using System.Numerics;
 using TinyEcs;
 using Raylib_cs;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 
-const int WINDOW_WIDTH = 800;
-const int WINDOW_HEIGHT = 600;
-const int VELOCITY = 250;
-const int ENTITIES_TO_SPAWN = 1_000_00;
+var app = new App();
+app.AddPlugin(new RaylibPlugin() {
+	WindowSize = new () { Value = { X = 800, Y = 600 } },
+	Title = "TinyEcs using raylib",
+	VSync = true
+});
+
+app.AddPlugin(new GameRootPlugin() {
+	EntitiesToSpawn = 1_000_00,
+	Velocity = 250
+});
+
+app.Run(() => Raylib.WindowShouldClose(), Raylib.CloseWindow);
 
 
-Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "TinyEcs sample");
 
-using var ecs = new World();
-var scheduler = new Scheduler(ecs);
-
-var wndSize = new WindowSize() { Value = { X = WINDOW_WIDTH, Y = WINDOW_HEIGHT } };
-
-// bleh
-var init = SpawnEntities;
-var fn0 = MoveSystem;
-var fn1 = CheckBounds;
-var fn2 = BeginRenderer;
-var fn3 = RenderEntities;
-var fn4 = DrawText;
-var fn5 = EndRenderer;
-
-
-scheduler.AddSystem(init, Stages.Startup);
-scheduler.AddSystem((Time time) => time.Value = Raylib.GetFrameTime(), Stages.BeforeUpdate);
-scheduler.AddPlugin<RaylibPlugin>();
-scheduler.AddSystem(fn0);
-scheduler.AddSystem(fn1);
-scheduler.AddSystem(fn2, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-scheduler.AddSystem(fn3, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-
-scheduler.AddResource(wndSize);
-scheduler.AddSystemParam(new Time());
-
-
-while (!Raylib.WindowShouldClose())
+// =================================================================================
+sealed class App : Scheduler
 {
-	scheduler.Run();
+	public App() : base(new ()) { }
 }
-
-Raylib.CloseWindow();
-
-
-static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
+// =================================================================================
+struct RaylibPlugin : IPlugin
 {
-	foreach ((var pos, var vel, var rot) in query)
+	public string Title { get; set; }
+	public WindowSize WindowSize { get; set; }
+	public bool VSync { get; set; }
+
+	public readonly void Build(Scheduler scheduler)
 	{
-		pos.Ref.Value += vel.Ref.Value * time.Value;
-		rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Value)) % 360;
+		ConfigFlags flags = 0;
+		if (VSync)
+			flags |= ConfigFlags.VSyncHint;
+
+		Raylib.SetConfigFlags(flags);
+		Raylib.InitWindow((int)WindowSize.Value.X, (int)WindowSize.Value.Y, Title);
+
+		scheduler.AddSystemParam(new Time());
+		scheduler.AddResource(WindowSize);
+		scheduler.AddResource(new AssetsManager());
+
+		scheduler.AddSystem((Time time) => {
+			time.Frame = Raylib.GetFrameTime();
+			time.Total += time.Frame;
+		}, Stages.BeforeUpdate);
 	}
 }
-
-static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
+// =================================================================================
+struct GameRootPlugin : IPlugin
 {
-	foreach ((var pos, var vel) in query)
-	{
-		if (pos.Ref.Value.X < 0.0f)
-		{
-			pos.Ref.Value.X = 0;
-			vel.Ref.Value.X *= -1;
-		}
-		else if (pos.Ref.Value.X > windowSize.Value.Value.X)
-		{
-			pos.Ref.Value.X = windowSize.Value.Value.X;
-			vel.Ref.Value.X *= -1;
-		}
+	public int EntitiesToSpawn { get; set; }
+	public int Velocity { get; set; }
 
-		if (pos.Ref.Value.Y < 0.0f)
+	public void Build(Scheduler scheduler)
+	{
+		scheduler.AddPlugin(new GameplayPlugin() { EntitiesToSpawn = EntitiesToSpawn, Velocity = Velocity });
+		scheduler.AddPlugin<RenderingPlugin>();
+	}
+}
+// =================================================================================
+struct GameplayPlugin : IPlugin
+{
+	public int EntitiesToSpawn { get; set; }
+	public int Velocity { get; set; }
+
+	public void Build(Scheduler scheduler)
+	{
+		var init = SpawnEntities;
+		var fn0 = MoveSystem;
+		var fn1 = CheckBounds;
+
+		scheduler.AddSystem(init, Stages.Startup);
+		scheduler.AddSystem(fn0);
+		scheduler.AddSystem(fn1);
+	}
+
+	static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
+	{
+		foreach ((var pos, var vel, var rot) in query)
 		{
-			pos.Ref.Value.Y = 0;
-			vel.Ref.Value.Y *= -1;
+			pos.Ref.Value += vel.Ref.Value * time.Frame;
+			rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Frame)) % 360;
 		}
-		else if (pos.Ref.Value.Y > windowSize.Value.Value.Y)
+	}
+
+	static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
+	{
+		foreach ((var pos, var vel) in query)
 		{
-			pos.Ref.Value.Y = windowSize.Value.Value.Y;
-			vel.Ref.Value.Y *= -1;
+			if (pos.Ref.Value.X < 0.0f)
+			{
+				pos.Ref.Value.X = 0;
+				vel.Ref.Value.X *= -1;
+			}
+			else if (pos.Ref.Value.X > windowSize.Value.Value.X)
+			{
+				pos.Ref.Value.X = windowSize.Value.Value.X;
+				vel.Ref.Value.X *= -1;
+			}
+
+			if (pos.Ref.Value.Y < 0.0f)
+			{
+				pos.Ref.Value.Y = 0;
+				vel.Ref.Value.Y *= -1;
+			}
+			else if (pos.Ref.Value.Y > windowSize.Value.Value.Y)
+			{
+				pos.Ref.Value.Y = windowSize.Value.Value.Y;
+				vel.Ref.Value.Y *= -1;
+			}
+		}
+	}
+
+	void SpawnEntities(World ecs, SchedulerState scheduler, Res<WindowSize> size, Res<AssetsManager> assetsManager)
+	{
+		var rnd = Random.Shared;
+		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
+		assetsManager.Value!.Register("pepe_face", texture);
+
+		for (var i = 0; i < EntitiesToSpawn; ++i)
+		{
+			ecs
+				.Entity()
+				.Set(
+					new Position()
+					{
+						Value = new Vector2(
+							rnd.Next(0, (int)size.Value.Value.X),
+							rnd.Next(0, (int)size.Value.Value.Y))
+					}
+				)
+				.Set(
+					new Velocity()
+					{
+						Value = new Vector2(
+							rnd.Next(-Velocity, Velocity),
+							rnd.Next(-Velocity, Velocity)
+						)
+					}
+				)
+				.Set(
+					new Sprite()
+					{
+						Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
+						Scale = rnd.NextSingle(),
+						TextureId = texture.Id
+					}
+				)
+				.Set(
+					new Rotation()
+					{
+						Value = 0f,
+						Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
+					}
+				);
 		}
 	}
 }
-
-static void BeginRenderer()
+// =================================================================================
+readonly struct RenderingPlugin : IPlugin
 {
-	Raylib.BeginDrawing();
-	Raylib.ClearBackground(Color.Black);
-}
-
-static void EndRenderer()
-{
-	Raylib.EndDrawing();
-}
-
-static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<Texture2D> texture)
-{
-	foreach ((var sprite, var pos, var rot) in query)
+	public void Build(Scheduler scheduler)
 	{
-		Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
+		var fn2 = BeginRenderer;
+		var fn3 = RenderEntities;
+		var fn4 = DrawText;
+		var fn5 = EndRenderer;
+
+		var begin = scheduler.AddSystem(fn2, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
+		var renderEntities = scheduler.AddSystem(fn3, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
+		var renderText = scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
+		var end = scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
+	}
+
+	static void BeginRenderer()
+	{
+		Raylib.BeginDrawing();
+		Raylib.ClearBackground(Color.Black);
+	}
+
+	static void EndRenderer()
+	{
+		Raylib.EndDrawing();
+	}
+
+	static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assetsManager)
+	{
+		var currTextureId = 0u;
+		Texture2D? texture = null;
+
+		foreach ((var sprite, var pos, var rot) in query)
+		{
+			if (sprite.Ref.TextureId != currTextureId)
+			{
+				currTextureId = sprite.Ref.TextureId;
+				texture = assetsManager.Value!.Get(currTextureId);
+			}
+
+			if (texture.HasValue)
+				Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
+		}
+	}
+
+	static void DrawText(World ecs, Time time, Local<string> text, Local<float> timeout)
+	{
+		if (time.Total > timeout)
+		{
+			timeout.Value = time.Total + 0.25f;
+			text.Value = $"""
+				[Debug]
+				FPS: {Raylib.GetFPS()}
+				Entities: {ecs.EntityCount}
+				DeltaTime: {time.Frame}
+				""".Replace("\r", "\n");
+		}
+
+		var textSize = 24;
+		Raylib.DrawText(text.Value ?? "", 15, 15, textSize, Color.White);
 	}
 }
-
-static void DrawText(World ecs, Time time)
+// =================================================================================
+sealed class AssetsManager
 {
-	var dbgText =
-		$"""
-			[Debug]
-			FPS: {Raylib.GetFPS()}
-			Entities: {ecs.EntityCount}
-			DeltaTime: {time.Value}
-			""".Replace("\r", "\n");
-	var textSize = 24;
-	Raylib.DrawText(dbgText, 15, 15, textSize, Color.White);
-}
+	private readonly Dictionary<string, Texture2D> _assets = new();
+	private readonly Dictionary<uint, Texture2D> _ids = new ();
 
-static void SpawnEntities(World ecs, Res<WindowSize> size, SchedulerState scheduler)
-{
-	var rnd = new Random();
-	var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
-	scheduler.AddResource(texture);
-
-	for (var i = 0; i < ENTITIES_TO_SPAWN; ++i)
+	public void Register(string name, Texture2D texture)
 	{
-		ecs
-			.Entity()
-			.Set(
-				new Position()
-				{
-					Value = new Vector2(rnd.Next(0, (int)size.Value.Value.X), rnd.Next(0, (int)size.Value.Value.Y))
-				}
-			)
-			.Set(
-				new Velocity()
-				{
-					Value = new Vector2(
-						rnd.Next(-VELOCITY, VELOCITY),
-						rnd.Next(-VELOCITY, VELOCITY)
-					)
-				}
-			)
-			.Set(
-				new Sprite()
-				{
-					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
-					Scale = rnd.NextSingle(),
-					Texture = texture.Id
-				}
-			)
-			.Set(
-				new Rotation()
-				{
-					Value = 0f,
-					Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
-				}
-			);
+		_assets[name] = texture;
+		_ids[texture.Id] = texture;
+	}
+
+	public Texture2D? Get(string name)
+	{
+		if (!_assets.TryGetValue(name, out var texture))
+			return null;
+		return texture;
+	}
+
+	public Texture2D? Get(uint id)
+	{
+		if (!_ids.TryGetValue(id, out var texture))
+			return null;
+		return texture;
 	}
 }
-
+// =================================================================================
 sealed class Time : SystemParam<World>, IIntoSystemParam<World>
 {
-	public float Value;
+	public float Frame;
+	public float Total;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -178,7 +267,7 @@ sealed class Time : SystemParam<World>, IIntoSystemParam<World>
 
 	struct Placeholder<T> { public T Value; }
 }
-
+// =================================================================================
 struct WindowSize
 {
 	public Vector2 Value;
@@ -198,43 +287,11 @@ struct Sprite
 {
     public Color Color;
     public float Scale;
-	public uint Texture;
-    //public Texture2D Texture;
+	public uint TextureId;
 }
 
 struct Rotation
 {
     public float Value;
     public float Acceleration;
-}
-
-readonly struct RaylibPlugin : IPlugin
-{
-	public readonly void Build(Scheduler scheduler)
-	{
-		scheduler.AddSystem((Res<Input> input) => {
-			foreach (ref var v in input.Value)
-				v = KeyboardKey.Null;
-
-			var key = Raylib.GetKeyPressed();
-			while (key != 0)
-			{
-				input.Value[key] = (KeyboardKey) key;
-				key = Raylib.GetKeyPressed();
-			}
-		});
-		scheduler.AddSystem((Res<Input> input) => {
-			if (input.Value[(int)KeyboardKey.A] == KeyboardKey.A)
-			{
-				Console.WriteLine("pressed {0}", KeyboardKey.A);
-			}
-		});
-		scheduler.AddResource(new Input());
-	}
-
-	[InlineArray(512)]
-	struct Input
-	{
-		private KeyboardKey _k0;
-	}
 }

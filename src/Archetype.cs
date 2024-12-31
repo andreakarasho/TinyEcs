@@ -23,11 +23,11 @@ internal struct ArchetypeChunk
 	public int Count { get; internal set; }
 
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref EntityView EntityAt(int row)
 		=> ref Unsafe.Add(ref Entities.AsSpan(0, Count)[0], row & Archetype.CHUNK_THRESHOLD);
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
@@ -37,7 +37,7 @@ internal struct ArchetypeChunk
 		return ref MemoryMarshal.GetReference(span);
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
@@ -52,7 +52,7 @@ internal struct ArchetypeChunk
 		return ref MemoryMarshal.GetReference(span);
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReferenceAt<T>(int column, int row) where T : struct
 	{
 		ref var reference = ref GetReference<T>(column);
@@ -61,7 +61,7 @@ internal struct ArchetypeChunk
 		return ref Unsafe.Add(ref reference, row & Archetype.CHUNK_THRESHOLD);
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
 		if (column < 0 || column >= Data!.Length)
@@ -71,7 +71,7 @@ internal struct ArchetypeChunk
 		return span;
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ReadOnlySpan<EntityView> GetEntities()
 		=> Entities.AsSpan(0, Count);
 }
@@ -183,7 +183,7 @@ public sealed class Archetype
 		return ref chunk;
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal ref ArchetypeChunk GetChunk(int index)
 		=> ref _chunks[index >> CHUNK_LOG2];
 
@@ -215,7 +215,7 @@ public sealed class Archetype
 		return _allLookup.ContainsKey(id);
 	}
 
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int GetComponentIndex<T>() where T : struct
 	{
 		var id = Lookup.Component<T>.HashCode;
@@ -413,6 +413,7 @@ public sealed class Archetype
 		MakeEdges(newNode, this, All[i].ID);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private bool IsSuperset(ReadOnlySpan<ComponentInfo> other)
 	{
 		int i = 0, j = 0;
