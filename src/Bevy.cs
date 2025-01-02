@@ -137,6 +137,8 @@ public partial class Scheduler
 		AddSystemParam(new Commands(world));
 	}
 
+	public World World => _world;
+
 	public void Run(Func<bool> checkForExitFn, Action? cleanupFn = null)
 	{
 		while (!checkForExitFn())
@@ -411,9 +413,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return q;
 	}
 
-
 	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
-
 
 	public ref T Single<T>() where T : struct
 		=> ref _query.Single<T>();
@@ -441,7 +441,6 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T
 		return res;
 	}
 
-
 	public static implicit operator T?(Res<T> reference)
 		=> reference.Value;
 }
@@ -456,7 +455,6 @@ public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where
 	{
 		return new Local<T>();
 	}
-
 
 	public static implicit operator T?(Local<T> reference)
 		=> reference.Value;
@@ -582,7 +580,6 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
 
 	internal Empty(QueryIterator iterator) => _iterator = iterator;
 
-
 	public static void Build(QueryBuilder builder)
 	{
 
@@ -600,16 +597,13 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
 		get => ref this;
 	}
 
-
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
 		entities = _iterator.Entities();
 		count = entities.Length;
 	}
 
-
 	public readonly Empty GetEnumerator() => this;
-
 
 	public bool MoveNext() => _iterator.Next();
 }

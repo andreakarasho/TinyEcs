@@ -3,7 +3,7 @@ using TinyEcs;
 using Raylib_cs;
 
 
-var app = new App();
+using var app = new App();
 app.AddPlugin(new RaylibPlugin() {
 	WindowSize = new () { Value = { X = 800, Y = 600 } },
 	Title = "TinyEcs using raylib",
@@ -20,9 +20,29 @@ app.Run(() => Raylib.WindowShouldClose(), Raylib.CloseWindow);
 
 
 // =================================================================================
-sealed class App : Scheduler
+sealed class App : Scheduler, IDisposable
 {
 	public App() : base(new ()) { }
+
+	public void Dispose() => World?.Dispose();
+}
+// =================================================================================
+sealed class Time : SystemParam<World>, IIntoSystemParam<World>
+{
+	public float Frame;
+	public float Total;
+
+	public static ISystemParam<World> Generate(World world)
+	{
+		if (world.Entity<Placeholder<Time>>().Has<Placeholder<Time>>())
+			return world.Entity<Placeholder<Time>>().Get<Placeholder<Time>>().Value;
+
+		var ev = new Time();
+		world.Entity<Placeholder<Time>>().Set(new Placeholder<Time>() { Value = ev });
+		return ev;
+	}
+
+	struct Placeholder<T> { public T Value; }
 }
 // =================================================================================
 struct RaylibPlugin : IPlugin
@@ -120,7 +140,7 @@ struct GameplayPlugin : IPlugin
 	{
 		var rnd = Random.Shared;
 		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
-		assetsManager.Value!.Register("pepe_face", texture);
+		assetsManager.Value!.Register(texture);
 
 		for (var i = 0; i < EntitiesToSpawn; ++i)
 		{
@@ -226,20 +246,11 @@ readonly struct RenderingPlugin : IPlugin
 // =================================================================================
 sealed class AssetsManager
 {
-	private readonly Dictionary<string, Texture2D> _assets = new();
 	private readonly Dictionary<uint, Texture2D> _ids = new ();
 
-	public void Register(string name, Texture2D texture)
+	public void Register(Texture2D texture)
 	{
-		_assets[name] = texture;
 		_ids[texture.Id] = texture;
-	}
-
-	public Texture2D? Get(string name)
-	{
-		if (!_assets.TryGetValue(name, out var texture))
-			return null;
-		return texture;
 	}
 
 	public Texture2D? Get(uint id)
@@ -248,24 +259,6 @@ sealed class AssetsManager
 			return null;
 		return texture;
 	}
-}
-// =================================================================================
-sealed class Time : SystemParam<World>, IIntoSystemParam<World>
-{
-	public float Frame;
-	public float Total;
-
-	public static ISystemParam<World> Generate(World arg)
-	{
-		if (arg.Entity<Placeholder<Time>>().Has<Placeholder<Time>>())
-			return arg.Entity<Placeholder<Time>>().Get<Placeholder<Time>>().Value;
-
-		var ev = new Time();
-		arg.Entity<Placeholder<Time>>().Set(new Placeholder<Time>() { Value = ev });
-		return ev;
-	}
-
-	struct Placeholder<T> { public T Value; }
 }
 // =================================================================================
 struct WindowSize
