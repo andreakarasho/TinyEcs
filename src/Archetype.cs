@@ -1,7 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Numerics;
-using Microsoft.VisualBasic;
 
 namespace TinyEcs;
 
@@ -504,25 +503,10 @@ public sealed class Archetype
 		public byte Data;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static void CopyData(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
 	{
-		if (isManaged)
-		{
-			Array.Copy(src, srcIdx, dst, dstIdx, count);
-		}
-		else
-		{
-			ref var srcB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(src).Data, (uint)(srcIdx * elementSize));
-			ref var dstB = ref Unsafe.AddByteOffset(ref Unsafe.As<RawArrayData>(dst).Data, (uint)(dstIdx * elementSize));
-
-			if (Vector.IsHardwareAccelerated)
-			{
-				CopySimd(ref srcB, ref dstB, elementSize * count);
-				return;
-			}
-
-			Unsafe.CopyBlock(ref dstB, ref srcB, (uint)(count * elementSize));
-		}
+		Array.Copy(src, srcIdx, dst, dstIdx, count);
 	}
 
 	private static unsafe void CopySimd(ref byte src, ref byte dst, int totalBytes)
