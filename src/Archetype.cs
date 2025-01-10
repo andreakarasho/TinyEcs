@@ -164,7 +164,6 @@ public sealed class Archetype
 	public EcsID Id { get; }
 	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
-	internal EcsID[] Sign => _ids;
 
 	private ref ArchetypeChunk GetOrCreateChunk(int index)
 	{
@@ -455,13 +454,13 @@ public sealed class Archetype
 
 	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
 	{
-		var result = Match.Validate(_comparer, _ids, terms);
-		if (result < 0)
+		var result = MatchWith(terms);
+		if (result == ArchetypeSearchResult.Stop)
 		{
 			return;
 		}
 
-		if (result == 0)
+		if (result == ArchetypeSearchResult.Found)
 		{
 			matched.Add(this);
 		}
@@ -476,13 +475,9 @@ public sealed class Archetype
 		}
 	}
 
-	internal int MatchWith(ReadOnlySpan<IQueryTerm> terms)
+	internal ArchetypeSearchResult MatchWith(ReadOnlySpan<IQueryTerm> terms)
 	{
-		var result = Match.Validate(_comparer, _ids, terms);
-		// if (result < 0)
-		// 	return -1;
-
-		return result;
+		return FilterMatch.Match(_ids, terms);
 	}
 
 	public void Print(int depth)

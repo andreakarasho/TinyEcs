@@ -1,71 +1,57 @@
 namespace TinyEcs;
 
-static class Match
+public enum ArchetypeSearchResult
 {
-	public static int Validate(IComparer<ulong> comparer, EcsID[] ids, ReadOnlySpan<IQueryTerm> terms)
+	Continue,
+	Found,
+	Stop
+}
+
+public static class FilterMatch
+{
+	public static ArchetypeSearchResult Match(ReadOnlySpan<EcsID> archetypeIds, ReadOnlySpan<IQueryTerm> terms)
 	{
-		if (terms.IsEmpty)
-			return -1;
+		int i = 0, j = 0;
 
-        foreach (ref readonly var term in terms)
-        {
-            switch (term.Op)
-            {
+		while (i < archetypeIds.Length && j < terms.Length)
+		{
+			switch (terms[j].Op)
+			{
 				case TermOp.DataAccess:
-                case TermOp.With:
-	                var all = true;
-	                foreach (var id in ids)
-	                {
-		                if (ComponentComparer.CompareTerms(null, id, term.Id) == 0)
-		                {
-			                all = false;
-			                break;
-		                }
-	                }
+				case TermOp.With:
 
-	                if (all)
-                    {
-                        return 1; // Required ID not found
-                    }
+					if (archetypeIds[i] == terms[j].Id)
+						j += 1;
 
-                    break;
-                case TermOp.Without:
-	                foreach (var id in ids)
-	                {
-		                if (ComponentComparer.CompareTerms(null, id, term.Id) == 0)
-		                {
-			                return -1; // Forbidden ID found
-		                }
-	                }
-
-	                break;
-                case TermOp.Optional:
-                    // Do nothing, as presence or absence is acceptable
-                    break;
-                case TermOp.AtLeastOne when term is ContainerQueryTerm container:
-					if (!ids.Any(id => container.Terms.Any(tid => ComponentComparer.CompareTerms(null, id, tid.Id)== 0)))
-					{
-						return 1; // At least one required ID not found
-					}
-                    break;
-                case TermOp.Exactly when term is ContainerQueryTerm container:
-					if (!ids.SequenceEqual(container.Terms.Select(s => s.Id)))
-					{
-						return 1; // Exact match required but not found
-					}
 					break;
-                case TermOp.None when term is ContainerQueryTerm container:
-                    if (ids.Any(id => container.Terms.Any(tid => ComponentComparer.CompareTerms(null, id, tid.Id) == 0)))
-                    {
-                        return -1; // None of the specified IDs should be present
-                    }
-                    break;
-				case TermOp.Or:
-					// Or is applied on query side
-					break;
-            }
-        }
 
-        return 0;
+				case TermOp.Without:
+
+					if (archetypeIds[i] == terms[j].Id)
+						return ArchetypeSearchResult.Stop;
+
+					if (archetypeIds[i] > terms[j].Id)
+						j += 1;
+
+					break;
+
+				default:
+				case TermOp.Optional:
+					j += 1;
+					break;
+			}
+
+			i += 1;
+		}
+
+		while (j < terms.Length)
+		{
+			if (terms[j].Op is not TermOp.Without or TermOp.Optional)
+				break;
+
+			j += 1;
+		}
+
+		return j == terms.Length ? ArchetypeSearchResult.Found : ArchetypeSearchResult.Continue;
 	}
 }

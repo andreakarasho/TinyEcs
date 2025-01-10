@@ -588,7 +588,7 @@ public sealed partial class World
 			{
 				var result = archetype.MatchWith(_terms);
 
-				if (result <= -1)
+				if (result == ArchetypeSearchResult.Stop)
 					break;
 
 				foreach (var edge in archetype._add)
