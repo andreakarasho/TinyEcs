@@ -13,13 +13,6 @@ public sealed class QueryBuilder
 
 	public World World => _world;
 
-	public QueryBuilder Data<T>() where T : struct
-	{
-		ref readonly var cmp = ref _world.Component<T>();
-		EcsAssert.Panic(cmp.Size > 0, "You can't access Tag as Component");
-		return Term(new QueryTerm(cmp.ID, TermOp.DataAccess));
-	}
-
 	public QueryBuilder With<T>() where T : struct
 		=> With(_world.Component<T>().ID);
 
@@ -70,9 +63,6 @@ public sealed class QueryBuilder
 	public QueryBuilder Optional(EcsID id)
 		=> Term(new QueryTerm(id, TermOp.Optional));
 
-	public QueryBuilder AtLeast(params EcsID[] ids)
-		=> Term(new ContainerQueryTerm(ids.Select(s => new QueryTerm(s, TermOp.Optional)).Cast<IQueryTerm>().ToArray(), TermOp.AtLeastOne));
-
 	public QueryBuilder Term(IQueryTerm term)
 	{
 		_components[term.Id] = term;
@@ -104,11 +94,11 @@ public sealed class Query
 		World = world;
 		_matchedArchetypes = new List<Archetype>();
 
-		_terms = terms.Where(s => s.Op != TermOp.Or)
+		_terms = terms
 			.ToImmutableSortedSet()
 			.ToImmutableArray();
 
-		TermsAccess = terms.Where(s => s.Op == TermOp.DataAccess || s.Op == TermOp.Optional)
+		TermsAccess = terms.Where(s => Lookup.GetComponent(s.Id).Size > 0)
 			.ToImmutableArray();
 
 		_indices = new int[TermsAccess.Length];

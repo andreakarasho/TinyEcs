@@ -26,6 +26,10 @@ internal static class Lookup
 	private static readonly FastIdLookup<Func<int, Array?>> _arrayCreator = new ();
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
 
+	public static ref readonly ComponentInfo GetComponent(EcsID id)
+	{
+		return ref _components.TryGet(id, out var exists);
+	}
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
 		ref var fn = ref _arrayCreator.TryGet(hashcode, out var exists);

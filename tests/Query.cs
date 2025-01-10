@@ -256,7 +256,7 @@ namespace TinyEcs.Tests
 			var count = 0;
 			var it = ctx.World.QueryBuilder()
 				.Optional<IntComponent>()
-				.Data<FloatComponent>()
+				.With<FloatComponent>()
 				.Build()
 				.Iter();
 

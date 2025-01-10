@@ -92,7 +92,7 @@ public sealed class Archetype
 		, _pairsLookup
 #endif
 		;
-	private readonly EcsID[] _ids;
+	private readonly FrozenSet<EcsID> _ids;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
 	private readonly int[] _fastLookup;
@@ -152,7 +152,7 @@ public sealed class Archetype
 			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
 #endif
 
-		_ids = All.Select(s => s.ID).ToArray();
+		_ids = All.Select(s => s.ID).ToFrozenSet();
 		_add = new ();
 		_remove = new ();
 	}

@@ -26,8 +26,8 @@ scheduler.AddSystem((Query<Data<Position, Velocity>> q)=>
 
 
 var query = ecs.QueryBuilder()
-	.Data<Position>()
-	.Data<Velocity>()
+	.With<Position>()
+	.With<Velocity>()
 	.Build();
 
 var sw = Stopwatch.StartNew();

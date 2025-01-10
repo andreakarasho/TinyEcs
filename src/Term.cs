@@ -48,12 +48,7 @@ public class ContainerQueryTerm(IQueryTerm[] terms, TermOp op) : IQueryTerm
 
 public enum TermOp : byte
 {
-	DataAccess,
 	With,
     Without,
     Optional,
-    AtLeastOne,
-    Exactly,
-    None,
-	Or
 }
