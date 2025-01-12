@@ -31,7 +31,7 @@ public sealed class QueryBuilder
 #endif
 
 	public QueryBuilder With(EcsID id)
-		=> Term(new QueryTerm(id, TermOp.With));
+		=> Term(new WithTerm(id));
 
 	public QueryBuilder Without<T>() where T : struct
 		=> Without(_world.Component<T>().ID);
@@ -51,7 +51,7 @@ public sealed class QueryBuilder
 #endif
 
 	public QueryBuilder Without(EcsID id)
-		=> Term(new QueryTerm(id, TermOp.Without));
+		=> Term(new WithoutTerm(id));
 
 	public QueryBuilder Optional<T>() where T : struct
 	{
@@ -61,7 +61,7 @@ public sealed class QueryBuilder
 	}
 
 	public QueryBuilder Optional(EcsID id)
-		=> Term(new QueryTerm(id, TermOp.Optional));
+		=> Term(new OptionalTerm(id));
 
 	public QueryBuilder Term(IQueryTerm term)
 	{

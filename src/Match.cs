@@ -15,22 +15,10 @@ public static class FilterMatch
 	{
 		foreach (ref readonly var term in terms)
 		{
-			switch (term.Op)
-			{
-				case TermOp.With:
+			var result = term.Match(archetypeIds);
 
-					if (!archetypeIds.Contains(term.Id))
-						return ArchetypeSearchResult.Continue;
-
-					break;
-
-				case TermOp.Without:
-
-					if (archetypeIds.Contains(term.Id))
-						return ArchetypeSearchResult.Stop;
-
-					break;
-			}
+			if (result == ArchetypeSearchResult.Stop || (term.Op == TermOp.With && result == ArchetypeSearchResult.Continue))
+				return result;
 		}
 
 		return ArchetypeSearchResult.Found;
