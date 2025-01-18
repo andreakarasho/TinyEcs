@@ -197,9 +197,9 @@ public ref struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T DataRefWithSize<T>(int index, out int sizeInByes) where T : struct
+	public readonly ref T DataRefWithSize<T>(int index, out int sizeInBytes) where T : struct
 	{
-		return ref _chunkIterator.Current.GetReferenceWithSize<T>(_indices[index], out sizeInByes);
+		return ref _chunkIterator.Current.GetReferenceWithSize<T>(_indices[index], out sizeInBytes);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
