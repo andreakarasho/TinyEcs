@@ -92,7 +92,7 @@ public sealed class Query
 	internal Query(World world, ImmutableArray<IQueryTerm> terms)
 	{
 		World = world;
-		_matchedArchetypes = new List<Archetype>();
+		_matchedArchetypes = new ();
 
 		_terms = terms
 			.ToImmutableSortedSet()
@@ -110,7 +110,7 @@ public sealed class Query
 
 
 
-	internal void Match()
+	private void Match()
 	{
 		if (_lastArchetypeIdMatched == World.LastArchetypeId)
 			return;
@@ -162,6 +162,29 @@ public sealed class Query
 		Match();
 
 		return new(CollectionsMarshal.AsSpan(_matchedArchetypes), TermsAccess, _indices);
+	}
+
+	public QueryIterator Iter(EcsID entity)
+	{
+		Match();
+
+		ref var record = ref World.GetRecord(entity);
+
+		var found = false;
+		foreach (var arch in _matchedArchetypes)
+		{
+			if (arch.Id == record.Archetype.Id)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			return new ([], TermsAccess, _indices);
+
+		var span = new ReadOnlySpan<Archetype>(ref record.Archetype);
+		return new(span, TermsAccess, _indices);
 	}
 }
 

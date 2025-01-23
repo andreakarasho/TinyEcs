@@ -415,6 +415,8 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 
 	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
+	public TQueryData Iter(EcsID id) => TQueryData.CreateIterator(_query.Iter(id));
+
 	public ref T Single<T>() where T : struct
 		=> ref _query.Single<T>();
 

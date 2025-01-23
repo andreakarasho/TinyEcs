@@ -75,7 +75,7 @@ internal struct ArchetypeChunk
 		=> Entities.AsSpan(0, Count);
 }
 
-public sealed class Archetype
+public sealed class Archetype : IComparable<Archetype>
 {
 	const int ARCHETYPE_INITIAL_CAPACITY = 1;
 
@@ -532,6 +532,11 @@ public sealed class Archetype
 			Unsafe.Add(ref dst, offset) = Unsafe.Add(ref src, offset);
 			offset++;
 		}
+	}
+
+	public int CompareTo(Archetype? other)
+	{
+		return Id.CompareTo(other?.Id);
 	}
 }
 
