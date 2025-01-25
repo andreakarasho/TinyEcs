@@ -19,6 +19,7 @@ public sealed partial class World
 			return;
 
 		_worldState.Locks += 1;
+		EcsAssert.Assert(_worldState.Locks > 0, "");
 	}
 
 
@@ -28,6 +29,7 @@ public sealed partial class World
 			return;
 
 		_worldState.Locks -= 1;
+		EcsAssert.Assert(_worldState.Locks >= 0, "");
 
 		if (_worldState.Locks == 0 && _operations.Count > 0)
 		{

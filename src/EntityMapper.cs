@@ -220,15 +220,25 @@ public partial interface IChildrenComponent
 {
 	HashSet<EcsID> Value { get; set; }
 
-	public HashSet<EcsID>.Enumerator GetEnumerator() => Value.GetEnumerator();
+	HashSet<EcsID>.Enumerator GetEnumerator();
 }
-
 
 public partial struct Parent { }
 
 public struct Children : IChildrenComponent
 {
-	HashSet<EcsID> IChildrenComponent.Value { get; set; }
+	private static readonly HashSet<EcsID> _empty = [];
+
+	private HashSet<EcsID> _value;
+
+    HashSet<ulong> IChildrenComponent.Value
+	{
+		readonly get => _value;
+		set => _value = value;
+	}
+
+	public readonly HashSet<ulong>.Enumerator GetEnumerator()
+		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
 }
 
 

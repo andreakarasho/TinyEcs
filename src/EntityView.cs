@@ -7,7 +7,7 @@ namespace TinyEcs;
 [SkipLocalsInit]
 #endif
 [DebuggerDisplay("ID: {ID}")]
-public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
+public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>, IComparable<EntityView>, IComparable<EcsID>
 {
     public static readonly EntityView Invalid = new(null!, 0);
 
@@ -46,6 +46,13 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>
     public readonly override bool Equals(object? obj)
 		=> obj is EntityView ent && Equals(ent);
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly int CompareTo(EntityView ent)
+		=> ID.CompareTo(ent.ID);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly int CompareTo(EcsID ent)
+		=> ID.CompareTo(ent);
 
 
 	/// <inheritdoc cref="World.Add{T}(EcsID)"/>
