@@ -123,45 +123,15 @@ public sealed class Query
 	public int Count()
 	{
 		Match();
+
 		return _matchedArchetypes.Sum(static s => s.Count);
-	}
-
-	public ref T Single<T>() where T : struct
-	{
-		var count = Count();
-		EcsAssert.Panic(count == 1, "'Single' must match one and only one entity.");
-
-		var it = Iter();
-		if (it.Next())
-			return ref it.Data<T>()[0];
-		return ref Unsafe.NullRef<T>();
-	}
-
-	public EntityView Single()
-	{
-		var count = Count();
-		EcsAssert.Panic(count == 1, "Multiple entities found for a single archetype");
-
-		var it = Iter();
-		if (it.Next())
-			return it.Entities()[0];
-		return EntityView.Invalid;
-	}
-
-	public ref T Get<T>(EcsID entity) where T : struct
-	{
-		ref var record = ref World.GetRecord(entity);
-		var idx = record.Archetype.GetComponentIndex<T>();
-		if (idx < 0)
-			return ref Unsafe.NullRef<T>();
-		return ref record.Chunk.GetReferenceAt<T>(idx, record.Row);
 	}
 
 	public QueryIterator Iter()
 	{
 		Match();
 
-		return new(CollectionsMarshal.AsSpan(_matchedArchetypes), TermsAccess, _indices);
+		return Iter(CollectionsMarshal.AsSpan(_matchedArchetypes), 0, -1);
 	}
 
 	public QueryIterator Iter(EcsID entity)
@@ -181,10 +151,16 @@ public sealed class Query
 		}
 
 		if (!found)
-			return new ([], TermsAccess, _indices);
+			return Iter([], 0, 0);
 
-		var span = new ReadOnlySpan<Archetype>(ref record.Archetype);
-		return new(span, TermsAccess, _indices);
+		var archetypes = new ReadOnlySpan<Archetype>(ref record.Archetype);
+		return Iter(archetypes, record.Row, 1);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
+	{
+		return new(archetypes, TermsAccess, _indices, start, count);
 	}
 }
 
@@ -197,56 +173,64 @@ public ref struct QueryIterator
 	private ReadOnlySpan<ArchetypeChunk>.Enumerator _chunkIterator;
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly Span<int> _indices;
+	private readonly int _start, _startSafe, _count;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ImmutableArray<IQueryTerm> terms, Span<int> indices)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ImmutableArray<IQueryTerm> terms, Span<int> indices, int start, int count)
 	{
 		_archetypeIterator = archetypes.GetEnumerator();
 		_terms = terms;
 		_indices = indices;
+		_start = start;
+		_startSafe = start & Archetype.CHUNK_THRESHOLD;
+		_count = count;
 	}
 
 	public readonly int Count
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => _chunkIterator.Current.Count;
+		get => _count > 0 ? Math.Min(_count, _chunkIterator.Current.Count) : _chunkIterator.Current.Count;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T DataRef<T>(int index) where T : struct
 	{
-		return ref _chunkIterator.Current.GetReference<T>(_indices[index]);
+		return ref Unsafe.Add(ref _chunkIterator.Current.GetReference<T>(_indices[index]), _startSafe);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T DataRefWithSize<T>(int index, out int sizeInBytes) where T : struct
 	{
-		return ref _chunkIterator.Current.GetReferenceWithSize<T>(_indices[index], out sizeInBytes);
+		return ref Unsafe.AddByteOffset(ref _chunkIterator.Current.GetReferenceWithSize<T>(_indices[index], out sizeInBytes), sizeInBytes * _startSafe);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>(int index) where T : struct
 	{
-		return _chunkIterator.Current.GetSpan<T>(_indices[index]);
+		return _chunkIterator.Current.GetSpan<T>(_indices[index])
+			.Slice(_startSafe, Count);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>() where T : struct
 	{
-		return _chunkIterator.Current.GetSpan<T>(_archetypeIterator.Current.GetComponentIndex<T>());
+		return _chunkIterator.Current.GetSpan<T>(_archetypeIterator.Current.GetComponentIndex<T>())
+			.Slice(_startSafe, Count);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ReadOnlySpan<EntityView> Entities()
 	{
-		return _chunkIterator.Current.GetEntities();
+		return _chunkIterator.Current.GetEntities()
+			.Slice(_startSafe, Count);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal readonly Span<EntityView> EntitiesDangerous()
 	{
-		return _chunkIterator.Current.Entities.AsSpan(0, Count);
+		return _chunkIterator.Current.Entities
+			.AsSpan(_startSafe, Count);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -280,7 +264,7 @@ public ref struct QueryIterator
 			ref readonly var arch = ref _archetypeIterator.Current;
 			for (var i = 0; i < _indices.Length; ++i)
 				_indices[i] = arch.GetComponentIndex(_terms[i].Id);
-			_chunkIterator = arch.Chunks.GetEnumerator();
+			_chunkIterator = arch.Chunks[(_start >> Archetype.CHUNK_LOG2) ..].GetEnumerator();
 		}
 	}
 }

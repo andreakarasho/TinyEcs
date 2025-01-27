@@ -80,7 +80,7 @@ public sealed class Archetype : IComparable<Archetype>
 	const int ARCHETYPE_INITIAL_CAPACITY = 1;
 
 	internal const int CHUNK_SIZE = 4096;
-	private const int CHUNK_LOG2 = 12;
+	internal const int CHUNK_LOG2 = 12;
 	internal const int CHUNK_THRESHOLD = CHUNK_SIZE - 1;
 
 

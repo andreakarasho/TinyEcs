@@ -415,7 +415,13 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 
 	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
-	public TQueryData Iter(EcsID id) => TQueryData.CreateIterator(_query.Iter(id));
+	public TQueryData Get(EcsID id)
+	{
+		var enumerator = TQueryData.CreateIterator(_query.Iter(id));
+		// TODO: handle the success
+		var success = enumerator.MoveNext();
+		return enumerator;
+	}
 
 	public TQueryData Single()
 	{
