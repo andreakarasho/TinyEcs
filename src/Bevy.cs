@@ -417,11 +417,14 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 
 	public TQueryData Iter(EcsID id) => TQueryData.CreateIterator(_query.Iter(id));
 
-	public ref T Single<T>() where T : struct
-		=> ref _query.Single<T>();
-
-	public EntityView Single()
-		=> _query.Single();
+	public TQueryData Single()
+	{
+		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
+		var enumerator = GetEnumerator();
+		var ok = enumerator.MoveNext();
+		EcsAssert.Panic(ok, "'Single' is not matching any entity.");
+		return enumerator;
+	}
 
 	public int Count()
 		=> _query.Count();
