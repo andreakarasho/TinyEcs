@@ -91,6 +91,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var fieldAssignments = GenerateSequence(i + 1, "\n", j => $"Unsafe.SkipInit<Ptr<T{j}>>(out ptr{j}); ptr{j}.Ref = ref _current{j};");
 				var queryBuilderCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) builder.With<T{j}>();");
 
+				var checkChanged = GenerateSequence(i + 1, "\n", j => $"if (!_iterator.IsChanged({j}, _index)) continue;");
+
 				sb.AppendLine($@"
 					[SkipLocalsInit]
 					public unsafe ref struct Data<{generics}> : IData<Data<{generics}>>, IQueryIterator<Data<{generics}>>

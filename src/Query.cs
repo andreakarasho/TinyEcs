@@ -127,11 +127,11 @@ public sealed class Query
 		return _matchedArchetypes.Sum(static s => s.Count);
 	}
 
-	public QueryIterator Iter()
+	public QueryIterator Iter(Func<uint[,], int, int, uint, bool> predicate = null)
 	{
 		Match();
 
-		return Iter(CollectionsMarshal.AsSpan(_matchedArchetypes), 0, -1);
+		return Iter(CollectionsMarshal.AsSpan(_matchedArchetypes), 0, -1, predicate);
 	}
 
 	public QueryIterator Iter(EcsID entity)
@@ -151,16 +151,16 @@ public sealed class Query
 		}
 
 		if (!found)
-			return Iter([], 0, 0);
+			return Iter([], 0, 0, null);
 
 		var archetypes = new ReadOnlySpan<Archetype>(ref record.Archetype);
-		return Iter(archetypes, record.Row, 1);
+		return Iter(archetypes, record.Row, 1, null);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
+	public QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count, Func<uint[,], int, int, uint, bool> predicate)
 	{
-		return new(archetypes, TermsAccess, _indices, start, count);
+		return new(archetypes, TermsAccess, _indices, start, count, predicate);
 	}
 }
 
@@ -174,10 +174,12 @@ public ref struct QueryIterator
 	private readonly ImmutableArray<IQueryTerm> _terms;
 	private readonly Span<int> _indices;
 	private readonly int _start, _startSafe, _count;
+	private readonly uint _tick;
+	private readonly Func<uint[,], int, int, uint, bool> _detectionFn;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ImmutableArray<IQueryTerm> terms, Span<int> indices, int start, int count)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ImmutableArray<IQueryTerm> terms, Span<int> indices, int start, int count, Func<uint[,], int, int, uint, bool> detectionFn)
 	{
 		_archetypeIterator = archetypes.GetEnumerator();
 		_terms = terms;
@@ -185,6 +187,7 @@ public ref struct QueryIterator
 		_start = start;
 		_startSafe = start & Archetype.CHUNK_THRESHOLD;
 		_count = count;
+		_detectionFn = detectionFn;
 	}
 
 	public readonly int Count

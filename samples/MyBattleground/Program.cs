@@ -15,9 +15,14 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 		.Set<Position>(new Position())
 		.Set<Velocity>(new Velocity());
 
-scheduler.AddSystem((Query<Data<Position, Velocity>> q)=>
+ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
+
+scheduler.AddSystem((Query<
+	Data<Position, Velocity>,
+	Empty
+> q)=>
 {
-	foreach ((var pos, var vel) in q)
+	foreach ((var ent, var pos, var vel) in q)
 	{
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;
@@ -38,9 +43,9 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		// scheduler.Run();
+		scheduler.RunOnce();
 
-		Execute(query);
+		// Execute(query);
 
 		// var it = query.Iter();
 		// while (it.Next())

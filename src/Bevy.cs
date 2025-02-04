@@ -389,18 +389,13 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	}
 }
 
-public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
+public class Query<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter, Empty>, IIntoSystemParam<World>
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
 	where TQueryFilter : struct, IFilter, allows ref struct
 {
-	private readonly Query _query;
+	internal Query(Query query) : base(query) { }
 
-	internal Query(Query query)
-	{
-		_query = query;
-	}
-
-	public static ISystemParam<World> Generate(World arg)
+	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Has<Placeholder<Query<TQueryData, TQueryFilter>>>())
 			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Get<Placeholder<Query<TQueryData, TQueryFilter>>>().Value;
@@ -412,8 +407,37 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Set(new Placeholder<Query<TQueryData, TQueryFilter>>() { Value = q });
 		return q;
 	}
+}
 
-	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
+public class Query<TQueryData, TQueryFilter, TQueryDetection> : SystemParam<World>, IIntoSystemParam<World>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryFilter : struct, IFilter, allows ref struct
+	where TQueryDetection : struct, IDetection, allows ref struct
+{
+	private readonly Query _query;
+
+	private static readonly Func<uint[,], int, int, uint, bool> _fn = TQueryDetection.Detection;
+
+	internal Query(Query query)
+	{
+		_query = query;
+	}
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Has<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>())
+			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Get<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Value;
+
+		var builder = arg.QueryBuilder();
+		TQueryData.Build(builder);
+		TQueryFilter.Build(builder);
+		TQueryDetection.Build(builder);
+		var q = new Query<TQueryData, TQueryFilter, TQueryDetection>(builder.Build());
+		arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Set(new Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>() { Value = q });
+		return q;
+	}
+
+	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter(_fn));
 
 	public TQueryData Get(EcsID id)
 	{
@@ -550,7 +574,8 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
-public interface IQueryIterator<TData> where TData : struct, allows ref struct
+public interface IQueryIterator<TData>
+	where TData : struct, allows ref struct
 {
 	TData GetEnumerator();
 
@@ -560,11 +585,17 @@ public interface IQueryIterator<TData> where TData : struct, allows ref struct
 	bool MoveNext();
 }
 
-public interface IData<TData> : ITermCreator where TData : struct, allows ref struct
+public interface IData<out TData> : ITermCreator where TData : struct, allows ref struct
 {
 	public static abstract TData CreateIterator(QueryIterator iterator);
 }
+
 public interface IFilter : ITermCreator { }
+
+public interface IDetection : ITermCreator
+{
+	internal static abstract bool Detection(uint[,] ticks, int column, int row, uint value);
+}
 
 public interface INestedFilter
 {
@@ -585,7 +616,7 @@ public static class FilterBuilder<T> where T : struct
 	}
 }
 
-public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
+public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter, IDetection
 {
 	private QueryIterator _iterator;
 
@@ -594,6 +625,11 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter
 	public static void Build(QueryBuilder builder)
 	{
 
+	}
+
+	public static bool Detection(uint[,] ticks, int column, int row, uint value)
+	{
+		return true;
 	}
 
 	public static Empty CreateIterator(QueryIterator iterator)
@@ -675,6 +711,22 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 		Build(builder);
 	}
 }
+
+public readonly struct Changed<T> : IDetection
+	where T : struct
+{
+	public static void Build(QueryBuilder builder)
+	{
+
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static bool Detection(uint[,] ticks, int column, int row, uint value)
+	{
+		return value == 0 || ticks[column, row] != value;
+	}
+}
+
 
 ///// <summary>
 ///// Used in query filters to find entities with any of the corrisponding components/tag.
