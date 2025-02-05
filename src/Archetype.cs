@@ -23,12 +23,12 @@ internal struct ArchetypeChunk
 	internal readonly Column[]? Columns;
 	internal readonly EntityView[] Entities;
 
-	internal ArchetypeChunk(ImmutableArray<ComponentInfo> sign, int chunkSize)
+	internal ArchetypeChunk(ReadOnlySpan<ComponentInfo> sign, int chunkSize)
 	{
 		Entities = new EntityView[chunkSize];
 		Columns = new Column[sign.Length];
 		for (var i = 0; i < sign.Length; ++i)
-			Columns[i] = new Column(in sign.ItemRef(i), chunkSize);
+			Columns[i] = new Column(in sign[i], chunkSize);
 	}
 
 	public int Count { get; internal set; }
@@ -125,9 +125,9 @@ public sealed class Archetype : IComparable<Archetype>
 	{
 		_comparer = comparer;
 		_world = world;
-		All = sign.ToImmutableArray();
-		Components = All.Where(x => x.Size > 0).ToImmutableArray();
-		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
+		All = sign;
+		Components = All.Where(x => x.Size > 0).ToArray();
+		Tags = All.Where(x => x.Size <= 0).ToArray();
 #if USE_PAIR
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
 #endif
@@ -180,7 +180,7 @@ public sealed class Archetype : IComparable<Archetype>
 
 	public World World => _world;
 	public int Count => _count;
-	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
+	public readonly ComponentInfo[] All, Components, Tags, Pairs;
 	public EcsID Id { get; }
 	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);

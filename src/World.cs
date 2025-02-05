@@ -114,7 +114,7 @@ public sealed partial class World : IDisposable
 				var arr = new ComponentInfo[oldArch.All.Length - 1];
 				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
 				{
-					ref readonly var item = ref oldArch.All.ItemRef(i);
+					ref readonly var item = ref oldArch.All[i];
 					if (item.ID != id)
 						arr[j++] = item;
 				}
@@ -184,7 +184,7 @@ public sealed partial class World : IDisposable
 			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
-				oldArch.All.CopyTo(arr);
+				oldArch.All.CopyTo(arr, 0);
 				arr[^1] = new ComponentInfo(id, size, isManaged);
 				arr.AsSpan().SortNoAlloc(_comparisonCmps);
 

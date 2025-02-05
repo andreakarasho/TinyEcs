@@ -132,7 +132,7 @@ public sealed partial class World
 		{
 			var archLessOne = Archetype(ids[..^1]);
 			var arr = new ComponentInfo[ids.Length];
-			archLessOne.All.CopyTo(arr);
+			archLessOne.All.CopyTo(arr, 0);
 			arr[^1] = ids[^1];
 			arr.AsSpan().SortNoAlloc(_comparisonCmps);
 			archetype = NewArchetype(archLessOne, arr, arr[^1].ID);
