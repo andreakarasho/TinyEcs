@@ -89,7 +89,8 @@ public sealed class Query
 		World = world;
 		_matchedArchetypes = new ();
 
-		_terms = terms;
+		_terms = new IQueryTerm[terms.Length];
+		terms.CopyTo(_terms, 0);
 		Array.Sort(_terms);
 
 		TermsAccess = terms
@@ -212,7 +213,7 @@ public ref struct QueryIterator
 	{
 		var i = _indices[index];
 		ref readonly var chunk = ref _chunkIterator.Current;
-		changed = ref chunk.Columns[i].Changed[0];
+		changed = 0; // ref chunk.Columns[i].Changed[0];
 		return ref Unsafe.AddByteOffset(ref chunk.GetReferenceWithSize<T>(i, out sizeInBytes), sizeInBytes * _startSafe);
 	}
 
