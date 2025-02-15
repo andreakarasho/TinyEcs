@@ -389,13 +389,18 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	}
 }
 
-public class Query<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter, Empty>, IIntoSystemParam<World>
+public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
 	where TQueryFilter : struct, IFilter, allows ref struct
 {
-	internal Query(Query query) : base(query) { }
+	private readonly Query _query;
 
-	public new static ISystemParam<World> Generate(World arg)
+	internal Query(Query query)
+	{
+		_query = query;
+	}
+
+	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Has<Placeholder<Query<TQueryData, TQueryFilter>>>())
 			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Get<Placeholder<Query<TQueryData, TQueryFilter>>>().Value;
@@ -405,35 +410,6 @@ public class Query<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter, E
 		TQueryFilter.Build(builder);
 		var q = new Query<TQueryData, TQueryFilter>(builder.Build());
 		arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Set(new Placeholder<Query<TQueryData, TQueryFilter>>() { Value = q });
-		return q;
-	}
-}
-
-public class Query<TQueryData, TQueryFilter, TQueryDetection> : SystemParam<World>, IIntoSystemParam<World>
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
-	where TQueryFilter : struct, IFilter, allows ref struct
-	where TQueryDetection : struct, IDetection, allows ref struct
-{
-	private readonly Query _query;
-
-	private static readonly Func<uint[,], int, int, uint, bool> _fn = TQueryDetection.Detection;
-
-	internal Query(Query query)
-	{
-		_query = query;
-	}
-
-	public static ISystemParam<World> Generate(World arg)
-	{
-		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Has<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>())
-			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Get<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Value;
-
-		var builder = arg.QueryBuilder();
-		TQueryData.Build(builder);
-		TQueryFilter.Build(builder);
-		TQueryDetection.Build(builder);
-		var q = new Query<TQueryData, TQueryFilter, TQueryDetection>(builder.Build());
-		arg.Entity<Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>>().Set(new Placeholder<Query<TQueryData, TQueryFilter, TQueryDetection>>() { Value = q });
 		return q;
 	}
 
@@ -585,7 +561,7 @@ public interface IQueryIterator<TData>
 	bool MoveNext();
 }
 
-public interface IData<out TData> : ITermCreator where TData : struct, allows ref struct
+public interface IData<TData> : ITermCreator, IQueryIterator<TData> where TData : struct, allows ref struct
 {
 	public static abstract TData CreateIterator(QueryIterator iterator);
 }
@@ -594,7 +570,6 @@ public interface IFilter : ITermCreator { }
 
 public interface IDetection : ITermCreator
 {
-	internal static abstract bool Detection(uint[,] ticks, int column, int row, uint value);
 }
 
 public interface INestedFilter
@@ -616,7 +591,7 @@ public static class FilterBuilder<T> where T : struct
 	}
 }
 
-public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter, IDetection
+public ref struct Empty : IData<Empty>, IFilter
 {
 	private QueryIterator _iterator;
 
@@ -627,22 +602,12 @@ public ref struct Empty : IData<Empty>, IQueryIterator<Empty>, IFilter, IDetecti
 
 	}
 
-	public static bool Detection(uint[,] ticks, int column, int row, uint value)
-	{
-		return true;
-	}
-
 	public static Empty CreateIterator(QueryIterator iterator)
 	{
 		return new Empty(iterator);
 	}
 
-	[UnscopedRef]
-	public ref Empty Current
-	{
-
-		get => ref this;
-	}
+	[UnscopedRef] public ref Empty Current => ref this;
 
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
@@ -711,99 +676,6 @@ public readonly struct Optional<T> : IFilter, INestedFilter
 		Build(builder);
 	}
 }
-
-public readonly struct Changed<T> : IDetection
-	where T : struct
-{
-	public static void Build(QueryBuilder builder)
-	{
-
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static bool Detection(uint[,] ticks, int column, int row, uint value)
-	{
-		return value == 0 || ticks[column, row] != value;
-	}
-}
-
-
-///// <summary>
-///// Used in query filters to find entities with any of the corrisponding components/tag.
-///// </summary>
-///// <typeparam name="T"></typeparam>
-//public readonly struct AtLeast<T> : ITuple, IFilter where T : struct, ITuple
-//{
-//	static readonly ITuple _value = default(T)!;
-
-//	public object? this[int index] => _value[index];
-
-//	public int Length => _value.Length;
-//	public static void Build(QueryBuilder builder)
-//	{
-//		throw new NotImplementedException();
-//	}
-//}
-
-///// <summary>
-///// Used in query filters to find entities with exactly the corrisponding components/tag.
-///// </summary>
-///// <typeparam name="T"></typeparam>
-//public readonly struct Exactly<T> : ITuple, IFilter where T : struct, ITuple
-//{
-//	static readonly ITuple _value = default(T)!;
-
-//	public object? this[int index] => _value[index];
-
-//	public int Length => _value.Length;
-//	public static void Build(QueryBuilder builder)
-//	{
-//		throw new NotImplementedException();
-//	}
-//}
-
-///// <summary>
-///// Used in query filters to find entities with none the corrisponding components/tag.
-///// </summary>
-///// <typeparam name="T"></typeparam>
-//public readonly struct None<T> : ITuple, IFilter where T : struct, ITuple
-//{
-//	static readonly ITuple _value = default(T)!;
-
-//	public object? this[int index] => _value[index];
-
-//	public int Length => _value.Length;
-//	public static void Build(QueryBuilder builder)
-//	{
-//		throw new NotImplementedException();
-//	}
-//}
-
-///// <summary>
-///// Used in query filters to accomplish the 'or' logic.
-///// </summary>
-///// <typeparam name="T"></typeparam>
-//public readonly struct Or<TFirst, TSecond>, IFilter, INestedFilter
-//	where TFirst : struct, IComponent
-//	where TSecond : struct, IComponent
-//{
-//	public static void Build(QueryBuilder builder)
-//	{
-//		//builder.Optional<TFirst>();
-//		//builder.Optional<TSecond>();
-
-//		var ok0 = FilterBuilder<TFirst>.Build(builder);
-//		var ok1 = FilterBuilder<TSecond>.Build(builder);
-
-//		builder.AtLeast(builder.World.Component<TFirst>().ID, builder.World.Component<TSecond>().ID);
-//	}
-
-//	public void BuildAsParam(QueryBuilder builder)
-//	{
-//		Build(builder);
-//	}
-//}
-
 
 public partial struct Parent { }
 public partial interface IChildrenComponent { }
