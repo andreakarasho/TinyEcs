@@ -437,7 +437,7 @@ public class Query<TQueryData, TQueryFilter, TQueryDetection> : SystemParam<Worl
 		return q;
 	}
 
-	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter(_fn));
+	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
 
 	public TQueryData Get(EcsID id)
 	{
