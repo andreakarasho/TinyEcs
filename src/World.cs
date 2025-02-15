@@ -114,7 +114,7 @@ public sealed partial class World : IDisposable
 				var arr = new ComponentInfo[oldArch.All.Length - 1];
 				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
 				{
-					ref readonly var item = ref oldArch.All.ItemRef(i);
+					ref readonly var item = ref oldArch.All[i];
 					if (item.ID != id)
 						arr[j++] = item;
 				}
@@ -157,7 +157,7 @@ public sealed partial class World : IDisposable
 
 		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
 		if (column >= 0)
-            return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+            return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 
 		BeginDeferred();
 
@@ -184,7 +184,7 @@ public sealed partial class World : IDisposable
 			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
-				oldArch.All.CopyTo(arr);
+				oldArch.All.CopyTo(arr, 0);
 				arr[^1] = new ComponentInfo(id, size, isManaged);
 				arr.AsSpan().SortNoAlloc(_comparisonCmps);
 
@@ -221,7 +221,7 @@ public sealed partial class World : IDisposable
 #endif
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
-		return (size > 0 ? record.Chunk.Data![column] : null, record.Row);
+		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}
 
 	internal bool IsAttached(ref EcsRecord record, EcsID id)

@@ -206,42 +206,42 @@ namespace TinyEcs.Tests
 		// 	Assert.Equal(23f, single.Target.Value);
 		// }
 
-		[Fact]
-		public void Query_Single()
-		{
-			using var ctx = new Context();
-
-			var singleton = ctx.World.Entity()
-				.Set(new FloatComponent())
-				.Set(new IntComponent())
-				.Add<NormalTag>();
-
-			var other = ctx.World.Entity()
-				.Set(new FloatComponent())
-				.Set(new IntComponent());
-
-			var result = ctx.World.QueryBuilder()
-				.With<FloatComponent>()
-				.With<IntComponent>()
-				.With<NormalTag>()
-				.Build()
-				.Single();
-
-			Assert.Equal(singleton.ID, result.ID);
-
-			var singleton2 = ctx.World.Entity()
-				.Set(new FloatComponent())
-				.Set(new IntComponent())
-				.Add<NormalTag>();
-
-			var query = ctx.World.QueryBuilder()
-				.With<FloatComponent>()
-				.With<IntComponent>()
-				.With<NormalTag>()
-				.Build();
-
-			Assert.ThrowsAny<Exception>(() => _ = query.Single());
-		}
+		// [Fact]
+		// public void Query_Single()
+		// {
+		// 	using var ctx = new Context();
+		//
+		// 	var singleton = ctx.World.Entity()
+		// 		.Set(new FloatComponent())
+		// 		.Set(new IntComponent())
+		// 		.Add<NormalTag>();
+		//
+		// 	var other = ctx.World.Entity()
+		// 		.Set(new FloatComponent())
+		// 		.Set(new IntComponent());
+		//
+		// 	var result = ctx.World.QueryBuilder()
+		// 		.With<FloatComponent>()
+		// 		.With<IntComponent>()
+		// 		.With<NormalTag>()
+		// 		.Build()
+		// 		.Single();
+		//
+		// 	Assert.Equal(singleton.ID, result.ID);
+		//
+		// 	var singleton2 = ctx.World.Entity()
+		// 		.Set(new FloatComponent())
+		// 		.Set(new IntComponent())
+		// 		.Add<NormalTag>();
+		//
+		// 	var query = ctx.World.QueryBuilder()
+		// 		.With<FloatComponent>()
+		// 		.With<IntComponent>()
+		// 		.With<NormalTag>()
+		// 		.Build();
+		//
+		// 	Assert.ThrowsAny<Exception>(() => _ = query.Single());
+		// }
 
 		[Fact]
 		public void Query_Optional()

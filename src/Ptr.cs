@@ -9,7 +9,17 @@ public ref struct Ptr<T> where T : struct
 [SkipLocalsInit]
 public readonly ref struct PtrRO<T> where T : struct
 {
-	public PtrRO(ref T r) => Ref = ref r;
+	public PtrRO(ref readonly T r) => Ref = ref r;
 
-	public readonly ref T Ref;
+	public readonly ref readonly T Ref;
+}
+
+[SkipLocalsInit]
+public ref struct DataRow<T> where T : struct
+{
+	public Ptr<T> Value;
+	public int Size;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Next() => Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
 }

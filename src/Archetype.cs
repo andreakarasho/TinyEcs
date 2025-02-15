@@ -1,22 +1,34 @@
 using System.Collections.Frozen;
-using System.Collections.Immutable;
 using System.Numerics;
 
 namespace TinyEcs;
 
+
+[SkipLocalsInit]
+internal readonly struct Column
+{
+	public readonly Array Data;
+	// public readonly uint[] Changed;
+
+	internal Column(ref readonly ComponentInfo component, int chunkSize)
+	{
+		Data = Lookup.GetArray(component.ID, chunkSize)!;
+		// Changed = new uint[chunkSize];
+	}
+}
+
 [SkipLocalsInit]
 internal struct ArchetypeChunk
 {
-	internal readonly Array[]? Data;
+	internal readonly Column[]? Columns;
 	internal readonly EntityView[] Entities;
 
-
-	internal ArchetypeChunk(ImmutableArray<ComponentInfo> sign, int chunkSize)
+	internal ArchetypeChunk(ReadOnlySpan<ComponentInfo> sign, int chunkSize)
 	{
 		Entities = new EntityView[chunkSize];
-		Data = new Array[sign.Length];
+		Columns = new Column[sign.Length];
 		for (var i = 0; i < sign.Length; ++i)
-			Data[i] = Lookup.GetArray(sign[i].ID, chunkSize)!;
+			Columns[i] = new(in sign[i], chunkSize); // Lookup.GetArray(sign[i].ID, chunkSize)!;
 	}
 
 	public int Count { get; internal set; }
@@ -29,17 +41,17 @@ internal struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReference<T>(int column) where T : struct
 	{
-		if (column < 0 || column >= Data!.Length)
+		if (column < 0 || column >= Columns!.Length)
 			return ref Unsafe.NullRef<T>();
 
-		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
 		return ref MemoryMarshal.GetReference(span);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
 	{
-		if (column < 0 || column >= Data!.Length)
+		if (column < 0 || column >= Columns!.Length)
 		{
 			sizeInBytes = 0;
 			return ref Unsafe.NullRef<T>();
@@ -47,8 +59,19 @@ internal struct ArchetypeChunk
 
 		sizeInBytes = Unsafe.SizeOf<T>();
 
-		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
 		return ref MemoryMarshal.GetReference(span);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ref Column GetColumn(int column)
+	{
+		if (column < 0 || column >= Columns!.Length)
+		{
+			return ref Unsafe.NullRef<Column>();
+		}
+
+		return ref Columns[column];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -63,10 +86,10 @@ internal struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> GetSpan<T>(int column) where T : struct
 	{
-		if (column < 0 || column >= Data!.Length)
+		if (column < 0 || column >= Columns!.Length)
 			return Span<T>.Empty;
 
-		var span = new Span<T>(Unsafe.As<T[]>(Data[column]), 0, Count);
+		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
 		return span;
 	}
 
@@ -105,9 +128,9 @@ public sealed class Archetype : IComparable<Archetype>
 	{
 		_comparer = comparer;
 		_world = world;
-		All = sign.ToImmutableArray();
-		Components = All.Where(x => x.Size > 0).ToImmutableArray();
-		Tags = All.Where(x => x.Size <= 0).ToImmutableArray();
+		All = sign;
+		Components = All.Where(x => x.Size > 0).ToArray();
+		Tags = All.Where(x => x.Size <= 0).ToArray();
 #if USE_PAIR
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
 #endif
@@ -160,7 +183,7 @@ public sealed class Archetype : IComparable<Archetype>
 
 	public World World => _world;
 	public int Count => _count;
-	public readonly ImmutableArray<ComponentInfo> All, Components, Tags, Pairs;
+	public readonly ComponentInfo[] All, Components, Tags, Pairs;
 	public EcsID Id { get; }
 	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
@@ -173,7 +196,7 @@ public sealed class Archetype : IComparable<Archetype>
 			Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
 
 		ref var chunk = ref _chunks[index];
-		if (chunk.Data == null)
+		if (chunk.Columns == null)
 		{
 			chunk = new ArchetypeChunk(Components, CHUNK_SIZE);
 		}
@@ -252,8 +275,8 @@ public sealed class Archetype : IComparable<Archetype>
 			var items = Components;
 			for (var i = 0; i < items.Length; ++i)
 			{
-				var arrayToBeRemoved = chunk.Data![i];
-				var lastValidArray = lastChunk.Data![i];
+				var arrayToBeRemoved = chunk.Columns![i].Data;
+				var lastValidArray = lastChunk.Columns![i].Data;
 
 				CopyData(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
 			}
@@ -321,11 +344,11 @@ public sealed class Archetype : IComparable<Archetype>
 				++y;
 			}
 
-			var fromArray = fromChunk.Data![i];
-			var toArray = toChunk.Data![j];
+			var fromArray = fromChunk.Columns![i].Data;
+			var toArray = toChunk.Columns![j].Data;
 
 			// copy the moved entity to the target archetype
-			CopyData(fromArray!, srcIdx, toArray!, dstIdx, 1, items[i].Size, items[i].IsManaged);
+			CopyData(fromArray, srcIdx, toArray, dstIdx, 1, items[i].Size, items[i].IsManaged);
 		}
 
 		_ = RemoveByRow(ref fromChunk, oldRow);
