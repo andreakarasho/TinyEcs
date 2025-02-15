@@ -189,6 +189,7 @@ public ref struct QueryIterator
 		var i = _indices[index];
 		if (i < 0)
 		{
+			data.Value.Ref = ref Unsafe.NullRef<T>();
 			data.Size = 0;
 			return data;
 		}
