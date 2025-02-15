@@ -146,7 +146,7 @@ public sealed class Query
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
+	private QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
 	{
 		return new(archetypes, TermsAccess, _indices, start, count);
 	}
