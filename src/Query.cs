@@ -207,15 +207,23 @@ public ref struct QueryIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<T> Data<T>(int index) where T : struct
 	{
-		return _chunkIterator.Current.GetSpan<T>(_indices[index])
-			.Slice(_startSafe, Count);
+		var span = _chunkIterator.Current.GetSpan<T>(_indices[index]);
+
+		if (!span.IsEmpty)
+			span = span.Slice(_startSafe, Count);
+
+		return span;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ReadOnlySpan<EntityView> Entities()
 	{
-		return _chunkIterator.Current.GetEntities()
-			.Slice(_startSafe, Count);
+		var entities = _chunkIterator.Current.GetEntities();
+
+		if (!entities.IsEmpty)
+			entities.Slice(_startSafe, Count);
+
+		return entities;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -308,11 +308,11 @@ namespace TinyEcs.Tests
 				var span1 = it.Data<FloatComponent>(1);
 
 				for (var i = 0; i < it.Count; ++i)
-					{
-						Assert.True(span0.IsEmpty || span0[i].Value == 10);
-						Assert.True(span1.IsEmpty || span1[i].Value == 0.5f);
-						count += 1;
-					}
+				{
+					Assert.True(span0.IsEmpty || span0[i].Value == 10);
+					Assert.True(span1.IsEmpty || span1[i].Value == 0.5f);
+					count += 1;
+				}
 			}
 
 			Assert.Equal(3, count);
