@@ -395,10 +395,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 {
 	private readonly Query _query;
 
-	internal Query(Query query)
-	{
-		_query = query;
-	}
+	internal Query(Query query) =>_query = query;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -418,9 +415,8 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public TQueryData Get(EcsID id)
 	{
 		var enumerator = TQueryData.CreateIterator(_query.Iter(id));
-		// TODO: handle the success
 		var success = enumerator.MoveNext();
-		return enumerator;
+		return success ? enumerator : default;
 	}
 
 	public TQueryData Single()
@@ -435,6 +431,76 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public int Count()
 		=> _query.Count();
 }
+
+public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<World>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+{
+	internal Single(Query query) : base(query) { }
+
+	public new static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Single<TQueryData>>>().Has<Placeholder<Single<TQueryData>>>())
+			return arg.Entity<Placeholder<Single<TQueryData>>>().Get<Placeholder<Single<TQueryData>>>().Value;
+
+		var builder = arg.QueryBuilder();
+		TQueryData.Build(builder);
+		var q = new Single<TQueryData>(builder.Build());
+		arg.Entity<Placeholder<Single<TQueryData>>>().Set(new Placeholder<Single<TQueryData>>() { Value = q });
+		return q;
+	}
+}
+
+public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryFilter : struct, IFilter, allows ref struct
+{
+	private readonly Query _query;
+
+	internal Single(Query query) => _query = query;
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Has<Placeholder<Single<TQueryData, TQueryFilter>>>())
+			return arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Get<Placeholder<Single<TQueryData, TQueryFilter>>>().Value;
+
+		var builder = arg.QueryBuilder();
+		TQueryData.Build(builder);
+		TQueryFilter.Build(builder);
+		var q = new Single<TQueryData, TQueryFilter>(builder.Build());
+		arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Set(new Placeholder<Single<TQueryData, TQueryFilter>>() { Value = q });
+		return q;
+	}
+
+	public TQueryData Get()
+	{
+		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
+		var enumerator = TQueryData.CreateIterator(_query.Iter());
+		var ok = enumerator.MoveNext();
+		EcsAssert.Panic(ok, "'Single' is not matching any entity.");
+		return enumerator;
+	}
+
+	public bool TryGet(out TQueryData data)
+	{
+		if (_query.Count() == 1)
+		{
+			var enumerator = TQueryData.CreateIterator(_query.Iter());
+			var ok = enumerator.MoveNext();
+			if (ok)
+			{
+				data = enumerator;
+				return true;
+			}
+		}
+
+		data = default;
+		return false;
+	}
+
+	public int Count()
+		=> _query.Count();
+}
+
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
