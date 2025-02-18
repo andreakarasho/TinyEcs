@@ -15,6 +15,13 @@ internal readonly struct Column
 		Data = Lookup.GetArray(component.ID, chunkSize)!;
 		// Changed = new uint[chunkSize];
 	}
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void CopyTo(int srcIdx, ref readonly Column dest, int dstIdx)
+	{
+		Array.Copy(Data, srcIdx, dest.Data, dstIdx, 1);
+	}
 }
 
 [SkipLocalsInit]
@@ -272,13 +279,9 @@ public sealed class Archetype : IComparable<Archetype>
 
 			var srcIdx = _count & CHUNK_THRESHOLD;
 			var dstIdx = row & CHUNK_THRESHOLD;
-			var items = Components;
-			for (var i = 0; i < items.Length; ++i)
+			for (var i = 0; i < Components.Length; ++i)
 			{
-				var arrayToBeRemoved = chunk.Columns![i].Data;
-				var lastValidArray = lastChunk.Columns![i].Data;
-
-				CopyData(lastValidArray, srcIdx, arrayToBeRemoved, dstIdx, 1, items[i].Size, items[i].IsManaged);
+				lastChunk.Columns![i].CopyTo(srcIdx, in chunk.Columns![i], dstIdx);
 			}
 
 			ref var rec = ref _world.GetRecord(chunk.EntityAt(row).ID);
@@ -308,11 +311,7 @@ public sealed class Archetype : IComparable<Archetype>
 	internal EcsID Remove(ref EcsRecord record)
 		=> RemoveByRow(ref record.Chunk, record.Row);
 
-	internal Archetype InsertVertex(
-		Archetype left,
-		ComponentInfo[] sign,
-		EcsID id
-	)
+	internal Archetype InsertVertex(Archetype left, ComponentInfo[] sign, EcsID id)
 	{
 		var vertex = new Archetype(left._world, sign, _comparer);
 		var a = left.All.Length < vertex.All.Length ? left : vertex;
@@ -344,11 +343,7 @@ public sealed class Archetype : IComparable<Archetype>
 				++y;
 			}
 
-			var fromArray = fromChunk.Columns![i].Data;
-			var toArray = toChunk.Columns![j].Data;
-
-			// copy the moved entity to the target archetype
-			CopyData(fromArray, srcIdx, toArray, dstIdx, 1, items[i].Size, items[i].IsManaged);
+			fromChunk.Columns![i].CopyTo(srcIdx, in toChunk.Columns![j], dstIdx);
 		}
 
 		_ = RemoveByRow(ref fromChunk, oldRow);
@@ -513,49 +508,6 @@ public sealed class Archetype : IComparable<Archetype>
             edge.Archetype.Print(depth + 2);
         }
     }
-
-	internal sealed class RawArrayData
-	{
-		public uint Length;
-		public uint Padding;
-		public byte Data;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static void CopyData(Array src, int srcIdx, Array dst, int dstIdx, int count, int elementSize, bool isManaged)
-	{
-		Array.Copy(src, srcIdx, dst, dstIdx, count);
-	}
-
-	private static unsafe void CopySimd(ref byte src, ref byte dst, int totalBytes)
-	{
-		int vectorSize = Vector<byte>.Count; // SIMD chunk size
-		int offset = 0;
-
-		// Perform vectorized copy
-		while (offset + vectorSize <= totalBytes)
-		{
-			var vector = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref src, offset));
-			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), vector);
-			offset += vectorSize;
-		}
-
-		// Process remaining bytes in chunks of 8 (long)
-		const int wordSize = sizeof(long); // 8 bytes
-		while (offset + wordSize <= totalBytes)
-		{
-			long word = Unsafe.ReadUnaligned<long>(ref Unsafe.Add(ref src, offset));
-			Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, offset), word);
-			offset += wordSize;
-		}
-
-		// Process remaining bytes one by one
-		while (offset < totalBytes)
-		{
-			Unsafe.Add(ref dst, offset) = Unsafe.Add(ref src, offset);
-			offset++;
-		}
-	}
 
 	public int CompareTo(Archetype? other)
 	{
