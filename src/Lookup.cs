@@ -9,13 +9,11 @@ public readonly struct ComponentInfo
 {
     public readonly EcsID ID;
     public readonly int Size;
-    public readonly bool IsManaged;
 
-    internal ComponentInfo(EcsID id, int size, bool isManaged)
+    internal ComponentInfo(EcsID id, int size)
     {
         ID = id;
         Size = size;
-        IsManaged = isManaged;
     }
 }
 
@@ -70,7 +68,7 @@ internal static class Lookup
         public static readonly int Size = GetSize();
         public static readonly string Name = GetName();
         public static readonly ulong HashCode = (ulong)System.Threading.Interlocked.Increment(ref _index);
-		public static readonly ComponentInfo Value = new (HashCode, Size, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+		public static readonly ComponentInfo Value = new (HashCode, Size);
 
 		static Component()
 		{
@@ -109,7 +107,7 @@ internal static class Lookup
     }
 }
 
-internal sealed class FastIdLookup<TValue>
+internal sealed class FastIdLookup<TValue> where TValue : notnull
 {
 	// private readonly EntitySparseSet<TValue> _set = new ();
 	// private readonly DictionarySlim<EcsID, TValue> _slowLookup = new ();

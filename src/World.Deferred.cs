@@ -72,10 +72,10 @@ public sealed partial class World
 		return ref Unsafe.Unbox<T>(cmd.Data);
 	}
 
-	internal object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size, bool isManaged)
+	internal object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size)
 	{
 		// ref readonly var cmp = ref Lookup.GetComponent(id, size);
-		var cmp = new ComponentInfo(id, size, isManaged);
+		var cmp = new ComponentInfo(id, size);
 
 		var cmd = new DeferredOp()
 		{
@@ -105,7 +105,7 @@ public sealed partial class World
 
 	internal void UnsetDeferred(EcsID entity, EcsID id)
 	{
-		var cmp = new ComponentInfo(id, 0, false);
+		var cmp = new ComponentInfo(id, 0);
 
 		var cmd = new DeferredOp()
 		{
@@ -141,7 +141,7 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 				{
-					(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size, op.ComponentInfo.IsManaged);
+					(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
 					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 
 					break;

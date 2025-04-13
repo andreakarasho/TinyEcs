@@ -386,7 +386,7 @@ public sealed partial class World
 			return;
 		}
 
-        _ = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        _ = Attach(entity, cmp.ID, cmp.Size);
     }
 
 	/// <summary>
@@ -407,7 +407,7 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = Attach(entity, cmp.ID, cmp.Size, cmp.IsManaged);
+        (var raw, var row) = Attach(entity, cmp.ID, cmp.Size);
         var array = (T[])raw!;
         array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
@@ -421,12 +421,12 @@ public sealed partial class World
 	{
 		if (IsDeferred && !Has(entity, id))
 		{
-			SetDeferred(entity, id, null, 0, false);
+			SetDeferred(entity, id, null, 0);
 
 			return;
 		}
 
-		_ = Attach(entity, id, 0, false);
+		_ = Attach(entity, id, 0);
 	}
 
 	/// <summary>

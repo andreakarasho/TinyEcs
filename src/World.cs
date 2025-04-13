@@ -90,7 +90,7 @@ public sealed partial class World : IDisposable
 		if (oldArch.GetAnyIndex(id) < 0)
             return;
 
-		OnComponentUnset?.Invoke(this, entity, new ComponentInfo(id, -1, false));
+		OnComponentUnset?.Invoke(this, entity, new ComponentInfo(id, -1));
 
 		BeginDeferred();
 
@@ -150,7 +150,7 @@ public sealed partial class World : IDisposable
 #endif
 	}
 
-	private (Array?, int) Attach(EcsID entity, EcsID id, int size, bool isManaged)
+	private (Array?, int) Attach(EcsID entity, EcsID id, int size)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
@@ -185,7 +185,7 @@ public sealed partial class World : IDisposable
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
 				oldArch.All.CopyTo(arr, 0);
-				arr[^1] = new ComponentInfo(id, size, isManaged);
+				arr[^1] = new ComponentInfo(id, size);
 				arr.AsSpan().SortNoAlloc(_comparisonCmps);
 
 				foundArch = NewArchetype(oldArch, arr, id);
@@ -196,7 +196,7 @@ public sealed partial class World : IDisposable
         record.Archetype = foundArch!;
 		EndDeferred();
 
-		OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size, isManaged));
+		OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size));
 
 #if USE_PAIR
 		if (id.IsPair())
@@ -311,7 +311,7 @@ public sealed partial class World : IDisposable
 		{
 			Unsafe.SkipInit<T>(out var val);
 			var isManaged = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size, isManaged)!);
+			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size)!);
 		}
 
         ref var record = ref GetRecord(entity);
