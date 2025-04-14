@@ -419,6 +419,12 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return success ? enumerator : default;
 	}
 
+	public bool Contains(EcsID id)
+	{
+		var enumerator = TQueryData.CreateIterator(_query.Iter(id));
+		return enumerator.MoveNext();
+	}
+
 	public TQueryData Single()
 	{
 		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
