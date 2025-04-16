@@ -87,7 +87,7 @@ public sealed class Query
 	internal Query(World world, IQueryTerm[] terms)
 	{
 		World = world;
-		_matchedArchetypes = new ();
+		_matchedArchetypes = new();
 
 		_terms = new IQueryTerm[terms.Length];
 		terms.CopyTo(_terms, 0);
@@ -221,7 +221,7 @@ public ref struct QueryIterator
 		var entities = _chunkIterator.Current.GetEntities();
 
 		if (!entities.IsEmpty)
-			entities.Slice(_startSafe, Count);
+			entities = entities.Slice(_startSafe, Count);
 
 		return entities;
 	}
@@ -229,14 +229,14 @@ public ref struct QueryIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool Next()
 	{
-		REDO:
+	REDO:
 		while (_chunkIterator.MoveNext())
 		{
 			if (_chunkIterator.Current.Count > 0)
 				return true;
 		}
 
-		REDO_1:
+	REDO_1:
 		if (!_archetypeIterator.MoveNext())
 			return false;
 
@@ -246,7 +246,7 @@ public ref struct QueryIterator
 		ref readonly var arch = ref _archetypeIterator.Current;
 		for (var i = 0; i < _indices.Length; ++i)
 			_indices[i] = arch.GetComponentIndex(_terms[i].Id);
-		_chunkIterator = arch.Chunks[(_start >> Archetype.CHUNK_LOG2) ..].GetEnumerator();
+		_chunkIterator = arch.Chunks[(_start >> Archetype.CHUNK_LOG2)..].GetEnumerator();
 
 		goto REDO;
 	}
