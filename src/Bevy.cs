@@ -124,13 +124,14 @@ public partial class Scheduler
 	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
 	private readonly List<FuncSystem<World>> _singleThreads = new();
 	private readonly List<FuncSystem<World>> _multiThreads = new();
+	private readonly Dictionary<Type, IEventParam> _events = new();
 
 	public Scheduler(World world)
 	{
 		_world = world;
 
 		for (var i = 0; i < _systems.Length; ++i)
-			_systems[i] = new();
+			_systems[i] = new LinkedList<FuncSystem<World>>();
 
 		AddSystemParam(world);
 		AddSystemParam(new SchedulerState(this));
@@ -149,6 +150,9 @@ public partial class Scheduler
 
 	public void RunOnce()
 	{
+		foreach ((_, var ev) in _events)
+			ev.Clear();
+
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
 
@@ -192,7 +196,8 @@ public partial class Scheduler
 
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
-		var sys = new FuncSystem<World>(_world, (args, runIf) => {
+		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		{
 			if (runIf?.Invoke(args) ?? true)
 				system();
 		}, () => false, threadingType);
@@ -213,7 +218,12 @@ public partial class Scheduler
 
 	public Scheduler AddEvent<T>() where T : notnull
 	{
-		return AddSystemParam(new EventParam<T>());
+		if (_events.ContainsKey(typeof(T)))
+			return this;
+
+		var ev = new EventParam<T>();
+		_events.Add(typeof(T), ev);
+		return AddSystemParam(ev);
 	}
 
 	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
@@ -271,19 +281,26 @@ public interface IIntoSystemParam<TArg>
 	public static abstract ISystemParam<TArg> Generate(TArg arg);
 }
 
-internal sealed class EventParam<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+public interface IEventParam
 {
-	private readonly Queue<T> _queue = new();
+	void Clear();
+}
+
+internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSystemParam<World> where T : notnull
+{
+	private readonly List<T> _events = new();
 
 	internal EventParam()
 	{
-		Writer = new EventWriter<T>(_queue);
-		Reader = new EventReader<T>(_queue);
+		Writer = new EventWriter<T>(_events);
+		Reader = new EventReader<T>(_events);
 	}
 
 	public EventWriter<T> Writer { get; }
 	public EventReader<T> Reader { get; }
 
+
+	public void Clear() => _events.Clear();
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -298,19 +315,19 @@ internal sealed class EventParam<T> : SystemParam<World>, IIntoSystemParam<World
 
 public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
-	private readonly Queue<T> _queue;
+	private readonly List<T> _events;
 
-	internal EventWriter(Queue<T> queue)
-		=> _queue = queue;
+	internal EventWriter(List<T> events)
+		=> _events = events;
 
 	public bool IsEmpty
-		=> _queue.Count == 0;
+		=> _events.Count == 0;
 
 	public void Clear()
-		=> _queue.Clear();
+		=> _events.Clear();
 
 	public void Enqueue(T ev)
-		=> _queue.Enqueue(ev);
+		=> _events.Add(ev);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -323,18 +340,19 @@ public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World>
 
 public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
-	private readonly Queue<T> _queue;
+	private readonly List<T> _events;
 
-	internal EventReader(Queue<T> queue)
-		=> _queue = queue;
+	internal EventReader(List<T> queue)
+		=> _events = queue;
 
 	public bool IsEmpty
-		=> _queue.Count == 0;
+		=> _events.Count == 0;
 
 	public void Clear()
-		=> _queue.Clear();
+		=> _events.Clear();
 
-	public EventReaderIterator GetEnumerator() => new(_queue!);
+	public EventReaderIterator GetEnumerator()
+		=> new(_events);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -346,18 +364,18 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 
 	public ref struct EventReaderIterator
 	{
-		private readonly Queue<T> _queue;
-		private T _data;
+		private readonly List<T> _events;
+		private int _index;
 
-		internal EventReaderIterator(Queue<T> queue)
+		internal EventReaderIterator(List<T> events)
 		{
-			_queue = queue;
-			_data = default!;
+			_events = events;
+			_index = events.Count;
 		}
 
-		public readonly T Current => _data;
+		public readonly T Current => _events[_index];
 
-		public bool MoveNext() => _queue.TryDequeue(out _data!);
+		public bool MoveNext() => --_index >= 0;
 	}
 }
 
@@ -395,7 +413,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 {
 	private readonly Query _query;
 
-	internal Query(Query query) =>_query = query;
+	internal Query(Query query) => _query = query;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
