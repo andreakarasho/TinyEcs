@@ -50,9 +50,9 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 			_parentsToChildren.Add(parentId, children);
 
 			_world.Set(parentId, new TChildrenComponent() { Value = children });
-			_world.Add<TParentComponent>(parentId);
 		}
 
+		_world.Add<TParentComponent>(childId);
 		children.Add(childId);
 	}
 
@@ -71,6 +71,7 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		// update children list on parent
 		if (_parentsToChildren.TryGetValue(parentId, out var children))
 		{
+			_world.Unset<TParentComponent>(childId);
 			children.Remove(childId);
 			if (children.Count == 0)
 				RemoveParent(parentId);
@@ -94,6 +95,7 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 
 			// if child is a parent, remove associated children too
 			RemoveParent(id);
+			_world.Unset<TParentComponent>(id);
 		}
 
 		children.Clear();
@@ -129,7 +131,7 @@ public sealed class RelationshipEntityMapper : EntityMapper<Parent, Children>
 
 public sealed class NamingEntityMapper
 {
-	private readonly Dictionary<string, EcsID> _names = new ();
+	private readonly Dictionary<string, EcsID> _names = new();
 	private readonly Dictionary<EcsID, string> _entitiesWithName = new();
 	private readonly World _world;
 
@@ -231,7 +233,7 @@ public struct Children : IChildrenComponent
 
 	private HashSet<EcsID> _value;
 
-    HashSet<ulong> IChildrenComponent.Value
+	HashSet<ulong> IChildrenComponent.Value
 	{
 		readonly get => _value;
 		set => _value = value;
