@@ -633,6 +633,12 @@ public readonly ref struct EntityCommand
 		_world.UnsetDeferred<T>(ID);
 		return this;
 	}
+
+	public readonly EntityCommand Delete()
+	{
+		_world.DeleteDeferred(ID);
+		return this;
+	}
 }
 
 

@@ -95,7 +95,6 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 
 			// if child is a parent, remove associated children too
 			RemoveParent(id);
-			_world.Unset<TParentComponent>(id);
 		}
 
 		children.Clear();
