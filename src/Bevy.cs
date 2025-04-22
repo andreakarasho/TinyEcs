@@ -9,17 +9,18 @@ namespace TinyEcs;
 public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
 	private readonly TArg _arg;
-	private readonly Action<TArg, Func<TArg, bool>> _fn;
+	private readonly Func<TArg, Func<TArg, bool>, bool> _fn;
 	private readonly List<Func<TArg, bool>> _conditions;
 	private readonly Func<TArg, bool> _validator;
 	private readonly Func<bool> _checkInUse;
+	private readonly Stages _stage;
 	private readonly ThreadingMode _threadingType;
 	private readonly LinkedList<FuncSystem<TArg>> _after = new();
 	private readonly LinkedList<FuncSystem<TArg>> _before = new();
 	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
 
 
-	internal FuncSystem(TArg arg, Action<TArg, Func<TArg, bool>> fn, Func<bool> checkInUse, ThreadingMode threadingType)
+	internal FuncSystem(TArg arg, Func<TArg, Func<TArg, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
 	{
 		_arg = arg;
 		_fn = fn;
@@ -27,6 +28,7 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		_validator = ValidateConditions;
 		_checkInUse = checkInUse;
 		_threadingType = threadingType;
+		_stage = stage;
 	}
 
 	internal void Run()
@@ -34,10 +36,11 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		foreach (var s in _before)
 			s.Run();
 
-		_fn(_arg, _validator);
-
-		foreach (var s in _after)
-			s.Run();
+		if (_fn(_arg, _validator))
+		{
+			foreach (var s in _after)
+				s.Run();
+		}
 	}
 
 	public FuncSystem<TArg> RunIf(Func<bool> condition)
@@ -57,6 +60,14 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		return this;
 	}
 
+	public FuncSystem<TArg> RunAfter(params ReadOnlySpan<FuncSystem<TArg>> systems)
+	{
+		foreach (var system in systems)
+			system.RunAfter(this);
+
+		return this;
+	}
+
 	public FuncSystem<TArg> RunBefore(FuncSystem<TArg> parent)
 	{
 		if (this == parent || Contains(parent, s => s._before))
@@ -64,6 +75,14 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 
 		Node?.List?.Remove(Node);
 		Node = parent._before.AddLast(this);
+
+		return this;
+	}
+
+	public FuncSystem<TArg> RunBefore(params ReadOnlySpan<FuncSystem<TArg>> systems)
+	{
+		foreach (var system in systems)
+			system.RunBefore(this);
 
 		return this;
 	}
@@ -194,13 +213,31 @@ public partial class Scheduler
 		sys.Node = _systems[(int)stage].AddLast(sys);
 	}
 
+	public FuncSystem<World> AddSystems(ReadOnlySpan<FuncSystem<World>> systems, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+	{
+		var rootSystem = AddSystem(() => { }, stage, threadingType);
+		foreach (var system in systems)
+		{
+			if (system == rootSystem)
+				continue;
+
+			system.RunAfter(rootSystem);
+		}
+
+		return rootSystem;
+	}
+
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
 		{
 			if (runIf?.Invoke(args) ?? true)
+			{
 				system();
-		}, () => false, threadingType);
+				return true;
+			}
+			return false;
+		}, () => false, stage, threadingType);
 		Add(sys, stage);
 
 		return sys;

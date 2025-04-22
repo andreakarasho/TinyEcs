@@ -290,7 +290,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					var fn = (World args, Func<World, bool> runIf) =>
 					{{
 						if (runIf != null && !runIf.Invoke(args))
-							return;
+							return false;
 
 						{objsGen}
 						{objsLock}
@@ -298,8 +298,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 						system({systemCall});
 						args.EndDeferred();
 						{objsUnlock}
+						return true;
 					}};
-					var sys = new FuncSystem<World>(_world, fn, checkInuse, threadingType);
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
 					Add(sys, stage);
 					return sys;
 				}}
