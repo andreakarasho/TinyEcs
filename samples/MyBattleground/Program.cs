@@ -23,6 +23,7 @@ scheduler.OnUpdate(() =>
 
 
 scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
+scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading 2"), ThreadingMode.Single);
 scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
 
 scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
@@ -35,13 +36,15 @@ scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Lo
 {
 	states.Value ??= Enum.GetValues<GameState>();
 
-	loading.Value += 0.2f;
-	Console.WriteLine("next {0:P}", loading.Value);
+	loading.Value += 1f;
+	// Console.WriteLine("next {0:P}", loading.Value);
+
+	Console.WriteLine("current state: {0}", state.Current);
 
 	if (loading.Value >= 1f)
 	{
 		loading.Value = 0f;
-		Console.WriteLine("on swapping state");
+		// Console.WriteLine("on swapping state");
 		state.Set(states.Value[(++index.Value) % states.Value.Length]);
 		anotherState.Set(AnotherState.A);
 	}
@@ -165,7 +168,8 @@ enum GameState
 {
 	Loading,
 	Playing,
-	Menu
+	Menu,
+	Menu2
 }
 
 enum AnotherState

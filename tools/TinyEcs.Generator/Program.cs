@@ -390,7 +390,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				// OnEnter method
 				sb.AppendLine($@"
 				public FuncSystem<World> OnEnter<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
-					where TState : notnull, Enum
+					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
 					{objs}
@@ -417,7 +417,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				// OnExit method
 				sb.AppendLine($@"
 				public FuncSystem<World> OnExit<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
-					where TState : notnull, Enum
+					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
 					{objs}

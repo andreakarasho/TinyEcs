@@ -147,6 +147,7 @@ public partial class Scheduler
 	private readonly List<FuncSystem<World>> _singleThreads = new();
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
+	private readonly Dictionary<Type, IState> _states = new();
 
 	public Scheduler(World world)
 	{
@@ -175,6 +176,9 @@ public partial class Scheduler
 		foreach ((_, var ev) in _events)
 			ev.Clear();
 
+		foreach ((_, var state) in _states)
+			state.Update();
+
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
 
@@ -191,6 +195,9 @@ public partial class Scheduler
 		_multiThreads.Clear();
 
 		var systems = _systems[(int)stage];
+
+		if (systems.Count == 0)
+			return;
 
 		foreach (var sys in systems)
 		{
@@ -236,7 +243,7 @@ public partial class Scheduler
 	}
 
 	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
-		where TState : notnull, Enum
+		where TState : struct, Enum
 	{
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
 		{
@@ -255,7 +262,7 @@ public partial class Scheduler
 	}
 
 	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
-		where TState : notnull, Enum
+		where TState : struct, Enum
 	{
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
 		{
@@ -293,9 +300,14 @@ public partial class Scheduler
 		return AddSystemParam(ev);
 	}
 
-	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
+	public Scheduler AddState<T>(T initialState = default!) where T : struct, Enum
 	{
-		return AddSystemParam(new State<T>(initialState, initialState));
+		if (_states.ContainsKey(typeof(T)))
+			return this;
+
+		var state = new State<T>(initialState, initialState);
+		_states.Add(typeof(T), state);
+		return AddSystemParam(state);
 	}
 
 	public Scheduler AddResource<T>(T resource) where T : notnull
@@ -315,7 +327,7 @@ public partial class Scheduler
 		return _world.Entity<Placeholder<T>>().Has<Placeholder<T>>();
 	}
 
-	internal bool InState<T>(T state) where T : notnull, Enum
+	internal bool InState<T>(T state) where T : struct, Enum
 	{
 		if (!_world.Entity<Placeholder<State<T>>>().Has<Placeholder<State<T>>>())
 			return false;
@@ -606,14 +618,20 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		=> _query.Count();
 }
 
-public sealed class State<T>(T? previous, T? current) : SystemParam<World>, IIntoSystemParam<World> where T : notnull, Enum
+public interface IState
 {
-	internal T? Previous { get; private set; } = previous;
-	internal T? Current { get; private set; } = current;
-	internal bool Changed { get; private set; } = false;
+	void Update();
+}
 
-	private readonly HashSet<T?> _enteredStates = new();
-	private readonly HashSet<T?> _exitedStates = new();
+public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoSystemParam<World>, IState
+	where T : struct, Enum
+{
+	private bool _enteredStateFrame;
+	private bool _exitedStateFrame;
+
+	internal T Previous { get; private set; } = previous;
+	public T Current { get; private set; } = current;
+
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -625,16 +643,24 @@ public sealed class State<T>(T? previous, T? current) : SystemParam<World>, IInt
 		return state;
 	}
 
-	public void Set(T? value)
+	public void Set(T value)
 	{
 		if (!Equals(Current, value))
 		{
 			Previous = Current;
 			Current = value;
-			Changed = true;
 
-			_enteredStates.Clear();
-			_exitedStates.Clear();
+			_enteredStateFrame = false;
+			_exitedStateFrame = false;
+		}
+	}
+
+	void IState.Update()
+	{
+		if (Equals(Current, Previous))
+		{
+			_enteredStateFrame = true;
+			_exitedStateFrame = true;
 		}
 	}
 
@@ -643,21 +669,19 @@ public sealed class State<T>(T? previous, T? current) : SystemParam<World>, IInt
 		return Equals(Current, state);
 	}
 
-	internal bool EnterState(T? state)
+	internal bool EnterState(T state)
 	{
-		if (Changed && Equals(Current, state) && !_enteredStates.Contains(state))
+		if (!_enteredStateFrame && Equals(Current, state))
 		{
-			_enteredStates.Add(state);
 			return true;
 		}
 		return false;
 	}
 
-	internal bool ExitState(T? state)
+	internal bool ExitState(T state)
 	{
-		if (Changed && Equals(Previous, state) && !_exitedStates.Contains(state))
+		if (!_exitedStateFrame && Equals(Previous, state))
 		{
-			_exitedStates.Add(state);
 			return true;
 		}
 		return false;
@@ -714,10 +738,10 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 	public bool ResourceExists<T>() where T : notnull
 		=> _scheduler.ResourceExists<Res<T>>();
 
-	public void AddState<T>(T state = default!) where T : notnull, Enum
+	public void AddState<T>(T state = default!) where T : struct, Enum
 		=> _scheduler.AddState(state);
 
-	public bool InState<T>(T state) where T : notnull, Enum
+	public bool InState<T>(T state) where T : struct, Enum
 		=> _scheduler.InState(state);
 
 	public static ISystemParam<World> Generate(World arg)
