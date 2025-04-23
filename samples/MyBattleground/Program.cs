@@ -10,6 +10,42 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
+
+scheduler.AddState(GameState.Loading);
+
+
+// scheduler.AddSystem(() => Console.WriteLine("on enter"), Stages.OnEnter, ThreadingMode.Single)
+// 		 .RunIf((State<GameState> state) => state.Changed && state.Current == GameState.Loading);
+
+// scheduler.AddSystem(() => Console.WriteLine("on exit"), Stages.OnExit, ThreadingMode.Single)
+// 		 .RunIf((State<GameState> state) => state.Changed && state.Previous == GameState.Loading);
+
+scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
+
+scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), ThreadingMode.Single);
+
+scheduler.AddSystem((State<GameState> state, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
+{
+	states.Value ??= Enum.GetValues<GameState>();
+
+	loading.Value += 0.1f;
+	Console.WriteLine("next {0:P}", loading.Value);
+
+	if (loading.Value >= 1f)
+	{
+		loading.Value = 0f;
+		Console.WriteLine("on swapping state");
+		state.Set(states.Value[(++index.Value) % states.Value.Length]);
+	}
+
+}, threadingType: ThreadingMode.Single);
+
+
+while (true)
+	scheduler.RunOnce();
+
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		.Set<Position>(new Position())
@@ -17,7 +53,9 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 
 ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
 
-scheduler.AddSystem((Query<Data<Position, Velocity>> q)=>
+
+
+scheduler.AddSystem((Query<Data<Position, Velocity>> q) =>
 {
 	foreach ((var ent, var pos, var vel) in q)
 	{
@@ -115,3 +153,10 @@ struct Velocity
 struct Mass { public float Value; }
 
 struct Tag { }
+
+
+enum GameState
+{
+	Loading,
+	Playing
+}

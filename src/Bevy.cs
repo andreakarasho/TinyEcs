@@ -127,7 +127,10 @@ public enum Stages
 	BeforeUpdate,
 	Update,
 	AfterUpdate,
-	FrameEnd
+	FrameEnd,
+
+	OnEnter,
+	OnExit
 }
 
 public enum ThreadingMode
@@ -140,7 +143,7 @@ public enum ThreadingMode
 public partial class Scheduler
 {
 	private readonly World _world;
-	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
+	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.OnExit + 1];
 	private readonly List<FuncSystem<World>> _singleThreads = new();
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
@@ -174,6 +177,9 @@ public partial class Scheduler
 
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
+
+		RunStage(Stages.OnEnter);
+		RunStage(Stages.OnExit);
 
 		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
 			RunStage(stage);
@@ -243,6 +249,60 @@ public partial class Scheduler
 		return sys;
 	}
 
+	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+		where TState : notnull, Enum
+	{
+		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		{
+			if (runIf?.Invoke(args) ?? true)
+			{
+				system();
+				return true;
+			}
+			return false;
+		}, () => false, Stages.OnEnter, threadingType)
+		.RunIf((State<TState> state) =>
+		{
+			var changed = state.Changed && Equals(state.Current, st);
+			if (changed)
+			{
+				state.Set(st);
+			}
+			return changed;
+		});
+
+		Add(sys, Stages.OnEnter);
+
+		return sys;
+	}
+
+	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+		where TState : notnull, Enum
+	{
+		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		{
+			if (runIf?.Invoke(args) ?? true)
+			{
+				system();
+				return true;
+			}
+			return false;
+		}, () => false, Stages.OnExit, threadingType)
+		.RunIf((State<TState> state) =>
+		{
+			var changed = state.Changed && Equals(state.Previous, st);
+			if (changed)
+			{
+				state.Set(st);
+			}
+			return changed;
+		});
+
+		Add(sys, Stages.OnExit);
+
+		return sys;
+	}
+
 	public Scheduler AddPlugin<T>() where T : notnull, IPlugin, new()
 		=> AddPlugin(new T());
 
@@ -265,7 +325,8 @@ public partial class Scheduler
 
 	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
 	{
-		return AddResource(initialState);
+		var tracked = new State<T>(initialState, initialState);
+		return AddSystemParam(tracked);
 	}
 
 	public Scheduler AddResource<T>(T resource) where T : notnull
@@ -562,6 +623,28 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		=> _query.Count();
 }
 
+public sealed class State<T>(T? previous, T? current) : SystemParam<World>, IIntoSystemParam<World> where T : notnull, Enum
+{
+	public T? Previous { get; private set; } = previous;
+	public T? Current { get; private set; } = current;
+	public bool Changed => !Equals(Current, Previous);
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<State<T>>>().Has<Placeholder<State<T>>>())
+			return arg.Entity<Placeholder<State<T>>>().Get<Placeholder<State<T>>>().Value;
+
+		var state = new State<T>(default, default);
+		arg.Entity<Placeholder<State<T>>>().Set(new Placeholder<State<T>>() { Value = state });
+		return state;
+	}
+
+	public void Set(T? value)
+	{
+		Previous = Current;
+		Current = value;
+	}
+}
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
