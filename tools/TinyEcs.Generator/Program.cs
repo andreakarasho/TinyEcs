@@ -18,7 +18,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
-			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
+			postContext.AddSource("TinyEcs.Systems.Scheduler.g.cs", CodeFormatter.Format(GenerateSchedulerSystems()));
+			postContext.AddSource("TinyEcs.Systems.StateHandlers.g.cs", CodeFormatter.Format(GenerateSchedulerSystemsState()));
+			postContext.AddSource("TinyEcs.Systems.StageSpecific.g.cs", CodeFormatter.Format(GenerateSchedulerStageSpecificSystems()));
+			postContext.AddSource("TinyEcs.Systems.Interfaces.g.cs", CodeFormatter.Format(GenerateSystemsInterfaces()));
+			postContext.AddSource("TinyEcs.Systems.DataAndFilter.g.cs", CodeFormatter.Format(CreateDataAndFilterStructs()));
+
 			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
 			postContext.AddSource("TinyEcs.QueryIteratorEach.g.cs", CodeFormatter.Format(GenerateQueryIteratorEach()));
 		});
@@ -29,30 +34,12 @@ public sealed class MyGenerator : IIncrementalGenerator
                 #pragma warning disable 1591
                 #nullable enable
 
+                using System;
+                using System.Collections.Generic;
+
                 namespace TinyEcs
                 {{
 					{GenerateArchetypeSigns()}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateSystems()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					#if NET
-					{GenerateSchedulerSystems()}
-					{GenerateSchedulerSystemsState()}
-					{GenerateSchedulerStageSpecificSystems()}
-					{GenerateSystemsInterfaces()}
-					{CreateDataAndFilterStructs()}
-					#endif
                 }}
 
                 #pragma warning restore 1591
@@ -64,6 +51,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return $@"
 			#pragma warning disable 1591
                 #nullable enable
+
+                using System;
+                using System.Runtime.CompilerServices;
 
                 namespace TinyEcs
                 {{
@@ -196,6 +186,26 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 		static string CreateDataAndFilterStructs()
 		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{CreateDataAndFilterStructsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string CreateDataAndFilterStructsContent()
+		{
 			var sb = new StringBuilder();
 
 			// for (var i = 0; i < MAX_GENERICS; ++i)
@@ -268,6 +278,29 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 		static string GenerateSchedulerSystems()
 		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerSystemsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerSystemsContent()
+		{
 			var sb = new StringBuilder();
 
 			sb.AppendLine("public partial class Scheduler {");
@@ -315,6 +348,29 @@ public sealed class MyGenerator : IIncrementalGenerator
 		}
 
 		static string GenerateSchedulerSystemsState()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerSystemsStateContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerSystemsStateContent()
 		{
 			var sb = new StringBuilder();
 
@@ -392,6 +448,29 @@ public sealed class MyGenerator : IIncrementalGenerator
 		}
 
 		static string GenerateSchedulerStageSpecificSystems()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerStageSpecificSystemsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerStageSpecificSystemsContent()
 		{
 			var sb = new StringBuilder();
 
@@ -473,6 +552,28 @@ public sealed class MyGenerator : IIncrementalGenerator
 		}
 
 		static string GenerateSystemsInterfaces()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSystemsInterfacesContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSystemsInterfacesContent()
 		{
 			var sb = new StringBuilder();
 			sb.AppendLine("public sealed partial class FuncSystem<TArg> {");
