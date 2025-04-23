@@ -14,12 +14,13 @@ var scheduler = new Scheduler(ecs);
 scheduler.AddState(GameState.Loading);
 scheduler.AddState(AnotherState.C);
 
-scheduler.AddSystem(() =>
+scheduler.OnUpdate(() =>
 {
 	Console.WriteLine("im in loading state");
-}, Stages.Update, ThreadingMode.Single)
+}, ThreadingMode.Single)
 .RunIf((SchedulerState state) => state.InState(GameState.Loading))
 .RunIf((SchedulerState state) => state.InState(AnotherState.A));
+
 
 scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
 scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
@@ -30,7 +31,7 @@ scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), 
 scheduler.OnEnter(GameState.Menu, () => Console.WriteLine("on enter Menu"), ThreadingMode.Single);
 scheduler.OnExit(GameState.Menu, () => Console.WriteLine("on exit Menu"), ThreadingMode.Single);
 
-scheduler.AddSystem((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
+scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
 {
 	states.Value ??= Enum.GetValues<GameState>();
 
