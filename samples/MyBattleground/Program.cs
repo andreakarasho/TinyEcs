@@ -12,13 +12,14 @@ var scheduler = new Scheduler(ecs);
 
 
 scheduler.AddState(GameState.Loading);
+scheduler.AddState(AnotherState.C);
 
-
-// scheduler.AddSystem(() => Console.WriteLine("on enter"), Stages.OnEnter, ThreadingMode.Single)
-// 		 .RunIf((State<GameState> state) => state.Changed && state.Current == GameState.Loading);
-
-// scheduler.AddSystem(() => Console.WriteLine("on exit"), Stages.OnExit, ThreadingMode.Single)
-// 		 .RunIf((State<GameState> state) => state.Changed && state.Previous == GameState.Loading);
+scheduler.AddSystem(() =>
+{
+	Console.WriteLine("im in loading state");
+}, Stages.Update, ThreadingMode.Single)
+.RunIf((SchedulerState state) => state.InState(GameState.Loading))
+.RunIf((SchedulerState state) => state.InState(AnotherState.A));
 
 scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
 scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
@@ -26,11 +27,14 @@ scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), 
 scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
 scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), ThreadingMode.Single);
 
-scheduler.AddSystem((State<GameState> state, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
+scheduler.OnEnter(GameState.Menu, () => Console.WriteLine("on enter Menu"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Menu, () => Console.WriteLine("on exit Menu"), ThreadingMode.Single);
+
+scheduler.AddSystem((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
 {
 	states.Value ??= Enum.GetValues<GameState>();
 
-	loading.Value += 0.1f;
+	loading.Value += 0.2f;
 	Console.WriteLine("next {0:P}", loading.Value);
 
 	if (loading.Value >= 1f)
@@ -38,6 +42,7 @@ scheduler.AddSystem((State<GameState> state, Local<float> loading, Local<GameSta
 		loading.Value = 0f;
 		Console.WriteLine("on swapping state");
 		state.Set(states.Value[(++index.Value) % states.Value.Length]);
+		anotherState.Set(AnotherState.A);
 	}
 
 }, threadingType: ThreadingMode.Single);
@@ -158,5 +163,11 @@ struct Tag { }
 enum GameState
 {
 	Loading,
-	Playing
+	Playing,
+	Menu
+}
+
+enum AnotherState
+{
+	A, B, C
 }
