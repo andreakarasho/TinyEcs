@@ -182,8 +182,8 @@ public partial class Scheduler
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
 
-		RunStage(Stages.OnEnter);
 		RunStage(Stages.OnExit);
+		RunStage(Stages.OnEnter);
 
 		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
 			RunStage(stage);
