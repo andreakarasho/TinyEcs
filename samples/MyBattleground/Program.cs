@@ -10,6 +10,51 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
+
+scheduler.AddState(GameState.Loading);
+scheduler.AddState(AnotherState.C);
+
+scheduler.OnUpdate(() =>
+{
+	Console.WriteLine("im in loading state");
+}, ThreadingMode.Single)
+.RunIf((SchedulerState state) => state.InState(GameState.Loading))
+.RunIf((SchedulerState state) => state.InState(AnotherState.A));
+
+
+scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
+scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading 2"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
+
+scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), ThreadingMode.Single);
+
+scheduler.OnEnter(GameState.Menu, () => Console.WriteLine("on enter Menu"), ThreadingMode.Single);
+scheduler.OnExit(GameState.Menu, () => Console.WriteLine("on exit Menu"), ThreadingMode.Single);
+
+scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
+{
+	states.Value ??= Enum.GetValues<GameState>();
+
+	loading.Value += 1f;
+	// Console.WriteLine("next {0:P}", loading.Value);
+
+	Console.WriteLine("current state: {0}", state.Current);
+
+	if (loading.Value >= 1f)
+	{
+		loading.Value = 0f;
+		// Console.WriteLine("on swapping state");
+		state.Set(states.Value[(++index.Value) % states.Value.Length]);
+		anotherState.Set(AnotherState.A);
+	}
+
+}, threadingType: ThreadingMode.Single);
+
+
+while (true)
+	scheduler.RunOnce();
+
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		.Set<Position>(new Position())
@@ -17,7 +62,9 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 
 ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
 
-scheduler.AddSystem((Query<Data<Position, Velocity>> q)=>
+
+
+scheduler.AddSystem((Query<Data<Position, Velocity>> q) =>
 {
 	foreach ((var ent, var pos, var vel) in q)
 	{
@@ -115,3 +162,17 @@ struct Velocity
 struct Mass { public float Value; }
 
 struct Tag { }
+
+
+enum GameState
+{
+	Loading,
+	Playing,
+	Menu,
+	Menu2
+}
+
+enum AnotherState
+{
+	A, B, C
+}

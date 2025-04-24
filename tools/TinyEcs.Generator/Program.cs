@@ -18,7 +18,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 	{
 		context.RegisterPostInitializationOutput((IncrementalGeneratorPostInitializationContext postContext) =>
 		{
-			postContext.AddSource("TinyEcs.Systems.g.cs", CodeFormatter.Format(GenerateSystems()));
+			postContext.AddSource("TinyEcs.Systems.Scheduler.g.cs", CodeFormatter.Format(GenerateSchedulerSystems()));
+			postContext.AddSource("TinyEcs.Systems.StateHandlers.g.cs", CodeFormatter.Format(GenerateSchedulerSystemsState()));
+			postContext.AddSource("TinyEcs.Systems.StageSpecific.g.cs", CodeFormatter.Format(GenerateSchedulerStageSpecificSystems()));
+			postContext.AddSource("TinyEcs.Systems.Interfaces.g.cs", CodeFormatter.Format(GenerateSystemsInterfaces()));
+			postContext.AddSource("TinyEcs.Systems.DataAndFilter.g.cs", CodeFormatter.Format(CreateDataAndFilterStructs()));
+
 			postContext.AddSource("TinyEcs.Archetypes.g.cs", CodeFormatter.Format(GenerateArchetypes()));
 			postContext.AddSource("TinyEcs.QueryIteratorEach.g.cs", CodeFormatter.Format(GenerateQueryIteratorEach()));
 		});
@@ -29,28 +34,12 @@ public sealed class MyGenerator : IIncrementalGenerator
                 #pragma warning disable 1591
                 #nullable enable
 
+                using System;
+                using System.Collections.Generic;
+
                 namespace TinyEcs
                 {{
 					{GenerateArchetypeSigns()}
-                }}
-
-                #pragma warning restore 1591
-            ";
-		}
-
-		static string GenerateSystems()
-		{
-			return $@"
-                #pragma warning disable 1591
-                #nullable enable
-
-                namespace TinyEcs
-                {{
-					#if NET
-					{GenerateSchedulerSystems()}
-					{GenerateSystemsInterfaces()}
-					{CreateDataAndFilterStructs()}
-					#endif
                 }}
 
                 #pragma warning restore 1591
@@ -62,6 +51,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return $@"
 			#pragma warning disable 1591
                 #nullable enable
+
+                using System;
+                using System.Runtime.CompilerServices;
 
                 namespace TinyEcs
                 {{
@@ -194,6 +186,26 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 		static string CreateDataAndFilterStructs()
 		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{CreateDataAndFilterStructsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string CreateDataAndFilterStructsContent()
+		{
 			var sb = new StringBuilder();
 
 			// for (var i = 0; i < MAX_GENERICS; ++i)
@@ -266,6 +278,29 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 		static string GenerateSchedulerSystems()
 		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerSystemsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerSystemsContent()
+		{
 			var sb = new StringBuilder();
 
 			sb.AppendLine("public partial class Scheduler {");
@@ -312,7 +347,233 @@ public sealed class MyGenerator : IIncrementalGenerator
 			return sb.ToString();
 		}
 
+		static string GenerateSchedulerSystemsState()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerSystemsStateContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerSystemsStateContent()
+		{
+			var sb = new StringBuilder();
+
+			sb.AppendLine("public partial class Scheduler {");
+
+			for (var i = 0; i < MAX_GENERICS; ++i)
+			{
+				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
+				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
+				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
+
+				// OnEnter method
+				sb.AppendLine($@"
+				public FuncSystem<World> OnEnter<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+					where TState : struct, Enum
+					{genericsArgsWhere}
+				{{
+					{objs}
+					var checkInuse = () => {objsCheckInuse};
+					var fn = (World args, Func<World, bool> runIf) =>
+					{{
+						if (runIf != null && !runIf.Invoke(args))
+							return false;
+
+						{objsGen}
+						{objsLock}
+						args.BeginDeferred();
+						system({systemCall});
+						args.EndDeferred();
+						{objsUnlock}
+						return true;
+					}};
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+						.RunIf((State<TState> state) => state.EnterState(st));
+					Add(sys, Stages.OnEnter);
+					return sys;
+				}}");
+
+				// OnExit method
+				sb.AppendLine($@"
+				public FuncSystem<World> OnExit<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+					where TState : struct, Enum
+					{genericsArgsWhere}
+				{{
+					{objs}
+					var checkInuse = () => {objsCheckInuse};
+					var fn = (World args, Func<World, bool> runIf) =>
+					{{
+						if (runIf != null && !runIf.Invoke(args))
+							return false;
+
+						{objsGen}
+						{objsLock}
+						args.BeginDeferred();
+						system({systemCall});
+						args.EndDeferred();
+						{objsUnlock}
+						return true;
+					}};
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+						.RunIf((State<TState> state) => state.ExitState(st));
+					Add(sys, Stages.OnExit);
+					return sys;
+				}}");
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
+		}
+
+		static string GenerateSchedulerStageSpecificSystems()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSchedulerStageSpecificSystemsContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSchedulerStageSpecificSystemsContent()
+		{
+			var sb = new StringBuilder();
+
+			sb.AppendLine("public partial class Scheduler {");
+
+			// Define the stage names to generate (excluding OnEnter and OnExit)
+			var stageNames = new[]
+			{
+				("Startup", "OnStartup"),
+				("FrameStart", "OnFrameStart"),
+				("BeforeUpdate", "OnBeforeUpdate"),
+				("Update", "OnUpdate"),
+				("AfterUpdate", "OnAfterUpdate"),
+				("FrameEnd", "OnFrameEnd")
+			};
+
+			foreach (var (stageName, methodName) in stageNames)
+			{
+				for (var i = 0; i < MAX_GENERICS; ++i)
+				{
+					var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+					var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
+					var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
+					var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
+					var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+					var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
+					var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+					var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
+
+					sb.AppendLine($@"
+					public FuncSystem<World> {methodName}<{genericsArgs}>(Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+						{genericsArgsWhere}
+					{{
+						{objs}
+						var checkInuse = () => {objsCheckInuse};
+						var fn = (World args, Func<World, bool> runIf) =>
+						{{
+							if (runIf != null && !runIf.Invoke(args))
+								return false;
+
+							{objsGen}
+							{objsLock}
+							args.BeginDeferred();
+							system({systemCall});
+							args.EndDeferred();
+							{objsUnlock}
+							return true;
+						}};
+						var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.{stageName}, threadingType);
+						Add(sys, Stages.{stageName});
+						return sys;
+					}}");
+				}
+			}
+
+			// Also add versions that take just Action with no parameters
+			foreach (var (stageName, methodName) in stageNames)
+			{
+				sb.AppendLine($@"
+				public FuncSystem<World> {methodName}(Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+				{{
+					var sys = new FuncSystem<World>(_world, (args, runIf) =>
+					{{
+						if (runIf?.Invoke(args) ?? true)
+						{{
+							system();
+							return true;
+						}}
+						return false;
+					}}, () => false, Stages.{stageName}, threadingType);
+					Add(sys, Stages.{stageName});
+					return sys;
+				}}");
+			}
+
+			sb.AppendLine("}");
+
+			return sb.ToString();
+		}
+
 		static string GenerateSystemsInterfaces()
+		{
+			return $@"
+                #pragma warning disable 1591
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Threading;
+                using System.Runtime.CompilerServices;
+
+                namespace TinyEcs
+                {{
+					#if NET
+					{GenerateSystemsInterfacesContent()}
+					#endif
+                }}
+
+                #pragma warning restore 1591
+            ";
+		}
+
+		static string GenerateSystemsInterfacesContent()
 		{
 			var sb = new StringBuilder();
 			sb.AppendLine("public sealed partial class FuncSystem<TArg> {");

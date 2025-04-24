@@ -127,7 +127,10 @@ public enum Stages
 	BeforeUpdate,
 	Update,
 	AfterUpdate,
-	FrameEnd
+	FrameEnd,
+
+	OnEnter,
+	OnExit
 }
 
 public enum ThreadingMode
@@ -140,10 +143,11 @@ public enum ThreadingMode
 public partial class Scheduler
 {
 	private readonly World _world;
-	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.FrameEnd + 1];
+	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.OnExit + 1];
 	private readonly List<FuncSystem<World>> _singleThreads = new();
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
+	private readonly Dictionary<Type, IState> _states = new();
 
 	public Scheduler(World world)
 	{
@@ -172,8 +176,14 @@ public partial class Scheduler
 		foreach ((_, var ev) in _events)
 			ev.Clear();
 
+		foreach ((_, var state) in _states)
+			state.Update();
+
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
+
+		RunStage(Stages.OnExit);
+		RunStage(Stages.OnEnter);
 
 		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
 			RunStage(stage);
@@ -185,6 +195,9 @@ public partial class Scheduler
 		_multiThreads.Clear();
 
 		var systems = _systems[(int)stage];
+
+		if (systems.Count == 0)
+			return;
 
 		foreach (var sys in systems)
 		{
@@ -213,20 +226,6 @@ public partial class Scheduler
 		sys.Node = _systems[(int)stage].AddLast(sys);
 	}
 
-	public FuncSystem<World> AddSystems(ReadOnlySpan<FuncSystem<World>> systems, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
-	{
-		var rootSystem = AddSystem(() => { }, stage, threadingType);
-		foreach (var system in systems)
-		{
-			if (system == rootSystem)
-				continue;
-
-			system.RunAfter(rootSystem);
-		}
-
-		return rootSystem;
-	}
-
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
@@ -239,6 +238,44 @@ public partial class Scheduler
 			return false;
 		}, () => false, stage, threadingType);
 		Add(sys, stage);
+
+		return sys;
+	}
+
+	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+		where TState : struct, Enum
+	{
+		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		{
+			if (runIf?.Invoke(args) ?? true)
+			{
+				system();
+				return true;
+			}
+			return false;
+		}, () => false, Stages.OnEnter, threadingType)
+		.RunIf((State<TState> state) => state.EnterState(st));
+
+		Add(sys, Stages.OnEnter);
+
+		return sys;
+	}
+
+	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+		where TState : struct, Enum
+	{
+		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		{
+			if (runIf?.Invoke(args) ?? true)
+			{
+				system();
+				return true;
+			}
+			return false;
+		}, () => false, Stages.OnExit, threadingType)
+		.RunIf((State<TState> state) => state.ExitState(st));
+
+		Add(sys, Stages.OnExit);
 
 		return sys;
 	}
@@ -263,9 +300,14 @@ public partial class Scheduler
 		return AddSystemParam(ev);
 	}
 
-	public Scheduler AddState<T>(T initialState = default!) where T : notnull, Enum
+	public Scheduler AddState<T>(T initialState = default!) where T : struct, Enum
 	{
-		return AddResource(initialState);
+		if (_states.ContainsKey(typeof(T)))
+			return this;
+
+		var state = new State<T>(initialState, initialState);
+		_states.Add(typeof(T), state);
+		return AddSystemParam(state);
 	}
 
 	public Scheduler AddResource<T>(T resource) where T : notnull
@@ -283,6 +325,13 @@ public partial class Scheduler
 	internal bool ResourceExists<T>() where T : notnull, ISystemParam<World>
 	{
 		return _world.Entity<Placeholder<T>>().Has<Placeholder<T>>();
+	}
+
+	internal bool InState<T>(T state) where T : struct, Enum
+	{
+		if (!_world.Entity<Placeholder<State<T>>>().Has<Placeholder<State<T>>>())
+			return false;
+		return _world.Entity<Placeholder<State<T>>>().Get<Placeholder<State<T>>>().Value.InState(state);
 	}
 }
 
@@ -342,6 +391,7 @@ internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSyst
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value;
 
 		var ev = new EventParam<T>();
@@ -369,6 +419,7 @@ public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Writer;
 
 		throw new NotImplementedException("EventWriter<T> must be created using the scheduler.AddEvent<T>() method");
@@ -394,6 +445,7 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
+
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Reader;
 
 		throw new NotImplementedException("EventReader<T> must be created using the scheduler.AddEvent<T>() method");
@@ -434,6 +486,7 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData>>>().Has<Placeholder<Query<TQueryData>>>())
+
 			return arg.Entity<Placeholder<Query<TQueryData>>>().Get<Placeholder<Query<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -455,6 +508,7 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Has<Placeholder<Query<TQueryData, TQueryFilter>>>())
+
 			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Get<Placeholder<Query<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -501,6 +555,7 @@ public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<Wo
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData>>>().Has<Placeholder<Single<TQueryData>>>())
+
 			return arg.Entity<Placeholder<Single<TQueryData>>>().Get<Placeholder<Single<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -522,6 +577,7 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Has<Placeholder<Single<TQueryData, TQueryFilter>>>())
+
 			return arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Get<Placeholder<Single<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -562,6 +618,75 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		=> _query.Count();
 }
 
+public interface IState
+{
+	void Update();
+}
+
+public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoSystemParam<World>, IState
+	where T : struct, Enum
+{
+	private bool _enteredStateFrame;
+	private bool _exitedStateFrame;
+
+	internal T Previous { get; private set; } = previous;
+	public T Current { get; private set; } = current;
+
+
+	public static ISystemParam<World> Generate(World arg)
+	{
+		if (arg.Entity<Placeholder<State<T>>>().Has<Placeholder<State<T>>>())
+			return arg.Entity<Placeholder<State<T>>>().Get<Placeholder<State<T>>>().Value;
+
+		var state = new State<T>(default, default);
+		arg.Entity<Placeholder<State<T>>>().Set(new Placeholder<State<T>>() { Value = state });
+		return state;
+	}
+
+	public void Set(T value)
+	{
+		if (!Equals(Current, value))
+		{
+			Previous = Current;
+			Current = value;
+
+			_enteredStateFrame = false;
+			_exitedStateFrame = false;
+		}
+	}
+
+	void IState.Update()
+	{
+		if (Equals(Current, Previous))
+		{
+			_enteredStateFrame = true;
+			_exitedStateFrame = true;
+		}
+	}
+
+	internal bool InState(T? state)
+	{
+		return Equals(Current, state);
+	}
+
+	internal bool EnterState(T state)
+	{
+		if (!_enteredStateFrame && Equals(Current, state))
+		{
+			return true;
+		}
+		return false;
+	}
+
+	internal bool ExitState(T state)
+	{
+		if (!_exitedStateFrame && Equals(Previous, state))
+		{
+			return true;
+		}
+		return false;
+	}
+}
 
 public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
 {
@@ -612,6 +737,12 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 
 	public bool ResourceExists<T>() where T : notnull
 		=> _scheduler.ResourceExists<Res<T>>();
+
+	public void AddState<T>(T state = default!) where T : struct, Enum
+		=> _scheduler.AddState(state);
+
+	public bool InState<T>(T state) where T : struct, Enum
+		=> _scheduler.InState(state);
 
 	public static ISystemParam<World> Generate(World arg)
 	{
