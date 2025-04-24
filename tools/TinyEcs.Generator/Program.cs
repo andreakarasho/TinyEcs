@@ -394,6 +394,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{genericsArgsWhere}
 				{{
 					{objs}
+					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
 					var fn = (World args, Func<World, bool> runIf) =>
 					{{
@@ -409,7 +410,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						return true;
 					}};
 					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
-						.RunIf((State<TState> state) => state.EnterState(st));
+						.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 					Add(sys, Stages.OnEnter);
 					return sys;
 				}}");
@@ -421,6 +422,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{genericsArgsWhere}
 				{{
 					{objs}
+					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
 					var fn = (World args, Func<World, bool> runIf) =>
 					{{
@@ -436,7 +438,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						return true;
 					}};
 					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
-						.RunIf((State<TState> state) => state.ExitState(st));
+						.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 					Add(sys, Stages.OnExit);
 					return sys;
 				}}");

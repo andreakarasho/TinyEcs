@@ -36,7 +36,7 @@ scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Lo
 {
 	states.Value ??= Enum.GetValues<GameState>();
 
-	loading.Value += 1f;
+	loading.Value += 0.1f;
 	// Console.WriteLine("next {0:P}", loading.Value);
 
 	Console.WriteLine("current state: {0}", state.Current);

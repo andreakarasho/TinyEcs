@@ -147,7 +147,6 @@ public partial class Scheduler
 	private readonly List<FuncSystem<World>> _singleThreads = new();
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
-	private readonly Dictionary<Type, IState> _states = new();
 
 	public Scheduler(World world)
 	{
@@ -175,9 +174,6 @@ public partial class Scheduler
 	{
 		foreach ((_, var ev) in _events)
 			ev.Clear();
-
-		foreach ((_, var state) in _states)
-			state.Update();
 
 		RunStage(Stages.Startup);
 		_systems[(int)Stages.Startup].Clear();
@@ -245,6 +241,8 @@ public partial class Scheduler
 	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 		where TState : struct, Enum
 	{
+		var stateChangeId = -1;
+
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
 		{
 			if (runIf?.Invoke(args) ?? true)
@@ -254,7 +252,7 @@ public partial class Scheduler
 			}
 			return false;
 		}, () => false, Stages.OnEnter, threadingType)
-		.RunIf((State<TState> state) => state.EnterState(st));
+		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
 		Add(sys, Stages.OnEnter);
 
@@ -264,6 +262,8 @@ public partial class Scheduler
 	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 		where TState : struct, Enum
 	{
+		var stateChangeId = -1;
+
 		var sys = new FuncSystem<World>(_world, (args, runIf) =>
 		{
 			if (runIf?.Invoke(args) ?? true)
@@ -273,7 +273,7 @@ public partial class Scheduler
 			}
 			return false;
 		}, () => false, Stages.OnExit, threadingType)
-		.RunIf((State<TState> state) => state.ExitState(st));
+		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
 		Add(sys, Stages.OnExit);
 
@@ -302,11 +302,7 @@ public partial class Scheduler
 
 	public Scheduler AddState<T>(T initialState = default!) where T : struct, Enum
 	{
-		if (_states.ContainsKey(typeof(T)))
-			return this;
-
 		var state = new State<T>(initialState, initialState);
-		_states.Add(typeof(T), state);
 		return AddSystemParam(state);
 	}
 
@@ -618,20 +614,14 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		=> _query.Count();
 }
 
-public interface IState
-{
-	void Update();
-}
 
-public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoSystemParam<World>, IState
+public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoSystemParam<World>
 	where T : struct, Enum
 {
-	private bool _enteredStateFrame;
-	private bool _exitedStateFrame;
+	private int _stateChangeId = -1;
 
 	internal T Previous { get; private set; } = previous;
 	public T Current { get; private set; } = current;
-
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -649,18 +639,7 @@ public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoS
 		{
 			Previous = Current;
 			Current = value;
-
-			_enteredStateFrame = false;
-			_exitedStateFrame = false;
-		}
-	}
-
-	void IState.Update()
-	{
-		if (Equals(Current, Previous))
-		{
-			_enteredStateFrame = true;
-			_exitedStateFrame = true;
+			_stateChangeId++; // Increment the change counter
 		}
 	}
 
@@ -669,19 +648,29 @@ public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoS
 		return Equals(Current, state);
 	}
 
-	internal bool EnterState(T state)
+	internal int GetChangeId() => _stateChangeId;
+
+	internal bool ShouldEnter(T state, ref int lastProcessedChangeId)
 	{
-		if (!_enteredStateFrame && Equals(Current, state))
+		if (!Equals(Current, state))
+			return false;
+
+		if (lastProcessedChangeId != _stateChangeId)
 		{
+			lastProcessedChangeId = _stateChangeId;
 			return true;
 		}
 		return false;
 	}
 
-	internal bool ExitState(T state)
+	internal bool ShouldExit(T state, ref int lastProcessedChangeId)
 	{
-		if (!_exitedStateFrame && Equals(Previous, state))
+		if (!Equals(Previous, state))
+			return false;
+
+		if (lastProcessedChangeId != _stateChangeId)
 		{
+			lastProcessedChangeId = _stateChangeId;
 			return true;
 		}
 		return false;
