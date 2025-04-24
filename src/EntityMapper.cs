@@ -104,8 +104,8 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		return true;
 	}
 
-	private static void OnEntityRemoved(World world, EcsID id)
-		=> world.RelationshipEntityMapper.Remove(id);
+	private void OnEntityRemoved(World world, EcsID id)
+		=> Remove(id);
 
 	private void ApplyPolicy(EcsID id)
 	{

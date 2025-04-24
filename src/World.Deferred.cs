@@ -5,7 +5,7 @@ namespace TinyEcs;
 public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
-	private WorldState _worldState = new () { Locks = 0 };
+	private WorldState _worldState = new() { Locks = 0 };
 
 	public bool IsDeferred => _worldState.Locks > 0;
 	public bool IsMerging => _worldState.Locks < 0;
@@ -136,23 +136,24 @@ public sealed partial class World
 			switch (op.Op)
 			{
 				case DeferredOpTypes.DestroyEntity:
-					Delete(op.Entity);
+					if (Exists(op.Entity))
+						Delete(op.Entity);
 					break;
 
 				case DeferredOpTypes.SetComponent:
-				{
-					(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
-					array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+					{
+						(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
+						array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
 
-					break;
-				}
+						break;
+					}
 
 				case DeferredOpTypes.UnsetComponent:
-				{
-					Detach(op.Entity, op.ComponentInfo.ID);
+					{
+						Detach(op.Entity, op.ComponentInfo.ID);
 
-					break;
-				}
+						break;
+					}
 			}
 		}
 
