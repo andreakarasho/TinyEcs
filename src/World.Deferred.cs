@@ -18,8 +18,8 @@ public sealed partial class World
 		if (IsMerging)
 			return;
 
-		_worldState.Locks += 1;
-		EcsAssert.Assert(_worldState.Locks > 0, "");
+		var locks = _worldState.Begin();
+		EcsAssert.Assert(locks > 0, "");
 	}
 
 
@@ -28,14 +28,14 @@ public sealed partial class World
 		if (IsMerging)
 			return;
 
-		_worldState.Locks -= 1;
-		EcsAssert.Assert(_worldState.Locks >= 0, "");
+		var locks = _worldState.End();
+		EcsAssert.Assert(locks >= 0, "");
 
-		if (_worldState.Locks == 0 && _operations.Count > 0)
+		if (locks == 0 && _operations.Count > 0)
 		{
-			_worldState.Locks = -1;
+			_worldState.Lock();
 			Merge();
-			_worldState.Locks = 0;
+			_worldState.Unlock();
 		}
 	}
 
@@ -163,6 +163,11 @@ public sealed partial class World
 	struct WorldState
 	{
 		public int Locks;
+
+		public int Lock() => Locks = -1;
+		public int Unlock() => Locks = 0;
+		public int Begin() => Interlocked.Increment(ref Locks);
+		public int End() => Interlocked.Decrement(ref Locks);
 	}
 
 	struct DeferredOp
