@@ -1,5 +1,5 @@
+using System.Collections;
 using System.Collections.Frozen;
-using System.Numerics;
 
 namespace TinyEcs;
 
@@ -8,19 +8,37 @@ namespace TinyEcs;
 internal readonly struct Column
 {
 	public readonly Array Data;
-	// public readonly uint[] Changed;
+	public readonly BitArray Changed;
 
 	internal Column(ref readonly ComponentInfo component, int chunkSize)
 	{
 		Data = Lookup.GetArray(component.ID, chunkSize)!;
-		// Changed = new uint[chunkSize];
+		Changed = new(chunkSize);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkChanged(int index)
+	{
+		Changed[index] = true;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool IsChanged(int index)
+	{
+		return Changed[index];
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void ClearChanges()
+	{
+		Changed.SetAll(false);
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void CopyTo(int srcIdx, ref readonly Column dest, int dstIdx)
 	{
 		Array.Copy(Data, srcIdx, dest.Data, dstIdx, 1);
+		dest.Changed[dstIdx] = Changed[srcIdx];
 	}
 }
 
@@ -35,7 +53,7 @@ internal struct ArchetypeChunk
 		Entities = new EntityView[chunkSize];
 		Columns = new Column[sign.Length];
 		for (var i = 0; i < sign.Length; ++i)
-			Columns[i] = new(in sign[i], chunkSize); // Lookup.GetArray(sign[i].ID, chunkSize)!;
+			Columns[i] = new(in sign[i], chunkSize);
 	}
 
 	public int Count { get; internal set; }
@@ -103,6 +121,27 @@ internal struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly ReadOnlySpan<EntityView> GetEntities()
 		=> Entities.AsSpan(0, Count);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkComponentChanged(int column, int row)
+	{
+		Columns![column].MarkChanged(row);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool IsComponentChanged(int column, int row)
+	{
+		return Columns![column].IsChanged(row);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void ClearAllChanges()
+	{
+		foreach (var column in Columns!)
+		{
+			column.ClearChanges();
+		}
+	}
 }
 
 public sealed class Archetype : IComparable<Archetype>
@@ -183,14 +222,14 @@ public sealed class Archetype : IComparable<Archetype>
 #endif
 
 		_ids = All.Select(s => s.ID).ToFrozenSet();
-		_add = new ();
-		_remove = new ();
+		_add = new();
+		_remove = new();
 	}
 
 
 	public World World => _world;
 	public int Count => _count;
-	public readonly ComponentInfo[] All, Components, Tags, Pairs;
+	public readonly ComponentInfo[] All, Components, Tags, Pairs = Array.Empty<ComponentInfo>();
 	public EcsID Id { get; }
 	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
@@ -495,19 +534,19 @@ public sealed class Archetype : IComparable<Archetype>
 
 	internal ArchetypeSearchResult MatchWith(ReadOnlySpan<IQueryTerm> terms)
 	{
-		return FilterMatch.Match(_ids, terms);
+		return FilterMatch.Match(this, terms);
 	}
 
 	public void Print(int depth)
-    {
-        Console.WriteLine(new string(' ', depth * 2) + $"Node: [{string.Join(", ", All.Select(s => s.ID))}]");
+	{
+		Console.WriteLine(new string(' ', depth * 2) + $"Node: [{string.Join(", ", All.Select(s => s.ID))}]");
 
-        foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
-        {
-            Console.WriteLine(new string(' ', (depth + 1) * 2) + $"Edge: {edge.Id}");
-            edge.Archetype.Print(depth + 2);
-        }
-    }
+		foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
+		{
+			Console.WriteLine(new string(' ', (depth + 1) * 2) + $"Edge: {edge.Id}");
+			edge.Archetype.Print(depth + 2);
+		}
+	}
 
 	public int CompareTo(Archetype? other)
 	{

@@ -4,13 +4,13 @@ public sealed partial class World : IDisposable
 {
 	internal delegate Query QueryFactoryDel(World world, ReadOnlySpan<IQueryTerm> terms);
 
-    private readonly Archetype _archRoot;
-	private readonly EntitySparseSet<EcsRecord> _entities = new ();
-	private readonly Dictionary<EcsID, Archetype> _typeIndex = new ();
-    private readonly ComponentComparer _comparer;
+	private readonly Archetype _archRoot;
+	private readonly EntitySparseSet<EcsRecord> _entities = new();
+	private readonly Dictionary<EcsID, Archetype> _typeIndex = new();
+	private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
-	private readonly FastIdLookup<EcsID> _cachedComponents = new ();
-	private readonly object _newEntLock = new ();
+	private readonly FastIdLookup<EcsID> _cachedComponents = new();
+	private readonly object _newEntLock = new();
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
@@ -42,7 +42,7 @@ public sealed partial class World : IDisposable
 
 	internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
-        ref readonly var lookup = ref Lookup.Component<T>.Value;
+		ref readonly var lookup = ref Lookup.Component<T>.Value;
 
 		EcsAssert.Panic(lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
@@ -71,16 +71,16 @@ public sealed partial class World : IDisposable
 		}
 
 		return ref lookup;
-    }
+	}
 
 
-    internal ref EcsRecord GetRecord(EcsID id)
-    {
-        ref var record = ref _entities.Get(id);
+	internal ref EcsRecord GetRecord(EcsID id)
+	{
+		ref var record = ref _entities.Get(id);
 		if (Unsafe.IsNullRef(ref record))
-        	EcsAssert.Panic(false, $"entity {id} is dead or doesn't exist!");
-        return ref record;
-    }
+			EcsAssert.Panic(false, $"entity {id} is dead or doesn't exist!");
+		return ref record;
+	}
 
 	private void Detach(EcsID entity, EcsID id)
 	{
@@ -88,7 +88,7 @@ public sealed partial class World : IDisposable
 		var oldArch = record.Archetype;
 
 		if (oldArch.GetAnyIndex(id) < 0)
-            return;
+			return;
 
 		OnComponentUnset?.Invoke(this, entity, new ComponentInfo(id, -1));
 
@@ -124,7 +124,7 @@ public sealed partial class World : IDisposable
 		}
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
-        record.Archetype = foundArch!;
+		record.Archetype = foundArch!;
 		EndDeferred();
 
 #if USE_PAIR
@@ -157,7 +157,13 @@ public sealed partial class World : IDisposable
 
 		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
 		if (column >= 0)
-            return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
+		{
+			if (size > 0)
+			{
+				record.Chunk.MarkComponentChanged(column, record.Row);
+			}
+			return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
+		}
 
 		BeginDeferred();
 
@@ -193,7 +199,7 @@ public sealed partial class World : IDisposable
 		}
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
-        record.Archetype = foundArch!;
+		record.Archetype = foundArch!;
 		EndDeferred();
 
 		OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size));
@@ -221,6 +227,10 @@ public sealed partial class World : IDisposable
 #endif
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
+		if (size > 0)
+		{
+			record.Chunk.MarkComponentChanged(column, record.Row);
+		}
 		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}
 
@@ -314,16 +324,16 @@ public sealed partial class World : IDisposable
 			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size)!);
 		}
 
-        ref var record = ref GetRecord(entity);
+		ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(id);
 		return ref record.Chunk.GetReferenceAt<T>(column, record.Row);
-    }
+	}
 }
 
 struct EcsRecord
 {
 	public Archetype Archetype;
-    public int Row;
+	public int Row;
 #if USE_PAIR
 	public EntityFlags Flags;
 #endif

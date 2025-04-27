@@ -17,7 +17,7 @@ public interface IQueryTerm : IComparable<IQueryTerm>
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	ArchetypeSearchResult Match(FrozenSet<EcsID> ids);
+	ArchetypeSearchResult Match(Archetype archetype);
 }
 
 [DebuggerDisplay("{Id} - {Op}")]
@@ -26,9 +26,9 @@ public readonly struct WithTerm(EcsID id) : IQueryTerm
 	public ulong Id { get; init; } = id;
 	public TermOp Op { get; init; } = TermOp.With;
 
-	public readonly ArchetypeSearchResult Match(FrozenSet<ulong> ids)
+	public readonly ArchetypeSearchResult Match(Archetype archetype)
 	{
-		return ids.Contains(Id) ? ArchetypeSearchResult.Found : ArchetypeSearchResult.Continue;
+		return archetype.HasIndex(Id) ? ArchetypeSearchResult.Found : ArchetypeSearchResult.Continue;
 	}
 }
 
@@ -38,9 +38,9 @@ public readonly struct WithoutTerm(EcsID id) : IQueryTerm
 	public ulong Id { get; init; } = id;
 	public TermOp Op { get; init; } = TermOp.Without;
 
-	public readonly ArchetypeSearchResult Match(FrozenSet<ulong> ids)
+	public readonly ArchetypeSearchResult Match(Archetype archetype)
 	{
-		return ids.Contains(Id) ? ArchetypeSearchResult.Stop : ArchetypeSearchResult.Continue;
+		return archetype.HasIndex(Id) ? ArchetypeSearchResult.Stop : ArchetypeSearchResult.Continue;
 	}
 }
 
@@ -50,9 +50,21 @@ public readonly struct OptionalTerm(EcsID id) : IQueryTerm
 	public ulong Id { get; init; } = id;
 	public TermOp Op { get; init; } = TermOp.Optional;
 
-	public readonly ArchetypeSearchResult Match(FrozenSet<ulong> ids)
+	public readonly ArchetypeSearchResult Match(Archetype archetype)
 	{
 		return ArchetypeSearchResult.Found;
+	}
+}
+
+[DebuggerDisplay("{Id} - {Op}")]
+public readonly struct ChangedTerm(EcsID id) : IQueryTerm
+{
+	public ulong Id { get; init; } = id;
+	public TermOp Op { get; init; } = TermOp.With;
+
+	public readonly ArchetypeSearchResult Match(Archetype archetype)
+	{
+		return archetype.HasIndex(Id) ? ArchetypeSearchResult.Found : ArchetypeSearchResult.Continue;
 	}
 }
 
@@ -60,6 +72,7 @@ public readonly struct OptionalTerm(EcsID id) : IQueryTerm
 public enum TermOp : byte
 {
 	With,
-    Without,
-    Optional,
+	Without,
+	Optional,
+	Changed
 }

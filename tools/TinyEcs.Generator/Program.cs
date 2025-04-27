@@ -258,16 +258,21 @@ public sealed class MyGenerator : IIncrementalGenerator
 			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
-				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IFilter");
+				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IFilter<T{j}>");
 				var appendTermsCalls = GenerateSequence(i + 1, "\n", j => $"if (!FilterBuilder<T{j}>.Build(builder)) T{j}.Build(builder);");
 
 				sb.AppendLine($@"
-					public readonly struct Filter<{genericsArgs}> : IFilter
+					public readonly ref struct Filter<{genericsArgs}> : IFilter<Filter<{genericsArgs}>>
 						{genericsArgsWhere}
 					{{
 						public static void Build(QueryBuilder builder)
 						{{
 							{appendTermsCalls}
+						}}
+
+						static bool IFilter<Filter<{genericsArgs}>>.Apply(ref readonly QueryIterator iterator, int row)
+						{{
+							return false;
 						}}
 					}}
 				");

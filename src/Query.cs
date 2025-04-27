@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
@@ -62,6 +63,16 @@ public sealed class QueryBuilder
 
 	public QueryBuilder Optional(EcsID id)
 		=> Term(new OptionalTerm(id));
+
+	public QueryBuilder Changed<T>() where T : struct
+	{
+		ref readonly var cmp = ref _world.Component<T>();
+		EcsAssert.Panic(cmp.Size > 0, "You can't access Tag as Component");
+		return Changed(cmp.ID);
+	}
+
+	public QueryBuilder Changed(EcsID id)
+		=> Term(new ChangedTerm(id));
 
 	public QueryBuilder Term(IQueryTerm term)
 	{
@@ -153,6 +164,11 @@ public sealed class Query
 }
 
 
+public static class BitArrayPool
+{
+	public static BitArray Empty { get; } = new(0, false);
+}
+
 
 [SkipLocalsInit]
 public ref struct QueryIterator
@@ -174,6 +190,10 @@ public ref struct QueryIterator
 		_startSafe = start & Archetype.CHUNK_THRESHOLD;
 		_count = count;
 	}
+
+	public readonly int Columns => _indices.Length;
+
+	internal ref readonly ArchetypeChunk Chunk => ref _chunkIterator.Current;
 
 	public readonly int Count
 	{
@@ -224,6 +244,17 @@ public ref struct QueryIterator
 			entities = entities.Slice(_startSafe, Count);
 
 		return entities;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly BitArray Changes(int index)
+	{
+		var i = _indices[index];
+		if (i < 0)
+			return BitArrayPool.Empty;
+
+		ref var column = ref _chunkIterator.Current.GetColumn(i);
+		return column.Changed;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

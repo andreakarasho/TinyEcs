@@ -11,6 +11,40 @@ using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
 
+
+scheduler.OnUpdate((Query<Data<Position>, Changed<Position>> query) =>
+{
+	foreach ((var ent, var pos) in query)
+	{
+
+	}
+}, ThreadingMode.Single);
+
+
+var ab = ecs.Entity()
+	.Set(new Position());
+ecs.Entity()
+	.Set(new Position() { X = -1 });
+var q = ecs.QueryBuilder()
+	.With<Position>()
+	.Changed<Position>()
+	.Build();
+
+var a = new QueryIter<Data2<Position>, Changed<Position>>(q.Iter());
+
+foreach ((var ent, var pos) in a)
+{
+	pos.Ref.X *= 2;
+	pos.Ref.Y *= 2;
+}
+
+
+scheduler.RunOnce();
+scheduler.RunOnce();
+
+ab.Set(new Position() { X = 2 });
+scheduler.RunOnce();
+
 scheduler.AddState(GameState.Loading);
 scheduler.AddState(AnotherState.C);
 
