@@ -26,7 +26,7 @@ public readonly ref struct PtrRO<T> where T : struct
 internal ref struct DataRow<T> where T : struct
 {
 	public Ptr<T> Value;
-	public int Size, StateSize;
+	public nint Size, StateSize;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next()
