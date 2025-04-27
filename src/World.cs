@@ -160,7 +160,7 @@ public sealed partial class World : IDisposable
 		{
 			if (size > 0)
 			{
-				record.Chunk.MarkComponentChanged(column, record.Row);
+				record.Chunk.MarkComponent(column, record.Row, ComponentState.Changed);
 			}
 			return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 		}
@@ -227,10 +227,10 @@ public sealed partial class World : IDisposable
 #endif
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
-		// if (size > 0)
-		// {
-		// 	record.Chunk.MarkComponentChanged(column, record.Row);
-		// }
+		if (size > 0)
+		{
+			record.Chunk.MarkComponent(column, record.Row, ComponentState.Added);
+		}
 		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}
 

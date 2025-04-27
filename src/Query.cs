@@ -214,7 +214,7 @@ public ref struct QueryIterator
 		ref readonly var chunk = ref _chunkIterator.Current;
 		ref var column = ref chunk.GetColumn(i);
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
-		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.Changed);
+		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.States);
 
 		data.Size = Unsafe.SizeOf<T>();
 		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);

@@ -16,31 +16,25 @@ public enum ComponentState : byte
 internal readonly struct Column
 {
 	public readonly Array Data;
-	public readonly ComponentState[] Changed;
+	public readonly ComponentState[] States;
 
 	internal Column(ref readonly ComponentInfo component, int chunkSize)
 	{
 		Data = Lookup.GetArray(component.ID, chunkSize)!;
-		Changed = new ComponentState[chunkSize];
+		States = new ComponentState[chunkSize];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkChanged(int index)
+	public void Mark(int index, ComponentState state)
 	{
-		Changed[index] = ComponentState.Changed;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool IsChanged(int index)
-	{
-		return Changed[index] == ComponentState.Changed;
+		States[index] = state;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void CopyTo(int srcIdx, ref readonly Column dest, int dstIdx)
 	{
 		Array.Copy(Data, srcIdx, dest.Data, dstIdx, 1);
-		dest.Changed[dstIdx] = Changed[srcIdx];
+		dest.States[dstIdx] = States[srcIdx];
 	}
 }
 
@@ -125,15 +119,9 @@ internal struct ArchetypeChunk
 		=> Entities.AsSpan(0, Count);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkComponentChanged(int column, int row)
+	public void MarkComponent(int column, int row, ComponentState state)
 	{
-		Columns![column].MarkChanged(row);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public bool IsComponentChanged(int column, int row)
-	{
-		return Columns![column].IsChanged(row);
+		Columns![column].Mark(row, state);
 	}
 }
 
