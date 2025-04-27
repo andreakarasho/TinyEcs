@@ -214,10 +214,11 @@ public ref struct QueryIterator
 		ref readonly var chunk = ref _chunkIterator.Current;
 		ref var column = ref chunk.GetColumn(i);
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
+		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.Changed);
 
-		data.Changed = column.Changed;
 		data.Size = Unsafe.SizeOf<T>();
 		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
+		data.Value.State = ref Unsafe.Add(ref stateRef, _startSafe);
 
 		return data;
 	}
@@ -242,17 +243,6 @@ public ref struct QueryIterator
 			entities = entities.Slice(_startSafe, Count);
 
 		return entities;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly BitArray? Changes(int index)
-	{
-		var i = _indices[index];
-		if (i < 0)
-			return null;
-
-		ref var column = ref _chunkIterator.Current.GetColumn(i);
-		return column.Changed;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

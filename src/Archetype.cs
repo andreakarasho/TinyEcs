@@ -1,37 +1,39 @@
-using System.Collections;
 using System.Collections.Frozen;
 
 namespace TinyEcs;
+
+
+public enum ComponentState : byte
+{
+	None = 0,
+	Added = 1,
+	Removed = 2,
+	Changed = 3,
+}
 
 
 [SkipLocalsInit]
 internal readonly struct Column
 {
 	public readonly Array Data;
-	public readonly BitArray Changed;
+	public readonly ComponentState[] Changed;
 
 	internal Column(ref readonly ComponentInfo component, int chunkSize)
 	{
 		Data = Lookup.GetArray(component.ID, chunkSize)!;
-		Changed = new(chunkSize);
+		Changed = new ComponentState[chunkSize];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void MarkChanged(int index)
 	{
-		Changed[index] = true;
+		Changed[index] = ComponentState.Changed;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool IsChanged(int index)
 	{
-		return Changed[index];
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void ClearChanges()
-	{
-		Changed.SetAll(false);
+		return Changed[index] == ComponentState.Changed;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -132,15 +134,6 @@ internal struct ArchetypeChunk
 	public bool IsComponentChanged(int column, int row)
 	{
 		return Columns![column].IsChanged(row);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void ClearAllChanges()
-	{
-		foreach (var column in Columns!)
-		{
-			column.ClearChanges();
-		}
 	}
 }
 

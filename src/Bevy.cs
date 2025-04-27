@@ -876,11 +876,6 @@ public struct With<T> : IFilter<With<T>>
 	[UnscopedRef]
 	ref With<T> IQueryIterator<With<T>>.Current => ref this;
 
-	public static bool Apply(ref readonly With<T> filter, int row)
-	{
-		return true;
-	}
-
 	public static void Build(QueryBuilder builder)
 	{
 		builder.With<T>();
@@ -913,11 +908,6 @@ public ref struct Without<T> : IFilter<Without<T>>
 {
 	[UnscopedRef]
 	ref Without<T> IQueryIterator<Without<T>>.Current => ref this;
-
-	public static bool Apply(ref readonly Without<T> filter, int row)
-	{
-		return true;
-	}
 
 	public static void Build(QueryBuilder builder)
 	{
@@ -952,11 +942,6 @@ public ref struct Optional<T> : IFilter<Optional<T>>
 {
 	[UnscopedRef]
 	ref Optional<T> IQueryIterator<Optional<T>>.Current => ref this;
-
-	public static bool Apply(ref readonly Optional<T> filter, int row)
-	{
-		return true;
-	}
 
 	public static void Build(QueryBuilder builder)
 	{
@@ -1031,8 +1016,12 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 			var index = _iterator.GetColumnIndexOf<T>();
 			_dataRow = _iterator.GetColumn<T>(index);
 		}
+		else
+		{
+			_dataRow.Next();
+		}
 
-		return _dataRow.Changed == null || !_dataRow.Changed[_row];
+		return _dataRow.Value.State == ComponentState.Changed;
 	}
 }
 
@@ -1067,9 +1056,6 @@ public ref struct QueryIter<D, F>
 
 			if (!_filterIterator.MoveNext())
 				continue;
-
-			// if (!F.Apply(in _filterIterator, _dataIterator.Row))
-			// 	continue;
 
 			return true;
 		}

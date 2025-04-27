@@ -21,8 +21,8 @@ var scheduler = new Scheduler(ecs);
 // }, ThreadingMode.Single);
 
 
-// var ab = ecs.Entity()
-// 	.Set(new Position());
+var ab = ecs.Entity()
+	.Set(new Position()).Set(new Velocity());
 // ecs.Entity()
 // 	.Set(new Position() { X = -1 });
 // // var q = ecs.QueryBuilder()
@@ -49,7 +49,7 @@ var scheduler = new Scheduler(ecs);
 // scheduler.RunOnce();
 // scheduler.RunOnce();
 
-// ab.Set(new Position() { X = 2 });
+ab.Set(new Position() { X = 2 });
 // scheduler.RunOnce();
 
 // scheduler.AddState(GameState.Loading);
@@ -111,6 +111,9 @@ scheduler.AddSystem((Query<Data<Position, Velocity>, Changed<Position>> q) =>
 	{
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;
+
+		if (pos.IsChanged)
+			pos.ClearState();
 	}
 }, threadingType: ThreadingMode.Single);
 
