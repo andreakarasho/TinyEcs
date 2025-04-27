@@ -164,12 +164,6 @@ public sealed class Query
 }
 
 
-public static class BitArrayPool
-{
-	public static BitArray Empty { get; } = new(0, false);
-}
-
-
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
@@ -191,14 +185,17 @@ public ref struct QueryIterator
 		_count = count;
 	}
 
-	public readonly int Columns => _indices.Length;
-
-	internal ref readonly ArchetypeChunk Chunk => ref _chunkIterator.Current;
-
 	public readonly int Count
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => _count > 0 ? Math.Min(_count, _chunkIterator.Current.Count) : _chunkIterator.Current.Count;
+	}
+
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly int GetColumnIndexOf<T>() where T : struct
+	{
+		return _archetypeIterator.Current.GetComponentIndex<T>();
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -247,11 +244,11 @@ public ref struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly BitArray Changes(int index)
+	public readonly BitArray? Changes(int index)
 	{
 		var i = _indices[index];
 		if (i < 0)
-			return BitArrayPool.Empty;
+			return null;
 
 		ref var column = ref _chunkIterator.Current.GetColumn(i);
 		return column.Changed;

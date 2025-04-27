@@ -12,95 +12,102 @@ var scheduler = new Scheduler(ecs);
 
 
 
-scheduler.OnUpdate((Query<Data<Position>, Changed<Position>> query) =>
-{
-	foreach ((var ent, var pos) in query)
-	{
+// scheduler.OnUpdate((Query<Data<Position>, Changed<Position>> query) =>
+// {
+// 	foreach ((var ent, var pos) in query)
+// 	{
 
-	}
-}, ThreadingMode.Single);
-
-
-var ab = ecs.Entity()
-	.Set(new Position());
-ecs.Entity()
-	.Set(new Position() { X = -1 });
-var q = ecs.QueryBuilder()
-	.With<Position>()
-	.Changed<Position>()
-	.Build();
-
-var a = new QueryIter<Data2<Position>, Changed<Position>>(q.Iter());
-
-foreach ((var ent, var pos) in a)
-{
-	pos.Ref.X *= 2;
-	pos.Ref.Y *= 2;
-}
+// 	}
+// }, ThreadingMode.Single);
 
 
-scheduler.RunOnce();
-scheduler.RunOnce();
+// var ab = ecs.Entity()
+// 	.Set(new Position());
+// ecs.Entity()
+// 	.Set(new Position() { X = -1 });
+// // var q = ecs.QueryBuilder()
+// // 	.With<Position>()
+// // 	.Changed<Position>()
+// // 	.Build();
 
-ab.Set(new Position() { X = 2 });
-scheduler.RunOnce();
+// // var a = new QueryIter<Data<Position>, Changed<Position>>(q.Iter());
 
-scheduler.AddState(GameState.Loading);
-scheduler.AddState(AnotherState.C);
-
-scheduler.OnUpdate(() =>
-{
-	Console.WriteLine("im in loading state");
-}, ThreadingMode.Single)
-.RunIf((SchedulerState state) => state.InState(GameState.Loading))
-.RunIf((SchedulerState state) => state.InState(AnotherState.A));
-
-
-scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
-scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading 2"), ThreadingMode.Single);
-scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
-
-scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
-scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), ThreadingMode.Single);
-
-scheduler.OnEnter(GameState.Menu, () => Console.WriteLine("on enter Menu"), ThreadingMode.Single);
-scheduler.OnExit(GameState.Menu, () => Console.WriteLine("on exit Menu"), ThreadingMode.Single);
-
-scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
-{
-	states.Value ??= Enum.GetValues<GameState>();
-
-	loading.Value += 0.1f;
-	// Console.WriteLine("next {0:P}", loading.Value);
-
-	Console.WriteLine("current state: {0}", state.Current);
-
-	if (loading.Value >= 1f)
-	{
-		loading.Value = 0f;
-		// Console.WriteLine("on swapping state");
-		state.Set(states.Value[(++index.Value) % states.Value.Length]);
-		anotherState.Set(AnotherState.A);
-	}
-
-}, threadingType: ThreadingMode.Single);
+// // foreach ((var ent, var pos) in a)
+// // {
+// // 	pos.Ref.X *= 2;
+// // 	pos.Ref.Y *= 2;
+// // }
 
 
-while (true)
-	scheduler.RunOnce();
+// // foreach ((var ent, var pos) in a)
+// // {
+// // 	pos.Ref.X *= 2;
+// // 	pos.Ref.Y *= 2;
+// // }
+
+
+// scheduler.RunOnce();
+// scheduler.RunOnce();
+
+// ab.Set(new Position() { X = 2 });
+// scheduler.RunOnce();
+
+// scheduler.AddState(GameState.Loading);
+// scheduler.AddState(AnotherState.C);
+
+// scheduler.OnUpdate(() =>
+// {
+// 	Console.WriteLine("im in loading state");
+// }, ThreadingMode.Single)
+// .RunIf((SchedulerState state) => state.InState(GameState.Loading))
+// .RunIf((SchedulerState state) => state.InState(AnotherState.A));
+
+
+// scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading"), ThreadingMode.Single);
+// scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("on enter loading 2"), ThreadingMode.Single);
+// scheduler.OnExit(GameState.Loading, () => Console.WriteLine("on exit loading"), ThreadingMode.Single);
+
+// scheduler.OnEnter(GameState.Playing, () => Console.WriteLine("on enter playing"), ThreadingMode.Single);
+// scheduler.OnExit(GameState.Playing, () => Console.WriteLine("on exit playing"), ThreadingMode.Single);
+
+// scheduler.OnEnter(GameState.Menu, () => Console.WriteLine("on enter Menu"), ThreadingMode.Single);
+// scheduler.OnExit(GameState.Menu, () => Console.WriteLine("on exit Menu"), ThreadingMode.Single);
+
+// scheduler.OnUpdate((State<GameState> state, State<AnotherState> anotherState, Local<float> loading, Local<GameState[]> states, Local<int> index) =>
+// {
+// 	states.Value ??= Enum.GetValues<GameState>();
+
+// 	loading.Value += 0.1f;
+// 	// Console.WriteLine("next {0:P}", loading.Value);
+
+// 	Console.WriteLine("current state: {0}", state.Current);
+
+// 	if (loading.Value >= 1f)
+// 	{
+// 		loading.Value = 0f;
+// 		// Console.WriteLine("on swapping state");
+// 		state.Set(states.Value[(++index.Value) % states.Value.Length]);
+// 		anotherState.Set(AnotherState.A);
+// 	}
+
+// }, threadingType: ThreadingMode.Single);
+
+
+// while (true)
+// 	scheduler.RunOnce();
 
 for (int i = 0; i < ENTITIES_COUNT; i++)
 	ecs.Entity()
 		.Set<Position>(new Position())
 		.Set<Velocity>(new Velocity());
 
-ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
+// ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
 
 
 
-scheduler.AddSystem((Query<Data<Position, Velocity>> q) =>
+scheduler.AddSystem((Query<Data<Position, Velocity>, Filter<Changed<Position>>> q) =>
 {
-	foreach ((var ent, var pos, var vel) in q)
+	foreach ((var pos, var vel) in q)
 	{
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;
@@ -121,9 +128,9 @@ while (true)
 {
 	for (int i = 0; i < 3600; ++i)
 	{
-		// scheduler.RunOnce();
+		scheduler.RunOnce();
 
-		Execute(query);
+		// Execute(query);
 		// ExecuteIterator(query);
 
 		// var it = query.Iter();
@@ -155,7 +162,7 @@ while (true)
 
 static void Execute(Query query)
 {
-	foreach ((var ent, var pos, var vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
+	foreach ((var pos, var vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
 	{
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;

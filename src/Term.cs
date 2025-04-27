@@ -60,7 +60,7 @@ public readonly struct OptionalTerm(EcsID id) : IQueryTerm
 public readonly struct ChangedTerm(EcsID id) : IQueryTerm
 {
 	public ulong Id { get; init; } = id;
-	public TermOp Op { get; init; } = TermOp.With;
+	public TermOp Op { get; init; } = TermOp.Changed;
 
 	public readonly ArchetypeSearchResult Match(Archetype archetype)
 	{
@@ -74,5 +74,5 @@ public enum TermOp : byte
 	With,
 	Without,
 	Optional,
-	Changed
+	Changed = With
 }

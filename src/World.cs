@@ -227,10 +227,10 @@ public sealed partial class World : IDisposable
 #endif
 
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
-		if (size > 0)
-		{
-			record.Chunk.MarkComponentChanged(column, record.Row);
-		}
+		// if (size > 0)
+		// {
+		// 	record.Chunk.MarkComponentChanged(column, record.Row);
+		// }
 		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}
 
