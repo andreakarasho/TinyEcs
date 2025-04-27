@@ -7,8 +7,7 @@ public enum ComponentState : byte
 {
 	None = 0,
 	Added = 1,
-	Removed = 2,
-	Changed = 3,
+	Changed = 2,
 }
 
 

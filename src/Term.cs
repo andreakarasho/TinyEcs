@@ -56,23 +56,10 @@ public readonly struct OptionalTerm(EcsID id) : IQueryTerm
 	}
 }
 
-[DebuggerDisplay("{Id} - {Op}")]
-public readonly struct ChangedTerm(EcsID id) : IQueryTerm
-{
-	public ulong Id { get; init; } = id;
-	public TermOp Op { get; init; } = TermOp.Changed;
-
-	public readonly ArchetypeSearchResult Match(Archetype archetype)
-	{
-		return archetype.HasIndex(Id) ? ArchetypeSearchResult.Found : ArchetypeSearchResult.Continue;
-	}
-}
-
 
 public enum TermOp : byte
 {
 	With,
 	Without,
-	Optional,
-	Changed = With
+	Optional
 }

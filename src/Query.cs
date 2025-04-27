@@ -64,16 +64,6 @@ public sealed class QueryBuilder
 	public QueryBuilder Optional(EcsID id)
 		=> Term(new OptionalTerm(id));
 
-	public QueryBuilder Changed<T>() where T : struct
-	{
-		ref readonly var cmp = ref _world.Component<T>();
-		EcsAssert.Panic(cmp.Size > 0, "You can't access Tag as Component");
-		return Changed(cmp.ID);
-	}
-
-	public QueryBuilder Changed(EcsID id)
-		=> Term(new ChangedTerm(id));
-
 	public QueryBuilder Term(IQueryTerm term)
 	{
 		_components[term.Id] = term;
@@ -203,11 +193,20 @@ public ref struct QueryIterator
 	{
 		Unsafe.SkipInit(out DataRow<T> data);
 
+		if (index >= _indices.Length)
+		{
+			data.Value.State = ref Unsafe.NullRef<ComponentState>();
+			data.Value.Ref = ref Unsafe.NullRef<T>();
+			data.Size = data.StateSize = 0;
+			return data;
+		}
+
 		var i = _indices[index];
 		if (i < 0)
 		{
+			data.Value.State = ref Unsafe.NullRef<ComponentState>();
 			data.Value.Ref = ref Unsafe.NullRef<T>();
-			data.Size = 0;
+			data.Size = data.StateSize = 0;
 			return data;
 		}
 
@@ -217,6 +216,7 @@ public ref struct QueryIterator
 		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.States);
 
 		data.Size = Unsafe.SizeOf<T>();
+		data.StateSize = Unsafe.SizeOf<ComponentState>();
 		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
 		data.Value.State = ref Unsafe.Add(ref stateRef, _startSafe);
 

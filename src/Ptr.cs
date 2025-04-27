@@ -8,7 +8,10 @@ public ref struct Ptr<T> where T : struct
 
 
 	public readonly bool IsChanged => State == ComponentState.Changed;
+	public readonly bool IsAdded => State == ComponentState.Added;
+
 	public void ClearState() => State = ComponentState.None;
+	public void MarkChanged() => State = ComponentState.Changed;
 }
 
 [SkipLocalsInit]
@@ -23,12 +26,12 @@ public readonly ref struct PtrRO<T> where T : struct
 internal ref struct DataRow<T> where T : struct
 {
 	public Ptr<T> Value;
-	public int Size;
+	public int Size, StateSize;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next()
 	{
 		Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
-		Value.State = ref Unsafe.AddByteOffset(ref Value.State, sizeof(ComponentState));
+		Value.State = ref Unsafe.AddByteOffset(ref Value.State, StateSize);
 	}
 }

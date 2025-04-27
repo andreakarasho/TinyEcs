@@ -989,7 +989,7 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 
 	public static void Build(QueryBuilder builder)
 	{
-		builder.Changed<T>();
+		builder.With<T>();
 	}
 
 	static Changed<T> IFilter<Changed<T>>.CreateIterator(QueryIterator iterator)
@@ -1022,6 +1022,61 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 		}
 
 		return _dataRow.Value.State == ComponentState.Changed;
+	}
+}
+
+public ref struct Added<T> : IFilter<Added<T>>
+	where T : struct
+{
+	private QueryIterator _iterator;
+	private DataRow<T> _dataRow;
+	private int _row, _count;
+
+	public Added(QueryIterator iterator)
+	{
+		_iterator = iterator;
+		_row = -1;
+		_count = -1;
+	}
+
+	[UnscopedRef]
+	ref Added<T> IQueryIterator<Added<T>>.Current => ref this;
+
+	public static void Build(QueryBuilder builder)
+	{
+		builder.With<T>();
+	}
+
+	static Added<T> IFilter<Added<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new(iterator);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Added<T> IQueryIterator<Added<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool IQueryIterator<Added<T>>.MoveNext()
+	{
+		if (++_row >= _count)
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_row = 0;
+			_count = _iterator.Count;
+			var index = _iterator.GetColumnIndexOf<T>();
+			_dataRow = _iterator.GetColumn<T>(index);
+		}
+		else
+		{
+			_dataRow.Next();
+		}
+
+		return _dataRow.Value.State == ComponentState.Added;
 	}
 }
 
