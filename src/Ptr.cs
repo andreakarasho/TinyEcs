@@ -3,8 +3,9 @@
 [SkipLocalsInit]
 public ref struct Ptr<T> where T : struct
 {
-	public ref T Ref;
+	public ref T Ref => ref Value;
 	internal ref ComponentState State;
+	internal ref T Value;
 
 
 	public readonly bool IsChanged => State == ComponentState.Changed;
@@ -31,7 +32,7 @@ internal ref struct DataRow<T> where T : struct
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next()
 	{
-		Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
+		Value.Value = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
 		Value.State = ref Unsafe.AddByteOffset(ref Value.State, StateSize);
 	}
 }

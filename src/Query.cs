@@ -196,7 +196,7 @@ public ref struct QueryIterator
 		if (index >= _indices.Length)
 		{
 			data.Value.State = ref Unsafe.NullRef<ComponentState>();
-			data.Value.Ref = ref Unsafe.NullRef<T>();
+			data.Value.Value = ref Unsafe.NullRef<T>();
 			data.Size = data.StateSize = 0;
 			return data;
 		}
@@ -205,7 +205,7 @@ public ref struct QueryIterator
 		if (i < 0)
 		{
 			data.Value.State = ref Unsafe.NullRef<ComponentState>();
-			data.Value.Ref = ref Unsafe.NullRef<T>();
+			data.Value.Value = ref Unsafe.NullRef<T>();
 			data.Size = data.StateSize = 0;
 			return data;
 		}
@@ -217,7 +217,7 @@ public ref struct QueryIterator
 
 		data.Size = Unsafe.SizeOf<T>();
 		data.StateSize = Unsafe.SizeOf<ComponentState>();
-		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
+		data.Value.Value = ref Unsafe.Add(ref reference, _startSafe);
 		data.Value.State = ref Unsafe.Add(ref stateRef, _startSafe);
 
 		return data;
