@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
@@ -816,36 +817,31 @@ public interface IQueryIterator<TData>
 public interface IData<TData> : ITermCreator, IQueryIterator<TData>
 	where TData : struct, allows ref struct
 {
-	[UnscopedRef]
-	internal ref readonly QueryIterator Iterator { get; }
-	int Row { get; }
-
 	public static abstract TData CreateIterator(QueryIterator iterator);
 }
 
-public interface IFilter<TFilter> : ITermCreator
+public interface IFilter<TFilter> : ITermCreator, IQueryIterator<TFilter>
 	where TFilter : struct, allows ref struct
 {
-	public static abstract bool Apply(ref readonly QueryIterator iterator, int row);
+	public static abstract TFilter CreateIterator(QueryIterator iterator);
 }
 
 public ref struct Empty : IData<Empty>, IFilter<Empty>
 {
+	private readonly bool _asFilter;
 	private QueryIterator _iterator;
 
-	internal Empty(QueryIterator iterator) => _iterator = iterator;
+	internal Empty(QueryIterator iterator, bool asFilter)
+	{
+		_iterator = iterator;
+		_asFilter = asFilter;
+	}
 
 	public static void Build(QueryBuilder builder) { }
 
-	public static Empty CreateIterator(QueryIterator iterator) => new(iterator);
 
 	[UnscopedRef]
 	public ref Empty Current => ref this;
-
-	[UnscopedRef]
-	ref readonly QueryIterator IData<Empty>.Iterator => ref _iterator;
-
-	readonly int IData<Empty>.Row => -1;
 
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
@@ -853,13 +849,20 @@ public ref struct Empty : IData<Empty>, IFilter<Empty>
 		count = entities.Length;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Empty GetEnumerator() => this;
 
-	public bool MoveNext() => _iterator.Next();
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext() => _asFilter || _iterator.Next();
 
-	static bool IFilter<Empty>.Apply(ref readonly QueryIterator iterator, int row)
+	static Empty IData<Empty>.CreateIterator(QueryIterator iterator)
 	{
-		return true;
+		return new Empty(iterator, false);
+	}
+
+	static Empty IFilter<Empty>.CreateIterator(QueryIterator iterator)
+	{
+		return new Empty(iterator, true);
 	}
 }
 
@@ -867,10 +870,13 @@ public ref struct Empty : IData<Empty>, IFilter<Empty>
 /// Used in query filters to find entities with the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly ref struct With<T> : IFilter<With<T>>
+public struct With<T> : IFilter<With<T>>
 	where T : struct
 {
-	public static bool Apply(ref readonly QueryIterator iterator, int row)
+	[UnscopedRef]
+	ref With<T> IQueryIterator<With<T>>.Current => ref this;
+
+	public static bool Apply(ref readonly With<T> filter, int row)
 	{
 		return true;
 	}
@@ -879,16 +885,36 @@ public readonly ref struct With<T> : IFilter<With<T>>
 	{
 		builder.With<T>();
 	}
+
+	static With<T> IFilter<With<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new With<T>();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly With<T> IQueryIterator<With<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<With<T>>.MoveNext()
+	{
+		return true;
+	}
 }
 
 /// <summary>
 /// Used in query filters to find entities without the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly ref struct Without<T> : IFilter<Without<T>>
+public ref struct Without<T> : IFilter<Without<T>>
 	where T : struct
 {
-	public static bool Apply(ref readonly QueryIterator iterator, int row)
+	[UnscopedRef]
+	ref Without<T> IQueryIterator<Without<T>>.Current => ref this;
+
+	public static bool Apply(ref readonly Without<T> filter, int row)
 	{
 		return true;
 	}
@@ -897,6 +923,23 @@ public readonly ref struct Without<T> : IFilter<Without<T>>
 	{
 		builder.Without<T>();
 	}
+
+	static Without<T> IFilter<Without<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Without<T> IQueryIterator<Without<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<Without<T>>.MoveNext()
+	{
+		return true;
+	}
 }
 
 /// <summary>
@@ -904,10 +947,13 @@ public readonly ref struct Without<T> : IFilter<Without<T>>
 /// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly ref struct Optional<T> : IFilter<Optional<T>>
+public ref struct Optional<T> : IFilter<Optional<T>>
 	where T : struct
 {
-	public static bool Apply(ref readonly QueryIterator iterator, int row)
+	[UnscopedRef]
+	ref Optional<T> IQueryIterator<Optional<T>>.Current => ref this;
+
+	public static bool Apply(ref readonly Optional<T> filter, int row)
 	{
 		return true;
 	}
@@ -916,30 +962,77 @@ public readonly ref struct Optional<T> : IFilter<Optional<T>>
 	{
 		builder.Optional<T>();
 	}
+
+	static Optional<T> IFilter<Optional<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Optional<T> IQueryIterator<Optional<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<Optional<T>>.MoveNext()
+	{
+		return true;
+	}
 }
 
 /// <summary>
 /// Used in query filters to find entities with components that have changed.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly ref struct Changed<T> : IFilter<Changed<T>>
+public ref struct Changed<T> : IFilter<Changed<T>>
 	where T : struct
 {
-	public static bool Apply(ref readonly QueryIterator iterator, int row)
+	private QueryIterator _iterator;
+	private DataRow<T> _dataRow;
+	private int _row, _count;
+
+	public Changed(QueryIterator iterator)
 	{
-		var index = iterator.GetColumnIndexOf<T>();
-		var changes = iterator.Changes(index);
-		if (changes != null && row < changes.Count && changes[row])
-		{
-			// changes[row] = false;
-			return true;
-		}
-		return false;
+		_iterator = iterator;
+		_row = -1;
+		_count = -1;
 	}
+
+	[UnscopedRef]
+	ref Changed<T> IQueryIterator<Changed<T>>.Current => ref this;
 
 	public static void Build(QueryBuilder builder)
 	{
 		builder.Changed<T>();
+	}
+
+	static Changed<T> IFilter<Changed<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new(iterator);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Changed<T> IQueryIterator<Changed<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool IQueryIterator<Changed<T>>.MoveNext()
+	{
+		if (++_row >= _count)
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_row = 0;
+			_count = _iterator.Count;
+			var index = _iterator.GetColumnIndexOf<T>();
+			_dataRow = _iterator.GetColumn<T>(index);
+		}
+
+		return _dataRow.Changed == null || !_dataRow.Changed[_row];
 	}
 }
 
@@ -953,10 +1046,12 @@ public ref struct QueryIter<D, F>
 	where F : struct, IFilter<F>, allows ref struct
 {
 	private D _dataIterator;
+	private F _filterIterator;
 
 	internal QueryIter(QueryIterator iterator)
 	{
 		_dataIterator = D.CreateIterator(iterator);
+		_filterIterator = F.CreateIterator(iterator);
 	}
 
 	[UnscopedRef]
@@ -970,8 +1065,11 @@ public ref struct QueryIter<D, F>
 			if (!_dataIterator.MoveNext())
 				return false;
 
-			if (!F.Apply(in _dataIterator.Iterator, _dataIterator.Row))
+			if (!_filterIterator.MoveNext())
 				continue;
+
+			// if (!F.Apply(in _filterIterator, _dataIterator.Row))
+			// 	continue;
 
 			return true;
 		}

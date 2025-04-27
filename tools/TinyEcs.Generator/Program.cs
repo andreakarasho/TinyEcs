@@ -115,11 +115,6 @@ public sealed class MyGenerator : IIncrementalGenerator
 							get => ref this;
 						}}
 
-						[System.Diagnostics.CodeAnalysis.UnscopedRef]
-						ref readonly QueryIterator IData<Data<{generics}>>.Iterator => ref _iterator;
-
-						readonly int IData<Data<{generics}>>.Row => _index;
-
 						[MethodImpl(MethodImplOptions.AggressiveInlining)]
 						public readonly void Deconstruct({fieldSign})
 						{{
@@ -218,20 +213,52 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : struct, IFilter<T{j}>, allows ref struct");
 				var appendTermsCalls = GenerateSequence(i + 1, "\n", j => $"T{j}.Build(builder);");
-				var appendApplyCalls = GenerateSequence(i + 1, " | ", j => $"T{j}.Apply(in iterator, row)\n");
+				var appendApplyCalls = GenerateSequence(i + 1, " | ", j => $"T{j}.Apply(in filter, row)\n");
+
+				var subIterators = GenerateSequence(i + 1, "\n", j => $"private T{j} _iter{j};");
+				var createSubIterators = GenerateSequence(i + 1, "\n", j => $"_iter{j} = T{j}.CreateIterator(iterator);");
+
+				var callSubIterators = GenerateSequence(i + 1, "\n", j => $"var i{j} = _iter{j}.MoveNext();");
+				var callResultsSubIterators = GenerateSequence(i + 1, " | ", j => $"i{j} ");
 
 				sb.AppendLine($@"
-					public readonly ref struct Filter<{genericsArgs}> : IFilter<Filter<{genericsArgs}>>
+					public ref struct Filter<{genericsArgs}> : IFilter<Filter<{genericsArgs}>>
 						{genericsArgsWhere}
 					{{
+						private QueryIterator _iterator;
+						{subIterators}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						internal Filter(QueryIterator iterator)
+						{{
+							_iterator = iterator;
+							{createSubIterators}
+						}}
+
 						public static void Build(QueryBuilder builder)
 						{{
 							{appendTermsCalls}
 						}}
 
-						static bool IFilter<Filter<{genericsArgs}>>.Apply(ref readonly QueryIterator iterator, int row)
+						[System.Diagnostics.CodeAnalysis.UnscopedRef]
+						ref Filter<{genericsArgs}> IQueryIterator<Filter<{genericsArgs}>>.Current => ref this;
+
+						static Filter<{genericsArgs}> IFilter<Filter<{genericsArgs}>>.CreateIterator(QueryIterator iterator)
 						{{
-							return {appendApplyCalls};
+							return new(iterator);
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						readonly Filter<{genericsArgs}> IQueryIterator<Filter<{genericsArgs}>>.GetEnumerator()
+						{{
+							return this;
+						}}
+
+						[MethodImpl(MethodImplOptions.AggressiveInlining)]
+						bool IQueryIterator<Filter<{genericsArgs}>>.MoveNext()
+						{{
+							{callSubIterators}
+							return {callResultsSubIterators};
 						}}
 					}}
 				");

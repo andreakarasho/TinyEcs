@@ -1,4 +1,6 @@
-﻿namespace TinyEcs;
+﻿using System.Collections;
+
+namespace TinyEcs;
 
 [SkipLocalsInit]
 public ref struct Ptr<T> where T : struct
@@ -19,6 +21,7 @@ public ref struct DataRow<T> where T : struct
 {
 	public Ptr<T> Value;
 	public int Size;
+	public BitArray? Changed;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next() => Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);

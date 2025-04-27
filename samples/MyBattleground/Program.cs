@@ -105,7 +105,7 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 
 
 
-scheduler.AddSystem((Query<Data<Position, Velocity>, Filter<Changed<Position>>> q) =>
+scheduler.AddSystem((Query<Data<Position, Velocity>, Changed<Position>> q) =>
 {
 	foreach ((var pos, var vel) in q)
 	{
