@@ -121,7 +121,7 @@ internal struct ArchetypeChunk
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void MarkComponent(int column, int row, ComponentState state)
 	{
-		Columns![column].Mark(row, state);
+		Columns![column].Mark(row & Archetype.CHUNK_THRESHOLD, state);
 	}
 }
 
@@ -142,7 +142,6 @@ public sealed class Archetype : IComparable<Archetype>
 		, _pairsLookup
 #endif
 		;
-	private readonly FrozenSet<EcsID> _ids;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
 	private readonly int[] _fastLookup;
@@ -202,7 +201,6 @@ public sealed class Archetype : IComparable<Archetype>
 			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
 #endif
 
-		_ids = All.Select(s => s.ID).ToFrozenSet();
 		_add = new();
 		_remove = new();
 	}
