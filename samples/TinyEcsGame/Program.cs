@@ -4,13 +4,15 @@ using Raylib_cs;
 
 
 using var app = new App();
-app.AddPlugin(new RaylibPlugin() {
-	WindowSize = new () { Value = { X = 800, Y = 600 } },
+app.AddPlugin(new RaylibPlugin()
+{
+	WindowSize = new() { Value = { X = 800, Y = 600 } },
 	Title = "TinyEcs using raylib",
 	VSync = true
 });
 
-app.AddPlugin(new GameRootPlugin() {
+app.AddPlugin(new GameRootPlugin()
+{
 	EntitiesToSpawn = 1_000_00,
 	Velocity = 250
 });
@@ -22,7 +24,7 @@ app.Run(() => Raylib.WindowShouldClose(), Raylib.CloseWindow);
 // =================================================================================
 sealed class App : Scheduler, IDisposable
 {
-	public App() : base(new ()) { }
+	public App() : base(new()) { }
 
 	public void Dispose() => World?.Dispose();
 }
@@ -64,7 +66,8 @@ struct RaylibPlugin : IPlugin
 		scheduler.AddResource(WindowSize);
 		scheduler.AddResource(new AssetsManager());
 
-		scheduler.AddSystem((Time time) => {
+		scheduler.AddSystem((Time time) =>
+		{
 			time.Frame = Raylib.GetFrameTime();
 			time.Total += time.Frame;
 		}, Stages.BeforeUpdate);
@@ -228,9 +231,9 @@ readonly struct RenderingPlugin : IPlugin
 
 	static void DrawText(World ecs, Time time, Local<string> text, Local<float> timeout)
 	{
-		if (time.Total > timeout)
+		//if (time.Total > timeout)
 		{
-			timeout.Value = time.Total + 0.25f;
+			// timeout.Value = time.Total + 0.10f;
 			text.Value = $"""
 				[Debug]
 				FPS: {Raylib.GetFPS()}
@@ -246,7 +249,7 @@ readonly struct RenderingPlugin : IPlugin
 // =================================================================================
 sealed class AssetsManager
 {
-	private readonly Dictionary<uint, Texture2D> _ids = new ();
+	private readonly Dictionary<uint, Texture2D> _ids = new();
 
 	public void Register(Texture2D texture)
 	{
@@ -268,23 +271,23 @@ struct WindowSize
 
 struct Position
 {
-    public Vector2 Value;
+	public Vector2 Value;
 }
 
 struct Velocity
 {
-    public Vector2 Value;
+	public Vector2 Value;
 }
 
 struct Sprite
 {
-    public Color Color;
-    public float Scale;
+	public Color Color;
+	public float Scale;
 	public uint TextureId;
 }
 
 struct Rotation
 {
-    public float Value;
-    public float Acceleration;
+	public float Value;
+	public float Acceleration;
 }

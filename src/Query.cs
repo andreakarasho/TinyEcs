@@ -199,7 +199,7 @@ public ref struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
+	internal readonly DataRow<T> GetColumn<T>(int index) where T : struct
 	{
 		Unsafe.SkipInit(out DataRow<T> data);
 
