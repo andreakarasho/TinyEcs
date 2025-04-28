@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
 namespace TinyEcs;
@@ -1021,10 +1020,14 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 			_dataRow.Next();
 		}
 
-		return _dataRow.Value.State == ComponentState.Changed;
+		return _dataRow.StateSize > 0 && _dataRow.Value.State == ComponentState.Changed;
 	}
 }
 
+/// <summary>
+/// Used in query filters to find entities with components that have added.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public ref struct Added<T> : IFilter<Added<T>>
 	where T : struct
 {
@@ -1076,7 +1079,7 @@ public ref struct Added<T> : IFilter<Added<T>>
 			_dataRow.Next();
 		}
 
-		return _dataRow.Value.State == ComponentState.Added;
+		return _dataRow.StateSize > 0 && _dataRow.Value.State == ComponentState.Added;
 	}
 }
 
