@@ -387,7 +387,6 @@ internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSyst
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value;
 
 		var ev = new EventParam<T>();
@@ -415,7 +414,6 @@ public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Writer;
 
 		throw new NotImplementedException("EventWriter<T> must be created using the scheduler.AddEvent<T>() method");
@@ -441,7 +439,6 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Reader;
 
 		throw new NotImplementedException("EventReader<T> must be created using the scheduler.AddEvent<T>() method");
@@ -482,7 +479,6 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData>>>().Has<Placeholder<Query<TQueryData>>>())
-
 			return arg.Entity<Placeholder<Query<TQueryData>>>().Get<Placeholder<Query<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -504,7 +500,6 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Has<Placeholder<Query<TQueryData, TQueryFilter>>>())
-
 			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Get<Placeholder<Query<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -551,7 +546,6 @@ public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<Wo
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData>>>().Has<Placeholder<Single<TQueryData>>>())
-
 			return arg.Entity<Placeholder<Single<TQueryData>>>().Get<Placeholder<Single<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -573,7 +567,6 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Has<Placeholder<Single<TQueryData, TQueryFilter>>>())
-
 			return arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Get<Placeholder<Single<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
