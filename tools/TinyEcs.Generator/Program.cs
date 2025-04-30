@@ -220,6 +220,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				var callSubIterators = GenerateSequence(i + 1, "\n", j => $"var i{j} = _iter{j}.MoveNext();");
 				var callResultsSubIterators = GenerateSequence(i + 1, " | ", j => $"i{j} ");
+				var setTicksSubIterators = GenerateSequence(i + 1, "\n", j => $"_iter{j}.SetTicks(lastRun, thisRun);");
 
 				sb.AppendLine($@"
 					public ref struct Filter<{genericsArgs}> : IFilter<Filter<{genericsArgs}>>
@@ -261,7 +262,10 @@ public sealed class MyGenerator : IIncrementalGenerator
 							return {callResultsSubIterators};
 						}}
 
-						public void SetTicks(uint lastRun, uint thisRun) {{ }}
+						public void SetTicks(uint lastRun, uint thisRun)
+						{{
+							{setTicksSubIterators}
+						}}
 					}}
 				");
 			}
