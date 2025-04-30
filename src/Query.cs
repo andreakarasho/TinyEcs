@@ -195,32 +195,58 @@ public ref struct QueryIterator
 
 		if (index >= _indices.Length)
 		{
-			data.Value.State = ref Unsafe.NullRef<ComponentState>();
+			// data.Value.State = ref Unsafe.NullRef<ComponentState>();
+			// data.StateSize = 0;
 			data.Value.Value = ref Unsafe.NullRef<T>();
-			data.Size = data.StateSize = 0;
+			data.Size = 0;
 			return data;
 		}
 
 		var i = _indices[index];
 		if (i < 0)
 		{
-			data.Value.State = ref Unsafe.NullRef<ComponentState>();
+			// data.Value.State = ref Unsafe.NullRef<ComponentState>();
+			// data.StateSize = 0;
 			data.Value.Value = ref Unsafe.NullRef<T>();
-			data.Size = data.StateSize = 0;
+			data.Size = 0;
 			return data;
 		}
 
 		ref readonly var chunk = ref _chunkIterator.Current;
 		ref var column = ref chunk.GetColumn(i);
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
-		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.States);
+		// ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.States);
 
 		data.Size = Unsafe.SizeOf<T>();
-		data.StateSize = Unsafe.SizeOf<ComponentState>();
+		// data.StateSize = Unsafe.SizeOf<ComponentState>();
+		// data.Value.State = ref Unsafe.Add(ref stateRef, _startSafe);
 		data.Value.Value = ref Unsafe.Add(ref reference, _startSafe);
-		data.Value.State = ref Unsafe.Add(ref stateRef, _startSafe);
 
 		return data;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly Span<ComponentState> GetState(int index)
+	{
+		if (index >= _indices.Length)
+		{
+			return Span<ComponentState>.Empty;
+		}
+
+		var i = _indices[index];
+		if (i < 0)
+		{
+			return Span<ComponentState>.Empty;
+		}
+
+		ref readonly var chunk = ref _chunkIterator.Current;
+		ref var column = ref chunk.GetColumn(i);
+		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.States);
+
+		var span = MemoryMarshal.CreateSpan(ref stateRef, column.States.Length);
+		if (!span.IsEmpty)
+			span = span.Slice(_startSafe, Count);
+		return span;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

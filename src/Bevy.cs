@@ -669,7 +669,8 @@ public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoS
 	}
 }
 
-public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World>
+	where T : notnull
 {
 	private T? _t;
 
@@ -689,7 +690,8 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T
 		=> reference.Value;
 }
 
-public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World>
+	where T : notnull
 {
 	private T? _t;
 
@@ -795,6 +797,7 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
+
 public interface IQueryIterator<TData>
 	where TData : struct, allows ref struct
 {
@@ -966,10 +969,11 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 	where T : struct
 {
 	private QueryIterator _iterator;
-	private DataRow<T> _dataRow;
+	private Ptr<ComponentState> _stateRow;
 	private int _row, _count;
+	private nint _size;
 
-	public Changed(QueryIterator iterator)
+	private Changed(QueryIterator iterator)
 	{
 		_iterator = iterator;
 		_row = -1;
@@ -1006,14 +1010,25 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 			_row = 0;
 			_count = _iterator.Count;
 			var index = _iterator.GetColumnIndexOf<T>();
-			_dataRow = _iterator.GetColumn<T>(index);
+			var states = _iterator.GetState(index);
+
+			if (states.IsEmpty)
+			{
+				_stateRow.Value = Unsafe.NullRef<ComponentState>();
+				_size = 0;
+			}
+			else
+			{
+				_stateRow.Value = ref MemoryMarshal.GetReference(states);
+				_size = Unsafe.SizeOf<ComponentState>();
+			}
 		}
 		else
 		{
-			_dataRow.Next();
+			_stateRow.Value = ref Unsafe.AddByteOffset(ref _stateRow.Value, _size);
 		}
 
-		return _dataRow.StateSize > 0 && _dataRow.Value.State == ComponentState.Changed;
+		return _size > 0 && _stateRow.Value == ComponentState.Changed;
 	}
 }
 
@@ -1025,10 +1040,11 @@ public ref struct Added<T> : IFilter<Added<T>>
 	where T : struct
 {
 	private QueryIterator _iterator;
-	private DataRow<T> _dataRow;
+	private Ptr<ComponentState> _stateRow;
 	private int _row, _count;
+	private nint _size;
 
-	public Added(QueryIterator iterator)
+	private Added(QueryIterator iterator)
 	{
 		_iterator = iterator;
 		_row = -1;
@@ -1065,14 +1081,25 @@ public ref struct Added<T> : IFilter<Added<T>>
 			_row = 0;
 			_count = _iterator.Count;
 			var index = _iterator.GetColumnIndexOf<T>();
-			_dataRow = _iterator.GetColumn<T>(index);
+			var states = _iterator.GetState(index);
+
+			if (states.IsEmpty)
+			{
+				_stateRow.Value = Unsafe.NullRef<ComponentState>();
+				_size = 0;
+			}
+			else
+			{
+				_stateRow.Value = ref MemoryMarshal.GetReference(states);
+				_size = Unsafe.SizeOf<ComponentState>();
+			}
 		}
 		else
 		{
-			_dataRow.Next();
+			_stateRow.Value = ref Unsafe.AddByteOffset(ref _stateRow.Value, _size);
 		}
 
-		return _dataRow.StateSize > 0 && _dataRow.Value.State == ComponentState.Added;
+		return _size > 0 && _stateRow.Value == ComponentState.Added;
 	}
 }
 
