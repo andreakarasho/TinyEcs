@@ -260,6 +260,8 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{callSubIterators}
 							return {callResultsSubIterators};
 						}}
+
+						public void SetTicks(uint lastRun, uint thisRun) {{ }}
 					}}
 				");
 			}
@@ -302,7 +304,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
 				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
-				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock(ticks);");
 				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
 				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
@@ -313,9 +315,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				{{
 					{objs}
 					var checkInuse = () => {objsCheckInuse};
-					var fn = (World args, Func<World, bool> runIf) =>
+					var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
 					{{
-						if (runIf != null && !runIf.Invoke(args))
+						if (runIf != null && !runIf.Invoke(ticks, args))
 							return false;
 
 						{objsGen}
@@ -373,7 +375,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
 				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
-				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock(ticks);");
 				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
 				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
@@ -387,9 +389,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
-					var fn = (World args, Func<World, bool> runIf) =>
+					var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
 					{{
-						if (runIf != null && !runIf.Invoke(args))
+						if (runIf != null && !runIf.Invoke(ticks, args))
 							return false;
 
 						{objsGen}
@@ -415,9 +417,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
-					var fn = (World args, Func<World, bool> runIf) =>
+					var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
 					{{
-						if (runIf != null && !runIf.Invoke(args))
+						if (runIf != null && !runIf.Invoke(ticks, args))
 							return false;
 
 						{objsGen}
@@ -488,7 +490,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 					var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
 					var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 					var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
-					var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+					var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock(ticks);");
 					var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
 					var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 					var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
@@ -499,9 +501,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					{{
 						{objs}
 						var checkInuse = () => {objsCheckInuse};
-						var fn = (World args, Func<World, bool> runIf) =>
+						var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
 						{{
-							if (runIf != null && !runIf.Invoke(args))
+							if (runIf != null && !runIf.Invoke(ticks, args))
 								return false;
 
 							{objsGen}
@@ -525,9 +527,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 				public FuncSystem<World> {methodName}(Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 				{{
-					var sys = new FuncSystem<World>(_world, (args, runIf) =>
+					var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 					{{
-						if (runIf?.Invoke(args) ?? true)
+						if (runIf?.Invoke(ticks, args) ?? true)
 						{{
 							system();
 							return true;
@@ -571,13 +573,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 			var sb = new StringBuilder();
 			sb.AppendLine("public sealed partial class FuncSystem<TArg> {");
 
-			for (var i = 0; i < 16; ++i)
+			for (var i = 0; i < MAX_GENERICS; ++i)
 			{
 				var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
 				var genericsArgsWhere = GenerateSequence(i + 1, "\n", j => $"where T{j} : class, ISystemParam<TArg>, IIntoSystemParam<TArg>");
 				var objs = GenerateSequence(i + 1, "\n", j => $"T{j}? obj{j} = null;");
 				var objsGen = GenerateSequence(i + 1, "\n", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
-				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock();");
+				var objsLock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Lock(ticks);");
 				var objsUnlock = GenerateSequence(i + 1, "\n", j => $"obj{j}.Unlock();");
 				var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
@@ -587,7 +589,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{genericsArgsWhere}
 					{{
 						{objs}
-						var fn = (TArg args) => {{
+						var fn = (SystemTicks ticks, TArg args) => {{
 							{objsGen}
 							return condition({systemCall});
 						}};

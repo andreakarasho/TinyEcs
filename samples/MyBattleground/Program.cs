@@ -105,16 +105,31 @@ for (int i = 0; i < ENTITIES_COUNT; i++)
 
 
 
-scheduler.AddSystem((Query<Data<Position, Velocity>, Changed<Position>> q) =>
+scheduler.AddSystem((
+	Query<Data<Position, Velocity>, With<Position>> q,
+	Query<Data<Position, Velocity>, Added<Position>> added
+) =>
 {
 	foreach ((var pos, var vel) in q)
 	{
 		pos.Ref.X *= vel.Ref.X;
 		pos.Ref.Y *= vel.Ref.Y;
 
-		if (pos.IsChanged)
-			pos.ClearState();
+		// pos.Ref.X *= vel.Ref.X;
+		// pos.Ref.Y *= vel.Ref.Y;
+
+		// if (pos.IsChanged)
+		// 	pos.ClearState();
 	}
+
+	// foreach ((var pos, var vel) in added)
+	// {
+	// 	pos.Ref.X *= vel.Ref.X;
+	// 	pos.Ref.Y *= vel.Ref.Y;
+
+	// 	// if (pos.IsAdded)
+	// 	// 	pos.ClearState();
+	// }
 }, threadingType: ThreadingMode.Single);
 
 

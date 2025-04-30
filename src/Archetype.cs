@@ -3,37 +3,37 @@ using System.Collections.Frozen;
 namespace TinyEcs;
 
 
-public enum ComponentState : byte
-{
-	None = 0,
-	Added = 1,
-	Changed = 2,
-}
-
-
 [SkipLocalsInit]
 internal readonly struct Column
 {
 	public readonly Array Data;
-	public readonly ComponentState[] States;
+	public readonly uint[] ChangedTicks, AddedTicks;
 
 	internal Column(ref readonly ComponentInfo component, int chunkSize)
 	{
 		Data = Lookup.GetArray(component.ID, chunkSize)!;
-		States = new ComponentState[chunkSize];
+		ChangedTicks = new uint[chunkSize];
+		AddedTicks = new uint[chunkSize];
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void Mark(int index, ComponentState state)
+	public void MarkChanged(int index, uint ticks)
 	{
-		States[index] = state;
+		ChangedTicks[index] = ticks;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkAdded(int index, uint ticks)
+	{
+		AddedTicks[index] = ticks;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void CopyTo(int srcIdx, ref readonly Column dest, int dstIdx)
 	{
 		Array.Copy(Data, srcIdx, dest.Data, dstIdx, 1);
-		dest.States[dstIdx] = States[srcIdx];
+		dest.ChangedTicks[dstIdx] = ChangedTicks[srcIdx];
+		dest.AddedTicks[dstIdx] = AddedTicks[srcIdx];
 	}
 }
 
@@ -118,9 +118,15 @@ internal struct ArchetypeChunk
 		=> Entities.AsSpan(0, Count);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkComponent(int column, int row, ComponentState state)
+	public void MarkChanged(int column, int row, uint ticks)
 	{
-		Columns![column].Mark(row & Archetype.CHUNK_THRESHOLD, state);
+		Columns![column].MarkChanged(row & Archetype.CHUNK_THRESHOLD, ticks);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkAdded(int column, int row, uint ticks)
+	{
+		Columns![column].MarkAdded(row & Archetype.CHUNK_THRESHOLD, ticks);
 	}
 }
 

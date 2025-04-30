@@ -11,6 +11,7 @@ public sealed partial class World : IDisposable
 	private readonly EcsID _maxCmpId;
 	private readonly FastIdLookup<EcsID> _cachedComponents = new();
 	private readonly object _newEntLock = new();
+	private uint _ticks;
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
@@ -26,6 +27,7 @@ public sealed partial class World : IDisposable
 	internal RelationshipEntityMapper RelationshipEntityMapper { get; }
 	internal NamingEntityMapper NamingEntityMapper { get; }
 
+	public uint Update() => ++_ticks;
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
 	{
@@ -160,7 +162,7 @@ public sealed partial class World : IDisposable
 		{
 			if (size > 0)
 			{
-				record.Chunk.MarkComponent(column, record.Row, ComponentState.Changed);
+				record.Chunk.MarkChanged(column, record.Row, _ticks);
 			}
 			return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 		}
@@ -229,7 +231,7 @@ public sealed partial class World : IDisposable
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
 		if (size > 0)
 		{
-			record.Chunk.MarkComponent(column, record.Row, ComponentState.Added);
+			record.Chunk.MarkAdded(column, record.Row, _ticks);
 		}
 		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}
