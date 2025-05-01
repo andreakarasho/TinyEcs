@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
@@ -153,7 +154,6 @@ public sealed class Query
 }
 
 
-
 [SkipLocalsInit]
 public ref struct QueryIterator
 {
@@ -181,15 +181,29 @@ public ref struct QueryIterator
 		get => _count > 0 ? Math.Min(_count, _chunkIterator.Current.Count) : _chunkIterator.Current.Count;
 	}
 
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
+	public readonly int GetColumnIndexOf<T>() where T : struct
+	{
+		return _archetypeIterator.Current.GetComponentIndex<T>();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly DataRow<T> GetColumn<T>(int index) where T : struct
 	{
 		Unsafe.SkipInit(out DataRow<T> data);
+
+		if (index >= _indices.Length)
+		{
+			data.Value.Value = ref Unsafe.NullRef<T>();
+			data.Size = 0;
+			return data;
+		}
 
 		var i = _indices[index];
 		if (i < 0)
 		{
-			data.Value.Ref = ref Unsafe.NullRef<T>();
+			data.Value.Value = ref Unsafe.NullRef<T>();
 			data.Size = 0;
 			return data;
 		}
@@ -199,9 +213,57 @@ public ref struct QueryIterator
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
 
 		data.Size = Unsafe.SizeOf<T>();
-		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
+		data.Value.Value = ref Unsafe.Add(ref reference, _startSafe);
 
 		return data;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly Span<uint> GetChangedTicks(int index)
+	{
+		if (index >= _indices.Length)
+		{
+			return Span<uint>.Empty;
+		}
+
+		var i = _indices[index];
+		if (i < 0)
+		{
+			return Span<uint>.Empty;
+		}
+
+		ref readonly var chunk = ref _chunkIterator.Current;
+		ref var column = ref chunk.GetColumn(i);
+		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.ChangedTicks);
+
+		var span = MemoryMarshal.CreateSpan(ref stateRef, column.ChangedTicks.Length);
+		if (!span.IsEmpty)
+			span = span.Slice(_startSafe, Count);
+		return span;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal readonly Span<uint> GetAddedTicks(int index)
+	{
+		if (index >= _indices.Length)
+		{
+			return Span<uint>.Empty;
+		}
+
+		var i = _indices[index];
+		if (i < 0)
+		{
+			return Span<uint>.Empty;
+		}
+
+		ref readonly var chunk = ref _chunkIterator.Current;
+		ref var column = ref chunk.GetColumn(i);
+		ref var stateRef = ref MemoryMarshal.GetArrayDataReference(column.AddedTicks);
+
+		var span = MemoryMarshal.CreateSpan(ref stateRef, column.AddedTicks.Length);
+		if (!span.IsEmpty)
+			span = span.Slice(_startSafe, Count);
+		return span;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -9,18 +9,19 @@ namespace TinyEcs;
 public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
 	private readonly TArg _arg;
-	private readonly Func<TArg, Func<TArg, bool>, bool> _fn;
-	private readonly List<Func<TArg, bool>> _conditions;
-	private readonly Func<TArg, bool> _validator;
+	private readonly Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> _fn;
+	private readonly List<Func<SystemTicks, TArg, bool>> _conditions;
+	private readonly Func<SystemTicks, TArg, bool> _validator;
 	private readonly Func<bool> _checkInUse;
 	private readonly Stages _stage;
 	private readonly ThreadingMode _threadingType;
 	private readonly LinkedList<FuncSystem<TArg>> _after = new();
 	private readonly LinkedList<FuncSystem<TArg>> _before = new();
 	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
+	internal SystemTicks Ticks { get; } = new();
 
 
-	internal FuncSystem(TArg arg, Func<TArg, Func<TArg, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
+	internal FuncSystem(TArg arg, Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
 	{
 		_arg = arg;
 		_fn = fn;
@@ -31,21 +32,25 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		_stage = stage;
 	}
 
-	internal void Run()
+	internal void Run(uint ticks)
 	{
-		foreach (var s in _before)
-			s.Run();
+		Ticks.ThisRun = ticks;
 
-		if (_fn(_arg, _validator))
+		foreach (var s in _before)
+			s.Run(ticks);
+
+		if (_fn(Ticks, _arg, _validator))
 		{
 			foreach (var s in _after)
-				s.Run();
+				s.Run(ticks);
 		}
+
+		Ticks.LastRun = Ticks.ThisRun;
 	}
 
 	public FuncSystem<TArg> RunIf(Func<bool> condition)
 	{
-		_conditions.Add((_) => condition());
+		_conditions.Add((_, _) => condition());
 		return this;
 	}
 
@@ -111,10 +116,10 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		};
 	}
 
-	private bool ValidateConditions(TArg args)
+	private bool ValidateConditions(SystemTicks ticks, TArg args)
 	{
 		foreach (var fn in _conditions)
-			if (!fn(args))
+			if (!fn(ticks, args))
 				return false;
 		return true;
 	}
@@ -138,6 +143,12 @@ public enum ThreadingMode
 	Auto,
 	Single,
 	Multi
+}
+
+public sealed class SystemTicks
+{
+	public uint LastRun { get; set; }
+	public uint ThisRun { get; set; }
 }
 
 public partial class Scheduler
@@ -172,20 +183,22 @@ public partial class Scheduler
 
 	public void RunOnce()
 	{
+		var ticks = _world.Update();
+
 		foreach ((_, var ev) in _events)
 			ev.Clear();
 
-		RunStage(Stages.Startup);
+		RunStage(Stages.Startup, ticks);
 		_systems[(int)Stages.Startup].Clear();
 
-		RunStage(Stages.OnExit);
-		RunStage(Stages.OnEnter);
+		RunStage(Stages.OnExit, ticks);
+		RunStage(Stages.OnEnter, ticks);
 
 		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
-			RunStage(stage);
+			RunStage(stage, ticks);
 	}
 
-	private void RunStage(Stages stage)
+	private void RunStage(Stages stage, uint ticks)
 	{
 		_singleThreads.Clear();
 		_multiThreads.Clear();
@@ -211,10 +224,10 @@ public partial class Scheduler
 		var singlethreading = _singleThreads;
 
 		if (multithreading.Count > 0)
-			Parallel.ForEach(multithreading, static s => s.Run());
+			Parallel.ForEach(multithreading, s => s.Run(ticks));
 
 		foreach (var system in singlethreading)
-			system.Run();
+			system.Run(ticks);
 	}
 
 	internal void Add(FuncSystem<World> sys, Stages stage)
@@ -224,9 +237,9 @@ public partial class Scheduler
 
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
-		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 		{
-			if (runIf?.Invoke(args) ?? true)
+			if (runIf?.Invoke(ticks, args) ?? true)
 			{
 				system();
 				return true;
@@ -243,9 +256,9 @@ public partial class Scheduler
 	{
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 		{
-			if (runIf?.Invoke(args) ?? true)
+			if (runIf?.Invoke(ticks, args) ?? true)
 			{
 				system();
 				return true;
@@ -264,9 +277,9 @@ public partial class Scheduler
 	{
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem<World>(_world, (args, runIf) =>
+		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 		{
-			if (runIf?.Invoke(args) ?? true)
+			if (runIf?.Invoke(ticks, args) ?? true)
 			{
 				system();
 				return true;
@@ -343,14 +356,29 @@ public abstract class SystemParam<T> : ISystemParam<T>
 {
 	private int _useIndex;
 	ref int ISystemParam.UseIndex => ref _useIndex;
+
+	public SystemTicks Ticks { get; } = new();
+
+	public void Lock(SystemTicks ticks)
+	{
+		Ticks.ThisRun = ticks.ThisRun;
+		Ticks.LastRun = ticks.LastRun;
+		Interlocked.Increment(ref _useIndex);
+	}
+
+	public void Unlock()
+	{
+		Interlocked.Decrement(ref _useIndex);
+		Ticks.LastRun = Ticks.ThisRun;
+	}
 }
 
 public interface ISystemParam
 {
 	internal ref int UseIndex { get; }
 
-	void Lock() => Interlocked.Increment(ref UseIndex);
-	void Unlock() => Interlocked.Decrement(ref UseIndex);
+	void Lock(SystemTicks ticks);
+	void Unlock();
 }
 
 public interface ISystemParam<TParam> : ISystemParam
@@ -387,7 +415,6 @@ internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSyst
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value;
 
 		var ev = new EventParam<T>();
@@ -415,7 +442,6 @@ public sealed class EventWriter<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Writer;
 
 		throw new NotImplementedException("EventWriter<T> must be created using the scheduler.AddEvent<T>() method");
@@ -441,7 +467,6 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
-
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Reader;
 
 		throw new NotImplementedException("EventReader<T> must be created using the scheduler.AddEvent<T>() method");
@@ -482,7 +507,6 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData>>>().Has<Placeholder<Query<TQueryData>>>())
-
 			return arg.Entity<Placeholder<Query<TQueryData>>>().Get<Placeholder<Query<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -495,7 +519,7 @@ public class Query<TQueryData> : Query<TQueryData, Empty>, IIntoSystemParam<Worl
 
 public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
-	where TQueryFilter : struct, IFilter, allows ref struct
+	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 {
 	private readonly Query _query;
 
@@ -504,7 +528,6 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Has<Placeholder<Query<TQueryData, TQueryFilter>>>())
-
 			return arg.Entity<Placeholder<Query<TQueryData, TQueryFilter>>>().Get<Placeholder<Query<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -515,22 +538,23 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return q;
 	}
 
-	public TQueryData GetEnumerator() => TQueryData.CreateIterator(_query.Iter());
+	public QueryIter<TQueryData, TQueryFilter> GetEnumerator()
+		=> GetIter();
 
-	public TQueryData Get(EcsID id)
+	public QueryIter<TQueryData, TQueryFilter> Get(EcsID id)
 	{
-		var enumerator = TQueryData.CreateIterator(_query.Iter(id));
+		var enumerator = GetIter(id);
 		var success = enumerator.MoveNext();
 		return success ? enumerator : default;
 	}
 
 	public bool Contains(EcsID id)
 	{
-		var enumerator = TQueryData.CreateIterator(_query.Iter(id));
+		var enumerator = GetIter(id);
 		return enumerator.MoveNext();
 	}
 
-	public TQueryData Single()
+	public QueryIter<TQueryData, TQueryFilter> Single()
 	{
 		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
 		var enumerator = GetEnumerator();
@@ -541,6 +565,9 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 
 	public int Count()
 		=> _query.Count();
+
+	private QueryIter<TQueryData, TQueryFilter> GetIter(EcsID id = 0)
+		=> new(Ticks.LastRun, Ticks.ThisRun, id == 0 ? _query.Iter() : _query.Iter(id));
 }
 
 public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<World>
@@ -551,7 +578,6 @@ public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<Wo
 	public new static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData>>>().Has<Placeholder<Single<TQueryData>>>())
-
 			return arg.Entity<Placeholder<Single<TQueryData>>>().Get<Placeholder<Single<TQueryData>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -564,7 +590,7 @@ public class Single<TQueryData> : Single<TQueryData, Empty>, IIntoSystemParam<Wo
 
 public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemParam<World>
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
-	where TQueryFilter : struct, IFilter, allows ref struct
+	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 {
 	private readonly Query _query;
 
@@ -573,7 +599,6 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Has<Placeholder<Single<TQueryData, TQueryFilter>>>())
-
 			return arg.Entity<Placeholder<Single<TQueryData, TQueryFilter>>>().Get<Placeholder<Single<TQueryData, TQueryFilter>>>().Value;
 
 		var builder = arg.QueryBuilder();
@@ -584,20 +609,20 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		return q;
 	}
 
-	public TQueryData Get()
+	public QueryIter<TQueryData, TQueryFilter> Get()
 	{
 		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
-		var enumerator = TQueryData.CreateIterator(_query.Iter());
+		var enumerator = GetIter();
 		var ok = enumerator.MoveNext();
 		EcsAssert.Panic(ok, "'Single' is not matching any entity.");
 		return enumerator;
 	}
 
-	public bool TryGet(out TQueryData data)
+	public bool TryGet(out QueryIter<TQueryData, TQueryFilter> data)
 	{
 		if (_query.Count() == 1)
 		{
-			var enumerator = TQueryData.CreateIterator(_query.Iter());
+			var enumerator = GetIter();
 			var ok = enumerator.MoveNext();
 			if (ok)
 			{
@@ -612,8 +637,10 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 
 	public int Count()
 		=> _query.Count();
-}
 
+	private QueryIter<TQueryData, TQueryFilter> GetIter(EcsID id = 0)
+		=> new(Ticks.LastRun, Ticks.ThisRun, id == 0 ? _query.Iter() : _query.Iter(id));
+}
 
 public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoSystemParam<World>
 	where T : struct, Enum
@@ -677,7 +704,8 @@ public sealed class State<T>(T previous, T current) : SystemParam<World>, IIntoS
 	}
 }
 
-public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World>
+	where T : notnull
 {
 	private T? _t;
 
@@ -697,7 +725,8 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World> where T
 		=> reference.Value;
 }
 
-public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World> where T : notnull
+public sealed class Local<T> : SystemParam<World>, IIntoSystemParam<World>
+	where T : notnull
 {
 	private T? _t;
 
@@ -803,6 +832,7 @@ public interface ITermCreator
 {
 	public static abstract void Build(QueryBuilder builder);
 }
+
 public interface IQueryIterator<TData>
 	where TData : struct, allows ref struct
 {
@@ -814,53 +844,35 @@ public interface IQueryIterator<TData>
 	bool MoveNext();
 }
 
-public interface IData<TData> : ITermCreator, IQueryIterator<TData> where TData : struct, allows ref struct
+public interface IData<TData> : ITermCreator, IQueryIterator<TData>
+	where TData : struct, allows ref struct
 {
 	public static abstract TData CreateIterator(QueryIterator iterator);
 }
 
-public interface IFilter : ITermCreator { }
-
-public interface IDetection : ITermCreator
+public interface IFilter<TFilter> : ITermCreator, IQueryIterator<TFilter>
+	where TFilter : struct, allows ref struct
 {
+	void SetTicks(uint lastRun, uint thisRun);
+	public static abstract TFilter CreateIterator(QueryIterator iterator);
 }
 
-public interface INestedFilter
+public ref struct Empty : IData<Empty>, IFilter<Empty>
 {
-	void BuildAsParam(QueryBuilder builder);
-}
-
-public static class FilterBuilder<T> where T : struct
-{
-	public static bool Build(QueryBuilder builder)
-	{
-		if (default(T) is INestedFilter nestedFilter)
-		{
-			nestedFilter.BuildAsParam(builder);
-			return true;
-		}
-
-		return false;
-	}
-}
-
-public ref struct Empty : IData<Empty>, IFilter
-{
+	private readonly bool _asFilter;
 	private QueryIterator _iterator;
 
-	internal Empty(QueryIterator iterator) => _iterator = iterator;
-
-	public static void Build(QueryBuilder builder)
+	internal Empty(QueryIterator iterator, bool asFilter)
 	{
-
+		_iterator = iterator;
+		_asFilter = asFilter;
 	}
 
-	public static Empty CreateIterator(QueryIterator iterator)
-	{
-		return new Empty(iterator);
-	}
+	public static void Build(QueryBuilder builder) { }
 
-	[UnscopedRef] public ref Empty Current => ref this;
+
+	[UnscopedRef]
+	public ref Empty Current => ref this;
 
 	public readonly void Deconstruct(out ReadOnlySpan<EntityView> entities, out int count)
 	{
@@ -868,47 +880,93 @@ public ref struct Empty : IData<Empty>, IFilter
 		count = entities.Length;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Empty GetEnumerator() => this;
 
-	public bool MoveNext() => _iterator.Next();
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext() => _asFilter || _iterator.Next();
+
+	public readonly void SetTicks(uint lastRun, uint thisRun) { }
+
+	static Empty IData<Empty>.CreateIterator(QueryIterator iterator)
+	{
+		return new Empty(iterator, false);
+	}
+
+	static Empty IFilter<Empty>.CreateIterator(QueryIterator iterator)
+	{
+		return new Empty(iterator, true);
+	}
 }
 
 /// <summary>
 /// Used in query filters to find entities with the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct With<T> : IFilter, INestedFilter
+public struct With<T> : IFilter<With<T>>
 	where T : struct
 {
+	[UnscopedRef]
+	ref With<T> IQueryIterator<With<T>>.Current => ref this;
+
 	public static void Build(QueryBuilder builder)
 	{
-		if (!FilterBuilder<T>.Build(builder))
-			builder.With<T>();
+		builder.With<T>();
 	}
 
-	public void BuildAsParam(QueryBuilder builder)
+	static With<T> IFilter<With<T>>.CreateIterator(QueryIterator iterator)
 	{
-		Build(builder);
+		return new With<T>();
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly With<T> IQueryIterator<With<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<With<T>>.MoveNext()
+	{
+		return true;
+	}
+
+	public readonly void SetTicks(uint lastRun, uint thisRun) { }
 }
 
 /// <summary>
 /// Used in query filters to find entities without the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct Without<T> : IFilter, INestedFilter
+public ref struct Without<T> : IFilter<Without<T>>
 	where T : struct
 {
+	[UnscopedRef]
+	ref Without<T> IQueryIterator<Without<T>>.Current => ref this;
+
 	public static void Build(QueryBuilder builder)
 	{
-		if (!FilterBuilder<T>.Build(builder))
-			builder.Without<T>();
+		builder.Without<T>();
 	}
 
-	public void BuildAsParam(QueryBuilder builder)
+	static Without<T> IFilter<Without<T>>.CreateIterator(QueryIterator iterator)
 	{
-		Build(builder);
+		return new();
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Without<T> IQueryIterator<Without<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<Without<T>>.MoveNext()
+	{
+		return true;
+	}
+
+	public readonly void SetTicks(uint lastRun, uint thisRun) { }
 }
 
 /// <summary>
@@ -916,21 +974,236 @@ public readonly struct Without<T> : IFilter, INestedFilter
 /// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public readonly struct Optional<T> : IFilter, INestedFilter
+public ref struct Optional<T> : IFilter<Optional<T>>
 	where T : struct
 {
+	[UnscopedRef]
+	ref Optional<T> IQueryIterator<Optional<T>>.Current => ref this;
+
 	public static void Build(QueryBuilder builder)
 	{
 		builder.Optional<T>();
 	}
 
-	public void BuildAsParam(QueryBuilder builder)
+	static Optional<T> IFilter<Optional<T>>.CreateIterator(QueryIterator iterator)
 	{
-		Build(builder);
+		return new();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Optional<T> IQueryIterator<Optional<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly bool IQueryIterator<Optional<T>>.MoveNext()
+	{
+		return true;
+	}
+
+	public readonly void SetTicks(uint lastRun, uint thisRun) { }
+}
+
+/// <summary>
+/// Used in query filters to find entities with components that have changed.
+/// </summary>
+/// <typeparam name="T"></typeparam>
+public ref struct Changed<T> : IFilter<Changed<T>>
+	where T : struct
+{
+	private QueryIterator _iterator;
+	private Ptr<uint> _stateRow;
+	private int _row, _count;
+	private nint _size;
+	private uint _lastRun, _thisRun;
+
+	private Changed(QueryIterator iterator)
+	{
+		_iterator = iterator;
+		_row = -1;
+		_count = -1;
+		_lastRun = 0;
+		_thisRun = 0;
+	}
+
+	[UnscopedRef]
+	ref Changed<T> IQueryIterator<Changed<T>>.Current => ref this;
+
+	public static void Build(QueryBuilder builder)
+	{
+		builder.With<T>();
+	}
+
+	static Changed<T> IFilter<Changed<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new(iterator);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Changed<T> IQueryIterator<Changed<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool IQueryIterator<Changed<T>>.MoveNext()
+	{
+		if (++_row >= _count)
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_row = 0;
+			_count = _iterator.Count;
+			var index = _iterator.GetColumnIndexOf<T>();
+			var states = _iterator.GetChangedTicks(index);
+
+			if (states.IsEmpty)
+			{
+				_stateRow.Value = Unsafe.NullRef<uint>();
+				_size = 0;
+			}
+			else
+			{
+				_stateRow.Value = ref MemoryMarshal.GetReference(states);
+				_size = Unsafe.SizeOf<uint>();
+			}
+		}
+		else
+		{
+			_stateRow.Value = ref Unsafe.AddByteOffset(ref _stateRow.Value, _size);
+		}
+
+		return _size > 0 && _stateRow.Value >= _lastRun && _stateRow.Value < _thisRun;
+	}
+
+	public void SetTicks(uint lastRun, uint thisRun)
+	{
+		_lastRun = lastRun;
+		_thisRun = thisRun;
+	}
+}
+
+/// <summary>
+/// Used in query filters to find entities with components that have added.
+/// </summary>
+/// <typeparam name="T"></typeparam>
+public ref struct Added<T> : IFilter<Added<T>>
+	where T : struct
+{
+	private QueryIterator _iterator;
+	private Ptr<uint> _stateRow;
+	private int _row, _count;
+	private nint _size;
+	private uint _lastRun, _thisRun;
+
+	private Added(QueryIterator iterator)
+	{
+		_iterator = iterator;
+		_row = -1;
+		_count = -1;
+		_lastRun = 0;
+		_thisRun = 0;
+	}
+
+	[UnscopedRef]
+	ref Added<T> IQueryIterator<Added<T>>.Current => ref this;
+
+	public static void Build(QueryBuilder builder)
+	{
+		builder.With<T>();
+	}
+
+	static Added<T> IFilter<Added<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new(iterator);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly Added<T> IQueryIterator<Added<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool IQueryIterator<Added<T>>.MoveNext()
+	{
+		if (++_row >= _count)
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_row = 0;
+			_count = _iterator.Count;
+			var index = _iterator.GetColumnIndexOf<T>();
+			var states = _iterator.GetAddedTicks(index);
+
+			if (states.IsEmpty)
+			{
+				_stateRow.Value = Unsafe.NullRef<uint>();
+				_size = 0;
+			}
+			else
+			{
+				_stateRow.Value = ref MemoryMarshal.GetReference(states);
+				_size = Unsafe.SizeOf<uint>();
+			}
+		}
+		else
+		{
+			_stateRow.Value = ref Unsafe.AddByteOffset(ref _stateRow.Value, _size);
+		}
+
+		return _size > 0 && _stateRow.Value >= _lastRun && _stateRow.Value < _thisRun;
+	}
+
+	public void SetTicks(uint lastRun, uint thisRun)
+	{
+		_lastRun = lastRun;
+		_thisRun = thisRun;
 	}
 }
 
 public partial struct Parent { }
 public partial interface IChildrenComponent { }
+
+
+[SkipLocalsInit]
+public ref struct QueryIter<D, F>
+	where D : struct, IData<D>, allows ref struct
+	where F : struct, IFilter<F>, allows ref struct
+{
+	private D _dataIterator;
+	private F _filterIterator;
+
+	internal QueryIter(uint lastRun, uint thisRun, QueryIterator iterator)
+	{
+		_dataIterator = D.CreateIterator(iterator);
+		_filterIterator = F.CreateIterator(iterator);
+		_filterIterator.SetTicks(lastRun, thisRun);
+	}
+
+	[UnscopedRef]
+	public ref D Current => ref _dataIterator;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		while (true)
+		{
+			if (!_dataIterator.MoveNext())
+				return false;
+
+			if (!_filterIterator.MoveNext())
+				continue;
+
+			return true;
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly QueryIter<D, F> GetEnumerator() => this;
+}
 
 #endif
