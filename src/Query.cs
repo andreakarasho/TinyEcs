@@ -185,7 +185,7 @@ public ref struct QueryIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly int GetColumnIndexOf<T>() where T : struct
 	{
-		return _archetypeIterator.Current.GetComponentIndex<T>();
+		return _indices.IndexOf(_archetypeIterator.Current.GetComponentIndex<T>());
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
