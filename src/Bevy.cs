@@ -1061,7 +1061,7 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 
 			if (states.IsEmpty)
 			{
-				_stateRow.Value = Unsafe.NullRef<uint>();
+				_stateRow.Value = ref Unsafe.NullRef<uint>();
 				_size = 0;
 			}
 			else
@@ -1141,7 +1141,7 @@ public ref struct Added<T> : IFilter<Added<T>>
 
 			if (states.IsEmpty)
 			{
-				_stateRow.Value = Unsafe.NullRef<uint>();
+				_stateRow.Value = ref Unsafe.NullRef<uint>();
 				_size = 0;
 			}
 			else
@@ -1156,6 +1156,88 @@ public ref struct Added<T> : IFilter<Added<T>>
 		}
 
 		return _size > 0 && _stateRow.Value >= _lastRun && _stateRow.Value < _thisRun;
+	}
+
+	public void SetTicks(uint lastRun, uint thisRun)
+	{
+		_lastRun = lastRun;
+		_thisRun = thisRun;
+	}
+}
+
+
+public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>
+	where T : struct
+{
+	private QueryIterator _iterator;
+	private Ptr<uint> _stateRow;
+	private int _row, _count;
+	private nint _size;
+	private uint _lastRun, _thisRun;
+
+	private MarkChanged(QueryIterator iterator)
+	{
+		_iterator = iterator;
+		_row = -1;
+		_count = -1;
+		_lastRun = 0;
+		_thisRun = 0;
+	}
+
+	[UnscopedRef]
+	ref MarkChanged<T> IQueryIterator<MarkChanged<T>>.Current => ref this;
+
+	public static void Build(QueryBuilder builder)
+	{
+		// builder.With<T>();
+	}
+
+	static MarkChanged<T> IFilter<MarkChanged<T>>.CreateIterator(QueryIterator iterator)
+	{
+		return new(iterator);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	readonly MarkChanged<T> IQueryIterator<MarkChanged<T>>.GetEnumerator()
+	{
+		return this;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	bool IQueryIterator<MarkChanged<T>>.MoveNext()
+	{
+		if (++_row >= _count)
+		{
+			if (!_iterator.Next())
+				return false;
+
+			_row = 0;
+			_count = _iterator.Count;
+			var index = _iterator.GetColumnIndexOf<T>();
+			var states = _iterator.GetChangedTicks(index);
+
+			if (states.IsEmpty)
+			{
+				_stateRow.Value = ref Unsafe.NullRef<uint>();
+				_size = 0;
+			}
+			else
+			{
+				_stateRow.Value = ref MemoryMarshal.GetReference(states);
+				_size = Unsafe.SizeOf<uint>();
+			}
+		}
+		else
+		{
+			_stateRow.Value = ref Unsafe.AddByteOffset(ref _stateRow.Value, _size);
+		}
+
+		if (_size > 0)
+		{
+			_stateRow.Value = _thisRun;
+		}
+
+		return true;
 	}
 
 	public void SetTicks(uint lastRun, uint thisRun)
