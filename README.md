@@ -41,17 +41,17 @@ scheduler.AddResource(new Time() { FrameTime = 1000.0f / 60.0f });
 scheduler.AddResource(new AssetManager());
 
 var setupSysFn = Setup;
-scheduler.AddSystem(setupSysFn, Stages.Startup);
+scheduler.OnStartup(setupSysFn);
 
 var moveSysFn = MoveEntities;
-scheduler.AddSystem(moveSysFn);
+scheduler.OnUpdate(moveSysFn);
 
 var countSomethingSysFn = CountSomething;
-scheduler.AddSystem(countSomethingSysFn);
+scheduler.OnUpdate(countSomethingSysFn);
 
 
 while (true)
-    scheduler.Run();
+    scheduler.RunOnce();
 
 void Setup(World world, Res<AssetManager> assets)
 {
