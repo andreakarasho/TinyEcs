@@ -135,12 +135,15 @@ public sealed class Query
 	{
 		Match();
 
-		ref var record = ref World.GetRecord(entity);
-		foreach (var arch in _matchedArchetypes)
+		if (World.Exists(entity))
 		{
-			if (arch.Id != record.Archetype.Id) continue;
-			var archetypes = new ReadOnlySpan<Archetype>(ref record.Archetype);
-			return Iter(archetypes, record.Row, 1);
+			ref var record = ref World.GetRecord(entity);
+			foreach (var arch in _matchedArchetypes)
+			{
+				if (arch.Id != record.Archetype.Id) continue;
+				var archetypes = new ReadOnlySpan<Archetype>(ref record.Archetype);
+				return Iter(archetypes, record.Row, 1);
+			}
 		}
 
 		return Iter([], 0, 0);
