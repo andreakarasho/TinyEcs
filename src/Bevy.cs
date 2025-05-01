@@ -541,11 +541,11 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 	public QueryIter<TQueryData, TQueryFilter> GetEnumerator()
 		=> GetIter();
 
-	public QueryIter<TQueryData, TQueryFilter> Get(EcsID id)
+	public TQueryData Get(EcsID id)
 	{
 		var enumerator = GetIter(id);
 		var success = enumerator.MoveNext();
-		return success ? enumerator : default;
+		return success ? enumerator.Current : default;
 	}
 
 	public bool Contains(EcsID id)
@@ -554,13 +554,13 @@ public class Query<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemPa
 		return enumerator.MoveNext();
 	}
 
-	public QueryIter<TQueryData, TQueryFilter> Single()
+	public TQueryData Single()
 	{
 		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
 		var enumerator = GetEnumerator();
 		var ok = enumerator.MoveNext();
 		EcsAssert.Panic(ok, "'Single' is not matching any entity.");
-		return enumerator;
+		return enumerator.Current;
 	}
 
 	public int Count()
@@ -609,16 +609,16 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 		return q;
 	}
 
-	public QueryIter<TQueryData, TQueryFilter> Get()
+	public TQueryData Get()
 	{
 		EcsAssert.Panic(_query.Count() == 1, "'Single' must match one and only one entity.");
 		var enumerator = GetIter();
 		var ok = enumerator.MoveNext();
 		EcsAssert.Panic(ok, "'Single' is not matching any entity.");
-		return enumerator;
+		return enumerator.Current;
 	}
 
-	public bool TryGet(out QueryIter<TQueryData, TQueryFilter> data)
+	public bool TryGet(out TQueryData data)
 	{
 		if (_query.Count() == 1)
 		{
@@ -626,7 +626,7 @@ public class Single<TQueryData, TQueryFilter> : SystemParam<World>, IIntoSystemP
 			var ok = enumerator.MoveNext();
 			if (ok)
 			{
-				data = enumerator;
+				data = enumerator.Current;
 				return true;
 			}
 		}
