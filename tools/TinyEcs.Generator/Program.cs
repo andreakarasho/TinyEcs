@@ -219,7 +219,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var createSubIterators = GenerateSequence(i + 1, "\n", j => $"_iter{j} = T{j}.CreateIterator(iterator);");
 
 				var callSubIterators = GenerateSequence(i + 1, "\n", j => $"var i{j} = _iter{j}.MoveNext();");
-				var callResultsSubIterators = GenerateSequence(i + 1, " | ", j => $"i{j} ");
+				var callResultsSubIterators = GenerateSequence(i + 1, " && ", j => $"i{j}");
 				var setTicksSubIterators = GenerateSequence(i + 1, "\n", j => $"_iter{j}.SetTicks(lastRun, thisRun);");
 
 				sb.AppendLine($@"

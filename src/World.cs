@@ -322,7 +322,6 @@ public sealed partial class World : IDisposable
 		if (IsDeferred && !Has(entity, id))
 		{
 			Unsafe.SkipInit<T>(out var val);
-			var isManaged = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
 			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size)!);
 		}
 

@@ -398,19 +398,24 @@ public interface IEventParam
 
 internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSystemParam<World> where T : notnull
 {
-	private readonly List<T> _events = new();
+	private readonly List<T> _eventsLastFrame = new (), _eventsThisFrame = new();
 
 	internal EventParam()
 	{
-		Writer = new EventWriter<T>(_events);
-		Reader = new EventReader<T>(_events);
+		Writer = new EventWriter<T>(_eventsThisFrame);
+		Reader = new EventReader<T>(_eventsLastFrame);
 	}
 
 	public EventWriter<T> Writer { get; }
 	public EventReader<T> Reader { get; }
 
 
-	public void Clear() => _events.Clear();
+	public void Clear()
+	{
+		_eventsLastFrame.Clear();
+		_eventsLastFrame.AddRange(_eventsThisFrame);
+		_eventsThisFrame.Clear();
+	}
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -779,7 +784,7 @@ public sealed class Commands : SystemParam<World>, IIntoSystemParam<World>
 		_world = world;
 	}
 
-	public EntityCommand Entity(EcsID id)
+	public EntityCommand Entity(EcsID id = 0)
 	{
 		var ent = _world.Entity(id);
 		return new EntityCommand(_world, ent.ID);
