@@ -13,18 +13,18 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="maxComponentId"></param>
 	public World(ulong maxComponentId = 256)
-    {
-        _comparer = new ComponentComparer(this);
-        _archRoot = new Archetype(
-            this,
-            [],
-            _comparer
-        );
+	{
+		_comparer = new ComponentComparer(this);
+		_archRoot = new Archetype(
+			this,
+			[],
+			_comparer
+		);
 		_typeIndex.Add(_archRoot.Id, _archRoot);
 		LastArchetypeId = _archRoot.Id;
 
 		_maxCmpId = maxComponentId;
-        _entities.MaxID = maxComponentId;
+		_entities.MaxID = maxComponentId;
 
 #if USE_PAIR
 		_ = Component<Rule>();
@@ -69,7 +69,7 @@ public sealed partial class World
 		NamingEntityMapper = new(this);
 
 		OnPluginInitialization?.Invoke(this);
-    }
+	}
 
 
 
@@ -92,10 +92,10 @@ public sealed partial class World
 	/// Cleanup the world.
 	/// </summary>
 	public void Dispose()
-    {
-        _entities.Clear();
-        _archRoot.Clear();
-        _typeIndex.Clear();
+	{
+		_entities.Clear();
+		_archRoot.Clear();
+		_typeIndex.Clear();
 		_cachedComponents.Clear();
 		RelationshipEntityMapper.Clear();
 		NamingEntityMapper.Clear();
@@ -127,7 +127,9 @@ public sealed partial class World
 
 		ids.SortNoAlloc(_comparisonCmps);
 
-		var hash = RollingHash.Calculate(ids);
+		var hash = 0ul;
+		foreach (ref readonly var cmp in ids)
+			hash = UnorderedSetHasher.Combine(hash, cmp.ID);
 		if (!_typeIndex.TryGetValue(hash, out var archetype))
 		{
 			var archLessOne = Archetype(ids[..^1]);
@@ -164,7 +166,7 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="id"></param>
 	/// <returns></returns>
-    public EntityView Entity(ulong id = 0)
+	public EntityView Entity(ulong id = 0)
 	{
 		lock (_newEntLock)
 		{
@@ -243,8 +245,8 @@ public sealed partial class World
 	/// Associated children are deleted too.
 	/// </summary>
 	/// <param name="entity"></param>
-    public void Delete(EcsID entity)
-    {
+	public void Delete(EcsID entity)
+	{
 		if (IsDeferred)
 		{
 			if (Exists(entity))
@@ -314,15 +316,15 @@ public sealed partial class World
 			EcsAssert.Assert(removedId == entity);
 			_entities.Remove(removedId);
 		}
-    }
+	}
 
 	/// <summary>
 	/// Check if the entity is valid and alive.
 	/// </summary>
 	/// <param name="entity"></param>
 	/// <returns></returns>
-    public bool Exists(EcsID entity)
-    {
+	public bool Exists(EcsID entity)
+	{
 #if USE_PAIR
 		if (entity.IsPair())
         {
@@ -331,8 +333,8 @@ public sealed partial class World
         }
 #endif
 
-        return _entities.Contains(entity);
-    }
+		return _entities.Contains(entity);
+	}
 
 	/// <summary>
 	/// Use this function to analyze pairs members.<br/>
@@ -363,21 +365,21 @@ public sealed partial class World
 	/// </summary>
 	/// <param name="id"></param>
 	/// <returns></returns>
-    public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
-    {
-        ref var record = ref GetRecord(id);
-        return record.Archetype.All.AsSpan();
-    }
+	public ReadOnlySpan<ComponentInfo> GetType(EcsID id)
+	{
+		ref var record = ref GetRecord(id);
+		return record.Archetype.All.AsSpan();
+	}
 
 	/// <summary>
 	/// Add a Tag to the entity.
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
-    public void Add<T>(EcsID entity) where T : struct
+	public void Add<T>(EcsID entity) where T : struct
 	{
-        ref readonly var cmp = ref Component<T>();
-        EcsAssert.Panic(cmp.Size <= 0, "this is not a tag");
+		ref readonly var cmp = ref Component<T>();
+		EcsAssert.Panic(cmp.Size <= 0, "this is not a tag");
 
 		if (IsDeferred && !Has(entity, cmp.ID))
 		{
@@ -386,8 +388,8 @@ public sealed partial class World
 			return;
 		}
 
-        _ = Attach(entity, cmp.ID, cmp.Size);
-    }
+		_ = Attach(entity, cmp.ID, cmp.Size);
+	}
 
 	/// <summary>
 	/// Set a Component to the entity.
@@ -395,10 +397,10 @@ public sealed partial class World
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
 	/// <param name="component"></param>
-    public void Set<T>(EcsID entity, T component) where T : struct
+	public void Set<T>(EcsID entity, T component) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
-        EcsAssert.Panic(cmp.Size > 0, "this is not a component");
+		EcsAssert.Panic(cmp.Size > 0, "this is not a component");
 
 		if (IsDeferred && !Has(entity, cmp.ID))
 		{
@@ -407,9 +409,9 @@ public sealed partial class World
 			return;
 		}
 
-        (var raw, var row) = Attach(entity, cmp.ID, cmp.Size);
-        var array = (T[])raw!;
-        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
+		(var raw, var row) = Attach(entity, cmp.ID, cmp.Size);
+		var array = (T[])raw!;
+		array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
 
 	/// <summary>
@@ -434,7 +436,7 @@ public sealed partial class World
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
-    public void Unset<T>(EcsID entity) where T : struct
+	public void Unset<T>(EcsID entity) where T : struct
 		=> Unset(entity, Component<T>().ID);
 
 	/// <summary>
@@ -460,7 +462,7 @@ public sealed partial class World
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
 	/// <returns></returns>
-    public bool Has<T>(EcsID entity) where T : struct
+	public bool Has<T>(EcsID entity) where T : struct
 		=> Has(entity, Component<T>().ID);
 
 	/// <summary>
@@ -471,9 +473,9 @@ public sealed partial class World
 	/// <param name="id"></param>
 	/// <returns></returns>
 	public bool Has(EcsID entity, EcsID id)
-    {
+	{
 		return IsAttached(ref GetRecord(entity), id);
-    }
+	}
 
 	/// <summary>
 	/// Get a component from the entity.
@@ -481,11 +483,11 @@ public sealed partial class World
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
 	/// <returns></returns>
-    public ref T Get<T>(EcsID entity) where T : struct
+	public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
 		return ref GetUntrusted<T>(entity, cmp.ID, cmp.Size);
-    }
+	}
 
 	/// <summary>
 	/// Get the name associated to the entity.
@@ -537,9 +539,9 @@ public sealed partial class World
 	/// Print the archetype graph.
 	/// </summary>
 	public void PrintGraph()
-    {
-        _archRoot.Print(0);
-    }
+	{
+		_archRoot.Print(0);
+	}
 
 	/// <summary>
 	///

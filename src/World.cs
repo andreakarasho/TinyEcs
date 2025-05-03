@@ -104,14 +104,14 @@ public sealed partial class World : IDisposable
 
 		if (foundArch == null)
 		{
-			var hash = new RollingHash();
+			var hash = 0ul;
 			foreach (ref readonly var cmp in oldArch.All.AsSpan())
 			{
 				if (cmp.ID != id)
-					hash.Add(cmp.ID);
+					hash = UnorderedSetHasher.Combine(hash, cmp.ID);
 			}
 
-			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
+			if (!_typeIndex.TryGetValue(hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length - 1];
 				for (int i = 0, j = 0; i < oldArch.All.Length; ++i)
@@ -172,24 +172,24 @@ public sealed partial class World : IDisposable
 		var foundArch = oldArch.TraverseRight(id);
 		if (foundArch == null)
 		{
-			var hash = new RollingHash();
+			var hash = 0ul;
 
 			var found = false;
 			foreach (ref readonly var cmp in oldArch.All.AsSpan())
 			{
 				if (!found && cmp.ID > id)
 				{
-					hash.Add(id);
+					hash = UnorderedSetHasher.Combine(hash, id);
 					found = true;
 				}
 
-				hash.Add(cmp.ID);
+				hash = UnorderedSetHasher.Combine(hash, cmp.ID);
 			}
 
 			if (!found)
-				hash.Add(id);
+				hash = UnorderedSetHasher.Combine(hash, id);
 
-			if (!_typeIndex.TryGetValue(hash.Hash, out foundArch))
+			if (!_typeIndex.TryGetValue(hash, out foundArch))
 			{
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
 				oldArch.All.CopyTo(arr, 0);

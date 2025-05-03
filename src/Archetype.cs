@@ -168,13 +168,13 @@ public sealed class Archetype : IComparable<Archetype>
 		_chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
 
-		var roll = new RollingHash();
+		var hash = 0ul;
 		var dict = new Dictionary<EcsID, int>();
 		var allDict = new Dictionary<EcsID, int>();
 		var maxId = -1;
 		for (int i = 0, cur = 0; i < sign.Length; ++i)
 		{
-			roll.Add(sign[i].ID);
+			hash = UnorderedSetHasher.Combine(hash, sign[i].ID);
 
 			if (sign[i].Size > 0)
 			{
@@ -185,7 +185,7 @@ public sealed class Archetype : IComparable<Archetype>
 			allDict.Add(sign[i].ID, i);
 		}
 
-		Id = roll.Hash;
+		Id = hash;
 
 		_fastLookup = new int[maxId + 1];
 		_fastLookup.AsSpan().Fill(-1);

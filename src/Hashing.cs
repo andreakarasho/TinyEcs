@@ -1,89 +1,37 @@
 namespace TinyEcs;
 
-
-public struct RollingHash
+internal static class UnorderedSetHasher
 {
-	private const ulong Base = 31; // A prime base for hashing
-    private const ulong Modulus = 1_000_000_007; // A large prime modulus
+	private const ulong Prime = 0x9E3779B185EBCA87UL; // Large 64-bit prime (Golden ratio)
 
-    private ulong _hash;
-    private ulong _product;
-
-	private static readonly ulong _inverseCache = ModInverse2(Base, Modulus);
-
-
-    public RollingHash()
-    {
-        _hash = 0;
-        _product = 1;
-    }
-
-	public readonly ulong Hash => _hash;
-
-
-
-    public void Add(ulong value)
-    {
-		_hash = (_hash + value * _product) % Modulus;
-        _product = (_product * Base) % Modulus;
-    }
-
-
-    public void Remove(ulong value)
-    {
-		var inverseBase = _inverseCache;
-        _product = (_product * inverseBase) % Modulus;
-        _hash = (_hash + Modulus - (value * _product % Modulus)) % Modulus;
-    }
-
-
-    // Compute modular inverse of a with respect to m using Extended Euclidean Algorithm
-
-    private static ulong ModInverse2(ulong a, ulong m)
-    {
-	    ulong m0 = m, x0 = 0, x1 = 1;
-
-	    while (a > 1)
-	    {
-		    ulong q = a / m;
-		    ulong t = m;
-
-		    m = a % m;
-		    a = t;
-		    t = x0;
-
-		    x0 = x1 - q * x0;
-		    x1 = t;
-	    }
-
-	    return (x1 + m0) % m0;
-    }
-
-	public static ulong Calculate(params ReadOnlySpan<EcsID> values)
+	public static ulong HashUnordered(Span<ulong> values)
 	{
-		var hash = 0ul;
-		var product = 1ul;
+		ulong hash = 0;
 
 		foreach (ref readonly var value in values)
 		{
-			hash = (hash + value * product) % Modulus;
-        	product = (product * Base) % Modulus;
+			hash ^= Mix(value);
+			hash *= Prime;
 		}
 
 		return hash;
 	}
 
-	public static ulong Calculate(params ReadOnlySpan<ComponentInfo> values)
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static ulong Combine(ulong currentHash, ulong mixed)
 	{
-		var hash = 0ul;
-		var product = 1ul;
+		return (currentHash ^ mixed) * Prime;
+	}
 
-		foreach (ref readonly var value in values)
-		{
-			hash = (hash + value.ID * product) % Modulus;
-        	product = (product * Base) % Modulus;
-		}
-
-		return hash;
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static ulong Mix(ulong x)
+	{
+		// A simple mixer (variant of MurmurHash3 finalizer)
+		x ^= x >> 30;
+		x *= 0xbf58476d1ce4e5b9UL;
+		x ^= x >> 27;
+		x *= 0x94d049bb133111ebUL;
+		x ^= x >> 31;
+		return x;
 	}
 }
