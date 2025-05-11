@@ -196,8 +196,8 @@ scheduler.OnUpdate((
 #### Queries filters
 Most of the time you need to pick a specific set of entities under certain conditions. That's why Filters exists!
 
-##### `With<T>`
-`With<T>` will tell to the query to grab all entities that contains the type `T`. `T` can be a component or a tag.
+##### `With<T>` 
+This will tell to the query to grab all entities that contains the type `T`. `T` can be a component or a tag.
 ```csharp
 Query<
     Data<Position, Velocity>,
@@ -205,8 +205,8 @@ Query<
 > query
 ```
 
-##### `Without<T>`
-`Without<T>` will tell to the query to exclude from the query all entities that contains the type `T`. `T` can be a component or a tag.
+#### `Without<T>` 
+This will tell to the query to exclude from the query all entities that contains the type `T`. `T` can be a component or a tag.
 ```csharp
 Query<
     Data<Position, Velocity>,
@@ -214,8 +214,8 @@ Query<
 > query
 ```
 
-##### `Optional<T>`
-`Optional<T>` will tell to the query to try to get all entities that contains the type `T`.
+#### `Optional<T>` 
+This will tell to the query to try to get all entities that contains the type `T`.
 Which means the query will returns entities which might not contains that `T`. 
 Check if `T` is valid using `Ptr<T>::IsValid()` method.
 ```csharp
@@ -231,8 +231,8 @@ foreach ((Ptr<Position> maybePos, Ptr<Velocity> vel) in query) {
 }
 ```
 
-##### `Filter<T0...TN>`
-You can mix all the filters above using the `Filter<...>` struct to create complex queries.
+##### `Filter<T0...TN>` 
+This is to mix all the filters above to create more complex queries.
 ```csharp
 Query<
     Data<Position, Velocity>,
@@ -296,6 +296,14 @@ scheduler.OnUpdate((EventWriter<OnClicked> writer, Res<MouseContext> mouseCtx) =
 struct OnClicked { public bool MouseLeft; }
 ```
 ---
+### SchedulerState
+`SchedulerState` is a system parameter which expose few Scheduler behaviour into the systems.
+```csharp
+scheduler.OnUpdate((SchedulerState sched) => {
+    sched.AddResource(new TileMap());
+});
+```
+---
 ### State
 State are simply enums useful to run certain systems in certain conditions.
 
@@ -347,11 +355,13 @@ scheduler.OnUpdate((Res<int> val) => Console.WriteLine("val: {0}", val.Value))
          // Run the system only when `val` is even...
          .RunIf((Res<int> val) => val.Value % 2 == 0)
          // and when exist entities with [Position + Velocity]
-         .RunIf((Query<Data<Position, Velocity>> query) => query.Count() > 0);
+         .RunIf((Query<Data<Position, Velocity>> query) => query.Count() > 0)
+         // and when the scheduler is in a specific state
+         .RunIf((SchedulerState sched) => sched.InState(GameState.Gameplay));
 ```
 ---
 ### Plugin
-Plugins are a way to organize better your code.
+Plugins are a way to organize your code better.
 
 ```csharp
 scheduler.AddPlugin<UIPlugin>();
