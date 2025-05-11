@@ -91,10 +91,12 @@ Attention: you can query for a non empty component only!
 ```csharp
 ref Position pos = ref entity.Get<Position>(); // or world.Get<Position>(entity);
 ```
-
+---
 ### AddChild/RemoveChild
 `AddChild` will add a component called `Children` to the parent entity and `Parent` to each child.
 `Children` contains a list of all entities associated to the parent.
+A child can have an unique parent only.
+
 ```csharp
 var root = world.Entity();
 var child = world.Entity();
@@ -169,7 +171,7 @@ scheduler.OnUpdate(() => Console.WriteLine("Baz"));
 scheduler.RunOnce();
 ```
 ---
-#### Stages
+### Stages
 Systems are organized in stages:
 ```csharp
 scheduler.OnStartup(() => Console.WriteLine("1"));
@@ -235,7 +237,7 @@ Query<
 > query
 ```
 
-#### `Without<T>` 
+##### `Without<T>` 
 This will tell to the query to exclude from the query all entities that contains the type `T`. `T` can be a component or a tag.
 ```csharp
 Query<
@@ -244,7 +246,7 @@ Query<
 > query
 ```
 
-#### `Changed<T>`
+##### `Changed<T>`
 The query will check if `T` is changed from last execution.
 ```csharp
 Query<
@@ -253,7 +255,7 @@ Query<
 > query
 ```
 
-#### `Added<T>`
+##### `Added<T>`
 The query will check if `T` has been added from last execution.
 ```csharp
 Query<
@@ -262,7 +264,7 @@ Query<
 > query
 ```
 
-#### `Optional<T>` 
+##### `Optional<T>` 
 This will tell to the query to try to get all entities that contains the type `T`.
 Which means the query will returns entities which might not contains that `T`. 
 Check if `T` is valid using `Ptr<T>::IsValid()` method.
@@ -321,7 +323,7 @@ scheduler.OnUpdate((Local<int> counter) => {
 scheduler.RunOnce();
 ```
 ---
-### Events
+#### Events
 Events are used to trigger behaviours between systems. Multiple system can read the same data using `EventReader<T>`. Events lives for 1 frame only.
 ```csharp
 // Register the event
@@ -344,7 +346,7 @@ scheduler.OnUpdate((EventWriter<OnClicked> writer, Res<MouseContext> mouseCtx) =
 struct OnClicked { public bool MouseLeft; }
 ```
 ---
-### SchedulerState
+#### SchedulerState
 `SchedulerState` is a system parameter which expose few Scheduler behaviour into the systems.
 ```csharp
 scheduler.OnUpdate((SchedulerState sched) => {
@@ -352,10 +354,10 @@ scheduler.OnUpdate((SchedulerState sched) => {
 });
 ```
 ---
-### State
+#### State
 State are simply enums useful to run certain systems in certain conditions.
 
-#### `State<T>`
+##### `State<T>`
 This is a special system parameter which keeps the current state of `T`.
 
 ```csharp
@@ -395,7 +397,7 @@ enum GameState
 }
 ```
 ---
-### System conditions
+#### System conditions
 Often you need to run a system only when a condition is met.
 ```csharp
 scheduler.OnUpdate((Res<int> val) => val.Value++);
