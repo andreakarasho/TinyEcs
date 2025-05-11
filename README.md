@@ -92,6 +92,28 @@ Attention: you can query for a non empty component only!
 ref Position pos = ref entity.Get<Position>(); // or world.Get<Position>(entity);
 ```
 
+### AddChild/RemoveChild
+`AddChild` will add a component called `Children` to the parent entity and `Parent` to each child.
+`Children` contains a list of all entities associated to the parent.
+```csharp
+var root = world.Entity();
+var child = world.Entity();
+var anotherChild = world.Entity();
+
+root.AddChild(child);
+root.AddChild(anotherChild);
+
+ref var children = ref root.Get<Children>();
+foreach (var child in children) {
+}
+
+// Remove the child from the parent
+root.RemoveChild(anotherchild);
+
+// This will delete all children too
+root.Delete();
+```
+
 ## Scheduler
 The scheduler class is highly ispired by the [bevy scheduler concept](https://bevy-cheatbook.github.io/programming/schedules.html).
 This is the real deal for modern game engines which want to implement their game beahviour fast and easy.
