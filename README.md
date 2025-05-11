@@ -21,12 +21,6 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 🚧 Early development stage: Expect breaking changes! 🚧
 
-## Run the pepe game!
-
-```bash
-cd samples/TinyEcsGame
-dotnet run -c Release
-```
 
 # Documentation
 
@@ -174,6 +168,20 @@ scheduler.RunOnce();
 ```
 ---
 ### System parameters
+#### World
+Access to the `World` instance.
+```csharp
+// Spawn an entity during the startup phase
+scheduler.OnStartup((World world) => world.Entity());
+```
+---
+#### Commands
+Access to the `World` instance but in deferred mode.
+```csharp
+// Spawn an entity during the startup phase in deferred mode
+scheduler.OnStartup((Commands commands) => commands.Entity());
+```
+---
 #### Queries
 Queries are one of the most type used in systems. They allow you to pick entities and manipulate the data associated with them.
 ```csharp
@@ -211,6 +219,24 @@ This will tell to the query to exclude from the query all entities that contains
 Query<
     Data<Position, Velocity>,
     Without<Mass>
+> query
+```
+
+#### `Changed<T>`
+The query will check if `T` is changed from last execution.
+```csharp
+Query<
+    Data<Position, Velocity>,
+    Changed<Position>
+> query
+```
+
+#### `Added<T>`
+The query will check if `T` has been added from last execution.
+```csharp
+Query<
+    Data<Position, Velocity>,
+    Added<Position>
 > query
 ```
 
@@ -379,6 +405,8 @@ struct UIPlugin : IPlugin {
     }
 }
 ```
+---
+
 
 ## Sample code
 
@@ -475,6 +503,13 @@ class AssetManager
     }
 }
 
+```
+
+## Run the pepe game!
+
+```bash
+cd samples/TinyEcsGame
+dotnet run -c Release
 ```
 
 ## Bechmarks
