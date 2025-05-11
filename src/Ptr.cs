@@ -10,6 +10,8 @@ public ref struct Ptr<T> where T : struct
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		get => ref Value;
 	}
+
+	public readonly bool IsValid() => !Unsafe.IsNullRef(ref Value);
 }
 
 [SkipLocalsInit]

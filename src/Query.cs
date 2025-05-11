@@ -196,7 +196,7 @@ public ref struct QueryIterator
 	{
 		Unsafe.SkipInit(out DataRow<T> data);
 
-		if (index >= _indices.Length)
+		if (index < 0 || index >= _indices.Length)
 		{
 			data.Value.Value = ref Unsafe.NullRef<T>();
 			data.Size = 0;

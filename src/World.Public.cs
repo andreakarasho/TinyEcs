@@ -337,6 +337,23 @@ public sealed partial class World
 	}
 
 	/// <summary>
+	/// Mark the component as changed.<br/>
+	/// </summary>
+	public void SetChanged(EcsID entity, EcsID component)
+	{
+		ref var record = ref GetRecord(entity);
+		var index = record.Archetype.GetComponentIndex(component);
+		EcsAssert.Panic(index < 0, "Component not found in the entity");
+		record.Chunk.MarkChanged(index, record.Row, _ticks);
+	}
+
+	/// <inheritdoc cref="SetChanged"/>
+	public void SetChanged<T>(EcsID entity) where T : struct
+	{
+		SetChanged(entity, Component<T>().ID);
+	}
+
+	/// <summary>
 	/// Use this function to analyze pairs members.<br/>
 	/// Pairs members lose their generation count. This function will bring it back!.
 	/// </summary>
