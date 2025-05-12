@@ -47,7 +47,7 @@ bool exists = entity.Exists(); // or world.Exists(entity);
 ```
 ---
 ### Set component
-Components are the real data that an entity contains. An array will be allocated per component. So you can grab the data using the `world.Get<T>()` api.
+Components are the real data that an entity contains. An array will be allocated per component. You can access to the data using the `world.Get<T>()` api.
 
 Requirements:
 - must be a `struct`
@@ -134,7 +134,7 @@ while (!exit) {
     scheduler.RunOnce();
 }
 ```
-or just run until a certain condition is met
+or just run until a certain condition is met.
 ```csharp
 var exitCalledFn = ExitCalled;
 scheduler.Run(exitCalledFn);
@@ -192,6 +192,17 @@ scheduler.RunOnce();
 ```
 ---
 ### System parameters
+You can set 0 to 16 parameters in any order of any type per system.
+```csharp
+scheduler.OnUpdate((
+    World world,
+    Query<Data<Position>> query1,
+    Query<Data<Position>, Without<Velocity>> query2,
+    Res<TileMap> tileMap
+) => {
+});
+```
+
 #### World
 Access to the `World` instance.
 ```csharp
@@ -200,13 +211,14 @@ scheduler.OnStartup((World world) => world.Entity());
 ```
 ---
 #### Commands
-Access to the `World` instance but in deferred mode.
+Access to the `World` instance, but in deferred mode.
 ```csharp
 // Spawn an entity during the startup phase in deferred mode
 scheduler.OnStartup((Commands commands) => commands.Entity());
 ```
 ---
-#### Queries
+#### `Query<TData>`
+`TData` constraint is a `Data<T0...TN>` type which is used to express the set of components that contains data (no tags).
 Queries are one of the most type used in systems. They allow you to pick entities and manipulate the data associated with them.
 ```csharp
 scheduler.OnUpdate((
@@ -225,8 +237,10 @@ scheduler.OnUpdate((
     }
 });
 ```
-#### Queries filters
-Most of the time you need to pick a specific set of entities under certain conditions. That's why Filters exists!
+
+
+#### `Query<TData, TFilter>`
+Filters help you to express a more granular search.
 
 ##### `With<T>` 
 This will tell to the query to grab all entities that contains the type `T`. `T` can be a component or a tag.
@@ -279,6 +293,15 @@ foreach ((Ptr<Position> maybePos, Ptr<Velocity> vel) in query) {
         maybePos.Ref.X += 1;
     }
 }
+```
+
+##### `Empty`
+Sometime you need to find entities without specifing any `Data<T0...TN>`.
+```csharp
+Query<
+    Empty,
+    Filter<With<Position>, With<Mass>, Without<Moon>>
+> query
 ```
 
 ##### `Filter<T0...TN>` 
