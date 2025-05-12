@@ -438,11 +438,17 @@ Plugins are a way to organize your code better.
 
 ```csharp
 scheduler.AddPlugin<UIPlugin>();
-scheduler.AddPlugin<GamePlayPlugin>();
+scheduler.AddPlugin(new GameplayPlugin(1000));
 
 struct GameplayPlugin : IPlugin {
+    public GameplayPlugin(int entitiesToSpawn) {
+        EntitiesToSpawn = entitiesToSpawn;
+    }
+
+    public int EntitiesToSpawn { get; }
+    
     public void Build(Scheduler scheduler) {
-        // declare your logic
+        // declare your logic, use properties to apply any behaviour
     }
 }
 
