@@ -466,8 +466,8 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public void Clear()
 		=> _events.Clear();
 
-	public EventReaderIterator GetEnumerator()
-		=> new(_events);
+	public List<T>.Enumerator GetEnumerator()
+		=> _events.GetEnumerator();
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -475,22 +475,6 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 			return arg.Entity<Placeholder<EventParam<T>>>().Get<Placeholder<EventParam<T>>>().Value.Reader;
 
 		throw new NotImplementedException("EventReader<T> must be created using the scheduler.AddEvent<T>() method");
-	}
-
-	public ref struct EventReaderIterator
-	{
-		private readonly List<T> _events;
-		private int _index;
-
-		internal EventReaderIterator(List<T> events)
-		{
-			_events = events;
-			_index = events.Count;
-		}
-
-		public readonly T Current => _events[_index];
-
-		public bool MoveNext() => --_index >= 0;
 	}
 }
 
