@@ -14,10 +14,10 @@ namespace TinyEcs.SourceGenerator;
 [Generator]
 public sealed class SourceGenerator : IIncrementalGenerator
 {
-	private static Dictionary<ISymbol, List<IMethodSymbol>> _classToMethods = new();
+	private readonly Dictionary<ISymbol, List<IMethodSymbol>> _classToMethods = new ();
 
 
-	class Comparer : IEqualityComparer<MethodDeclarationSyntax>
+	private class Comparer : IEqualityComparer<MethodDeclarationSyntax>
 	{
 		public static readonly Comparer Instance = new();
 
@@ -40,10 +40,10 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		).Where(static m => m is not null)!;
 
 		IncrementalValueProvider<(Compilation, ImmutableArray<MethodDeclarationSyntax>)> compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer.Instance).Collect());
-		context.RegisterSourceOutput(compilationAndMethods, static (spc, source) => Generate(source.Item1, source.Item2, spc));
+		context.RegisterSourceOutput(compilationAndMethods, (spc, source) => Generate(source.Item1, source.Item2, spc));
 	}
 
-	static MethodDeclarationSyntax? GetMethodSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
+	private static MethodDeclarationSyntax? GetMethodSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
 	{
 		var enumDeclarationSyntax = (MethodDeclarationSyntax)context.Node;
 
@@ -56,7 +56,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 				var attributeContainingTypeSymbol = attributeSymbol.ContainingType;
 				var fullName = attributeContainingTypeSymbol.ToDisplayString();
 
-				// Is the attribute the [EnumExtensions] attribute?
 				if (fullName != name) continue;
 				return enumDeclarationSyntax;
 			}
@@ -65,7 +64,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		return null;
 	}
 
-	private static void AddMethodToClass(IMethodSymbol methodSymbol)
+	private void AddMethodToClass(IMethodSymbol methodSymbol)
 	{
 		if (!_classToMethods.TryGetValue(methodSymbol.ContainingSymbol, out var list))
 		{
@@ -75,7 +74,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		list.Add(methodSymbol);
 	}
 
-	static void Generate(Compilation compilation, ImmutableArray<MethodDeclarationSyntax> methods, SourceProductionContext context)
+	private void Generate(Compilation compilation, ImmutableArray<MethodDeclarationSyntax> methods, SourceProductionContext context)
 	{
 		if (methods.IsDefaultOrEmpty) return;
 
@@ -92,7 +91,29 @@ public sealed class SourceGenerator : IIncrementalGenerator
 				continue;
 			}
 
-			AddMethodToClass(methodSymbol);
+			var isValid = false;
+
+			var mem = methodSymbol.ContainingSymbol;
+			while (mem is INamedTypeSymbol symb)
+			{
+				var members = symb.GetMembers("SetupSystems");
+				if (members.OfType<IMethodSymbol>().Any(member => member.IsOverride))
+				{
+					isValid = false;
+					break;
+				}
+
+				mem = symb.BaseType;
+
+				if (mem?.Name == "TinyPlugin")
+				{
+					isValid = true;
+					break;
+				}
+			}
+
+			if (isValid)
+				AddMethodToClass(methodSymbol);
 		}
 
 		foreach (var classToMethod in _classToMethods)
@@ -107,7 +128,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 				{{
 					{sb}
 				}}
-
 			}} ";
 
 			if (string.IsNullOrEmpty(template)) continue;
@@ -118,14 +138,14 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		}
 	}
 
-	private static string GenerateOne(IMethodSymbol methodSymbol)
+	private string GenerateOne(IMethodSymbol methodSymbol)
 	{
 		var systemDescData = GetAttributeData(methodSymbol, "TinySystem");
 		var runifData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("RunIf")).ToArray();
 
 		var arguments = methodSymbol.Parameters.ToList();
 
-		if (systemDescData.ConstructorArguments.Length == 2)
+		if (systemDescData.ConstructorArguments.Length < 2)
 		{
 			Debug.WriteLine($"Method {methodSymbol.Name} does not have the correct number of arguments for TinySystem attribute. Expected 2, got {systemDescData.ConstructorArguments.Length}.");
 			return string.Empty;
@@ -138,13 +158,15 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var className = methodSymbol.ContainingSymbol.ToString();
 		className = className.Replace("TinyEcs.", "");
 
+
+
 		var method = $@"
-				var {methodSymbol.Name}fn = {methodSymbol.Name};
-				scheduler.AddSystem(
-					{methodSymbol.Name}fn,
-					stage: ({stage.Item1}){stage.Value},
-					threadingType: ({threading.Item1}){threading.Value}
-				); ";
+			var {methodSymbol.Name}fn = {methodSymbol.Name};
+			scheduler.AddSystem(
+				{methodSymbol.Name}fn,
+				stage: ({stage.Item1}){stage.Value},
+				threadingType: ({threading.Item1}){threading.Value}
+			); ";
 
 		return method;
 	}
@@ -160,52 +182,5 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		}
 
 		return default;
-	}
-}
-
-
-internal sealed class CodeFormatter : CSharpSyntaxRewriter
-{
-	public static string Format(string source)
-	{
-		SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source);
-		SyntaxNode normalized = syntaxTree.GetRoot().NormalizeWhitespace();
-
-		normalized = new CodeFormatter().Visit(normalized);
-
-		return normalized.ToFullString();
-	}
-
-	private static T FormatMembers<T>(T node, IEnumerable<SyntaxNode> members) where T : SyntaxNode
-	{
-		SyntaxNode[] membersArray = members as SyntaxNode[] ?? members.ToArray();
-
-		int memberCount = membersArray.Length;
-		int current = 0;
-
-		return node.ReplaceNodes(membersArray, RewriteTrivia);
-
-		SyntaxNode RewriteTrivia<TNode>(TNode oldMember, TNode _) where TNode : SyntaxNode
-		{
-			string trailingTrivia = oldMember.GetTrailingTrivia().ToFullString().TrimEnd() + "\n\n";
-			return current++ != memberCount - 1
-				? oldMember.WithTrailingTrivia(SyntaxFactory.Whitespace(trailingTrivia))
-				: oldMember;
-		}
-	}
-
-	public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
-	{
-		return base.VisitNamespaceDeclaration(FormatMembers(node, node.Members))!;
-	}
-
-	public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
-	{
-		return base.VisitClassDeclaration(FormatMembers(node, node.Members))!;
-	}
-
-	public override SyntaxNode VisitStructDeclaration(StructDeclarationSyntax node)
-	{
-		return base.VisitStructDeclaration(FormatMembers(node, node.Members))!;
 	}
 }
