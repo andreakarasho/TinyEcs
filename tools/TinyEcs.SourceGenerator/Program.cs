@@ -122,13 +122,18 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			foreach (var method in classToMethod.Value)
 				sb.AppendLine(GenerateOne(method));
 
+			var @namespace = classToMethod.Key.ContainingNamespace.ToString();
+			var className = classToMethod.Key.Name.Substring(classToMethod.Key.Name.LastIndexOf('.') + 1);
+
 			var template = $@"
-			partial class {classToMethod.Key} {{
-				public override void SetupSystems(TinyEcs.Scheduler scheduler)
-				{{
-					{sb}
+			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
+				{(classToMethod.Key.IsStatic ? "static" : "")} partial class {className} {{
+					public override void SetupSystems(TinyEcs.Scheduler scheduler)
+					{{
+						{sb}
+					}}
 				}}
-			}} ";
+			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
 
 			if (string.IsNullOrEmpty(template)) continue;
 
@@ -154,19 +159,34 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var stage = (systemDescData.ConstructorArguments[0].Type.ToDisplayString(), systemDescData.ConstructorArguments[0].Value);
 		var threading = (systemDescData.ConstructorArguments[1].Type.ToDisplayString(), systemDescData.ConstructorArguments[1].Value);
 
-		var @namespace = methodSymbol.ContainingNamespace.ToString();
-		var className = methodSymbol.ContainingSymbol.ToString();
-		className = className.Replace("TinyEcs.", "");
+		var classSymbol = methodSymbol.ContainingType;
+		var allMethods = classSymbol.GetMembers().OfType<IMethodSymbol>().ToDictionary(k => k.Name, v => v);
 
+		var sbRunIfFn = new StringBuilder();
+		var sb = new StringBuilder();
+		foreach (var runif in runifData)
+		{
+			var runifMethodName = runif.ConstructorArguments[0].Value.ToString();
+			if (string.IsNullOrEmpty(runifMethodName)) continue;
 
+			if (!allMethods.TryGetValue(runifMethodName, out var runIfMethod))
+			{
+				Debug.WriteLine($"RunIf method {runifMethodName} not found in class {classSymbol.Name}.");
+				continue;
+			}
+
+			sbRunIfFn.AppendLine($"var {runIfMethod.Name}fn = {runIfMethod.Name};");
+			sb.AppendLine($".RunIf({runIfMethod.Name}fn)");
+		}
 
 		var method = $@"
+			{sbRunIfFn}
 			var {methodSymbol.Name}fn = {methodSymbol.Name};
 			scheduler.AddSystem(
 				{methodSymbol.Name}fn,
 				stage: ({stage.Item1}){stage.Value},
 				threadingType: ({threading.Item1}){threading.Value}
-			); ";
+			){sb}; ";
 
 		return method;
 	}

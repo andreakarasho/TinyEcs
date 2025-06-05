@@ -10,7 +10,7 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
-var pl = new AAA();
+var pl = new  ANamespace.AAA();
 scheduler.AddPlugin(pl);
 pl.SetupSystems(scheduler);
 
@@ -277,11 +277,9 @@ enum AnotherState
 }
 
 
-public partial class AAA : TinyPlugin
+partial class BBB : TinyPlugin
 {
-	[TinySystem(Stages.FrameEnd, ThreadingMode.Single)]
-	[RunIf(nameof(TestRun))]
-	[RunIf(nameof(TestRun2))]
+	[TinySystem(Stages.Update, ThreadingMode.Single)]
 	void Execute(Query<Data<Position, Velocity>> query)
 	{
 		foreach (var (pos, vel) in query)
@@ -291,27 +289,51 @@ public partial class AAA : TinyPlugin
 		}
 	}
 
-	[TinySystem]
-	static void DoThat(Query<Data<Position, Velocity>> query)
+	public override void Build(Scheduler scheduler)
 	{
-		foreach (var (pos, vel) in query)
+		throw new NotImplementedException();
+	}
+}
+
+namespace ANamespace
+{
+	public partial class AAA : TinyPlugin
+	{
+		[TinySystem(Stages.FrameEnd, ThreadingMode.Single)]
+		[RunIf(nameof(TestRun))]
+		[RunIf(nameof(TestRun2))]
+		void Execute(Query<Data<Position, Velocity>> query)
 		{
-			pos.Ref.X *= vel.Ref.X;
-			pos.Ref.Y *= vel.Ref.Y;
+			foreach (var (pos, vel) in query)
+			{
+				pos.Ref.X *= vel.Ref.X;
+				pos.Ref.Y *= vel.Ref.Y;
+			}
+		}
+
+		[TinySystem]
+		static void DoThat(Query<Data<Position, Velocity>> query)
+		{
+			foreach (var (pos, vel) in query)
+			{
+				pos.Ref.X *= vel.Ref.X;
+				pos.Ref.Y *= vel.Ref.Y;
+			}
+		}
+
+		private bool TestRun(SchedulerState state, World world, Local<int> index)
+		{
+			return true;
+		}
+
+		private bool TestRun2()
+		{
+			return true;
+		}
+
+		public override void Build(Scheduler scheduler)
+		{
 		}
 	}
 
-	private bool TestRun()
-	{
-		return true;
-	}
-
-	private bool TestRun2()
-	{
-		return true;
-	}
-
-	public override void Build(Scheduler scheduler)
-	{
-	}
 }
