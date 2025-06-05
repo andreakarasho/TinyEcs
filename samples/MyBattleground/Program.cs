@@ -299,7 +299,7 @@ namespace ANamespace
 {
 	public partial class AAA : TinyPlugin
 	{
-		[TinySystem(Stages.FrameEnd, ThreadingMode.Single)]
+		[TinySystem(Stages.Update, ThreadingMode.Single)]
 		[RunIf(nameof(TestRun))]
 		[RunIf(nameof(TestRun2))]
 		void Execute(Query<Data<Position, Velocity>> query)
@@ -319,6 +319,25 @@ namespace ANamespace
 				pos.Ref.X *= vel.Ref.X;
 				pos.Ref.Y *= vel.Ref.Y;
 			}
+		}
+
+
+		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Second))]
+		void First()
+		{
+			Console.WriteLine("1");
+		}
+
+		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Third))]
+		void Second()
+		{
+			Console.WriteLine("2");
+		}
+
+		[TinySystem(threadingMode: ThreadingMode.Single)]
+		void Third()
+		{
+			Console.WriteLine("3");
 		}
 
 		private bool TestRun(SchedulerState state, World world, Local<int> index)

@@ -293,7 +293,7 @@ public partial class Scheduler
 		return sys;
 	}
 
-	public Scheduler AddPlugin<T>() where T : notnull, IPlugin, new()
+	public Scheduler AddPlugin<T>() where T : IPlugin, new()
 		=> AddPlugin(new T());
 
 	public Scheduler AddPlugin<T>(T plugin) where T : IPlugin
@@ -324,14 +324,14 @@ public partial class Scheduler
 		return AddSystemParam(new Res<T>() { Value = resource });
 	}
 
-	public Scheduler AddSystemParam<T>(T param) where T : notnull, ISystemParam<World>
+	public Scheduler AddSystemParam<T>(T param) where T : ISystemParam<World>
 	{
 		_world.Entity<Placeholder<T>>().Set(new Placeholder<T>() { Value = param });
 
 		return this;
 	}
 
-	internal bool ResourceExists<T>() where T : notnull, ISystemParam<World>
+	internal bool ResourceExists<T>() where T : ISystemParam<World>
 	{
 		return _world.Entity<Placeholder<T>>().Has<Placeholder<T>>();
 	}
@@ -1278,21 +1278,27 @@ public ref struct QueryIter<D, F>
 }
 
 
-[AttributeUsage(System.AttributeTargets.Method, Inherited=true)]
+[AttributeUsage(System.AttributeTargets.Method)]
 public class TinySystemAttribute(Stages stage = Stages.Update, ThreadingMode threadingMode = ThreadingMode.Auto) : Attribute
 {
 	public Stages Stage { get; } = stage;
 	public ThreadingMode ThreadingMode { get; } = threadingMode;
 }
 
-[AttributeUsage(System.AttributeTargets.Method, Inherited=true, AllowMultiple = true)]
-public class RunIf(string name) : Attribute
+[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
+public sealed class RunIf(string name) : Attribute
 {
 
 }
 
-[AttributeUsage(System.AttributeTargets.Method, Inherited=true, AllowMultiple = true)]
-public class BeforeOf(string name) : Attribute
+[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
+public sealed class BeforeOf(string name) : Attribute
+{
+
+}
+
+[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
+public sealed class AfterOf(string name) : Attribute
 {
 
 }

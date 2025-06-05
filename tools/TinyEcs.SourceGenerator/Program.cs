@@ -119,8 +119,13 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		foreach (var classToMethod in _classToMethods)
 		{
 			var sb = new StringBuilder();
+			var sbEnd = new StringBuilder();
 			foreach (var method in classToMethod.Value)
-				sb.AppendLine(GenerateOne(method));
+			{
+				(var systems, var systemsOrder) = GenerateOne(method);
+				sb.AppendLine(systems);
+				sbEnd.AppendLine(systemsOrder);
+			}
 
 			var @namespace = classToMethod.Key.ContainingNamespace.ToString();
 			var className = classToMethod.Key.Name.Substring(classToMethod.Key.Name.LastIndexOf('.') + 1);
@@ -131,6 +136,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 					public override void SetupSystems(TinyEcs.Scheduler scheduler)
 					{{
 						{sb}
+						{sbEnd}
 					}}
 				}}
 			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
@@ -143,52 +149,103 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		}
 	}
 
-	private string GenerateOne(IMethodSymbol methodSymbol)
+	private (string, string) GenerateOne(IMethodSymbol methodSymbol)
 	{
 		var systemDescData = GetAttributeData(methodSymbol, "TinySystem");
 		var runifData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("RunIf")).ToArray();
+		var beforeOfData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("BeforeOf")).ToArray();
+		var afterOfData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("AfterOf")).ToArray();
 
 		var arguments = methodSymbol.Parameters.ToList();
 
 		if (systemDescData.ConstructorArguments.Length < 2)
 		{
 			Debug.WriteLine($"Method {methodSymbol.Name} does not have the correct number of arguments for TinySystem attribute. Expected 2, got {systemDescData.ConstructorArguments.Length}.");
-			return string.Empty;
+			return (string.Empty, string.Empty);
 		}
 
 		var stage = (systemDescData.ConstructorArguments[0].Type.ToDisplayString(), systemDescData.ConstructorArguments[0].Value);
 		var threading = (systemDescData.ConstructorArguments[1].Type.ToDisplayString(), systemDescData.ConstructorArguments[1].Value);
 
 		var classSymbol = methodSymbol.ContainingType;
-		var allMethods = classSymbol.GetMembers().OfType<IMethodSymbol>().ToDictionary(k => k.Name, v => v);
+		var allMethods = classSymbol.GetMembers().OfType<IMethodSymbol>().ToList();
 
-		var sbRunIfFn = new StringBuilder();
-		var sb = new StringBuilder();
-		foreach (var runif in runifData)
+
+		var runIfMethods = GetAssociatedMethods(runifData, allMethods, "RunIf", classSymbol);
+		var beforeMethodsTargets = GetAssociatedMethods(beforeOfData, allMethods, "BeforeOf", classSymbol);
+		var afterMethodsTargets = GetAssociatedMethods(afterOfData, allMethods, "AfterOf", classSymbol);
+
+		var sbRunIfFns = new StringBuilder();
+		var sbRunIfActions = new StringBuilder();
+		foreach (var runIf in runIfMethods)
 		{
-			var runifMethodName = runif.ConstructorArguments[0].Value.ToString();
-			if (string.IsNullOrEmpty(runifMethodName)) continue;
-
-			if (!allMethods.TryGetValue(runifMethodName, out var runIfMethod))
-			{
-				Debug.WriteLine($"RunIf method {runifMethodName} not found in class {classSymbol.Name}.");
-				continue;
-			}
-
-			sbRunIfFn.AppendLine($"var {runIfMethod.Name}fn = {runIfMethod.Name};");
-			sb.AppendLine($".RunIf({runIfMethod.Name}fn)");
+			sbRunIfFns.AppendLine($"var {runIf.Name}fn = {runIf.Name};");
+			sbRunIfActions.AppendLine($".RunIf({runIf.Name}fn)");
 		}
 
+		var sb = new StringBuilder();
+
+		foreach (var after in afterMethodsTargets)
+		{
+			sb.AppendLine($"{methodSymbol.Name}System.RunAfter({after.Name}System);");
+		}
+
+		foreach (var before in beforeMethodsTargets)
+		{
+			sb.AppendLine($"{methodSymbol.Name}System.RunBefore({before.Name}System);");
+		}
+
+
+		// var sbRunIfFn = new StringBuilder();
+		// var sb = new StringBuilder();
+		// foreach (var runif in runifData)
+		// {
+		// 	var runifMethodName = runif.ConstructorArguments[0].Value.ToString();
+		// 	if (string.IsNullOrEmpty(runifMethodName)) continue;
+		//
+		// 	if (!allMethods.TryGetValue(runifMethodName, out var runIfMethod))
+		// 	{
+		// 		Debug.WriteLine($"RunIf method {runifMethodName} not found in class {classSymbol.Name}.");
+		// 		continue;
+		// 	}
+		//
+		// 	sbRunIfFn.AppendLine($"var {runIfMethod.Name}fn = {runIfMethod.Name};");
+		// 	sb.AppendLine($".RunIf({runIfMethod.Name}fn)");
+		// }
+
 		var method = $@"
-			{sbRunIfFn}
+			{sbRunIfFns}
 			var {methodSymbol.Name}fn = {methodSymbol.Name};
-			scheduler.AddSystem(
+			var {methodSymbol.Name}System = scheduler.AddSystem(
 				{methodSymbol.Name}fn,
 				stage: ({stage.Item1}){stage.Value},
 				threadingType: ({threading.Item1}){threading.Value}
-			){sb}; ";
+			)
+			{sbRunIfActions};";
 
-		return method;
+		// var afterBefore = $@"
+		// 	{beforeFns}
+		// 	{afterFns}
+		// ";
+
+		return (method, sb.ToString());
+	}
+
+	private static List<IMethodSymbol> GetAssociatedMethods(AttributeData[] attributeData, List<IMethodSymbol> allMethods, string attributeType, INamedTypeSymbol classSymbol)
+	{
+		var associatedMethods = new List<IMethodSymbol>();
+		foreach (var attr in attributeData)
+		{
+			var methodName = attr.ConstructorArguments[0].Value?.ToString();
+			if (string.IsNullOrEmpty(methodName)) continue;
+
+			var method = allMethods.FirstOrDefault(m => m.Name == methodName);
+			if (method != null)
+				associatedMethods.Add(method);
+			else
+				Debug.WriteLine($"{attributeType} method {methodName} not found in class {classSymbol.Name}.");
+		}
+		return associatedMethods;
 	}
 
 	private static AttributeData GetAttributeData(IMethodSymbol ms, string name)
