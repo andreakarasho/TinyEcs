@@ -1277,4 +1277,32 @@ public ref struct QueryIter<D, F>
 	public readonly QueryIter<D, F> GetEnumerator() => this;
 }
 
+
+[AttributeUsage(System.AttributeTargets.Method, Inherited=true)]
+public class TinySystemAttribute(Stages stage = Stages.Update, ThreadingMode threadingMode = ThreadingMode.Auto) : Attribute
+{
+	public Stages Stage { get; } = stage;
+	public ThreadingMode ThreadingMode { get; } = threadingMode;
+}
+
+[AttributeUsage(System.AttributeTargets.Method, Inherited=true, AllowMultiple = true)]
+public class RunIf(string name) : Attribute
+{
+
+}
+
+[AttributeUsage(System.AttributeTargets.Method, Inherited=true, AllowMultiple = true)]
+public class BeforeOf(string name) : Attribute
+{
+
+}
+
+public abstract class TinyPlugin : IPlugin
+{
+	public abstract void Build(Scheduler scheduler);
+	public virtual void SetupSystems(Scheduler scheduler) { }
+}
+
+
+
 #endif

@@ -10,7 +10,19 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
+var pl = new AAA();
+scheduler.AddPlugin(pl);
+pl.SetupSystems(scheduler);
 
+scheduler.RunOnce();
+
+return;
+// ecs.Entity();
+// ecs.Entity().Delete();
+// var xx = ecs.Entity().Add<Tag>();
+//
+// xx.Get<Tag>();
+// Console.WriteLine("");
 
 // scheduler.OnUpdate((Query<Data<Position>, Changed<Position>> query) =>
 // {
@@ -21,8 +33,8 @@ var scheduler = new Scheduler(ecs);
 // }, ThreadingMode.Single);
 
 
-var ab = ecs.Entity()
-	.Set(new Position()).Set(new Velocity());
+// var ab = ecs.Entity()
+// 	.Set(new Position()).Set(new Velocity());
 // ecs.Entity()
 // 	.Set(new Position() { X = -1 });
 // // var q = ecs.QueryBuilder()
@@ -49,7 +61,7 @@ var ab = ecs.Entity()
 // scheduler.RunOnce();
 // scheduler.RunOnce();
 
-ab.Set(new Position() { X = 2 });
+// ab.Set(new Position() { X = 2 });
 // scheduler.RunOnce();
 
 // scheduler.AddState(GameState.Loading);
@@ -96,47 +108,75 @@ ab.Set(new Position() { X = 2 });
 // while (true)
 // 	scheduler.RunOnce();
 
-for (int i = 0; i < ENTITIES_COUNT; i++)
-	ecs.Entity()
-		.Set<Position>(new Position())
-		.Set<Velocity>(new Velocity());
+for (var i = 0; i < ENTITIES_COUNT; i++)
+    ecs.Entity()
+        .Set(new Position())
+        .Set(new Velocity());
 
 // ecs.Entity().Set(new Position()).Set(new Velocity()).Set(new Mass());
 
+// ecs.Entity()
+// 	.Set(new Velocity());
+// ecs.Entity()
+// 	.Set(new Position());
 
-
-scheduler.AddSystem((
-	Query<Data<Position, Velocity>, With<Position>> q,
-	Query<Data<Position, Velocity>, Added<Position>> added
+// ecs.Entity().Set(new Velocity()).Set(new Position());
+scheduler.AddSystem([TinySystem] (
+    Query<Data<Position, Velocity>> q,
+    Query<Data<Position, Velocity>, Added<Position>> added
 ) =>
 {
-	foreach ((var pos, var vel) in q)
-	{
-		pos.Ref.X *= vel.Ref.X;
-		pos.Ref.Y *= vel.Ref.Y;
 
-		// pos.Ref.X *= vel.Ref.X;
-		// pos.Ref.Y *= vel.Ref.Y;
+    // foreach ((var pos, var vel) in or)
+    // {
+    // 	if (pos.IsValid())
+    // 	{
+    // 		Console.Write("pos is valid ");
+    // 	}
+    // 	else
+    // 	{
 
-		// if (pos.IsChanged)
-		// 	pos.ClearState();
-	}
+    // 	}
 
-	// foreach ((var pos, var vel) in added)
-	// {
-	// 	pos.Ref.X *= vel.Ref.X;
-	// 	pos.Ref.Y *= vel.Ref.Y;
+    // 	if (vel.IsValid())
+    // 	{
+    // 		Console.Write("vel is valid");
+    // 	}
+    // 	else
+    // 	{
 
-	// 	// if (pos.IsAdded)
-	// 	// 	pos.ClearState();
-	// }
+    // 	}
+
+    // 	Console.WriteLine();
+    // }
+
+    foreach (var (pos, vel) in q)
+    {
+        pos.Ref.X *= vel.Ref.X;
+        pos.Ref.Y *= vel.Ref.Y;
+
+        // pos.Ref.X *= vel.Ref.X;
+        // pos.Ref.Y *= vel.Ref.Y;
+
+        // if (pos.IsChanged)
+        // 	pos.ClearState();
+    }
+
+    // foreach ((var pos, var vel) in added)
+    // {
+    // 	pos.Ref.X *= vel.Ref.X;
+    // 	pos.Ref.Y *= vel.Ref.Y;
+
+    // 	// if (pos.IsAdded)
+    // 	// 	pos.ClearState();
+    // }
 }, threadingType: ThreadingMode.Single);
 
 
 var query = ecs.QueryBuilder()
-	.With<Position>()
-	.With<Velocity>()
-	.Build();
+    .With<Position>()
+    .With<Velocity>()
+    .Build();
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -144,78 +184,78 @@ var last = 0f;
 
 while (true)
 {
-	for (int i = 0; i < 3600; ++i)
-	{
-		scheduler.RunOnce();
+    for (int i = 0; i < 3600; ++i)
+    {
+        // scheduler.RunOnce();
 
-		// Execute(query);
-		// ExecuteIterator(query);
+        Execute(query);
+        // ExecuteIterator(query);
 
-		// var it = query.Iter();
-		// while (it.Next())
-		// {
-		// 	var count = it.Count;
+        // var it = query.Iter();
+        // while (it.Next())
+        // {
+        // 	var count = it.Count;
 
-		// 	ref var pos = ref it.DataRef<Position>(0);
-		// 	ref var vel = ref it.DataRef<Velocity>(1);
-		// 	ref var lastPos = ref Unsafe.Add(ref pos, count);
+        // 	ref var pos = ref it.DataRef<Position>(0);
+        // 	ref var vel = ref it.DataRef<Velocity>(1);
+        // 	ref var lastPos = ref Unsafe.Add(ref pos, count);
 
-		// 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
-		// 	{
-		// 		pos.X *= vel.X;
-		// 		pos.Y *= vel.Y;
+        // 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
+        // 	{
+        // 		pos.X *= vel.X;
+        // 		pos.Y *= vel.Y;
 
-		// 		pos = ref Unsafe.Add(ref pos, 1);
-		// 		vel = ref Unsafe.Add(ref vel, 1);
-		// 	}
-		// }
-	}
+        // 		pos = ref Unsafe.Add(ref pos, 1);
+        // 		vel = ref Unsafe.Add(ref vel, 1);
+        // 	}
+        // }
+    }
 
-	last = start;
-	start = sw.ElapsedMilliseconds;
+    last = start;
+    start = sw.ElapsedMilliseconds;
 
-	Console.WriteLine("query done in {0} ms", start - last);
+    Console.WriteLine("query done in {0} ms", start - last);
 }
 
 
 static void Execute(Query query)
 {
-	foreach ((var pos, var vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
-	{
-		pos.Ref.X *= vel.Ref.X;
-		pos.Ref.Y *= vel.Ref.Y;
-	}
+    foreach (var (pos, vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
+    {
+        pos.Ref.X *= vel.Ref.X;
+        pos.Ref.Y *= vel.Ref.Y;
+    }
 }
 
 static void ExecuteIterator(Query query)
 {
-	var it = query.Iter();
+    var it = query.Iter();
 
-	while (it.Next())
-	{
-		var span0 = it.Data<Position>(0);
-		var span1 = it.Data<Velocity>(1);
-		var count = it.Count;
+    while (it.Next())
+    {
+        var span0 = it.Data<Position>(0);
+        var span1 = it.Data<Velocity>(1);
+        var count = it.Count;
 
-		for (var i = 0; i < count; ++i)
-		{
-			ref var pos = ref span0[i];
-			ref var vel = ref span1[i];
+        for (var i = 0; i < count; ++i)
+        {
+            ref var pos = ref span0[i];
+            ref var vel = ref span1[i];
 
-			pos.X *= vel.X;
-			pos.Y *= vel.Y;
-		}
-	}
+            pos.X *= vel.X;
+            pos.Y *= vel.Y;
+        }
+    }
 }
 
-struct Position
+public struct Position
 {
-	public float X, Y, Z;
+    public float X, Y, Z;
 }
 
-struct Velocity
+public struct Velocity
 {
-	public float X, Y;
+    public float X, Y;
 }
 
 struct Mass { public float Value; }
@@ -225,13 +265,53 @@ struct Tag { }
 
 enum GameState
 {
-	Loading,
-	Playing,
-	Menu,
-	Menu2
+    Loading,
+    Playing,
+    Menu,
+    Menu2
 }
 
 enum AnotherState
 {
-	A, B, C
+    A, B, C
+}
+
+
+public partial class AAA : TinyPlugin
+{
+	[TinySystem(Stages.FrameEnd, ThreadingMode.Single)]
+	[RunIf(nameof(TestRun))]
+	[RunIf(nameof(TestRun2))]
+	void Execute(Query<Data<Position, Velocity>> query)
+	{
+		foreach (var (pos, vel) in query)
+		{
+			pos.Ref.X *= vel.Ref.X;
+			pos.Ref.Y *= vel.Ref.Y;
+		}
+	}
+
+	[TinySystem]
+	static void DoThat(Query<Data<Position, Velocity>> query)
+	{
+		foreach (var (pos, vel) in query)
+		{
+			pos.Ref.X *= vel.Ref.X;
+			pos.Ref.Y *= vel.Ref.Y;
+		}
+	}
+
+	private bool TestRun()
+	{
+		return true;
+	}
+
+	private bool TestRun2()
+	{
+		return true;
+	}
+
+	public override void Build(Scheduler scheduler)
+	{
+	}
 }
