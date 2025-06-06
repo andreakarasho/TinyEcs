@@ -3,17 +3,13 @@ using System.Diagnostics;
 using TinyEcs;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Numerics;
 
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
-var pl = new  ANamespace.AAA();
-scheduler.AddPlugin(pl);
-pl.SetupSystems(scheduler);
-
+scheduler.AddPlugin<ANamespace.AAA>();
 scheduler.RunOnce();
 
 return;
@@ -227,6 +223,7 @@ static void Execute(Query query)
     }
 }
 
+[TinySystem]
 static void ExecuteIterator(Query query)
 {
     var it = query.Iter();
@@ -312,7 +309,7 @@ namespace ANamespace
 		}
 
 		[TinySystem]
-		static void DoThat(Query<Data<Position, Velocity>> query)
+		static void DoThat(Query<Data<Position, Velocity>> query, EventWriter<CustomEvent> writer)
 		{
 			foreach (var (pos, vel) in query)
 			{
@@ -329,12 +326,12 @@ namespace ANamespace
 		}
 
 		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Third))]
-		void Second()
+		void Second(EventReader<CustomEvent> reader)
 		{
 			Console.WriteLine("2");
 		}
 
-		[TinySystem(threadingMode: ThreadingMode.Single)]
+		[TinySystem(threadingMode: ThreadingMode.Single), BeforeOf("HELLO")]
 		void Third()
 		{
 			Console.WriteLine("3");
@@ -352,6 +349,14 @@ namespace ANamespace
 
 		public override void Build(Scheduler scheduler)
 		{
+			scheduler.AddEvent<CustomEvent>();
+
+			base.Build(scheduler);
+		}
+
+		struct CustomEvent
+		{
+			public int Value;
 		}
 	}
 

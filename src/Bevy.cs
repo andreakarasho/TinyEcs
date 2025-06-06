@@ -1278,37 +1278,39 @@ public ref struct QueryIter<D, F>
 }
 
 
-[AttributeUsage(System.AttributeTargets.Method)]
+[AttributeUsage(AttributeTargets.Method)]
 public class TinySystemAttribute(Stages stage = Stages.Update, ThreadingMode threadingMode = ThreadingMode.Auto) : Attribute
 {
 	public Stages Stage { get; } = stage;
 	public ThreadingMode ThreadingMode { get; } = threadingMode;
 }
 
-[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
-public sealed class RunIf(string name) : Attribute
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class RunIf(string systemName) : Attribute
 {
+	public string SystemName { get; } = systemName;
+}
 
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class BeforeOf(string systemName) : Attribute
+{
+	public string SystemName { get; } = systemName;
 }
 
 [AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
-public sealed class BeforeOf(string name) : Attribute
+public sealed class AfterOf(string systemName) : Attribute
 {
-
-}
-
-[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
-public sealed class AfterOf(string name) : Attribute
-{
-
+	public string SystemName { get; } = systemName;
 }
 
 public abstract class TinyPlugin : IPlugin
 {
-	public abstract void Build(Scheduler scheduler);
-	public virtual void SetupSystems(Scheduler scheduler) { }
+	public virtual void Build(Scheduler scheduler)
+	{
+		SetupSystems(scheduler);
+	}
+
+	protected virtual void SetupSystems(Scheduler scheduler) { }
 }
-
-
 
 #endif

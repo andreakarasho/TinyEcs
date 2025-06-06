@@ -16,30 +16,14 @@ public sealed class SourceGenerator : IIncrementalGenerator
 {
 	private readonly Dictionary<ISymbol, List<IMethodSymbol>> _classToMethods = new ();
 
-
-	private class Comparer : IEqualityComparer<MethodDeclarationSyntax>
-	{
-		public static readonly Comparer Instance = new();
-
-		public bool Equals(MethodDeclarationSyntax x, MethodDeclarationSyntax y)
-		{
-			return x.Equals(y);
-		}
-
-		public int GetHashCode(MethodDeclarationSyntax obj)
-		{
-			return obj.GetHashCode();
-		}
-	}
-
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
-		IncrementalValuesProvider<MethodDeclarationSyntax> methodDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
+		var methodDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
 			static (s, _) => s is MethodDeclarationSyntax { AttributeLists.Count: > 0 },
 			static (ctx, _) => GetMethodSymbolIfAttributeof(ctx, "TinyEcs.TinySystemAttribute")
 		).Where(static m => m is not null)!;
 
-		IncrementalValueProvider<(Compilation, ImmutableArray<MethodDeclarationSyntax>)> compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer.Instance).Collect());
+		var compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer.Instance).Collect());
 		context.RegisterSourceOutput(compilationAndMethods, (spc, source) => Generate(source.Item1, source.Item2, spc));
 	}
 
@@ -133,7 +117,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			var template = $@"
 			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
 				{(classToMethod.Key.IsStatic ? "static" : "")} partial class {className} {{
-					public override void SetupSystems(TinyEcs.Scheduler scheduler)
+					protected override void SetupSystems(TinyEcs.Scheduler scheduler)
 					{{
 						{sb}
 						{sbEnd}
@@ -195,24 +179,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			sb.AppendLine($"{methodSymbol.Name}System.RunBefore({before.Name}System);");
 		}
 
-
-		// var sbRunIfFn = new StringBuilder();
-		// var sb = new StringBuilder();
-		// foreach (var runif in runifData)
-		// {
-		// 	var runifMethodName = runif.ConstructorArguments[0].Value.ToString();
-		// 	if (string.IsNullOrEmpty(runifMethodName)) continue;
-		//
-		// 	if (!allMethods.TryGetValue(runifMethodName, out var runIfMethod))
-		// 	{
-		// 		Debug.WriteLine($"RunIf method {runifMethodName} not found in class {classSymbol.Name}.");
-		// 		continue;
-		// 	}
-		//
-		// 	sbRunIfFn.AppendLine($"var {runIfMethod.Name}fn = {runIfMethod.Name};");
-		// 	sb.AppendLine($".RunIf({runIfMethod.Name}fn)");
-		// }
-
 		var method = $@"
 			{sbRunIfFns}
 			var {methodSymbol.Name}fn = {methodSymbol.Name};
@@ -223,18 +189,13 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			)
 			{sbRunIfActions};";
 
-		// var afterBefore = $@"
-		// 	{beforeFns}
-		// 	{afterFns}
-		// ";
-
 		return (method, sb.ToString());
 	}
 
 	private static List<IMethodSymbol> GetAssociatedMethods(AttributeData[] attributeData, List<IMethodSymbol> allMethods, string attributeType, INamedTypeSymbol classSymbol)
 	{
 		var associatedMethods = new List<IMethodSymbol>();
-		foreach (var attr in attributeData)
+		foreach (var attr in attributeData.Where(s => !s.ConstructorArguments.IsEmpty))
 		{
 			var methodName = attr.ConstructorArguments[0].Value?.ToString();
 			if (string.IsNullOrEmpty(methodName)) continue;
@@ -259,5 +220,21 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		}
 
 		return default;
+	}
+
+
+	private class Comparer : IEqualityComparer<MethodDeclarationSyntax>
+	{
+		public static readonly Comparer Instance = new();
+
+		public bool Equals(MethodDeclarationSyntax x, MethodDeclarationSyntax y)
+		{
+			return x.Equals(y);
+		}
+
+		public int GetHashCode(MethodDeclarationSyntax obj)
+		{
+			return obj.GetHashCode();
+		}
 	}
 }
