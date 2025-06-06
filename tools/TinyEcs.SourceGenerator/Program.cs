@@ -14,31 +14,20 @@ namespace TinyEcs.SourceGenerator;
 [Generator]
 public sealed class SourceGenerator : IIncrementalGenerator
 {
-	private readonly Dictionary<ISymbol, List<IMethodSymbol>> _classToMethods = new ();
-
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
 		var pluginDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-			static (s, _) => s is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
+			static (s, _) => s is ClassDeclarationSyntax { AttributeLists.Count: > 0 } or StructDeclarationSyntax { AttributeLists.Count: > 0 },
 			static (ctx, _) => GetClassDeclarationSymbolIfAttributeof(ctx, "TinyEcs.TinyPluginAttribute")
 		).Where(static m => m is not null)!;
 
-		var compilationAndClasses = context.CompilationProvider.Combine(pluginDeclarations.WithComparer(Comparer<ClassDeclarationSyntax>.Instance).Collect());
+		var compilationAndClasses = context.CompilationProvider.Combine(pluginDeclarations.WithComparer(Comparer<TypeDeclarationSyntax>.Instance).Collect());
 		context.RegisterSourceOutput(compilationAndClasses, (spc, source) => Generate(source.Item1, source.Item2, spc));
-
-
-		// var methodDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-		// 	static (s, _) => s is MethodDeclarationSyntax { AttributeLists.Count: > 0 },
-		// 	static (ctx, _) => GetMethodSymbolIfAttributeof(ctx, "TinyEcs.TinySystemAttribute")
-		// ).Where(static m => m is not null)!;
-		//
-		// var compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer<MethodDeclarationSyntax>.Instance).Collect());
-		// context.RegisterSourceOutput(compilationAndMethods, (spc, source) => Generate(source.Item1, source.Item2, spc));
 	}
 
-	private static ClassDeclarationSyntax? GetClassDeclarationSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
+	private static TypeDeclarationSyntax? GetClassDeclarationSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
 	{
-		var enumDeclarationSyntax = (ClassDeclarationSyntax)context.Node;
+		var enumDeclarationSyntax = (TypeDeclarationSyntax)context.Node;
 
 		foreach (var attributeListSyntax in enumDeclarationSyntax.AttributeLists)
 		{
@@ -57,7 +46,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		return null;
 	}
 
-	private void Generate(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes, SourceProductionContext context)
+	private void Generate(Compilation compilation, ImmutableArray<TypeDeclarationSyntax> classes, SourceProductionContext context)
 	{
 		if (classes.IsDefaultOrEmpty) return;
 
@@ -94,11 +83,17 @@ public sealed class SourceGenerator : IIncrementalGenerator
 
 			var @namespace = nameSymbol.ContainingNamespace.ToString();
 			var className = nameSymbol.Name.Substring(nameSymbol.Name.LastIndexOf('.') + 1);
+			var typeName = nameSymbol.TypeKind switch
+			{
+				TypeKind.Class => "class",
+				TypeKind.Struct => "struct",
+				_ => throw new InvalidOperationException($"Unsupported type kind: {nameSymbol.TypeKind}")
+			};
 
 			var template = $@"
 			using TinyEcs;
 			{(nameSymbol.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
-				{(nameSymbol.IsStatic ? "static" : "")} partial class {className} : IPlugin {{
+				{(nameSymbol.IsStatic ? "static" : "")} partial {typeName} {className} : IPlugin {{
 					void IPlugin.Build(Scheduler scheduler)
 					{{
 						this.Build(scheduler);
@@ -110,110 +105,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			{(nameSymbol.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
 
 			var fileName = nameSymbol.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat).Replace('<', '{').Replace('>', '}');
-			context.AddSource($"{fileName}.g.cs",
-				CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
-		}
-	}
-
-	private static MethodDeclarationSyntax? GetMethodSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
-	{
-		var enumDeclarationSyntax = (MethodDeclarationSyntax)context.Node;
-
-		foreach (var attributeListSyntax in enumDeclarationSyntax.AttributeLists)
-		{
-			foreach (var attributeSyntax in attributeListSyntax.Attributes)
-			{
-				if (ModelExtensions.GetSymbolInfo(context.SemanticModel, attributeSyntax).Symbol is not IMethodSymbol attributeSymbol) continue;
-
-				var attributeContainingTypeSymbol = attributeSymbol.ContainingType;
-				var fullName = attributeContainingTypeSymbol.ToDisplayString();
-
-				if (fullName != name) continue;
-				return enumDeclarationSyntax;
-			}
-		}
-
-		return null;
-	}
-
-	private void AddMethodToClass(IMethodSymbol methodSymbol)
-	{
-		if (!_classToMethods.TryGetValue(methodSymbol.ContainingSymbol, out var list))
-		{
-			list = new List<IMethodSymbol>();
-			_classToMethods[methodSymbol.ContainingSymbol] = list;
-		}
-		list.Add(methodSymbol);
-	}
-
-	private void Generate(Compilation compilation, ImmutableArray<MethodDeclarationSyntax> methods, SourceProductionContext context)
-	{
-		if (methods.IsDefaultOrEmpty) return;
-
-		foreach (var methodSyntax in methods)
-		{
-			IMethodSymbol? methodSymbol = null;
-			try
-			{
-				var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
-				methodSymbol = ModelExtensions.GetDeclaredSymbol(semanticModel, methodSyntax) as IMethodSymbol;
-			}
-			catch
-			{
-				continue;
-			}
-
-			if (methodSymbol == null)
-				continue;
-
-			var isValid = false;
-			if (methodSymbol.ContainingSymbol is INamedTypeSymbol symb)
-			{
-				var members = symb.GetMembers("Build");
-				if (members.OfType<IMethodSymbol>().Any(s => !s.IsStatic))
-				{
-					isValid = true;
-				}
-
-				if (symb.AllInterfaces.Any(s => s.Name == "IPlugin"))
-				{
-					isValid = true;
-				}
-			}
-
-			if (isValid)
-				AddMethodToClass(methodSymbol);
-		}
-
-		foreach (var classToMethod in _classToMethods)
-		{
-			var sb = new StringBuilder();
-			var sbEnd = new StringBuilder();
-			foreach (var method in classToMethod.Value)
-			{
-				(var systems, var systemsOrder) = GenerateOne(method);
-				sb.AppendLine(systems);
-				sbEnd.AppendLine(systemsOrder);
-			}
-
-			var @namespace = classToMethod.Key.ContainingNamespace.ToString();
-			var className = classToMethod.Key.Name.Substring(classToMethod.Key.Name.LastIndexOf('.') + 1);
-
-			var template = $@"
-			using TinyEcs;
-			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
-				{(classToMethod.Key.IsStatic ? "static" : "")} partial class {className} : ISourceGenPlugin {{
-					void ISourceGenPlugin.InternalBuild(Scheduler scheduler)
-					{{
-						{sb}
-						{sbEnd}
-					}}
-				}}
-			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
-
-			if (string.IsNullOrEmpty(template)) continue;
-
-			var fileName = (classToMethod.Key as INamedTypeSymbol).ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat).Replace('<', '{').Replace('>', '}');
 			context.AddSource($"{fileName}.g.cs",
 				CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
 		}

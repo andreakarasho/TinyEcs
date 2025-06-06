@@ -277,7 +277,7 @@ enum AnotherState
 
 
 [TinyPlugin]
-partial class BBB
+partial struct BBB
 {
 	[TinySystem(Stages.Update, ThreadingMode.Single)]
 	void Execute(Query<Data<Position, Velocity>> query)
