@@ -9,6 +9,7 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
+scheduler.AddPlugin<TestPlugin>();
 scheduler.AddPlugin<ANamespace.AAA>();
 scheduler.RunOnce();
 
@@ -274,7 +275,9 @@ enum AnotherState
 }
 
 
-partial class BBB : TinyPlugin
+
+[TinyPlugin]
+partial class BBB
 {
 	[TinySystem(Stages.Update, ThreadingMode.Single)]
 	void Execute(Query<Data<Position, Velocity>> query)
@@ -286,15 +289,16 @@ partial class BBB : TinyPlugin
 		}
 	}
 
-	public override void Build(Scheduler scheduler)
+	public void Build(Scheduler scheduler)
 	{
-		throw new NotImplementedException();
+
 	}
 }
 
 namespace ANamespace
 {
-	public partial class AAA : TinyPlugin
+	[TinyPlugin]
+	public partial class AAA
 	{
 		[TinySystem(Stages.Update, ThreadingMode.Single)]
 		[RunIf(nameof(TestRun))]
@@ -347,11 +351,9 @@ namespace ANamespace
 			return true;
 		}
 
-		public override void Build(Scheduler scheduler)
+		public void Build(Scheduler scheduler)
 		{
 			scheduler.AddEvent<CustomEvent>();
-
-			base.Build(scheduler);
 		}
 
 		struct CustomEvent
@@ -360,4 +362,13 @@ namespace ANamespace
 		}
 	}
 
+}
+
+[TinyPlugin]
+public partial class TestPlugin
+{
+	public void Build(Scheduler scheduler)
+	{
+
+	}
 }

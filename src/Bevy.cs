@@ -1303,14 +1303,10 @@ public sealed class AfterOf(string systemName) : Attribute
 	public string SystemName { get; } = systemName;
 }
 
-public abstract class TinyPlugin : IPlugin
-{
-	public virtual void Build(Scheduler scheduler)
-	{
-		SetupSystems(scheduler);
-	}
 
-	protected virtual void SetupSystems(Scheduler scheduler) { }
+[AttributeUsage(System.AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
+public sealed class TinyPluginAttribute : Attribute
+{
 }
 
 #endif

@@ -18,13 +18,101 @@ public sealed class SourceGenerator : IIncrementalGenerator
 
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
-		var methodDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-			static (s, _) => s is MethodDeclarationSyntax { AttributeLists.Count: > 0 },
-			static (ctx, _) => GetMethodSymbolIfAttributeof(ctx, "TinyEcs.TinySystemAttribute")
+		var pluginDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
+			static (s, _) => s is ClassDeclarationSyntax { AttributeLists.Count: > 0 },
+			static (ctx, _) => GetClassDeclarationSymbolIfAttributeof(ctx, "TinyEcs.TinyPluginAttribute")
 		).Where(static m => m is not null)!;
 
-		var compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer.Instance).Collect());
-		context.RegisterSourceOutput(compilationAndMethods, (spc, source) => Generate(source.Item1, source.Item2, spc));
+		var compilationAndClasses = context.CompilationProvider.Combine(pluginDeclarations.WithComparer(Comparer<ClassDeclarationSyntax>.Instance).Collect());
+		context.RegisterSourceOutput(compilationAndClasses, (spc, source) => Generate(source.Item1, source.Item2, spc));
+
+
+		// var methodDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
+		// 	static (s, _) => s is MethodDeclarationSyntax { AttributeLists.Count: > 0 },
+		// 	static (ctx, _) => GetMethodSymbolIfAttributeof(ctx, "TinyEcs.TinySystemAttribute")
+		// ).Where(static m => m is not null)!;
+		//
+		// var compilationAndMethods = context.CompilationProvider.Combine(methodDeclarations.WithComparer(Comparer<MethodDeclarationSyntax>.Instance).Collect());
+		// context.RegisterSourceOutput(compilationAndMethods, (spc, source) => Generate(source.Item1, source.Item2, spc));
+	}
+
+	private static ClassDeclarationSyntax? GetClassDeclarationSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
+	{
+		var enumDeclarationSyntax = (ClassDeclarationSyntax)context.Node;
+
+		foreach (var attributeListSyntax in enumDeclarationSyntax.AttributeLists)
+		{
+			foreach (var attributeSyntax in attributeListSyntax.Attributes)
+			{
+				if (ModelExtensions.GetSymbolInfo(context.SemanticModel, attributeSyntax).Symbol is not IMethodSymbol attributeSymbol) continue;
+
+				var attributeContainingTypeSymbol = attributeSymbol.ContainingType;
+				var fullName = attributeContainingTypeSymbol.ToDisplayString();
+
+				if (fullName != name) continue;
+				return enumDeclarationSyntax;
+			}
+		}
+
+		return null;
+	}
+
+	private void Generate(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes, SourceProductionContext context)
+	{
+		if (classes.IsDefaultOrEmpty) return;
+
+		foreach (var cl in classes)
+		{
+			INamedTypeSymbol? nameSymbol = null;
+			try
+			{
+				var semanticModel = compilation.GetSemanticModel(cl.SyntaxTree);
+				nameSymbol = ModelExtensions.GetDeclaredSymbol(semanticModel, cl) as INamedTypeSymbol;
+			}
+			catch
+			{
+				continue;
+			}
+
+			if (nameSymbol == null)
+				continue;
+
+			var allMethods = nameSymbol.GetMembers().OfType<IMethodSymbol>().ToList();
+
+			var allSystems = allMethods.Where(s => s.GetAttributes()
+				.Any(s => s.AttributeClass.ToDisplayString() == "TinyEcs.TinySystemAttribute"))
+				.ToList();
+
+			var sb = new StringBuilder();
+			var sbEnd = new StringBuilder();
+			foreach (var method in allSystems)
+			{
+				(var systems, var systemsOrder) = GenerateOne(method);
+				sb.AppendLine(systems);
+				sbEnd.AppendLine(systemsOrder);
+			}
+
+			var @namespace = nameSymbol.ContainingNamespace.ToString();
+			var className = nameSymbol.Name.Substring(nameSymbol.Name.LastIndexOf('.') + 1);
+
+			var template = $@"
+			using TinyEcs;
+			{(nameSymbol.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
+				{(nameSymbol.IsStatic ? "static" : "")} partial class {className} : IPlugin {{
+					void IPlugin.Build(Scheduler scheduler)
+					{{
+						this.Build(scheduler);
+
+						{sb}
+						{sbEnd}
+					}}
+				}}
+			{(nameSymbol.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
+
+			var fileName = nameSymbol.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat).Replace('<', '{').Replace('>', '}');
+			context.AddSource($"{fileName}.g.cs",
+				CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
+		}
 	}
 
 	private static MethodDeclarationSyntax? GetMethodSymbolIfAttributeof(GeneratorSyntaxContext context, string name)
@@ -75,24 +163,21 @@ public sealed class SourceGenerator : IIncrementalGenerator
 				continue;
 			}
 
+			if (methodSymbol == null)
+				continue;
+
 			var isValid = false;
-
-			var mem = methodSymbol.ContainingSymbol;
-			while (mem is INamedTypeSymbol symb)
+			if (methodSymbol.ContainingSymbol is INamedTypeSymbol symb)
 			{
-				var members = symb.GetMembers("SetupSystems");
-				if (members.OfType<IMethodSymbol>().Any(member => member.IsOverride))
-				{
-					isValid = false;
-					break;
-				}
-
-				mem = symb.BaseType;
-
-				if (mem?.Name == "TinyPlugin")
+				var members = symb.GetMembers("Build");
+				if (members.OfType<IMethodSymbol>().Any(s => !s.IsStatic))
 				{
 					isValid = true;
-					break;
+				}
+
+				if (symb.AllInterfaces.Any(s => s.Name == "IPlugin"))
+				{
+					isValid = true;
 				}
 			}
 
@@ -115,9 +200,10 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			var className = classToMethod.Key.Name.Substring(classToMethod.Key.Name.LastIndexOf('.') + 1);
 
 			var template = $@"
+			using TinyEcs;
 			{(classToMethod.Key.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {@namespace} {{")}
-				{(classToMethod.Key.IsStatic ? "static" : "")} partial class {className} {{
-					protected override void SetupSystems(TinyEcs.Scheduler scheduler)
+				{(classToMethod.Key.IsStatic ? "static" : "")} partial class {className} : ISourceGenPlugin {{
+					void ISourceGenPlugin.InternalBuild(Scheduler scheduler)
 					{{
 						{sb}
 						{sbEnd}
@@ -223,16 +309,16 @@ public sealed class SourceGenerator : IIncrementalGenerator
 	}
 
 
-	private class Comparer : IEqualityComparer<MethodDeclarationSyntax>
+	private class Comparer<T> : IEqualityComparer<T>
 	{
-		public static readonly Comparer Instance = new();
+		public static readonly Comparer<T> Instance = new();
 
-		public bool Equals(MethodDeclarationSyntax x, MethodDeclarationSyntax y)
+		public bool Equals(T x, T y)
 		{
 			return x.Equals(y);
 		}
 
-		public int GetHashCode(MethodDeclarationSyntax obj)
+		public int GetHashCode(T obj)
 		{
 			return obj.GetHashCode();
 		}
