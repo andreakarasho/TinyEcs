@@ -313,6 +313,10 @@ namespace ANamespace
 		}
 
 		[TinySystem]
+		[RunIf(nameof(TestRun2))]
+		[RunIf(nameof(TestRun2))]
+		[RunIf(nameof(TestRun2))]
+		[RunIf(nameof(TestRun2))]
 		static void DoThat(Query<Data<Position, Velocity>> query, EventWriter<CustomEvent> writer)
 		{
 			foreach (var (pos, vel) in query)

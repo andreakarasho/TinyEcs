@@ -17,7 +17,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
 		var pluginDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-			static (s, _) => s is ClassDeclarationSyntax { AttributeLists.Count: > 0 } or StructDeclarationSyntax { AttributeLists.Count: > 0 },
+			static (s, _) => s is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
 			static (ctx, _) => GetClassDeclarationSymbolIfAttributeof(ctx, "TinyEcs.TinyPluginAttribute")
 		).Where(static m => m is not null)!;
 
@@ -72,13 +72,14 @@ public sealed class SourceGenerator : IIncrementalGenerator
 				.Any(s => s.AttributeClass.ToDisplayString() == "TinyEcs.TinySystemAttribute"))
 				.ToList();
 
-			var sb = new StringBuilder();
-			var sbEnd = new StringBuilder();
+			var sbDeclarations = new StringBuilder();
+			var sbSystemsOrder = new StringBuilder();
+			var cache = new HashSet<string>();
 			foreach (var method in allSystems)
 			{
-				(var systems, var systemsOrder) = GenerateOne(method);
-				sb.AppendLine(systems);
-				sbEnd.AppendLine(systemsOrder);
+				(var systems, var systemsOrder) = GenerateOne(method, allMethods, cache);
+				sbDeclarations.AppendLine(systems);
+				sbSystemsOrder.AppendLine(systemsOrder);
 			}
 
 			var @namespace = nameSymbol.ContainingNamespace.ToString();
@@ -98,8 +99,8 @@ public sealed class SourceGenerator : IIncrementalGenerator
 					{{
 						this.Build(scheduler);
 
-						{sb}
-						{sbEnd}
+						{sbDeclarations}
+						{sbSystemsOrder}
 					}}
 				}}
 			{(nameSymbol.ContainingNamespace.IsGlobalNamespace ? "" : "}")}";
@@ -110,7 +111,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		}
 	}
 
-	private (string, string) GenerateOne(IMethodSymbol methodSymbol)
+	private static (string, string) GenerateOne(IMethodSymbol methodSymbol, List<IMethodSymbol> allMethods, HashSet<string> cache)
 	{
 		var systemDescData = GetAttributeData(methodSymbol, "TinySystem");
 		var runifData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("RunIf")).ToArray();
@@ -129,9 +130,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var threading = (systemDescData.ConstructorArguments[1].Type.ToDisplayString(), systemDescData.ConstructorArguments[1].Value);
 
 		var classSymbol = methodSymbol.ContainingType;
-		var allMethods = classSymbol.GetMembers().OfType<IMethodSymbol>().ToList();
-
-
 		var runIfMethods = GetAssociatedMethods(runifData, allMethods, "RunIf", classSymbol);
 		var beforeMethodsTargets = GetAssociatedMethods(beforeOfData, allMethods, "BeforeOf", classSymbol);
 		var afterMethodsTargets = GetAssociatedMethods(afterOfData, allMethods, "AfterOf", classSymbol);
@@ -140,6 +138,11 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var sbRunIfActions = new StringBuilder();
 		foreach (var runIf in runIfMethods)
 		{
+			if (!cache.Add(runIf.Name))
+			{
+				Debug.WriteLine($"Duplicate RunIf method found: {runIf.Name} in class {classSymbol.Name}. Skipping.");
+				continue;
+			}
 			sbRunIfFns.AppendLine($"var {runIf.Name}fn = {runIf.Name};");
 			sbRunIfActions.AppendLine($".RunIf({runIf.Name}fn)");
 		}
