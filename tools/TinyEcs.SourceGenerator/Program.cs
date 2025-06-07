@@ -69,7 +69,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			var allMethods = nameSymbol.GetMembers().OfType<IMethodSymbol>().ToList();
 
 			var allSystems = allMethods.Where(s => s.GetAttributes()
-				.Any(s => s.AttributeClass.ToDisplayString() == "TinyEcs.TinySystemAttribute"))
+				.Any(k => k.AttributeClass.ToDisplayString() == "TinyEcs.TinySystemAttribute"))
 				.ToList();
 
 			var sbDeclarations = new StringBuilder();
