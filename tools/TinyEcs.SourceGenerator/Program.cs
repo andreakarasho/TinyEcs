@@ -138,13 +138,12 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var sbRunIfActions = new StringBuilder();
 		foreach (var runIf in runIfMethods)
 		{
-			if (!cache.Add(runIf.Name))
-			{
-				Debug.WriteLine($"Duplicate RunIf method found: {runIf.Name} in class {classSymbol.Name}. Skipping.");
-				continue;
-			}
-			sbRunIfFns.AppendLine($"var {runIf.Name}fn = {runIf.Name};");
 			sbRunIfActions.AppendLine($".RunIf({runIf.Name}fn)");
+
+			if (cache.Add(runIf.Name))
+			{
+				sbRunIfFns.AppendLine($"var {runIf.Name}fn = {runIf.Name};");
+			}
 		}
 
 		var sb = new StringBuilder();
