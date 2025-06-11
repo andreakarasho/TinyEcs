@@ -9,8 +9,11 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
-scheduler.AddPlugin<TestPlugin>();
-scheduler.AddPlugin<ANamespace.AAA>();
+// scheduler.AddPlugin<TestPlugin>();
+// scheduler.AddPlugin<ANamespace.AAA>();
+
+scheduler.AddPlugin<TestSys>();
+scheduler.AddPlugin<TestSys2>();
 scheduler.RunOnce();
 
 return;
@@ -276,103 +279,205 @@ enum AnotherState
 
 
 
-[TinyPlugin]
-partial struct BBB
+// [TinyPlugin]
+// partial struct BBB
+// {
+// 	[TinySystem(Stages.Update, ThreadingMode.Single)]
+// 	void Execute(Query<Data<Position, Velocity>> query)
+// 	{
+// 		foreach (var (pos, vel) in query)
+// 		{
+// 			pos.Ref.X *= vel.Ref.X;
+// 			pos.Ref.Y *= vel.Ref.Y;
+// 		}
+// 	}
+//
+// 	public void Build(Scheduler scheduler)
+// 	{
+//
+// 	}
+// }
+
+class TestSys : IPlugin
 {
-	[TinySystem(Stages.Update, ThreadingMode.Single)]
-	void Execute(Query<Data<Position, Velocity>> query)
-	{
-		foreach (var (pos, vel) in query)
-		{
-			pos.Ref.X *= vel.Ref.X;
-			pos.Ref.Y *= vel.Ref.Y;
-		}
-	}
 
 	public void Build(Scheduler scheduler)
 	{
+		scheduler.OnUpdate2(TestMethod);
+		var xx = TestMethod2;
+		scheduler.OnUpdate2(xx);
+		scheduler.OnUpdate2(TestMethod2);
+		scheduler.OnUpdate2(TestMethod2);
+		scheduler.OnUpdate2(TestMethod2);
+		scheduler.OnUpdate2(Palle)
+			.RunIf((World w) =>
+			{
+				return true;
+			});
 
+		scheduler.OnUpdate2((Local<int> w) =>
+		{
+
+		});
+
+
+		scheduler.OnStartup2((World w) => { });
 	}
-}
 
-namespace ANamespace
-{
-	[TinyPlugin]
-	public partial class AAA
+	void TestMethod(World world, Query<Data<Position, Velocity>> query)
 	{
-		[TinySystem(Stages.Update, ThreadingMode.Single)]
-		[RunIf(nameof(TestRun))]
-		[RunIf(nameof(TestRun2))]
-		void Execute(Query<Data<Position, Velocity>> query)
-		{
-			foreach (var (pos, vel) in query)
-			{
-				pos.Ref.X *= vel.Ref.X;
-				pos.Ref.Y *= vel.Ref.Y;
-			}
-		}
 
-		[TinySystem]
-		[RunIf(nameof(TestRun2))]
-		[RunIf(nameof(TestRun2))]
-		[RunIf(nameof(TestRun2))]
-		[RunIf(nameof(TestRun2))]
-		static void DoThat(Query<Data<Position, Velocity>> query, EventWriter<CustomEvent> writer)
-		{
-			foreach (var (pos, vel) in query)
-			{
-				pos.Ref.X *= vel.Ref.X;
-				pos.Ref.Y *= vel.Ref.Y;
-			}
-		}
-
-
-		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Second))]
-		void First()
-		{
-			Console.WriteLine("1");
-		}
-
-		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Third))]
-		void Second(EventReader<CustomEvent> reader)
-		{
-			Console.WriteLine("2");
-		}
-
-		[TinySystem(threadingMode: ThreadingMode.Single), BeforeOf("HELLO")]
-		void Third()
-		{
-			Console.WriteLine("3");
-		}
-
-		private bool TestRun(SchedulerState state, World world, Local<int> index)
-		{
-			return true;
-		}
-
-		private bool TestRun2()
-		{
-			return true;
-		}
-
-		public void Build(Scheduler scheduler)
-		{
-			scheduler.AddEvent<CustomEvent>();
-		}
-
-		struct CustomEvent
-		{
-			public int Value;
-		}
 	}
 
+	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
+	{
+
+	}
+
+	void Palle()
+	{
+
+	}
 }
 
-[TinyPlugin]
-public partial class TestPlugin
+class TestSys2 : IPlugin
 {
+
 	public void Build(Scheduler scheduler)
 	{
+		scheduler.OnUpdate2(TestMethod);
+		var xx = TestMethod2;
+		scheduler.OnUpdate2(xx);
+		scheduler.OnUpdate2(TestMethod2, ThreadingMode.Single);
+		scheduler.OnUpdate2(TestMethod2);
+		scheduler.OnUpdate2(TestMethod2);
+		scheduler.OnUpdate2(Palle)
+			.RunIf((World w) =>
+			{
+				return true;
+			});
+
+		scheduler.OnUpdate2((Local<int> w) =>
+		{
+
+		});
+	}
+
+	void TestMethod(World world, Query<Data<Position, Velocity>> query)
+	{
+
+	}
+
+	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
+	{
+
+	}
+
+	void Palle()
+	{
 
 	}
 }
+
+
+// namespace TinyEcs
+// {
+// 	public delegate void SystemFn(World param1, SchedulerState param2);
+// 	public partial class Scheduler {
+// 		public void OnUpdate2(SystemFn fn)
+// 		{
+//
+// 		}
+// 	}
+// }
+
+
+//
+// namespace ANamespace
+// {
+// 	[TinyPlugin]
+// 	public partial class AAA
+// 	{
+// 		[TinySystem(Stages.Update, ThreadingMode.Single)]
+// 		[RunIf(nameof(TestRun))]
+// 		[RunIf(nameof(TestRun2))]
+// 		void Execute(Query<Data<Position, Velocity>> query)
+// 		{
+// 			foreach (var (pos, vel) in query)
+// 			{
+// 				pos.Ref.X *= vel.Ref.X;
+// 				pos.Ref.Y *= vel.Ref.Y;
+// 			}
+// 		}
+//
+//
+// 		[TinySystem(Stages.OnEnter, ThreadingMode.Single)]
+// 		static void CheckState(World world)
+// 		{
+//
+// 		}
+//
+// 		[TinySystem]
+// 		[RunIf(nameof(TestRun2))]
+// 		[RunIf(nameof(TestRun2))]
+// 		[RunIf(nameof(TestRun2))]
+// 		[RunIf(nameof(TestRun2))]
+// 		static void DoThat(Query<Data<Position, Velocity>> query, EventWriter<CustomEvent> writer)
+// 		{
+// 			foreach (var (pos, vel) in query)
+// 			{
+// 				pos.Ref.X *= vel.Ref.X;
+// 				pos.Ref.Y *= vel.Ref.Y;
+// 			}
+// 		}
+//
+//
+// 		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Second))]
+// 		void First()
+// 		{
+// 			Console.WriteLine("1");
+// 		}
+//
+// 		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Third))]
+// 		void Second(EventReader<CustomEvent> reader)
+// 		{
+// 			Console.WriteLine("2");
+// 		}
+//
+// 		[TinySystem(threadingMode: ThreadingMode.Single), BeforeOf("HELLO")]
+// 		void Third()
+// 		{
+// 			Console.WriteLine("3");
+// 		}
+//
+// 		private bool TestRun(SchedulerState state, World world, Local<int> index)
+// 		{
+// 			return true;
+// 		}
+//
+// 		private bool TestRun2()
+// 		{
+// 			return true;
+// 		}
+//
+// 		public void Build(Scheduler scheduler)
+// 		{
+// 			scheduler.AddEvent<CustomEvent>();
+// 		}
+//
+// 		struct CustomEvent
+// 		{
+// 			public int Value;
+// 		}
+// 	}
+//
+// }
+//
+// [TinyPlugin]
+// public partial class TestPlugin
+// {
+// 	public void Build(Scheduler scheduler)
+// 	{
+//
+// 	}
+// }
