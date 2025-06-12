@@ -159,9 +159,10 @@ public partial class Scheduler
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
 
-	public Scheduler(World world)
+	public Scheduler(World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
+		ThreadingExecutionMode = threadingMode;
 
 		for (var i = 0; i < _systems.Length; ++i)
 			_systems[i] = new LinkedList<FuncSystem<World>>();
@@ -172,6 +173,8 @@ public partial class Scheduler
 	}
 
 	public World World => _world;
+	public ThreadingMode ThreadingExecutionMode { get; }
+
 
 	public void Run(Func<bool> checkForExitFn, Action? cleanupFn = null)
 	{
@@ -237,6 +240,9 @@ public partial class Scheduler
 
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 	{
+		if (threadingType == ThreadingMode.Auto)
+			threadingType = ThreadingExecutionMode;
+
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 		{
 			if (runIf?.Invoke(ticks, args) ?? true)
@@ -254,6 +260,9 @@ public partial class Scheduler
 	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 		where TState : struct, Enum
 	{
+		if (threadingType == ThreadingMode.Auto)
+			threadingType = ThreadingExecutionMode;
+
 		var stateChangeId = -1;
 
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
@@ -275,6 +284,9 @@ public partial class Scheduler
 	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 		where TState : struct, Enum
 	{
+		if (threadingType == ThreadingMode.Auto)
+			threadingType = ThreadingExecutionMode;
+
 		var stateChangeId = -1;
 
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
@@ -398,7 +410,7 @@ public interface IEventParam
 
 internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSystemParam<World> where T : notnull
 {
-	private readonly List<T> _eventsLastFrame = new (), _eventsThisFrame = new();
+	private readonly List<T> _eventsLastFrame = new(), _eventsThisFrame = new();
 
 	internal EventParam()
 	{

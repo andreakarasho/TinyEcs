@@ -317,6 +317,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				public FuncSystem<World> AddSystem<{genericsArgs}>(Action<{genericsArgs}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
 					{genericsArgsWhere}
 				{{
+					if (threadingType == ThreadingMode.Auto)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var checkInuse = () => {objsCheckInuse};
 					var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
@@ -390,6 +393,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
+					if (threadingType == ThreadingMode.Auto)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
@@ -418,6 +424,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
+					if (threadingType == ThreadingMode.Auto)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
@@ -503,6 +512,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 					public FuncSystem<World> {methodName}<{genericsArgs}>(Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
 						{genericsArgsWhere}
 					{{
+						if (threadingType == ThreadingMode.Auto)
+							threadingType = ThreadingExecutionMode;
+
 						{objs}
 						var checkInuse = () => {objsCheckInuse};
 						var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
@@ -531,6 +543,9 @@ public sealed class MyGenerator : IIncrementalGenerator
 				sb.AppendLine($@"
 				public FuncSystem<World> {methodName}(Action system, ThreadingMode threadingType = ThreadingMode.Auto)
 				{{
+					if (threadingType == ThreadingMode.Auto)
+						threadingType = ThreadingExecutionMode;
+
 					var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 					{{
 						if (runIf?.Invoke(ticks, args) ?? true)
