@@ -57,7 +57,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateIterators()}
 					#endif
                 }}
@@ -195,7 +195,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{CreateDataAndFilterStructsContent()}
 					#endif
                 }}
@@ -287,7 +287,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerSystemsContent()}
 					#endif
                 }}
@@ -361,7 +361,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerSystemsStateContent()}
 					#endif
                 }}
@@ -469,7 +469,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerStageSpecificSystemsContent()}
 					#endif
                 }}
@@ -578,7 +578,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSystemsInterfacesContent()}
 					#endif
                 }}

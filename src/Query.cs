@@ -194,7 +194,11 @@ public ref struct QueryIterator
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal readonly DataRow<T> GetColumn<T>(int index) where T : struct
 	{
+#if NET9_0_OR_GREATER
 		Unsafe.SkipInit(out DataRow<T> data);
+#else
+		var data = new DataRow<T>();
+#endif
 
 		if (index < 0 || index >= _indices.Length)
 		{

@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
-#if NET
+#if NET9_0_OR_GREATER
 
 public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
