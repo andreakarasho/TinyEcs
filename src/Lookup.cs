@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
@@ -80,17 +81,39 @@ internal static class Lookup
 			_components.Add(Value.ID, Value);
 		}
 
+		// credit: BeanCheeseBurrito from Flecs.NET
 		private static string GetName()
 		{
-			var name = typeof(T).ToString()
-				.Replace("[", "")
-				.Replace("]", "");
+			var name = typeof(T).ToString();
+			name = name
+				.Replace('+', '.')
+				.Replace('[', '<')
+				.Replace(']', '>');
 
-			var indexOf = name.LastIndexOf('.');
-			if (indexOf >= 0)
-				name = name[(indexOf + 1) ..];
+			int start = 0;
+			int current = 0;
+			bool skip = false;
 
-			return name;
+			var stringBuilder = new StringBuilder();
+
+			foreach (char c in name)
+			{
+				if (skip && (c == '<' || c == '.'))
+				{
+					start = current;
+					skip = false;
+				}
+				else if (!skip && c == '`')
+				{
+					stringBuilder.Append(name.AsSpan(start, current - start));
+					skip = true;
+				}
+
+				current++;
+			}
+
+			var str = stringBuilder.Append(name.AsSpan(start)).ToString();
+			return str;
 		}
 
 		private static int GetSize()
