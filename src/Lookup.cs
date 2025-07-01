@@ -4,7 +4,7 @@ using Microsoft.Collections.Extensions;
 
 namespace TinyEcs;
 
-[DebuggerDisplay("ID: {ID}, Size: {Size}, IsManaged: {IsManaged}")]
+[DebuggerDisplay("ID: {ID}, Size: {Size}")]
 public readonly struct ComponentInfo
 {
     public readonly EcsID ID;
@@ -26,8 +26,12 @@ internal static class Lookup
 
 	public static ref readonly ComponentInfo GetComponent(EcsID id)
 	{
-		return ref _components.TryGet(id, out var exists);
+		ref readonly var cmp = ref _components.TryGet(id, out var exists);
+		if (!exists)
+			EcsAssert.Panic(false, $"component not found with hashcode {id}");
+		return ref cmp;
 	}
+
 	public static Array? GetArray(EcsID hashcode, int count)
 	{
 		ref var fn = ref _arrayCreator.TryGet(hashcode, out var exists);

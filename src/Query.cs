@@ -184,6 +184,8 @@ public ref struct QueryIterator
 		get => _count > 0 ? Math.Min(_count, _chunkIterator.Current.Count) : _chunkIterator.Current.Count;
 	}
 
+	public readonly Archetype Archetype => _archetypeIterator.Current;
+
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly int GetColumnIndexOf<T>() where T : struct
@@ -288,6 +290,17 @@ public ref struct QueryIterator
 	public readonly ReadOnlySpan<EntityView> Entities()
 	{
 		var entities = _chunkIterator.Current.GetEntities();
+
+		if (!entities.IsEmpty)
+			entities = entities.Slice(_startSafe, Count);
+
+		return entities;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly ReadOnlyMemory<EntityView> EntitiesAsMemory()
+	{
+		var entities = _chunkIterator.Current.Entities.AsMemory(0, _chunkIterator.Current.Count);
 
 		if (!entities.IsEmpty)
 			entities = entities.Slice(_startSafe, Count);

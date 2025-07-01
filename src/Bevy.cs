@@ -481,6 +481,8 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 	public List<T>.Enumerator GetEnumerator()
 		=> _events.GetEnumerator();
 
+	public IEnumerable<T> Values => _events;
+
 	public static ISystemParam<World> Generate(World arg)
 	{
 		if (arg.Entity<Placeholder<EventParam<T>>>().Has<Placeholder<EventParam<T>>>())
