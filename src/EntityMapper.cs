@@ -6,7 +6,7 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 	where TChildrenComponent : struct, IChildrenComponent
 {
 	private readonly Dictionary<EcsID, EcsID> _childrenToParent = new();
-	private readonly Dictionary<EcsID, HashSet<EcsID>> _parentsToChildren = new();
+	private readonly Dictionary<EcsID, List<EcsID>> _parentsToChildren = new();
 	private readonly World _world;
 	private readonly CleanupPolicy _policy;
 
@@ -31,13 +31,13 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		return parentId;
 	}
 
-	public HashSet<EcsID>? GetChildren(EcsID parentId)
+	public List<EcsID>? GetChildren(EcsID parentId)
 	{
 		_parentsToChildren.TryGetValue(parentId, out var children);
 		return children;
 	}
 
-	public void Add(EcsID parentId, EcsID childId)
+	public void Add(EcsID parentId, EcsID childId, int index = -1)
 	{
 		// update current parent
 		RemoveChild(childId);
@@ -53,7 +53,11 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		}
 
 		_world.Add<TParentComponent>(childId);
-		children.Add(childId);
+
+		if (index >= 0 && index < children.Count)
+			children.Insert(index, childId);
+		else
+			children.Add(childId);
 	}
 
 	public void Remove(EcsID id)
@@ -190,9 +194,9 @@ public sealed class NamingEntityMapper
 
 public static class EntityMapperEx
 {
-	public static void AddChild(this World world, EcsID parent, EcsID child)
+	public static void AddChild(this World world, EcsID parent, EcsID child, int index = -1)
 	{
-		world.RelationshipEntityMapper.Add(parent, child);
+		world.RelationshipEntityMapper.Add(parent, child, index);
 	}
 
 	public static void RemoveChild(this World world, EcsID child)
@@ -200,9 +204,9 @@ public static class EntityMapperEx
 		world.RelationshipEntityMapper.Remove(child);
 	}
 
-	public static EntityView AddChild(this EntityView entity, EcsID childId)
+	public static EntityView AddChild(this EntityView entity, EcsID childId, int index = -1)
 	{
-		entity.World.AddChild(entity.ID, childId);
+		entity.World.AddChild(entity.ID, childId, index);
 		return entity;
 	}
 
@@ -219,26 +223,26 @@ public static class EntityMapperEx
 
 public partial interface IChildrenComponent
 {
-	HashSet<EcsID> Value { get; set; }
+	List<EcsID> Value { get; set; }
 
-	HashSet<EcsID>.Enumerator GetEnumerator();
+	List<EcsID>.Enumerator GetEnumerator();
 }
 
 public partial struct Parent { }
 
 public struct Children : IChildrenComponent
 {
-	private static readonly HashSet<EcsID> _empty = [];
+	private static readonly List<EcsID> _empty = [];
 
-	private HashSet<EcsID> _value;
+	private List<EcsID> _value;
 
-	HashSet<ulong> IChildrenComponent.Value
+	List<ulong> IChildrenComponent.Value
 	{
 		readonly get => _value;
 		set => _value = value;
 	}
 
-	public readonly HashSet<ulong>.Enumerator GetEnumerator()
+	public readonly List<ulong>.Enumerator GetEnumerator()
 		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
 }
 
