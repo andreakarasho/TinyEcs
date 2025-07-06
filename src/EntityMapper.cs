@@ -53,6 +53,7 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		}
 
 		_world.Add<TParentComponent>(childId);
+		_world.SetChanged<TChildrenComponent>(parentId);
 
 		if (index >= 0 && index < children.Count)
 			children.Insert(index, childId);
@@ -77,6 +78,9 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		{
 			_world.Unset<TParentComponent>(childId);
 			children.Remove(childId);
+
+			_world.SetChanged<TChildrenComponent>(parentId);
+
 			if (children.Count == 0)
 				RemoveParent(parentId);
 		}
@@ -236,13 +240,13 @@ public struct Children : IChildrenComponent
 
 	private List<EcsID> _value;
 
-	List<ulong> IChildrenComponent.Value
+	List<EcsID> IChildrenComponent.Value
 	{
 		readonly get => _value;
 		set => _value = value;
 	}
 
-	public readonly List<ulong>.Enumerator GetEnumerator()
+	public readonly List<EcsID>.Enumerator GetEnumerator()
 		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
 }
 

@@ -89,6 +89,34 @@ public sealed partial class World
 		return rawCmp;
 	}
 
+	internal void SetChangedDeferred<T>(EcsID entity) where T : struct
+	{
+		ref readonly var cmp = ref Component<T>();
+
+		var cmd = new DeferredOp()
+		{
+			Op = DeferredOpTypes.SetChanged,
+			Entity = entity,
+			ComponentInfo = cmp
+		};
+
+		_operations.Enqueue(cmd);
+	}
+
+	internal void SetChangedDeferred(EcsID entity, EcsID id)
+	{
+		var cmp = new ComponentInfo(id, -1);
+
+		var cmd = new DeferredOp()
+		{
+			Op = DeferredOpTypes.SetChanged,
+			Entity = entity,
+			ComponentInfo = cmp
+		};
+
+		_operations.Enqueue(cmd);
+	}
+
 	internal void UnsetDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -154,6 +182,12 @@ public sealed partial class World
 
 						break;
 					}
+				case DeferredOpTypes.SetChanged:
+					{
+						if (Exists(op.Entity))
+							SetChanged(op.Entity, op.ComponentInfo.ID);
+						break;
+					}
 			}
 		}
 
@@ -183,5 +217,6 @@ public sealed partial class World
 		DestroyEntity,
 		SetComponent,
 		UnsetComponent,
+		SetChanged
 	}
 }

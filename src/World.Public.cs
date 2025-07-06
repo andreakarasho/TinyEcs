@@ -341,9 +341,15 @@ public sealed partial class World
 	/// </summary>
 	public void SetChanged(EcsID entity, EcsID component)
 	{
+		if (IsDeferred)
+		{
+			SetChangedDeferred(entity, component);
+			return;
+		}
+
 		ref var record = ref GetRecord(entity);
 		var index = record.Archetype.GetComponentIndex(component);
-		EcsAssert.Panic(index < 0, "Component not found in the entity");
+		EcsAssert.Panic(index >= 0, "Component not found in the entity");
 		record.Chunk.MarkChanged(index, record.Row, _ticks);
 	}
 
