@@ -74,7 +74,6 @@ public sealed partial class World
 
 	internal object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size)
 	{
-		// ref readonly var cmp = ref Lookup.GetComponent(id, size);
 		var cmp = new ComponentInfo(id, size);
 
 		var cmd = new DeferredOp()
@@ -184,7 +183,7 @@ public sealed partial class World
 					}
 				case DeferredOpTypes.SetChanged:
 					{
-						if (Exists(op.Entity))
+						if (Exists(op.Entity) && Has(op.Entity, op.ComponentInfo.ID))
 							SetChanged(op.Entity, op.ComponentInfo.ID);
 						break;
 					}
