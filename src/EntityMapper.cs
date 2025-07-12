@@ -2,7 +2,7 @@ namespace TinyEcs;
 
 
 public abstract class EntityMapper<TParentComponent, TChildrenComponent>
-	where TParentComponent : struct
+	where TParentComponent : struct, IParentComponent
 	where TChildrenComponent : struct, IChildrenComponent
 {
 	private readonly Dictionary<EcsID, EcsID> _childrenToParent = new();
@@ -52,7 +52,7 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 			_world.Set(parentId, new TChildrenComponent() { Value = children });
 		}
 
-		_world.Add<TParentComponent>(childId);
+		_world.Set<TParentComponent>(childId, new() { Id = parentId });
 		_world.SetChanged<TChildrenComponent>(parentId);
 
 		if (index >= 0 && index < children.Count)
@@ -225,6 +225,11 @@ public static class EntityMapperEx
 		=> entity.World.Name(entity.ID);
 }
 
+public partial interface IParentComponent
+{
+	EcsID Id { get; init; }
+}
+
 public partial interface IChildrenComponent
 {
 	List<EcsID> Value { get; set; }
@@ -232,7 +237,10 @@ public partial interface IChildrenComponent
 	List<EcsID>.Enumerator GetEnumerator();
 }
 
-public partial struct Parent { }
+public partial struct Parent : IParentComponent
+{
+	public EcsID Id { get; init; }
+}
 
 public struct Children : IChildrenComponent
 {
