@@ -254,6 +254,8 @@ public struct Children : IChildrenComponent
 		set => _value = value;
 	}
 
+	public int Count => _value.Count;
+
 	public readonly List<EcsID>.Enumerator GetEnumerator()
 		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
 }
