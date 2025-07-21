@@ -152,7 +152,7 @@ You should wrap your game logic using systems!
 var printSomethingFn = PrintSomething;
 scheduler.OnUpdate(printSomethingFn);
 
-// The scheduler will run all systems registered before one time
+// The scheduler will run all systems registered before once
 scheduler.RunOnce();
 
 void PrintSomething() => Console.WriteLine("Hello from TinyEcs!");
@@ -187,7 +187,7 @@ scheduler.OnStartup(() => Console.WriteLine("7"));
 scheduler.RunOnce();
 
 // This will print:
-// 2 to 7 in order. "1" get excluded because the OnStartup are one-shot systems.
+// 2 to 6 in order. "1" & "2" get excluded because the OnStartup are one-shot systems.
 scheduler.RunOnce();
 ```
 ---
