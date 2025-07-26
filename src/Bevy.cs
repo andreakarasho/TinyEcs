@@ -238,9 +238,9 @@ public partial class Scheduler
 		sys.Node = _systems[(int)stage].AddLast(sys);
 	}
 
-	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
 	{
-		if (threadingType == ThreadingMode.Auto)
+		if (!threadingType.HasValue)
 			threadingType = ThreadingExecutionMode;
 
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
@@ -251,16 +251,16 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, stage, threadingType);
+		}, () => false, stage, threadingType.Value);
 		Add(sys, stage);
 
 		return sys;
 	}
 
-	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
-		if (threadingType == ThreadingMode.Auto)
+		if (!threadingType.HasValue)
 			threadingType = ThreadingExecutionMode;
 
 		var stateChangeId = -1;
@@ -273,7 +273,7 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, Stages.OnEnter, threadingType)
+		}, () => false, Stages.OnEnter, threadingType.Value)
 		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
 		Add(sys, Stages.OnEnter);
@@ -281,10 +281,10 @@ public partial class Scheduler
 		return sys;
 	}
 
-	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
-		if (threadingType == ThreadingMode.Auto)
+		if (!threadingType.HasValue)
 			threadingType = ThreadingExecutionMode;
 
 		var stateChangeId = -1;
@@ -297,7 +297,7 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, Stages.OnExit, threadingType)
+		}, () => false, Stages.OnExit, threadingType.Value)
 		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
 		Add(sys, Stages.OnExit);
@@ -758,6 +758,13 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 
 	public bool ResourceExists<T>() where T : notnull
 		=> _scheduler.ResourceExists<Res<T>>();
+
+	public ref T? GetResource<T>() where T : notnull
+	{
+		if (_scheduler.ResourceExists<Res<T>>())
+			return ref _scheduler.World.Entity<Placeholder<Res<T>>>().Get<Placeholder<Res<T>>>().Value.Value;
+		throw new InvalidOperationException($"Resource of type {typeof(T)} does not exist.");
+	}
 
 	public void AddState<T>(T state = default!) where T : struct, Enum
 		=> _scheduler.AddState(state);
