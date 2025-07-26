@@ -1,7 +1,4 @@
 # TinyEcs
-
-[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
-
 TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 ## Key Features
@@ -495,7 +492,7 @@ void Setup(World world, Res<AssetManager> assets)
 
     var texture = new Texture(0, 2, 2);
     texture.SetData(new byte[] { 0, 0, 0, 0 });
-    assets.Register("image.png", texture);
+    assets.Value.Register("image.png", texture);
 }
 
 void MoveEntities(Query<Data<Position, Velocity>> query, Res<Time> time)
