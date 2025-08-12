@@ -99,14 +99,17 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		foreach (var id in children)
 		{
 			if (_childrenToParent.Remove(id))
+			{
+				_world.Unset<TParentComponent>(id);
 				ApplyPolicy(id);
+			}
 
 			// if child is a parent, remove associated children too
 			RemoveParent(id);
 		}
 
 		children.Clear();
-		_world.Unset<TParentComponent>(parentId);
+
 		_world.Unset<TChildrenComponent>(parentId);
 
 		return true;

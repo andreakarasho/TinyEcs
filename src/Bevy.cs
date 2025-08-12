@@ -766,6 +766,23 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 		throw new InvalidOperationException($"Resource of type {typeof(T)} does not exist.");
 	}
 
+	public ref T GetSystemParam<T>() where T : notnull, ISystemParam<World>
+	{
+		if (_scheduler.World.Entity<Placeholder<T>>().Has<Placeholder<T>>())
+			return ref _scheduler.World.Entity<Placeholder<T>>().Get<Placeholder<T>>().Value;
+		throw new InvalidOperationException($"SystemParam of type {typeof(T)} does not exist.");
+	}
+
+	public EventWriter<T> GetEventWriter<T>() where T : notnull
+	{
+		return GetSystemParam<EventParam<T>>().Writer;
+	}
+
+	public EventReader<T> GetEventReader<T>() where T : notnull
+	{
+		return GetSystemParam<EventParam<T>>().Reader;
+	}
+
 	public void AddState<T>(T state = default!) where T : struct, Enum
 		=> _scheduler.AddState(state);
 
