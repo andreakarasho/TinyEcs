@@ -59,10 +59,10 @@ namespace TinyEcs
             var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
             var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 #>
-        public FuncSystem<World> <#= stage.MethodName #><<#= genericsArgs #>>(Action<<#= genericsArgs #>> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> <#= stage.MethodName #><<#= genericsArgs #>>(Action<<#= genericsArgs #>> system, ThreadingMode? threadingType = null)
             <#= genericsArgsWhere #>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             <#= objs #>
@@ -80,7 +80,7 @@ namespace TinyEcs
                 <#= objsUnlock #>
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.<#= stage.StageName #>, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.<#= stage.StageName #>, threadingType.Value);
             Add(sys, Stages.<#= stage.StageName #>);
             return sys;
         }
