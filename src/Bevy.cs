@@ -1342,7 +1342,7 @@ public sealed class AfterOf(string systemName) : Attribute
 }
 
 
-[AttributeUsage(System.AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
+[AttributeUsage(System.AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class TinyPluginAttribute : Attribute
 {
 }
