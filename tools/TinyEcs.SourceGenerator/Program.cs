@@ -150,12 +150,12 @@ public sealed class SourceGenerator : IIncrementalGenerator
 
                 foreach (var classSymbolObj in classes)
                 {
-                    if (classSymbolObj is not null && classSymbolObj is INamedTypeSymbol classSymbol)
+                    if (classSymbolObj is { } classSymbol)
                     {
                         var className = classSymbol.Name.EndsWith("System") ? classSymbol.Name : classSymbol.Name + "System";
                         var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? "" : classSymbol.ContainingNamespace.ToDisplayString();
                         // Find the Execute method in the class
-                        var executeMethodSymbol = classSymbol.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(m => m.Name == "Execute" && !m.IsStatic);
+                        var executeMethodSymbol = classSymbol.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(m => m.Name == "OnExecute" && !m.IsStatic);
                         if (executeMethodSymbol == null) continue;
 
                         // Accept all parameters for injection
@@ -165,37 +165,32 @@ public sealed class SourceGenerator : IIncrementalGenerator
                         var fieldDecls = string.Join("\n", validParams.Select(p => $"    private {p.Type.ToDisplayString()} _{p.Name};"));
 
                         // Setup method: assign all fields
-                        var setupAssignments = string.Join("\n", validParams.Select(p => $"        _{p.Name} = ({p.Type.ToDisplayString()}){p.Type.ToDisplayString()}.Generate(world);"));
-                        var setupCode = $@"    public override void Setup(World world)
+                        var setupAssignments = string.Join("\n", validParams.Select(p => $"        _{p.Name} = builder.Add<{p.Type.ToDisplayString()}>();"));
+                        var setupCode = $@"    protected override void Setup(SystemParamBuilder builder)
     {{
 {setupAssignments}
     }}";
 
-                        var paramNames = string.Join(", ", validParams.Select(p => $"_{p.Name}"));
-
-                        var paramLocks = string.Join("\n", validParams.Select(p => $"        _{p.Name}.Lock(ticks);"));
-                        var paramUnlocks = string.Join("\n", validParams.Select(p => $"        _{p.Name}.Unlock();"));
-                        var executeOverride = $@"    public override void Execute(SystemTicks ticks, World world)
+                        var onExecuteParams = string.Join(", ", validParams.Select(p => $"_{p.Name}"));
+                        var executeOverride = $@"    public override void Execute(World world)
     {{
-{paramLocks}
+		Lock();
         world.BeginDeferred();
-        Execute({paramNames});
+        OnExecute({onExecuteParams});
         world.EndDeferred();
-{paramUnlocks}
+		Unlock();
     }}";
 
-                        // Only generate Setup and Execute(World world)
+                        // Only generate Setup, Execute, and OnExecute
                         var systemClass = classSymbol.ContainingNamespace.IsGlobalNamespace
-                            ? $@"
-using TinyEcs;
+                            ? $@"using TinyEcs;
 public partial class {className} : TinySystem2
 {{
 {fieldDecls}
 {setupCode}
 {executeOverride}
 }}"
-                            : $@"
-using TinyEcs;
+                            : $@"using TinyEcs;
 namespace {ns}
 {{
     public partial class {className} : TinySystem2

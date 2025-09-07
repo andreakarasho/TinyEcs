@@ -6,7 +6,8 @@ namespace TinyEcs;
 
 #if NET9_0_OR_GREATER
 
-public sealed partial class FuncSystem<TArg> where TArg : notnull
+public sealed partial class FuncSystem<TArg> : ITinySystem
+	where TArg : notnull
 {
 	private readonly TArg _arg;
 	private readonly Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> _fn;
@@ -15,10 +16,6 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 	private readonly Func<bool> _checkInUse;
 	private readonly Stages _stage;
 	private readonly ThreadingMode _threadingType;
-	private readonly LinkedList<FuncSystem<TArg>> _after = new();
-	private readonly LinkedList<FuncSystem<TArg>> _before = new();
-	internal LinkedListNode<FuncSystem<TArg>>? Node { get; set; }
-	internal SystemTicks Ticks { get; } = new();
 
 
 	internal FuncSystem(TArg arg, Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
@@ -32,21 +29,21 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		_stage = stage;
 	}
 
-	internal void Run(uint ticks)
-	{
-		Ticks.ThisRun = ticks;
-
-		foreach (var s in _before)
-			s.Run(ticks);
-
-		if (_fn(Ticks, _arg, _validator))
-		{
-			foreach (var s in _after)
-				s.Run(ticks);
-		}
-
-		Ticks.LastRun = Ticks.ThisRun;
-	}
+	// internal void Run(uint ticks)
+	// {
+	// 	Ticks.ThisRun = ticks;
+	//
+	// 	foreach (var s in _before)
+	// 		s.Run(ticks);
+	//
+	// 	if (_fn(Ticks, _arg, _validator))
+	// 	{
+	// 		foreach (var s in _after)
+	// 			s.Run(ticks);
+	// 	}
+	//
+	// 	Ticks.LastRun = Ticks.ThisRun;
+	// }
 
 	public FuncSystem<TArg> RunIf(Func<bool> condition)
 	{
@@ -54,57 +51,57 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 		return this;
 	}
 
-	public FuncSystem<TArg> RunAfter(FuncSystem<TArg> parent)
-	{
-		if (this == parent || Contains(parent, s => s._after))
-			throw new InvalidOperationException("Circular dependency detected");
-
-		Node?.List?.Remove(Node);
-		Node = parent._after.AddLast(this);
-
-		return this;
-	}
-
-	public FuncSystem<TArg> RunAfter(params ReadOnlySpan<FuncSystem<TArg>> systems)
-	{
-		foreach (var system in systems)
-			system.RunAfter(this);
-
-		return this;
-	}
-
-	public FuncSystem<TArg> RunBefore(FuncSystem<TArg> parent)
-	{
-		if (this == parent || Contains(parent, s => s._before))
-			throw new InvalidOperationException("Circular dependency detected");
-
-		Node?.List?.Remove(Node);
-		Node = parent._before.AddLast(this);
-
-		return this;
-	}
-
-	public FuncSystem<TArg> RunBefore(params ReadOnlySpan<FuncSystem<TArg>> systems)
-	{
-		foreach (var system in systems)
-			system.RunBefore(this);
-
-		return this;
-	}
-
-	private bool Contains(FuncSystem<TArg> system, Func<FuncSystem<TArg>, LinkedList<FuncSystem<TArg>>> direction)
-	{
-		var current = this;
-		while (current != null)
-		{
-			if (current == system)
-				return true;
-
-			var nextNode = direction(current)?.First;
-			current = nextNode?.Value;
-		}
-		return false;
-	}
+	// public FuncSystem<TArg> RunAfter(ITinySystem parent)
+	// {
+	// 	if (this == parent || Contains(parent, s => s.Configuration.AfterSystems))
+	// 		throw new InvalidOperationException("Circular dependency detected");
+	//
+	// 	Configuration.Node?.List?.Remove(Configuration.Node);
+	// 	Configuration.Node = parent.Configuration.AfterSystems.AddLast(this);
+	//
+	// 	return this;
+	// }
+	//
+	// public FuncSystem<TArg> RunAfter(params ReadOnlySpan<ITinySystem> systems)
+	// {
+	// 	foreach (var system in systems)
+	// 		system.RunAfter(this);
+	//
+	// 	return this;
+	// }
+	//
+	// public FuncSystem<TArg> RunBefore(ITinySystem parent)
+	// {
+	// 	if (this == parent || Contains(parent, s => s.Configuration.BeforeSystems))
+	// 		throw new InvalidOperationException("Circular dependency detected");
+	//
+	// 	Configuration.Node?.List?.Remove(Configuration.Node);
+	// 	Configuration.Node = parent.Configuration.BeforeSystems.AddLast(this);
+	//
+	// 	return this;
+	// }
+	//
+	// public FuncSystem<TArg> RunBefore(params ReadOnlySpan<ITinySystem> systems)
+	// {
+	// 	foreach (var system in systems)
+	// 		system.RunBefore(this);
+	//
+	// 	return this;
+	// }
+	//
+	// private bool Contains(ITinySystem system, Func<ITinySystem, LinkedList<ITinySystem>?> direction)
+	// {
+	// 	ITinySystem? current = this;
+	// 	while (current != null)
+	// 	{
+	// 		if (current == system)
+	// 			return true;
+	//
+	// 		var nextNode = direction(current)?.First;
+	// 		current = nextNode?.Value;
+	// 	}
+	// 	return false;
+	// }
 
 	internal bool IsResourceInUse()
 	{
@@ -122,6 +119,70 @@ public sealed partial class FuncSystem<TArg> where TArg : notnull
 			if (!fn(ticks, args))
 				return false;
 		return true;
+	}
+
+	public ISystemParam[] SystemParams { get; set; }
+	public SystemTicks Ticks { get; }
+	public SystemConfiguration Configuration { get; }
+
+	public void Initialize(World world)
+	{
+
+	}
+
+	public bool ExecuteOnReady(World world, uint ticks)
+	{
+		Ticks.ThisRun = ticks;
+		var canRun = true;
+
+		var config = Configuration;
+
+		if (config.BeforeSystems != null)
+		{
+			foreach (var beforeSys in config.BeforeSystems)
+			{
+				if (!beforeSys.ExecuteOnReady(world, ticks))
+				{
+					canRun = false;
+					break;
+				}
+			}
+		}
+
+		if (canRun)
+		{
+			foreach (var conditional in config.Conditionals)
+			{
+				if (!conditional.ExecuteOnReady(world, ticks))
+				{
+					canRun = false;
+					break;
+				}
+			}
+
+			_fn(Ticks, _arg, _validator);
+
+			if (config.AfterSystems != null)
+			{
+				foreach (var afterSys in config.AfterSystems)
+				{
+					if (!afterSys.ExecuteOnReady(world, ticks))
+					{
+						canRun = false;
+						break;
+					}
+				}
+			}
+		}
+
+		Ticks.LastRun = Ticks.ThisRun;
+
+		return canRun;
+	}
+
+	public bool ParamsAreLocked()
+	{
+		return IsResourceInUse();
 	}
 }
 
@@ -154,10 +215,12 @@ public sealed class SystemTicks
 public partial class Scheduler
 {
 	private readonly World _world;
-	private readonly LinkedList<FuncSystem<World>>[] _systems = new LinkedList<FuncSystem<World>>[(int)Stages.OnExit + 1];
-	private readonly List<FuncSystem<World>> _singleThreads = new();
-	private readonly List<FuncSystem<World>> _multiThreads = new();
+	private readonly LinkedList<ITinySystem>[] _systems = new LinkedList<ITinySystem>[(int)Stages.OnExit + 1];
+	private readonly List<ITinySystem> _singleThreads = new();
+	private readonly List<ITinySystem> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
+
+	private bool _initialized;
 
 	public Scheduler(World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
@@ -165,7 +228,7 @@ public partial class Scheduler
 		ThreadingExecutionMode = threadingMode;
 
 		for (var i = 0; i < _systems.Length; ++i)
-			_systems[i] = new LinkedList<FuncSystem<World>>();
+			_systems[i] = new LinkedList<ITinySystem>();
 
 		AddSystemParam(world);
 		AddSystemParam(new SchedulerState(this));
@@ -186,6 +249,18 @@ public partial class Scheduler
 
 	public void RunOnce()
 	{
+		if (!_initialized)
+		{
+			foreach (var stage in _systems)
+			{
+				foreach (var system in stage)
+				{
+					system.Initialize(World);
+				}
+			}
+
+			_initialized = true;
+		}
 		var ticks = _world.Update();
 
 		foreach ((_, var ev) in _events)
@@ -213,7 +288,7 @@ public partial class Scheduler
 
 		foreach (var sys in systems)
 		{
-			if (sys.IsResourceInUse())
+			if (sys.ParamsAreLocked())
 			{
 				_singleThreads.Add(sys);
 			}
@@ -227,15 +302,37 @@ public partial class Scheduler
 		var singlethreading = _singleThreads;
 
 		if (multithreading.Count > 0)
-			Parallel.ForEach(multithreading, s => s.Run(ticks));
+			Parallel.ForEach(multithreading, s => s.ExecuteOnReady(World, ticks));
 
 		foreach (var system in singlethreading)
-			system.Run(ticks);
+			system.ExecuteOnReady(World, ticks);
 	}
 
-	internal void Add(FuncSystem<World> sys, Stages stage)
+	internal void Add(ITinySystem sys, Stages stage)
 	{
-		sys.Node = _systems[(int)stage].AddLast(sys);
+		sys.Configuration.Node = _systems[(int)stage].AddLast(sys);
+	}
+
+	public Scheduler AddSystem2<T>(Stages stage) where T : ITinySystem, new()
+	{
+		var system = new T();
+		Add(system, stage);
+		return this;
+	}
+
+	public Scheduler AddSystem2(Stages stage, ITinySystem system)
+	{
+		Add(system, stage);
+		return this;
+	}
+
+	public Scheduler AddSystems2(Stages stage, params ITinySystem[] systems)
+	{
+		foreach (var system in systems)
+		{
+			Add(system, stage);
+		}
+		return this;
 	}
 
 	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
@@ -494,8 +591,6 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 
 partial class World : SystemParam<World>, IIntoSystemParam<World>
 {
-	public World() : this(256) { }
-
 	public static ISystemParam<World> Generate(World arg)
 	{
 		return arg;
@@ -1364,10 +1459,125 @@ public sealed class TinyPluginAttribute : Attribute
 }
 
 
-public abstract class TinySystem2
+public sealed class SystemParamBuilder(World world)
 {
-	public abstract void Setup(World world);
-	public abstract void Execute(SystemTicks ticks, World world);
+	private readonly List<ISystemParam> _params = [];
+
+	public T Add<T>() where T : ISystemParam<World>, IIntoSystemParam<World>
+	{
+		var param = (T)T.Generate(world);
+		_params.Add(param);
+		return param;
+	}
+
+	public ISystemParam[] Build()
+		=> _params.ToArray();
+}
+
+public sealed class SystemConfiguration
+{
+	public List<ITinySystem> Conditionals { get; } = [];
+	public LinkedList<ITinySystem> BeforeSystems { get; set; } = new();
+	public LinkedList<ITinySystem> AfterSystems { get; set; } = new();
+	public LinkedListNode<ITinySystem>? Node { get; set; }
+	public ThreadingMode ThreadingMode { get; set; } = ThreadingMode.Auto;
+	public Stages Stage { get; set; } = Stages.Update;
+}
+
+public interface ITinySystem
+{
+	ISystemParam[] SystemParams { get; set; }
+	SystemTicks Ticks { get; }
+	SystemConfiguration Configuration { get; }
+
+	void Initialize(World world);
+
+	bool ExecuteOnReady(World world, uint ticks);
+
+	bool ParamsAreLocked();
+}
+
+public abstract class TinySystem2 : ITinySystem
+{
+	public ISystemParam[] SystemParams { get; set; } = [];
+	public SystemTicks Ticks { get; } = new();
+
+	public SystemConfiguration Configuration { get; } = new();
+
+	public void Initialize(World world)
+	{
+		var builder = new SystemParamBuilder(world);
+		Setup(builder);
+		SystemParams = builder.Build();
+	}
+
+	public bool ExecuteOnReady(World world, uint ticks)
+	{
+		Ticks.ThisRun = ticks;
+		var canRun = true;
+
+		var config = Configuration;
+
+		foreach (var beforeSys in config.BeforeSystems)
+		{
+			if (!beforeSys.ExecuteOnReady(world, ticks))
+			{
+				canRun = false;
+				break;
+			}
+		}
+
+		if (canRun)
+		{
+			foreach (var conditional in config.Conditionals)
+			{
+				if (!conditional.ExecuteOnReady(world, ticks))
+				{
+					canRun = false;
+					break;
+				}
+			}
+
+			Execute(world);
+
+			foreach (var afterSys in config.AfterSystems)
+			{
+				if (!afterSys.ExecuteOnReady(world, ticks))
+				{
+					canRun = false;
+					break;
+				}
+			}
+		}
+
+		Ticks.LastRun = Ticks.ThisRun;
+
+		return canRun;
+	}
+
+	public bool ParamsAreLocked()
+	{
+		return Configuration.ThreadingMode switch {
+			ThreadingMode.Single => true,
+			ThreadingMode.Multi => false,
+			_ => SystemParams.All(static p => p.UseIndex > 0)
+		};
+	}
+
+	protected void Lock()
+	{
+		foreach (var param in SystemParams)
+			param.Lock(Ticks);
+	}
+
+	protected void Unlock()
+	{
+		foreach (var param in SystemParams)
+			param.Unlock();
+	}
+
+	protected abstract void Setup(SystemParamBuilder builder);
+	public abstract void Execute(World world);
 }
 
 #endif
