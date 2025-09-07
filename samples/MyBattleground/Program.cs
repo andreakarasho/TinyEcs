@@ -9,6 +9,7 @@ const int ENTITIES_COUNT = (524_288 * 2 * 1);
 using var ecs = new World();
 var scheduler = new Scheduler(ecs);
 
+scheduler.AddResource(new CustomResource());
 scheduler.AddPlugin<TestPlugin>();
 scheduler.AddPlugin<ANamespace.AAA>();
 
@@ -298,86 +299,86 @@ enum AnotherState
 // 	}
 // }
 
-class TestSys : IPlugin
-{
-
-	public void Build(Scheduler scheduler)
-	{
-		scheduler.OnUpdate2(TestMethod);
-		var xx = TestMethod2;
-		scheduler.OnUpdate2(xx);
-		scheduler.OnUpdate2(TestMethod2);
-		scheduler.OnUpdate2(TestMethod2);
-		scheduler.OnUpdate2(TestMethod2);
-		scheduler.OnUpdate2(Palle)
-			.RunIf((World w) =>
-			{
-				return true;
-			});
-
-		scheduler.OnUpdate2((Local<int> w) =>
-		{
-
-		});
-
-
-		scheduler.OnStartup2((World w) => { });
-	}
-
-	void TestMethod(World world, Query<Data<Position, Velocity>> query)
-	{
-
-	}
-
-	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
-	{
-
-	}
-
-	void Palle()
-	{
-
-	}
-}
-
-class TestSys2 : IPlugin
-{
-
-	public void Build(Scheduler scheduler)
-	{
-		scheduler.OnUpdate2(TestMethod);
-		var xx = TestMethod2;
-		scheduler.OnUpdate2(xx);
-		scheduler.OnUpdate2(TestMethod2, ThreadingMode.Single);
-		scheduler.OnUpdate2(TestMethod2);
-		scheduler.OnUpdate2(TestMethod2);
-		scheduler.OnUpdate2(Palle)
-			.RunIf((World w) =>
-			{
-				return true;
-			});
-
-		scheduler.OnUpdate2((Local<int> w) =>
-		{
-
-		});
-	}
-
-	void TestMethod(World world, Query<Data<Position, Velocity>> query)
-	{
-
-	}
-
-	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
-	{
-
-	}
-
-	void Palle()
-	{
-
-	}
-}
+// class TestSys : IPlugin
+// {
+//
+// 	public void Build(Scheduler scheduler)
+// 	{
+// 		scheduler.OnUpdate2(TestMethod);
+// 		var xx = TestMethod2;
+// 		scheduler.OnUpdate2(xx);
+// 		scheduler.OnUpdate2(TestMethod2);
+// 		scheduler.OnUpdate2(TestMethod2);
+// 		scheduler.OnUpdate2(TestMethod2);
+// 		scheduler.OnUpdate2(Palle)
+// 			.RunIf((World w) =>
+// 			{
+// 				return true;
+// 			});
+//
+// 		scheduler.OnUpdate2((Local<int> w) =>
+// 		{
+//
+// 		});
+//
+//
+// 		scheduler.OnStartup2((World w) => { });
+// 	}
+//
+// 	void TestMethod(World world, Query<Data<Position, Velocity>> query)
+// 	{
+//
+// 	}
+//
+// 	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
+// 	{
+//
+// 	}
+//
+// 	void Palle()
+// 	{
+//
+// 	}
+// }
+//
+// class TestSys2 : IPlugin
+// {
+//
+// 	public void Build(Scheduler scheduler)
+// 	{
+// 		scheduler.OnUpdate2(TestMethod);
+// 		var xx = TestMethod2;
+// 		scheduler.OnUpdate2(xx);
+// 		scheduler.OnUpdate2(TestMethod2, ThreadingMode.Single);
+// 		scheduler.OnUpdate2(TestMethod2);
+// 		scheduler.OnUpdate2(TestMethod2);
+// 		scheduler.OnUpdate2(Palle)
+// 			.RunIf((World w) =>
+// 			{
+// 				return true;
+// 			});
+//
+// 		scheduler.OnUpdate2((Local<int> w) =>
+// 		{
+//
+// 		});
+// 	}
+//
+// 	void TestMethod(World world, Query<Data<Position, Velocity>> query)
+// 	{
+//
+// 	}
+//
+// 	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
+// 	{
+//
+// 	}
+//
+// 	void Palle()
+// 	{
+//
+// 	}
+// }
 
 
 // namespace TinyEcs
@@ -391,14 +392,47 @@ class TestSys2 : IPlugin
 // 	}
 // }
 
+// partial class GenSystem : TinySystem2
+// {
+// 	private Query<Data<Position, Velocity>> _query;
+//
+// 	public override void Setup(World world)
+// 	{
+// 		_query = (Query<Data<Position, Velocity>>)Query<Data<Position, Velocity>>.Generate(world);
+// 	}
+//
+// 	public override void Execute(World world)
+// 	{
+// 		Execute(_query);
+// 	}
+// }
 
+
+[TinySystem]
+partial class GenSystem
+{
+	void Execute(World world, Query<Data<Position, Velocity>> query, Res<CustomResource> customRes)
+	{
+
+	}
+}
+
+
+[TinySystem]
+partial class HelloSystem
+{
+	void Execute(Query<Data<Position, Velocity>> query, Local<CustomResource> customRes)
+	{
+
+	}
+}
 
 namespace ANamespace
 {
 	[TinyPlugin]
 	public partial class AAA
 	{
-		[TinySystem(Stages.Update, ThreadingMode.Single)]
+		[TinySystem]
 		[RunIf(nameof(TestRun))]
 		[RunIf(nameof(TestRun2))]
 		void Execute(Query<Data<Position, Velocity>> query)
@@ -480,4 +514,10 @@ public partial class TestPlugin
 	{
 
 	}
+}
+
+
+public class CustomResource
+{
+
 }

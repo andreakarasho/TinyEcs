@@ -16,111 +16,204 @@ public sealed class SourceGenerator : IIncrementalGenerator
 {
 	public void Initialize(IncrementalGeneratorInitializationContext context)
 	{
-		var pluginDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-			static (s, _) => s is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
-			static (ctx, _) => GetClassDeclarationSymbolIfAttributeOf(ctx, "TinyEcs.TinyPluginAttribute")
-		).Where(static m => m is not null)!;
+        RegisterPluginExtensionsGenerator(context);
+        RegisterTinySystemGenerator(context);
+    }
 
-		var compilationAndClasses = context.CompilationProvider.Combine(pluginDeclarations.WithComparer(Comparer<TypeDeclarationSyntax>.Instance).Collect());
-		context.RegisterSourceOutput(compilationAndClasses, (spc, source) => Generate(source.Left, source.Right, spc));
+    #region Plugin Extensions Generator
+    private void RegisterPluginExtensionsGenerator(IncrementalGeneratorInitializationContext context)
+    {
+        var pluginDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
+            static (s, _) => s is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
+            static (ctx, _) => GetClassDeclarationSymbolIfAttributeOf(ctx, "TinyEcs.TinyPluginAttribute")
+        ).Where(static m => m is not null);
+
+        var compilationAndClasses = context.CompilationProvider.Combine(pluginDeclarations.WithComparer(Comparer<TypeDeclarationSyntax>.Instance).Collect());
+        context.RegisterSourceOutput(compilationAndClasses, (spc, source) => Generate(source.Left, source.Right, spc));
+
+        var pluginDeclarations2 = context.SyntaxProvider.CreateSyntaxProvider(
+            static (s, _) => s is TypeDeclarationSyntax,
+            static (ctx, _) => (TypeDeclarationSyntax)ctx.Node
+        ).Where(static m => m is not null);
+
+        var compilationAndClasses2 = context.CompilationProvider.Combine(pluginDeclarations2.WithComparer(Comparer<TypeDeclarationSyntax>.Instance).Collect());
+        context.RegisterSourceOutput(compilationAndClasses2, (spc, source) =>
+        {
+            var classes = source.Right;
+            var compilation = source.Left;
+
+            if (classes.IsDefaultOrEmpty) return;
+
+            var iPluginSymbol = compilation.GetTypeByMetadataName("TinyEcs.IPlugin");
+            if (iPluginSymbol == null) return;
+
+            var hashDelegates = new HashSet<(string MethodName, string Parameters)>();
+            var sb = new StringBuilder();
+            var allowedMethodNames = new Dictionary<string, string>
+            {
+                { "OnStartup2", "OnStartup" },
+                { "OnFrameStart2", "OnFrameStart" },
+                { "OnBeforeUpdate2", "OnBeforeUpdate" },
+                { "OnUpdate2", "OnUpdate" },
+                { "OnAfterUpdate2", "OnAfterUpdate" },
+                { "OnFrameEnd2", "OnFrameEnd" },
+            };
+
+            foreach (var cl in classes)
+            {
+                var semanticModel = compilation.GetSemanticModel(cl.SyntaxTree);
+
+                if (ModelExtensions.GetDeclaredSymbol(semanticModel, cl) is not INamedTypeSymbol symbol)
+                    continue;
+
+                var pluginInterfaces = symbol.AllInterfaces
+                    .Where(s => SymbolEqualityComparer.Default.Equals(s, iPluginSymbol))
+                    .ToArray();
+
+                if (pluginInterfaces.Length == 0)
+                    continue;
 
 
+                var build = symbol.GetMembers("Build")
+                    .OfType<IMethodSymbol>()
+                    .SingleOrDefault(m => m.Parameters.Length == 1 &&
+                                          m.Parameters[0].Type.ToDisplayString() == "TinyEcs.Scheduler");
 
-		var pluginDeclarations2 = context.SyntaxProvider.CreateSyntaxProvider(
-			static (s, _) => s is TypeDeclarationSyntax,
-			static (ctx, _) => (TypeDeclarationSyntax)ctx.Node
-		).Where(static m => m is not null)!;
+                if (build == null)
+                    continue;
 
+                // Step 1: Get the syntax node for the method
+                if (build.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not MethodDeclarationSyntax buildSyntax)
+                    continue;
 
-		var compilationAndClasses2 = context.CompilationProvider.Combine(pluginDeclarations2.WithComparer(Comparer<TypeDeclarationSyntax>.Instance).Collect());
-		context.RegisterSourceOutput(compilationAndClasses2, (spc, source) =>
-		{
-			var classes = source.Right;
-			var compilation = source.Left;
+                var semanticModel2 = compilation.GetSemanticModel(buildSyntax.SyntaxTree);
 
-			if (classes.IsDefaultOrEmpty)
-				return;
+                // Step 2: Traverse the method body to find calls
 
-			var iPluginSymbol = compilation.GetTypeByMetadataName("TinyEcs.IPlugin");
-			if (iPluginSymbol == null)
-				return;
+                foreach (var methodName in allowedMethodNames.Keys)
+                {
+                    var calls = GetMethodCalls(buildSyntax, semanticModel2, methodName);
 
-			var hashDelegates = new HashSet<(string MethodName, string Parameters)>();
-			var sb = new StringBuilder();
-			var allowedMethodNames = new Dictionary<string, string>
-			{
-				{ "OnStartup2", "OnStartup" },
-				{ "OnFrameStart2", "OnFrameStart" },
-				{ "OnBeforeUpdate2", "OnBeforeUpdate" },
-				{ "OnUpdate2", "OnUpdate" },
-				{ "OnAfterUpdate2", "OnAfterUpdate" },
-				{ "OnFrameEnd2", "OnFrameEnd" },
-			};
+                    foreach (var invocation in calls)
+                    {
+                        ProcessCallInvocations(invocation, semanticModel2, methodName, hashDelegates);
+                    }
+                }
+            }
 
-			foreach (var cl in classes)
-			{
-				var semanticModel = compilation.GetSemanticModel(cl.SyntaxTree);
+            foreach ((var methodName, var paramList) in hashDelegates)
+            {
+                sb.AppendLine($@"
+                    public static FuncSystem<World> {methodName}(this Scheduler scheduler, {paramList} fn, ThreadingMode threading = ThreadingMode.Auto) {{
+                        return scheduler.{allowedMethodNames[methodName]}(fn, threading);
+                    }}");
+            }
 
-				if (ModelExtensions.GetDeclaredSymbol(semanticModel, cl) is not INamedTypeSymbol symbol)
-					continue;
+            var template = $@"
+                    // This code is auto-generated.
 
-				var pluginInterfaces = symbol.AllInterfaces
-					.Where(s => SymbolEqualityComparer.Default.Equals(s, iPluginSymbol))
-					.ToArray();
+                    using TinyEcs;
 
-				if (pluginInterfaces.Length == 0)
-					continue;
+                    public static partial class SchedulerExt {{
+                        {sb}
+                    }}
+                ";
 
+            spc.AddSource($"SchedulerExt.g.cs",
+                CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
+        });
+    }
+    #endregion
 
-				var build = symbol.GetMembers("Build")
-					.OfType<IMethodSymbol>()
-					.SingleOrDefault(m => m.Parameters.Length == 1 &&
-					                      m.Parameters[0].Type.ToDisplayString() == "TinyEcs.Scheduler");
+    #region TinySystem Generator
+    private void RegisterTinySystemGenerator(IncrementalGeneratorInitializationContext context)
+    {
+        var tinySystemClasses = context.SyntaxProvider.CreateSyntaxProvider(
+            static (s, _) => s is TypeDeclarationSyntax t && t.AttributeLists.Count > 0,
+            static (ctx, _) =>
+            {
+                var typeSyntax = (TypeDeclarationSyntax)ctx.Node;
+                var typeSymbol = ctx.SemanticModel.GetDeclaredSymbol(typeSyntax);
+                if (typeSymbol is not INamedTypeSymbol namedTypeSymbol) return null;
+                if (!namedTypeSymbol.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "TinyEcs.TinySystemAttribute")) return null;
+                if (namedTypeSymbol.TypeKind != TypeKind.Class) return null;
+                return namedTypeSymbol;
+            }
+        ).Where(static t => t is not null);
 
-				if (build == null)
-					continue;
+        context.RegisterSourceOutput(
+            context.CompilationProvider.Combine(tinySystemClasses.Collect()),
+            (spc, source) =>
+            {
+                var classes = source.Right;
+                if (classes.IsDefaultOrEmpty) return;
 
-				// Step 1: Get the syntax node for the method
-				if (build.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not MethodDeclarationSyntax buildSyntax)
-					continue;
+                foreach (var classSymbolObj in classes)
+                {
+                    if (classSymbolObj is not null && classSymbolObj is INamedTypeSymbol classSymbol)
+                    {
+                        var className = classSymbol.Name.EndsWith("System") ? classSymbol.Name : classSymbol.Name + "System";
+                        var ns = classSymbol.ContainingNamespace.IsGlobalNamespace ? "" : classSymbol.ContainingNamespace.ToDisplayString();
+                        // Find the Execute method in the class
+                        var executeMethodSymbol = classSymbol.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(m => m.Name == "Execute" && !m.IsStatic);
+                        if (executeMethodSymbol == null) continue;
 
-				var semanticModel2 = compilation.GetSemanticModel(buildSyntax.SyntaxTree);
+                        // Accept all parameters for injection
+                        var validParams = executeMethodSymbol.Parameters.ToList();
 
-				// Step 2: Traverse the method body to find calls
+                        // Declare private fields for each parameter
+                        var fieldDecls = string.Join("\n", validParams.Select(p => $"    private {p.Type.ToDisplayString()} _{p.Name};"));
 
-				foreach (var methodName in allowedMethodNames.Keys)
-				{
-					var calls = GetMethodCalls(buildSyntax, semanticModel2, methodName);
+                        // Setup method: assign all fields
+                        var setupAssignments = string.Join("\n", validParams.Select(p => $"        _{p.Name} = ({p.Type.ToDisplayString()}){p.Type.ToDisplayString()}.Generate(world);"));
+                        var setupCode = $@"    public override void Setup(World world)
+    {{
+{setupAssignments}
+    }}";
 
-					foreach (var invocation in calls)
-					{
-						ProcessCallInvocations(invocation, semanticModel2, methodName, hashDelegates);
-					}
-				}
-			}
+                        var paramNames = string.Join(", ", validParams.Select(p => $"_{p.Name}"));
 
-			foreach ((var methodName, var paramList) in hashDelegates)
-			{
-				sb.AppendLine($@"
-					public static FuncSystem<World> {methodName}(this Scheduler scheduler, {paramList} fn, ThreadingMode threading = ThreadingMode.Auto) {{
-						return scheduler.{allowedMethodNames[methodName]}(fn, threading);
-					}}");
-			}
+                        var paramLocks = string.Join("\n", validParams.Select(p => $"        _{p.Name}.Lock(ticks);"));
+                        var paramUnlocks = string.Join("\n", validParams.Select(p => $"        _{p.Name}.Unlock();"));
+                        var executeOverride = $@"    public override void Execute(SystemTicks ticks, World world)
+    {{
+{paramLocks}
+        world.BeginDeferred();
+        Execute({paramNames});
+        world.EndDeferred();
+{paramUnlocks}
+    }}";
 
-			var template = $@"
-					// This code is auto-generated.
+                        // Only generate Setup and Execute(World world)
+                        var systemClass = classSymbol.ContainingNamespace.IsGlobalNamespace
+                            ? $@"
+using TinyEcs;
+public partial class {className} : TinySystem2
+{{
+{fieldDecls}
+{setupCode}
+{executeOverride}
+}}"
+                            : $@"
+using TinyEcs;
+namespace {ns}
+{{
+    public partial class {className} : TinySystem2
+    {{
+{fieldDecls}
+{setupCode}
+{executeOverride}
+    }}
+}}";
 
-					using TinyEcs;
-
-					public static partial class SchedulerExt {{
-						{sb}
-					}}
-				";
-
-			spc.AddSource($"SchedulerExt.g.cs",
-				CSharpSyntaxTree.ParseText(template).GetRoot().NormalizeWhitespace().ToFullString());
-		});
-	}
+                        var fileName = $"{className}.g.cs";
+                        spc.AddSource(fileName, systemClass);
+                    }
+                }
+            }
+        );
+    }
+    #endregion
 
 	private static InvocationExpressionSyntax[] GetMethodCalls(MethodDeclarationSyntax buildSyntax, SemanticModel semanticModel, string name)
 	{
@@ -365,9 +458,6 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var afterOfData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("AfterOf")).ToArray();
 		var onEnterData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("OnEnter")).ToArray();
 		var onExitData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("OnExit")).ToArray();
-
-		// var arguments = methodSymbol.Parameters.ToList();
-
 
 		var stagee = systemDescData.ConstructorArguments.FirstOrDefault(s => s.Type.ToDisplayString() == "TinyEcs.Stages");
 		var threadingg = systemDescData.ConstructorArguments.FirstOrDefault(s => s.Type.ToDisplayString() == "TinyEcs.ThreadingMode");

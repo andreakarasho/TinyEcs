@@ -1316,7 +1316,7 @@ public ref struct QueryIter<D, F>
 }
 
 
-[AttributeUsage(AttributeTargets.Method)]
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
 public class TinySystemAttribute : Attribute
 {
 	public TinySystemAttribute(Stages stage = Stages.Update)
@@ -1361,6 +1361,13 @@ public sealed class AfterOf(string systemName) : Attribute
 [AttributeUsage(System.AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class TinyPluginAttribute : Attribute
 {
+}
+
+
+public abstract class TinySystem2
+{
+	public abstract void Setup(World world);
+	public abstract void Execute(SystemTicks ticks, World world);
 }
 
 #endif
