@@ -4,9 +4,9 @@
 		<OutputType>Library</OutputType>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-		<LangVersion>13.0</LangVersion>
+		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<TargetFrameworks>net9.0</TargetFrameworks>
+		<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
 		<IsAotCompatible>true</IsAotCompatible>
 		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 		<CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\Generated</CompilerGeneratedFilesOutputPath>
@@ -32,8 +32,112 @@
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
 	</ItemGroup>
 
+	<!-- Start Templates -->
 	<ItemGroup>
-		<ProjectReference Include="..\tools\TinyEcs.Generator\TinyEcs.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<None Update="TinyEcs.Archetypes.tt">
+			<LastGenOutput>TinyEcs.Archetypes.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.QueryIteratorEach.tt">
+			<LastGenOutput>TinyEcs.QueryIteratorEach.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.Systems.DataAndFilter.tt">
+			<LastGenOutput>TinyEcs.Systems.DataAndFilter.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.Systems.Scheduler.tt">
+			<LastGenOutput>TinyEcs.Systems.Scheduler.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.Systems.StateHandlers.tt">
+			<LastGenOutput>TinyEcs.Systems.StateHandlers.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.Systems.StageSpecific.tt">
+			<LastGenOutput>TinyEcs.Systems.StageSpecific.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
+		<None Update="TinyEcs.Systems.Interfaces.tt">
+			<LastGenOutput>TinyEcs.Systems.Interfaces.g.cs</LastGenOutput>
+			<Generator>TextTemplatingFileGenerator</Generator>
+		</None>
 	</ItemGroup>
 
+
+	<ItemGroup>
+		<Compile Update="TinyEcs.QueryIteratorEach.g.cs">
+			<DependentUpon>TinyEcs.QueryIteratorEach.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.DataAndFilter.g.cs">
+			<DependentUpon>TinyEcs.Systems.DataAndFilter.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.Scheduler.g.cs">
+			<DependentUpon>TinyEcs.Systems.Scheduler.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.StateHandlers.g.cs">
+			<DependentUpon>TinyEcs.Systems.StateHandlers.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.StageSpecific.g.cs">
+			<DependentUpon>TinyEcs.Systems.StageSpecific.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.Interfaces.g.cs">
+			<DependentUpon>TinyEcs.Systems.Interfaces.tt</DependentUpon>
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+		</Compile>
+		<Compile Update="TinyEcs.Archetypes.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Archetypes.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.QueryIteratorEach.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.QueryIteratorEach.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Archetypes.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Archetypes.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.DataAndFilter.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Systems.DataAndFilter.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.Interfaces.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Systems.Interfaces.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.Scheduler.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Systems.Scheduler.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.StageSpecific.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Systems.StageSpecific.tt</DependentUpon>
+		</Compile>
+		<Compile Update="TinyEcs.Systems.StateHandlers.g.cs">
+		  <AutoGen>True</AutoGen>
+		  <DesignTime>True</DesignTime>
+		  <DependentUpon>TinyEcs.Systems.StateHandlers.tt</DependentUpon>
+		</Compile>
+	</ItemGroup>
+	<!-- End Templates -->
+	
+	
 </Project>

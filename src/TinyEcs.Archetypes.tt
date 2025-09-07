@@ -1,0 +1,52 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".g.cs" #>
+<#
+    const int MAX_GENERICS = 16;
+
+    string GenerateSequence(int count, string separator, System.Func<int, string> generator)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < count; ++i)
+        {
+            sb.Append(generator(i));
+            if (i < count - 1)
+            {
+                sb.Append(separator);
+            }
+        }
+        return sb.ToString();
+    }
+#>
+#pragma warning disable 1591
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+
+namespace TinyEcs
+{
+    public partial class World
+    {
+<#
+    for (var i = 0; i < MAX_GENERICS; ++i)
+    {
+        var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
+        var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
+        var objsArgs = GenerateSequence(i + 1, ", ", j => $"Component<T{j}>()");
+#>
+        /// <inheritdoc cref="World.Archetype(Span{EcsID})"/>
+        public Archetype Archetype<<#= generics #>>()
+            <#= whereGenerics #>
+            => Archetype(<#= objsArgs #>);
+
+<#
+    }
+#>
+    }
+}
+
+#pragma warning restore 1591

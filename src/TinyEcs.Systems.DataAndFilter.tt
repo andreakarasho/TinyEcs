@@ -1,0 +1,99 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".g.cs" #>
+<#
+    const int MAX_GENERICS = 16;
+
+    string GenerateSequence(int count, string separator, System.Func<int, string> generator)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < count; ++i)
+        {
+            sb.Append(generator(i));
+            if (i < count - 1)
+            {
+                sb.Append(separator);
+            }
+        }
+        return sb.ToString();
+    }
+#>
+#pragma warning disable 1591
+#nullable enable
+
+using System;
+using System.Runtime.CompilerServices;
+
+namespace TinyEcs
+{
+#if NET9_0_OR_GREATER
+<#
+    for (var i = 0; i < MAX_GENERICS; ++i)
+    {
+        var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t", j => $"where T{j} : struct, IFilter<T{j}>, allows ref struct");
+        var appendTermsCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"T{j}.Build(builder);");
+        var appendApplyCalls = GenerateSequence(i + 1, " | ", j => $"T{j}.Apply(in filter, row)\n");
+
+        var subIterators = GenerateSequence(i + 1, "\n\t\t", j => $"private T{j} _iter{j};");
+        var createSubIterators = GenerateSequence(i + 1, "\n\t\t\t", j => $"_iter{j} = T{j}.CreateIterator(iterator);");
+
+        var callSubIterators = GenerateSequence(i + 1, "\n\t\t\t", j => $"var i{j} = _iter{j}.MoveNext();");
+        var callResultsSubIterators = GenerateSequence(i + 1, " && ", j => $"i{j}");
+        var setTicksSubIterators = GenerateSequence(i + 1, "\n\t\t\t", j => $"_iter{j}.SetTicks(lastRun, thisRun);");
+#>
+    public ref struct Filter<<#= genericsArgs #>> : IFilter<Filter<<#= genericsArgs #>>>
+        <#= genericsArgsWhere #>
+    {
+        private QueryIterator _iterator;
+        <#= subIterators #>
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal Filter(QueryIterator iterator)
+        {
+            _iterator = iterator;
+            <#= createSubIterators #>
+        }
+
+        public static void Build(QueryBuilder builder)
+        {
+            <#= appendTermsCalls #>
+        }
+
+        [System.Diagnostics.CodeAnalysis.UnscopedRef]
+        ref Filter<<#= genericsArgs #>> IQueryIterator<Filter<<#= genericsArgs #>>>.Current => ref this;
+
+        static Filter<<#= genericsArgs #>> IFilter<Filter<<#= genericsArgs #>>>.CreateIterator(QueryIterator iterator)
+        {
+            return new(iterator);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        readonly Filter<<#= genericsArgs #>> IQueryIterator<Filter<<#= genericsArgs #>>>.GetEnumerator()
+        {
+            return this;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool IQueryIterator<Filter<<#= genericsArgs #>>>.MoveNext()
+        {
+            <#= callSubIterators #>
+            return <#= callResultsSubIterators #>;
+        }
+
+        public void SetTicks(uint lastRun, uint thisRun)
+        {
+            <#= setTicksSubIterators #>
+        }
+    }
+
+<#
+    }
+#>
+#endif
+}
+
+#pragma warning restore 1591
