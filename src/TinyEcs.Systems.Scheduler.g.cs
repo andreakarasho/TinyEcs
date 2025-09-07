@@ -12,10 +12,10 @@ namespace TinyEcs
 #if NET9_0_OR_GREATER
     public partial class Scheduler
     {
-        public FuncSystem<World> AddSystem<T0>(Action<T0> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0>(Action<T0> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -33,16 +33,16 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1>(Action<T0, T1> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1>(Action<T0, T1> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -64,17 +64,17 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2>(Action<T0, T1, T2> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2>(Action<T0, T1, T2> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -100,18 +100,18 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3>(Action<T0, T1, T2, T3> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3>(Action<T0, T1, T2, T3> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -141,19 +141,19 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4>(Action<T0, T1, T2, T3, T4> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4>(Action<T0, T1, T2, T3, T4> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -187,12 +187,12 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5>(Action<T0, T1, T2, T3, T4, T5> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5>(Action<T0, T1, T2, T3, T4, T5> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -200,7 +200,7 @@ namespace TinyEcs
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -238,12 +238,12 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6>(Action<T0, T1, T2, T3, T4, T5, T6> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6>(Action<T0, T1, T2, T3, T4, T5, T6> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -252,7 +252,7 @@ namespace TinyEcs
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -294,12 +294,12 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7>(Action<T0, T1, T2, T3, T4, T5, T6, T7> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7>(Action<T0, T1, T2, T3, T4, T5, T6, T7> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -309,7 +309,7 @@ namespace TinyEcs
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -355,12 +355,12 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -371,7 +371,7 @@ namespace TinyEcs
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -421,12 +421,12 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -438,7 +438,7 @@ namespace TinyEcs
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -492,12 +492,12 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -510,7 +510,7 @@ namespace TinyEcs
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -568,12 +568,12 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -587,7 +587,7 @@ namespace TinyEcs
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -649,12 +649,12 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -669,7 +669,7 @@ namespace TinyEcs
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -735,12 +735,12 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -756,7 +756,7 @@ namespace TinyEcs
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -826,12 +826,12 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -848,7 +848,7 @@ namespace TinyEcs
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -922,12 +922,12 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
 
-        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+        public FuncSystem<World> AddSystem<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -945,7 +945,7 @@ namespace TinyEcs
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T15 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1023,7 +1023,7 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
             Add(sys, stage);
             return sys;
         }
