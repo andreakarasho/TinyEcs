@@ -306,10 +306,10 @@ namespace TinyEcs.Tests
 			using var ctx = new Context();
 
 			var b = ctx.World.Entity<NormalTag>();
-			var a = ctx.World.Entity("NormalTag");
+			var a = ctx.World.Entity("TinyEcs.Tests.NormalTag");
 
-			Assert.Equal("NormalTag", a.Name());
-			Assert.Equal("NormalTag", b.Name());
+			Assert.Equal("TinyEcs.Tests.NormalTag", a.Name());
+			Assert.Equal("TinyEcs.Tests.NormalTag", b.Name());
 			Assert.True(a.ID == b.ID);
 		}
 
@@ -318,7 +318,7 @@ namespace TinyEcs.Tests
 		{
 			using var ctx = new Context();
 
-			var a = ctx.World.Entity("NormalTag");
+			var a = ctx.World.Entity("TinyEcs.Tests.NormalTag");
 
 			Assert.Equal(ctx.World.Entity<NormalTag>(), a);
 		}
@@ -398,6 +398,24 @@ namespace TinyEcs.Tests
 			Assert.True(ent.Exists());
 			Assert.True(ent.Has<FloatComponent>());
 			Assert.True(ent.Has<BoolComponent>());
+		}
+
+		[Fact]
+		public void Entity_Ensure_Tag_Is_Empty_When_Using_Set()
+		{
+			using var ctx = new Context();
+			var ent = ctx.World.Entity().Set<NormalTag>();
+
+			Assert.Throws<Exception>(() => ctx.World.Get<NormalTag>(ent));
+		}
+
+		[Fact]
+		public void Entity_Ensure_Tag_Is_Empty_When_Using_Add()
+		{
+			using var ctx = new Context();
+			var ent = ctx.World.Entity().Add<NormalTag>();
+
+			Assert.Throws<Exception>(() => ctx.World.Get<NormalTag>(ent));
 		}
 	}
 }

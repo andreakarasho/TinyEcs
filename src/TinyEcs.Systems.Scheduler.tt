@@ -1,0 +1,83 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".g.cs" #>
+<#
+    const int MAX_GENERICS = 16;
+
+    string GenerateSequence(int count, string separator, System.Func<int, string> generator)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < count; ++i)
+        {
+            sb.Append(generator(i));
+            if (i < count - 1)
+            {
+                sb.Append(separator);
+            }
+        }
+        return sb.ToString();
+    }
+#>
+#pragma warning disable 1591
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
+
+namespace TinyEcs
+{
+#if NET9_0_OR_GREATER
+    public partial class Scheduler
+    {
+<#
+    for (var i = 0; i < MAX_GENERICS; ++i)
+    {
+        var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
+        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t\t", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
+        var objs = GenerateSequence(i + 1, "\n\t\t\t", j => $"T{j}? obj{j} = null;");
+        var objsGen = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
+        var objsLock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Lock(ticks);");
+        var objsUnlock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Unlock();");
+        var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
+        var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
+#>
+        public FuncSystem<World> AddSystem<<#= genericsArgs #>>(Action<<#= genericsArgs #>> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+            <#= genericsArgsWhere #>
+        {
+            if (threadingType == ThreadingMode.Auto)
+                threadingType = ThreadingExecutionMode;
+
+            <#= objs #>
+            var checkInuse = () => <#= objsCheckInuse #>;
+            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            {
+                if (runIf != null && !runIf.Invoke(ticks, args))
+                    return false;
+
+                <#= objsGen #>
+                <#= objsLock #>
+                args.BeginDeferred();
+                system(<#= systemCall #>);
+                args.EndDeferred();
+                <#= objsUnlock #>
+                return true;
+            };
+            var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+            Add(sys, stage);
+            return sys;
+        }
+
+<#
+    }
+#>
+    }
+#endif
+}
+
+#pragma warning restore 1591

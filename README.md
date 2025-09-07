@@ -1,7 +1,4 @@
 # TinyEcs
-
-[![NuGet Version](https://img.shields.io/nuget/v/TinyEcs.Main?label=TinyEcs)](https://www.nuget.org/packages/TinyEcs.Main)
-
 TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 ## Key Features
@@ -14,8 +11,8 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 -   `Bevy systems` concept
 
 ## Requirements
-
--   `net9.0`
+-   `net8.0` for classic ecs only
+-   `net9.0+` will include the `Bevy systems` support
 
 ## Status
 
@@ -29,7 +26,15 @@ TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
 
 ```csharp
 var world = new World();
+
+// Get or create a new entity
 EntityView entity = world.Entity();
+
+// Get or create an entity with a specific name
+EntityView entity = world.Entity("Player");
+
+// Get or create an entity with a specific id
+EntityView entity = world.Entity(1234);
 ```
 ---
 ### Delete an entity
@@ -46,43 +51,35 @@ entity.Delete(); // or world.Delete(entity);
 bool exists = entity.Exists(); // or world.Exists(entity);
 ```
 ---
-### Set component
+### Set component/tag
 Components are the real data that an entity contains. An array will be allocated per component. You can access to the data using the `world.Get<T>()` api.
-
-Requirements:
-- must be a `struct`
-- must contains one field at least
-```csharp
-EntityView entity = world.Entity()
-    .Set(new Position() { X = 0, Y = 1, Z = -1 });
-
-struct Position { public float X, Y, Z; }
-```
----
-### Add tag
 Tags are used to describe an entity. No data will get allocated when adding a tag. Tags are not accessible from the `world.Get<T>()` api.
 
 Requirements:
 - must be a `struct`
-- must be empty
+
 ```csharp
 EntityView entity = world.Entity()
-    .Add<IsFruit>();
+    // This is a component
+    .Set(new Position() { X = 0, Y = 1, Z = -1 })
+    // This is a tag
+    .Set<IsAlly>(); 
 
-struct IsFruit;
+struct Position { public float X, Y, Z; }
+struct IsAlly;
 ```
 ---
 ### Unset component/tag
 
 ```csharp
-entity.Unset<IsFruit>()
+entity.Unset<IsAlly>()
       .Unset<Position>();
 ```
 ---
 ### Has component/tag
 
 ```csharp
-bool isFruit = entity.Has<IsFruit>();
+bool isAlly = entity.Has<IsAlly>();
 bool hasPosition = entity.Has<Position>();
 ```
 ---
@@ -152,7 +149,7 @@ You should wrap your game logic using systems!
 var printSomethingFn = PrintSomething;
 scheduler.OnUpdate(printSomethingFn);
 
-// The scheduler will run all systems registered before one time
+// The scheduler will run all systems registered before once
 scheduler.RunOnce();
 
 void PrintSomething() => Console.WriteLine("Hello from TinyEcs!");
@@ -187,7 +184,7 @@ scheduler.OnStartup(() => Console.WriteLine("7"));
 scheduler.RunOnce();
 
 // This will print:
-// 2 to 7 in order. "1" get excluded because the OnStartup are one-shot systems.
+// 2 to 6 in order. "1" & "2" get excluded because the OnStartup are one-shot systems.
 scheduler.RunOnce();
 ```
 ---
@@ -495,7 +492,7 @@ void Setup(World world, Res<AssetManager> assets)
 
     var texture = new Texture(0, 2, 2);
     texture.SetData(new byte[] { 0, 0, 0, 0 });
-    assets.Register("image.png", texture);
+    assets.Value.Register("image.png", texture);
 }
 
 void MoveEntities(Query<Data<Position, Velocity>> query, Res<Time> time)

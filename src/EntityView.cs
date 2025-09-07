@@ -57,6 +57,9 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>, I
 
 	/// <inheritdoc cref="World.Add{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if !USE_PAIR
+	[Obsolete("PAIRS feature has been disabled. Use Set<T> instead")]
+#endif
 	public readonly EntityView Add<T>() where T : struct
 	{
 		World.Add<T>(ID);
@@ -65,12 +68,13 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>, I
 
 	/// <inheritdoc cref="World.Set{T}(EcsID, T)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component) where T : struct
+	public readonly EntityView Set<T>(T component = default) where T : struct
 	{
 		World.Set(ID, component);
 		return this;
 	}
 
+#if USE_PAIR
 	/// <inheritdoc cref="World.Add(EcsID, EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EcsID id)
@@ -83,6 +87,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>, I
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly EntityView Add(EntityView id)
 		=> Add(id.ID);
+#endif
 
 	/// <inheritdoc cref="World.Unset{T}(EcsID)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

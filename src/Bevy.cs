@@ -4,7 +4,7 @@ namespace TinyEcs;
 
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
-#if NET
+#if NET9_0_OR_GREATER
 
 public sealed partial class FuncSystem<TArg> where TArg : notnull
 {
@@ -159,9 +159,10 @@ public partial class Scheduler
 	private readonly List<FuncSystem<World>> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
 
-	public Scheduler(World world)
+	public Scheduler(World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
+		ThreadingExecutionMode = threadingMode;
 
 		for (var i = 0; i < _systems.Length; ++i)
 			_systems[i] = new LinkedList<FuncSystem<World>>();
@@ -172,6 +173,8 @@ public partial class Scheduler
 	}
 
 	public World World => _world;
+	public ThreadingMode ThreadingExecutionMode { get; }
+
 
 	public void Run(Func<bool> checkForExitFn, Action? cleanupFn = null)
 	{
@@ -235,8 +238,11 @@ public partial class Scheduler
 		sys.Node = _systems[(int)stage].AddLast(sys);
 	}
 
-	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
 	{
+		if (!threadingType.HasValue)
+			threadingType = ThreadingExecutionMode;
+
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 		{
 			if (runIf?.Invoke(ticks, args) ?? true)
@@ -245,15 +251,18 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, stage, threadingType);
+		}, () => false, stage, threadingType.Value);
 		Add(sys, stage);
 
 		return sys;
 	}
 
-	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
+		if (!threadingType.HasValue)
+			threadingType = ThreadingExecutionMode;
+
 		var stateChangeId = -1;
 
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
@@ -264,7 +273,7 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, Stages.OnEnter, threadingType)
+		}, () => false, Stages.OnEnter, threadingType.Value)
 		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
 		Add(sys, Stages.OnEnter);
@@ -272,9 +281,12 @@ public partial class Scheduler
 		return sys;
 	}
 
-	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
+		if (!threadingType.HasValue)
+			threadingType = ThreadingExecutionMode;
+
 		var stateChangeId = -1;
 
 		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
@@ -285,7 +297,7 @@ public partial class Scheduler
 				return true;
 			}
 			return false;
-		}, () => false, Stages.OnExit, threadingType)
+		}, () => false, Stages.OnExit, threadingType.Value)
 		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
 		Add(sys, Stages.OnExit);
@@ -398,7 +410,7 @@ public interface IEventParam
 
 internal sealed class EventParam<T> : SystemParam<World>, IEventParam, IIntoSystemParam<World> where T : notnull
 {
-	private readonly List<T> _eventsLastFrame = new (), _eventsThisFrame = new();
+	private readonly List<T> _eventsLastFrame = new(), _eventsThisFrame = new();
 
 	internal EventParam()
 	{
@@ -468,6 +480,8 @@ public sealed class EventReader<T> : SystemParam<World>, IIntoSystemParam<World>
 
 	public List<T>.Enumerator GetEnumerator()
 		=> _events.GetEnumerator();
+
+	public IEnumerable<T> Values => _events;
 
 	public static ISystemParam<World> Generate(World arg)
 	{
@@ -744,6 +758,30 @@ public sealed class SchedulerState : SystemParam<World>, IIntoSystemParam<World>
 
 	public bool ResourceExists<T>() where T : notnull
 		=> _scheduler.ResourceExists<Res<T>>();
+
+	public ref T? GetResource<T>() where T : notnull
+	{
+		if (_scheduler.ResourceExists<Res<T>>())
+			return ref _scheduler.World.Entity<Placeholder<Res<T>>>().Get<Placeholder<Res<T>>>().Value.Value;
+		throw new InvalidOperationException($"Resource of type {typeof(T)} does not exist.");
+	}
+
+	public ref T GetSystemParam<T>() where T : notnull, ISystemParam<World>
+	{
+		if (_scheduler.World.Entity<Placeholder<T>>().Has<Placeholder<T>>())
+			return ref _scheduler.World.Entity<Placeholder<T>>().Get<Placeholder<T>>().Value;
+		throw new InvalidOperationException($"SystemParam of type {typeof(T)} does not exist.");
+	}
+
+	public EventWriter<T> GetEventWriter<T>() where T : notnull
+	{
+		return GetSystemParam<EventParam<T>>().Writer;
+	}
+
+	public EventReader<T> GetEventReader<T>() where T : notnull
+	{
+		return GetSystemParam<EventParam<T>>().Reader;
+	}
 
 	public void AddState<T>(T state = default!) where T : struct, Enum
 		=> _scheduler.AddState(state);

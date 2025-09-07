@@ -57,7 +57,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateIterators()}
 					#endif
                 }}
@@ -195,7 +195,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{CreateDataAndFilterStructsContent()}
 					#endif
                 }}
@@ -287,7 +287,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerSystemsContent()}
 					#endif
                 }}
@@ -314,9 +314,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 				var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 				sb.AppendLine($@"
-				public FuncSystem<World> AddSystem<{genericsArgs}>(Action<{genericsArgs}> system, Stages stage = Stages.Update, ThreadingMode threadingType = ThreadingMode.Auto)
+				public FuncSystem<World> AddSystem<{genericsArgs}>(Action<{genericsArgs}> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
 					{genericsArgsWhere}
 				{{
+					if (!threadingType.HasValue)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var checkInuse = () => {objsCheckInuse};
 					var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
@@ -332,7 +335,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{objsUnlock}
 						return true;
 					}};
-					var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType);
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, stage, threadingType.Value);
 					Add(sys, stage);
 					return sys;
 				}}
@@ -358,7 +361,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerSystemsStateContent()}
 					#endif
                 }}
@@ -386,10 +389,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				// OnEnter method
 				sb.AppendLine($@"
-				public FuncSystem<World> OnEnter<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+				public FuncSystem<World> OnEnter<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode? threadingType = null)
 					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
+					if (!threadingType.HasValue)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
@@ -406,7 +412,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{objsUnlock}
 						return true;
 					}};
-					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType.Value)
 						.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 					Add(sys, Stages.OnEnter);
 					return sys;
@@ -414,10 +420,13 @@ public sealed class MyGenerator : IIncrementalGenerator
 
 				// OnExit method
 				sb.AppendLine($@"
-				public FuncSystem<World> OnExit<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+				public FuncSystem<World> OnExit<TState, {genericsArgs}>(TState st, Action<{genericsArgs}> system, ThreadingMode? threadingType = null)
 					where TState : struct, Enum
 					{genericsArgsWhere}
 				{{
+					if (!threadingType.HasValue)
+						threadingType = ThreadingExecutionMode;
+
 					{objs}
 					var stateChangeId = -1;
 					var checkInuse = () => {objsCheckInuse};
@@ -434,7 +443,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 						{objsUnlock}
 						return true;
 					}};
-					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+					var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType.Value)
 						.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 					Add(sys, Stages.OnExit);
 					return sys;
@@ -460,7 +469,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSchedulerStageSpecificSystemsContent()}
 					#endif
                 }}
@@ -500,9 +509,12 @@ public sealed class MyGenerator : IIncrementalGenerator
 					var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 
 					sb.AppendLine($@"
-					public FuncSystem<World> {methodName}<{genericsArgs}>(Action<{genericsArgs}> system, ThreadingMode threadingType = ThreadingMode.Auto)
+					public FuncSystem<World> {methodName}<{genericsArgs}>(Action<{genericsArgs}> system, ThreadingMode? threadingType = null)
 						{genericsArgsWhere}
 					{{
+						if (!threadingType.HasValue)
+							threadingType = ThreadingExecutionMode;
+
 						{objs}
 						var checkInuse = () => {objsCheckInuse};
 						var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
@@ -518,7 +530,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 							{objsUnlock}
 							return true;
 						}};
-						var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.{stageName}, threadingType);
+						var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.{stageName}, threadingType.Value);
 						Add(sys, Stages.{stageName});
 						return sys;
 					}}");
@@ -529,8 +541,11 @@ public sealed class MyGenerator : IIncrementalGenerator
 			foreach (var (stageName, methodName) in stageNames)
 			{
 				sb.AppendLine($@"
-				public FuncSystem<World> {methodName}(Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+				public FuncSystem<World> {methodName}(Action system, ThreadingMode? threadingType = null)
 				{{
+					if (!threadingType.HasValue)
+						threadingType = ThreadingExecutionMode;
+
 					var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
 					{{
 						if (runIf?.Invoke(ticks, args) ?? true)
@@ -539,7 +554,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 							return true;
 						}}
 						return false;
-					}}, () => false, Stages.{stageName}, threadingType);
+					}}, () => false, Stages.{stageName}, threadingType.Value);
 					Add(sys, Stages.{stageName});
 					return sys;
 				}}");
@@ -563,7 +578,7 @@ public sealed class MyGenerator : IIncrementalGenerator
 
                 namespace TinyEcs
                 {{
-					#if NET
+					#if NET9_0_OR_GREATER
 					{GenerateSystemsInterfacesContent()}
 					#endif
                 }}

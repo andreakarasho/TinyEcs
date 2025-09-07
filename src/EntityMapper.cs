@@ -2,11 +2,11 @@ namespace TinyEcs;
 
 
 public abstract class EntityMapper<TParentComponent, TChildrenComponent>
-	where TParentComponent : struct
+	where TParentComponent : struct, IParentComponent
 	where TChildrenComponent : struct, IChildrenComponent
 {
 	private readonly Dictionary<EcsID, EcsID> _childrenToParent = new();
-	private readonly Dictionary<EcsID, HashSet<EcsID>> _parentsToChildren = new();
+	private readonly Dictionary<EcsID, List<EcsID>> _parentsToChildren = new();
 	private readonly World _world;
 	private readonly CleanupPolicy _policy;
 
@@ -31,13 +31,13 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		return parentId;
 	}
 
-	public HashSet<EcsID>? GetChildren(EcsID parentId)
+	public List<EcsID>? GetChildren(EcsID parentId)
 	{
 		_parentsToChildren.TryGetValue(parentId, out var children);
 		return children;
 	}
 
-	public void Add(EcsID parentId, EcsID childId)
+	public void Add(EcsID parentId, EcsID childId, int index = -1)
 	{
 		// update current parent
 		RemoveChild(childId);
@@ -52,8 +52,13 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 			_world.Set(parentId, new TChildrenComponent() { Value = children });
 		}
 
-		_world.Add<TParentComponent>(childId);
-		children.Add(childId);
+		_world.Set<TParentComponent>(childId, new() { Id = parentId });
+		_world.SetChanged<TChildrenComponent>(parentId);
+
+		if (index >= 0 && index < children.Count)
+			children.Insert(index, childId);
+		else
+			children.Add(childId);
 	}
 
 	public void Remove(EcsID id)
@@ -73,6 +78,9 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		{
 			_world.Unset<TParentComponent>(childId);
 			children.Remove(childId);
+
+			_world.SetChanged<TChildrenComponent>(parentId);
+
 			if (children.Count == 0)
 				RemoveParent(parentId);
 		}
@@ -91,14 +99,17 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		foreach (var id in children)
 		{
 			if (_childrenToParent.Remove(id))
+			{
+				_world.Unset<TParentComponent>(id);
 				ApplyPolicy(id);
+			}
 
 			// if child is a parent, remove associated children too
 			RemoveParent(id);
 		}
 
 		children.Clear();
-		_world.Unset<TParentComponent>(parentId);
+
 		_world.Unset<TChildrenComponent>(parentId);
 
 		return true;
@@ -190,9 +201,9 @@ public sealed class NamingEntityMapper
 
 public static class EntityMapperEx
 {
-	public static void AddChild(this World world, EcsID parent, EcsID child)
+	public static void AddChild(this World world, EcsID parent, EcsID child, int index = -1)
 	{
-		world.RelationshipEntityMapper.Add(parent, child);
+		world.RelationshipEntityMapper.Add(parent, child, index);
 	}
 
 	public static void RemoveChild(this World world, EcsID child)
@@ -200,9 +211,9 @@ public static class EntityMapperEx
 		world.RelationshipEntityMapper.Remove(child);
 	}
 
-	public static EntityView AddChild(this EntityView entity, EcsID childId)
+	public static EntityView AddChild(this EntityView entity, EcsID childId, int index = -1)
 	{
-		entity.World.AddChild(entity.ID, childId);
+		entity.World.AddChild(entity.ID, childId, index);
 		return entity;
 	}
 
@@ -217,28 +228,38 @@ public static class EntityMapperEx
 		=> entity.World.Name(entity.ID);
 }
 
-public partial interface IChildrenComponent
+public partial interface IParentComponent
 {
-	HashSet<EcsID> Value { get; set; }
-
-	HashSet<EcsID>.Enumerator GetEnumerator();
+	EcsID Id { get; init; }
 }
 
-public partial struct Parent { }
+public partial interface IChildrenComponent
+{
+	List<EcsID> Value { get; set; }
+
+	List<EcsID>.Enumerator GetEnumerator();
+}
+
+public partial struct Parent : IParentComponent
+{
+	public EcsID Id { get; init; }
+}
 
 public struct Children : IChildrenComponent
 {
-	private static readonly HashSet<EcsID> _empty = [];
+	private static readonly List<EcsID> _empty = [];
 
-	private HashSet<EcsID> _value;
+	private List<EcsID> _value;
 
-	HashSet<ulong> IChildrenComponent.Value
+	List<EcsID> IChildrenComponent.Value
 	{
 		readonly get => _value;
 		set => _value = value;
 	}
 
-	public readonly HashSet<ulong>.Enumerator GetEnumerator()
+	public int Count => _value.Count;
+
+	public readonly List<EcsID>.Enumerator GetEnumerator()
 		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
 }
 
