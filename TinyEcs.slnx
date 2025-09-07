@@ -11,5 +11,6 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/TinyEcs.Generator/TinyEcs.Generator.csproj" />
+  	<Project Path="tools/TinyEcs.SourceGenerator/TinyEcs.SourceGenerator.csproj" />
   </Folder>
 </Solution>

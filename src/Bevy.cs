@@ -1317,10 +1317,26 @@ public ref struct QueryIter<D, F>
 
 
 [AttributeUsage(AttributeTargets.Method)]
-public class TinySystemAttribute(Stages stage = Stages.Update, ThreadingMode threadingMode = ThreadingMode.Auto) : Attribute
+public class TinySystemAttribute : Attribute
 {
-	public Stages Stage { get; } = stage;
-	public ThreadingMode ThreadingMode { get; } = threadingMode;
+	public TinySystemAttribute(Stages stage = Stages.Update)
+	{
+		Stage = stage;
+		ThreadingMode = null;
+	}
+
+	public TinySystemAttribute(ThreadingMode threadingMode) : this(Stages.Update, threadingMode)
+	{
+	}
+
+	public TinySystemAttribute(Stages stage, ThreadingMode threadingMode)
+	{
+		Stage = stage;
+		ThreadingMode = threadingMode;
+	}
+
+	public Stages Stage { get; }
+	public ThreadingMode? ThreadingMode { get; }
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]

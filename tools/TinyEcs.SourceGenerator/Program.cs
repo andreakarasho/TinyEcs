@@ -366,16 +366,16 @@ public sealed class SourceGenerator : IIncrementalGenerator
 		var onEnterData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("OnEnter")).ToArray();
 		var onExitData = methodSymbol.GetAttributes().Where(s => s.AttributeClass.Name.Contains("OnExit")).ToArray();
 
-		var arguments = methodSymbol.Parameters.ToList();
+		// var arguments = methodSymbol.Parameters.ToList();
 
-		if (systemDescData.ConstructorArguments.Length < 2)
-		{
-			Debug.WriteLine($"Method {methodSymbol.Name} does not have the correct number of arguments for TinySystem attribute. Expected 2, got {systemDescData.ConstructorArguments.Length}.");
-			return (string.Empty, string.Empty);
-		}
 
-		var stage = (systemDescData.ConstructorArguments[0].Type.ToDisplayString(), systemDescData.ConstructorArguments[0].Value);
-		var threading = (systemDescData.ConstructorArguments[1].Type.ToDisplayString(), systemDescData.ConstructorArguments[1].Value);
+		var stagee = systemDescData.ConstructorArguments.FirstOrDefault(s => s.Type.ToDisplayString() == "TinyEcs.Stages");
+		var threadingg = systemDescData.ConstructorArguments.FirstOrDefault(s => s.Type.ToDisplayString() == "TinyEcs.ThreadingMode");
+
+		var stage = stagee is { Kind: TypedConstantKind.Error } ? ("TinyEcs.Stages", "TinyEcs.Stages.Update")
+			: (stagee.Type.ToDisplayString(), stagee.Value);
+		var threading = threadingg is { Kind: TypedConstantKind.Error } ? ("TinyEcs.ThreadingMode?", "null")
+			: (threadingg.Type.ToDisplayString(), threadingg.Value);
 
 		var classSymbol = methodSymbol.ContainingType;
 		var runIfMethods = GetAssociatedMethods(runifData, allMethods, "RunIf", classSymbol);
@@ -414,7 +414,7 @@ public sealed class SourceGenerator : IIncrementalGenerator
 			var {methodSymbol.Name}System = scheduler.AddSystem(
 				{methodSymbol.Name}fn,
 				stage: ({stage.Item1}){stage.Value},
-				threadingType: ({threading.Item1}){threading.Value}
+				threadingType: ({threading.Item1}){threading.Value ?? "null"}
 			)
 			{sbRunIfActions};";
 
