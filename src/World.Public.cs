@@ -520,6 +520,7 @@ public sealed partial class World
 	public ref T Get<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
+		EcsAssert.Panic(cmp.Size > 0, "this is not a component");
 		return ref GetUntrusted<T>(entity, cmp.ID, cmp.Size);
 	}
 

@@ -68,7 +68,7 @@ public readonly struct EntityView : IEquatable<EcsID>, IEquatable<EntityView>, I
 
 	/// <inheritdoc cref="World.Set{T}(EcsID, T)"/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly EntityView Set<T>(T component) where T : struct
+	public readonly EntityView Set<T>(T component = default) where T : struct
 	{
 		World.Set(ID, component);
 		return this;

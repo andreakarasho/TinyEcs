@@ -399,5 +399,23 @@ namespace TinyEcs.Tests
 			Assert.True(ent.Has<FloatComponent>());
 			Assert.True(ent.Has<BoolComponent>());
 		}
+
+		[Fact]
+		public void Entity_Ensure_Tag_Is_Empty_When_Using_Set()
+		{
+			using var ctx = new Context();
+			var ent = ctx.World.Entity().Set<NormalTag>();
+
+			Assert.Throws<Exception>(() => ctx.World.Get<NormalTag>(ent));
+		}
+
+		[Fact]
+		public void Entity_Ensure_Tag_Is_Empty_When_Using_Add()
+		{
+			using var ctx = new Context();
+			var ent = ctx.World.Entity().Add<NormalTag>();
+
+			Assert.Throws<Exception>(() => ctx.World.Get<NormalTag>(ent));
+		}
 	}
 }
