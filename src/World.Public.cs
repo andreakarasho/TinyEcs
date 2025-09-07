@@ -399,6 +399,9 @@ public sealed partial class World
 	/// </summary>
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
+#if !USE_PAIR
+	[Obsolete("PAIRS feature has been disabled. Use Set<T> instead")]
+#endif
 	public void Add<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -420,23 +423,30 @@ public sealed partial class World
 	/// <typeparam name="T"></typeparam>
 	/// <param name="entity"></param>
 	/// <param name="component"></param>
-	public void Set<T>(EcsID entity, T component) where T : struct
+	public void Set<T>(EcsID entity, T component = default) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
+#if USE_PAIR
 		EcsAssert.Panic(cmp.Size > 0, "this is not a component");
-
+#endif
 		if (IsDeferred && !Has(entity, cmp.ID))
 		{
-			SetDeferred(entity, component);
+			if (cmp.Size > 0)
+				SetDeferred(entity, component);
+			else
+				AddDeferred<T>(entity);
 
 			return;
 		}
 
 		(var raw, var row) = Attach(entity, cmp.ID, cmp.Size);
+		if (cmp.Size <= 0)
+			return;
 		var array = (T[])raw!;
 		array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
 	}
 
+#if USE_PAIR
 	/// <summary>
 	/// Add a Tag to the entity.<br/>Tag is an entity.
 	/// </summary>
@@ -453,6 +463,7 @@ public sealed partial class World
 
 		_ = Attach(entity, id, 0);
 	}
+#endif
 
 	/// <summary>
 	/// Remove a component or a tag from the entity.
