@@ -76,6 +76,9 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
         var pluginClassName = pluginClass.ToDisplayString();
         var ns = pluginClass.ContainingNamespace.IsGlobalNamespace ? "" : pluginClass.ContainingNamespace.ToDisplayString();
 
+        // Validate method requirements for TinySystemAttribute
+        ValidateMethodRequirements(context, method);
+
         // Check if method returns bool (for conditional systems)
         var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
         var conditionalInterface = returnsBool ? ", TinyEcs.ITinyConditionalSystem" : "";
@@ -100,16 +103,21 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
             methodCallParameters.Append(fieldName);
         }
 
-        // Determine how to call the method (static vs instance)
+        // For non-static methods, add a field for the plugin instance
+        string instanceField = "";
+        string ctor = "";
         string methodCall;
+
         if (method.IsStatic)
         {
             methodCall = $"{pluginClassName}.{method.Name}({methodCallParameters})";
         }
         else
         {
-            // For instance methods, we need to create an instance of the plugin class
-            methodCall = $"new {pluginClassName}().{method.Name}({methodCallParameters})";
+            // Adapter will accept the instance via constructor
+            instanceField = $"    private readonly {pluginClassName} _instance;";
+            ctor = $"        public {adapterName}({pluginClassName} instance) {{ _instance = instance; }}";
+            methodCall = $"_instance.{method.Name}({methodCallParameters})";
         }
 
         // Generate Execute method based on return type
@@ -150,9 +158,11 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
             adapterClass.AppendLine("{");
         }
 
-        adapterClass.AppendLine($@"    public class {adapterName} : TinyEcs.TinySystem{conditionalInterface}
+        // Make the adapter class sealed and partial
+        adapterClass.AppendLine($@"    public sealed partial class {adapterName} : TinyEcs.TinySystem{conditionalInterface}
     {{
-{fieldDeclarations}
+{fieldDeclarations}{instanceField}
+{ctor}
         protected override void Setup(TinyEcs.SystemParamBuilder builder)
         {{
 {setupAssignments}        }}
@@ -167,6 +177,39 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
 
         var sourceText = adapterClass.ToString();
         context.AddSource($"{adapterName}.g.cs", sourceText);
+    }
+
+    private static void ValidateMethodRequirements(SourceProductionContext context, IMethodSymbol method)
+    {
+        var location = method.Locations.FirstOrDefault() ?? Location.None;
+
+        // Check if method is public
+        if (method.DeclaredAccessibility != Accessibility.Public)
+        {
+            var descriptor = new DiagnosticDescriptor(
+                "TINYECS001",
+                "TinySystem method must be public",
+                "Method '{0}' with [TinySystem] attribute must be public",
+                "TinyEcs",
+                DiagnosticSeverity.Error,
+                isEnabledByDefault: true);
+
+            context.ReportDiagnostic(Diagnostic.Create(descriptor, location, method.Name));
+        }
+
+        // Check if method is static
+        // if (!method.IsStatic)
+        // {
+        //     var descriptor = new DiagnosticDescriptor(
+        //         "TINYECS002",
+        //         "TinySystem method must be static",
+        //         "Method '{0}' with [TinySystem] attribute must be static",
+        //         "TinyEcs",
+        //         DiagnosticSeverity.Error,
+        //         isEnabledByDefault: true);
+        //
+        //     context.ReportDiagnostic(Diagnostic.Create(descriptor, location, method.Name));
+        // }
     }
 
     private class PluginClassInfo

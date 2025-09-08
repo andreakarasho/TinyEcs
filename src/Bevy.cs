@@ -404,7 +404,7 @@ public partial class Scheduler
 	public Scheduler AddPlugin<T>() where T : IPlugin, new()
 		=> AddPlugin(new T());
 
-	public Scheduler AddPlugin<T>(T plugin) where T : IPlugin
+	public Scheduler AddPlugin(IPlugin plugin)
 	{
 		plugin.Build(this);
 
@@ -1518,6 +1518,16 @@ public abstract class TinySystem : ITinySystem
 		var builder = new SystemParamBuilder(world);
 		Setup(builder);
 		SystemParams = builder.Build();
+
+		foreach (var conditional in Configuration.Conditionals)
+		{
+			conditional.Initialize(world);
+		}
+
+		foreach (var afterSys in Configuration.AfterSystems)
+		{
+			afterSys.Initialize(world);
+		}
 	}
 
 	public bool ExecuteOnReady(World world, uint ticks)
@@ -1593,10 +1603,14 @@ public abstract class TinySystem : ITinySystem
 	protected abstract bool Execute(World world);
 
 
-	public TinySystem RunIf(ITinyConditionalSystem sys)
+	public TinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
+		=> RunIf(new T());
+
+	public TinySystem RunIf(params ITinyConditionalSystem[] conditionals)
 	{
 		// TODO: Check for duplicates?
-		_ = Configuration.Conditionals.Add(sys);
+		foreach (var sys in conditionals)
+			_ = Configuration.Conditionals.Add(sys);
 		return this;
 	}
 
