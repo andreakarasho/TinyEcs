@@ -108,70 +108,76 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
         string ctor = "";
         string methodCall;
 
+        // Use a single IndentedStringBuilder for all code blocks
+        var adapterClass = new IndentedStringBuilder();
+
+        if (!string.IsNullOrEmpty(ns))
+        {
+            adapterClass.AppendLine($"namespace {ns}");
+            adapterClass.AppendLine("{");
+            adapterClass.IncrementIndent();
+        }
+
+        // Make the adapter class sealed and partial
+        adapterClass.AppendLine($"public sealed partial class {adapterName} : TinyEcs.TinySystem{conditionalInterface}");
+        adapterClass.AppendLine("{");
+        adapterClass.IncrementIndent();
+
+        // Fields
+        foreach (var line in fieldDeclarations.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            adapterClass.AppendLine(line);
+
         if (method.IsStatic)
         {
             methodCall = $"{pluginClassName}.{method.Name}({methodCallParameters})";
         }
         else
         {
-            // Adapter will accept the instance via constructor
-            instanceField = $"    private readonly {pluginClassName} _instance;";
-            ctor = $"        public {adapterName}({pluginClassName} instance) {{ _instance = instance; }}";
+            instanceField = $"private readonly {pluginClassName} _instance;";
+            ctor = $"public {adapterName}({pluginClassName} instance) {{ _instance = instance; }}";
             methodCall = $"_instance.{method.Name}({methodCallParameters})";
+            adapterClass.AppendLine(instanceField);
+            adapterClass.AppendLine(ctor);
         }
 
-        // Generate Execute method based on return type
-        string executeMethod;
+        // Setup method
+        adapterClass.AppendLine("protected override void Setup(TinyEcs.SystemParamBuilder builder)");
+        adapterClass.AppendLine("{");
+        adapterClass.IncrementIndent();
+        foreach (var line in setupAssignments.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            adapterClass.AppendLine(line);
+        adapterClass.DecrementIndent();
+        adapterClass.AppendLine("}");
+
+        // Execute method
+        adapterClass.AppendLine("protected override bool Execute(TinyEcs.World world)");
+        adapterClass.AppendLine("{");
+        adapterClass.IncrementIndent();
+        adapterClass.AppendLine("Lock();");
+        adapterClass.AppendLine("world.BeginDeferred();");
         if (returnsBool)
         {
-            // For conditional systems, return the method's boolean result
-            executeMethod = $@"        protected override bool Execute(TinyEcs.World world)
-        {{
-            Lock();
-            world.BeginDeferred();
-            bool result = {methodCall};
-            world.EndDeferred();
-            Unlock();
-            return result;
-        }}";
+            adapterClass.AppendLine($"bool result = {methodCall};");
+            adapterClass.AppendLine("world.EndDeferred();");
+            adapterClass.AppendLine("Unlock();");
+            adapterClass.AppendLine("return result;");
         }
         else
         {
-            // For regular systems, call method and return true
-            executeMethod = $@"        protected override bool Execute(TinyEcs.World world)
-        {{
-            Lock();
-            world.BeginDeferred();
-            {methodCall};
-            world.EndDeferred();
-            Unlock();
-            return true;
-        }}";
+            adapterClass.AppendLine($"{methodCall};");
+            adapterClass.AppendLine("world.EndDeferred();");
+            adapterClass.AppendLine("Unlock();");
+            adapterClass.AppendLine("return true;");
         }
+        adapterClass.DecrementIndent();
+        adapterClass.AppendLine("}");
 
-        // Generate the adapter class
-        var adapterClass = new StringBuilder();
+        adapterClass.DecrementIndent();
+        adapterClass.AppendLine("}");
 
         if (!string.IsNullOrEmpty(ns))
         {
-            adapterClass.AppendLine($"namespace {ns}");
-            adapterClass.AppendLine("{");
-        }
-
-        // Make the adapter class sealed and partial
-        adapterClass.AppendLine($@"    public sealed partial class {adapterName} : TinyEcs.TinySystem{conditionalInterface}
-    {{
-{fieldDeclarations}{instanceField}
-{ctor}
-        protected override void Setup(TinyEcs.SystemParamBuilder builder)
-        {{
-{setupAssignments}        }}
-
-{executeMethod}
-    }}");
-
-        if (!string.IsNullOrEmpty(ns))
-        {
+            adapterClass.DecrementIndent();
             adapterClass.AppendLine("}");
         }
 
