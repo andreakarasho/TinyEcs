@@ -172,19 +172,20 @@ public sealed class SourceGenerator : IIncrementalGenerator
     }}";
 
                         var onExecuteParams = string.Join(", ", validParams.Select(p => $"_{p.Name}"));
-                        var executeOverride = $@"    public override void Execute(World world)
+                        var executeOverride = $@"    protected override bool Execute(World world)
     {{
 		Lock();
         world.BeginDeferred();
         OnExecute({onExecuteParams});
         world.EndDeferred();
 		Unlock();
+		return true;
     }}";
 
                         // Only generate Setup, Execute, and OnExecute
                         var systemClass = classSymbol.ContainingNamespace.IsGlobalNamespace
                             ? $@"using TinyEcs;
-public partial class {className} : TinySystem2
+public partial class {className} : TinySystem
 {{
 {fieldDecls}
 {setupCode}
@@ -193,7 +194,7 @@ public partial class {className} : TinySystem2
                             : $@"using TinyEcs;
 namespace {ns}
 {{
-    public partial class {className} : TinySystem2
+    public partial class {className} : TinySystem
     {{
 {fieldDecls}
 {setupCode}
