@@ -73,8 +73,10 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
     private static void GenerateAdapterClass(SourceProductionContext context, INamedTypeSymbol pluginClass, IMethodSymbol method)
     {
         var adapterName = $"{method.Name}Adapter";
-        var pluginClassName = pluginClass.ToDisplayString();
         var ns = pluginClass.ContainingNamespace.IsGlobalNamespace ? "" : pluginClass.ContainingNamespace.ToDisplayString();
+
+        // Use fully-qualified type name (global::Namespace.Type) for instance/static references
+        var instanceTypeName = pluginClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         // Validate method requirements for TinySystemAttribute
         ValidateMethodRequirements(context, method);
@@ -129,16 +131,21 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
 
         if (method.IsStatic)
         {
-            methodCall = $"{pluginClassName}.{method.Name}({methodCallParameters})";
+            // Use namespace-qualified type for static call
+            methodCall = $"{instanceTypeName}.{method.Name}({methodCallParameters})";
         }
         else
         {
-            instanceField = $"private readonly {pluginClassName} _instance;";
-            ctor = $"public {adapterName}({pluginClassName} instance) {{ _instance = instance; }}";
+            // Adapter will accept the instance via constructor using namespace-qualified type
+            instanceField = $"private readonly {instanceTypeName} _instance;";
+            ctor = $"public {adapterName}({instanceTypeName} instance) {{ _instance = instance; }}";
             methodCall = $"_instance.{method.Name}({methodCallParameters})";
             adapterClass.AppendLine(instanceField);
+            adapterClass.AppendLine();
             adapterClass.AppendLine(ctor);
         }
+
+        adapterClass.AppendLine();
 
         // Setup method
         adapterClass.AppendLine("protected override void Setup(TinyEcs.SystemParamBuilder builder)");
@@ -148,6 +155,8 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
             adapterClass.AppendLine(line);
         adapterClass.DecrementIndent();
         adapterClass.AppendLine("}");
+
+        adapterClass.AppendLine();
 
         // Execute method
         adapterClass.AppendLine("protected override bool Execute(TinyEcs.World world)");
