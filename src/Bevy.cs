@@ -137,15 +137,12 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 
 		var config = Configuration;
 
-		if (config.BeforeSystems != null)
+		foreach (var beforeSys in config.BeforeSystems)
 		{
-			foreach (var beforeSys in config.BeforeSystems)
+			if (!beforeSys.ExecuteOnReady(world, ticks))
 			{
-				if (!beforeSys.ExecuteOnReady(world, ticks))
-				{
-					canRun = false;
-					break;
-				}
+				canRun = false;
+				break;
 			}
 		}
 
@@ -160,9 +157,10 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 				}
 			}
 
-			_fn(Ticks, _arg, _validator);
+			if (canRun)
+				canRun = _fn(Ticks, _arg, _validator);
 
-			if (config.AfterSystems != null)
+			if (canRun)
 			{
 				foreach (var afterSys in config.AfterSystems)
 				{
@@ -311,6 +309,7 @@ public partial class Scheduler
 	internal void Add(ITinySystem sys, Stages stage)
 	{
 		sys.Configuration.Node = _systems[(int)stage].AddLast(sys);
+		sys.Configuration.Stage = stage;
 	}
 
 	public Scheduler AddSystem2<T>(Stages stage) where T : ITinySystem, new()
@@ -1459,6 +1458,12 @@ public sealed class TinyPluginAttribute : Attribute
 }
 
 
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class TinyConditionalSystemAttribute : Attribute
+{
+}
+
+
 public sealed class SystemParamBuilder(World world)
 {
 	private readonly List<ISystemParam> _params = [];
@@ -1476,12 +1481,16 @@ public sealed class SystemParamBuilder(World world)
 
 public sealed class SystemConfiguration
 {
-	public List<ITinySystem> Conditionals { get; } = [];
+	public HashSet<ITinyConditionalSystem> Conditionals { get; } = [];
 	public LinkedList<ITinySystem> BeforeSystems { get; set; } = new();
 	public LinkedList<ITinySystem> AfterSystems { get; set; } = new();
 	public LinkedListNode<ITinySystem>? Node { get; set; }
 	public ThreadingMode ThreadingMode { get; set; } = ThreadingMode.Auto;
 	public Stages Stage { get; set; } = Stages.Update;
+}
+
+public interface ITinyConditionalSystem : ITinySystem
+{
 }
 
 public interface ITinySystem
@@ -1497,12 +1506,12 @@ public interface ITinySystem
 	bool ParamsAreLocked();
 }
 
-public abstract class TinySystem2 : ITinySystem
+public abstract class TinySystem : ITinySystem
 {
 	public ISystemParam[] SystemParams { get; set; } = [];
 	public SystemTicks Ticks { get; } = new();
-
 	public SystemConfiguration Configuration { get; } = new();
+
 
 	public void Initialize(World world)
 	{
@@ -1516,9 +1525,7 @@ public abstract class TinySystem2 : ITinySystem
 		Ticks.ThisRun = ticks;
 		var canRun = true;
 
-		var config = Configuration;
-
-		foreach (var beforeSys in config.BeforeSystems)
+		foreach (var beforeSys in Configuration.BeforeSystems)
 		{
 			if (!beforeSys.ExecuteOnReady(world, ticks))
 			{
@@ -1529,7 +1536,7 @@ public abstract class TinySystem2 : ITinySystem
 
 		if (canRun)
 		{
-			foreach (var conditional in config.Conditionals)
+			foreach (var conditional in Configuration.Conditionals)
 			{
 				if (!conditional.ExecuteOnReady(world, ticks))
 				{
@@ -1538,14 +1545,20 @@ public abstract class TinySystem2 : ITinySystem
 				}
 			}
 
-			Execute(world);
-
-			foreach (var afterSys in config.AfterSystems)
+			if (canRun)
 			{
-				if (!afterSys.ExecuteOnReady(world, ticks))
+				canRun = Execute(world);
+			}
+
+			if (canRun)
+			{
+				foreach (var afterSys in Configuration.AfterSystems)
 				{
-					canRun = false;
-					break;
+					if (!afterSys.ExecuteOnReady(world, ticks))
+					{
+						canRun = false;
+						break;
+					}
 				}
 			}
 		}
@@ -1577,7 +1590,29 @@ public abstract class TinySystem2 : ITinySystem
 	}
 
 	protected abstract void Setup(SystemParamBuilder builder);
-	public abstract void Execute(World world);
+	protected abstract bool Execute(World world);
+
+
+	public TinySystem RunIf(ITinyConditionalSystem sys)
+	{
+		// TODO: Check for duplicates?
+		_ = Configuration.Conditionals.Add(sys);
+		return this;
+	}
+
+	public TinySystem RunAfter(ITinySystem sys)
+	{
+		Configuration.Node?.List?.Remove(Configuration.Node);
+		Configuration.Node = Configuration.AfterSystems.AddLast(sys);
+		return this;
+	}
+
+	public TinySystem RunBefore(ITinySystem sys)
+	{
+		Configuration.Node?.List?.Remove(Configuration.Node);
+		Configuration.Node = Configuration.BeforeSystems.AddLast(sys);
+		return this;
+	}
 }
 
 #endif
