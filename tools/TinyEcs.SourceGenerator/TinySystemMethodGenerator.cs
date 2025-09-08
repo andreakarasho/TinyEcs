@@ -76,6 +76,10 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
         var pluginClassName = pluginClass.ToDisplayString();
         var ns = pluginClass.ContainingNamespace.IsGlobalNamespace ? "" : pluginClass.ContainingNamespace.ToDisplayString();
 
+        // Check if method returns bool (for conditional systems)
+        var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
+        var conditionalInterface = returnsBool ? ", TinyEcs.ITinyConditionalSystem" : "";
+
         // Get method parameters for dependency injection
         var parameters = method.Parameters.ToList();
         var fieldDeclarations = new StringBuilder();
@@ -108,6 +112,35 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
             methodCall = $"new {pluginClassName}().{method.Name}({methodCallParameters})";
         }
 
+        // Generate Execute method based on return type
+        string executeMethod;
+        if (returnsBool)
+        {
+            // For conditional systems, return the method's boolean result
+            executeMethod = $@"        protected override bool Execute(TinyEcs.World world)
+        {{
+            Lock();
+            world.BeginDeferred();
+            bool result = {methodCall};
+            world.EndDeferred();
+            Unlock();
+            return result;
+        }}";
+        }
+        else
+        {
+            // For regular systems, call method and return true
+            executeMethod = $@"        protected override bool Execute(TinyEcs.World world)
+        {{
+            Lock();
+            world.BeginDeferred();
+            {methodCall};
+            world.EndDeferred();
+            Unlock();
+            return true;
+        }}";
+        }
+
         // Generate the adapter class
         var adapterClass = new StringBuilder();
 
@@ -117,22 +150,14 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
             adapterClass.AppendLine("{");
         }
 
-        adapterClass.AppendLine($@"    public class {adapterName} : TinyEcs.TinySystem
+        adapterClass.AppendLine($@"    public class {adapterName} : TinyEcs.TinySystem{conditionalInterface}
     {{
 {fieldDeclarations}
         protected override void Setup(TinyEcs.SystemParamBuilder builder)
         {{
 {setupAssignments}        }}
 
-        protected override bool Execute(TinyEcs.World world)
-        {{
-            Lock();
-            world.BeginDeferred();
-            {methodCall};
-            world.EndDeferred();
-            Unlock();
-            return true;
-        }}
+{executeMethod}
     }}");
 
         if (!string.IsNullOrEmpty(ns))
