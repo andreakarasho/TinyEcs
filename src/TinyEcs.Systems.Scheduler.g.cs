@@ -19,12 +19,8 @@ namespace TinyEcs
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
-            var checkInuse = () => obj0?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
                 obj0.Lock(ticks);
                 args.BeginDeferred();
@@ -33,7 +29,9 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -47,12 +45,8 @@ namespace TinyEcs
 
             T0? obj0 = null;
 			T1? obj1 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
                 obj0.Lock(ticks);
@@ -64,7 +58,9 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -80,12 +76,8 @@ namespace TinyEcs
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -100,7 +92,9 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -118,12 +112,8 @@ namespace TinyEcs
 			T1? obj1 = null;
 			T2? obj2 = null;
 			T3? obj3 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -141,7 +131,9 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -161,12 +153,8 @@ namespace TinyEcs
 			T2? obj2 = null;
 			T3? obj3 = null;
 			T4? obj4 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -187,7 +175,9 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -209,12 +199,8 @@ namespace TinyEcs
 			T3? obj3 = null;
 			T4? obj4 = null;
 			T5? obj5 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -238,7 +224,9 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -262,12 +250,8 @@ namespace TinyEcs
 			T4? obj4 = null;
 			T5? obj5 = null;
 			T6? obj6 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -294,7 +278,9 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -320,12 +306,8 @@ namespace TinyEcs
 			T5? obj5 = null;
 			T6? obj6 = null;
 			T7? obj7 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -355,7 +337,9 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -383,12 +367,8 @@ namespace TinyEcs
 			T6? obj6 = null;
 			T7? obj7 = null;
 			T8? obj8 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -421,7 +401,9 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -451,12 +433,8 @@ namespace TinyEcs
 			T7? obj7 = null;
 			T8? obj8 = null;
 			T9? obj9 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -492,7 +470,9 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -524,12 +504,8 @@ namespace TinyEcs
 			T8? obj8 = null;
 			T9? obj9 = null;
 			T10? obj10 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -568,7 +544,9 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -602,12 +580,8 @@ namespace TinyEcs
 			T9? obj9 = null;
 			T10? obj10 = null;
 			T11? obj11 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -649,7 +623,9 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -685,12 +661,8 @@ namespace TinyEcs
 			T10? obj10 = null;
 			T11? obj11 = null;
 			T12? obj12 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -735,7 +707,9 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -773,12 +747,8 @@ namespace TinyEcs
 			T11? obj11 = null;
 			T12? obj12 = null;
 			T13? obj13 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -826,7 +796,9 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -866,12 +838,8 @@ namespace TinyEcs
 			T12? obj12 = null;
 			T13? obj13 = null;
 			T14? obj14 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -922,7 +890,9 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -964,12 +934,8 @@ namespace TinyEcs
 			T13? obj13 = null;
 			T14? obj14 = null;
 			T15? obj15 = null;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0|| obj15?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1023,7 +989,9 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }

@@ -9,17 +9,19 @@ using System.Runtime.CompilerServices;
 namespace TinyEcs
 {
 #if NET9_0_OR_GREATER
-    public sealed partial class FuncSystem
+    public sealed partial class TinyDelegateSystem
     {
         public ITinySystem RunIf<T0>(Func<T0, bool> condition)
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
                 return condition(obj0);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -29,12 +31,14 @@ namespace TinyEcs
         {
             T0? obj0 = null;
 			T1? obj1 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
                 return condition(obj0, obj1);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -46,13 +50,15 @@ namespace TinyEcs
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
                 return condition(obj0, obj1, obj2);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -66,14 +72,16 @@ namespace TinyEcs
 			T1? obj1 = null;
 			T2? obj2 = null;
 			T3? obj3 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
 				obj3 ??= (T3)T3.Generate(args);
                 return condition(obj0, obj1, obj2, obj3);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -89,7 +97,7 @@ namespace TinyEcs
 			T2? obj2 = null;
 			T3? obj3 = null;
 			T4? obj4 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -97,7 +105,9 @@ namespace TinyEcs
 				obj4 ??= (T4)T4.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -115,7 +125,7 @@ namespace TinyEcs
 			T3? obj3 = null;
 			T4? obj4 = null;
 			T5? obj5 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -124,7 +134,9 @@ namespace TinyEcs
 				obj5 ??= (T5)T5.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -144,7 +156,7 @@ namespace TinyEcs
 			T4? obj4 = null;
 			T5? obj5 = null;
 			T6? obj6 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -154,7 +166,9 @@ namespace TinyEcs
 				obj6 ??= (T6)T6.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -176,7 +190,7 @@ namespace TinyEcs
 			T5? obj5 = null;
 			T6? obj6 = null;
 			T7? obj7 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -187,7 +201,9 @@ namespace TinyEcs
 				obj7 ??= (T7)T7.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -211,7 +227,7 @@ namespace TinyEcs
 			T6? obj6 = null;
 			T7? obj7 = null;
 			T8? obj8 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -223,7 +239,9 @@ namespace TinyEcs
 				obj8 ??= (T8)T8.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -249,7 +267,7 @@ namespace TinyEcs
 			T7? obj7 = null;
 			T8? obj8 = null;
 			T9? obj9 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -262,7 +280,9 @@ namespace TinyEcs
 				obj9 ??= (T9)T9.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -290,7 +310,7 @@ namespace TinyEcs
 			T8? obj8 = null;
 			T9? obj9 = null;
 			T10? obj10 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -304,7 +324,9 @@ namespace TinyEcs
 				obj10 ??= (T10)T10.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -334,7 +356,7 @@ namespace TinyEcs
 			T9? obj9 = null;
 			T10? obj10 = null;
 			T11? obj11 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -349,7 +371,9 @@ namespace TinyEcs
 				obj11 ??= (T11)T11.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10, obj11);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -381,7 +405,7 @@ namespace TinyEcs
 			T10? obj10 = null;
 			T11? obj11 = null;
 			T12? obj12 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -397,7 +421,9 @@ namespace TinyEcs
 				obj12 ??= (T12)T12.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10, obj11, obj12);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -431,7 +457,7 @@ namespace TinyEcs
 			T11? obj11 = null;
 			T12? obj12 = null;
 			T13? obj13 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -448,7 +474,9 @@ namespace TinyEcs
 				obj13 ??= (T13)T13.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10, obj11, obj12, obj13);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -484,7 +512,7 @@ namespace TinyEcs
 			T12? obj12 = null;
 			T13? obj13 = null;
 			T14? obj14 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -502,7 +530,9 @@ namespace TinyEcs
 				obj14 ??= (T14)T14.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10, obj11, obj12, obj13, obj14);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 
@@ -540,7 +570,7 @@ namespace TinyEcs
 			T13? obj13 = null;
 			T14? obj14 = null;
 			T15? obj15 = null;
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -559,7 +589,9 @@ namespace TinyEcs
 				obj15 ??= (T15)T15.Generate(args);
                 return condition(obj0, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9, obj10, obj11, obj12, obj13, obj14, obj15);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 

@@ -5,189 +5,6 @@ namespace TinyEcs;
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
 #if NET9_0_OR_GREATER
-
-public sealed partial class FuncSystem : ITinySystem
-{
-	private readonly World _arg;
-	private readonly Func<SystemTicks, World, Func<SystemTicks, World, bool>, bool> _fn;
-	private readonly List<Func<SystemTicks, World, bool>> _conditions;
-	private readonly Func<SystemTicks, World, bool> _validator;
-	private readonly Func<bool> _checkInUse;
-
-	public ISystemParam[] SystemParams { get; set; } = [];
-	public SystemTicks Ticks { get; } = new();
-	public SystemConfiguration Configuration { get; } = new();
-	public SystemOrderConfiguration OrderConfiguration { get; } = new();
-
-
-	internal FuncSystem(World arg, Func<SystemTicks, World, Func<SystemTicks, World, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
-	{
-		_arg = arg;
-		_fn = fn;
-		_conditions = new();
-		_validator = ValidateConditions;
-		_checkInUse = checkInUse;
-		Configuration.ThreadingMode = threadingType;
-		Configuration.Stage = stage;
-	}
-
-
-	public ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
-	{
-		var conditional = new T();
-		_conditions.Add((ticks, args) => conditional.ExecuteOnReady(args, ticks.ThisRun));
-
-		return this;
-	}
-
-	public ITinySystem RunIf(params ITinyConditionalSystem[] conditionals)
-	{
-		foreach (var conditional in conditionals)
-			_conditions.Add((ticks, args) => conditional.ExecuteOnReady(args, ticks.ThisRun));
-
-		return this;
-	}
-
-	public ITinySystem RunAfter(ITinySystem parent)
-	{
-		if (this == parent || Contains(parent, s => s.OrderConfiguration.AfterSystems))
-			throw new InvalidOperationException("Circular dependency detected");
-
-		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
-		OrderConfiguration.Node = parent.OrderConfiguration.AfterSystems.AddLast(this);
-
-		return this;
-	}
-
-	public ITinySystem RunAfter(params ReadOnlySpan<ITinySystem> systems)
-	{
-		foreach (var system in systems)
-			system.RunAfter(this);
-
-		return this;
-	}
-
-	public ITinySystem RunBefore(ITinySystem parent)
-	{
-		if (this == parent || Contains(parent, s => s.OrderConfiguration.BeforeSystems))
-			throw new InvalidOperationException("Circular dependency detected");
-
-		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
-		OrderConfiguration.Node = parent.OrderConfiguration.BeforeSystems.AddLast(this);
-
-		return this;
-	}
-
-	public ITinySystem RunBefore(params ReadOnlySpan<ITinySystem> systems)
-	{
-		foreach (var system in systems)
-			system.RunBefore(this);
-
-		return this;
-	}
-
-	private bool Contains(ITinySystem system, Func<ITinySystem, LinkedList<ITinySystem>?> direction)
-	{
-		ITinySystem? current = this;
-		while (current != null)
-		{
-			if (current == system)
-				return true;
-
-			var nextNode = direction(current)?.First;
-			current = nextNode?.Value;
-		}
-		return false;
-	}
-
-	internal bool IsResourceInUse()
-	{
-		return Configuration.ThreadingMode switch
-		{
-			ThreadingMode.Multi => false,
-			ThreadingMode.Single => true,
-			_ or ThreadingMode.Auto => _checkInUse()
-		};
-	}
-
-	private bool ValidateConditions(SystemTicks ticks, World args)
-	{
-		foreach (var fn in _conditions)
-			if (!fn(ticks, args))
-				return false;
-		return true;
-	}
-
-
-	public void Initialize(World world)
-	{
-
-	}
-
-	public bool BeforeExecute(World world)
-	{
-		var ticks = Ticks.ThisRun;
-		foreach (var beforeSys in OrderConfiguration.BeforeSystems)
-		{
-			if (!beforeSys.ExecuteOnReady(world, ticks))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	public bool AfterExecute(World world)
-	{
-		var ticks = Ticks.ThisRun;
-		foreach (var afterSys in OrderConfiguration.AfterSystems)
-		{
-			if (!afterSys.ExecuteOnReady(world, ticks))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	public bool ExecuteOnReady(World world, uint ticks)
-	{
-		Ticks.ThisRun = ticks;
-		var config = Configuration;
-
-		var canRun = BeforeExecute(world);
-
-		if (canRun)
-		{
-			foreach (var conditional in config.Conditionals)
-			{
-				if (!conditional.ExecuteOnReady(world, ticks))
-				{
-					canRun = false;
-					break;
-				}
-			}
-
-			if (canRun)
-				canRun = _fn(Ticks, _arg, _validator);
-
-			if (canRun)
-			{
-				canRun = AfterExecute(world);
-			}
-		}
-
-		Ticks.LastRun = Ticks.ThisRun;
-
-		return canRun;
-	}
-
-	public bool ParamsAreLocked()
-	{
-		return IsResourceInUse();
-	}
-}
-
 public enum Stages
 {
 	Startup,
@@ -333,20 +150,17 @@ public partial class Scheduler
 		return this;
 	}
 
-	public FuncSystem AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
+	public ITinySystem AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
 	{
 		if (!threadingType.HasValue)
 			threadingType = ThreadingExecutionMode;
 
-		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
+		var sys = new TinyDelegateSystem((args, ticks) =>
 		{
-			if (runIf?.Invoke(ticks, args) ?? true)
-			{
-				system();
-				return true;
-			}
-			return false;
-		}, () => false, stage, threadingType.Value);
+			system();
+			return true;
+		});
+		sys.Configuration.ThreadingMode = threadingType;
 		Add(sys, stage);
 
 		return sys;
@@ -360,15 +174,12 @@ public partial class Scheduler
 
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
+		var sys = new TinyDelegateSystem((args, ticks) =>
 		{
-			if (runIf?.Invoke(ticks, args) ?? true)
-			{
-				system();
-				return true;
-			}
-			return false;
-		}, () => false, Stages.OnEnter, threadingType.Value)
+			system();
+			return true;
+		})
+		{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType.Value } }
 		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
 		Add(sys, Stages.OnEnter);
@@ -384,15 +195,12 @@ public partial class Scheduler
 
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
+		var sys = new TinyDelegateSystem((args, ticks) =>
 		{
-			if (runIf?.Invoke(ticks, args) ?? true)
-			{
-				system();
-				return true;
-			}
-			return false;
-		}, () => false, Stages.OnExit, threadingType.Value)
+			system();
+			return true;
+		})
+		{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType.Value } }
 		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
 		Add(sys, Stages.OnExit);
@@ -1686,7 +1494,7 @@ public abstract class TinyConditionalSystem : TinySystemBase, ITinyConditionalSy
 {
 }
 
-public sealed partial class TinyDelegateSystem : TinySystem
+public sealed partial class TinyDelegateSystem : TinySystem, ITinyConditionalSystem
 {
 	private readonly Func<World, SystemTicks, bool> _fn;
 

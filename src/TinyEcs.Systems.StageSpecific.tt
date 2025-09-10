@@ -57,7 +57,6 @@ namespace TinyEcs
             var objsLock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Lock(ticks);");
             var objsUnlock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Unlock();");
             var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
-            var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 #>
         public ITinySystem <#= stage.MethodName #><<#= genericsArgs #>>(Action<<#= genericsArgs #>> system, ThreadingMode? threadingType = null)
             <#= genericsArgsWhere #>
@@ -66,12 +65,8 @@ namespace TinyEcs
                 threadingType = ThreadingExecutionMode;
 
             <#= objs #>
-            var checkInuse = () => <#= objsCheckInuse #>;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 <#= objsGen #>
                 <#= objsLock #>
                 args.BeginDeferred();
@@ -80,7 +75,8 @@ namespace TinyEcs
                 <#= objsUnlock #>
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.<#= stage.StageName #>, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType;
             Add(sys, Stages.<#= stage.StageName #>);
             return sys;
         }
@@ -93,20 +89,19 @@ namespace TinyEcs
     foreach (var stage in stageNames)
     {
 #>
-        public ITinySystem <#= stage.MethodName #>(Action system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem <#= stage.MethodName #>(Action system, ThreadingMode? threadingType = null)
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
-            var sys = new FuncSystem(_world, (ticks, args, runIf) =>
-            {
-                if (runIf?.Invoke(ticks, args) ?? true)
-                {
-                    system();
-                    return true;
-                }
-                return false;
-            }, () => false, Stages.<#= stage.StageName #>, threadingType);
+			var fn = (World args, SystemTicks ticks) =>
+			{
+				system();
+                return true;
+			};
+
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType;
             Add(sys, Stages.<#= stage.StageName #>);
             return sys;
         }

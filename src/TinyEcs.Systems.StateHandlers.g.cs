@@ -12,21 +12,17 @@ namespace TinyEcs
 #if NET9_0_OR_GREATER
     public partial class Scheduler
     {
-        public ITinySystem OnEnter<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0>(TState st, Action<T0> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
                 obj0.Lock(ticks);
                 args.BeginDeferred();
@@ -35,27 +31,24 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0>(TState st, Action<T0> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
                 obj0.Lock(ticks);
                 args.BeginDeferred();
@@ -64,29 +57,26 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
 			T1? obj1 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
                 obj0.Lock(ticks);
@@ -98,29 +88,26 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
 			T1? obj1 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
                 obj0.Lock(ticks);
@@ -132,31 +119,28 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -171,31 +155,28 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -210,20 +191,21 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -231,12 +213,8 @@ namespace TinyEcs
 			T2? obj2 = null;
 			T3? obj3 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -254,20 +232,21 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -275,12 +254,8 @@ namespace TinyEcs
 			T2? obj2 = null;
 			T3? obj3 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -298,13 +273,14 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -312,7 +288,7 @@ namespace TinyEcs
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -321,12 +297,8 @@ namespace TinyEcs
 			T3? obj3 = null;
 			T4? obj4 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -347,13 +319,14 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -361,7 +334,7 @@ namespace TinyEcs
 			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -370,12 +343,8 @@ namespace TinyEcs
 			T3? obj3 = null;
 			T4? obj4 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -396,13 +365,14 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -411,7 +381,7 @@ namespace TinyEcs
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -421,12 +391,8 @@ namespace TinyEcs
 			T4? obj4 = null;
 			T5? obj5 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -450,13 +416,14 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -465,7 +432,7 @@ namespace TinyEcs
 			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -475,12 +442,8 @@ namespace TinyEcs
 			T4? obj4 = null;
 			T5? obj5 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -504,13 +467,14 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -520,7 +484,7 @@ namespace TinyEcs
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -531,12 +495,8 @@ namespace TinyEcs
 			T5? obj5 = null;
 			T6? obj6 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -563,13 +523,14 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -579,7 +540,7 @@ namespace TinyEcs
 			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -590,12 +551,8 @@ namespace TinyEcs
 			T5? obj5 = null;
 			T6? obj6 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -622,13 +579,14 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -639,7 +597,7 @@ namespace TinyEcs
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -651,12 +609,8 @@ namespace TinyEcs
 			T6? obj6 = null;
 			T7? obj7 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -686,13 +640,14 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -703,7 +658,7 @@ namespace TinyEcs
 			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -715,12 +670,8 @@ namespace TinyEcs
 			T6? obj6 = null;
 			T7? obj7 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -750,13 +701,14 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -768,7 +720,7 @@ namespace TinyEcs
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -781,12 +733,8 @@ namespace TinyEcs
 			T7? obj7 = null;
 			T8? obj8 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -819,13 +767,14 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -837,7 +786,7 @@ namespace TinyEcs
 			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -850,12 +799,8 @@ namespace TinyEcs
 			T7? obj7 = null;
 			T8? obj8 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -888,13 +833,14 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -907,7 +853,7 @@ namespace TinyEcs
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -921,12 +867,8 @@ namespace TinyEcs
 			T8? obj8 = null;
 			T9? obj9 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -962,13 +904,14 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -981,7 +924,7 @@ namespace TinyEcs
 			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -995,12 +938,8 @@ namespace TinyEcs
 			T8? obj8 = null;
 			T9? obj9 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1036,13 +975,14 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1056,7 +996,7 @@ namespace TinyEcs
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1071,12 +1011,8 @@ namespace TinyEcs
 			T9? obj9 = null;
 			T10? obj10 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1115,13 +1051,14 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1135,7 +1072,7 @@ namespace TinyEcs
 			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1150,12 +1087,8 @@ namespace TinyEcs
 			T9? obj9 = null;
 			T10? obj10 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1194,13 +1127,14 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1215,7 +1149,7 @@ namespace TinyEcs
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1231,12 +1165,8 @@ namespace TinyEcs
 			T10? obj10 = null;
 			T11? obj11 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1278,13 +1208,14 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1299,7 +1230,7 @@ namespace TinyEcs
 			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1315,12 +1246,8 @@ namespace TinyEcs
 			T10? obj10 = null;
 			T11? obj11 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1362,13 +1289,14 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1384,7 +1312,7 @@ namespace TinyEcs
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1401,12 +1329,8 @@ namespace TinyEcs
 			T11? obj11 = null;
 			T12? obj12 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1451,13 +1375,14 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1473,7 +1398,7 @@ namespace TinyEcs
 			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1490,12 +1415,8 @@ namespace TinyEcs
 			T11? obj11 = null;
 			T12? obj12 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1540,13 +1461,14 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1563,7 +1485,7 @@ namespace TinyEcs
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1581,12 +1503,8 @@ namespace TinyEcs
 			T12? obj12 = null;
 			T13? obj13 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1634,13 +1552,14 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1657,7 +1576,7 @@ namespace TinyEcs
 			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1675,12 +1594,8 @@ namespace TinyEcs
 			T12? obj12 = null;
 			T13? obj13 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1728,13 +1643,14 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1752,7 +1668,7 @@ namespace TinyEcs
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1771,12 +1687,8 @@ namespace TinyEcs
 			T13? obj13 = null;
 			T14? obj14 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1827,13 +1739,14 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1851,7 +1764,7 @@ namespace TinyEcs
 			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1870,12 +1783,8 @@ namespace TinyEcs
 			T13? obj13 = null;
 			T14? obj14 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -1926,13 +1835,14 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1951,7 +1861,7 @@ namespace TinyEcs
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T15 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -1971,12 +1881,8 @@ namespace TinyEcs
 			T14? obj14 = null;
 			T15? obj15 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0|| obj15?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -2030,13 +1936,14 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode? threadingType = null)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -2055,7 +1962,7 @@ namespace TinyEcs
 			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T15 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
-            if (threadingType == ThreadingMode.Auto)
+            if (!threadingType.HasValue)
                 threadingType = ThreadingExecutionMode;
 
             T0? obj0 = null;
@@ -2075,12 +1982,8 @@ namespace TinyEcs
 			T14? obj14 = null;
 			T15? obj15 = null;
             var stateChangeId = -1;
-            var checkInuse = () => obj0?.UseIndex != 0|| obj1?.UseIndex != 0|| obj2?.UseIndex != 0|| obj3?.UseIndex != 0|| obj4?.UseIndex != 0|| obj5?.UseIndex != 0|| obj6?.UseIndex != 0|| obj7?.UseIndex != 0|| obj8?.UseIndex != 0|| obj9?.UseIndex != 0|| obj10?.UseIndex != 0|| obj11?.UseIndex != 0|| obj12?.UseIndex != 0|| obj13?.UseIndex != 0|| obj14?.UseIndex != 0|| obj15?.UseIndex != 0;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -2134,7 +2037,8 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new TinyDelegateSystem(fn)
+			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;

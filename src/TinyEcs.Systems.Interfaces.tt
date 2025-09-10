@@ -32,7 +32,7 @@ using System.Runtime.CompilerServices;
 namespace TinyEcs
 {
 #if NET9_0_OR_GREATER
-    public sealed partial class FuncSystem
+    public sealed partial class TinyDelegateSystem
     {
 <#
     for (var i = 0; i < MAX_GENERICS; ++i)
@@ -48,11 +48,13 @@ namespace TinyEcs
             <#= genericsArgsWhere #>
         {
             <#= objs #>
-            var fn = (SystemTicks ticks, World args) => {
+            var fn = (World args, SystemTicks ticks) => {
                 <#= objsGen #>
                 return condition(<#= systemCall #>);
             };
-            _conditions.Add(fn);
+
+			var sys = new TinyDelegateSystem(fn);
+			Configuration.Conditionals.Add(sys);
             return this;
         }
 

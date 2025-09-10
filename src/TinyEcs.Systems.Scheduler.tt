@@ -45,7 +45,6 @@ namespace TinyEcs
         var objsLock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Lock(ticks);");
         var objsUnlock = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j}.Unlock();");
         var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
-        var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 #>
         public ITinySystem AddSystem<<#= genericsArgs #>>(Action<<#= genericsArgs #>> system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
             <#= genericsArgsWhere #>
@@ -54,12 +53,8 @@ namespace TinyEcs
                 threadingType = ThreadingExecutionMode;
 
             <#= objs #>
-            var checkInuse = () => <#= objsCheckInuse #>;
-            var fn = (SystemTicks ticks, World args, Func<SystemTicks, World, bool> runIf) =>
+            var fn = (World args, SystemTicks ticks) =>
             {
-                if (runIf != null && !runIf.Invoke(ticks, args))
-                    return false;
-
                 <#= objsGen #>
                 <#= objsLock #>
                 args.BeginDeferred();
@@ -68,7 +63,9 @@ namespace TinyEcs
                 <#= objsUnlock #>
                 return true;
             };
-            var sys = new FuncSystem(_world, fn, checkInuse, stage, threadingType.Value);
+            var sys = new TinyDelegateSystem(fn);
+			sys.Configuration.ThreadingMode = threadingType.Value;
+			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
