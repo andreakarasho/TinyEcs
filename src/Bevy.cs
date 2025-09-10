@@ -6,106 +6,103 @@ namespace TinyEcs;
 
 #if NET9_0_OR_GREATER
 
-public sealed partial class FuncSystem<TArg> : ITinySystem
-	where TArg : notnull
+public sealed partial class FuncSystem : ITinySystem
 {
-	private readonly TArg _arg;
-	private readonly Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> _fn;
-	private readonly List<Func<SystemTicks, TArg, bool>> _conditions;
-	private readonly Func<SystemTicks, TArg, bool> _validator;
+	private readonly World _arg;
+	private readonly Func<SystemTicks, World, Func<SystemTicks, World, bool>, bool> _fn;
+	private readonly List<Func<SystemTicks, World, bool>> _conditions;
+	private readonly Func<SystemTicks, World, bool> _validator;
 	private readonly Func<bool> _checkInUse;
-	private readonly Stages _stage;
-	private readonly ThreadingMode _threadingType;
+
+	public ISystemParam[] SystemParams { get; set; } = [];
+	public SystemTicks Ticks { get; } = new();
+	public SystemConfiguration Configuration { get; } = new();
+	public SystemOrderConfiguration OrderConfiguration { get; } = new();
 
 
-	internal FuncSystem(TArg arg, Func<SystemTicks, TArg, Func<SystemTicks, TArg, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
+	internal FuncSystem(World arg, Func<SystemTicks, World, Func<SystemTicks, World, bool>, bool> fn, Func<bool> checkInUse, Stages stage, ThreadingMode threadingType)
 	{
 		_arg = arg;
 		_fn = fn;
 		_conditions = new();
 		_validator = ValidateConditions;
 		_checkInUse = checkInUse;
-		_threadingType = threadingType;
-		_stage = stage;
+		Configuration.ThreadingMode = threadingType;
+		Configuration.Stage = stage;
 	}
 
-	// internal void Run(uint ticks)
-	// {
-	// 	Ticks.ThisRun = ticks;
-	//
-	// 	foreach (var s in _before)
-	// 		s.Run(ticks);
-	//
-	// 	if (_fn(Ticks, _arg, _validator))
-	// 	{
-	// 		foreach (var s in _after)
-	// 			s.Run(ticks);
-	// 	}
-	//
-	// 	Ticks.LastRun = Ticks.ThisRun;
-	// }
 
-	public FuncSystem<TArg> RunIf(Func<bool> condition)
+	public ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
 	{
-		_conditions.Add((_, _) => condition());
+		var conditional = new T();
+		_conditions.Add((ticks, args) => conditional.ExecuteOnReady(args, ticks.ThisRun));
+
 		return this;
 	}
 
-	// public FuncSystem<TArg> RunAfter(ITinySystem parent)
-	// {
-	// 	if (this == parent || Contains(parent, s => s.Configuration.AfterSystems))
-	// 		throw new InvalidOperationException("Circular dependency detected");
-	//
-	// 	Configuration.Node?.List?.Remove(Configuration.Node);
-	// 	Configuration.Node = parent.Configuration.AfterSystems.AddLast(this);
-	//
-	// 	return this;
-	// }
-	//
-	// public FuncSystem<TArg> RunAfter(params ReadOnlySpan<ITinySystem> systems)
-	// {
-	// 	foreach (var system in systems)
-	// 		system.RunAfter(this);
-	//
-	// 	return this;
-	// }
-	//
-	// public FuncSystem<TArg> RunBefore(ITinySystem parent)
-	// {
-	// 	if (this == parent || Contains(parent, s => s.Configuration.BeforeSystems))
-	// 		throw new InvalidOperationException("Circular dependency detected");
-	//
-	// 	Configuration.Node?.List?.Remove(Configuration.Node);
-	// 	Configuration.Node = parent.Configuration.BeforeSystems.AddLast(this);
-	//
-	// 	return this;
-	// }
-	//
-	// public FuncSystem<TArg> RunBefore(params ReadOnlySpan<ITinySystem> systems)
-	// {
-	// 	foreach (var system in systems)
-	// 		system.RunBefore(this);
-	//
-	// 	return this;
-	// }
-	//
-	// private bool Contains(ITinySystem system, Func<ITinySystem, LinkedList<ITinySystem>?> direction)
-	// {
-	// 	ITinySystem? current = this;
-	// 	while (current != null)
-	// 	{
-	// 		if (current == system)
-	// 			return true;
-	//
-	// 		var nextNode = direction(current)?.First;
-	// 		current = nextNode?.Value;
-	// 	}
-	// 	return false;
-	// }
+	public ITinySystem RunIf(params ITinyConditionalSystem[] conditionals)
+	{
+		foreach (var conditional in conditionals)
+			_conditions.Add((ticks, args) => conditional.ExecuteOnReady(args, ticks.ThisRun));
+
+		return this;
+	}
+
+	public ITinySystem RunAfter(ITinySystem parent)
+	{
+		if (this == parent || Contains(parent, s => s.OrderConfiguration.AfterSystems))
+			throw new InvalidOperationException("Circular dependency detected");
+
+		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
+		OrderConfiguration.Node = parent.OrderConfiguration.AfterSystems.AddLast(this);
+
+		return this;
+	}
+
+	public ITinySystem RunAfter(params ReadOnlySpan<ITinySystem> systems)
+	{
+		foreach (var system in systems)
+			system.RunAfter(this);
+
+		return this;
+	}
+
+	public ITinySystem RunBefore(ITinySystem parent)
+	{
+		if (this == parent || Contains(parent, s => s.OrderConfiguration.BeforeSystems))
+			throw new InvalidOperationException("Circular dependency detected");
+
+		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
+		OrderConfiguration.Node = parent.OrderConfiguration.BeforeSystems.AddLast(this);
+
+		return this;
+	}
+
+	public ITinySystem RunBefore(params ReadOnlySpan<ITinySystem> systems)
+	{
+		foreach (var system in systems)
+			system.RunBefore(this);
+
+		return this;
+	}
+
+	private bool Contains(ITinySystem system, Func<ITinySystem, LinkedList<ITinySystem>?> direction)
+	{
+		ITinySystem? current = this;
+		while (current != null)
+		{
+			if (current == system)
+				return true;
+
+			var nextNode = direction(current)?.First;
+			current = nextNode?.Value;
+		}
+		return false;
+	}
 
 	internal bool IsResourceInUse()
 	{
-		return _threadingType switch
+		return Configuration.ThreadingMode switch
 		{
 			ThreadingMode.Multi => false,
 			ThreadingMode.Single => true,
@@ -113,7 +110,7 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 		};
 	}
 
-	private bool ValidateConditions(SystemTicks ticks, TArg args)
+	private bool ValidateConditions(SystemTicks ticks, World args)
 	{
 		foreach (var fn in _conditions)
 			if (!fn(ticks, args))
@@ -121,10 +118,6 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 		return true;
 	}
 
-	public ISystemParam[] SystemParams { get; set; }
-	public SystemTicks Ticks { get; } = new();
-	public SystemConfiguration Configuration { get; } = new();
-	public SystemOrderConfiguration OrderConfiguration { get; } = new();
 
 	public void Initialize(World world)
 	{
@@ -340,12 +333,12 @@ public partial class Scheduler
 		return this;
 	}
 
-	public FuncSystem<World> AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
+	public FuncSystem AddSystem(Action system, Stages stage = Stages.Update, ThreadingMode? threadingType = null)
 	{
 		if (!threadingType.HasValue)
 			threadingType = ThreadingExecutionMode;
 
-		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
+		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
 		{
 			if (runIf?.Invoke(ticks, args) ?? true)
 			{
@@ -359,7 +352,7 @@ public partial class Scheduler
 		return sys;
 	}
 
-	public FuncSystem<World> OnEnter<TState>(TState st, Action system, ThreadingMode? threadingType = null)
+	public ITinySystem OnEnter<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
 		if (!threadingType.HasValue)
@@ -367,7 +360,7 @@ public partial class Scheduler
 
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
+		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
 		{
 			if (runIf?.Invoke(ticks, args) ?? true)
 			{
@@ -383,7 +376,7 @@ public partial class Scheduler
 		return sys;
 	}
 
-	public FuncSystem<World> OnExit<TState>(TState st, Action system, ThreadingMode? threadingType = null)
+	public ITinySystem OnExit<TState>(TState st, Action system, ThreadingMode? threadingType = null)
 		where TState : struct, Enum
 	{
 		if (!threadingType.HasValue)
@@ -391,7 +384,7 @@ public partial class Scheduler
 
 		var stateChangeId = -1;
 
-		var sys = new FuncSystem<World>(_world, (ticks, args, runIf) =>
+		var sys = new FuncSystem(_world, (ticks, args, runIf) =>
 		{
 			if (runIf?.Invoke(ticks, args) ?? true)
 			{
@@ -1522,6 +1515,11 @@ public interface ITinyMeta
 public interface ITinySystem : ITinyMeta
 {
 	SystemOrderConfiguration OrderConfiguration { get; }
+
+	ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new();
+	ITinySystem RunIf(params ITinyConditionalSystem[] conditionals);
+	ITinySystem RunAfter(ITinySystem sys);
+	ITinySystem RunBefore(ITinySystem sys);
 }
 
 public interface ITinyConditionalSystem : ITinyMeta
@@ -1658,10 +1656,10 @@ public abstract class TinySystem : TinySystemBase, ITinySystem
 	}
 
 
-	public TinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
+	public ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
 		=> RunIf(new T());
 
-	public TinySystem RunIf(params ITinyConditionalSystem[] conditionals)
+	public ITinySystem RunIf(params ITinyConditionalSystem[] conditionals)
 	{
 		// TODO: Check for duplicates?
 		foreach (var sys in conditionals)
@@ -1669,14 +1667,14 @@ public abstract class TinySystem : TinySystemBase, ITinySystem
 		return this;
 	}
 
-	public TinySystem RunAfter(ITinySystem sys)
+	public ITinySystem RunAfter(ITinySystem sys)
 	{
 		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
 		OrderConfiguration.Node = OrderConfiguration.AfterSystems.AddLast(sys);
 		return this;
 	}
 
-	public TinySystem RunBefore(ITinySystem sys)
+	public ITinySystem RunBefore(ITinySystem sys)
 	{
 		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
 		OrderConfiguration.Node = OrderConfiguration.BeforeSystems.AddLast(sys);
@@ -1686,6 +1684,25 @@ public abstract class TinySystem : TinySystemBase, ITinySystem
 
 public abstract class TinyConditionalSystem : TinySystemBase, ITinyConditionalSystem
 {
+}
+
+public sealed partial class TinyDelegateSystem : TinySystem
+{
+	private readonly Func<World, SystemTicks, bool> _fn;
+
+	public TinyDelegateSystem(Func<World, SystemTicks, bool> fn)
+	{
+		_fn = fn;
+	}
+
+	protected override void Setup(SystemParamBuilder builder)
+	{
+	}
+
+	protected override bool Execute(World world)
+	{
+		return _fn(world, Ticks);
+	}
 }
 
 #endif

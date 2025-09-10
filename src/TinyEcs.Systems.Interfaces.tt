@@ -32,23 +32,23 @@ using System.Runtime.CompilerServices;
 namespace TinyEcs
 {
 #if NET9_0_OR_GREATER
-    public sealed partial class FuncSystem<TArg>
+    public sealed partial class FuncSystem
     {
 <#
     for (var i = 0; i < MAX_GENERICS; ++i)
     {
         var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
-        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t\t", j => $"where T{j} : class, ISystemParam<TArg>, IIntoSystemParam<TArg>");
+        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t\t", j => $"where T{j} : class, ISystemParam<World>, IIntoSystemParam<World>");
         var objs = GenerateSequence(i + 1, "\n\t\t\t", j => $"T{j}? obj{j} = null;");
         var objsGen = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"obj{j} ??= (T{j})T{j}.Generate(args);");
         var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
         var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 #>
-        public FuncSystem<TArg> RunIf<<#= genericsArgs #>>(Func<<#= genericsArgs #>, bool> condition)
+        public ITinySystem RunIf<<#= genericsArgs #>>(Func<<#= genericsArgs #>, bool> condition)
             <#= genericsArgsWhere #>
         {
             <#= objs #>
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 <#= objsGen #>
                 return condition(<#= systemCall #>);
             };

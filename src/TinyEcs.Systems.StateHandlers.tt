@@ -47,7 +47,7 @@ namespace TinyEcs
         var systemCall = GenerateSequence(i + 1, ", ", j => $"obj{j}");
         var objsCheckInuse = GenerateSequence(i + 1, " ", j => $"obj{j}?.UseIndex != 0" + (j < i ? "||" : ""));
 #>
-        public FuncSystem<World> OnEnter<TState, <#= genericsArgs #>>(TState st, Action<<#= genericsArgs #>> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, <#= genericsArgs #>>(TState st, Action<<#= genericsArgs #>> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             <#= genericsArgsWhere #>
         {
@@ -70,13 +70,13 @@ namespace TinyEcs
                 <#= objsUnlock #>
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, <#= genericsArgs #>>(TState st, Action<<#= genericsArgs #>> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, <#= genericsArgs #>>(TState st, Action<<#= genericsArgs #>> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             <#= genericsArgsWhere #>
         {
@@ -99,7 +99,7 @@ namespace TinyEcs
                 <#= objsUnlock #>
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;

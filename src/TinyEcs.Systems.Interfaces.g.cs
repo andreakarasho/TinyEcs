@@ -1,4 +1,4 @@
-﻿#pragma warning disable 1591
+#pragma warning disable 1591
 #nullable enable
 
 using System;
@@ -9,13 +9,13 @@ using System.Runtime.CompilerServices;
 namespace TinyEcs
 {
 #if NET9_0_OR_GREATER
-    public sealed partial class FuncSystem<TArg>
+    public sealed partial class FuncSystem
     {
-        public FuncSystem<TArg> RunIf<T0>(Func<T0, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0>(Func<T0, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
                 return condition(obj0);
             };
@@ -23,13 +23,13 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1>(Func<T0, T1, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1>(Func<T0, T1, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
                 return condition(obj0, obj1);
@@ -38,15 +38,15 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2>(Func<T0, T1, T2, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -56,17 +56,17 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3>(Func<T0, T1, T2, T3, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3>(Func<T0, T1, T2, T3, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
 			T3? obj3 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -77,19 +77,19 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4>(Func<T0, T1, T2, T3, T4, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4>(Func<T0, T1, T2, T3, T4, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
 			T2? obj2 = null;
 			T3? obj3 = null;
 			T4? obj4 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -101,13 +101,13 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5>(Func<T0, T1, T2, T3, T4, T5, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5>(Func<T0, T1, T2, T3, T4, T5, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -115,7 +115,7 @@ namespace TinyEcs
 			T3? obj3 = null;
 			T4? obj4 = null;
 			T5? obj5 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -128,14 +128,14 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6>(Func<T0, T1, T2, T3, T4, T5, T6, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6>(Func<T0, T1, T2, T3, T4, T5, T6, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -144,7 +144,7 @@ namespace TinyEcs
 			T4? obj4 = null;
 			T5? obj5 = null;
 			T6? obj6 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -158,15 +158,15 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7>(Func<T0, T1, T2, T3, T4, T5, T6, T7, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7>(Func<T0, T1, T2, T3, T4, T5, T6, T7, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -176,7 +176,7 @@ namespace TinyEcs
 			T5? obj5 = null;
 			T6? obj6 = null;
 			T7? obj7 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -191,16 +191,16 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -211,7 +211,7 @@ namespace TinyEcs
 			T6? obj6 = null;
 			T7? obj7 = null;
 			T8? obj8 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -227,17 +227,17 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -249,7 +249,7 @@ namespace TinyEcs
 			T7? obj7 = null;
 			T8? obj8 = null;
 			T9? obj9 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -266,18 +266,18 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -290,7 +290,7 @@ namespace TinyEcs
 			T8? obj8 = null;
 			T9? obj9 = null;
 			T10? obj10 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -308,19 +308,19 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T11 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -334,7 +334,7 @@ namespace TinyEcs
 			T9? obj9 = null;
 			T10? obj10 = null;
 			T11? obj11 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -353,20 +353,20 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T11 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T12 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -381,7 +381,7 @@ namespace TinyEcs
 			T10? obj10 = null;
 			T11? obj11 = null;
 			T12? obj12 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -401,21 +401,21 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T11 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T12 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T13 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -431,7 +431,7 @@ namespace TinyEcs
 			T11? obj11 = null;
 			T12? obj12 = null;
 			T13? obj13 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -452,22 +452,22 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T11 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T12 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T13 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T14 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -484,7 +484,7 @@ namespace TinyEcs
 			T12? obj12 = null;
 			T13? obj13 = null;
 			T14? obj14 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);
@@ -506,23 +506,23 @@ namespace TinyEcs
             return this;
         }
 
-        public FuncSystem<TArg> RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, bool> condition)
-            where T0 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T1 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T2 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T3 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T4 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T5 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T6 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T7 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T8 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T9 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T10 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T11 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T12 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T13 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T14 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
-			where T15 : class, ISystemParam<TArg>, IIntoSystemParam<TArg>
+        public ITinySystem RunIf<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(Func<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, bool> condition)
+            where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T2 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T3 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T4 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T5 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T6 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T7 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T8 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T9 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T10 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T11 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T12 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T13 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T14 : class, ISystemParam<World>, IIntoSystemParam<World>
+			where T15 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
             T0? obj0 = null;
 			T1? obj1 = null;
@@ -540,7 +540,7 @@ namespace TinyEcs
 			T13? obj13 = null;
 			T14? obj14 = null;
 			T15? obj15 = null;
-            var fn = (SystemTicks ticks, TArg args) => {
+            var fn = (SystemTicks ticks, World args) => {
                 obj0 ??= (T0)T0.Generate(args);
 				obj1 ??= (T1)T1.Generate(args);
 				obj2 ??= (T2)T2.Generate(args);

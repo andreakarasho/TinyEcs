@@ -1,4 +1,4 @@
-﻿#pragma warning disable 1591
+#pragma warning disable 1591
 #nullable enable
 
 using System;
@@ -12,7 +12,7 @@ namespace TinyEcs
 #if NET9_0_OR_GREATER
     public partial class Scheduler
     {
-        public FuncSystem<World> OnEnter<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
@@ -35,13 +35,13 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0>(TState st, Action<T0> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
         {
@@ -64,13 +64,13 @@ namespace TinyEcs
                 obj0.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -98,13 +98,13 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1>(TState st, Action<T0, T1> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -132,13 +132,13 @@ namespace TinyEcs
 				obj1.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -171,13 +171,13 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2>(TState st, Action<T0, T1, T2> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -210,13 +210,13 @@ namespace TinyEcs
 				obj2.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -254,13 +254,13 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3>(TState st, Action<T0, T1, T2, T3> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -298,13 +298,13 @@ namespace TinyEcs
 				obj3.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -347,13 +347,13 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4>(TState st, Action<T0, T1, T2, T3, T4> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -396,13 +396,13 @@ namespace TinyEcs
 				obj4.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -450,13 +450,13 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5>(TState st, Action<T0, T1, T2, T3, T4, T5> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -504,13 +504,13 @@ namespace TinyEcs
 				obj5.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -563,13 +563,13 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6>(TState st, Action<T0, T1, T2, T3, T4, T5, T6> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -622,13 +622,13 @@ namespace TinyEcs
 				obj6.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -686,13 +686,13 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -750,13 +750,13 @@ namespace TinyEcs
 				obj7.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -819,13 +819,13 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -888,13 +888,13 @@ namespace TinyEcs
 				obj8.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -962,13 +962,13 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1036,13 +1036,13 @@ namespace TinyEcs
 				obj9.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1115,13 +1115,13 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1194,13 +1194,13 @@ namespace TinyEcs
 				obj10.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1278,13 +1278,13 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1362,13 +1362,13 @@ namespace TinyEcs
 				obj11.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1451,13 +1451,13 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1540,13 +1540,13 @@ namespace TinyEcs
 				obj12.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1634,13 +1634,13 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1728,13 +1728,13 @@ namespace TinyEcs
 				obj13.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1827,13 +1827,13 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -1926,13 +1926,13 @@ namespace TinyEcs
 				obj14.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
         }
 
-        public FuncSystem<World> OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnEnter<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -2030,13 +2030,13 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnEnter, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnEnter, threadingType)
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
         }
 
-        public FuncSystem<World> OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
+        public ITinySystem OnExit<TState, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(TState st, Action<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> system, ThreadingMode threadingType = ThreadingMode.Auto)
             where TState : struct, Enum
             where T0 : class, ISystemParam<World>, IIntoSystemParam<World>
 			where T1 : class, ISystemParam<World>, IIntoSystemParam<World>
@@ -2134,7 +2134,7 @@ namespace TinyEcs
 				obj15.Unlock();
                 return true;
             };
-            var sys = new FuncSystem<World>(_world, fn, checkInuse, Stages.OnExit, threadingType)
+            var sys = new FuncSystem(_world, fn, checkInuse, Stages.OnExit, threadingType)
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
