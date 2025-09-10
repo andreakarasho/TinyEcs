@@ -122,29 +122,47 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 	}
 
 	public ISystemParam[] SystemParams { get; set; }
-	public SystemTicks Ticks { get; }
-	public SystemConfiguration Configuration { get; }
+	public SystemTicks Ticks { get; } = new();
+	public SystemConfiguration Configuration { get; } = new();
+	public SystemOrderConfiguration OrderConfiguration { get; } = new();
 
 	public void Initialize(World world)
 	{
 
 	}
 
-	public bool ExecuteOnReady(World world, uint ticks)
+	public bool BeforeExecute(World world)
 	{
-		Ticks.ThisRun = ticks;
-		var canRun = true;
-
-		var config = Configuration;
-
-		foreach (var beforeSys in config.BeforeSystems)
+		var ticks = Ticks.ThisRun;
+		foreach (var beforeSys in OrderConfiguration.BeforeSystems)
 		{
 			if (!beforeSys.ExecuteOnReady(world, ticks))
 			{
-				canRun = false;
-				break;
+				return false;
 			}
 		}
+		return true;
+	}
+
+	public bool AfterExecute(World world)
+	{
+		var ticks = Ticks.ThisRun;
+		foreach (var afterSys in OrderConfiguration.AfterSystems)
+		{
+			if (!afterSys.ExecuteOnReady(world, ticks))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public bool ExecuteOnReady(World world, uint ticks)
+	{
+		Ticks.ThisRun = ticks;
+		var config = Configuration;
+
+		var canRun = BeforeExecute(world);
 
 		if (canRun)
 		{
@@ -162,14 +180,7 @@ public sealed partial class FuncSystem<TArg> : ITinySystem
 
 			if (canRun)
 			{
-				foreach (var afterSys in config.AfterSystems)
-				{
-					if (!afterSys.ExecuteOnReady(world, ticks))
-					{
-						canRun = false;
-						break;
-					}
-				}
+				canRun = AfterExecute(world);
 			}
 		}
 
@@ -306,21 +317,16 @@ public partial class Scheduler
 			system.ExecuteOnReady(World, ticks);
 	}
 
-	internal void Add(ITinySystem sys, Stages stage)
+	private void Add(ITinySystem sys, Stages stage)
 	{
-		sys.Configuration.Node = _systems[(int)stage].AddLast(sys);
+		sys.OrderConfiguration.Node = _systems[(int)stage].AddLast(sys);
 		sys.Configuration.Stage = stage;
+		sys.Configuration.ThreadingMode ??= ThreadingExecutionMode;
 	}
 
 	public Scheduler AddSystem2<T>(Stages stage) where T : ITinySystem, new()
 	{
 		var system = new T();
-		Add(system, stage);
-		return this;
-	}
-
-	public Scheduler AddSystem2(Stages stage, ITinySystem system)
-	{
 		Add(system, stage);
 		return this;
 	}
@@ -1388,7 +1394,11 @@ public ref struct QueryIter<D, F>
 	}
 
 	[UnscopedRef]
-	public ref D Current => ref _dataIterator;
+	public ref D Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref _dataIterator;
+	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool MoveNext()
@@ -1476,45 +1486,63 @@ public sealed class SystemParamBuilder(World world)
 	}
 
 	public ISystemParam[] Build()
-		=> _params.ToArray();
+		=> [.. _params];
 }
 
 public sealed class SystemConfiguration
 {
 	public HashSet<ITinyConditionalSystem> Conditionals { get; } = [];
-	public LinkedList<ITinySystem> BeforeSystems { get; set; } = new();
-	public LinkedList<ITinySystem> AfterSystems { get; set; } = new();
-	public LinkedListNode<ITinySystem>? Node { get; set; }
-	public ThreadingMode ThreadingMode { get; set; } = ThreadingMode.Auto;
+	public ThreadingMode? ThreadingMode { get; set; }
 	public Stages Stage { get; set; } = Stages.Update;
 }
 
-public interface ITinyConditionalSystem : ITinySystem
+public sealed class SystemOrderConfiguration
 {
+	public LinkedList<ITinySystem> BeforeSystems { get; set; } = new();
+	public LinkedList<ITinySystem> AfterSystems { get; set; } = new();
+	public LinkedListNode<ITinySystem>? Node { get; set; }
 }
 
-public interface ITinySystem
+
+public interface ITinyMeta
 {
 	ISystemParam[] SystemParams { get; set; }
 	SystemTicks Ticks { get; }
 	SystemConfiguration Configuration { get; }
 
-	void Initialize(World world);
-
-	bool ExecuteOnReady(World world, uint ticks);
 
 	bool ParamsAreLocked();
+	void Initialize(World world);
+	bool ExecuteOnReady(World world, uint ticks);
+
+	bool BeforeExecute(World world);
+	bool AfterExecute(World world);
 }
 
-public abstract class TinySystem : ITinySystem
+public interface ITinySystem : ITinyMeta
 {
+	SystemOrderConfiguration OrderConfiguration { get; }
+}
+
+public interface ITinyConditionalSystem : ITinyMeta
+{
+}
+
+public abstract class TinySystemBase : ITinyMeta
+{
+	private bool _initialized;
+
 	public ISystemParam[] SystemParams { get; set; } = [];
 	public SystemTicks Ticks { get; } = new();
 	public SystemConfiguration Configuration { get; } = new();
 
-
-	public void Initialize(World world)
+	public virtual void Initialize(World world)
 	{
+		if (_initialized)
+			throw new Exception("Already initialized");
+
+		_initialized = true;
+
 		var builder = new SystemParamBuilder(world);
 		Setup(builder);
 		SystemParams = builder.Build();
@@ -1523,26 +1551,18 @@ public abstract class TinySystem : ITinySystem
 		{
 			conditional.Initialize(world);
 		}
-
-		foreach (var afterSys in Configuration.AfterSystems)
-		{
-			afterSys.Initialize(world);
-		}
 	}
+
+	public virtual bool BeforeExecute(World world)
+		=> true;
+
+	public virtual bool AfterExecute(World world)
+		=> true;
 
 	public bool ExecuteOnReady(World world, uint ticks)
 	{
 		Ticks.ThisRun = ticks;
-		var canRun = true;
-
-		foreach (var beforeSys in Configuration.BeforeSystems)
-		{
-			if (!beforeSys.ExecuteOnReady(world, ticks))
-			{
-				canRun = false;
-				break;
-			}
-		}
+		var canRun = BeforeExecute(world);
 
 		if (canRun)
 		{
@@ -1562,14 +1582,7 @@ public abstract class TinySystem : ITinySystem
 
 			if (canRun)
 			{
-				foreach (var afterSys in Configuration.AfterSystems)
-				{
-					if (!afterSys.ExecuteOnReady(world, ticks))
-					{
-						canRun = false;
-						break;
-					}
-				}
+				canRun = AfterExecute(world);
 			}
 		}
 
@@ -1583,7 +1596,7 @@ public abstract class TinySystem : ITinySystem
 		return Configuration.ThreadingMode switch {
 			ThreadingMode.Single => true,
 			ThreadingMode.Multi => false,
-			_ => SystemParams.All(static p => p.UseIndex > 0)
+			_ => SystemParams.Any(static p => p.UseIndex > 0)
 		};
 	}
 
@@ -1601,6 +1614,48 @@ public abstract class TinySystem : ITinySystem
 
 	protected abstract void Setup(SystemParamBuilder builder);
 	protected abstract bool Execute(World world);
+}
+
+public abstract class TinySystem : TinySystemBase, ITinySystem
+{
+	public SystemOrderConfiguration OrderConfiguration { get; } = new();
+
+	public override void Initialize(World world)
+	{
+		base.Initialize(world);
+
+		foreach (var afterSys in OrderConfiguration.AfterSystems)
+		{
+			afterSys.Initialize(world);
+		}
+	}
+
+	public override bool BeforeExecute(World world)
+	{
+		var ticks = Ticks.ThisRun;
+		foreach (var beforeSys in OrderConfiguration.BeforeSystems)
+		{
+			if (!beforeSys.ExecuteOnReady(world, ticks))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public override bool AfterExecute(World world)
+	{
+		var ticks = Ticks.ThisRun;
+		foreach (var afterSys in OrderConfiguration.AfterSystems)
+		{
+			if (!afterSys.ExecuteOnReady(world, ticks))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 
 	public TinySystem RunIf<T>() where T : ITinyConditionalSystem, new()
@@ -1616,17 +1671,21 @@ public abstract class TinySystem : ITinySystem
 
 	public TinySystem RunAfter(ITinySystem sys)
 	{
-		Configuration.Node?.List?.Remove(Configuration.Node);
-		Configuration.Node = Configuration.AfterSystems.AddLast(sys);
+		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
+		OrderConfiguration.Node = OrderConfiguration.AfterSystems.AddLast(sys);
 		return this;
 	}
 
 	public TinySystem RunBefore(ITinySystem sys)
 	{
-		Configuration.Node?.List?.Remove(Configuration.Node);
-		Configuration.Node = Configuration.BeforeSystems.AddLast(sys);
+		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
+		OrderConfiguration.Node = OrderConfiguration.BeforeSystems.AddLast(sys);
 		return this;
 	}
+}
+
+public abstract class TinyConditionalSystem : TinySystemBase, ITinyConditionalSystem
+{
 }
 
 #endif

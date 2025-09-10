@@ -83,7 +83,7 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
 
         // Check if method returns bool (for conditional systems)
         var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
-        var conditionalInterface = returnsBool ? ", TinyEcs.ITinyConditionalSystem" : "";
+        var baseClass = returnsBool ? "TinyEcs.TinyConditionalSystem" : "TinyEcs.TinySystem";
 
         // Get method parameters for dependency injection
         var parameters = method.Parameters.ToList();
@@ -121,7 +121,7 @@ public sealed class TinySystemMethodGenerator : IIncrementalGenerator
         }
 
         // Make the adapter class sealed and partial
-        adapterClass.AppendLine($"public sealed partial class {adapterName} : TinyEcs.TinySystem{conditionalInterface}");
+        adapterClass.AppendLine($"public sealed partial class {adapterName} : {baseClass}");
         adapterClass.AppendLine("{");
         adapterClass.IncrementIndent();
 
