@@ -32,7 +32,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -58,7 +58,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -89,7 +89,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -120,7 +120,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -156,7 +156,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -192,7 +192,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -233,7 +233,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -274,7 +274,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -320,7 +320,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -366,7 +366,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -417,7 +417,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -468,7 +468,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -524,7 +524,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -580,7 +580,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -641,7 +641,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -702,7 +702,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -768,7 +768,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -834,7 +834,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -905,7 +905,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -976,7 +976,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1052,7 +1052,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -1128,7 +1128,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1209,7 +1209,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -1290,7 +1290,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1376,7 +1376,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -1462,7 +1462,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1553,7 +1553,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -1644,7 +1644,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1740,7 +1740,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -1836,7 +1836,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;
@@ -1937,7 +1937,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-				{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType } }
+				{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
             Add(sys, Stages.OnEnter);
             return sys;
@@ -2038,7 +2038,7 @@ namespace TinyEcs
                 return true;
             };
             var sys = new TinyDelegateSystem(fn)
-			{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType } }
+			{ Configuration = { ThreadingMode = threadingType } }
                 .RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
             Add(sys, Stages.OnExit);
             return sys;

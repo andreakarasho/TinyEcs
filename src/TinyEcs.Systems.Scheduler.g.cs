@@ -31,7 +31,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -60,7 +59,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -94,7 +92,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -133,7 +130,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -177,7 +173,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -226,7 +221,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -280,7 +274,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -339,7 +332,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -403,7 +395,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -472,7 +463,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -546,7 +536,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -625,7 +614,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -709,7 +697,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -798,7 +785,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -892,7 +878,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }
@@ -991,7 +976,6 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType.Value;
-			sys.Configuration.Stage = stage;
             Add(sys, stage);
             return sys;
         }

@@ -5,6 +5,8 @@ namespace TinyEcs;
 // https://promethia-27.github.io/dependency_injection_like_bevy_from_scratch/introductions.html
 
 #if NET9_0_OR_GREATER
+
+[Obsolete("Use the Stage class instead.")]
 public enum Stages
 {
 	Startup,
@@ -31,14 +33,147 @@ public sealed class SystemTicks
 	public uint ThisRun { get; set; }
 }
 
+public record Stage(string Name, bool RunOnce)
+{
+	public static readonly Stage Startup = new(nameof(Startup), true);
+	public static readonly Stage FrameStart = new(nameof(FrameStart), false);
+	public static readonly Stage BeforeUpdate = new(nameof(BeforeUpdate), false);
+	public static readonly Stage Update = new(nameof(Update), false);
+	public static readonly Stage AfterUpdate = new(nameof(AfterUpdate), false);
+	public static readonly Stage FrameEnd = new(nameof(FrameEnd), false);
+	public static readonly Stage OnEnter = new(nameof(OnEnter), false);
+	public static readonly Stage OnExit = new(nameof(OnExit), false);
+}
+
+internal sealed class StageHandler(Stage stage)
+{
+	private bool _initialized;
+	public Stage Stage { get; } = stage;
+	public List<ITinySystem> Systems { get; } = new();
+
+	public void AddSystem(ITinySystem system)
+		=> Systems.Add(system);
+
+	public void Initialize(RunHandler runner, World world)
+	{
+		if (!_initialized)
+		{
+			runner.Initialize(Systems, world);
+
+			_initialized = true;
+		}
+	}
+
+	public void Run(RunHandler runner, World world, uint ticks)
+	{
+		runner.Run(Systems, world, ticks);
+
+		if (Stage.RunOnce)
+			Systems.Clear();
+	}
+}
+
+public interface IRunHandler
+{
+	void Initialize(IEnumerable<ITinySystem> systems, World world);
+	void Run(IEnumerable<ITinySystem> systems, World world, uint ticks);
+}
+
+public sealed class RunHandler : IRunHandler
+{
+	public void Initialize(IEnumerable<ITinySystem> systems, World world)
+	{
+		foreach (var sys in systems)
+			sys.Initialize(world);
+	}
+
+	public void Run(IEnumerable<ITinySystem> systems, World world, uint ticks)
+	{
+		foreach (var system in systems)
+			system.ExecuteOnReady(world, ticks);
+	}
+}
+
+internal sealed class StageContainer
+{
+	public List<StageHandler> Stages { get; } = new();
+	public Dictionary<string, StageHandler> StageMap { get; } = new();
+
+	public Stage Get(string name)
+	{
+		if (StageMap.TryGetValue(name, out var handler))
+			return handler.Stage;
+		throw new InvalidOperationException($"Stage '{name}' not found.");
+	}
+
+	internal void Add(Stage stage)
+	{
+		if (!Contains(stage))
+		{
+			var handler = new StageHandler(stage);
+			Stages.Add(handler);
+			StageMap.Add(stage.Name, handler);
+		}
+		else
+		{
+			throw new InvalidOperationException($"Stage '{stage.Name}' already exists.");
+		}
+	}
+
+	public void AddBeforeOf(Stage parent, Stage stage)
+	{
+		if (!Contains(parent))
+			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
+
+		if (Contains(stage))
+			throw new InvalidOperationException($"Stage '{stage.Name}' already exists.");
+
+		var index = Stages.FindIndex(s => s.Stage == parent);
+		if (index == -1)
+			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
+
+		var handler = new StageHandler(stage);
+		Stages.Insert(index, handler);
+		StageMap.Add(stage.Name, handler);
+	}
+
+	public void AddAfterOf(Stage parent, Stage stage)
+	{
+		if (!Contains(parent))
+			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
+
+		if (Contains(stage))
+			throw new InvalidOperationException($"Stage '{stage.Name}' already exists.");
+
+		var index = Stages.FindIndex(s => s.Stage == parent);
+		if (index == -1)
+			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
+
+		var handler = new StageHandler(stage);
+		Stages.Insert(index + 1, handler);
+		StageMap.Add(stage.Name, handler);
+	}
+
+	public void AddSystem(ITinySystem system, Stage stage)
+	{
+		if (!StageMap.TryGetValue(stage.Name, out var handler))
+			throw new InvalidOperationException($"Stage '{stage.Name}' not found.");
+
+		handler.AddSystem(system);
+	}
+
+	private bool Contains(Stage stage)
+		=> StageMap.ContainsKey(stage.Name);
+}
+
 public partial class Scheduler
 {
 	private readonly World _world;
-	private readonly LinkedList<ITinySystem>[] _systems = new LinkedList<ITinySystem>[(int)Stages.OnExit + 1];
 	private readonly List<ITinySystem> _singleThreads = new();
 	private readonly List<ITinySystem> _multiThreads = new();
 	private readonly Dictionary<Type, IEventParam> _events = new();
-
+	private readonly StageContainer _stageContainer = new();
+	private readonly RunHandler _runHandler = new();
 	private bool _initialized;
 
 	public Scheduler(World world, ThreadingMode threadingMode = ThreadingMode.Auto)
@@ -46,8 +181,14 @@ public partial class Scheduler
 		_world = world;
 		ThreadingExecutionMode = threadingMode;
 
-		for (var i = 0; i < _systems.Length; ++i)
-			_systems[i] = new LinkedList<ITinySystem>();
+		_stageContainer.Add(Stage.Startup);
+		_stageContainer.Add(Stage.OnExit);
+		_stageContainer.Add(Stage.OnEnter);
+		_stageContainer.Add(Stage.FrameStart);
+		_stageContainer.Add(Stage.BeforeUpdate);
+		_stageContainer.Add(Stage.Update);
+		_stageContainer.Add(Stage.AfterUpdate);
+		_stageContainer.Add(Stage.FrameEnd);
 
 		AddSystemParam(world);
 		AddSystemParam(new SchedulerState(this));
@@ -57,6 +198,22 @@ public partial class Scheduler
 	public World World => _world;
 	public ThreadingMode ThreadingExecutionMode { get; }
 
+
+	public Stage AddStageBeforeOf(Stage parent, string name, bool oneShot = false)
+	{
+		var stage = new Stage(name, oneShot);
+		_stageContainer.AddBeforeOf(parent, stage);
+
+		return stage;
+	}
+
+	public Stage AddStageAfterOf(Stage parent, string name, bool oneShot = false)
+	{
+		var stage = new Stage(name, oneShot);
+		_stageContainer.AddAfterOf(parent, stage);
+
+		return stage;
+	}
 
 	public void Run(Func<bool> checkForExitFn, Action? cleanupFn = null)
 	{
@@ -70,78 +227,99 @@ public partial class Scheduler
 	{
 		if (!_initialized)
 		{
-			foreach (var stage in _systems)
-			{
-				foreach (var system in stage)
-				{
-					system.Initialize(World);
-				}
-			}
+			foreach (var stageHandler in _stageContainer.Stages)
+				stageHandler.Initialize(_runHandler, _world);
 
 			_initialized = true;
 		}
+
 		var ticks = _world.Update();
 
 		foreach ((_, var ev) in _events)
 			ev.Clear();
 
-		RunStage(Stages.Startup, ticks);
-		_systems[(int)Stages.Startup].Clear();
+		foreach (var stageHandler in _stageContainer.Stages)
+			stageHandler.Run(_runHandler, _world, ticks);
 
-		RunStage(Stages.OnExit, ticks);
-		RunStage(Stages.OnEnter, ticks);
+		// RunStage(Stages.Startup, ticks);
+		// _systems[(int)Stages.Startup].Clear();
 
-		for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
-			RunStage(stage, ticks);
+		// RunStage(Stages.OnExit, ticks);
+		// RunStage(Stages.OnEnter, ticks);
+
+		// for (var stage = Stages.FrameStart; stage <= Stages.FrameEnd; stage += 1)
+		// 	RunStage(stage, ticks);
 	}
 
 	private void RunStage(Stages stage, uint ticks)
 	{
-		_singleThreads.Clear();
-		_multiThreads.Clear();
+		// _singleThreads.Clear();
+		// _multiThreads.Clear();
 
-		var systems = _systems[(int)stage];
+		// var systems = _systems[(int)stage];
 
-		if (systems.Count == 0)
-			return;
+		// if (systems.Count == 0)
+		// 	return;
 
-		foreach (var sys in systems)
+		// foreach (var sys in systems)
+		// {
+		// 	if (sys.ParamsAreLocked())
+		// 	{
+		// 		_singleThreads.Add(sys);
+		// 	}
+		// 	else
+		// 	{
+		// 		_multiThreads.Add(sys);
+		// 	}
+		// }
+
+		// var multithreading = _multiThreads;
+		// var singlethreading = _singleThreads;
+
+		// if (multithreading.Count > 0)
+		// 	Parallel.ForEach(multithreading, s => s.ExecuteOnReady(World, ticks));
+
+		// foreach (var system in singlethreading)
+		// 	system.ExecuteOnReady(World, ticks);
+	}
+
+	private static Stage GetStage(Stages stage)
+	{
+		return stage switch
 		{
-			if (sys.ParamsAreLocked())
-			{
-				_singleThreads.Add(sys);
-			}
-			else
-			{
-				_multiThreads.Add(sys);
-			}
-		}
-
-		var multithreading = _multiThreads;
-		var singlethreading = _singleThreads;
-
-		if (multithreading.Count > 0)
-			Parallel.ForEach(multithreading, s => s.ExecuteOnReady(World, ticks));
-
-		foreach (var system in singlethreading)
-			system.ExecuteOnReady(World, ticks);
+			Stages.Startup => Stage.Startup,
+			Stages.FrameStart => Stage.FrameStart,
+			Stages.BeforeUpdate => Stage.BeforeUpdate,
+			Stages.Update => Stage.Update,
+			Stages.AfterUpdate => Stage.AfterUpdate,
+			Stages.FrameEnd => Stage.FrameEnd,
+			Stages.OnEnter => Stage.OnEnter,
+			Stages.OnExit => Stage.OnExit,
+			_ => throw new ArgumentOutOfRangeException(nameof(stage), stage, null)
+		};
 	}
 
 	private void Add(ITinySystem sys, Stages stage)
 	{
-		sys.OrderConfiguration.Node = _systems[(int)stage].AddLast(sys);
-		sys.Configuration.Stage = stage;
 		sys.Configuration.ThreadingMode ??= ThreadingExecutionMode;
+		_stageContainer.AddSystem(sys, GetStage(stage));
 	}
 
-	public Scheduler AddSystem2<T>(Stages stage) where T : ITinySystem, new()
+	private void Add(ITinySystem sys, Stage stage)
+	{
+		sys.Configuration.ThreadingMode ??= ThreadingExecutionMode;
+
+		_stageContainer.AddSystem(sys, stage);
+	}
+
+	public Scheduler AddSystem2<T>(Stage stage) where T : ITinySystem, new()
 	{
 		var system = new T();
 		Add(system, stage);
 		return this;
 	}
 
-	public Scheduler AddSystems2(Stages stage, params ITinySystem[] systems)
+	public Scheduler AddSystems2(Stage stage, params ITinySystem[] systems)
 	{
 		foreach (var system in systems)
 		{
@@ -179,7 +357,7 @@ public partial class Scheduler
 			system();
 			return true;
 		})
-		{ Configuration = { Stage = Stages.OnEnter, ThreadingMode = threadingType.Value } }
+		{ Configuration = { ThreadingMode = threadingType.Value } }
 		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
 		Add(sys, Stages.OnEnter);
@@ -200,7 +378,7 @@ public partial class Scheduler
 			system();
 			return true;
 		})
-		{ Configuration = { Stage = Stages.OnExit, ThreadingMode = threadingType.Value } }
+		{ Configuration = { ThreadingMode = threadingType.Value } }
 		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
 		Add(sys, Stages.OnExit);
@@ -1294,7 +1472,6 @@ public sealed class SystemConfiguration
 {
 	public HashSet<ITinyConditionalSystem> Conditionals { get; } = [];
 	public ThreadingMode? ThreadingMode { get; set; }
-	public Stages Stage { get; set; } = Stages.Update;
 }
 
 public sealed class SystemOrderConfiguration
@@ -1399,7 +1576,8 @@ public abstract class TinySystemBase : ITinyMeta
 
 	public bool ParamsAreLocked()
 	{
-		return Configuration.ThreadingMode switch {
+		return Configuration.ThreadingMode switch
+		{
 			ThreadingMode.Single => true,
 			ThreadingMode.Multi => false,
 			_ => SystemParams.Any(static p => p.UseIndex > 0)
