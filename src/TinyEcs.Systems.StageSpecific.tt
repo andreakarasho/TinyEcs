@@ -77,7 +77,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.<#= stage.StageName #>);
+            Add(sys, Stage.<#= stage.StageName #>);
             return sys;
         }
 
@@ -102,7 +102,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.<#= stage.StageName #>);
+            Add(sys, Stage.<#= stage.StageName #>);
             return sys;
         }
 

@@ -31,7 +31,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -59,7 +59,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -92,7 +92,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -130,7 +130,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -173,7 +173,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -221,7 +221,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -274,7 +274,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -332,7 +332,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -395,7 +395,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -463,7 +463,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -536,7 +536,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -614,7 +614,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -697,7 +697,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -785,7 +785,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -878,7 +878,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -976,7 +976,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -999,7 +999,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1027,7 +1027,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1060,7 +1060,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1098,7 +1098,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1141,7 +1141,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1189,7 +1189,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1242,7 +1242,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1300,7 +1300,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1363,7 +1363,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1431,7 +1431,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1504,7 +1504,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1582,7 +1582,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1665,7 +1665,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1753,7 +1753,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1846,7 +1846,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1944,7 +1944,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -1967,7 +1967,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -1995,7 +1995,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2028,7 +2028,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2066,7 +2066,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2109,7 +2109,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2157,7 +2157,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2210,7 +2210,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2268,7 +2268,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2331,7 +2331,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2399,7 +2399,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2472,7 +2472,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2550,7 +2550,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2633,7 +2633,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2721,7 +2721,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2814,7 +2814,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2912,7 +2912,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -2935,7 +2935,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -2963,7 +2963,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -2996,7 +2996,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3034,7 +3034,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3077,7 +3077,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3125,7 +3125,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3178,7 +3178,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3236,7 +3236,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3299,7 +3299,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3367,7 +3367,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3440,7 +3440,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3518,7 +3518,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3601,7 +3601,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3689,7 +3689,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3782,7 +3782,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3880,7 +3880,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -3903,7 +3903,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -3931,7 +3931,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -3964,7 +3964,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4002,7 +4002,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4045,7 +4045,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4093,7 +4093,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4146,7 +4146,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4204,7 +4204,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4267,7 +4267,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4335,7 +4335,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4408,7 +4408,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4486,7 +4486,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4569,7 +4569,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4657,7 +4657,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4750,7 +4750,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4848,7 +4848,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -4871,7 +4871,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -4899,7 +4899,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -4932,7 +4932,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -4970,7 +4970,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5013,7 +5013,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5061,7 +5061,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5114,7 +5114,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5172,7 +5172,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5235,7 +5235,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5303,7 +5303,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5376,7 +5376,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5454,7 +5454,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5537,7 +5537,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5625,7 +5625,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5718,7 +5718,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5816,7 +5816,7 @@ namespace TinyEcs
             };
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
@@ -5833,7 +5833,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Startup);
+            Add(sys, Stage.Startup);
             return sys;
         }
 
@@ -5850,7 +5850,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameStart);
+            Add(sys, Stage.FrameStart);
             return sys;
         }
 
@@ -5867,7 +5867,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.BeforeUpdate);
+            Add(sys, Stage.BeforeUpdate);
             return sys;
         }
 
@@ -5884,7 +5884,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.Update);
+            Add(sys, Stage.Update);
             return sys;
         }
 
@@ -5901,7 +5901,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.AfterUpdate);
+            Add(sys, Stage.AfterUpdate);
             return sys;
         }
 
@@ -5918,7 +5918,7 @@ namespace TinyEcs
 
             var sys = new TinyDelegateSystem(fn);
 			sys.Configuration.ThreadingMode = threadingType;
-            Add(sys, Stages.FrameEnd);
+            Add(sys, Stage.FrameEnd);
             return sys;
         }
 
