@@ -7,8 +7,7 @@ using System.Runtime.InteropServices;
 const int ENTITIES_COUNT = (524_288 * 2 * 1);
 
 using var ecs = new World();
-var scheduler = new Scheduler(ecs);
-
+var scheduler = new Scheduler(ecs, ThreadingMode.Single);
 
 // var sys = new HelloSystem();
 // sys.Initialize(ecs);
@@ -16,9 +15,12 @@ var scheduler = new Scheduler(ecs);
 
 scheduler.AddResource(new CustomResource());
 
-scheduler.AddSystem2(Stages.Startup, new SetupSystem(ENTITIES_COUNT));
-scheduler.AddSystem2<GenSystem>(Stages.Update);
-scheduler.AddSystem2(Stages.Update, new HelloSystem());
+// scheduler.AddSystem2(Stages.Startup, new SetupSystem(ENTITIES_COUNT));
+// scheduler.AddSystem2<GenSystem>(Stages.Update);
+//
+// scheduler.AddSystem2(Stages.Update, new HelloSystem());
+
+scheduler.AddPlugin(new TestPlugin() { Count = ENTITIES_COUNT });
 
 
 // scheduler.AddPlugin<TestPlugin>();
@@ -240,27 +242,28 @@ static void Execute(Query query)
     }
 }
 
-[TinySystem]
-static void ExecuteIterator(Query query)
-{
-    var it = query.Iter();
 
-    while (it.Next())
-    {
-        var span0 = it.Data<Position>(0);
-        var span1 = it.Data<Velocity>(1);
-        var count = it.Count;
 
-        for (var i = 0; i < count; ++i)
-        {
-            ref var pos = ref span0[i];
-            ref var vel = ref span1[i];
-
-            pos.X *= vel.X;
-            pos.Y *= vel.Y;
-        }
-    }
-}
+// static void ExecuteIterator(Query query)
+// {
+//     var it = query.Iter();
+//
+//     while (it.Next())
+//     {
+//         var span0 = it.Data<Position>(0);
+//         var span1 = it.Data<Velocity>(1);
+//         var count = it.Count;
+//
+//         for (var i = 0; i < count; ++i)
+//         {
+//             ref var pos = ref span0[i];
+//             ref var vel = ref span1[i];
+//
+//             pos.X *= vel.X;
+//             pos.Y *= vel.Y;
+//         }
+//     }
+// }
 
 public struct Position
 {
@@ -291,150 +294,51 @@ enum AnotherState
 }
 
 
-
-// [TinyPlugin]
-// partial struct BBB
-// {
-// 	[TinySystem(Stages.Update, ThreadingMode.Single)]
-// 	void Execute(Query<Data<Position, Velocity>> query)
-// 	{
-// 		foreach (var (pos, vel) in query)
-// 		{
-// 			pos.Ref.X *= vel.Ref.X;
-// 			pos.Ref.Y *= vel.Ref.Y;
-// 		}
-// 	}
-//
-// 	public void Build(Scheduler scheduler)
-// 	{
-//
-// 	}
-// }
-
-// class TestSys : IPlugin
-// {
-//
-// 	public void Build(Scheduler scheduler)
-// 	{
-// 		scheduler.OnUpdate2(TestMethod);
-// 		var xx = TestMethod2;
-// 		scheduler.OnUpdate2(xx);
-// 		scheduler.OnUpdate2(TestMethod2);
-// 		scheduler.OnUpdate2(TestMethod2);
-// 		scheduler.OnUpdate2(TestMethod2);
-// 		scheduler.OnUpdate2(Palle)
-// 			.RunIf((World w) =>
-// 			{
-// 				return true;
-// 			});
-//
-// 		scheduler.OnUpdate2((Local<int> w) =>
-// 		{
-//
-// 		});
-//
-//
-// 		scheduler.OnStartup2((World w) => { });
-// 	}
-//
-// 	void TestMethod(World world, Query<Data<Position, Velocity>> query)
-// 	{
-//
-// 	}
-//
-// 	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
-// 	{
-//
-// 	}
-//
-// 	void Palle()
-// 	{
-//
-// 	}
-// }
-//
-// class TestSys2 : IPlugin
-// {
-//
-// 	public void Build(Scheduler scheduler)
-// 	{
-// 		scheduler.OnUpdate2(TestMethod);
-// 		var xx = TestMethod2;
-// 		scheduler.OnUpdate2(xx);
-// 		scheduler.OnUpdate2(TestMethod2, ThreadingMode.Single);
-// 		scheduler.OnUpdate2(TestMethod2);
-// 		scheduler.OnUpdate2(TestMethod2);
-// 		scheduler.OnUpdate2(Palle)
-// 			.RunIf((World w) =>
-// 			{
-// 				return true;
-// 			});
-//
-// 		scheduler.OnUpdate2((Local<int> w) =>
-// 		{
-//
-// 		});
-// 	}
-//
-// 	void TestMethod(World world, Query<Data<Position, Velocity>> query)
-// 	{
-//
-// 	}
-//
-// 	void TestMethod2(World world, Query<Data<Position, Velocity>> query)
-// 	{
-//
-// 	}
-//
-// 	void Palle()
-// 	{
-//
-// 	}
-// }
-
-
-// namespace TinyEcs
-// {
-// 	public delegate void SystemFn(World param1, SchedulerState param2);
-// 	public partial class Scheduler {
-// 		public void OnUpdate2(SystemFn fn)
-// 		{
-//
-// 		}
-// 	}
-// }
-
-// partial class GenSystem : TinySystem2
-// {
-// 	private Query<Data<Position, Velocity>> _query;
-//
-// 	public override void Setup(World world)
-// 	{
-// 		_query = (Query<Data<Position, Velocity>>)Query<Data<Position, Velocity>>.Generate(world);
-// 	}
-//
-// 	public override void Execute(World world)
-// 	{
-// 		Execute(_query);
-// 	}
-// }
-
-[TinySystem]
-partial class SetupSystem(int count)
+class SYSTEMS
 {
- 	void OnExecute(World world, World world2)
+	[TinySystem]
+	public bool CheckThis()
 	{
-		for (var i = 0; i < count; i++)
+		new CheckThisAdapter(this);
+		return true;
+	}
+}
+
+
+internal sealed class TestPlugin : IPlugin
+{
+	public int Count { get; init; }
+
+	public void Build(Scheduler scheduler)
+	{
+		scheduler.AddState(GameState.Loading);
+
+		scheduler
+			.AddSystems(Stage.Startup, new SetupAdapter(this))
+			.AddSystems(Stage.Update, new MoveEntitiesAdapter()
+				.RunIf(new CanRunAdapter(this)))
+			.AddSystem<PrintSomethingAdapter>(Stage.Update);
+
+		scheduler.AddStageAfterOf(Stage.Update, "AFTER_UPDATE");
+		scheduler.AddSystems("AFTER_UPDATE", new AcceptAdapter(this));
+
+		//scheduler.AddSystems(Stage.OnEnter, new TinyStateSystemAdapter<GameState>(GameState.Playing));
+		scheduler.AddSystems(Stage.OnEnter(GameState.Playing), new OnEnterAdapter(this));
+		scheduler.AddSystems(Stage.OnExit(GameState.Loading), new OnExitAdapter(this));
+	}
+
+
+	[TinySystem]
+	public void Setup(World world)
+	{
+		for (var i = 0; i < Count; i++)
 			world.Entity()
 				.Set(new Position())
 				.Set(new Velocity());
 	}
-}
 
-[TinySystem]
-partial class GenSystem
-{
-	void OnExecute(World world, Query<Data<Position, Velocity>> query, Res<CustomResource> customRes)
+	[TinySystem]
+	public static void MoveEntities(Query<Data<Position, Velocity>> query)
 	{
 		foreach ((var pos, var vel) in query)
 		{
@@ -442,106 +346,35 @@ partial class GenSystem
 			pos.Ref.Y *= vel.Ref.Y;
 		}
 	}
-}
 
-
-[TinySystem]
-partial class HelloSystem
-{
-	void OnExecute(Query<Data<Position, Velocity>> query, Local<CustomResource> customRes)
+	[TinySystem]
+	public static void PrintSomething(State<GameState> state)
 	{
+		state.Set(GameState.Playing);
+	}
 
+	[TinySystem]
+	public void OnEnter(State<GameState> state)
+	{
+		Console.WriteLine("on enter {0}", state.Current);
+	}
+
+	[TinySystem]
+	public void OnExit(State<GameState> state)
+	{
+		Console.WriteLine("on exit {0}", state.Current);
+	}
+
+	[TinySystem]
+	public bool CanRun()
+		=> true;
+
+	[TinySystem]
+	public void Accept()
+	{
 	}
 }
 
-// namespace ANamespace
-// {
-// 	[TinyPlugin]
-// 	public partial class AAA
-// 	{
-// 		[TinySystem]
-// 		[RunIf(nameof(TestRun))]
-// 		[RunIf(nameof(TestRun2))]
-// 		void Execute(Query<Data<Position, Velocity>> query)
-// 		{
-// 			foreach (var (pos, vel) in query)
-// 			{
-// 				pos.Ref.X *= vel.Ref.X;
-// 				pos.Ref.Y *= vel.Ref.Y;
-// 			}
-// 		}
-//
-//
-// 		[TinySystem(Stages.OnEnter, ThreadingMode.Single)]
-// 		static void CheckState(World world)
-// 		{
-//
-// 		}
-//
-// 		[TinySystem]
-// 		[RunIf(nameof(TestRun2))]
-// 		[RunIf(nameof(TestRun2))]
-// 		[RunIf(nameof(TestRun2))]
-// 		[RunIf(nameof(TestRun2))]
-// 		static void DoThat(Query<Data<Position, Velocity>> query, EventWriter<CustomEvent> writer)
-// 		{
-// 			foreach (var (pos, vel) in query)
-// 			{
-// 				pos.Ref.X *= vel.Ref.X;
-// 				pos.Ref.Y *= vel.Ref.Y;
-// 			}
-// 		}
-//
-//
-// 		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Second))]
-// 		void First()
-// 		{
-// 			Console.WriteLine("1");
-// 		}
-//
-// 		[TinySystem(threadingMode: ThreadingMode.Single), AfterOf(nameof(Third))]
-// 		void Second(EventReader<CustomEvent> reader)
-// 		{
-// 			Console.WriteLine("2");
-// 		}
-//
-// 		[TinySystem(threadingMode: ThreadingMode.Single), BeforeOf("HELLO")]
-// 		void Third()
-// 		{
-// 			Console.WriteLine("3");
-// 		}
-//
-// 		private bool TestRun(SchedulerState state, World world, Local<int> index)
-// 		{
-// 			return true;
-// 		}
-//
-// 		private bool TestRun2()
-// 		{
-// 			return true;
-// 		}
-//
-// 		public void Build(Scheduler scheduler)
-// 		{
-// 			scheduler.AddEvent<CustomEvent>();
-// 		}
-//
-// 		struct CustomEvent
-// 		{
-// 			public int Value;
-// 		}
-// 	}
-//
-// }
-//
-// [TinyPlugin]
-// public partial class TestPlugin
-// {
-// 	public void Build(Scheduler scheduler)
-// 	{
-//
-// 	}
-// }
 
 
 public class CustomResource

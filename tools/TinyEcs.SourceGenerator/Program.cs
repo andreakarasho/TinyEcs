@@ -44,39 +44,92 @@ public sealed class Program : IIncrementalGenerator
 
                 if (!tinySystemMethods.Any()) return null;
 
-                return new PluginClassInfo
+                return new SystemMethodInfo
                 {
-                    ClassSymbol = classSymbol,
-                    TinySystemMethods = tinySystemMethods
+                    ContainingType = classSymbol,
+                    TinySystemMethods = tinySystemMethods,
+                    IsFromPlugin = true
                 };
             }
         ).Where(static info => info != null);
 
+        // Find all methods with [TinySystem] attributes (including those outside IPlugin classes)
+        var allTinySystemMethods = context.SyntaxProvider.CreateSyntaxProvider(
+            static (s, _) => s is MethodDeclarationSyntax methodDecl &&
+                            methodDecl.AttributeLists.Count > 0,
+            static (ctx, _) =>
+            {
+                var methodDecl = (MethodDeclarationSyntax)ctx.Node;
+                var methodSymbol = ctx.SemanticModel.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+
+                if (methodSymbol == null) return null;
+
+                // Check if method has [TinySystem] attribute
+                var hasTinySystemAttribute = methodSymbol.GetAttributes().Any(attr =>
+                    attr.AttributeClass?.ToDisplayString() == "TinyEcs.TinySystemAttribute");
+
+                if (!hasTinySystemAttribute) return null;
+
+                var containingType = methodSymbol.ContainingType;
+
+                // Check if the containing class implements IPlugin
+                var implementsIPlugin = containingType.AllInterfaces.Any(i =>
+                    i.ToDisplayString() == "TinyEcs.IPlugin");
+
+                // Only include if it's NOT from an IPlugin class (those are handled separately)
+                if (implementsIPlugin) return null;
+
+                return new SystemMethodInfo
+                {
+                    ContainingType = containingType,
+                    TinySystemMethods = new List<IMethodSymbol> { methodSymbol },
+                    IsFromPlugin = false
+                };
+            }
+        ).Where(static info => info != null);
+
+        // Combine both providers
+        var allSystemMethods = pluginClassesWithTinySystemMethods.Collect()
+            .Combine(allTinySystemMethods.Collect())
+            .Select(static (combined, _) =>
+            {
+                var (pluginMethods, standaloneMethods) = combined;
+                var result = new List<SystemMethodInfo>();
+                
+                if (!pluginMethods.IsDefaultOrEmpty)
+                    result.AddRange(pluginMethods);
+                
+                if (!standaloneMethods.IsDefaultOrEmpty)
+                    result.AddRange(standaloneMethods);
+                
+                return result.ToImmutableArray();
+            });
+
         // Generate adapter classes for each method
         context.RegisterSourceOutput(
-            pluginClassesWithTinySystemMethods.Collect(),
-            (spc, pluginClasses) =>
+            allSystemMethods,
+            (spc, systemMethods) =>
             {
-                if (pluginClasses.IsDefaultOrEmpty) return;
+                if (systemMethods.IsDefaultOrEmpty) return;
 
-                foreach (var pluginClass in pluginClasses)
+                foreach (var systemMethod in systemMethods)
                 {
-                    foreach (var method in pluginClass.TinySystemMethods)
+                    foreach (var method in systemMethod.TinySystemMethods)
                     {
-                        GenerateAdapterClass(spc, pluginClass.ClassSymbol, method);
+                        GenerateAdapterClass(spc, systemMethod.ContainingType, method, systemMethod.IsFromPlugin);
                     }
                 }
             }
         );
     }
 
-    private static void GenerateAdapterClass(SourceProductionContext context, INamedTypeSymbol pluginClass, IMethodSymbol method)
+    private static void GenerateAdapterClass(SourceProductionContext context, INamedTypeSymbol containingType, IMethodSymbol method, bool isFromPlugin)
     {
         var adapterName = $"{method.Name}Adapter";
-        var ns = pluginClass.ContainingNamespace.IsGlobalNamespace ? "" : pluginClass.ContainingNamespace.ToDisplayString();
+        var ns = containingType.ContainingNamespace.IsGlobalNamespace ? "" : containingType.ContainingNamespace.ToDisplayString();
 
         // Use fully-qualified type name (global::Namespace.Type) for instance/static references
-        var instanceTypeName = pluginClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var instanceTypeName = containingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         // Validate method requirements for TinySystemAttribute
         ValidateMethodRequirements(context, method);
@@ -84,6 +137,9 @@ public sealed class Program : IIncrementalGenerator
         // Check if method returns bool (for conditional systems)
         var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
         var baseClass = returnsBool ? "TinyEcs.TinyConditionalSystem" : "TinyEcs.TinySystem";
+
+        // Determine class visibility based on the containing type's visibility
+        var classVisibility = GetClassVisibility(containingType);
 
         // Get method parameters for dependency injection
         var parameters = method.Parameters.ToList();
@@ -105,7 +161,7 @@ public sealed class Program : IIncrementalGenerator
             methodCallParameters.Append(fieldName);
         }
 
-        // For non-static methods, add a field for the plugin instance
+        // For non-static methods, add a field for the instance
         string instanceField = "";
         string ctor = "";
         string methodCall;
@@ -120,8 +176,8 @@ public sealed class Program : IIncrementalGenerator
             adapterClass.IncrementIndent();
         }
 
-        // Make the adapter class sealed and partial
-        adapterClass.AppendLine($"public sealed partial class {adapterName} : {baseClass}");
+        // Make the adapter class sealed and partial with visibility matching the containing type
+        adapterClass.AppendLine($"{classVisibility} sealed partial class {adapterName} : {baseClass}");
         adapterClass.AppendLine("{");
         adapterClass.IncrementIndent();
 
@@ -194,6 +250,20 @@ public sealed class Program : IIncrementalGenerator
         context.AddSource($"{adapterName}.g.cs", sourceText);
     }
 
+    private static string GetClassVisibility(INamedTypeSymbol containingType)
+    {
+        return containingType.DeclaredAccessibility switch
+        {
+            Accessibility.Public => "public",
+            Accessibility.Internal => "internal",
+            Accessibility.Private => "private",
+            Accessibility.Protected => "protected",
+            Accessibility.ProtectedAndInternal => "private protected",
+            Accessibility.ProtectedOrInternal => "protected internal",
+            _ => "internal" // Default to internal if accessibility is not recognized
+        };
+    }
+
     private static void ValidateMethodRequirements(SourceProductionContext context, IMethodSymbol method)
     {
         var location = method.Locations.FirstOrDefault() ?? Location.None;
@@ -227,9 +297,10 @@ public sealed class Program : IIncrementalGenerator
         // }
     }
 
-    private class PluginClassInfo
+    private class SystemMethodInfo
     {
-        public INamedTypeSymbol ClassSymbol { get; set; }
+        public INamedTypeSymbol ContainingType { get; set; }
         public List<IMethodSymbol> TinySystemMethods { get; set; }
+        public bool IsFromPlugin { get; set; }
     }
 }

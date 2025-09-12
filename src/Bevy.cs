@@ -33,10 +33,20 @@ public sealed class SystemTicks
 	public uint ThisRun { get; internal set; }
 }
 
-public sealed class Stage(string name, bool runOnce)
+
+public class Stage
 {
-	public string Name { get; } = name;
-	public bool RunOnce { get; } = runOnce;
+	internal Stage(string name, bool runOnce)
+	{
+		if (string.IsNullOrWhiteSpace(name))
+			throw new ArgumentException("Stage name cannot be null or whitespace.", nameof(name));
+		Name = name;
+		RunOnce = runOnce;
+	}
+
+	public string Name { get; }
+	public bool RunOnce { get; }
+
 
 	public static readonly Stage Startup = new(nameof(Startup), true);
 	public static readonly Stage FrameStart = new(nameof(FrameStart), false);
@@ -44,9 +54,48 @@ public sealed class Stage(string name, bool runOnce)
 	public static readonly Stage Update = new(nameof(Update), false);
 	public static readonly Stage AfterUpdate = new(nameof(AfterUpdate), false);
 	public static readonly Stage FrameEnd = new(nameof(FrameEnd), false);
-	public static readonly Stage OnEnter = new(nameof(OnEnter), false);
-	public static readonly Stage OnExit = new(nameof(OnExit), false);
+
+	// These are useful just to headers for the custom OnEnter<T>/OnExit<T> stages
+	internal static readonly Stage OnEnterInner = new(nameof(OnEnterInner), false);
+	internal static readonly Stage OnExitInner = new(nameof(OnExitInner), false);
+
+	public static Stage OnEnter<TState>(TState state)
+		where TState : struct, Enum
+	{
+		var stage = new OnEnterStage<TState>(state, $"__pvt_on_enter_{typeof(TState).ToString()}.{Enum.GetName(state)}", false);
+		return stage;
+	}
+
+	public static Stage OnExit<TState>(TState state)
+		where TState : struct, Enum
+	{
+		var stage = new OnExitStage<TState>(state, $"__pvt_on_exit_{typeof(TState).ToString()}.{Enum.GetName(state)}", false);
+		return stage;
+	}
 }
+
+public interface IStateStage
+{
+	ITinySystem CreateSystem(ITinySystem sys);
+}
+
+public interface IStateEnter : IStateStage { }
+public interface IStateExit : IStateStage { }
+
+internal sealed class OnEnterStage<TState>(TState state, string name, bool runOnce = false) : Stage(name, runOnce), IStateEnter
+	where TState : struct, Enum
+{
+	public ITinySystem CreateSystem(ITinySystem sys)
+		=> new TinyOnEnterSystem<TState>(state, sys);
+}
+
+internal sealed class OnExitStage<TState>(TState state, string name, bool runOnce = false) : Stage(name, runOnce), IStateExit
+	where TState : struct, Enum
+{
+	public ITinySystem CreateSystem(ITinySystem sys)
+		=> new TinyOnExitSystem<TState>(state, sys);
+}
+
 
 internal sealed class StageHandler(Stage stage)
 {
@@ -154,7 +203,7 @@ internal sealed class StageContainer
 		}
 	}
 
-	public void AddBeforeOf(Stage parent, Stage stage)
+	public StageHandler AddBeforeOf(Stage parent, Stage stage)
 	{
 		if (!Contains(parent))
 			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
@@ -169,9 +218,10 @@ internal sealed class StageContainer
 		var handler = new StageHandler(stage);
 		Stages.Insert(index, handler);
 		StageMap.Add(stage.Name, handler);
+		return handler;
 	}
 
-	public void AddAfterOf(Stage parent, Stage stage)
+	public StageHandler AddAfterOf(Stage parent, Stage stage)
 	{
 		if (!Contains(parent))
 			throw new InvalidOperationException($"Parent stage '{parent.Name}' not found.");
@@ -186,12 +236,33 @@ internal sealed class StageContainer
 		var handler = new StageHandler(stage);
 		Stages.Insert(index + 1, handler);
 		StageMap.Add(stage.Name, handler);
+		return handler;
 	}
 
 	public void AddSystem(ITinySystem system, Stage stage)
 	{
 		if (!StageMap.TryGetValue(stage.Name, out var handler))
-			throw new InvalidOperationException($"Stage '{stage.Name}' not found.");
+		{
+			// TODO: is there a better way to handle these special cases?
+			//	     the AddAfterOf makes the current stage to be added on head instead of tail.
+			if (stage is IStateEnter)
+			{
+				handler = AddAfterOf(Stage.OnEnterInner, stage);
+			}
+			else if (stage is IStateExit)
+			{
+				handler = AddAfterOf(Stage.OnExitInner, stage);
+			}
+			else
+			{
+				throw new InvalidOperationException($"Stage '{stage.Name}' not found.");
+			}
+		}
+
+		if (stage is IStateStage stStage)
+		{
+			system = stStage.CreateSystem(system);
+		}
 
 		handler.AddSystem(system);
 	}
@@ -214,8 +285,8 @@ public partial class Scheduler
 		ThreadingExecutionMode = threadingMode;
 
 		_stageContainer.Add(Stage.Startup);
-		_stageContainer.Add(Stage.OnExit);
-		_stageContainer.Add(Stage.OnEnter);
+		_stageContainer.Add(Stage.OnExitInner);
+		_stageContainer.Add(Stage.OnEnterInner);
 		_stageContainer.Add(Stage.FrameStart);
 		_stageContainer.Add(Stage.BeforeUpdate);
 		_stageContainer.Add(Stage.Update);
@@ -364,7 +435,7 @@ public partial class Scheduler
 		{ Configuration = { ThreadingMode = threadingType } }
 		.RunIf((State<TState> state) => state.ShouldEnter(st, ref stateChangeId));
 
-		Add(sys, Stage.OnEnter);
+		Add(sys, Stage.OnEnterInner);
 
 		return sys;
 	}
@@ -385,7 +456,7 @@ public partial class Scheduler
 		{ Configuration = { ThreadingMode = threadingType } }
 		.RunIf((State<TState> state) => state.ShouldExit(st, ref stateChangeId));
 
-		Add(sys, Stage.OnExit);
+		Add(sys, Stage.OnExitInner);
 
 		return sys;
 	}
@@ -450,8 +521,8 @@ public partial class Scheduler
 			Stages.Update => Stage.Update,
 			Stages.AfterUpdate => Stage.AfterUpdate,
 			Stages.FrameEnd => Stage.FrameEnd,
-			Stages.OnEnter => Stage.OnEnter,
-			Stages.OnExit => Stage.OnExit,
+			Stages.OnEnter => Stage.OnEnterInner,
+			Stages.OnExit => Stage.OnExitInner,
 			_ => throw new ArgumentOutOfRangeException(nameof(stage), stage, null)
 		};
 	}
@@ -1419,59 +1490,10 @@ public ref struct QueryIter<D, F>
 }
 
 
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
-public class TinySystemAttribute : Attribute
-{
-	public TinySystemAttribute(Stages stage = Stages.Update)
-	{
-		Stage = stage;
-		ThreadingMode = null;
-	}
-
-	public TinySystemAttribute(ThreadingMode threadingMode) : this(Stages.Update, threadingMode)
-	{
-	}
-
-	public TinySystemAttribute(Stages stage, ThreadingMode threadingMode)
-	{
-		Stage = stage;
-		ThreadingMode = threadingMode;
-	}
-
-	public Stages Stage { get; }
-	public ThreadingMode? ThreadingMode { get; }
-}
-
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class RunIf(string systemName) : Attribute
-{
-	public string SystemName { get; } = systemName;
-}
-
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class BeforeOf(string systemName) : Attribute
-{
-	public string SystemName { get; } = systemName;
-}
-
-[AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
-public sealed class AfterOf(string systemName) : Attribute
-{
-	public string SystemName { get; } = systemName;
-}
-
-
-[AttributeUsage(System.AttributeTargets.Class | AttributeTargets.Struct)]
-public sealed class TinyPluginAttribute : Attribute
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class TinySystemAttribute : Attribute
 {
 }
-
-
-[AttributeUsage(AttributeTargets.Class)]
-public sealed class TinyConditionalSystemAttribute : Attribute
-{
-}
-
 
 public sealed class SystemParamBuilder(World world)
 {
@@ -1644,6 +1666,7 @@ public abstract class TinySystem : TinySystemBase, ITinySystem
 				return false;
 			}
 		}
+
 		return true;
 	}
 
@@ -1708,6 +1731,60 @@ public sealed partial class TinyDelegateSystem : TinySystem, ITinyConditionalSys
 	protected override bool Execute(World world)
 	{
 		return _fn(world, Ticks);
+	}
+}
+
+internal abstract class TinyStateSystemAdapter<TState>(ITinySystem sys) : TinySystem
+	where TState : struct, Enum
+{
+	protected State<TState> _state;
+	protected int _stateChangedId = -1;
+
+	public override void Initialize(World world)
+	{
+		base.Initialize(world);
+		sys.Initialize(world);
+	}
+
+	protected override void Setup(SystemParamBuilder builder)
+	{
+		_state = builder.Add<State<TState>>();
+	}
+}
+
+internal sealed class TinyOnEnterSystem<TState>(TState st, ITinySystem sys) : TinyStateSystemAdapter<TState>(sys)
+	where TState : struct, Enum
+{
+	protected override bool Execute(World world)
+	{
+		Lock();
+		world.BeginDeferred();
+		var result = _state.ShouldEnter(st, ref _stateChangedId);
+		if (result)
+		{
+			_ = sys.ExecuteOnReady(world, Ticks.ThisRun);
+		}
+		world.EndDeferred();
+		Unlock();
+		return result;
+	}
+}
+
+internal sealed class TinyOnExitSystem<TState>(TState st, ITinySystem sys) : TinyStateSystemAdapter<TState>(sys)
+	where TState : struct, Enum
+{
+	protected override bool Execute(World world)
+	{
+		Lock();
+		world.BeginDeferred();
+		var result = _state.ShouldExit(st, ref _stateChangedId);
+		if (result)
+		{
+			_ = sys.ExecuteOnReady(world, Ticks.ThisRun);
+		}
+		world.EndDeferred();
+		Unlock();
+		return result;
 	}
 }
 
