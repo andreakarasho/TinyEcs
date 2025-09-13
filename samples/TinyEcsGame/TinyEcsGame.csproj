@@ -40,6 +40,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	  <ProjectReference Include="..\..\tools\TinyEcs.SourceGenerator\TinyEcs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
 </Project>

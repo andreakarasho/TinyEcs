@@ -19,24 +19,25 @@ public sealed class Program : IIncrementalGenerator
     {
         // Find IPlugin classes that contain methods with [TinySystem] attributes
         var pluginClassesWithTinySystemMethods = context.SyntaxProvider.CreateSyntaxProvider(
-            static (s, _) => s is ClassDeclarationSyntax classDecl &&
-                            classDecl.Members.OfType<MethodDeclarationSyntax>()
+            static (s, _) => (s is ClassDeclarationSyntax || s is StructDeclarationSyntax) &&
+                            s is TypeDeclarationSyntax typeDecl &&
+                            typeDecl.Members.OfType<MethodDeclarationSyntax>()
                                      .Any(m => m.AttributeLists.Count > 0),
             static (ctx, _) =>
             {
-                var classDecl = (ClassDeclarationSyntax)ctx.Node;
-                var classSymbol = ctx.SemanticModel.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
+                var typeDecl = (TypeDeclarationSyntax)ctx.Node;
+                var typeSymbol = ctx.SemanticModel.GetDeclaredSymbol(typeDecl) as INamedTypeSymbol;
 
-                if (classSymbol == null) return null;
+                if (typeSymbol == null) return null;
 
-                // Check if the class implements IPlugin
-                var implementsIPlugin = classSymbol.AllInterfaces.Any(i =>
+                // Check if the type implements IPlugin
+                var implementsIPlugin = typeSymbol.AllInterfaces.Any(i =>
                     i.ToDisplayString() == "TinyEcs.IPlugin");
 
                 if (!implementsIPlugin) return null;
 
                 // Find methods with [TinySystem] attribute
-                var tinySystemMethods = classSymbol.GetMembers()
+                var tinySystemMethods = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
                     .Where(m => m.GetAttributes().Any(attr =>
                         attr.AttributeClass?.ToDisplayString() == "TinyEcs.TinySystemAttribute"))
@@ -46,14 +47,14 @@ public sealed class Program : IIncrementalGenerator
 
                 return new SystemMethodInfo
                 {
-                    ContainingType = classSymbol,
+                    ContainingType = typeSymbol,
                     TinySystemMethods = tinySystemMethods,
                     IsFromPlugin = true
                 };
             }
         ).Where(static info => info != null);
 
-        // Find all methods with [TinySystem] attributes (including those outside IPlugin classes)
+        // Find all methods with [TinySystem] attributes (including those outside IPlugin classes/structs)
         var allTinySystemMethods = context.SyntaxProvider.CreateSyntaxProvider(
             static (s, _) => s is MethodDeclarationSyntax methodDecl &&
                             methodDecl.AttributeLists.Count > 0,
@@ -72,11 +73,11 @@ public sealed class Program : IIncrementalGenerator
 
                 var containingType = methodSymbol.ContainingType;
 
-                // Check if the containing class implements IPlugin
+                // Check if the containing type implements IPlugin
                 var implementsIPlugin = containingType.AllInterfaces.Any(i =>
                     i.ToDisplayString() == "TinyEcs.IPlugin");
 
-                // Only include if it's NOT from an IPlugin class (those are handled separately)
+                // Only include if it's NOT from an IPlugin type (those are handled separately)
                 if (implementsIPlugin) return null;
 
                 return new SystemMethodInfo

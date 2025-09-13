@@ -3,7 +3,7 @@ using TinyEcs;
 using Raylib_cs;
 
 
-using var app = new App();
+using var app = new App(ThreadingMode.Multi);
 app.AddPlugin(new RaylibPlugin()
 {
 	WindowSize = new() { Value = { X = 800, Y = 600 } },
@@ -17,14 +17,14 @@ app.AddPlugin(new GameRootPlugin()
 	Velocity = 250
 });
 
-app.Run(() => Raylib.WindowShouldClose(), Raylib.CloseWindow);
+app.Run(() => Raylib.IsWindowReady() && Raylib.WindowShouldClose(), Raylib.CloseWindow);
 
 
 
 // =================================================================================
 sealed class App : Scheduler, IDisposable
 {
-	public App() : base(new()) { }
+	public App(ThreadingMode threadingMode = ThreadingMode.Auto) : base(new(), threadingMode) { }
 
 	public void Dispose() => World?.Dispose();
 }
@@ -55,22 +55,30 @@ struct RaylibPlugin : IPlugin
 
 	public readonly void Build(Scheduler scheduler)
 	{
+		scheduler.AddSystemParam(new Time());
+		scheduler.AddResource(WindowSize);
+		scheduler.AddResource(new AssetsManager());
+
+		scheduler.AddSystems(Stage.Startup, new CreateWindowAdapter(this) { Configuration = { ThreadingMode = ThreadingMode.Single } });
+		scheduler.AddSystems(Stage.BeforeUpdate, new UpdateTimeAdapter(this));
+	}
+
+	[TinySystem]
+	public void CreateWindow()
+	{
 		ConfigFlags flags = 0;
 		if (VSync)
 			flags |= ConfigFlags.VSyncHint;
 
 		Raylib.SetConfigFlags(flags);
 		Raylib.InitWindow((int)WindowSize.Value.X, (int)WindowSize.Value.Y, Title);
+	}
 
-		scheduler.AddSystemParam(new Time());
-		scheduler.AddResource(WindowSize);
-		scheduler.AddResource(new AssetsManager());
-
-		scheduler.AddSystem((Time time) =>
-		{
-			time.Frame = Raylib.GetFrameTime();
-			time.Total += time.Frame;
-		}, Stages.BeforeUpdate);
+	[TinySystem]
+	public void UpdateTime(Time time)
+	{
+		time.Frame = Raylib.GetFrameTime();
+		time.Total += time.Frame;
 	}
 }
 // =================================================================================
@@ -93,16 +101,14 @@ struct GameplayPlugin : IPlugin
 
 	public void Build(Scheduler scheduler)
 	{
-		var init = SpawnEntities;
-		var fn0 = MoveSystem;
-		var fn1 = CheckBounds;
-
-		scheduler.AddSystem(init, Stages.Startup);
-		scheduler.AddSystem(fn0);
-		scheduler.AddSystem(fn1);
+		scheduler
+			.AddSystems(Stage.Startup, new SpawnEntitiesAdapter(this) { Configuration = { ThreadingMode = ThreadingMode.Single } }
+				.RunIf(new CheckIfWindowReadyAdapter()))
+			.AddSystems(Stage.Update, new MoveSystemAdapter(), new CheckBoundsAdapter());
 	}
 
-	static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
+	[TinySystem]
+	public static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
 	{
 		foreach ((var pos, var vel, var rot) in query)
 		{
@@ -111,7 +117,8 @@ struct GameplayPlugin : IPlugin
 		}
 	}
 
-	static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
+	[TinySystem]
+	public static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
 	{
 		foreach ((var pos, var vel) in query)
 		{
@@ -139,7 +146,14 @@ struct GameplayPlugin : IPlugin
 		}
 	}
 
-	void SpawnEntities(World ecs, SchedulerState scheduler, Res<WindowSize> size, Res<AssetsManager> assetsManager)
+	[TinySystem]
+	public static bool CheckIfWindowReady()
+	{
+		return Raylib.IsWindowReady();
+	}
+
+	[TinySystem]
+	public void SpawnEntities(World ecs, SchedulerState scheduler, Res<WindowSize> size, Res<AssetsManager> assetsManager)
 	{
 		var rnd = Random.Shared;
 		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
@@ -189,29 +203,30 @@ readonly struct RenderingPlugin : IPlugin
 {
 	public void Build(Scheduler scheduler)
 	{
-		var fn2 = BeginRenderer;
-		var fn3 = RenderEntities;
-		var fn4 = DrawText;
-		var fn5 = EndRenderer;
-
-		var begin = scheduler.AddSystem(fn2, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-		var renderEntities = scheduler.AddSystem(fn3, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-		var renderText = scheduler.AddSystem(fn4, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
-		var end = scheduler.AddSystem(fn5, stage: Stages.FrameEnd, threadingType: ThreadingMode.Single);
+		scheduler
+			.AddSystems(Stage.FrameEnd,
+				new BeginRendererAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
+				new RenderEntitiesAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
+				new DrawTextAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
+				new EndRendererAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter())
+			);
 	}
 
-	static void BeginRenderer()
+	[TinySystem]
+	public static void BeginRenderer()
 	{
 		Raylib.BeginDrawing();
 		Raylib.ClearBackground(Color.Black);
 	}
 
-	static void EndRenderer()
+	[TinySystem]
+	public static void EndRenderer()
 	{
 		Raylib.EndDrawing();
 	}
 
-	static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assetsManager)
+	[TinySystem]
+	public static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assetsManager)
 	{
 		var currTextureId = 0u;
 		Texture2D? texture = null;
@@ -229,7 +244,8 @@ readonly struct RenderingPlugin : IPlugin
 		}
 	}
 
-	static void DrawText(World ecs, Time time, Local<string> text, Local<float> timeout)
+	[TinySystem]
+	public static void DrawText(World ecs, Time time, Local<string> text, Local<float> timeout)
 	{
 		//if (time.Total > timeout)
 		{
