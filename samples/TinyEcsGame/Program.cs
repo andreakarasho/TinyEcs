@@ -205,11 +205,14 @@ readonly struct RenderingPlugin : IPlugin
 	{
 		scheduler
 			.AddSystems(Stage.FrameEnd,
-				new BeginRendererAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
-				new RenderEntitiesAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
-				new DrawTextAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter()),
-				new EndRendererAdapter() { Configuration = { ThreadingMode = ThreadingMode.Single } }.RunIf(new CheckIfWindowReadyAdapter())
-			);
+				SystemOrder.Chain
+				(
+					new BeginRendererAdapter(),
+					new RenderEntitiesAdapter(),
+					new DrawTextAdapter(),
+					new EndRendererAdapter()
+				)
+				.RunIf(new CheckIfWindowReadyAdapter()));
 	}
 
 	[TinySystem]

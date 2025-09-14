@@ -1516,11 +1516,23 @@ public sealed class SystemConfiguration
 	public ThreadingMode? ThreadingMode { get; set; }
 }
 
-public sealed class SystemOrderConfiguration
+public sealed class SystemOrder
 {
-	public LinkedList<ITinySystem> BeforeSystems { get; set; } = new();
-	public LinkedList<ITinySystem> AfterSystems { get; set; } = new();
-	public LinkedListNode<ITinySystem>? Node { get; set; }
+	public LinkedList<ITinySystem> BeforeSystems { get; internal set; } = new();
+	public LinkedList<ITinySystem> AfterSystems { get; internal set; } = new();
+	public LinkedListNode<ITinySystem>? Node { get; internal set; }
+
+
+	public static ITinySystem Chain(params ITinySystem[] systems)
+	{
+		if (systems.Length == 0)
+			throw new ArgumentException("At least one system is required to create a chain.", nameof(systems));
+
+		var first = systems[0];
+		for (var i = 1; i < systems.Length; i++)
+			systems[i].RunAfter(first);
+		return first;
+	}
 }
 
 
@@ -1541,7 +1553,7 @@ public interface ITinyMeta
 
 public interface ITinySystem : ITinyMeta
 {
-	SystemOrderConfiguration OrderConfiguration { get; }
+	SystemOrder OrderConfiguration { get; }
 
 	ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new();
 	ITinySystem RunIf(params ITinyConditionalSystem[] conditionals);
@@ -1644,7 +1656,7 @@ public abstract class TinySystemBase : ITinyMeta
 
 public abstract class TinySystem : TinySystemBase, ITinySystem
 {
-	public SystemOrderConfiguration OrderConfiguration { get; } = new();
+	public SystemOrder OrderConfiguration { get; } = new();
 
 	public override void Initialize(World world)
 	{
@@ -1699,14 +1711,14 @@ public abstract class TinySystem : TinySystemBase, ITinySystem
 	public ITinySystem RunAfter(ITinySystem sys)
 	{
 		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
-		OrderConfiguration.Node = OrderConfiguration.AfterSystems.AddLast(sys);
+		OrderConfiguration.Node = sys.OrderConfiguration.AfterSystems.AddLast(this);
 		return this;
 	}
 
 	public ITinySystem RunBefore(ITinySystem sys)
 	{
 		OrderConfiguration.Node?.List?.Remove(OrderConfiguration.Node);
-		OrderConfiguration.Node = OrderConfiguration.BeforeSystems.AddLast(sys);
+		OrderConfiguration.Node = sys.OrderConfiguration.BeforeSystems.AddLast(this);
 		return this;
 	}
 }
