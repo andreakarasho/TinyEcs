@@ -144,22 +144,19 @@ public sealed class Program : IIncrementalGenerator
 
         // Get method parameters for dependency injection
         var parameters = method.Parameters.ToList();
-        var fieldDeclarations = new StringBuilder();
         var setupAssignments = new StringBuilder();
         var methodCallParameters = new StringBuilder();
 
-        // Generate field declarations and setup assignments
+        // Generate setup assignments and method call parameters
         for (int i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
-            var fieldName = $"_{param.Name}";
             var paramType = param.Type.ToDisplayString();
 
-            fieldDeclarations.AppendLine($"    private {paramType} {fieldName};");
-            setupAssignments.AppendLine($"        {fieldName} = builder.Add<{paramType}>();");
+            setupAssignments.AppendLine($"        builder.Add<{paramType}>();");
 
             if (i > 0) methodCallParameters.Append(", ");
-            methodCallParameters.Append(fieldName);
+            methodCallParameters.Append($"({paramType})SystemParams[{i}]");
         }
 
         // For non-static methods, add a field for the instance
@@ -181,10 +178,6 @@ public sealed class Program : IIncrementalGenerator
         adapterClass.AppendLine($"{classVisibility} sealed partial class {adapterName} : {baseClass}");
         adapterClass.AppendLine("{");
         adapterClass.IncrementIndent();
-
-        // Fields
-        foreach (var line in fieldDeclarations.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            adapterClass.AppendLine(line);
 
         if (method.IsStatic)
         {

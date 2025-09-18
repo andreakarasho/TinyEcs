@@ -171,11 +171,6 @@ internal sealed class RunHandler : IRunHandler
 	}
 }
 
-sealed class ThreadSchedule
-{
-	
-}
-
 
 internal sealed class StageContainer
 {
@@ -528,7 +523,7 @@ public partial class Scheduler
 	}
 }
 
-internal struct Placeholder<T> where T : ISystemParam<World> { public T Value; }
+internal struct Placeholder<T> where T : ISystemParam { public T Value; }
 
 
 public interface IPlugin
@@ -567,7 +562,6 @@ public interface ISystemParam
 
 public interface ISystemParam<TParam> : ISystemParam
 {
-
 }
 
 public interface IIntoSystemParam<TArg>
@@ -886,12 +880,11 @@ public sealed class Res<T> : SystemParam<World>, IIntoSystemParam<World>
 
 	public static ISystemParam<World> Generate(World arg)
 	{
-		if (arg.Entity<Placeholder<Res<T>>>().Has<Placeholder<Res<T>>>())
-			return arg.Entity<Placeholder<Res<T>>>().Get<Placeholder<Res<T>>>().Value;
+		var ent = arg.Entity<Placeholder<Res<T>>>();
+		if (ent.Has<Placeholder<Res<T>>>())
+			return ent.Get<Placeholder<Res<T>>>().Value;
 
-		var res = new Res<T>();
-		arg.Entity<Placeholder<Res<T>>>().Set(new Placeholder<Res<T>>() { Value = res });
-		return res;
+		return null;
 	}
 
 	public static implicit operator T?(Res<T> reference)
@@ -1497,17 +1490,28 @@ public sealed class TinySystemAttribute : Attribute
 
 public sealed class SystemParamBuilder(World world)
 {
-	private readonly List<ISystemParam> _params = [];
+	private readonly List<ISystemParam<World>> _params = [];
+	private readonly List<Func<ISystemParam<World>>> _paramsFns = [];
 
 	public T Add<T>() where T : ISystemParam<World>, IIntoSystemParam<World>
 	{
 		var param = (T)T.Generate(world);
 		_params.Add(param);
+		_paramsFns.Add(() => (T)T.Generate(world));
 		return param;
 	}
 
-	public ISystemParam[] Build()
-		=> [.. _params];
+	public (ISystemParam<World>[], Func<ISystemParam<World>>[]) Build()
+		=> ([.. _params], [.. _paramsFns]);
+}
+
+public sealed class SystemParamRef<T> where T : ISystemParam<World>, IIntoSystemParam<World>
+{
+	private readonly World _world;
+	private T? _t;
+	internal SystemParamRef(World world) => _world = world;
+
+	public T Get() => _t ??= (T)T.Generate(_world);
 }
 
 public sealed class SystemConfiguration
@@ -1538,7 +1542,7 @@ public sealed class SystemOrder
 
 public interface ITinyMeta
 {
-	ISystemParam[] SystemParams { get; set; }
+	ISystemParam<World>[] SystemParams { get; set; }
 	SystemTicks Ticks { get; }
 	SystemConfiguration Configuration { get; }
 
@@ -1555,6 +1559,7 @@ public interface ITinySystem : ITinyMeta
 {
 	SystemOrder OrderConfiguration { get; }
 
+	bool ParamsAreReady();
 	ITinySystem RunIf<T>() where T : ITinyConditionalSystem, new();
 	ITinySystem RunIf(params ITinyConditionalSystem[] conditionals);
 	ITinySystem RunAfter(ITinySystem sys);
@@ -1565,11 +1570,13 @@ public interface ITinyConditionalSystem : ITinyMeta
 {
 }
 
+
 public abstract class TinySystemBase : ITinyMeta
 {
 	private bool _initialized;
+	private Func<ISystemParam<World>>[] _paramsFns = [];
 
-	public ISystemParam[] SystemParams { get; set; } = [];
+	public ISystemParam<World>[] SystemParams { get; set; } = [];
 	public SystemTicks Ticks { get; } = new();
 	public SystemConfiguration Configuration { get; } = new();
 
@@ -1582,7 +1589,7 @@ public abstract class TinySystemBase : ITinyMeta
 
 		var builder = new SystemParamBuilder(world);
 		Setup(builder);
-		SystemParams = builder.Build();
+		(SystemParams, _paramsFns) = builder.Build();
 
 		foreach (var conditional in Configuration.Conditionals)
 		{
@@ -1598,6 +1605,20 @@ public abstract class TinySystemBase : ITinyMeta
 
 	public bool ExecuteOnReady(World world, uint ticks)
 	{
+		if (!ParamsAreReady())
+		{
+			for (var i = 0; i < SystemParams.Length; i++)
+			{
+				if (SystemParams[i] == null && i < _paramsFns.Length)
+				{
+					SystemParams[i] = _paramsFns[i]();
+				}
+			}
+
+			if (!ParamsAreReady())
+				return false;
+		}
+
 		Ticks.ThisRun = ticks;
 		var canRun = BeforeExecute(world);
 
@@ -1626,6 +1647,15 @@ public abstract class TinySystemBase : ITinyMeta
 		Ticks.LastRun = Ticks.ThisRun;
 
 		return canRun;
+	}
+
+	public bool ParamsAreReady()
+	{
+		foreach (var param in SystemParams)
+			if (param == null)
+				return false;
+
+		return true;
 	}
 
 	public bool ParamsAreLocked()
