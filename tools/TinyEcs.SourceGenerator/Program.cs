@@ -277,18 +277,6 @@ public sealed class Program : IIncrementalGenerator
         }
 
         // Check if method is static
-        // if (!method.IsStatic)
-        // {
-        //     var descriptor = new DiagnosticDescriptor(
-        //         "TINYECS002",
-        //         "TinySystem method must be static",
-        //         "Method '{0}' with [TinySystem] attribute must be static",
-        //         "TinyEcs",
-        //         DiagnosticSeverity.Error,
-        //         isEnabledByDefault: true);
-        //
-        //     context.ReportDiagnostic(Diagnostic.Create(descriptor, location, method.Name));
-        // }
     }
 
     private class SystemMethodInfo
