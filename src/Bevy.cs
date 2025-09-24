@@ -1664,7 +1664,7 @@ public abstract class TinySystemBase : ITinyMeta
 		{
 			ThreadingMode.Single => true,
 			ThreadingMode.Multi => false,
-			_ => SystemParams.Any(static p => p.UseIndex > 0)
+			_ => SystemParams.Any(static p => p is { UseIndex: > 0 })
 		};
 	}
 
