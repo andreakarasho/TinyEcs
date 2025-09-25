@@ -96,13 +96,13 @@ public sealed class Program : IIncrementalGenerator
             {
                 var (pluginMethods, standaloneMethods) = combined;
                 var result = new List<SystemMethodInfo>();
-                
+
                 if (!pluginMethods.IsDefaultOrEmpty)
                     result.AddRange(pluginMethods);
-                
+
                 if (!standaloneMethods.IsDefaultOrEmpty)
                     result.AddRange(standaloneMethods);
-                
+
                 return result.ToImmutableArray();
             });
 
@@ -113,10 +113,66 @@ public sealed class Program : IIncrementalGenerator
             {
                 if (systemMethods.IsDefaultOrEmpty) return;
 
+                // Create delegate signature cache
+                var delegateCache = new Dictionary<string, (int Index, string ReturnType)>();
+                var currentIndex = 0;
+
+                // Create extension class cache for each unique signature
+                var extensionCache = new Dictionary<string, string>();
+
+                // Create stub system cache for each unique signature
+                var stubSystemCache = new Dictionary<string, (string Name, IList<IParameterSymbol> Parameters, bool ReturnsBool)>();
+
+                // First pass: collect all unique delegate signatures
                 foreach (var systemMethod in systemMethods)
                 {
                     foreach (var method in systemMethod.TinySystemMethods)
                     {
+                        var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
+                        var delegateReturnType = returnsBool ? "bool" : "void";
+
+                        var parameters = method.Parameters.ToList();
+                        var delegateSignature = string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}"));
+                        var fullSignature = $"{delegateReturnType}({delegateSignature})";
+
+                        // Cache delegate signature
+                        if (!delegateCache.ContainsKey(fullSignature))
+                        {
+                            delegateCache[fullSignature] = (currentIndex++, delegateReturnType);
+                        }
+
+                        // Cache extension class name for this signature
+                        if (!extensionCache.ContainsKey(fullSignature))
+                        {
+                            var delegateIndex = delegateCache[fullSignature].Index;
+                            extensionCache[fullSignature] = $"OnTinyDelegate{delegateIndex}Ext";
+                        }
+
+                        // Cache stub system name for this signature
+                        if (!stubSystemCache.ContainsKey(fullSignature))
+                        {
+                            var delegateIndex = delegateCache[fullSignature].Index;
+                            var stubSystemName = $"OnTinyDelegate{delegateIndex}StubSystem";
+                            stubSystemCache[fullSignature] = (stubSystemName, method.Parameters.ToList(), returnsBool);
+                        }
+                    }
+                }
+
+                // Generate delegates file
+                GenerateDelegatesFile(spc, delegateCache);
+
+                // Generate cached extensions file
+                GenerateExtensionsFile(spc, delegateCache, extensionCache);
+
+                // Generate cached stub systems file
+                GenerateStubSystemsFile(spc, delegateCache, stubSystemCache);
+
+                // Second pass: generate systems using cached delegates
+                foreach (var systemMethod in systemMethods)
+                {
+                    foreach (var method in systemMethod.TinySystemMethods)
+                    {
+                        // Generate only adapter classes (stub systems are now cached)
                         GenerateAdapterClass(spc, systemMethod.ContainingType, method, systemMethod.IsFromPlugin);
                     }
                 }
@@ -124,7 +180,310 @@ public sealed class Program : IIncrementalGenerator
         );
     }
 
-    private static void GenerateAdapterClass(SourceProductionContext context, INamedTypeSymbol containingType, IMethodSymbol method, bool isFromPlugin)
+    private static void GenerateDelegatesFile(SourceProductionContext context, Dictionary<string, (int Index, string ReturnType)> delegateCache)
+    {
+        var delegatesClass = new IndentedStringBuilder();
+
+        delegatesClass.AppendLine("// Auto-generated delegate types for TinyEcs stub systems");
+        delegatesClass.AppendLine("namespace TinyEcs");
+        delegatesClass.AppendLine("{");
+        delegatesClass.IncrementIndent();
+
+        foreach (var kvp in delegateCache.OrderBy(x => x.Value.Index))
+        {
+            var signature = kvp.Key;
+            var (index, returnType) = kvp.Value;
+
+            // Extract parameter part from full signature like "void(World world, Query<...> query)"
+            var paramStart = signature.IndexOf('(');
+            var paramEnd = signature.LastIndexOf(')');
+            var parameters = signature.Substring(paramStart + 1, paramEnd - paramStart - 1);
+
+            delegatesClass.AppendLine($"internal delegate {returnType} OnTinyDelegate{index}({parameters});");
+        }
+
+        delegatesClass.DecrementIndent();
+        delegatesClass.AppendLine("}");
+
+        context.AddSource("TinyDelegates.g.cs", delegatesClass.ToString());
+    }
+
+    private static void GenerateExtensionsFile(SourceProductionContext context, Dictionary<string, (int Index, string ReturnType)> delegateCache, Dictionary<string, string> extensionCache)
+    {
+        var extensionsClass = new IndentedStringBuilder();
+
+        extensionsClass.AppendLine("// Auto-generated extension methods for TinyEcs stub systems");
+        extensionsClass.AppendLine("namespace TinyEcs");
+        extensionsClass.AppendLine("{");
+        extensionsClass.IncrementIndent();
+
+        // Generate extension classes for each unique delegate signature
+        foreach (var kvp in extensionCache.OrderBy(x => delegateCache[x.Key].Index))
+        {
+            var signature = kvp.Key;
+            var extensionClassName = kvp.Value;
+            var (index, returnType) = delegateCache[signature];
+
+            extensionsClass.AppendLine($"internal static class {extensionClassName}");
+            extensionsClass.AppendLine("{");
+            extensionsClass.IncrementIndent();
+
+            if (returnType == "bool")
+            {
+                // Generate RunIf extension method for bool-returning delegates
+                extensionsClass.AppendLine($"public static TinyEcs.ITinySystem RunIf(this TinyEcs.ITinySystem system, OnTinyDelegate{index} condition)");
+                extensionsClass.AppendLine("{");
+                extensionsClass.IncrementIndent();
+                extensionsClass.AppendLine($"var conditionSystem = new OnTinyDelegate{index}StubSystem(condition);");
+                extensionsClass.AppendLine("return system.RunIf(conditionSystem);");
+                extensionsClass.DecrementIndent();
+                extensionsClass.AppendLine("}");
+            }
+            else
+            {
+                // Generate AddSystems extension method for void-returning delegates
+                extensionsClass.AppendLine($"public static TinyEcs.Scheduler AddSystems(this TinyEcs.Scheduler scheduler, TinyEcs.Stage stage, OnTinyDelegate{index} del)");
+                extensionsClass.AppendLine("{");
+                extensionsClass.IncrementIndent();
+                extensionsClass.AppendLine($"var sys = new OnTinyDelegate{index}StubSystem(del);");
+                extensionsClass.AppendLine("scheduler.AddSystems(stage, sys);");
+                extensionsClass.AppendLine("return scheduler;");
+                extensionsClass.DecrementIndent();
+                extensionsClass.AppendLine("}");
+            }
+
+            extensionsClass.DecrementIndent();
+            extensionsClass.AppendLine("}");
+            extensionsClass.AppendLine();
+        }
+
+        extensionsClass.DecrementIndent();
+        extensionsClass.AppendLine("}");
+
+        context.AddSource("TinyExtensions.g.cs", extensionsClass.ToString());
+    }
+
+    private static void GenerateStubSystemsFile(SourceProductionContext context, Dictionary<string, (int Index, string ReturnType)> delegateCache, Dictionary<string, (string Name, IList<IParameterSymbol> Parameters, bool ReturnsBool)> stubSystemCache)
+    {
+        var stubSystemsClass = new IndentedStringBuilder();
+
+        stubSystemsClass.AppendLine("// Auto-generated cached stub systems for TinyEcs");
+        stubSystemsClass.AppendLine("namespace TinyEcs");
+        stubSystemsClass.AppendLine("{");
+        stubSystemsClass.IncrementIndent();
+
+        // Generate cached stub system classes for each unique delegate signature
+        foreach (var kvp in stubSystemCache.OrderBy(x => delegateCache[x.Key].Index))
+        {
+            var signature = kvp.Key;
+            var (stubSystemName, parameters, returnsBool) = kvp.Value;
+            var (index, returnType) = delegateCache[signature];
+
+            var baseClass = returnsBool ? "TinyEcs.TinyConditionalSystem" : "TinyEcs.TinySystem";
+            var delegateName = $"OnTinyDelegate{index}";
+
+            stubSystemsClass.AppendLine($"internal class {stubSystemName} : {baseClass}");
+            stubSystemsClass.AppendLine("{");
+            stubSystemsClass.IncrementIndent();
+
+            // Private field for delegate
+            stubSystemsClass.AppendLine($"private readonly {delegateName} _fn;");
+            stubSystemsClass.AppendLine();
+
+            // Constructor
+            stubSystemsClass.AppendLine($"public {stubSystemName}({delegateName} fn)");
+            stubSystemsClass.AppendLine("{");
+            stubSystemsClass.IncrementIndent();
+            stubSystemsClass.AppendLine("_fn = fn;");
+            stubSystemsClass.DecrementIndent();
+            stubSystemsClass.AppendLine("}");
+            stubSystemsClass.AppendLine();
+
+            // Setup method using actual parameter symbols
+            stubSystemsClass.AppendLine("protected override void Setup(TinyEcs.SystemParamBuilder builder)");
+            stubSystemsClass.AppendLine("{");
+            stubSystemsClass.IncrementIndent();
+
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                var param = parameters[i];
+                var paramType = param.Type.ToDisplayString();
+                stubSystemsClass.AppendLine($"        builder.Add<{paramType}>();");
+            }
+
+            stubSystemsClass.DecrementIndent();
+            stubSystemsClass.AppendLine("}");
+            stubSystemsClass.AppendLine();
+
+            // Execute method
+            stubSystemsClass.AppendLine("protected override bool Execute(TinyEcs.World world)");
+            stubSystemsClass.AppendLine("{");
+            stubSystemsClass.IncrementIndent();
+            stubSystemsClass.AppendLine("Lock();");
+            stubSystemsClass.AppendLine("world.BeginDeferred();");
+
+            // Build parameter list for delegate call using actual parameter types
+            if (parameters.Count > 0)
+            {
+                var executeParameters = string.Join(", ", parameters.Select((p, i) =>
+                {
+                    var paramType = p.Type.ToDisplayString();
+                    return $"({paramType})SystemParams[{i}]";
+                }));
+
+                if (returnsBool)
+                {
+                    stubSystemsClass.AppendLine($"bool result = _fn({executeParameters});");
+                    stubSystemsClass.AppendLine("world.EndDeferred();");
+                    stubSystemsClass.AppendLine("Unlock();");
+                    stubSystemsClass.AppendLine("return result;");
+                }
+                else
+                {
+                    stubSystemsClass.AppendLine($"_fn({executeParameters});");
+                    stubSystemsClass.AppendLine("world.EndDeferred();");
+                    stubSystemsClass.AppendLine("Unlock();");
+                    stubSystemsClass.AppendLine("return true;");
+                }
+            }
+            else
+            {
+                // No parameters
+                if (returnsBool)
+                {
+                    stubSystemsClass.AppendLine("bool result = _fn();");
+                    stubSystemsClass.AppendLine("world.EndDeferred();");
+                    stubSystemsClass.AppendLine("Unlock();");
+                    stubSystemsClass.AppendLine("return result;");
+                }
+                else
+                {
+                    stubSystemsClass.AppendLine("_fn();");
+                    stubSystemsClass.AppendLine("world.EndDeferred();");
+                    stubSystemsClass.AppendLine("Unlock();");
+                    stubSystemsClass.AppendLine("return true;");
+                }
+            }
+
+            stubSystemsClass.DecrementIndent();
+            stubSystemsClass.AppendLine("}");
+            stubSystemsClass.DecrementIndent();
+            stubSystemsClass.AppendLine("}");
+            stubSystemsClass.AppendLine();
+        }
+
+        stubSystemsClass.DecrementIndent();
+        stubSystemsClass.AppendLine("}");
+
+        context.AddSource("TinyStubSystems.g.cs", stubSystemsClass.ToString());
+    }
+
+    private static void GenerateStubClass(SourceProductionContext context, INamedTypeSymbol containingType, IMethodSymbol method, bool isFromPlugin, int delegateIndex)
+    {
+        var stubName = $"{method.Name}StubSystem";
+        var ns = containingType.ContainingNamespace.IsGlobalNamespace ? "" : containingType.ContainingNamespace.ToDisplayString();
+        var delegateName = $"TinyEcs.OnTinyDelegate{delegateIndex}";
+
+        // Validate method requirements for TinySystemAttribute
+        ValidateMethodRequirements(context, method);
+
+        // Check if method returns bool (for conditional systems)
+        var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
+        var baseClass = returnsBool ? "TinyEcs.TinyConditionalSystem" : "TinyEcs.TinySystem";
+
+        // Determine class visibility based on the containing type's visibility
+        var classVisibility = GetClassVisibility(containingType);
+
+        // Get method parameters for dependency injection
+        var parameters = method.Parameters.ToList();
+        var setupAssignments = new StringBuilder();
+        var executeParameters = new StringBuilder();
+
+        // Generate parameter lists
+        for (int i = 0; i < parameters.Count; i++)
+        {
+            var param = parameters[i];
+            var paramType = param.Type.ToDisplayString();
+
+            setupAssignments.AppendLine($"        builder.Add<{paramType}>();");
+
+            if (i > 0) executeParameters.Append(", ");
+            executeParameters.Append($"({paramType})SystemParams[{i}]");
+        }
+
+        // Use a single IndentedStringBuilder for all code blocks
+        var stubClass = new IndentedStringBuilder();
+
+        if (!string.IsNullOrEmpty(ns))
+        {
+            stubClass.AppendLine($"namespace {ns}");
+            stubClass.AppendLine("{");
+            stubClass.IncrementIndent();
+        }
+
+        // Generate the stub system class
+        stubClass.AppendLine($"{classVisibility} class {stubName} : {baseClass}");
+        stubClass.AppendLine("{");
+        stubClass.IncrementIndent();
+
+        // Generate private field for delegate (using cached delegate type)
+        stubClass.AppendLine($"private readonly {delegateName} _fn;");
+        stubClass.AppendLine();
+
+        // Generate constructor
+        stubClass.AppendLine($"public {stubName}({delegateName} fn)");
+        stubClass.AppendLine("{");
+        stubClass.IncrementIndent();
+        stubClass.AppendLine("_fn = fn;");
+        stubClass.DecrementIndent();
+        stubClass.AppendLine("}");
+        stubClass.AppendLine();
+
+        // Setup method
+        stubClass.AppendLine("protected override void Setup(TinyEcs.SystemParamBuilder builder)");
+        stubClass.AppendLine("{");
+        stubClass.IncrementIndent();
+        foreach (var line in setupAssignments.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            stubClass.AppendLine(line);
+        stubClass.DecrementIndent();
+        stubClass.AppendLine("}");
+        stubClass.AppendLine();
+
+        // Execute method
+        stubClass.AppendLine("protected override bool Execute(TinyEcs.World world)");
+        stubClass.AppendLine("{");
+        stubClass.IncrementIndent();
+        stubClass.AppendLine("Lock();");
+        stubClass.AppendLine("world.BeginDeferred();");
+        if (returnsBool)
+        {
+            stubClass.AppendLine($"bool result = _fn({executeParameters});");
+            stubClass.AppendLine("world.EndDeferred();");
+            stubClass.AppendLine("Unlock();");
+            stubClass.AppendLine("return result;");
+        }
+        else
+        {
+            stubClass.AppendLine($"_fn({executeParameters});");
+            stubClass.AppendLine("world.EndDeferred();");
+            stubClass.AppendLine("Unlock();");
+            stubClass.AppendLine("return true;");
+        }
+        stubClass.DecrementIndent();
+        stubClass.AppendLine("}");
+
+        stubClass.DecrementIndent();
+        stubClass.AppendLine("}");
+
+        if (!string.IsNullOrEmpty(ns))
+        {
+            stubClass.DecrementIndent();
+            stubClass.AppendLine("}");
+        }
+
+        var sourceText = stubClass.ToString();
+        context.AddSource($"{stubName}.g.cs", sourceText);
+    }    private static void GenerateAdapterClass(SourceProductionContext context, INamedTypeSymbol containingType, IMethodSymbol method, bool isFromPlugin)
     {
         var adapterName = $"{method.Name}Adapter";
         var ns = containingType.ContainingNamespace.IsGlobalNamespace ? "" : containingType.ContainingNamespace.ToDisplayString();
@@ -279,10 +638,10 @@ public sealed class Program : IIncrementalGenerator
         // Check if method is static
     }
 
-    private class SystemMethodInfo
+    internal class SystemMethodInfo
     {
-        public INamedTypeSymbol ContainingType { get; set; }
-        public List<IMethodSymbol> TinySystemMethods { get; set; }
+        public INamedTypeSymbol ContainingType { get; set; } = null!;
+        public List<IMethodSymbol> TinySystemMethods { get; set; } = null!;
         public bool IsFromPlugin { get; set; }
     }
 }

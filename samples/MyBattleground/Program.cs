@@ -189,9 +189,9 @@ scheduler.AddPlugin(new TestPlugin() { Count = ENTITIES_COUNT });
 //
 
 var query = ecs.QueryBuilder()
-    .With<Position>()
-    .With<Velocity>()
-    .Build();
+	.With<Position>()
+	.With<Velocity>()
+	.Build();
 
 var sw = Stopwatch.StartNew();
 var start = 0f;
@@ -199,47 +199,47 @@ var last = 0f;
 
 while (true)
 {
-    for (int i = 0; i < 3600; ++i)
-    {
-        scheduler.RunOnce();
+	for (int i = 0; i < 3600; ++i)
+	{
+		scheduler.RunOnce();
 
-        // Execute(query);
-        // ExecuteIterator(query);
+		// Execute(query);
+		// ExecuteIterator(query);
 
-        // var it = query.Iter();
-        // while (it.Next())
-        // {
-        // 	var count = it.Count;
+		// var it = query.Iter();
+		// while (it.Next())
+		// {
+		// 	var count = it.Count;
 
-        // 	ref var pos = ref it.DataRef<Position>(0);
-        // 	ref var vel = ref it.DataRef<Velocity>(1);
-        // 	ref var lastPos = ref Unsafe.Add(ref pos, count);
+		// 	ref var pos = ref it.DataRef<Position>(0);
+		// 	ref var vel = ref it.DataRef<Velocity>(1);
+		// 	ref var lastPos = ref Unsafe.Add(ref pos, count);
 
-        // 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
-        // 	{
-        // 		pos.X *= vel.X;
-        // 		pos.Y *= vel.Y;
+		// 	while (Unsafe.IsAddressLessThan(ref pos, ref lastPos))
+		// 	{
+		// 		pos.X *= vel.X;
+		// 		pos.Y *= vel.Y;
 
-        // 		pos = ref Unsafe.Add(ref pos, 1);
-        // 		vel = ref Unsafe.Add(ref vel, 1);
-        // 	}
-        // }
-    }
+		// 		pos = ref Unsafe.Add(ref pos, 1);
+		// 		vel = ref Unsafe.Add(ref vel, 1);
+		// 	}
+		// }
+	}
 
-    last = start;
-    start = sw.ElapsedMilliseconds;
+	last = start;
+	start = sw.ElapsedMilliseconds;
 
-    Console.WriteLine("query done in {0} ms", start - last);
+	Console.WriteLine("query done in {0} ms", start - last);
 }
 
 
 static void Execute(Query query)
 {
-    foreach (var (pos, vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
-    {
-        pos.Ref.X *= vel.Ref.X;
-        pos.Ref.Y *= vel.Ref.Y;
-    }
+	foreach (var (pos, vel) in Data<Position, Velocity>.CreateIterator(query.Iter()))
+	{
+		pos.Ref.X *= vel.Ref.X;
+		pos.Ref.Y *= vel.Ref.Y;
+	}
 }
 
 
@@ -267,12 +267,12 @@ static void Execute(Query query)
 
 public struct Position
 {
-    public float X, Y, Z;
+	public float X, Y, Z;
 }
 
 public struct Velocity
 {
-    public float X, Y;
+	public float X, Y;
 }
 
 struct Mass { public float Value; }
@@ -282,28 +282,24 @@ struct Tag { }
 
 enum GameState
 {
-    Loading,
-    Playing,
-    Menu,
-    Menu2
+	Loading,
+	Playing,
+	Menu,
+	Menu2
 }
 
 enum AnotherState
 {
-    A, B, C
+	A, B, C
 }
 
-
-class SYSTEMS
+internal static class Extss
 {
-	[TinySystem]
-	public bool CheckThis()
+	public static void Test(this OnTinyDelegate0 d)
 	{
-		new CheckThisAdapter(this);
-		return true;
+
 	}
 }
-
 
 internal sealed class TestPlugin : IPlugin
 {
@@ -325,8 +321,28 @@ internal sealed class TestPlugin : IPlugin
 		//scheduler.AddSystems(Stage.OnEnter, new TinyStateSystemAdapter<GameState>(GameState.Playing));
 		scheduler.AddSystems(Stage.OnEnter(GameState.Playing), new OnEnterAdapter(this));
 		scheduler.AddSystems(Stage.OnExit(GameState.Loading), new OnExitAdapter(this));
+
+		scheduler.AddSystems(Stage.Update, Test2);
+		scheduler.AddSystems(Stage.Update, Test3);
+
+		scheduler.AddSystems(Stage.Startup, Setup);
+		scheduler.AddSystems(Stage.Startup, Hello);
 	}
 
+
+	void Hello() { }
+
+	[TinySystem]
+	public void Test2(World world, Query<Data<Position, Velocity>> query)
+	{
+
+	}
+
+	[TinySystem]
+	public void Test3(World world, Query<Data<Position, Velocity>> query)
+	{
+
+	}
 
 	[TinySystem]
 	public void Setup(World world)
