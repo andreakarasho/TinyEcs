@@ -382,19 +382,25 @@ public partial class Scheduler
 		return AddSystem<T>(stage);
 	}
 
-	public Scheduler AddSystems(string stageName, params ITinySystem[] systems)
+	public ITinySystem AddSystem(string stageName, ITinySystem system)
 	{
 		var stage = _stageContainer.Get(stageName);
 		if (stage == null)
 			throw new InvalidOperationException($"Stage '{stageName}' not found.");
-		return AddSystems(stage, systems);
+		return AddSystem(stage, system);
+	}
+
+	public ITinySystem AddSystem(Stage stage, ITinySystem system)
+	{
+		Add(system, stage);
+
+		return system;
 	}
 
 	public Scheduler AddSystems(Stage stage, params ITinySystem[] systems)
 	{
-		foreach (var system in systems)
-			Add(system, stage);
-
+		foreach (var sys in systems)
+			Add(sys, stage);
 		return this;
 	}
 

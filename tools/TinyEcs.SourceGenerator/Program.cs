@@ -89,7 +89,42 @@ public sealed class Program : IIncrementalGenerator
             }
         ).Where(static info => info != null);
 
-        // Combine both providers
+        // Find compatible methods for cached delegate generation (any accessibility)
+        var allCompatibleMethods = context.SyntaxProvider.CreateSyntaxProvider(
+            static (s, _) => s is MethodDeclarationSyntax methodDecl,
+            static (ctx, _) =>
+            {
+                var methodDecl = (MethodDeclarationSyntax)ctx.Node;
+                var methodSymbol = ctx.SemanticModel.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+
+                if (methodSymbol == null) return null;
+
+                // Check if method has compatible parameters for system generation
+                foreach (var param in methodSymbol.Parameters)
+                {
+                    var paramType = param.Type;
+                    var paramTypeName = paramType.ToDisplayString();
+                    
+                    // Skip methods with certain known incompatible types
+                    if (paramTypeName.Contains("Scheduler") && 
+                        !paramTypeName.Contains("SchedulerState"))
+                    {
+                        return null;
+                    }
+                    
+                    // Skip methods with primitive types that aren't system parameters
+                    if (paramType.SpecialType != SpecialType.None && 
+                        paramType.SpecialType != SpecialType.System_Object)
+                    {
+                        return null;
+                    }
+                }
+
+                return methodSymbol;
+            }
+        ).Where(static method => method != null);
+
+        // Combine TinySystem methods for adapter class generation
         var allSystemMethods = pluginClassesWithTinySystemMethods.Collect()
             .Combine(allTinySystemMethods.Collect())
             .Select(static (combined, _) =>
@@ -106,12 +141,12 @@ public sealed class Program : IIncrementalGenerator
                 return result.ToImmutableArray();
             });
 
-        // Generate adapter classes for each method
+        // Generate cached delegates and systems for ALL compatible methods
         context.RegisterSourceOutput(
-            allSystemMethods,
-            (spc, systemMethods) =>
+            allCompatibleMethods.Collect(),
+            (spc, compatibleMethods) =>
             {
-                if (systemMethods.IsDefaultOrEmpty) return;
+                if (compatibleMethods.IsDefaultOrEmpty) return;
 
                 // Create delegate signature cache
                 var delegateCache = new Dictionary<string, (int Index, string ReturnType)>();
@@ -123,38 +158,35 @@ public sealed class Program : IIncrementalGenerator
                 // Create stub system cache for each unique signature
                 var stubSystemCache = new Dictionary<string, (string Name, IList<IParameterSymbol> Parameters, bool ReturnsBool)>();
 
-                // First pass: collect all unique delegate signatures
-                foreach (var systemMethod in systemMethods)
+                // Collect all unique delegate signatures from ALL compatible methods
+                foreach (var method in compatibleMethods)
                 {
-                    foreach (var method in systemMethod.TinySystemMethods)
+                    var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
+                    var delegateReturnType = returnsBool ? "bool" : "void";
+
+                    var parameters = method.Parameters.ToList();
+                    var delegateSignature = string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}"));
+                    var fullSignature = $"{delegateReturnType}({delegateSignature})";
+
+                    // Cache delegate signature
+                    if (!delegateCache.ContainsKey(fullSignature))
                     {
-                        var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
-                        var delegateReturnType = returnsBool ? "bool" : "void";
+                        delegateCache[fullSignature] = (currentIndex++, delegateReturnType);
+                    }
 
-                        var parameters = method.Parameters.ToList();
-                        var delegateSignature = string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}"));
-                        var fullSignature = $"{delegateReturnType}({delegateSignature})";
+                    // Cache extension class name for this signature
+                    if (!extensionCache.ContainsKey(fullSignature))
+                    {
+                        var delegateIndex = delegateCache[fullSignature].Index;
+                        extensionCache[fullSignature] = $"OnTinyDelegate{delegateIndex}Ext";
+                    }
 
-                        // Cache delegate signature
-                        if (!delegateCache.ContainsKey(fullSignature))
-                        {
-                            delegateCache[fullSignature] = (currentIndex++, delegateReturnType);
-                        }
-
-                        // Cache extension class name for this signature
-                        if (!extensionCache.ContainsKey(fullSignature))
-                        {
-                            var delegateIndex = delegateCache[fullSignature].Index;
-                            extensionCache[fullSignature] = $"OnTinyDelegate{delegateIndex}Ext";
-                        }
-
-                        // Cache stub system name for this signature
-                        if (!stubSystemCache.ContainsKey(fullSignature))
-                        {
-                            var delegateIndex = delegateCache[fullSignature].Index;
-                            var stubSystemName = $"OnTinyDelegate{delegateIndex}StubSystem";
-                            stubSystemCache[fullSignature] = (stubSystemName, method.Parameters.ToList(), returnsBool);
-                        }
+                    // Cache stub system name for this signature
+                    if (!stubSystemCache.ContainsKey(fullSignature))
+                    {
+                        var delegateIndex = delegateCache[fullSignature].Index;
+                        var stubSystemName = $"OnTinyDelegate{delegateIndex}StubSystem";
+                        stubSystemCache[fullSignature] = (stubSystemName, method.Parameters.ToList(), returnsBool);
                     }
                 }
 
@@ -166,8 +198,17 @@ public sealed class Program : IIncrementalGenerator
 
                 // Generate cached stub systems file
                 GenerateStubSystemsFile(spc, delegateCache, stubSystemCache);
+            }
+        );
 
-                // Second pass: generate systems using cached delegates
+        // Generate adapter classes for TinySystem methods only
+        context.RegisterSourceOutput(
+            allSystemMethods,
+            (spc, systemMethods) =>
+            {
+                if (systemMethods.IsDefaultOrEmpty) return;
+
+                // Generate adapter classes only for methods with [TinySystem] attribute
                 foreach (var systemMethod in systemMethods)
                 {
                     foreach (var method in systemMethod.TinySystemMethods)
@@ -242,12 +283,23 @@ public sealed class Program : IIncrementalGenerator
             else
             {
                 // Generate AddSystems extension method for void-returning delegates
-                extensionsClass.AppendLine($"public static TinyEcs.Scheduler AddSystems(this TinyEcs.Scheduler scheduler, TinyEcs.Stage stage, OnTinyDelegate{index} del)");
+                extensionsClass.AppendLine($"public static TinyEcs.ITinySystem AddSystem(this TinyEcs.Scheduler scheduler, TinyEcs.Stage stage, OnTinyDelegate{index} del)");
                 extensionsClass.AppendLine("{");
                 extensionsClass.IncrementIndent();
                 extensionsClass.AppendLine($"var sys = new OnTinyDelegate{index}StubSystem(del);");
-                extensionsClass.AppendLine("scheduler.AddSystems(stage, sys);");
-                extensionsClass.AppendLine("return scheduler;");
+                extensionsClass.AppendLine("scheduler.AddSystem(stage, sys);");
+                extensionsClass.AppendLine("return sys;");
+                extensionsClass.DecrementIndent();
+                extensionsClass.AppendLine("}");
+                extensionsClass.AppendLine();
+
+                // Also generate string overload
+                extensionsClass.AppendLine($"public static TinyEcs.ITinySystem AddSystem(this TinyEcs.Scheduler scheduler, string stageName, OnTinyDelegate{index} del)");
+                extensionsClass.AppendLine("{");
+                extensionsClass.IncrementIndent();
+                extensionsClass.AppendLine($"var sys = new OnTinyDelegate{index}StubSystem(del);");
+                extensionsClass.AppendLine("scheduler.AddSystem(stageName, sys);");
+                extensionsClass.AppendLine("return sys;");
                 extensionsClass.DecrementIndent();
                 extensionsClass.AppendLine("}");
             }

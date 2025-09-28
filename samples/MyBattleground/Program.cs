@@ -73,8 +73,8 @@ scheduler.AddPlugin(new TestPlugin() { Count = ENTITIES_COUNT });
 // // }
 
 
-// scheduler.RunOnce();
-// scheduler.RunOnce();
+//scheduler.RunOnce();
+//scheduler.RunOnce();
 
 // ab.Set(new Position() { X = 2 });
 // scheduler.RunOnce();
@@ -293,13 +293,6 @@ enum AnotherState
 	A, B, C
 }
 
-internal static class Extss
-{
-	public static void Test(this OnTinyDelegate0 d)
-	{
-
-	}
-}
 
 internal sealed class TestPlugin : IPlugin
 {
@@ -308,44 +301,37 @@ internal sealed class TestPlugin : IPlugin
 	public void Build(Scheduler scheduler)
 	{
 		scheduler.AddState(GameState.Loading);
+		var afterUpdateStage = scheduler.AddStageAfterOf(Stage.Update, "AFTER_UPDATE");
 
+		scheduler.AddSystem(Stage.Startup, Setup);
 		scheduler
-			.AddSystems(Stage.Startup, new SetupAdapter(this))
-			.AddSystems(Stage.Update, new MoveEntitiesAdapter()
-				.RunIf(new CanRunAdapter(this)))
-			.AddSystem<PrintSomethingAdapter>(Stage.Update);
-
-		scheduler.AddStageAfterOf(Stage.Update, "AFTER_UPDATE");
-		scheduler.AddSystems("AFTER_UPDATE", new AcceptAdapter(this));
-
-		//scheduler.AddSystems(Stage.OnEnter, new TinyStateSystemAdapter<GameState>(GameState.Playing));
-		scheduler.AddSystems(Stage.OnEnter(GameState.Playing), new OnEnterAdapter(this));
-		scheduler.AddSystems(Stage.OnExit(GameState.Loading), new OnExitAdapter(this));
-
-		scheduler.AddSystems(Stage.Update, Test2);
-		scheduler.AddSystems(Stage.Update, Test3);
-
-		scheduler.AddSystems(Stage.Startup, Setup);
-		scheduler.AddSystems(Stage.Startup, Hello);
+			.AddSystem(Stage.Update, MoveEntities)
+			.RunIf(CanRun);
+		scheduler.AddSystem(Stage.Update, PrintSomething);
+		scheduler.AddSystem(afterUpdateStage, Accept);
+		scheduler.AddSystem(Stage.OnEnter(GameState.Playing), OnEnter);
+		scheduler.AddSystem(Stage.OnExit(GameState.Loading), OnExit);
+		
+		// Test the string stage version
+		scheduler.AddSystem("Update", Hello);
 	}
 
 
-	void Hello() { }
+	void Hello()
+	{
+	}
 
-	[TinySystem]
-	public void Test2(World world, Query<Data<Position, Velocity>> query)
+	void Test2(World world, Query<Data<Position, Velocity>> query)
 	{
 
 	}
 
-	[TinySystem]
-	public void Test3(World world, Query<Data<Position, Velocity>> query)
+	void Test3(World world, Query<Data<Position, Velocity>> query)
 	{
 
 	}
 
-	[TinySystem]
-	public void Setup(World world)
+	void Setup(World world)
 	{
 		for (var i = 0; i < Count; i++)
 			world.Entity()
@@ -353,8 +339,7 @@ internal sealed class TestPlugin : IPlugin
 				.Set(new Velocity());
 	}
 
-	[TinySystem]
-	public static void MoveEntities(Query<Data<Position, Velocity>> query)
+	void MoveEntities(Query<Data<Position, Velocity>> query)
 	{
 		foreach ((var pos, var vel) in query)
 		{
@@ -363,30 +348,25 @@ internal sealed class TestPlugin : IPlugin
 		}
 	}
 
-	[TinySystem]
-	public static void PrintSomething(State<GameState> state)
+	void PrintSomething(State<GameState> state)
 	{
 		state.Set(GameState.Playing);
 	}
 
-	[TinySystem]
-	public void OnEnter(State<GameState> state)
+	void OnEnter(State<GameState> state)
 	{
 		Console.WriteLine("on enter {0}", state.Current);
 	}
 
-	[TinySystem]
-	public void OnExit(State<GameState> state)
+	void OnExit(State<GameState> state)
 	{
 		Console.WriteLine("on exit {0}", state.Current);
 	}
 
-	[TinySystem]
-	public bool CanRun()
+	bool CanRun()
 		=> true;
 
-	[TinySystem]
-	public void Accept()
+	void Accept()
 	{
 	}
 }
