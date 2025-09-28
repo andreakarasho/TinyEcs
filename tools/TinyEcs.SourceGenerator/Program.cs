@@ -99,22 +99,17 @@ public sealed class Program : IIncrementalGenerator
 
                 if (methodSymbol == null) return null;
 
-                // Check if method has compatible parameters for system generation
+                // Check if all parameters implement ISystemParam
                 foreach (var param in methodSymbol.Parameters)
                 {
                     var paramType = param.Type;
-                    var paramTypeName = paramType.ToDisplayString();
                     
-                    // Skip methods with certain known incompatible types
-                    if (paramTypeName.Contains("Scheduler") && 
-                        !paramTypeName.Contains("SchedulerState"))
-                    {
-                        return null;
-                    }
-                    
-                    // Skip methods with primitive types that aren't system parameters
-                    if (paramType.SpecialType != SpecialType.None && 
-                        paramType.SpecialType != SpecialType.System_Object)
+                    // Check if parameter implements ISystemParam
+                    var implementsISystemParam = paramType.AllInterfaces.Any(i =>
+                        i.ToDisplayString().StartsWith("TinyEcs.ISystemParam"));
+
+                    // If any parameter doesn't implement ISystemParam, exclude this method
+                    if (!implementsISystemParam)
                     {
                         return null;
                     }
@@ -161,6 +156,20 @@ public sealed class Program : IIncrementalGenerator
                 // Collect all unique delegate signatures from ALL compatible methods
                 foreach (var method in compatibleMethods)
                 {
+                    // Double-check that all parameters implement ISystemParam before processing
+                    var hasIncompatibleParams = method.Parameters.Any(param =>
+                    {
+                        var paramType = param.Type;
+                        return !paramType.AllInterfaces.Any(i =>
+                            i.ToDisplayString().StartsWith("TinyEcs.ISystemParam"));
+                    });
+
+                    // Skip methods with incompatible parameters
+                    if (hasIncompatibleParams)
+                    {
+                        continue;
+                    }
+
                     var returnsBool = method.ReturnType.SpecialType == SpecialType.System_Boolean;
                     var delegateReturnType = returnsBool ? "bool" : "void";
 
@@ -226,6 +235,7 @@ public sealed class Program : IIncrementalGenerator
         var delegatesClass = new IndentedStringBuilder();
 
         delegatesClass.AppendLine("// Auto-generated delegate types for TinyEcs stub systems");
+        delegatesClass.AppendLine("// Only includes signatures where all parameters implement ISystemParam");
         delegatesClass.AppendLine("namespace TinyEcs");
         delegatesClass.AppendLine("{");
         delegatesClass.IncrementIndent();
@@ -320,6 +330,7 @@ public sealed class Program : IIncrementalGenerator
         var stubSystemsClass = new IndentedStringBuilder();
 
         stubSystemsClass.AppendLine("// Auto-generated cached stub systems for TinyEcs");
+        stubSystemsClass.AppendLine("// Only includes systems where all parameters implement ISystemParam");
         stubSystemsClass.AppendLine("namespace TinyEcs");
         stubSystemsClass.AppendLine("{");
         stubSystemsClass.IncrementIndent();
@@ -330,6 +341,20 @@ public sealed class Program : IIncrementalGenerator
             var signature = kvp.Key;
             var (stubSystemName, parameters, returnsBool) = kvp.Value;
             var (index, returnType) = delegateCache[signature];
+
+            // Validate that all parameters implement ISystemParam before生成 stub system
+            var hasValidParameters = parameters.All(param =>
+            {
+                var paramType = param.Type;
+                return paramType.AllInterfaces.Any(i =>
+                    i.ToDisplayString().StartsWith("TinyEcs.ISystemParam"));
+            });
+
+            // Skip generating stub system if parameters are not valid
+            if (!hasValidParameters)
+            {
+                continue;
+            }
 
             var baseClass = returnsBool ? "TinyEcs.TinyConditionalSystem" : "TinyEcs.TinySystem";
             var delegateName = $"OnTinyDelegate{index}";
