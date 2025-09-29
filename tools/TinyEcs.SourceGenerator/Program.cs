@@ -628,7 +628,7 @@ public sealed class Program : IIncrementalGenerator
                 var accessorName = $"Access{method.Name}";
                 var returnTypeStr = returnsBool ? "bool" : "void";
                 var parameterList = parameters.Count > 0 ? 
-                    string.Join(", ", parameters.Select(p => p.Type.ToDisplayString())) : "";
+                    string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}")) : "";
                 
                 adapterClass.AppendLine($"[System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.StaticMethod, Name = \"{method.Name}\")]");
                 adapterClass.AppendLine($"private static extern {returnTypeStr} {accessorName}({instanceTypeName} target{(parameters.Count > 0 ? ", " + parameterList : "")});");
@@ -660,7 +660,7 @@ public sealed class Program : IIncrementalGenerator
                 var accessorName = $"Access{method.Name}";
                 var returnTypeStr = returnsBool ? "bool" : "void";
                 var parameterList = parameters.Count > 0 ? 
-                    ", " + string.Join(", ", parameters.Select(p => p.Type.ToDisplayString())) : "";
+                    ", " + string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}")) : "";
                 
                 // Check if containing type is a struct - if so, first parameter must be ref
                 var firstParamModifier = isStruct ? "ref " : "";
