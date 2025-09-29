@@ -578,6 +578,10 @@ public sealed class Program : IIncrementalGenerator
         // Determine class visibility based on the containing type's visibility
         var classVisibility = GetClassVisibility(containingType);
 
+        // Check if method is non-public and we need UnsafeAccessor
+        var isPublic = method.DeclaredAccessibility == Accessibility.Public;
+        var needsUnsafeAccessor = !isPublic;
+
         // Get method parameters for dependency injection
         var parameters = method.Parameters.ToList();
         var setupAssignments = new StringBuilder();
@@ -599,6 +603,7 @@ public sealed class Program : IIncrementalGenerator
         string instanceField = "";
         string ctor = "";
         string methodCall;
+        string unsafeAccessorMethod = "";
 
         // Use a single IndentedStringBuilder for all code blocks
         var adapterClass = new IndentedStringBuilder();
@@ -617,18 +622,63 @@ public sealed class Program : IIncrementalGenerator
 
         if (method.IsStatic)
         {
-            // Use namespace-qualified type for static call
-            methodCall = $"{instanceTypeName}.{method.Name}({methodCallParameters})";
+            if (needsUnsafeAccessor)
+            {
+                // Generate UnsafeAccessor method for static non-public method
+                var accessorName = $"Access{method.Name}";
+                var returnTypeStr = returnsBool ? "bool" : "void";
+                var parameterList = parameters.Count > 0 ? 
+                    string.Join(", ", parameters.Select(p => p.Type.ToDisplayString())) : "";
+                
+                adapterClass.AppendLine($"[System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.StaticMethod, Name = \"{method.Name}\")]");
+                adapterClass.AppendLine($"private static extern {returnTypeStr} {accessorName}({instanceTypeName} target{(parameters.Count > 0 ? ", " + parameterList : "")});");
+                adapterClass.AppendLine();
+
+                methodCall = $"{accessorName}(default({instanceTypeName}){(parameters.Count > 0 ? ", " + methodCallParameters : "")})";
+            }
+            else
+            {
+                // Use direct static call for public methods
+                methodCall = $"{instanceTypeName}.{method.Name}({methodCallParameters})";
+            }
         }
         else
         {
-            // Adapter will accept the instance via constructor using namespace-qualified type
-            instanceField = $"private readonly {instanceTypeName} _instance;";
+            // Instance method - always need an instance
+            var isStruct = containingType.TypeKind == TypeKind.Struct;
+            var readonlyModifier = (needsUnsafeAccessor && isStruct) ? "" : "readonly ";
+            
+            instanceField = $"private {readonlyModifier}{instanceTypeName} _instance;";
             ctor = $"public {adapterName}({instanceTypeName} instance) {{ _instance = instance; }}";
-            methodCall = $"_instance.{method.Name}({methodCallParameters})";
             adapterClass.AppendLine(instanceField);
             adapterClass.AppendLine();
             adapterClass.AppendLine(ctor);
+            
+            if (needsUnsafeAccessor)
+            {
+                // Generate UnsafeAccessor method for instance non-public method
+                var accessorName = $"Access{method.Name}";
+                var returnTypeStr = returnsBool ? "bool" : "void";
+                var parameterList = parameters.Count > 0 ? 
+                    ", " + string.Join(", ", parameters.Select(p => p.Type.ToDisplayString())) : "";
+                
+                // Check if containing type is a struct - if so, first parameter must be ref
+                var firstParamModifier = isStruct ? "ref " : "";
+                
+                adapterClass.AppendLine();
+                adapterClass.AppendLine($"[System.Runtime.CompilerServices.UnsafeAccessor(System.Runtime.CompilerServices.UnsafeAccessorKind.Method, Name = \"{method.Name}\")]");
+                adapterClass.AppendLine($"private static extern {returnTypeStr} {accessorName}({firstParamModifier}{instanceTypeName} target{parameterList});");
+                adapterClass.AppendLine();
+
+                // For structs, pass _instance by ref; for classes, pass by value
+                var instanceParam = isStruct ? "ref _instance" : "_instance";
+                methodCall = $"{accessorName}({instanceParam}{(parameters.Count > 0 ? ", " + methodCallParameters : "")})";
+            }
+            else
+            {
+                // Use direct instance call for public methods
+                methodCall = $"_instance.{method.Name}({methodCallParameters})";
+            }
         }
 
         adapterClass.AppendLine();
@@ -698,21 +748,8 @@ public sealed class Program : IIncrementalGenerator
     {
         var location = method.Locations.FirstOrDefault() ?? Location.None;
 
-        // Check if method is public
-        if (method.DeclaredAccessibility != Accessibility.Public)
-        {
-            var descriptor = new DiagnosticDescriptor(
-                "TINYECS001",
-                "TinySystem method must be public",
-                "Method '{0}' with [TinySystem] attribute must be public",
-                "TinyEcs",
-                DiagnosticSeverity.Error,
-                isEnabledByDefault: true);
-
-            context.ReportDiagnostic(Diagnostic.Create(descriptor, location, method.Name));
-        }
-
-        // Check if method is static
+        // No longer require methods to be public since we can use UnsafeAccessorAttribute
+        // Just validate other requirements if any
     }
 
     internal class SystemMethodInfo
