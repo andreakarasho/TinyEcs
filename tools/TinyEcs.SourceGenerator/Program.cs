@@ -167,7 +167,10 @@ public sealed class Program : IIncrementalGenerator
             string paramList = string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}"));
             string targetType = instanceTypeName;
             string instanceParam = method.IsStatic ? "" : (isStruct ? $"ref {targetType} instance, " : $"{targetType} instance, ");
-            adapterClass.AppendLine($"    [global::System.Runtime.CompilerServices.UnsafeAccessor(global::System.Runtime.CompilerServices.UnsafeAccessorKind.Method, Name = \"{method.Name}\")]");
+            string unsafeAccessorKind = method.IsStatic
+                ? "global::System.Runtime.CompilerServices.UnsafeAccessorKind.StaticMethod"
+                : "global::System.Runtime.CompilerServices.UnsafeAccessorKind.Method";
+            adapterClass.AppendLine($"    [global::System.Runtime.CompilerServices.UnsafeAccessor({unsafeAccessorKind}, Name = \"{method.Name}\")]" );
             adapterClass.AppendLine($"    private static extern {method.ReturnType.ToDisplayString()} {accessorName}({instanceParam}{paramList});");
             adapterClass.AppendLine();
             if (!method.IsStatic)
