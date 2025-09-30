@@ -166,7 +166,22 @@ public sealed class Program : IIncrementalGenerator
             string accessorName = $"Invoke_{method.Name}_Accessor";
             string paramList = string.Join(", ", parameters.Select((p, i) => $"{p.Type.ToDisplayString()} arg{i}"));
             string targetType = instanceTypeName;
-            string instanceParam = method.IsStatic ? "" : (isStruct ? $"ref {targetType} instance, " : $"{targetType} instance, ");
+
+            // UnsafeAccessor parameter setup for method declaration
+            string instanceParam = "";
+            if (method.IsStatic)
+            {
+                instanceParam = $"{targetType} instance";
+                if (!string.IsNullOrEmpty(paramList))
+                    instanceParam += ", ";
+            }
+            else
+            {
+                instanceParam = isStruct ? $"ref {targetType} instance" : $"{targetType} instance";
+                if (!string.IsNullOrEmpty(paramList))
+                    instanceParam += ", ";
+            }
+
             string unsafeAccessorKind = method.IsStatic
                 ? "global::System.Runtime.CompilerServices.UnsafeAccessorKind.StaticMethod"
                 : "global::System.Runtime.CompilerServices.UnsafeAccessorKind.Method";
@@ -198,7 +213,7 @@ public sealed class Program : IIncrementalGenerator
             adapterClass.AppendLine("Lock();");
             adapterClass.AppendLine("world.BeginDeferred();");
             string call = method.IsStatic
-                ? $"{accessorName}({methodCallParameters})"
+                ? $"{accessorName}(default({instanceTypeName}), {methodCallParameters})"
                 : (isStruct
                     ? $"{accessorName}(ref _instance, {methodCallParameters})"
                     : $"{accessorName}(_instance, {methodCallParameters})");
