@@ -27,6 +27,12 @@ public sealed partial class World : IDisposable
 	internal RelationshipEntityMapper RelationshipEntityMapper { get; }
 	internal NamingEntityMapper NamingEntityMapper { get; }
 
+	/// <summary>
+	/// Maximum component ID. Component entities have IDs from 1 to this value.
+	/// Regular entities have IDs starting from MaxComponentId + 1.
+	/// </summary>
+	public EcsID MaxComponentId => _maxCmpId;
+
 	public uint Update() => ++_ticks;
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)

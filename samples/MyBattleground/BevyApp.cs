@@ -601,6 +601,9 @@ public class App
 
 		ExecuteSystemsParallel(Stage.Startup);
 
+		// Auto-flush observers after startup stage
+		_world.FlushObservers();
+
 		ProcessStateTransitions();
 		_world.ProcessEvents();
 	}
@@ -616,6 +619,9 @@ public class App
 				continue;
 
 			ExecuteSystemsParallel(stageDesc.Stage);
+
+			// Auto-flush observers after each stage (like Bevy's apply_deferred)
+			_world.FlushObservers();
 		}
 
 		ProcessStateTransitions();

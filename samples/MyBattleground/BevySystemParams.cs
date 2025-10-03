@@ -244,6 +244,353 @@ public class EventWriter<T> : ISystemParam where T : notnull
 }
 
 // ============================================================================
+// Commands - Deferred world operations
+// ============================================================================
+
+/// <summary>
+/// Commands for deferred world operations (spawning entities, adding/removing components).
+/// Operations are queued locally per-system and applied at the end of the system.
+/// Thread-safe for parallel system execution.
+/// </summary>
+public class Commands : ISystemParam
+{
+	private TinyEcs.World? _world;
+	private readonly List<DeferredCommand> _localCommands = new();
+	private readonly List<ulong> _spawnedEntityIds = new();
+
+	public void Initialize(TinyEcs.World world)
+	{
+		_world = world;
+	}
+
+	public void Fetch(TinyEcs.World world)
+	{
+		_world = world;
+		_localCommands.Clear();
+		_spawnedEntityIds.Clear();
+	}
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		// Commands have exclusive world access (prevents parallel execution with other Commands users)
+		access.WriteResources.Add(typeof(Commands));
+		return access;
+	}
+
+	/// <summary>
+	/// Apply all queued commands to the world. Called automatically after system execution.
+	/// </summary>
+	internal void Apply()
+	{
+		if (_localCommands.Count == 0)
+			return;
+
+		// Apply all commands in order
+		foreach (var cmd in _localCommands)
+		{
+			cmd.Execute(_world!, this);
+		}
+
+		_localCommands.Clear();
+	}
+
+	/// <summary>
+	/// Spawn a new entity and return a builder for adding components
+	/// </summary>
+	public EntityCommands Spawn()
+	{
+		// Reserve a slot in the list for the entity ID (will be filled when command executes)
+		int index = _spawnedEntityIds.Count;
+		_spawnedEntityIds.Add(0); // Placeholder - will be filled in Apply()
+		_localCommands.Add(new SpawnEntityCommand(index));
+		return new EntityCommands(this, index);
+	}
+
+	/// <summary>
+	/// Get entity ID by index (internal use by EntityCommands)
+	/// </summary>
+	internal ulong GetSpawnedEntityId(int index)
+	{
+		return _spawnedEntityIds[index];
+	}
+
+	/// <summary>
+	/// Set entity ID by index (internal use by SpawnEntityCommand)
+	/// </summary>
+	internal void SetSpawnedEntityId(int index, ulong entityId)
+	{
+		_spawnedEntityIds[index] = entityId;
+	}
+
+	/// <summary>
+	/// Get entity commands for an existing entity
+	/// </summary>
+	public EntityCommands Entity(ulong entityId)
+	{
+		return new EntityCommands(this, entityId);
+	}
+
+	/// <summary>
+	/// Add a resource to the world
+	/// </summary>
+	public void InsertResource<T>(T resource) where T : notnull
+	{
+		_localCommands.Add(new InsertResourceCommand<T>(resource));
+	}
+
+	/// <summary>
+	/// Remove a resource from the world
+	/// </summary>
+	public void RemoveResource<T>() where T : notnull
+	{
+		_localCommands.Add(new RemoveResourceCommand(typeof(T)));
+	}
+
+	/// <summary>
+	/// Internal method to queue a deferred command
+	/// </summary>
+	internal void QueueCommand(DeferredCommand command)
+	{
+		_localCommands.Add(command);
+	}
+}
+
+/// <summary>
+/// Builder for entity operations in Commands
+/// </summary>
+public ref struct EntityCommands
+{
+	private readonly Commands _commands;
+	private readonly int _spawnIndex; // Index into _spawnedEntityIds list (-1 if not spawned)
+	private readonly ulong _entityId;
+
+	internal EntityCommands(Commands commands, int spawnIndex)
+	{
+		_commands = commands;
+		_spawnIndex = spawnIndex;
+		_entityId = 0;
+	}
+
+	internal EntityCommands(Commands commands, ulong entityId)
+	{
+		_commands = commands;
+		_spawnIndex = -1;
+		_entityId = entityId;
+	}
+
+	/// <summary>
+	/// The entity ID (returns 0 if entity hasn't been spawned yet)
+	/// </summary>
+	public ulong Id => _spawnIndex >= 0 ? _commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+
+	/// <summary>
+	/// Add a component to the entity
+	/// </summary>
+	public readonly EntityCommands Insert<T>(T component) where T : struct
+	{
+		if (_spawnIndex >= 0)
+			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, component));
+		else
+			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, component));
+		return this;
+	}
+
+	/// <summary>
+	/// Add a tag component (zero-sized) to the entity
+	/// </summary>
+	public readonly EntityCommands Insert<T>() where T : struct
+	{
+		if (_spawnIndex >= 0)
+			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, default));
+		else
+			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, default));
+		return this;
+	}
+
+	/// <summary>
+	/// Remove a component from the entity
+	/// </summary>
+	public readonly EntityCommands Remove<T>() where T : struct
+	{
+		if (_spawnIndex >= 0)
+			_commands.QueueCommand(new RemoveComponentCommand<T>(_commands, _spawnIndex));
+		else
+			_commands.QueueCommand(new RemoveComponentCommand<T>(_entityId));
+		return this;
+	}
+
+	/// <summary>
+	/// Despawn the entity
+	/// </summary>
+	public readonly void Despawn()
+	{
+		if (_spawnIndex >= 0)
+			_commands.QueueCommand(new DespawnEntityCommand(_commands, _spawnIndex));
+		else
+			_commands.QueueCommand(new DespawnEntityCommand(_entityId));
+	}
+}
+
+// ============================================================================
+// Deferred Command Types - Commands queued for later execution
+// ============================================================================
+
+/// <summary>
+/// Base interface for deferred commands
+/// </summary>
+internal interface DeferredCommand
+{
+	void Execute(TinyEcs.World world, Commands commands);
+}
+
+/// <summary>
+/// Command to spawn a new entity
+/// </summary>
+internal readonly struct SpawnEntityCommand : DeferredCommand
+{
+	private readonly int _spawnIndex;
+
+	public SpawnEntityCommand(int spawnIndex)
+	{
+		_spawnIndex = spawnIndex;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var entity = world.Entity();
+		commands.SetSpawnedEntityId(_spawnIndex, entity.ID);
+	}
+}
+
+/// <summary>
+/// Command to insert a component on an entity
+/// </summary>
+internal readonly struct InsertComponentCommand<T> : DeferredCommand where T : struct
+{
+	private readonly int _spawnIndex; // -1 if existing entity
+	private readonly ulong _entityId;
+	private readonly T _component;
+
+	// Constructor for spawned entities (uses index)
+	public InsertComponentCommand(Commands commands, int spawnIndex, T component)
+	{
+		_spawnIndex = spawnIndex;
+		_entityId = 0;
+		_component = component;
+	}
+
+	// Constructor for existing entities (uses direct ID)
+	public InsertComponentCommand(ulong entityId, T component)
+	{
+		_spawnIndex = -1;
+		_entityId = entityId;
+		_component = component;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		world.Set(entityId, _component);
+	}
+}
+
+/// <summary>
+/// Command to remove a component from an entity
+/// </summary>
+internal readonly struct RemoveComponentCommand<T> : DeferredCommand where T : struct
+{
+	private readonly int _spawnIndex; // -1 if existing entity
+	private readonly ulong _entityId;
+
+	// Constructor for spawned entities (uses index)
+	public RemoveComponentCommand(Commands commands, int spawnIndex)
+	{
+		_spawnIndex = spawnIndex;
+		_entityId = 0;
+	}
+
+	// Constructor for existing entities (uses direct ID)
+	public RemoveComponentCommand(ulong entityId)
+	{
+		_spawnIndex = -1;
+		_entityId = entityId;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		world.Unset<T>(entityId);
+	}
+}
+
+/// <summary>
+/// Command to despawn an entity
+/// </summary>
+internal readonly struct DespawnEntityCommand : DeferredCommand
+{
+	private readonly int _spawnIndex; // -1 if existing entity
+	private readonly ulong _entityId;
+
+	// Constructor for spawned entities (uses index)
+	public DespawnEntityCommand(Commands commands, int spawnIndex)
+	{
+		_spawnIndex = spawnIndex;
+		_entityId = 0;
+	}
+
+	// Constructor for existing entities (uses direct ID)
+	public DespawnEntityCommand(ulong entityId)
+	{
+		_spawnIndex = -1;
+		_entityId = entityId;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		if (world.Exists(entityId))
+			world.Delete(entityId);
+	}
+}
+
+/// <summary>
+/// Command to insert a resource
+/// </summary>
+internal readonly struct InsertResourceCommand<T> : DeferredCommand where T : notnull
+{
+	private readonly T _resource;
+
+	public InsertResourceCommand(T resource)
+	{
+		_resource = resource;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		world.AddResource(_resource);
+	}
+}
+
+/// <summary>
+/// Command to remove a resource
+/// </summary>
+internal readonly struct RemoveResourceCommand : DeferredCommand
+{
+	private readonly Type _resourceType;
+
+	public RemoveResourceCommand(Type resourceType)
+	{
+		_resourceType = resourceType;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		world.GetState().Resources.Remove(_resourceType);
+	}
+}
+
+// ============================================================================
 // Query Parameter - Typed ECS queries
 // ============================================================================
 
@@ -263,7 +610,7 @@ public class Query<TQueryData> : ISystemParam
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_query = world.Query<TQueryData>();
+		_query ??= world.Query<TQueryData>();
 	}
 
 	public TinyEcs.Query<TQueryData> Inner => _query!;
@@ -300,7 +647,7 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_query = world.Query<TQueryData, TQueryFilter>();
+		_query ??= world.Query<TQueryData, TQueryFilter>();
 	}
 
 	public TinyEcs.Query<TQueryData, TQueryFilter> Inner => _query!;
@@ -355,6 +702,15 @@ public class ParameterizedSystem : ISystem
 
 		// Run the system
 		_systemFn(world);
+
+		// Apply any queued commands (thread-safe per-system)
+		foreach (var param in _parameters)
+		{
+			if (param is Commands commands)
+			{
+				commands.Apply();
+			}
+		}
 	}
 
 	/// <summary>
