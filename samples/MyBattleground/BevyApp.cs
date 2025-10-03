@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MyBattleground.Bevy;
 
@@ -376,6 +377,7 @@ public class App
 	// Cached sorted results - computed once after app is built
 	private List<StageDescriptor>? _sortedStages = null;
 	private readonly Dictionary<Stage, List<SystemDescriptor>> _sortedStageSystems = new();
+	private readonly Dictionary<Stage, List<List<SystemDescriptor>>> _cachedBatches = new();
 
 	public App(TinyEcs.World world)
 	{
@@ -401,12 +403,14 @@ public class App
 		// Sort stages once
 		_sortedStages = TopologicalSortStages();
 
-		// Sort systems for each stage once
+		// Sort systems for each stage once and build parallel batches
 		foreach (var (stage, systems) in _stageSystems)
 		{
 			if (systems.Count > 0)
 			{
-				_sortedStageSystems[stage] = TopologicalSortSystems(systems);
+				var sortedSystems = TopologicalSortSystems(systems);
+				_sortedStageSystems[stage] = sortedSystems;
+				_cachedBatches[stage] = BuildParallelBatches(sortedSystems);
 			}
 		}
 	}
@@ -595,16 +599,7 @@ public class App
 		// Build execution order once before first run
 		BuildExecutionOrder();
 
-		if (_sortedStageSystems.TryGetValue(Stage.Startup, out var orderedSystems))
-		{
-			foreach (var descriptor in orderedSystems)
-			{
-				if (descriptor.ShouldRun(_world))
-				{
-					descriptor.System.Run(_world);
-				}
-			}
-		}
+		ExecuteSystemsParallel(Stage.Startup);
 
 		ProcessStateTransitions();
 		_world.ProcessEvents();
@@ -620,20 +615,95 @@ public class App
 			if (stageDesc.Stage == Stage.Startup)
 				continue;
 
-			if (!_sortedStageSystems.TryGetValue(stageDesc.Stage, out var orderedSystems))
-				continue;
+			ExecuteSystemsParallel(stageDesc.Stage);
+		}
 
-			foreach (var descriptor in orderedSystems)
+		ProcessStateTransitions();
+		_world.ProcessEvents();
+	}
+
+	/// <summary>
+	/// Execute systems in parallel where possible, respecting dependency constraints
+	/// </summary>
+	private void ExecuteSystemsParallel(Stage stage)
+	{
+		// Use cached batches (already computed during BuildExecutionOrder)
+		if (!_cachedBatches.TryGetValue(stage, out var batches))
+			return;
+
+		// Execute each batch (systems within a batch run in parallel)
+		foreach (var batch in batches)
+		{
+			if (batch.Count == 1)
 			{
+				// Single system - no need for parallelization overhead
+				var descriptor = batch[0];
 				if (descriptor.ShouldRun(_world))
 				{
 					descriptor.System.Run(_world);
 				}
 			}
+			else
+			{
+				// Multiple systems - run in parallel
+				Parallel.ForEach(batch, descriptor =>
+				{
+					if (descriptor.ShouldRun(_world))
+					{
+						descriptor.System.Run(_world);
+					}
+				});
+			}
+		}
+	}
+
+	/// <summary>
+	/// Build batches of systems that can run in parallel
+	/// Systems in the same batch have no resource conflicts
+	/// </summary>
+	private List<List<SystemDescriptor>> BuildParallelBatches(List<SystemDescriptor> systems)
+	{
+		var batches = new List<List<SystemDescriptor>>();
+		var remaining = new List<SystemDescriptor>(systems);
+
+		while (remaining.Count > 0)
+		{
+			var batch = new List<SystemDescriptor>();
+			var batchAccess = new SystemParamAccess();
+
+			for (int i = remaining.Count - 1; i >= 0; i--)
+			{
+				var descriptor = remaining[i];
+
+				// Get access pattern if it's a parameterized system
+				var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
+				if (access == null)
+				{
+					// Non-parameterized systems have unknown access - run them sequentially
+					access = new SystemParamAccess();
+					// Treat as exclusive by adding a unique type marker
+					access.WriteResources.Add(descriptor.System.GetType());
+				}
+
+				// Check if this system conflicts with the current batch
+				if (!batchAccess.ConflictsWith(access))
+				{
+					// No conflict - add to batch
+					batch.Add(descriptor);
+					remaining.RemoveAt(i);
+
+					// Merge access patterns
+					foreach (var read in access.ReadResources)
+						batchAccess.ReadResources.Add(read);
+					foreach (var write in access.WriteResources)
+						batchAccess.WriteResources.Add(write);
+				}
+			}
+
+			batches.Add(batch);
 		}
 
-		ProcessStateTransitions();
-		_world.ProcessEvents();
+		return batches;
 	}
 
 	private void ProcessStateTransitions()

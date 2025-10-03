@@ -15,6 +15,38 @@ public interface ISystemParam
 {
 	void Initialize(TinyEcs.World world);
 	void Fetch(TinyEcs.World world);
+
+	/// <summary>
+	/// Gets the access information for this parameter (for parallel execution analysis)
+	/// </summary>
+	SystemParamAccess GetAccess();
+}
+
+/// <summary>
+/// Describes what resources a system parameter accesses
+/// </summary>
+public class SystemParamAccess
+{
+	public HashSet<Type> ReadResources { get; } = new();
+	public HashSet<Type> WriteResources { get; } = new();
+
+	public bool ConflictsWith(SystemParamAccess other)
+	{
+		// Conflict if either writes to a resource the other reads or writes
+		foreach (var write in WriteResources)
+		{
+			if (other.ReadResources.Contains(write) || other.WriteResources.Contains(write))
+				return true;
+		}
+
+		foreach (var write in other.WriteResources)
+		{
+			if (ReadResources.Contains(write) || WriteResources.Contains(write))
+				return true;
+		}
+
+		return false;
+	}
 }
 
 // ============================================================================
@@ -37,6 +69,13 @@ public class Res<T> : ISystemParam where T : notnull
 	public void Fetch(TinyEcs.World world)
 	{
 		Value = world.GetResource<T>();
+	}
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		access.ReadResources.Add(typeof(T));
+		return access;
 	}
 }
 
@@ -61,6 +100,13 @@ public class ResMut<T> : ISystemParam where T : notnull
 	{
 		Value = world.GetResource<T>();
 	}
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		access.WriteResources.Add(typeof(T));
+		return access;
+	}
 }
 
 // ============================================================================
@@ -84,6 +130,12 @@ public class Local<T> : ISystemParam where T : new()
 	public void Fetch(TinyEcs.World world)
 	{
 		// Local state doesn't need to fetch - it's already there
+	}
+
+	public SystemParamAccess GetAccess()
+	{
+		// Local state has no conflicts - it's per-system
+		return new SystemParamAccess();
 	}
 }
 
@@ -144,6 +196,13 @@ public class EventReader<T> : ISystemParam where T : notnull
 	/// Get the number of events
 	/// </summary>
 	public int Count => _events.Count;
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		access.WriteResources.Add(typeof(Queue<T>)); // Dequeues are writes
+		return access;
+	}
 }
 
 // ============================================================================
@@ -174,6 +233,13 @@ public class EventWriter<T> : ISystemParam where T : notnull
 	public void Send(T evt)
 	{
 		_world?.SendEvent(evt);
+	}
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		access.WriteResources.Add(typeof(Queue<T>));
+		return access;
 	}
 }
 
@@ -206,6 +272,15 @@ public class Query<TQueryData> : ISystemParam
 	public bool Contains(ulong id) => _query!.Contains(id);
 	public TQueryData Get(ulong id) => _query!.Get(id);
 	public TinyEcs.QueryIter<TQueryData, Empty> GetEnumerator() => _query!.GetEnumerator();
+
+	public SystemParamAccess GetAccess()
+	{
+		// Queries can be read/write depending on component access
+		// For simplicity, treat as write since we can't easily determine at compile-time
+		var access = new SystemParamAccess();
+		access.WriteResources.Add(typeof(TQueryData));
+		return access;
+	}
 }
 
 /// <summary>
@@ -234,6 +309,13 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	public bool Contains(ulong id) => _query!.Contains(id);
 	public TQueryData Get(ulong id) => _query!.Get(id);
 	public QueryIter<TQueryData, TQueryFilter> GetEnumerator() => _query!.GetEnumerator();
+
+	public SystemParamAccess GetAccess()
+	{
+		var access = new SystemParamAccess();
+		access.WriteResources.Add(typeof(TQueryData));
+		return access;
+	}
 }
 
 // ============================================================================
@@ -245,6 +327,7 @@ public class ParameterizedSystem : ISystem
 	private readonly Action<TinyEcs.World> _systemFn;
 	private readonly ISystemParam[] _parameters;
 	private bool _initialized = false;
+	private SystemParamAccess? _cachedAccess;
 
 	public ParameterizedSystem(Action<TinyEcs.World> systemFn, params ISystemParam[] parameters)
 	{
@@ -272,6 +355,28 @@ public class ParameterizedSystem : ISystem
 
 		// Run the system
 		_systemFn(world);
+	}
+
+	/// <summary>
+	/// Get the combined access pattern of all parameters
+	/// </summary>
+	public SystemParamAccess GetAccess()
+	{
+		if (_cachedAccess != null)
+			return _cachedAccess;
+
+		var combinedAccess = new SystemParamAccess();
+		foreach (var param in _parameters)
+		{
+			var access = param.GetAccess();
+			foreach (var read in access.ReadResources)
+				combinedAccess.ReadResources.Add(read);
+			foreach (var write in access.WriteResources)
+				combinedAccess.WriteResources.Add(write);
+		}
+
+		_cachedAccess = combinedAccess;
+		return _cachedAccess;
 	}
 }
 
