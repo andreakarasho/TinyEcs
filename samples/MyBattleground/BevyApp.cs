@@ -461,11 +461,25 @@ public class App
 		return AddPlugin(new T());
 	}
 
+	/// <summary>
+	/// Add a system with fluent configuration (must call .InStage() or state transition methods)
+	/// </summary>
 	public ISystemStageSelector AddSystem(ISystem system)
 	{
 		var descriptor = new SystemDescriptor(system);
 		_lastAddedSystem = descriptor;
 		return new SystemConfigurator(this, descriptor);
+	}
+
+	/// <summary>
+	/// Add a system directly to a stage (simpler API)
+	/// </summary>
+	public App AddSystem(Stage stage, ISystem system)
+	{
+		var descriptor = new SystemDescriptor(system);
+		_lastAddedSystem = descriptor;
+		AddSystemToStage(stage, descriptor);
+		return this;
 	}
 
 	public App AddObserver<T>(Action<T> observer) where T : notnull
@@ -480,6 +494,7 @@ public class App
 		{
 			AddStage(stage);
 		}
+		descriptor.Stage = stage; // Set the stage on the descriptor
 		_stageSystems[stage].Add(descriptor);
 	}
 
@@ -1013,8 +1028,15 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 
 public static class AppExtensions
 {
+	// Fluent API - must specify stage with .InStage()
 	public static ISystemStageSelector AddSystem(this App app, Action<TinyEcs.World> systemFn)
 	{
 		return app.AddSystem(new FunctionalSystem(systemFn));
+	}
+
+	// Direct stage API - stage parameter first
+	public static App AddSystem(this App app, Stage stage, Action<TinyEcs.World> systemFn)
+	{
+		return app.AddSystem(stage, new FunctionalSystem(systemFn));
 	}
 }

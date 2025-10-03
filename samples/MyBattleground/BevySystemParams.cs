@@ -1105,6 +1105,98 @@ public static class AppSystemParamExtensions
 		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
 		where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new() where T16 : ISystemParam, new()
 		=> app.AddSystem(SystemFunctionAdapters.Create(systemFn));
+
+	// ============================================================================
+	// Stage-first API overloads (simpler, more explicit)
+	// ============================================================================
+
+	public static App AddSystem<T1>(this App app, Stage stage, Action<T1> systemFn)
+		where T1 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2>(this App app, Stage stage, Action<T1, T2> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3>(this App app, Stage stage, Action<T1, T2, T3> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4>(this App app, Stage stage, Action<T1, T2, T3, T4> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5>(this App app, Stage stage, Action<T1, T2, T3, T4, T5> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new() where T14 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+
+	public static App AddSystem<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(this App app, Stage stage, Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> systemFn)
+		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new() where T16 : ISystemParam, new()
+		=> app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
 }
 
 // ============================================================================
