@@ -82,6 +82,24 @@ public static class ParallelSystemsExample
 		.InStage(Stage.Last)
 		.Build();
 
+		// System with RunIf condition using system parameters
+		app.AddSystem((Res<SharedCounter> counter) =>
+		{
+			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System7: Conditional system running! Counter = {counter.Value.Count}");
+		})
+		.InStage(Stage.Last)
+		.RunIf((Res<SharedCounter> counter) => counter.Value.Count >= 2)
+		.Build();
+
+		// System that should NOT run (condition false)
+		app.AddSystem((Res<SharedCounter> counter) =>
+		{
+			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System8: This should NOT run!");
+		})
+		.InStage(Stage.Last)
+		.RunIf((Res<SharedCounter> counter) => counter.Value.Count > 100)
+		.Build();
+
 		Console.WriteLine("Systems registered. Starting execution...\n");
 
 		var sw = Stopwatch.StartNew();
@@ -93,5 +111,7 @@ public static class ParallelSystemsExample
 		Console.WriteLine("- System1, System2, System3 should run in parallel (different thread IDs, ~10ms total)");
 		Console.WriteLine("- System4 and System5 should run sequentially (same/different threads, ~20ms total)");
 		Console.WriteLine("- System6 should run after System4 and System5");
+		Console.WriteLine("- System7 should run (counter >= 2)");
+		Console.WriteLine("- System8 should NOT run (counter > 100 is false)");
 	}
 }

@@ -1,4 +1,4 @@
 using MyBattleground;
 
-// Run the System Parameters example
-SystemParamsExample.Run();
+// Run the Parallel Systems example
+ParallelSystemsExample.Run();
