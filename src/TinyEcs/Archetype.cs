@@ -536,6 +536,17 @@ public sealed class Archetype : IComparable<Archetype>
 	{
 		return Id.CompareTo(other?.Id);
 	}
+
+	internal ulong ComputeHashWithout(EcsID id)
+	{
+		var hash = 0ul;
+		foreach (ref readonly var cmp in All.AsSpan())
+		{
+			if (cmp.ID != id)
+				hash = UnorderedSetHasher.Combine(hash, cmp.ID);
+		}
+		return hash;
+	}
 }
 
 struct EcsEdge

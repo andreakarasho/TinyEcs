@@ -110,12 +110,7 @@ public sealed partial class World : IDisposable
 
 		if (foundArch == null)
 		{
-			var hash = 0ul;
-			foreach (ref readonly var cmp in oldArch.All.AsSpan())
-			{
-				if (cmp.ID != id)
-					hash = UnorderedSetHasher.Combine(hash, cmp.ID);
-			}
+			var hash = oldArch.ComputeHashWithout(id);
 
 			if (!_typeIndex.TryGetValue(hash, out foundArch))
 			{
@@ -178,8 +173,8 @@ public sealed partial class World : IDisposable
 		var foundArch = oldArch.TraverseRight(id);
 		if (foundArch == null)
 		{
+			// Compute hash first to check cache before allocating
 			var hash = 0ul;
-
 			var found = false;
 			foreach (ref readonly var cmp in oldArch.All.AsSpan())
 			{
@@ -188,15 +183,14 @@ public sealed partial class World : IDisposable
 					hash = UnorderedSetHasher.Combine(hash, id);
 					found = true;
 				}
-
 				hash = UnorderedSetHasher.Combine(hash, cmp.ID);
 			}
-
 			if (!found)
 				hash = UnorderedSetHasher.Combine(hash, id);
 
 			if (!_typeIndex.TryGetValue(hash, out foundArch))
 			{
+				// Only allocate array if archetype doesn't exist
 				var arr = new ComponentInfo[oldArch.All.Length + 1];
 				oldArch.All.CopyTo(arr, 0);
 				arr[^1] = new ComponentInfo(id, size);
@@ -325,14 +319,20 @@ public sealed partial class World : IDisposable
 
 	internal ref T GetUntrusted<T>(EcsID entity, EcsID id, int size) where T : struct
 	{
-		if (IsDeferred && !Has(entity, id))
+		// Check deferred cache first if in deferred mode
+		if (IsDeferred && _deferredComponentCache.TryGetValue((entity, id), out var cached))
 		{
-			Unsafe.SkipInit<T>(out var val);
-			return ref Unsafe.Unbox<T>(SetDeferred(entity, id, val, size)!);
+			return ref Unsafe.Unbox<T>(cached);
 		}
 
 		ref var record = ref GetRecord(entity);
 		var column = record.Archetype.GetComponentIndex(id);
+
+		if (column < 0)
+		{
+			EcsAssert.Panic(false, $"Component {id} not found on entity {entity}");
+		}
+
 		return ref record.Chunk.GetReferenceAt<T>(column, record.Row);
 	}
 }

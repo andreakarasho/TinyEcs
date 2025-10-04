@@ -5,6 +5,7 @@ namespace TinyEcs;
 public sealed partial class World
 {
 	private readonly ConcurrentQueue<DeferredOp> _operations = new();
+	private readonly Dictionary<(EcsID entity, EcsID component), object> _deferredComponentCache = new();
 	private WorldState _worldState = new() { Locks = 0 };
 
 	public bool IsDeferred => _worldState.Locks > 0;
@@ -55,21 +56,24 @@ public sealed partial class World
 		_operations.Enqueue(cmd);
 	}
 
-	internal ref T SetDeferred<T>(EcsID entity, T component) where T : struct
+	internal void SetDeferred<T>(EcsID entity, T component) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
+
+		// Always box the component for the cache to allow mutation via Get
+		var boxedComponent = (object)component;
+		var key = (entity, cmp.ID);
+		_deferredComponentCache[key] = boxedComponent;
 
 		var cmd = new DeferredOp()
 		{
 			Op = DeferredOpTypes.SetComponent,
 			Entity = entity,
-			Data = component,
+			Data = boxedComponent,
 			ComponentInfo = cmp
 		};
 
 		_operations.Enqueue(cmd);
-
-		return ref Unsafe.Unbox<T>(cmd.Data);
 	}
 
 	internal object? SetDeferred(EcsID entity, EcsID id, object? rawCmp, int size)
@@ -158,6 +162,9 @@ public sealed partial class World
 
 	private void Merge()
 	{
+		// Clear deferred component cache
+		_deferredComponentCache.Clear();
+
 		while (_operations.TryDequeue(out var op))
 		{
 			switch (op.Op)
@@ -170,7 +177,10 @@ public sealed partial class World
 				case DeferredOpTypes.SetComponent:
 					{
 						(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
-						array?.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+						if (array != null && op.Data != null)
+						{
+							array.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+						}
 
 						break;
 					}

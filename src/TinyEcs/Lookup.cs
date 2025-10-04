@@ -193,15 +193,20 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
 #endif
     private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
     private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
+    private int _fastLookupCount = 0;
 
-    public int Count => _slowLookup.Count + CountFastLookup();
+    public int Count => _slowLookup.Count + _fastLookupCount;
 
     public void Add(ulong id, TValue value)
     {
         if (id < (ulong)COMPONENT_MAX_ID)
         {
+            if (!_fastLookupAdded[id])
+            {
+                _fastLookupCount++;
+                _fastLookupAdded[id] = true;
+            }
             _fastLookup[id] = value;
-            _fastLookupAdded[id] = true;
         }
         else
         {
@@ -264,6 +269,7 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     {
         Array.Clear(_fastLookup, 0, _fastLookup.Length);
         Array.Fill(_fastLookupAdded, false);
+        _fastLookupCount = 0;
         _slowLookup.Clear();
     }
 
@@ -271,19 +277,12 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     private ref TValue AddToFast(ulong id)
     {
         ref var value = ref _fastLookup[id];
-        _fastLookupAdded[id] = true;
-        return ref value;
-    }
-
-    private int CountFastLookup()
-    {
-        int count = 0;
-        for (int i = 0; i < _fastLookupAdded.Length; i++)
+        if (!_fastLookupAdded[id])
         {
-            if (_fastLookupAdded[i])
-                count++;
+            _fastLookupCount++;
+            _fastLookupAdded[id] = true;
         }
-        return count;
+        return ref value;
     }
 
     public IEnumerator<KeyValuePair<ulong, TValue>> GetEnumerator()
