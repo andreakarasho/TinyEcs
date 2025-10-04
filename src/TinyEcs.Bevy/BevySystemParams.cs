@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using TinyEcs;
 
-namespace MyBattleground.Bevy;
+namespace TinyEcs.Bevy;
 
 // ============================================================================
 // System Parameters - Bevy-style automatic dependency injection
@@ -149,38 +149,25 @@ public class Local<T> : ISystemParam where T : new()
 /// </summary>
 public class EventReader<T> : ISystemParam where T : notnull
 {
-	private Queue<T>? _queue;
+	private EventChannel<T>? _channel;
 	private readonly List<T> _events = new();
+	private ulong _lastEpoch = ulong.MaxValue;
+	private int _lastReadIndex;
 
 	public void Initialize(TinyEcs.World world)
 	{
-		var state = world.GetState();
-		var type = typeof(T);
-
-		if (!state.EventQueues.TryGetValue(type, out var queueObj))
-		{
-			queueObj = new Queue<T>();
-			state.EventQueues[type] = queueObj;
-		}
-
-		_queue = (Queue<T>)queueObj;
+		_channel = world.GetEventChannel<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
 		_events.Clear();
-
-		if (_queue != null)
-		{
-			while (_queue.Count > 0)
-			{
-				_events.Add(_queue.Dequeue());
-			}
-		}
+		_channel ??= world.GetEventChannel<T>();
+		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
 	/// <summary>
-	/// Iterate over all events of type T that occurred this frame
+	/// Iterate over all events of type T that occurred since the last fetch
 	/// </summary>
 	public IEnumerable<T> Read()
 	{
@@ -200,7 +187,7 @@ public class EventReader<T> : ISystemParam where T : notnull
 	public SystemParamAccess GetAccess()
 	{
 		var access = new SystemParamAccess();
-		access.WriteResources.Add(typeof(Queue<T>)); // Dequeues are writes
+		access.ReadResources.Add(typeof(EventChannel<T>));
 		return access;
 	}
 }
@@ -215,30 +202,33 @@ public class EventReader<T> : ISystemParam where T : notnull
 /// </summary>
 public class EventWriter<T> : ISystemParam where T : notnull
 {
-	private TinyEcs.World? _world;
+	private EventChannel<T>? _channel;
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_world = world;
+		_channel = world.GetEventChannel<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_world = world;
+		_channel ??= world.GetEventChannel<T>();
 	}
 
 	/// <summary>
-	/// Send an event to be processed at the end of the current stage
+	/// Send an event to be processed at the end of the current frame
 	/// </summary>
 	public void Send(T evt)
 	{
-		_world?.SendEvent(evt);
+		if (_channel == null)
+			throw new InvalidOperationException("EventWriter has not been initialized.");
+
+		_channel.Enqueue(evt);
 	}
 
 	public SystemParamAccess GetAccess()
 	{
 		var access = new SystemParamAccess();
-		access.WriteResources.Add(typeof(Queue<T>));
+		access.WriteResources.Add(typeof(EventChannel<T>));
 		return access;
 	}
 }
@@ -598,72 +588,166 @@ internal readonly struct RemoveResourceCommand : DeferredCommand
 /// Typed query parameter for iterating entities with specific components
 /// </summary>
 public class Query<TQueryData> : ISystemParam
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+
 {
+
 	private TinyEcs.World? _world;
+
 	private TinyEcs.Query<TQueryData>? _query;
 
-	public void Initialize(TinyEcs.World world)
+
+
+	private static readonly SystemParamAccess _access = BuildAccess();
+
+
+
+	private static SystemParamAccess BuildAccess()
+
 	{
-		_world = world;
+
+		var access = new SystemParamAccess();
+
+		foreach (var component in TQueryData.ReadComponents)
+
+			access.ReadResources.Add(component);
+
+		foreach (var component in TQueryData.WriteComponents)
+
+			access.WriteResources.Add(component);
+
+		return access;
+
 	}
 
-	public void Fetch(TinyEcs.World world)
+
+
+	public void Initialize(TinyEcs.World world)
+
 	{
-		_query ??= world.Query<TQueryData>();
+
+		_world = world;
+
 	}
+
+
+
+	public void Fetch(TinyEcs.World world)
+
+	{
+
+		_query ??= world.Query<TQueryData>();
+
+	}
+
+
 
 	public TinyEcs.Query<TQueryData> Inner => _query!;
 
+
+
 	public int Count() => _query!.Count();
+
 	public bool Contains(ulong id) => _query!.Contains(id);
+
 	public TQueryData Get(ulong id) => _query!.Get(id);
+
 	public TinyEcs.QueryIter<TQueryData, Empty> GetEnumerator() => _query!.GetEnumerator();
 
-	public SystemParamAccess GetAccess()
-	{
-		// Queries can be read/write depending on component access
-		// For simplicity, treat as write since we can't easily determine at compile-time
-		var access = new SystemParamAccess();
-		access.WriteResources.Add(typeof(TQueryData));
-		return access;
-	}
+
+
+	public SystemParamAccess GetAccess() => _access;
+
 }
 
-/// <summary>
-/// Typed query parameter with filter
-/// </summary>
+
+
 public class Query<TQueryData, TQueryFilter> : ISystemParam
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
-	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
+
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+
+	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
+
 {
+
 	private TinyEcs.World? _world;
+
 	private TinyEcs.Query<TQueryData, TQueryFilter>? _query;
 
-	public void Initialize(TinyEcs.World world)
+
+
+	private static readonly SystemParamAccess _access = BuildAccess();
+
+
+
+	private static SystemParamAccess BuildAccess()
+
 	{
-		_world = world;
+
+		var access = new SystemParamAccess();
+
+		foreach (var component in TQueryData.ReadComponents)
+
+			access.ReadResources.Add(component);
+
+		foreach (var component in TQueryData.WriteComponents)
+
+			access.WriteResources.Add(component);
+
+		foreach (var component in TQueryFilter.ReadComponents)
+
+			access.ReadResources.Add(component);
+
+		foreach (var component in TQueryFilter.WriteComponents)
+
+			access.WriteResources.Add(component);
+
+		return access;
+
 	}
 
-	public void Fetch(TinyEcs.World world)
+
+
+	public void Initialize(TinyEcs.World world)
+
 	{
-		_query ??= world.Query<TQueryData, TQueryFilter>();
+
+		_world = world;
+
 	}
+
+
+
+	public void Fetch(TinyEcs.World world)
+
+	{
+
+		_query ??= world.Query<TQueryData, TQueryFilter>();
+
+	}
+
+
 
 	public TinyEcs.Query<TQueryData, TQueryFilter> Inner => _query!;
 
+
+
 	public int Count() => _query!.Count();
+
 	public bool Contains(ulong id) => _query!.Contains(id);
+
 	public TQueryData Get(ulong id) => _query!.Get(id);
+
 	public QueryIter<TQueryData, TQueryFilter> GetEnumerator() => _query!.GetEnumerator();
 
-	public SystemParamAccess GetAccess()
-	{
-		var access = new SystemParamAccess();
-		access.WriteResources.Add(typeof(TQueryData));
-		return access;
-	}
+
+
+	public SystemParamAccess GetAccess() => _access;
+
 }
+
+
 
 // ============================================================================
 // Parameterized System - Supports dependency injection
@@ -1429,3 +1513,4 @@ public static class RunIfSystemParamExtensions
 	public static ISystemConfiguratorOrdered RunIf<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(this ISystemConfiguratorOrdered configurator, Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, bool> condition) where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new() { var p1 = new T1(); var p2 = new T2(); var p3 = new T3(); var p4 = new T4(); var p5 = new T5(); var p6 = new T6(); var p7 = new T7(); var p8 = new T8(); var p9 = new T9(); var p10 = new T10(); var p11 = new T11(); var p12 = new T12(); var p13 = new T13(); var p14 = new T14(); var p15 = new T15(); return configurator.RunIf(world => { p1.Fetch(world); p2.Fetch(world); p3.Fetch(world); p4.Fetch(world); p5.Fetch(world); p6.Fetch(world); p7.Fetch(world); p8.Fetch(world); p9.Fetch(world); p10.Fetch(world); p11.Fetch(world); p12.Fetch(world); p13.Fetch(world); p14.Fetch(world); p15.Fetch(world); return condition(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15); }); }
 	public static ISystemConfiguratorOrdered RunIf<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(this ISystemConfiguratorOrdered configurator, Func<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, bool> condition) where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new() where T16 : ISystemParam, new() { var p1 = new T1(); var p2 = new T2(); var p3 = new T3(); var p4 = new T4(); var p5 = new T5(); var p6 = new T6(); var p7 = new T7(); var p8 = new T8(); var p9 = new T9(); var p10 = new T10(); var p11 = new T11(); var p12 = new T12(); var p13 = new T13(); var p14 = new T14(); var p15 = new T15(); var p16 = new T16(); return configurator.RunIf(world => { p1.Fetch(world); p2.Fetch(world); p3.Fetch(world); p4.Fetch(world); p5.Fetch(world); p6.Fetch(world); p7.Fetch(world); p8.Fetch(world); p9.Fetch(world); p10.Fetch(world); p11.Fetch(world); p12.Fetch(world); p13.Fetch(world); p14.Fetch(world); p15.Fetch(world); p16.Fetch(world); return condition(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16); }); }
 }
+

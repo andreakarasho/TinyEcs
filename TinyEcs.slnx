@@ -4,7 +4,8 @@
     <Project Path="samples/TinyEcsGame/TinyEcsGame.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/TinyEcs.csproj" />
+    <Project Path="src/TinyEcs/TinyEcs.csproj" />
+    <Project Path="src/TinyEcs.Bevy/TinyEcs.Bevy.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TinyEcs.Tests.csproj" />

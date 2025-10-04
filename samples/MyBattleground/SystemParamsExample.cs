@@ -1,5 +1,5 @@
 using System;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 
 namespace MyBattleground;
 
@@ -50,7 +50,7 @@ public class CombatPlugin : IPlugin
 		{
 			Console.WriteLine($"⚙️  [Config] Starting Health: {config.Value.StartingHealth}, Damage Multiplier: {config.Value.DamageMultiplier}x");
 		})
-		.InStage(Stage.Startup)
+		.InStage(TinyEcs.Bevy.Stage.Startup)
 		.Build();
 
 		// System with ResMut<T> - mutable resource access
@@ -59,7 +59,7 @@ public class CombatPlugin : IPlugin
 			stats.Value.TotalDamageDealt += 15;
 			Console.WriteLine($"📊 [Stats] Total Damage: {stats.Value.TotalDamageDealt}, Enemies Killed: {stats.Value.EnemiesKilled}");
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Label("update_stats")
 		.Build();
 
@@ -72,7 +72,7 @@ public class CombatPlugin : IPlugin
 				Console.WriteLine($"⏱️  [Timer] Frame #{counter.Value.Count} (even frame)");
 			}
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Build();
 
 		// System with EventWriter<T> - send events
@@ -83,7 +83,7 @@ public class CombatPlugin : IPlugin
 			damageEvents.Send(new DamageDealtEvent(damage, "Goblin"));
 			Console.WriteLine($"⚔️  [Combat] Dealt {damage} damage to Goblin");
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.After("update_stats")
 		.Build();
 
@@ -96,7 +96,7 @@ public class CombatPlugin : IPlugin
 				Console.WriteLine($"📬 [EventHandler] Processed damage event: {evt.Amount} to {evt.Target}");
 			}
 		})
-		.InStage(Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.Build();
 
 		// System with EventReader for enemy killed events
@@ -111,7 +111,7 @@ public class CombatPlugin : IPlugin
 				}
 			}
 		})
-		.InStage(Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.Build();
 
 		// Complex system with multiple parameters
@@ -145,7 +145,7 @@ public class CombatPlugin : IPlugin
 				spawnCounter.Value.TotalSpawned++;
 			}
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIf(world => world.Query<TinyEcs.Data<Health>, TinyEcs.With<EnemyTag>>().Count() > 0)
 		.Build();
 	}

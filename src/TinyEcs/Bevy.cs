@@ -1053,10 +1053,14 @@ public interface IFilter<TFilter> : ITermCreator, IQueryIterator<TFilter>
 	public static abstract TFilter CreateIterator(QueryIterator iterator);
 }
 
-public ref struct Empty : IData<Empty>, IFilter<Empty>
+public ref struct Empty : IData<Empty>, IFilter<Empty>, IQueryComponentAccess, IQueryFilterAccess
 {
 	private readonly bool _asFilter;
 	private QueryIterator _iterator;
+
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_emptyTypes;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 
 	internal Empty(QueryIterator iterator, bool asFilter)
 	{
@@ -1099,9 +1103,13 @@ public ref struct Empty : IData<Empty>, IFilter<Empty>
 /// Used in query filters to find entities with the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public struct With<T> : IFilter<With<T>>
+public struct With<T> : IFilter<With<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_components = { typeof(T) };
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_components;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 	[UnscopedRef]
 	ref With<T> IQueryIterator<With<T>>.Current => ref this;
 
@@ -1134,9 +1142,12 @@ public struct With<T> : IFilter<With<T>>
 /// Used in query filters to find entities without the corrisponding component/tag.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public ref struct Without<T> : IFilter<Without<T>>
+public ref struct Without<T> : IFilter<Without<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_emptyTypes;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 	[UnscopedRef]
 	ref Without<T> IQueryIterator<Without<T>>.Current => ref this;
 
@@ -1170,9 +1181,13 @@ public ref struct Without<T> : IFilter<Without<T>>
 /// You would Unsafe.IsNullRef&lt;T&gt;(); to check if the value has been found.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public ref struct Optional<T> : IFilter<Optional<T>>
+public ref struct Optional<T> : IFilter<Optional<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_components = { typeof(T) };
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_components;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 	[UnscopedRef]
 	ref Optional<T> IQueryIterator<Optional<T>>.Current => ref this;
 
@@ -1205,9 +1220,13 @@ public ref struct Optional<T> : IFilter<Optional<T>>
 /// Used in query filters to find entities with components that have changed.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public ref struct Changed<T> : IFilter<Changed<T>>
+public ref struct Changed<T> : IFilter<Changed<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_components = { typeof(T) };
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_components;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 	private QueryIterator _iterator;
 	private Ptr<uint> _stateRow;
 	private int _row, _count;
@@ -1285,9 +1304,13 @@ public ref struct Changed<T> : IFilter<Changed<T>>
 /// Used in query filters to find entities with components that have added.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public ref struct Added<T> : IFilter<Added<T>>
+public ref struct Added<T> : IFilter<Added<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_components = { typeof(T) };
+	private static readonly System.Type[] s_emptyTypes = System.Array.Empty<System.Type>();
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_components;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 	private QueryIterator _iterator;
 	private Ptr<uint> _stateRow;
 	private int _row, _count;
@@ -1362,9 +1385,12 @@ public ref struct Added<T> : IFilter<Added<T>>
 }
 
 
-public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>
+public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 	where T : struct
 {
+	private static readonly System.Type[] s_components = { typeof(T) };
+	public static System.ReadOnlySpan<System.Type> ReadComponents => s_components;
+	public static System.ReadOnlySpan<System.Type> WriteComponents => s_components;
 	private QueryIterator _iterator;
 	private Ptr<uint> _stateRow;
 	private int _row, _count;
@@ -1837,3 +1863,5 @@ internal sealed class TinyOnExitSystem<TState>(TState st, ITinySystem sys) : Tin
 }
 
 #endif
+
+

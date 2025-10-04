@@ -1,6 +1,6 @@
 using System;
 using TinyEcs;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 
 // ============================================================================
 // TinyEcs + Bevy App Integration Example
@@ -40,9 +40,9 @@ public class PlayerData
 public enum AppState { MainMenu, Loading, Playing, Paused, GameOver }
 
 // Plugin example
-public class GamePlugin : Bevy.IPlugin
+public class GamePlugin : TinyEcs.Bevy.IPlugin
 {
-	public void Build(Bevy.App app)
+	public void Build(App app)
 	{
 		Console.WriteLine("📦 Installing GamePlugin");
 
@@ -65,14 +65,14 @@ public class GamePlugin : Bevy.IPlugin
 				.Set(new Position { X = 0, Y = 0, Z = 0 })
 				.Set(new Velocity { X = 2, Y = 2 });
 		})
-		.InStage(Bevy.Stage.Startup)
+		.InStage(TinyEcs.Bevy.Stage.Startup)
 		.Build();
 
 		app.AddSystem(world =>
 		{
 			Console.WriteLine("📦 [Startup] Loading initial assets...");
 		})
-		.InStage(Bevy.Stage.Startup)
+		.InStage(TinyEcs.Bevy.Stage.Startup)
 		.Build();
 
 		// Frame systems
@@ -80,7 +80,7 @@ public class GamePlugin : Bevy.IPlugin
 		{
 			Console.WriteLine("▶️  [First] Frame Start");
 		})
-		.InStage(Bevy.Stage.First)
+		.InStage(TinyEcs.Bevy.Stage.First)
 		.Build();
 
 		// Time system
@@ -90,7 +90,7 @@ public class GamePlugin : Bevy.IPlugin
 			time.TotalTime += time.DeltaTime;
 			Console.WriteLine($"⏰ [Update] Time: {time.TotalTime:F2}s");
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Label("time")
 		.Build();
 
@@ -109,7 +109,7 @@ public class GamePlugin : Bevy.IPlugin
 				pos.Ref.Y += vel.Ref.Y * time.DeltaTime;
 			}
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.After("time")
 		.Build();
 
@@ -128,7 +128,7 @@ public class GamePlugin : Bevy.IPlugin
 				Console.WriteLine($"🎮 [Update] Player - Score: {playerData.Score}, Pos: ({pos.Ref.X:F1}, {pos.Ref.Y:F1})");
 			}
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.After("time")
 		.RunIfState(AppState.Playing)
 		.Build();
@@ -137,15 +137,15 @@ public class GamePlugin : Bevy.IPlugin
 		{
 			Console.WriteLine("⏹️  [Last] Frame End\n");
 		})
-		.InStage(Bevy.Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.Build();
 	}
 }
 
 // State transition plugin
-public class StatePlugin : Bevy.IPlugin
+public class StatePlugin : TinyEcs.Bevy.IPlugin
 {
-	public void Build(Bevy.App app)
+	public void Build(App app)
 	{
 		Console.WriteLine("📦 Installing StatePlugin");
 
@@ -185,7 +185,7 @@ public class StatePlugin : Bevy.IPlugin
 				world.SetState(AppState.GameOver);
 			}
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIfState(AppState.Playing)
 		.Build();
 
@@ -195,7 +195,7 @@ public class StatePlugin : Bevy.IPlugin
 			Console.WriteLine("📋 [Update] Main Menu - Auto-starting game!");
 			world.SetState(AppState.Loading);
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIfState(AppState.MainMenu)
 		.Build();
 
@@ -206,7 +206,7 @@ public class StatePlugin : Bevy.IPlugin
 			Console.WriteLine("✅ Loading complete!");
 			world.SetState(AppState.Playing);
 		})
-		.InStage(Bevy.Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIfState(AppState.Loading)
 		.Build();
 	}
@@ -224,7 +224,7 @@ public static class TinyEcsExample
 		using var world = new TinyEcs.World();
 
 		// Create App that wraps the world
-		var app = new Bevy.App(world);
+		var app = new App(world);
 
 		// Add state management
 		app.AddState(AppState.MainMenu);

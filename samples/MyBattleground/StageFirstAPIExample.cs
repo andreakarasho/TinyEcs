@@ -1,5 +1,5 @@
 using System;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 
 namespace MyBattleground.Examples;
 
@@ -16,17 +16,17 @@ public static class StageFirstAPIExample
 		app.AddSystem((world) =>
 		{
 			Console.WriteLine("  System 1 (fluent API with .InStage)");
-		}).InStage(Stage.Startup).Build();
+		}).InStage(TinyEcs.Bevy.Stage.Startup).Build();
 
 		// New stage-first API - cleaner and more explicit
 		Console.WriteLine("Using stage-first API (stage, system):");
-		app.AddSystem(Stage.Startup, (world) =>
+		app.AddSystem(TinyEcs.Bevy.Stage.Startup, (world) =>
 		{
 			Console.WriteLine("  System 2 (stage-first API)");
 		});
 
 		// Works with system parameters too!
-		app.AddSystem(Stage.Startup, (Res<ExampleConfig> config) =>
+		app.AddSystem(TinyEcs.Bevy.Stage.Startup, (Res<ExampleConfig> config) =>
 		{
 			Console.WriteLine($"  System 3 with params (stage-first): speed = {config.Value.Speed}");
 		});
@@ -37,7 +37,7 @@ public static class StageFirstAPIExample
 		{
 			Console.WriteLine("  System 4 (labeled and ordered)");
 		})
-		.InStage(Stage.Startup)
+		.InStage(TinyEcs.Bevy.Stage.Startup)
 		.Label("my_labeled_system")
 		.RunIf(world => true)
 		.Build();
@@ -51,9 +51,9 @@ public static class StageFirstAPIExample
 		Console.WriteLine("\n=== Complete ===\n");
 		Console.WriteLine("Summary:");
 		Console.WriteLine("  • Use stage-first API for simple systems:");
-		Console.WriteLine("    app.AddSystem(Stage.X, system)");
+		Console.WriteLine("    app.AddSystem(TinyEcs.Bevy.Stage.X, system)");
 		Console.WriteLine("  • Use fluent API for advanced features:");
-		Console.WriteLine("    app.AddSystem(system).InStage(Stage.X).Label(...).After(...).Build()");
+		Console.WriteLine("    app.AddSystem(system).InStage(TinyEcs.Bevy.Stage.X).Label(...).After(...).Build()");
 	}
 }
 

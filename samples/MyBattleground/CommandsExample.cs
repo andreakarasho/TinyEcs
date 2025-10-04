@@ -1,5 +1,5 @@
 using System;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 
 namespace MyBattleground;
 
@@ -21,7 +21,7 @@ public static class CommandsExample
 		var app = new App(world);
 
 		// System 1: Spawn entities using Commands
-		app.AddSystem((Bevy.Commands commands) =>
+		app.AddSystem((Commands commands) =>
 		{
 			Console.WriteLine("System 1: Spawning entities with Commands...");
 
@@ -46,10 +46,10 @@ public static class CommandsExample
 
 			Console.WriteLine("  (Commands queued - will be applied at end of system)");
 
-		}).InStage(Bevy.Stage.Startup);
+		}).InStage(TinyEcs.Bevy.Stage.Startup);
 
 		// System 2: Modify entities using Commands
-		app.AddSystem((Bevy.Commands commands) =>
+		app.AddSystem((Commands commands) =>
 		{
 			Console.WriteLine("\nSystem 2: Modifying entities with Commands...");
 
@@ -67,23 +67,23 @@ public static class CommandsExample
 
 			Console.WriteLine("  (Commands queued - will be applied at end of system)");
 
-		}).InStage(Bevy.Stage.Update);
+		}).InStage(TinyEcs.Bevy.Stage.Update);
 
 		// System 3: Insert a resource
-		app.AddSystem((Bevy.Commands commands) =>
+		app.AddSystem((Commands commands) =>
 		{
 			Console.WriteLine("\nSystem 3: Adding resource with Commands...");
 			commands.InsertResource(new GameStats { TotalKills = 1 });
 			Console.WriteLine("  Inserted GameStats resource");
 
-		}).InStage(Bevy.Stage.Update);
+		}).InStage(TinyEcs.Bevy.Stage.Update);
 
 		// System 4: Read the resource
 		app.AddSystem((Res<GameStats> stats) =>
 		{
 			Console.WriteLine($"\nSystem 4: Reading resource - Total kills: {stats.Value.TotalKills}");
 
-		}).InStage(Bevy.Stage.PostUpdate);
+		}).InStage(TinyEcs.Bevy.Stage.PostUpdate);
 
 		Console.WriteLine("\n--- Running Startup Stage ---");
 		app.Update();

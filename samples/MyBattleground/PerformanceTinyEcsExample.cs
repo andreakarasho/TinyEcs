@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 using TinyEcs;
 
 namespace MyBattleground;
 
 
-public sealed class PerfSystem : Bevy.SystemBase<Time>
+public sealed class PerfSystem : SystemBase<Time>
 {
 	protected override void Execute(TinyEcs.World world, Time _)
 	{
@@ -23,7 +23,7 @@ public static class PerformanceTinyEcsExample
 	public static void Run()
 	{
 		using var world = new TinyEcs.World();
-		var app = new Bevy.App(world);
+		var app = new App(world);
 
 		app
 			.AddResource(new Time { DeltaTime = 1f / 60f, TotalTime = 0f })
@@ -36,11 +36,11 @@ public static class PerformanceTinyEcsExample
 						.Set(new Velocity { X = 0, Y = 0 });
 				}
 			})
-				.InStage(Bevy.Stage.Startup)
+				.InStage(TinyEcs.Bevy.Stage.Startup)
 				.Build()
 
 			.AddSystem(new PerfSystem())
-				.InStage(Bevy.Stage.Update)
+				.InStage(TinyEcs.Bevy.Stage.Update)
 				.Build();
 
 

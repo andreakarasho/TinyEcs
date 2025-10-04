@@ -1,5 +1,5 @@
 using System;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 using TinyEcs;
 
 namespace MyBattleground;
@@ -59,7 +59,7 @@ public static class ObserverExample
 		});
 
 		// Observer with system parameters - check if it's an enemy when health is added
-		app.Observe<OnInsert<Health>, MyBattleground.Bevy.Query<Data<Enemy>>>((trigger, query) =>
+		app.Observe<OnInsert<Health>, TinyEcs.Bevy.Query<Data<Enemy>>>((trigger, query) =>
 		{
 			if (query.Inner.Contains(trigger.EntityId))
 			{
@@ -93,7 +93,7 @@ public static class ObserverExample
 			// Store entities as resources for later systems
 			world.AddResource(new PlayerEntity { Id = player });
 			world.AddResource(new EnemyEntity { Id = enemy });
-		}).InStage(Bevy.Stage.Startup);
+		}).InStage(TinyEcs.Bevy.Stage.Startup);
 
 		// Add an update system to move player
 		app.AddSystem((TinyEcs.World world) =>
@@ -102,7 +102,7 @@ public static class ObserverExample
 
 			Console.WriteLine("\n--- Moving player ---\n");
 			world.Set(player, new Position { X = 5, Y = 3 });
-		}).InStage(Bevy.Stage.Update);
+		}).InStage(TinyEcs.Bevy.Stage.Update);
 
 		// Add another system to damage enemy
 		app.AddSystem((TinyEcs.World world) =>
@@ -111,7 +111,7 @@ public static class ObserverExample
 
 			Console.WriteLine("\n--- Enemy takes damage ---\n");
 			world.Unset<Health>(enemy);
-		}).InStage(Bevy.Stage.PostUpdate);
+		}).InStage(TinyEcs.Bevy.Stage.PostUpdate);
 
 		// Add a final system to despawn enemy
 		app.AddSystem((TinyEcs.World world) =>
@@ -120,7 +120,7 @@ public static class ObserverExample
 
 			Console.WriteLine("\n--- Despawning enemy ---\n");
 			world.Delete(enemy);
-		}).InStage(Bevy.Stage.Last);
+		}).InStage(TinyEcs.Bevy.Stage.Last);
 
 		// Run the app - observers will auto-flush at end of each stage
 		app.Update();

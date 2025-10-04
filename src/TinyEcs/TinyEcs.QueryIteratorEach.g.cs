@@ -8,9 +8,13 @@ namespace TinyEcs
 {
 #if NET9_0_OR_GREATER
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0> : IData<Data<T0>>
+    public unsafe ref struct Data<T0> : IData<Data<T0>>, IQueryComponentAccess
         where T0 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -80,9 +84,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1> : IData<Data<T0, T1>>
+    public unsafe ref struct Data<T0, T1> : IData<Data<T0, T1>>, IQueryComponentAccess
         where T0 : struct where T1 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -158,9 +166,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2> : IData<Data<T0, T1, T2>>
+    public unsafe ref struct Data<T0, T1, T2> : IData<Data<T0, T1, T2>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -242,9 +254,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3> : IData<Data<T0, T1, T2, T3>>
+    public unsafe ref struct Data<T0, T1, T2, T3> : IData<Data<T0, T1, T2, T3>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -332,9 +348,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4> : IData<Data<T0, T1, T2, T3, T4>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4> : IData<Data<T0, T1, T2, T3, T4>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -428,9 +448,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5> : IData<Data<T0, T1, T2, T3, T4, T5>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5> : IData<Data<T0, T1, T2, T3, T4, T5>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -530,9 +554,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6> : IData<Data<T0, T1, T2, T3, T4, T5, T6>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6> : IData<Data<T0, T1, T2, T3, T4, T5, T6>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -638,9 +666,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -752,9 +784,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -872,9 +908,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -998,9 +1038,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -1130,9 +1174,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -1268,9 +1316,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -1412,9 +1464,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -1562,9 +1618,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13), typeof(T14) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;
@@ -1718,9 +1778,13 @@ namespace TinyEcs
     }
 
     [SkipLocalsInit]
-    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>
+    public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct
     {
+		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13), typeof(T14), typeof(T15) };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;

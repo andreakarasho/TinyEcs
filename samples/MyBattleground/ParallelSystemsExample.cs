@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using MyBattleground.Bevy;
+using TinyEcs.Bevy;
 
 namespace MyBattleground;
 
@@ -36,7 +36,7 @@ public static class ParallelSystemsExample
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System1: Reading ResourceA = {a.Value.Value}");
 			Thread.Sleep(10); // Simulate work
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Build();
 
 		app.AddSystem((Res<ResourceB> b) =>
@@ -44,7 +44,7 @@ public static class ParallelSystemsExample
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System2: Reading ResourceB = {b.Value.Value}");
 			Thread.Sleep(10); // Simulate work
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Build();
 
 		app.AddSystem((Res<ResourceC> c) =>
@@ -52,7 +52,7 @@ public static class ParallelSystemsExample
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System3: Reading ResourceC = {c.Value.Value}");
 			Thread.Sleep(10); // Simulate work
 		})
-		.InStage(Stage.Update)
+		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Build();
 
 		// Systems that CANNOT run in parallel with each other (write conflict)
@@ -62,7 +62,7 @@ public static class ParallelSystemsExample
 			counter.Value.Count++;
 			Thread.Sleep(10);
 		})
-		.InStage(Stage.PostUpdate)
+		.InStage(TinyEcs.Bevy.Stage.PostUpdate)
 		.Build();
 
 		app.AddSystem((ResMut<SharedCounter> counter) =>
@@ -71,7 +71,7 @@ public static class ParallelSystemsExample
 			counter.Value.Count++;
 			Thread.Sleep(10);
 		})
-		.InStage(Stage.PostUpdate)
+		.InStage(TinyEcs.Bevy.Stage.PostUpdate)
 		.Build();
 
 		// System that reads SharedCounter (can't run parallel with writers)
@@ -79,7 +79,7 @@ public static class ParallelSystemsExample
 		{
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System6: Reading SharedCounter = {counter.Value.Count}");
 		})
-		.InStage(Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.Build();
 
 		// System with RunIf condition using system parameters
@@ -87,7 +87,7 @@ public static class ParallelSystemsExample
 		{
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System7: Conditional system running! Counter = {counter.Value.Count}");
 		})
-		.InStage(Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.RunIf((Res<SharedCounter> counter) => counter.Value.Count >= 2)
 		.Build();
 
@@ -96,7 +96,7 @@ public static class ParallelSystemsExample
 		{
 			Console.WriteLine($"[Thread {Environment.CurrentManagedThreadId}] System8: This should NOT run!");
 		})
-		.InStage(Stage.Last)
+		.InStage(TinyEcs.Bevy.Stage.Last)
 		.RunIf((Res<SharedCounter> counter) => counter.Value.Count > 100)
 		.Build();
 

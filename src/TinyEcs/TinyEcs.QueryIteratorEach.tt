@@ -41,11 +41,16 @@ namespace TinyEcs
         var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
         var fieldAssignments = GenerateSequence(i + 1, "\n\t\t\t", j => $"ptr{j} = _current{j}.Value;");
         var queryBuilderCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"builder.With<T{j}>();");
+		var typeOfs = GenerateSequence(i + 1, ", ", j => $"typeof(T{j})");
 #>
     [SkipLocalsInit]
-    public unsafe ref struct Data<<#= generics #>> : IData<Data<<#= generics #>>>
+    public unsafe ref struct Data<<#= generics #>> : IData<Data<<#= generics #>>>, IQueryComponentAccess
         <#= whereGenerics #>
     {
+		private static readonly System.Type[] s_componentTypes = new[] { <#= typeOfs #> };
+		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
+        public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
+
         private QueryIterator _iterator;
         private int _index, _count;
         private ReadOnlySpan<EntityView> _entities;

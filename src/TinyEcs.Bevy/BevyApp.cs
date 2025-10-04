@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 
-namespace MyBattleground.Bevy;
+namespace TinyEcs.Bevy;
 
 // ============================================================================
 // Core Interfaces
@@ -66,73 +67,77 @@ public class StageDescriptor
 
 public static class WorldExtensions
 {
-	private static readonly Dictionary<TinyEcs.World, WorldState> _worldStates = new();
+	private static readonly ConditionalWeakTable<TinyEcs.World, WorldState> _worldStates = new();
 
 	internal static WorldState GetState(this TinyEcs.World world)
 	{
-		if (!_worldStates.TryGetValue(world, out var state))
-		{
-			state = new WorldState();
-			_worldStates[world] = state;
-		}
-		return state;
+		return _worldStates.GetValue(world, static _ => new WorldState());
 	}
 
 	public static void AddResource<T>(this TinyEcs.World world, T resource) where T : notnull
 	{
-		world.GetState().Resources[typeof(T)] = resource;
+		var state = world.GetState();
+		lock (state.SyncRoot)
+		{
+			state.Resources[typeof(T)] = resource;
+		}
 	}
 
 	public static T GetResource<T>(this TinyEcs.World world) where T : notnull
 	{
-		return (T)world.GetState().Resources[typeof(T)];
+		var state = world.GetState();
+		lock (state.SyncRoot)
+		{
+			return (T)state.Resources[typeof(T)];
+		}
 	}
 
 	public static bool HasResource<T>(this TinyEcs.World world) where T : notnull
 	{
-		return world.GetState().Resources.ContainsKey(typeof(T));
+		var state = world.GetState();
+		lock (state.SyncRoot)
+		{
+			return state.Resources.ContainsKey(typeof(T));
+		}
 	}
 
 	public static void SendEvent<T>(this TinyEcs.World world, T evt) where T : notnull
 	{
+		world.GetEventChannel<T>().Enqueue(evt);
+	}
+
+	internal static EventChannel<T> GetEventChannel<T>(this TinyEcs.World world) where T : notnull
+	{
 		var state = world.GetState();
-		var type = typeof(T);
-		if (!state.EventQueues.TryGetValue(type, out var queueObj))
+		lock (state.SyncRoot)
 		{
-			queueObj = new Queue<T>();
-			state.EventQueues[type] = queueObj;
+			if (!state.EventChannels.TryGetValue(typeof(T), out var channelObj))
+			{
+				var channel = new EventChannel<T>();
+				state.EventChannels[typeof(T)] = channel;
+				return channel;
+			}
+
+			return (EventChannel<T>)channelObj;
 		}
-		((Queue<T>)queueObj).Enqueue(evt);
 	}
 
 	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer) where T : notnull
 	{
-		var state = world.GetState();
-		var type = typeof(T);
-		if (!state.EventQueues.TryGetValue(type, out var queueObj))
-		{
-			queueObj = new Queue<T>();
-			state.EventQueues[type] = queueObj;
-		}
-
-		var queue = (Queue<T>)queueObj;
-
-		state.EventProcessors.Add(() =>
-		{
-			while (queue.Count > 0)
-			{
-				var evt = queue.Dequeue();
-				observer(evt);
-			}
-		});
+		world.GetEventChannel<T>().RegisterObserver(observer);
 	}
 
 	internal static void ProcessEvents(this TinyEcs.World world)
 	{
 		var state = world.GetState();
-		foreach (var processor in state.EventProcessors)
+		List<IEventChannel> channels;
+		lock (state.SyncRoot)
 		{
-			processor();
+			channels = state.EventChannels.Values.ToList();
+		}
+		foreach (var channel in channels)
+		{
+			channel.Flush();
 		}
 	}
 
@@ -141,35 +146,50 @@ public static class WorldExtensions
 	{
 		var worldState = world.GetState();
 		var type = typeof(TState);
-		if (worldState.States.TryGetValue(type, out var current))
+		lock (worldState.SyncRoot)
 		{
-			worldState.PreviousStates[type] = current;
+			if (worldState.States.TryGetValue(type, out var current))
+			{
+				worldState.PreviousStates[type] = current;
+			}
+			worldState.States[type] = state;
+			worldState.StatesProcessedThisFrame.Remove(type); // Mark for reprocessing
 		}
-		worldState.States[type] = state;
-		worldState.StatesProcessedThisFrame.Remove(type); // Mark for reprocessing
 	}
 
 	public static TState GetState<TState>(this TinyEcs.World world) where TState : struct, Enum
 	{
 		var type = typeof(TState);
-		if (world.GetState().States.TryGetValue(type, out var state))
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
 		{
-			return (TState)state;
+			if (worldState.States.TryGetValue(type, out var state))
+			{
+				return (TState)state;
+			}
 		}
 		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
 	}
 
 	public static bool HasState<TState>(this TinyEcs.World world) where TState : struct, Enum
 	{
-		return world.GetState().States.ContainsKey(typeof(TState));
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
+		{
+			return worldState.States.ContainsKey(typeof(TState));
+		}
 	}
 
 	internal static TState? GetPreviousState<TState>(this TinyEcs.World world) where TState : struct, Enum
 	{
 		var type = typeof(TState);
-		if (world.GetState().PreviousStates.TryGetValue(type, out var state))
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
 		{
-			return (TState)state;
+			if (worldState.PreviousStates.TryGetValue(type, out var state))
+			{
+				return (TState)state;
+			}
 		}
 		return null;
 	}
@@ -178,13 +198,16 @@ public static class WorldExtensions
 	{
 		var state = world.GetState();
 		var type = typeof(TState);
-		if (!state.States.TryGetValue(type, out var current))
-			return false;
+		lock (state.SyncRoot)
+		{
+			if (!state.States.TryGetValue(type, out var current))
+				return false;
 
-		if (!state.PreviousStates.TryGetValue(type, out var previous))
-			return true;
+			if (!state.PreviousStates.TryGetValue(type, out var previous))
+				return true;
 
-		return !current.Equals(previous);
+			return !current.Equals(previous);
+		}
 	}
 
 	// Query helpers - create cached queries
@@ -204,13 +227,106 @@ public static class WorldExtensions
 
 internal class WorldState
 {
+	public object SyncRoot { get; } = new object();
 	public Dictionary<Type, object> Resources { get; } = new();
-	public Dictionary<Type, object> EventQueues { get; } = new();
-	public List<Action> EventProcessors { get; } = new();
+	public Dictionary<Type, IEventChannel> EventChannels { get; } = new();
 	public Dictionary<Type, object> States { get; } = new();
 	public Dictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
 	public List<Action> StateChangeDetectors { get; } = new();
+}
+
+internal interface IEventChannel
+{
+	void Flush();
+}
+
+internal sealed class EventChannel<T> : IEventChannel
+{
+	private readonly object _lock = new();
+	private List<T> _readBuffer = new();
+	private List<T> _writeBuffer = new();
+	private readonly List<Action<T>> _observers = new();
+	private ulong _epoch;
+
+	internal void Enqueue(T evt)
+	{
+		lock (_lock)
+		{
+			_writeBuffer.Add(evt);
+		}
+	}
+
+	internal void RegisterObserver(Action<T> observer)
+	{
+		lock (_lock)
+		{
+			_observers.Add(observer);
+		}
+	}
+
+	internal void CopyEvents(ref ulong epoch, ref int lastReadIndex, List<T> target)
+	{
+		lock (_lock)
+		{
+			if (epoch != _epoch)
+			{
+				epoch = _epoch;
+				lastReadIndex = 0;
+			}
+
+			if (lastReadIndex > _readBuffer.Count)
+			{
+				lastReadIndex = _readBuffer.Count;
+			}
+
+			for (var i = lastReadIndex; i < _readBuffer.Count; i++)
+			{
+				target.Add(_readBuffer[i]);
+			}
+
+			lastReadIndex = _readBuffer.Count;
+		}
+	}
+
+	public void Flush()
+	{
+		List<T>? snapshot = null;
+		List<Action<T>>? observers = null;
+
+		lock (_lock)
+		{
+			if (_writeBuffer.Count == 0 && _readBuffer.Count == 0)
+			{
+				return;
+			}
+
+			(_readBuffer, _writeBuffer) = (_writeBuffer, _readBuffer);
+			_writeBuffer.Clear();
+			_epoch++;
+
+			if (_readBuffer.Count == 0 || _observers.Count == 0)
+			{
+				return;
+			}
+
+			snapshot = new List<T>(_readBuffer);
+			observers = new List<Action<T>>(_observers);
+		}
+
+		if (snapshot == null || observers == null)
+		{
+			return;
+		}
+
+		foreach (var evt in snapshot)
+		{
+			foreach (var observer in observers)
+			{
+				observer(evt);
+			}
+		}
+	}
 }
 
 // ============================================================================
@@ -427,18 +543,23 @@ public class App
 		return this;
 	}
 
-	public StageConfigurator AddStage(Stage stage)
+	internal StageDescriptor GetOrCreateStageDescriptor(Stage stage)
 	{
 		if (!_stageSystems.ContainsKey(stage))
 		{
 			_stageSystems[stage] = new List<SystemDescriptor>();
 			var descriptor = new StageDescriptor(stage);
 			_stageDescriptors.Add(descriptor);
-			return new StageConfigurator(this, descriptor);
+			return descriptor;
 		}
 
-		var existingDescriptor = _stageDescriptors.First(d => d.Stage == stage);
-		return new StageConfigurator(this, existingDescriptor);
+		return _stageDescriptors.First(d => d.Stage == stage);
+	}
+
+	public StageConfigurator AddStage(Stage stage)
+	{
+		var descriptor = GetOrCreateStageDescriptor(stage);
+		return new StageConfigurator(this, descriptor);
 	}
 
 	public App AddPlugin(IPlugin plugin)
@@ -555,53 +676,55 @@ public class App
 		_registeredStateTypes.Add(type);
 
 		var worldState = _world.GetState();
-		worldState.StateChangeDetectors.Add(() =>
+		Action detector = () =>
 		{
-			if (worldState.StatesProcessedThisFrame.Contains(type))
-				return;
+			TState? previousState = null;
+			TState? currentState = null;
 
-			if (!_world.StateChanged<TState>())
-				return;
+			lock (worldState.SyncRoot)
+			{
+				if (worldState.StatesProcessedThisFrame.Contains(type))
+					return;
 
-			worldState.StatesProcessedThisFrame.Add(type);
+				if (!_world.StateChanged<TState>())
+					return;
 
-			var previousState = _world.GetPreviousState<TState>();
-			var currentState = _world.HasState<TState>() ? _world.GetState<TState>() : (TState?)null;
+				worldState.StatesProcessedThisFrame.Add(type);
+				previousState = _world.GetPreviousState<TState>();
+				currentState = _world.HasState<TState>() ? _world.GetState<TState>() : (TState?)null;
+			}
 
-			// Run OnExit systems
 			if (previousState != null && _onExitSystems.TryGetValue(type, out var exitDict))
 			{
-				// Use boxed enum directly - no ToString() allocation
 				object prevStateKey = previousState.Value;
 				if (exitDict.TryGetValue(prevStateKey, out var exitSystems))
 				{
 					foreach (var descriptor in exitSystems)
 					{
 						if (descriptor.ShouldRun(_world))
-						{
 							descriptor.System.Run(_world);
-						}
 					}
 				}
 			}
 
-			// Run OnEnter systems
 			if (currentState != null && _onEnterSystems.TryGetValue(type, out var enterDict))
 			{
-				// Use boxed enum directly - no ToString() allocation
 				object currStateKey = currentState.Value;
 				if (enterDict.TryGetValue(currStateKey, out var enterSystems))
 				{
 					foreach (var descriptor in enterSystems)
 					{
 						if (descriptor.ShouldRun(_world))
-						{
 							descriptor.System.Run(_world);
-						}
 					}
 				}
 			}
-		});
+		};
+
+		lock (worldState.SyncRoot)
+		{
+			worldState.StateChangeDetectors.Add(detector);
+		}
 	}
 
 	public void RunStartup()
@@ -730,7 +853,13 @@ public class App
 	private void ProcessStateTransitions()
 	{
 		var worldState = _world.GetState();
-		foreach (var detector in worldState.StateChangeDetectors)
+		List<Action> detectors;
+		lock (worldState.SyncRoot)
+		{
+			detectors = worldState.StateChangeDetectors.ToList();
+			worldState.StatesProcessedThisFrame.Clear();
+		}
+		foreach (var detector in detectors)
 		{
 			detector();
 		}
@@ -835,13 +964,35 @@ public class StageConfigurator
 
 	public StageConfigurator Before(Stage stage)
 	{
-		_descriptor.BeforeStages.Add(stage);
+		var currentStage = _descriptor.Stage;
+		if (currentStage == stage)
+			return this;
+
+		var targetDescriptor = _app.GetOrCreateStageDescriptor(stage);
+
+		if (!targetDescriptor.BeforeStages.Contains(currentStage))
+			targetDescriptor.BeforeStages.Add(currentStage);
+
+		if (!_descriptor.AfterStages.Contains(stage))
+			_descriptor.AfterStages.Add(stage);
+
 		return this;
 	}
 
 	public StageConfigurator After(Stage stage)
 	{
-		_descriptor.AfterStages.Add(stage);
+		var currentStage = _descriptor.Stage;
+		if (currentStage == stage)
+			return this;
+
+		var targetDescriptor = _app.GetOrCreateStageDescriptor(stage);
+
+		if (!_descriptor.BeforeStages.Contains(stage))
+			_descriptor.BeforeStages.Add(stage);
+
+		if (!targetDescriptor.AfterStages.Contains(currentStage))
+			targetDescriptor.AfterStages.Add(currentStage);
+
 		return this;
 	}
 
@@ -918,9 +1069,13 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 	public ISystemConfiguratorOrdered After(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
-		if (target != null)
+		if (target != null && target != _descriptor)
 		{
-			_descriptor.AfterSystems.Add(target);
+			if (!_descriptor.BeforeSystems.Contains(target))
+				_descriptor.BeforeSystems.Add(target);
+
+			if (!target.AfterSystems.Contains(_descriptor))
+				target.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
@@ -928,9 +1083,13 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 	public ISystemConfiguratorOrdered Before(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
-		if (target != null)
+		if (target != null && target != _descriptor)
 		{
-			target.AfterSystems.Add(_descriptor);
+			if (!target.BeforeSystems.Contains(_descriptor))
+				target.BeforeSystems.Add(_descriptor);
+
+			if (!_descriptor.AfterSystems.Contains(target))
+				_descriptor.AfterSystems.Add(target);
 		}
 		return this;
 	}
@@ -946,7 +1105,11 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		var previousSystem = _app.GetLastAddedSystem();
 		if (previousSystem != null && previousSystem != _descriptor)
 		{
-			_descriptor.AfterSystems.Add(previousSystem);
+			if (!_descriptor.BeforeSystems.Contains(previousSystem))
+				_descriptor.BeforeSystems.Add(previousSystem);
+
+			if (!previousSystem.AfterSystems.Contains(_descriptor))
+				previousSystem.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
@@ -1040,3 +1203,4 @@ public static class AppExtensions
 		return app.AddSystem(stage, new FunctionalSystem(systemFn));
 	}
 }
+

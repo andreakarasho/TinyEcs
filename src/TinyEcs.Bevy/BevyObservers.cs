@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using TinyEcs;
 
-namespace MyBattleground.Bevy;
+namespace TinyEcs.Bevy;
 
 // ============================================================================
 // Observer Triggers - Events that observers can react to
@@ -121,8 +121,10 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 
 	public void HandleSet(TinyEcs.World world, ulong entityId)
 	{
-		// Direct typed call - no reflection!
-		var component = world.Get<T>(entityId);
+		if (!world.Has<T>(entityId))
+			return;
+
+		ref var component = ref world.Get<T>(entityId);
 		world.EmitTrigger(new OnInsert<T>(entityId, component));
 	}
 
@@ -432,3 +434,4 @@ public static class AppObserverExtensions
 		return app;
 	}
 }
+
