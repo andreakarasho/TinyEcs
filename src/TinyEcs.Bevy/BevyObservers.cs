@@ -10,58 +10,80 @@ namespace TinyEcs.Bevy;
 
 public interface ITrigger
 {
-	public static abstract void Register(TinyEcs.World world);
+#if NET9_0_OR_GREATER
+	static abstract void Register(TinyEcs.World world);
+#else
+	void Register(TinyEcs.World world);
+#endif
 }
 
 /// <summary>
 /// Trigger when a component is added to an entity
 /// </summary>
-public record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger
+public readonly record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger
 	where T : struct
 {
+#if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
 		=> world.EnableObservers<T>();
 }
 
 /// <summary>
 /// Trigger when a component is inserted/updated on an entity
 /// </summary>
-public record struct OnInsert<T>(ulong EntityId, T Component) : ITrigger
+public readonly record struct OnInsert<T>(ulong EntityId, T Component) : ITrigger
 	where T : struct
 {
+#if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
 		=> world.EnableObservers<T>();
 }
 
 /// <summary>
 /// Trigger when a component is removed from an entity
 /// </summary>
-public record struct OnRemove<T>(ulong EntityId) : ITrigger
+public readonly record struct OnRemove<T>(ulong EntityId) : ITrigger
 	where T : struct
 {
+#if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
 		=> world.EnableObservers<T>();
 }
 
 /// <summary>
 /// Trigger when an entity is spawned
 /// </summary>
-public record struct OnSpawn(ulong EntityId) : ITrigger
+public readonly record struct OnSpawn(ulong EntityId) : ITrigger
 {
+#if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
 	{
-
 	}
 }
 
 /// <summary>
 /// Trigger when an entity is despawned
 /// </summary>
-public record struct OnDespawn(ulong EntityId) : ITrigger
+public readonly record struct OnDespawn(ulong EntityId) : ITrigger
 {
+#if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
 	{
-
 	}
 }
 
@@ -159,20 +181,24 @@ public static class ObserverExtensions
 			_observerStates[world] = state;
 			RegisterWorldHooks(world, state);
 		}
+
 		return state;
 	}
 
 	private static void RegisterWorldHooks(TinyEcs.World world, ObserverState state)
 	{
 		if (state.HooksRegistered) return;
+
 		state.HooksRegistered = true;
 
 		// Hook into entity creation - automatically emit OnSpawn
 		world.OnEntityCreated += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
+
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
+
 			w.EmitTrigger(new OnSpawn(entityId));
 		};
 
@@ -180,8 +206,10 @@ public static class ObserverExtensions
 		world.OnEntityDeleted += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
+
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
+
 			w.EmitTrigger(new OnDespawn(entityId));
 		};
 
@@ -190,6 +218,7 @@ public static class ObserverExtensions
 		world.OnComponentSet += (w, entityId, componentInfo) =>
 		{
 			if (!state.HooksEnabled) return;
+
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
@@ -204,6 +233,7 @@ public static class ObserverExtensions
 		world.OnComponentUnset += (w, entityId, componentInfo) =>
 		{
 			if (!state.HooksEnabled) return;
+
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
@@ -307,7 +337,6 @@ public static class ObserverExtensions
 			handler.HandleSet(world, entityId);
 		}
 	}
-
 }
 
 internal class ObserverState
@@ -335,7 +364,11 @@ public static class AppObserverExtensions
 		var world = app.GetWorld();
 
 		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
 		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
 
 		world.RegisterObserver(callback);
 		return app;
@@ -345,13 +378,17 @@ public static class AppObserverExtensions
 	/// Register an observer with system parameters
 	/// </summary>
 	public static App Observe<TTrigger, T1>(this App app, Action<TTrigger, T1> callback)
-		where TTrigger : ITrigger
+		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new()
 	{
 		var world = app.GetWorld();
 
 		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
 		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
 
 		var p1 = new T1();
 		world.RegisterObserver<TTrigger>((w, trigger) =>
@@ -359,18 +396,23 @@ public static class AppObserverExtensions
 			p1.Fetch(w);
 			callback(trigger, p1);
 		});
+
 		return app;
 	}
 
 	public static App Observe<TTrigger, T1, T2>(this App app, Action<TTrigger, T1, T2> callback)
-		where TTrigger : ITrigger
+		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new()
 		where T2 : ISystemParam, new()
 	{
 		var world = app.GetWorld();
 
 		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
 		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
 
 		var p1 = new T1();
 		var p2 = new T2();
@@ -380,11 +422,12 @@ public static class AppObserverExtensions
 			p2.Fetch(w);
 			callback(trigger, p1, p2);
 		});
+
 		return app;
 	}
 
 	public static App Observe<TTrigger, T1, T2, T3>(this App app, Action<TTrigger, T1, T2, T3> callback)
-		where TTrigger : ITrigger
+		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new()
 		where T2 : ISystemParam, new()
 		where T3 : ISystemParam, new()
@@ -392,7 +435,11 @@ public static class AppObserverExtensions
 		var world = app.GetWorld();
 
 		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
 		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
 
 		var p1 = new T1();
 		var p2 = new T2();
@@ -404,11 +451,12 @@ public static class AppObserverExtensions
 			p3.Fetch(w);
 			callback(trigger, p1, p2, p3);
 		});
+
 		return app;
 	}
 
 	public static App Observe<TTrigger, T1, T2, T3, T4>(this App app, Action<TTrigger, T1, T2, T3, T4> callback)
-		where TTrigger : ITrigger
+		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new()
 		where T2 : ISystemParam, new()
 		where T3 : ISystemParam, new()
@@ -417,7 +465,11 @@ public static class AppObserverExtensions
 		var world = app.GetWorld();
 
 		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
 		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
 
 		var p1 = new T1();
 		var p2 = new T2();
@@ -431,7 +483,557 @@ public static class AppObserverExtensions
 			p4.Fetch(w);
 			callback(trigger, p1, p2, p3, p4);
 		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5>(this App app, Action<TTrigger, T1, T2, T3, T4, T5> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+		where T11 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		var p11 = new T11();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			p11.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+		where T11 : ISystemParam, new()
+		where T12 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		var p11 = new T11();
+		var p12 = new T12();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			p11.Fetch(w);
+			p12.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+		where T11 : ISystemParam, new()
+		where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		var p11 = new T11();
+		var p12 = new T12();
+		var p13 = new T13();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			p11.Fetch(w);
+			p12.Fetch(w);
+			p13.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+		where T11 : ISystemParam, new()
+		where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new()
+		where T14 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		var p11 = new T11();
+		var p12 = new T12();
+		var p13 = new T13();
+		var p14 = new T14();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			p11.Fetch(w);
+			p12.Fetch(w);
+			p13.Fetch(w);
+			p14.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14);
+		});
+
+		return app;
+	}
+
+	public static App Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(this App app, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> callback)
+		where TTrigger : struct, ITrigger
+		where T1 : ISystemParam, new()
+		where T2 : ISystemParam, new()
+		where T3 : ISystemParam, new()
+		where T4 : ISystemParam, new()
+		where T5 : ISystemParam, new()
+		where T6 : ISystemParam, new()
+		where T7 : ISystemParam, new()
+		where T8 : ISystemParam, new()
+		where T9 : ISystemParam, new()
+		where T10 : ISystemParam, new()
+		where T11 : ISystemParam, new()
+		where T12 : ISystemParam, new()
+		where T13 : ISystemParam, new()
+		where T14 : ISystemParam, new()
+		where T15 : ISystemParam, new()
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		var p1 = new T1();
+		var p2 = new T2();
+		var p3 = new T3();
+		var p4 = new T4();
+		var p5 = new T5();
+		var p6 = new T6();
+		var p7 = new T7();
+		var p8 = new T8();
+		var p9 = new T9();
+		var p10 = new T10();
+		var p11 = new T11();
+		var p12 = new T12();
+		var p13 = new T13();
+		var p14 = new T14();
+		var p15 = new T15();
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			p1.Fetch(w);
+			p2.Fetch(w);
+			p3.Fetch(w);
+			p4.Fetch(w);
+			p5.Fetch(w);
+			p6.Fetch(w);
+			p7.Fetch(w);
+			p8.Fetch(w);
+			p9.Fetch(w);
+			p10.Fetch(w);
+			p11.Fetch(w);
+			p12.Fetch(w);
+			p13.Fetch(w);
+			p14.Fetch(w);
+			p15.Fetch(w);
+			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15);
+		});
+
 		return app;
 	}
 }
-

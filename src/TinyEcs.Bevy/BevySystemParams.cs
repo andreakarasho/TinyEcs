@@ -588,64 +588,37 @@ internal readonly struct RemoveResourceCommand : DeferredCommand
 /// Typed query parameter for iterating entities with specific components
 /// </summary>
 public class Query<TQueryData> : ISystemParam
-
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
 
 {
-
 	private TinyEcs.World? _world;
-
 	private TinyEcs.Query<TQueryData>? _query;
-
-
 
 	private static readonly SystemParamAccess _access = BuildAccess();
 
-
-
 	private static SystemParamAccess BuildAccess()
-
 	{
-
 		var access = new SystemParamAccess();
-
 		foreach (var component in TQueryData.ReadComponents)
-
 			access.ReadResources.Add(component);
 
 		foreach (var component in TQueryData.WriteComponents)
-
 			access.WriteResources.Add(component);
 
 		return access;
-
 	}
-
-
 
 	public void Initialize(TinyEcs.World world)
-
 	{
-
 		_world = world;
-
 	}
-
-
 
 	public void Fetch(TinyEcs.World world)
-
 	{
-
 		_query ??= world.Query<TQueryData>();
-
 	}
 
-
-
 	public TinyEcs.Query<TQueryData> Inner => _query!;
-
-
 
 	public int Count() => _query!.Count();
 
@@ -655,83 +628,49 @@ public class Query<TQueryData> : ISystemParam
 
 	public TinyEcs.QueryIter<TQueryData, Empty> GetEnumerator() => _query!.GetEnumerator();
 
-
-
 	public SystemParamAccess GetAccess() => _access;
-
 }
 
 
 
 public class Query<TQueryData, TQueryFilter> : ISystemParam
-
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
-
 	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
-
 {
-
 	private TinyEcs.World? _world;
-
 	private TinyEcs.Query<TQueryData, TQueryFilter>? _query;
-
-
 
 	private static readonly SystemParamAccess _access = BuildAccess();
 
-
-
 	private static SystemParamAccess BuildAccess()
-
 	{
-
 		var access = new SystemParamAccess();
-
 		foreach (var component in TQueryData.ReadComponents)
-
 			access.ReadResources.Add(component);
 
 		foreach (var component in TQueryData.WriteComponents)
-
 			access.WriteResources.Add(component);
 
 		foreach (var component in TQueryFilter.ReadComponents)
-
 			access.ReadResources.Add(component);
 
 		foreach (var component in TQueryFilter.WriteComponents)
-
 			access.WriteResources.Add(component);
 
 		return access;
-
 	}
-
-
 
 	public void Initialize(TinyEcs.World world)
-
 	{
-
 		_world = world;
-
 	}
-
-
 
 	public void Fetch(TinyEcs.World world)
-
 	{
-
 		_query ??= world.Query<TQueryData, TQueryFilter>();
-
 	}
 
-
-
 	public TinyEcs.Query<TQueryData, TQueryFilter> Inner => _query!;
-
-
 
 	public int Count() => _query!.Count();
 
@@ -741,10 +680,7 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 
 	public QueryIter<TQueryData, TQueryFilter> GetEnumerator() => _query!.GetEnumerator();
 
-
-
 	public SystemParamAccess GetAccess() => _access;
-
 }
 
 
