@@ -299,5 +299,240 @@ namespace TinyEcs.Tests
             app.Run();
             Assert.Equal(new[] { 7 }, collected);
         }
+
+        [Fact]
+        public void SystemsRunInDeclarationOrderWithNoDependencies()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            // Add systems without any explicit ordering - they should run in declaration order
+            app.AddSystem(w => executed.Add("First"))
+                .InStage(Stage.Update)
+                .Build();
+
+            app.AddSystem(w => executed.Add("Second"))
+                .InStage(Stage.Update)
+                .Build();
+
+            app.AddSystem(w => executed.Add("Third"))
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+        }
+
+        [Fact]
+        public void SystemsRespectAfterOrdering()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            app.AddSystem(w => executed.Add("First"))
+                .InStage(Stage.Update)
+                .Label("first")
+                .Build();
+
+            app.AddSystem(w => executed.Add("Second"))
+                .InStage(Stage.Update)
+                .Label("second")
+                .After("first")
+                .Build();
+
+            app.AddSystem(w => executed.Add("Third"))
+                .InStage(Stage.Update)
+                .After("second")
+                .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+        }
+
+        [Fact]
+        public void SystemsRespectBeforeOrdering()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            app.AddSystem(w => executed.Add("Third"))
+                .InStage(Stage.Update)
+                .Label("third")
+                .Build();
+
+            app.AddSystem(w => executed.Add("Second"))
+                .InStage(Stage.Update)
+                .Label("second")
+                .Before("third")
+                .Build();
+
+            app.AddSystem(w => executed.Add("First"))
+                .InStage(Stage.Update)
+                .Before("second")
+                .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+        }
+
+        [Fact]
+        public void SingleThreadedSystemsRunInOrder()
+        {
+            using var world = new World();
+            var app = new App(world, ThreadingMode.Multi); // Use multi-threaded mode
+            var executed = new List<string>();
+            var lockObj = new object();
+
+            // All systems are marked single-threaded and should run in declaration order
+            app.AddSystem(w =>
+                {
+                    lock (lockObj) executed.Add("First");
+                })
+                .InStage(Stage.Update)
+                .SingleThreaded()
+                .Build();
+
+            app.AddSystem(w =>
+                {
+                    lock (lockObj) executed.Add("Second");
+                })
+                .InStage(Stage.Update)
+                .SingleThreaded()
+                .Build();
+
+            app.AddSystem(w =>
+                {
+                    lock (lockObj) executed.Add("Third");
+                })
+                .InStage(Stage.Update)
+                .SingleThreaded()
+                .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+        }
+
+        [Fact]
+        public void ChainedSystemsRunInCorrectOrder()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            app.AddSystem(w => executed.Add("First"))
+                .InStage(Stage.Update)
+                .Build();
+
+            app.AddSystem(w => executed.Add("Second"))
+                .InStage(Stage.Update)
+                .Chain() // Runs after the previous system
+                .Build();
+
+            app.AddSystem(w => executed.Add("Third"))
+                .InStage(Stage.Update)
+                .Chain() // Runs after "Second"
+                .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+        }
+
+        [Fact]
+        public void ComplexDependencyGraphRespectsAllConstraints()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            // Create a dependency graph:
+            // A -> B -> D
+            // A -> C
+            // Should execute as: A, then B and C (in some order), then D
+
+            app.AddSystem(w => executed.Add("A"))
+                .InStage(Stage.Update)
+                .Label("A")
+                .Build();
+
+            app.AddSystem(w => executed.Add("B"))
+                .InStage(Stage.Update)
+                .Label("B")
+                .After("A")
+                .Build();
+
+            app.AddSystem(w => executed.Add("C"))
+                .InStage(Stage.Update)
+                .After("A")
+                .Build();
+
+            app.AddSystem(w => executed.Add("D"))
+                .InStage(Stage.Update)
+                .After("B")
+                .Build();
+
+            app.Run();
+
+            // A must be first
+            Assert.Equal("A", executed[0]);
+            // D must be last
+            Assert.Equal("D", executed[3]);
+            // B and C must be between A and D
+            Assert.Contains("B", executed);
+            Assert.Contains("C", executed);
+            Assert.True(executed.IndexOf("B") > executed.IndexOf("A"));
+            Assert.True(executed.IndexOf("C") > executed.IndexOf("A"));
+            Assert.True(executed.IndexOf("D") > executed.IndexOf("B"));
+        }
+
+        [Fact]
+        public void InvalidLabelThrowsException()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+            {
+                app.AddSystem(w => { })
+                    .InStage(Stage.Update)
+                    .After("nonexistent-label")
+                    .Build();
+            });
+
+            Assert.Contains("nonexistent-label", exception.Message);
+        }
+
+        [Fact]
+        public void SystemsWithLabelAndAfterPreserveDeclarationOrder()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var executed = new List<string>();
+
+            // First system labeled
+            app.AddSystem(w => executed.Add("Window"))
+                .InStage(Stage.Startup)
+                .Label("create-window")
+                .SingleThreaded()
+                .Build();
+
+            // Second system depends on first
+            app.AddSystem(w => executed.Add("Load"))
+                .InStage(Stage.Startup)
+                .After("create-window")
+                .SingleThreaded()
+                .Build();
+
+            app.RunStartup();
+
+            Assert.Equal(new[] { "Window", "Load" }, executed);
+        }
     }
 }

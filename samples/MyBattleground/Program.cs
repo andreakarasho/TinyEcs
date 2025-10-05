@@ -1,4 +1,3 @@
-using MyBattleground;
 using MyBattleground.Examples;
 
 // Run the Parallel Systems example

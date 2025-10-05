@@ -1,288 +1,287 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
-using TinyEcs;
 using Raylib_cs;
+using TinyEcs;
+using TinyEcs.Bevy;
 
+using var world = new World();
+var app = new App(world, ThreadingMode.Single);
 
-using var app = new App(ThreadingMode.Multi);
-app.AddPlugin(new RaylibPlugin()
+app.AddPlugin(new RaylibPlugin
 {
-	WindowSize = new() { Value = { X = 800, Y = 600 } },
 	Title = "TinyEcs using raylib",
+	WindowSize = new WindowSize { Value = new Vector2(800, 600) },
 	VSync = true
 });
 
-app.AddPlugin(new GameRootPlugin()
+app.AddPlugin(new GameRootPlugin
 {
-	EntitiesToSpawn = 1_000_00,
+	EntitiesToSpawn = 100_000,
 	Velocity = 250
 });
 
-app.Run(() => Raylib.IsWindowReady() && Raylib.WindowShouldClose(), Raylib.CloseWindow);
+app.RunStartup();
 
-
-
-// =================================================================================
-sealed class App : Scheduler, IDisposable
+while (!Raylib.WindowShouldClose())
 {
-	public App(ThreadingMode threadingMode = ThreadingMode.Auto) : base(new(), threadingMode) { }
-
-	public void Dispose() => World?.Dispose();
+	app.Update();
 }
-// =================================================================================
-sealed class Time : SystemParam<World>, IIntoSystemParam<World>
+
+Raylib.CloseWindow();
+
+sealed class RaylibPlugin : IPlugin
 {
-	public float Frame;
-	public float Total;
-
-	public static ISystemParam<World> Generate(World world)
-	{
-		if (world.Entity<Placeholder<Time>>().Has<Placeholder<Time>>())
-			return world.Entity<Placeholder<Time>>().Get<Placeholder<Time>>().Value;
-
-		var ev = new Time();
-		world.Entity<Placeholder<Time>>().Set(new Placeholder<Time>() { Value = ev });
-		return ev;
-	}
-
-	struct Placeholder<T> { public T Value; }
-}
-// =================================================================================
-struct RaylibPlugin : IPlugin
-{
-	public string Title { get; set; }
+	public string Title { get; set; } = string.Empty;
 	public WindowSize WindowSize { get; set; }
 	public bool VSync { get; set; }
 
-	public readonly void Build(Scheduler scheduler)
+	public void Build(App app)
 	{
-		scheduler.AddSystemParam(new Time());
-		scheduler.AddResource(WindowSize);
-		scheduler.AddResource(new AssetsManager());
+		app.AddResource(WindowSize);
+		app.AddResource(new AssetsManager());
+		app.AddResource(new TimeResource());
 
-		scheduler.AddSystems(Stage.Startup, new CreateWindowAdapter(this) { Configuration = { ThreadingMode = ThreadingMode.Single } });
-		scheduler.AddSystems(Stage.BeforeUpdate, new UpdateTimeAdapter(this));
-	}
+		app.AddSystem((Res<WindowSize> window) =>
+		{
+			var flags = VSync ? ConfigFlags.VSyncHint : 0;
+			Raylib.SetConfigFlags(flags);
+			Raylib.InitWindow((int)window.Value.Value.X, (int)window.Value.Value.Y, Title);
+		})
+		.InStage(Stage.Startup)
+		.Label("raylib:create-window")
+		.SingleThreaded()
+		.Build();
 
-	[TinySystem]
-	public void CreateWindow()
-	{
-		ConfigFlags flags = 0;
-		if (VSync)
-			flags |= ConfigFlags.VSyncHint;
-
-		Raylib.SetConfigFlags(flags);
-		Raylib.InitWindow((int)WindowSize.Value.X, (int)WindowSize.Value.Y, Title);
-	}
-
-	[TinySystem]
-	public void UpdateTime(Time time)
-	{
-		time.Frame = Raylib.GetFrameTime();
-		time.Total += time.Frame;
+		app.AddSystem((ResMut<TimeResource> time) =>
+		{
+			var t = time.Value;
+			t.Frame = Raylib.GetFrameTime();
+			t.Total += t.Frame;
+		})
+		.InStage(Stage.Update)
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
 	}
 }
-// =================================================================================
-struct GameRootPlugin : IPlugin
+
+sealed class GameRootPlugin : IPlugin
 {
 	public int EntitiesToSpawn { get; set; }
 	public int Velocity { get; set; }
 
-	public void Build(Scheduler scheduler)
+	public void Build(App app)
 	{
-		scheduler.AddPlugin(new GameplayPlugin() { EntitiesToSpawn = EntitiesToSpawn, Velocity = Velocity });
-		scheduler.AddPlugin<RenderingPlugin>();
+		app.AddPlugin(new GameplayPlugin
+		{
+			EntitiesToSpawn = EntitiesToSpawn,
+			Velocity = Velocity
+		});
+
+		app.AddPlugin(new RenderingPlugin());
 	}
 }
-// =================================================================================
-struct GameplayPlugin : IPlugin
+
+sealed class GameplayPlugin : IPlugin
 {
 	public int EntitiesToSpawn { get; set; }
 	public int Velocity { get; set; }
 
-	public void Build(Scheduler scheduler)
+	public void Build(App app)
 	{
-		scheduler
-			.AddSystems(Stage.Startup, new SpawnEntitiesAdapter(this) { Configuration = { ThreadingMode = ThreadingMode.Single } }
-				.RunIf(new CheckIfWindowReadyAdapter()))
-			.AddSystems(Stage.Update, new MoveSystemAdapter(), new CheckBoundsAdapter());
-	}
-
-	[TinySystem]
-	public static void MoveSystem(Time time, Query<Data<Position, Velocity, Rotation>> query)
-	{
-		foreach ((var pos, var vel, var rot) in query)
+		app.AddSystem((Commands commands, Res<WindowSize> size, Res<AssetsManager> assets) =>
 		{
-			pos.Ref.Value += vel.Ref.Value * time.Frame;
-			rot.Ref.Value = (rot.Ref.Value + (rot.Ref.Acceleration * time.Frame)) % 360;
-		}
-	}
+			var texturePath = Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png");
+			var texture = Raylib.LoadTexture(texturePath);
+			assets.Value!.Register(texture);
 
-	[TinySystem]
-	public static void CheckBounds(Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize)
-	{
-		foreach ((var pos, var vel) in query)
+			var rnd = Random.Shared;
+			for (var i = 0; i < EntitiesToSpawn; ++i)
+			{
+				var position = new Position
+				{
+					Value = new Vector2(
+						rnd.Next(0, (int)size.Value.Value.X),
+						rnd.Next(0, (int)size.Value.Value.Y))
+				};
+
+				var velocity = new Velocity
+				{
+					Value = new Vector2(
+						rnd.Next(-Velocity, Velocity),
+						rnd.Next(-Velocity, Velocity))
+				};
+
+				var sprite = new Sprite
+				{
+					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
+					Scale = rnd.NextSingle(),
+					TextureId = texture.Id
+				};
+
+				var rotation = new Rotation
+				{
+					Value = 0f,
+					Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
+				};
+
+				commands.Spawn()
+					.Insert(position)
+					.Insert(velocity)
+					.Insert(sprite)
+					.Insert(rotation);
+			}
+		})
+		.InStage(Stage.Startup)
+		.After("raylib:create-window")
+		.SingleThreaded()
+		.Build();
+
+		app.AddSystem((Res<TimeResource> time, Query<Data<Position, Velocity, Rotation>> query) =>
 		{
-			if (pos.Ref.Value.X < 0.0f)
+			foreach (var (pos, vel, rot) in query)
 			{
-				pos.Ref.Value.X = 0;
-				vel.Ref.Value.X *= -1;
+				pos.Ref.Value += vel.Ref.Value * time.Value.Frame;
+				rot.Ref.Value = (rot.Ref.Value + rot.Ref.Acceleration * time.Value.Frame) % 360f;
 			}
-			else if (pos.Ref.Value.X > windowSize.Value.Value.X)
-			{
-				pos.Ref.Value.X = windowSize.Value.Value.X;
-				vel.Ref.Value.X *= -1;
-			}
+		})
+		.InStage(Stage.Update)
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
 
-			if (pos.Ref.Value.Y < 0.0f)
-			{
-				pos.Ref.Value.Y = 0;
-				vel.Ref.Value.Y *= -1;
-			}
-			else if (pos.Ref.Value.Y > windowSize.Value.Value.Y)
-			{
-				pos.Ref.Value.Y = windowSize.Value.Value.Y;
-				vel.Ref.Value.Y *= -1;
-			}
-		}
-	}
-
-	[TinySystem]
-	public static bool CheckIfWindowReady()
-	{
-		return Raylib.IsWindowReady();
-	}
-
-	[TinySystem]
-	public void SpawnEntities(World ecs, SchedulerState scheduler, Res<WindowSize> size, Res<AssetsManager> assetsManager)
-	{
-		var rnd = Random.Shared;
-		var texture = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "Content", "pepe.png"));
-		assetsManager.Value!.Register(texture);
-
-		for (var i = 0; i < EntitiesToSpawn; ++i)
+		app.AddSystem((Query<Data<Position, Velocity>> query, Res<WindowSize> windowSize) =>
 		{
-			ecs
-				.Entity()
-				.Set(
-					new Position()
-					{
-						Value = new Vector2(
-							rnd.Next(0, (int)size.Value.Value.X),
-							rnd.Next(0, (int)size.Value.Value.Y))
-					}
-				)
-				.Set(
-					new Velocity()
-					{
-						Value = new Vector2(
-							rnd.Next(-Velocity, Velocity),
-							rnd.Next(-Velocity, Velocity)
-						)
-					}
-				)
-				.Set(
-					new Sprite()
-					{
-						Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
-						Scale = rnd.NextSingle(),
-						TextureId = texture.Id
-					}
-				)
-				.Set(
-					new Rotation()
-					{
-						Value = 0f,
-						Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
-					}
-				);
-		}
+			var bounds = windowSize.Value.Value;
+			foreach (var (pos, vel) in query)
+			{
+				ref var position = ref pos.Ref.Value;
+				ref var velocity = ref vel.Ref.Value;
+
+				if (position.X < 0f)
+				{
+					position.X = 0f;
+					velocity.X *= -1f;
+				}
+				else if (position.X > bounds.X)
+				{
+					position.X = bounds.X;
+					velocity.X *= -1f;
+				}
+
+				if (position.Y < 0f)
+				{
+					position.Y = 0f;
+					velocity.Y *= -1f;
+				}
+				else if (position.Y > bounds.Y)
+				{
+					position.Y = bounds.Y;
+					velocity.Y *= -1f;
+				}
+			}
+		})
+		.InStage(Stage.Update)
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
 	}
 }
-// =================================================================================
-readonly struct RenderingPlugin : IPlugin
+
+sealed class RenderingPlugin : IPlugin
 {
-	public void Build(Scheduler scheduler)
+	public void Build(App app)
 	{
-		scheduler
-			.AddSystems(Stage.FrameEnd,
-				SystemOrder.Chain
-				(
-					new BeginRendererAdapter(),
-					new RenderEntitiesAdapter(),
-					new DrawTextAdapter(),
-					new EndRendererAdapter()
-				)
-				.RunIf(new CheckIfWindowReadyAdapter()));
-	}
-
-	[TinySystem]
-	public static void BeginRenderer()
-	{
-		Raylib.BeginDrawing();
-		Raylib.ClearBackground(Color.Black);
-	}
-
-	[TinySystem]
-	public static void EndRenderer()
-	{
-		Raylib.EndDrawing();
-	}
-
-	[TinySystem]
-	public static void RenderEntities(Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assetsManager)
-	{
-		var currTextureId = 0u;
-		Texture2D? texture = null;
-
-		foreach ((var sprite, var pos, var rot) in query)
+		app.AddSystem((World _) =>
 		{
-			if (sprite.Ref.TextureId != currTextureId)
+			Raylib.BeginDrawing();
+			Raylib.ClearBackground(Color.Black);
+		})
+		.InStage(Stage.Last)
+		.Label("render:begin")
+		.SingleThreaded()
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
+
+		app.AddSystem((Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assets) =>
+		{
+			var currentTextureId = 0u;
+			Texture2D? texture = null;
+
+			foreach (var (sprite, pos, rot) in query)
 			{
-				currTextureId = sprite.Ref.TextureId;
-				texture = assetsManager.Value!.Get(currTextureId);
+				if (sprite.Ref.TextureId != currentTextureId)
+				{
+					currentTextureId = sprite.Ref.TextureId;
+					texture = assets.Value!.Get(currentTextureId);
+				}
+
+				if (texture.HasValue)
+				{
+					Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
+				}
+			}
+		})
+		.InStage(Stage.Last)
+		.Label("render:draw")
+		.After("render:begin")
+		.SingleThreaded()
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
+
+		app.AddSystem((Query<Data<Position>> query, Res<TimeResource> time, Local<DebugOverlay> overlay) =>
+		{
+			var entityCount = 0;
+			foreach (var _ in query)
+			{
+				entityCount++;
 			}
 
-			if (texture.HasValue)
-				Raylib.DrawTextureEx(texture.Value, pos.Ref.Value, rot.Ref.Value, sprite.Ref.Scale, sprite.Ref.Color);
-		}
-	}
+			var data = overlay.Value;
+			data.Text = $"""
+                [Debug]
+                FPS: {Raylib.GetFPS()}
+                Entities: {entityCount}
+                DeltaTime: {time.Value.Frame:F4}
+                """.Replace("\r", "\n");
 
-	[TinySystem]
-	public static void DrawText(World ecs, Time time, Local<string> text, Local<float> timeout)
-	{
-		//if (time.Total > timeout)
-		{
-			// timeout.Value = time.Total + 0.10f;
-			text.Value = $"""
-				[Debug]
-				FPS: {Raylib.GetFPS()}
-				Entities: {ecs.EntityCount}
-				DeltaTime: {time.Frame}
-				""".Replace("\r", "\n");
-		}
+			Raylib.DrawText(data.Text, 15, 15, 24, Color.White);
+		})
+		.InStage(Stage.Last)
+		.Label("render:debug")
+		.After("render:draw")
+		.SingleThreaded()
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
 
-		var textSize = 24;
-		Raylib.DrawText(text.Value ?? "", 15, 15, textSize, Color.White);
+		app.AddSystem((World _) => Raylib.EndDrawing())
+		.InStage(Stage.Last)
+		.After("render:debug")
+		.SingleThreaded()
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
 	}
 }
-// =================================================================================
+
 sealed class AssetsManager
 {
-	private readonly Dictionary<uint, Texture2D> _ids = new();
+	private readonly Dictionary<uint, Texture2D> _textures = new();
 
-	public void Register(Texture2D texture)
-	{
-		_ids[texture.Id] = texture;
-	}
+	public void Register(Texture2D texture) => _textures[texture.Id] = texture;
 
-	public Texture2D? Get(uint id)
-	{
-		if (!_ids.TryGetValue(id, out var texture))
-			return null;
-		return texture;
-	}
+	public Texture2D? Get(uint id) => _textures.TryGetValue(id, out var texture) ? texture : null;
 }
-// =================================================================================
+
+sealed class TimeResource
+{
+	public float Frame;
+	public float Total;
+}
+
+sealed class DebugOverlay
+{
+	public string Text { get; set; } = string.Empty;
+}
+
 struct WindowSize
 {
 	public Vector2 Value;

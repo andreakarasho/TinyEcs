@@ -7,6 +7,28 @@ using System.Runtime.CompilerServices;
 namespace TinyEcs.Bevy;
 
 // ============================================================================
+// Threading Mode
+// ============================================================================
+
+public enum ThreadingMode
+{
+	/// <summary>
+	/// Automatically determine threading based on system count and dependencies
+	/// </summary>
+	Auto,
+
+	/// <summary>
+	/// Force single-threaded execution for all systems
+	/// </summary>
+	Single,
+
+	/// <summary>
+	/// Enable multi-threaded execution where possible
+	/// </summary>
+	Multi
+}
+
+// ============================================================================
 // Core Interfaces
 // ============================================================================
 
@@ -371,6 +393,11 @@ public class SystemDescriptor
 	public string? Label { get; set; }
 	public Stage? Stage { get; set; }
 
+	/// <summary>
+	/// Override threading mode for this specific system. Null means use App default.
+	/// </summary>
+	public ThreadingMode? ThreadingMode { get; set; }
+
 	public SystemDescriptor(ISystem system)
 	{
 		System = system;
@@ -468,6 +495,8 @@ public interface ISystemConfigurator
 	ISystemConfigurator RunIfResourceExists<T>() where T : notnull;
 	ISystemConfigurator RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
 	ISystemConfigurator RunIfState<TState>(TState state) where TState : struct, Enum;
+	ISystemConfigurator SingleThreaded();
+	ISystemConfigurator WithThreadingMode(ThreadingMode mode);
 	ISystemConfiguratorOrdered After(string label);
 	ISystemConfiguratorOrdered Before(string label);
 	ISystemConfiguratorLabeled Label(string label);
@@ -482,6 +511,8 @@ public interface ISystemConfiguratorLabeled
 	ISystemConfiguratorLabeled RunIfResourceExists<T>() where T : notnull;
 	ISystemConfiguratorLabeled RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
 	ISystemConfiguratorLabeled RunIfState<TState>(TState state) where TState : struct, Enum;
+	ISystemConfiguratorLabeled SingleThreaded();
+	ISystemConfiguratorLabeled WithThreadingMode(ThreadingMode mode);
 	ISystemConfiguratorOrdered After(string label);
 	ISystemConfiguratorOrdered Before(string label);
 	ISystemConfiguratorOrdered Chain();
@@ -495,6 +526,8 @@ public interface ISystemConfiguratorOrdered
 	ISystemConfiguratorOrdered RunIfResourceExists<T>() where T : notnull;
 	ISystemConfiguratorOrdered RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
 	ISystemConfiguratorOrdered RunIfState<TState>(TState state) where TState : struct, Enum;
+	ISystemConfiguratorOrdered SingleThreaded();
+	ISystemConfiguratorOrdered WithThreadingMode(ThreadingMode mode);
 	App Build();
 }
 
@@ -505,13 +538,14 @@ public interface ISystemConfiguratorOrdered
 public class App
 {
 	private readonly TinyEcs.World _world;
+	private readonly ThreadingMode _threadingMode;
 	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
 	private SystemDescriptor? _lastAddedSystem = null;
 	private readonly HashSet<Type> _installedPlugins = new();
 
-	// State transition systems - use object as key to store boxed enum values (no ToString() allocation)
+	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
 	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
 	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onExitSystems = new();
 	private readonly HashSet<Type> _registeredStateTypes = new();
@@ -524,9 +558,10 @@ public class App
 	private readonly Dictionary<Stage, List<SystemDescriptor>> _sortedStageSystems = new();
 	private readonly Dictionary<Stage, List<List<SystemDescriptor>>> _cachedBatches = new();
 
-	public App(TinyEcs.World world)
+	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
+		_threadingMode = threadingMode;
 
 		// Initialize Startup stage (runs once)
 		AddStage(Stage.Startup);
@@ -537,6 +572,13 @@ public class App
 		AddStage(Stage.Update).After(Stage.PreUpdate);
 		AddStage(Stage.PostUpdate).After(Stage.Update);
 		AddStage(Stage.Last).After(Stage.PostUpdate);
+	}
+
+	/// <summary>
+	/// Create a new App with a new World and optional threading mode
+	/// </summary>
+	public App(ThreadingMode threadingMode = ThreadingMode.Auto) : this(new World(), threadingMode)
+	{
 	}
 
 	// Call this after all systems and stages are added (before first Run())
@@ -812,21 +854,32 @@ public class App
 		if (!_cachedBatches.TryGetValue(stage, out var batches))
 			return;
 
+		// Determine if we should use parallel execution
+		bool useParallel = _threadingMode switch
+		{
+			ThreadingMode.Single => false,
+			ThreadingMode.Multi => true,
+			ThreadingMode.Auto => Environment.ProcessorCount > 1,
+			_ => false
+		};
+
 		// Execute each batch (systems within a batch run in parallel)
 		foreach (var batch in batches)
 		{
-			if (batch.Count == 1)
+			if (batch.Count == 1 || !useParallel)
 			{
-				// Single system - no need for parallelization overhead
-				var descriptor = batch[0];
-				if (descriptor.ShouldRun(_world))
+				// Single system or single-threaded mode - run sequentially
+				foreach (var descriptor in batch)
 				{
-					descriptor.System.Run(_world);
+					if (descriptor.ShouldRun(_world))
+					{
+						descriptor.System.Run(_world);
+					}
 				}
 			}
 			else
 			{
-				// Multiple systems - run in parallel
+				// Multiple systems and parallel mode enabled - run in parallel
 				Parallel.ForEach(batch, descriptor =>
 				{
 					if (descriptor.ShouldRun(_world))
@@ -840,7 +893,8 @@ public class App
 
 	/// <summary>
 	/// Build batches of systems that can run in parallel
-	/// Systems in the same batch have no resource conflicts
+	/// Systems in the same batch have no resource conflicts.
+	/// Systems with SingleThreaded mode are placed in their own exclusive batch.
 	/// </summary>
 	private List<List<SystemDescriptor>> BuildParallelBatches(List<SystemDescriptor> systems)
 	{
@@ -851,10 +905,42 @@ public class App
 		{
 			var batch = new List<SystemDescriptor>();
 			var batchAccess = new SystemParamAccess();
+			bool batchCanBeParallel = true;
 
-			for (int i = remaining.Count - 1; i >= 0; i--)
+			// Process systems in forward order to preserve topological sort order
+			for (int i = 0; i < remaining.Count; )
 			{
 				var descriptor = remaining[i];
+
+				// Check if this system has a threading override
+				bool systemRequiresSingleThread = descriptor.ThreadingMode == ThreadingMode.Single;
+
+				// If the current batch already has systems and this one requires single-threading,
+				// or if the batch requires single-threading and already has a system, skip it for this batch
+				if (systemRequiresSingleThread)
+				{
+					if (batch.Count > 0)
+					{
+						// Can't add to an existing batch - will be processed in next iteration
+						i++; // Move to next system
+						continue;
+					}
+					else
+					{
+						// Start a new single-threaded batch with just this system
+						batch.Add(descriptor);
+						remaining.RemoveAt(i);
+						batchCanBeParallel = false;
+						break; // This batch is done - only one system allowed
+					}
+				}
+
+				// If batch is already marked single-threaded, skip all other systems
+				if (!batchCanBeParallel)
+				{
+					i++; // Move to next system
+					continue;
+				}
 
 				// Get access pattern if it's a parameterized system
 				var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
@@ -872,12 +958,18 @@ public class App
 					// No conflict - add to batch
 					batch.Add(descriptor);
 					remaining.RemoveAt(i);
+					// Don't increment i - next item shifted into current position
 
 					// Merge access patterns
 					foreach (var read in access.ReadResources)
 						batchAccess.ReadResources.Add(read);
 					foreach (var write in access.WriteResources)
 						batchAccess.WriteResources.Add(write);
+				}
+				else
+				{
+					// Conflict - skip this system for now
+					i++;
 				}
 			}
 
@@ -959,7 +1051,13 @@ public class App
 
 			visiting.Add(node);
 
-			foreach (var before in node.BeforeSystems)
+			// Visit dependencies in their original declaration order
+			// Sort BeforeSystems by their position in the original systems list to preserve declaration order
+			var orderedBefore = node.BeforeSystems
+				.OrderBy(systems.IndexOf)
+				.ToList();
+
+			foreach (var before in orderedBefore)
 				Visit(before);
 
 			visiting.Remove(node);
@@ -977,6 +1075,9 @@ public class App
 			}
 		}
 
+		// Visit systems in their original declaration order
+		// This ensures that when there are no explicit dependencies,
+		// systems run in the order they were added
 		foreach (var system in systems)
 			Visit(system);
 
@@ -1103,10 +1204,29 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		});
 	}
 
+	public ISystemConfigurator SingleThreaded()
+	{
+		_descriptor.ThreadingMode = ThreadingMode.Single;
+		return this;
+	}
+
+	public ISystemConfigurator WithThreadingMode(ThreadingMode mode)
+	{
+		_descriptor.ThreadingMode = mode;
+		return this;
+	}
+
 	public ISystemConfiguratorOrdered After(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
-		if (target != null && target != _descriptor)
+		if (target == null)
+		{
+			throw new InvalidOperationException(
+				$"Cannot add dependency .After(\"{label}\"): No system with label \"{label}\" has been registered. " +
+				$"Make sure the system you're referencing is added before this one, or use explicit .Before()/.After() with system instances.");
+		}
+
+		if (target != _descriptor)
 		{
 			if (!_descriptor.BeforeSystems.Contains(target))
 				_descriptor.BeforeSystems.Add(target);
@@ -1120,7 +1240,14 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 	public ISystemConfiguratorOrdered Before(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
-		if (target != null && target != _descriptor)
+		if (target == null)
+		{
+			throw new InvalidOperationException(
+				$"Cannot add dependency .Before(\"{label}\"): No system with label \"{label}\" has been registered. " +
+				$"Make sure the system you're referencing is added before this one, or use explicit .Before()/.After() with system instances.");
+		}
+
+		if (target != _descriptor)
 		{
 			if (!target.BeforeSystems.Contains(_descriptor))
 				target.BeforeSystems.Add(_descriptor);
@@ -1208,6 +1335,30 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 			if (!world.HasState<TState>()) return false;
 			return world.GetState<TState>().Equals(state);
 		});
+		return this;
+	}
+
+	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.SingleThreaded()
+	{
+		_descriptor.ThreadingMode = ThreadingMode.Single;
+		return this;
+	}
+
+	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.WithThreadingMode(ThreadingMode mode)
+	{
+		_descriptor.ThreadingMode = mode;
+		return this;
+	}
+
+	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.SingleThreaded()
+	{
+		_descriptor.ThreadingMode = ThreadingMode.Single;
+		return this;
+	}
+
+	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.WithThreadingMode(ThreadingMode mode)
+	{
+		_descriptor.ThreadingMode = mode;
 		return this;
 	}
 

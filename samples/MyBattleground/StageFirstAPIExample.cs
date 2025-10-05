@@ -1,5 +1,6 @@
 using System;
 using TinyEcs.Bevy;
+using TinyEcs;
 
 namespace MyBattleground.Examples;
 

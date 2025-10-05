@@ -1,47 +1,34 @@
 using System.Diagnostics;
-using TinyEcs.Bevy;
 using TinyEcs;
-
-namespace MyBattleground;
-
-
-public sealed class PerfSystem : SystemBase<Time>
-{
-	protected override void Execute(TinyEcs.World world, Time _)
-	{
-		foreach (var (pos, vel) in world.Query<Data<Position, Velocity>>())
-		{
-			pos.Ref.X *= vel.Ref.X;
-			pos.Ref.Y *= vel.Ref.Y;
-		}
-	}
-}
-
+using TinyEcs.Bevy;
 
 public static class PerformanceTinyEcsExample
 {
 	public static void Run()
 	{
-		using var world = new TinyEcs.World();
-		var app = new App(world);
+		using var world = new World();
+		var app = new App(world, ThreadingMode.Single);
 
 		app
-			.AddResource(new Time { DeltaTime = 1f / 60f, TotalTime = 0f })
-			.AddSystem(w =>
+			.AddSystem(Stage.Startup, (Commands cmds) =>
 			{
-				for (var i = 0; i < 1_000_000; i++)
+				const int ENTITIES_COUNT = (524_288 * 2 * 1);
+
+				for (int i = 0; i < ENTITIES_COUNT; i++)
 				{
-					w.Entity()
-						.Set(new Position { X = 0, Y = 0 })
-						.Set(new Velocity { X = 0, Y = 0 });
+					cmds.Spawn()
+						.Insert(new Position { X = 0, Y = 0 })
+						.Insert(new Velocity { X = 0, Y = 0 });
 				}
 			})
-				.InStage(TinyEcs.Bevy.Stage.Startup)
-				.Build()
-
-			.AddSystem(new PerfSystem())
-				.InStage(TinyEcs.Bevy.Stage.Update)
-				.Build();
+			.AddSystem(Stage.Update, (Query<Data<Position, Velocity>> query) =>
+			{
+				foreach (var (pos, vel) in query)
+				{
+					pos.Ref.X *= vel.Ref.X;
+					pos.Ref.Y *= vel.Ref.Y;
+				}
+			});
 
 
 		var sw = Stopwatch.StartNew();
@@ -60,5 +47,16 @@ public static class PerformanceTinyEcsExample
 
 			Console.WriteLine("query done in {0} ms", start - last);
 		}
+	}
+
+	struct Position
+	{
+		public float X;
+		public float Y;
+	}
+	struct Velocity
+	{
+		public float X;
+		public float Y;
 	}
 }

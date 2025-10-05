@@ -1,5 +1,6 @@
 using System;
 using TinyEcs.Bevy;
+using TinyEcs;
 
 namespace MyBattleground;
 
@@ -116,7 +117,7 @@ public class CombatPlugin : IPlugin
 
 		// Complex system with multiple parameters
 		app.AddSystem((
-			Query<TinyEcs.Data<Health, Damage>, TinyEcs.With<EnemyTag>> enemyQuery,
+			Query<Data<Health, Damage>, With<EnemyTag>> enemyQuery,
 			Res<GameConfig> config,
 			EventWriter<EnemyKilledEvent> killedEvents,
 			Local<EnemySpawnCounter> spawnCounter
@@ -146,8 +147,17 @@ public class CombatPlugin : IPlugin
 			}
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
-		.RunIf(world => world.Query<TinyEcs.Data<Health>, TinyEcs.With<EnemyTag>>().Count() > 0)
+		.RunIf(HasEnemies)
 		.Build();
+	}
+
+	private static bool HasEnemies(World world)
+	{
+		foreach (var _ in world.Query<Data<Health>, With<EnemyTag>>())
+		{
+			return true;
+		}
+		return false;
 	}
 }
 
