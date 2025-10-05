@@ -204,7 +204,7 @@ public ref struct QueryIterator
 
 		if (index < 0 || index >= _indices.Length)
 		{
-			data.Value.Value = ref Unsafe.NullRef<T>();
+			data.Value.Ref = ref Unsafe.NullRef<T>();
 			data.Size = 0;
 			return data;
 		}
@@ -212,7 +212,7 @@ public ref struct QueryIterator
 		var i = _indices[index];
 		if (i < 0)
 		{
-			data.Value.Value = ref Unsafe.NullRef<T>();
+			data.Value.Ref = ref Unsafe.NullRef<T>();
 			data.Size = 0;
 			return data;
 		}
@@ -222,7 +222,7 @@ public ref struct QueryIterator
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
 
 		data.Size = Unsafe.SizeOf<T>();
-		data.Value.Value = ref Unsafe.Add(ref reference, _startSafe);
+		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
 
 		return data;
 	}

@@ -3,15 +3,9 @@
 [SkipLocalsInit]
 public ref struct Ptr<T> where T : struct
 {
-	internal ref T Value;
+	public ref T Ref;
 
-	public readonly ref T Ref
-	{
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref Value;
-	}
-
-	public readonly bool IsValid() => !Unsafe.IsNullRef(ref Value);
+	public readonly bool IsValid() => !Unsafe.IsNullRef(ref Ref);
 }
 
 [SkipLocalsInit]
@@ -31,6 +25,6 @@ internal ref struct DataRow<T> where T : struct
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next()
 	{
-		Value.Value = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
+		Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
 	}
 }
