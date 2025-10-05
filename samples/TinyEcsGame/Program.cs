@@ -99,38 +99,32 @@ sealed class GameplayPlugin : IPlugin
 			var rnd = Random.Shared;
 			for (var i = 0; i < EntitiesToSpawn; ++i)
 			{
-				var position = new Position
+				commands.SpawnBundle(new SpriteBundle
 				{
-					Value = new Vector2(
-						rnd.Next(0, (int)size.Value.Value.X),
-						rnd.Next(0, (int)size.Value.Value.Y))
-				};
-
-				var velocity = new Velocity
-				{
-					Value = new Vector2(
-						rnd.Next(-Velocity, Velocity),
-						rnd.Next(-Velocity, Velocity))
-				};
-
-				var sprite = new Sprite
-				{
-					Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
-					Scale = rnd.NextSingle(),
-					TextureId = texture.Id
-				};
-
-				var rotation = new Rotation
-				{
-					Value = 0f,
-					Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
-				};
-
-				commands.Spawn()
-					.Insert(position)
-					.Insert(velocity)
-					.Insert(sprite)
-					.Insert(rotation);
+					Position = new Position
+					{
+						Value = new Vector2(
+							rnd.Next(0, (int)size.Value.Value.X),
+							rnd.Next(0, (int)size.Value.Value.Y))
+					},
+					Velocity = new Velocity
+					{
+						Value = new Vector2(
+							rnd.Next(-Velocity, Velocity),
+							rnd.Next(-Velocity, Velocity))
+					},
+					Sprite = new Sprite
+					{
+						Color = new Color(rnd.Next(0, 256), rnd.Next(0, 256), rnd.Next(0, 256), 255),
+						Scale = rnd.NextSingle(),
+						TextureId = texture.Id
+					},
+					Rotation = new Rotation
+					{
+						Value = 0f,
+						Acceleration = rnd.Next(45, 180) * (rnd.Next() % 2 == 0 ? -1 : 1)
+					}
+				});
 			}
 		})
 		.InStage(Stage.Startup)
@@ -308,4 +302,31 @@ struct Rotation
 {
 	public float Value;
 	public float Acceleration;
+}
+
+/// <summary>
+/// Bundle for spawning a sprite entity with position, velocity, and rotation
+/// </summary>
+struct SpriteBundle : IBundle
+{
+	public Position Position;
+	public Velocity Velocity;
+	public Sprite Sprite;
+	public Rotation Rotation;
+
+	public readonly void Insert(EntityView entity)
+	{
+		entity.Set(Position);
+		entity.Set(Velocity);
+		entity.Set(Sprite);
+		entity.Set(Rotation);
+	}
+
+	public readonly void Insert(EntityCommands entity)
+	{
+		entity.Insert(Position);
+		entity.Insert(Velocity);
+		entity.Insert(Sprite);
+		entity.Insert(Rotation);
+	}
 }

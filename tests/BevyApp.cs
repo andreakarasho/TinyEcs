@@ -534,5 +534,125 @@ namespace TinyEcs.Tests
 
             Assert.Equal(new[] { "Window", "Load" }, executed);
         }
+
+        // Bundle tests
+        private struct Transform
+        {
+            public int X;
+            public int Y;
+        }
+
+        private struct Sprite2
+        {
+            public int TextureId;
+        }
+
+        private struct SpriteBundle : IBundle
+        {
+            public Transform Transform;
+            public Sprite2 Sprite;
+
+            public readonly void Insert(EntityView entity)
+            {
+                entity.Set(Transform);
+                entity.Set(Sprite);
+            }
+
+            public readonly void Insert(EntityCommands entity)
+            {
+                entity.Insert(Transform);
+                entity.Insert(Sprite);
+            }
+        }
+
+        [Fact]
+        public void BundleCanBeInsertedIntoEntity()
+        {
+            using var world = new World();
+            var entity = world.Entity();
+
+            var bundle = new SpriteBundle
+            {
+                Transform = new Transform { X = 10, Y = 20 },
+                Sprite = new Sprite2 { TextureId = 42 }
+            };
+
+            entity.InsertBundle(bundle);
+
+            Assert.True(entity.Has<Transform>());
+            Assert.True(entity.Has<Sprite2>());
+            Assert.Equal(10, entity.Get<Transform>().X);
+            Assert.Equal(20, entity.Get<Transform>().Y);
+            Assert.Equal(42, entity.Get<Sprite2>().TextureId);
+        }
+
+        [Fact]
+        public void BundleCanBeSpawnedWithCommands()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var system = SystemFunctionAdapters.Create<Commands>(commands =>
+            {
+                var bundle = new SpriteBundle
+                {
+                    Transform = new Transform { X = 100, Y = 200 },
+                    Sprite = new Sprite2 { TextureId = 999 }
+                };
+
+                commands.SpawnBundle(bundle);
+            });
+
+            app.AddSystem(system)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            // Find the spawned entity by querying for the components
+            var query = world.Query<Data<Transform, Sprite2>>();
+            var found = false;
+            foreach (var (transform, sprite) in query)
+            {
+                Assert.Equal(100, transform.Ref.X);
+                Assert.Equal(200, transform.Ref.Y);
+                Assert.Equal(999, sprite.Ref.TextureId);
+                found = true;
+            }
+            Assert.True(found, "Entity with bundle components should exist");
+        }
+
+        [Fact]
+        public void BundleCanBeInsertedIntoExistingEntityWithCommands()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var existingEntity = world.Entity();
+            var entityId = existingEntity.ID;
+
+            var system = SystemFunctionAdapters.Create<Commands>(commands =>
+            {
+                var bundle = new SpriteBundle
+                {
+                    Transform = new Transform { X = 50, Y = 75 },
+                    Sprite = new Sprite2 { TextureId = 123 }
+                };
+
+                commands.Entity(entityId).InsertBundle(bundle);
+            });
+
+            app.AddSystem(system)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            Assert.True(existingEntity.Has<Transform>());
+            Assert.True(existingEntity.Has<Sprite2>());
+            Assert.Equal(50, existingEntity.Get<Transform>().X);
+            Assert.Equal(75, existingEntity.Get<Transform>().Y);
+            Assert.Equal(123, existingEntity.Get<Sprite2>().TextureId);
+        }
     }
 }

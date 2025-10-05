@@ -247,7 +247,7 @@ public class EventWriter<T> : ISystemParam where T : notnull
 public class Commands : ISystemParam
 {
 	private TinyEcs.World? _world;
-	private readonly List<DeferredCommand> _localCommands = new();
+	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
 
 	public void Initialize(TinyEcs.World world)
@@ -342,7 +342,7 @@ public class Commands : ISystemParam
 	/// <summary>
 	/// Internal method to queue a deferred command
 	/// </summary>
-	internal void QueueCommand(DeferredCommand command)
+	internal void QueueCommand(IDeferredCommand command)
 	{
 		_localCommands.Add(command);
 	}
@@ -431,7 +431,7 @@ public ref struct EntityCommands
 /// <summary>
 /// Base interface for deferred commands
 /// </summary>
-internal interface DeferredCommand
+internal interface IDeferredCommand
 {
 	void Execute(TinyEcs.World world, Commands commands);
 }
@@ -439,7 +439,7 @@ internal interface DeferredCommand
 /// <summary>
 /// Command to spawn a new entity
 /// </summary>
-internal readonly struct SpawnEntityCommand : DeferredCommand
+internal readonly struct SpawnEntityCommand : IDeferredCommand
 {
 	private readonly int _spawnIndex;
 
@@ -458,7 +458,7 @@ internal readonly struct SpawnEntityCommand : DeferredCommand
 /// <summary>
 /// Command to insert a component on an entity
 /// </summary>
-internal readonly struct InsertComponentCommand<T> : DeferredCommand where T : struct
+internal readonly struct InsertComponentCommand<T> : IDeferredCommand where T : struct
 {
 	private readonly int _spawnIndex; // -1 if existing entity
 	private readonly ulong _entityId;
@@ -490,7 +490,7 @@ internal readonly struct InsertComponentCommand<T> : DeferredCommand where T : s
 /// <summary>
 /// Command to remove a component from an entity
 /// </summary>
-internal readonly struct RemoveComponentCommand<T> : DeferredCommand where T : struct
+internal readonly struct RemoveComponentCommand<T> : IDeferredCommand where T : struct
 {
 	private readonly int _spawnIndex; // -1 if existing entity
 	private readonly ulong _entityId;
@@ -519,7 +519,7 @@ internal readonly struct RemoveComponentCommand<T> : DeferredCommand where T : s
 /// <summary>
 /// Command to despawn an entity
 /// </summary>
-internal readonly struct DespawnEntityCommand : DeferredCommand
+internal readonly struct DespawnEntityCommand : IDeferredCommand
 {
 	private readonly int _spawnIndex; // -1 if existing entity
 	private readonly ulong _entityId;
@@ -549,7 +549,7 @@ internal readonly struct DespawnEntityCommand : DeferredCommand
 /// <summary>
 /// Command to insert a resource
 /// </summary>
-internal readonly struct InsertResourceCommand<T> : DeferredCommand where T : notnull
+internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : notnull
 {
 	private readonly T _resource;
 
@@ -567,7 +567,7 @@ internal readonly struct InsertResourceCommand<T> : DeferredCommand where T : no
 /// <summary>
 /// Command to remove a resource
 /// </summary>
-internal readonly struct RemoveResourceCommand : DeferredCommand
+internal readonly struct RemoveResourceCommand : IDeferredCommand
 {
 	private readonly Type _resourceType;
 
