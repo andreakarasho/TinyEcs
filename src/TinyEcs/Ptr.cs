@@ -17,7 +17,7 @@ public readonly ref struct PtrRO<T> where T : struct
 }
 
 [SkipLocalsInit]
-internal ref struct DataRow<T> where T : struct
+public ref struct DataRow<T> where T : struct
 {
 	public Ptr<T> Value;
 	public nint Size;

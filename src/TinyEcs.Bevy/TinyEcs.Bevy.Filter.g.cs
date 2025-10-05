@@ -4,7 +4,7 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace TinyEcs
+namespace TinyEcs.Bevy
 {
 #if NET9_0_OR_GREATER
     public ref struct Filter<T0> : IFilter<Filter<T0>>
