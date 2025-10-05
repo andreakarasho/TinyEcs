@@ -425,57 +425,6 @@ public class FunctionalSystem : ISystem
 	public void Run(TinyEcs.World world) => _systemFn(world);
 }
 
-public abstract class SystemBase<T1> : ISystem where T1 : notnull
-{
-	public void Run(TinyEcs.World world)
-	{
-		var res1 = world.GetResource<T1>();
-		Execute(world, res1);
-	}
-
-	protected abstract void Execute(TinyEcs.World world, T1 res1);
-}
-
-public abstract class SystemBase<T1, T2> : ISystem
-	where T1 : notnull
-	where T2 : notnull
-{
-	public void Run(TinyEcs.World world)
-	{
-		var res1 = world.GetResource<T1>();
-		var res2 = world.GetResource<T2>();
-		Execute(world, res1, res2);
-	}
-
-	protected abstract void Execute(TinyEcs.World world, T1 res1, T2 res2);
-}
-
-public abstract class SystemBase<T1, T2, T3> : ISystem
-	where T1 : notnull
-	where T2 : notnull
-	where T3 : notnull
-{
-	public void Run(TinyEcs.World world)
-	{
-		var res1 = world.GetResource<T1>();
-		var res2 = world.GetResource<T2>();
-		var res3 = world.GetResource<T3>();
-		Execute(world, res1, res2, res3);
-	}
-
-	protected abstract void Execute(TinyEcs.World world, T1 res1, T2 res2, T3 res3);
-}
-
-public abstract class StatefulSystemBase : ISystem
-{
-	public void Run(TinyEcs.World world)
-	{
-		Execute(world);
-	}
-
-	protected abstract void Execute(TinyEcs.World world);
-}
-
 // ============================================================================
 // Fluent Configuration Interfaces
 // ============================================================================
@@ -908,7 +857,7 @@ public class App
 			bool batchCanBeParallel = true;
 
 			// Process systems in forward order to preserve topological sort order
-			for (int i = 0; i < remaining.Count; )
+			for (int i = 0; i < remaining.Count;)
 			{
 				var descriptor = remaining[i];
 

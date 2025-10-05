@@ -1,0 +1,63 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".g.cs" #>
+<#
+    const int MAX_PARAMS = 15;
+
+    string GenericParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    string WhereConstraints(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : ISystemParam, new()"));
+    string ParamDecls(int count) => string.Join("\n\t\t", Enumerable.Range(1, count).Select(i => $"var p{i} = new T{i}();"));
+    string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(w);"));
+    string CallbackParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
+#>
+#pragma warning disable 1591
+#nullable enable
+
+using System;
+
+namespace TinyEcs.Bevy;
+
+public static partial class AppObserverExtensions
+{
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+        var paramDecls = ParamDecls(i);
+        var fetchCalls = FetchCalls(i);
+        var callbackParams = CallbackParams(i);
+#>
+	/// <summary>
+	/// Register an observer with system parameters
+	/// </summary>
+	public static App Observe<TTrigger, <#= generics #>>(this App app, Action<TTrigger, <#= generics #>> callback)
+		where TTrigger : struct, ITrigger
+		<#= whereClause #>
+	{
+		var world = app.GetWorld();
+
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		<#= paramDecls #>
+		world.RegisterObserver<TTrigger>((w, trigger) =>
+		{
+			<#= fetchCalls #>
+			callback(trigger, <#= callbackParams #>);
+		});
+
+		return app;
+	}
+
+<#
+    }
+#>
+}

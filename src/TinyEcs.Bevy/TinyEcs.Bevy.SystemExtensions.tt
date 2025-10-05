@@ -1,0 +1,144 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".g.cs" #>
+<#
+    const int MAX_PARAMS = 16;
+
+    string GenericParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    string WhereConstraints(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : ISystemParam, new()"));
+    string ActionParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
+    string FuncParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
+    string ParamDecls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"var p{i} = new T{i}();"));
+    string FetchCalls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(world);"));
+#>
+#pragma warning disable 1591
+#nullable enable
+
+using System;
+
+namespace TinyEcs.Bevy;
+
+public static class SystemExtensions
+{
+	// ============================================================================
+	// AddSystem Extensions - Fluent API (returns ISystemStageSelector)
+	// ============================================================================
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+#>
+
+	public static ISystemStageSelector AddSystem<<#= generics #>>(this App app, Action<<#= generics #>> systemFn)
+		<#= whereClause #>
+	{
+		return app.AddSystem(SystemFunctionAdapters.Create(systemFn));
+	}
+<#
+    }
+#>
+
+	// ============================================================================
+	// AddSystem Extensions - Direct Stage API (returns App)
+	// ============================================================================
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+#>
+
+	public static App AddSystem<<#= generics #>>(this App app, Stage stage, Action<<#= generics #>> systemFn)
+		<#= whereClause #>
+	{
+		return app.AddSystem(stage, SystemFunctionAdapters.Create(systemFn));
+	}
+<#
+    }
+#>
+
+	// ============================================================================
+	// RunIf Extensions - ISystemConfigurator
+	// ============================================================================
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+        var paramDecls = ParamDecls(i);
+        var fetchCalls = FetchCalls(i);
+        var funcParams = FuncParams(i);
+#>
+
+	public static ISystemConfigurator RunIf<<#= generics #>>(this ISystemConfigurator configurator, Func<<#= generics #>, bool> condition)
+		<#= whereClause #>
+	{
+		<#= paramDecls #>
+		return configurator.RunIf(world =>
+		{
+			<#= fetchCalls #>
+			return condition(<#= funcParams #>);
+		});
+	}
+<#
+    }
+#>
+
+	// ============================================================================
+	// RunIf Extensions - ISystemConfiguratorLabeled
+	// ============================================================================
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+        var paramDecls = ParamDecls(i);
+        var fetchCalls = FetchCalls(i);
+        var funcParams = FuncParams(i);
+#>
+
+	public static ISystemConfiguratorLabeled RunIf<<#= generics #>>(this ISystemConfiguratorLabeled configurator, Func<<#= generics #>, bool> condition)
+		<#= whereClause #>
+	{
+		<#= paramDecls #>
+		return configurator.RunIf(world =>
+		{
+			<#= fetchCalls #>
+			return condition(<#= funcParams #>);
+		});
+	}
+<#
+    }
+#>
+
+	// ============================================================================
+	// RunIf Extensions - ISystemConfiguratorOrdered
+	// ============================================================================
+<#
+    for (var i = 1; i <= MAX_PARAMS; ++i)
+    {
+        var generics = GenericParams(i);
+        var whereClause = WhereConstraints(i);
+        var paramDecls = ParamDecls(i);
+        var fetchCalls = FetchCalls(i);
+        var funcParams = FuncParams(i);
+#>
+
+	public static ISystemConfiguratorOrdered RunIf<<#= generics #>>(this ISystemConfiguratorOrdered configurator, Func<<#= generics #>, bool> condition)
+		<#= whereClause #>
+	{
+		<#= paramDecls #>
+		return configurator.RunIf(world =>
+		{
+			<#= fetchCalls #>
+			return condition(<#= funcParams #>);
+		});
+	}
+<#
+    }
+#>
+}

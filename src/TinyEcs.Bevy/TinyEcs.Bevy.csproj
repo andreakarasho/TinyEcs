@@ -9,4 +9,58 @@
   <ItemGroup>
     <ProjectReference Include="..\TinyEcs\TinyEcs.csproj" />
   </ItemGroup>
+
+  <!-- Start Templates -->
+  <ItemGroup>
+    <None Update="TinyEcs.Bevy.Data.tt">
+      <LastGenOutput>TinyEcs.Bevy.Data.g.cs</LastGenOutput>
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </None>
+    <None Update="TinyEcs.Bevy.Filter.tt">
+      <LastGenOutput>TinyEcs.Bevy.Filter.g.cs</LastGenOutput>
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </None>
+    <None Update="TinyEcs.Bevy.SystemExtensions.tt">
+      <LastGenOutput>TinyEcs.Bevy.SystemExtensions.g.cs</LastGenOutput>
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </None>
+    <None Update="TinyEcs.Bevy.Observers.tt">
+      <LastGenOutput>TinyEcs.Bevy.Observers.g.cs</LastGenOutput>
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </None>
+    <None Update="TinyEcs.Bevy.SystemAdapters.tt">
+      <LastGenOutput>TinyEcs.Bevy.SystemAdapters.g.cs</LastGenOutput>
+      <Generator>TextTemplatingFileGenerator</Generator>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="TinyEcs.Bevy.Data.g.cs">
+      <DependentUpon>TinyEcs.Bevy.Data.tt</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Update="TinyEcs.Bevy.Filter.g.cs">
+      <DependentUpon>TinyEcs.Bevy.Filter.tt</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Update="TinyEcs.Bevy.SystemExtensions.g.cs">
+      <DependentUpon>TinyEcs.Bevy.SystemExtensions.tt</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Update="TinyEcs.Bevy.Observers.g.cs">
+      <DependentUpon>TinyEcs.Bevy.Observers.tt</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+    <Compile Update="TinyEcs.Bevy.SystemAdapters.g.cs">
+      <DependentUpon>TinyEcs.Bevy.SystemAdapters.tt</DependentUpon>
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+    </Compile>
+  </ItemGroup>
+  <!-- End Templates -->
+
 </Project>
