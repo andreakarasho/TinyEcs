@@ -214,8 +214,8 @@ public static class WorldExtensions
 	/// <summary>
 	/// Create a query with automatic tick tracking for Changed/Added filters
 	/// </summary>
-	public static BevyQueryIter<TQueryData, TinyEcs.Empty> Query<TQueryData>(this TinyEcs.World world)
-		where TQueryData : struct, TinyEcs.IData<TQueryData>, TinyEcs.IQueryIterator<TQueryData>, allows ref struct
+	public static BevyQueryIter<TQueryData, Empty> Query<TQueryData>(this TinyEcs.World world)
+		where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
 	{
 		// Use world's tick system for change detection
 		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
@@ -228,15 +228,15 @@ public static class WorldExtensions
 		TQueryData.Build(builder);
 		var query = builder.Build();
 
-		return new BevyQueryIter<TQueryData, TinyEcs.Empty>(lastTick, currentTick, query.Iter());
+		return new BevyQueryIter<TQueryData, Empty>(lastTick, currentTick, query.Iter());
 	}
 
 	/// <summary>
 	/// Create a query with automatic tick tracking for Changed/Added filters
 	/// </summary>
 	public static BevyQueryIter<TQueryData, TQueryFilter> Query<TQueryData, TQueryFilter>(this TinyEcs.World world)
-		where TQueryData : struct, TinyEcs.IData<TQueryData>, TinyEcs.IQueryIterator<TQueryData>, allows ref struct
-		where TQueryFilter : struct, TinyEcs.IFilter<TQueryFilter>, allows ref struct
+		where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+		where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 	{
 		// Use world's tick system for change detection
 		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
