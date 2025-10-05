@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using TinyEcs;
 
 namespace TinyEcs.Bevy;
@@ -581,79 +583,44 @@ internal readonly struct RemoveResourceCommand : DeferredCommand
 }
 
 // ============================================================================
-// Query Parameter - Typed ECS queries
+// Query Parameter - Typed ECS queries (standalone implementation)
 // ============================================================================
 
 /// <summary>
-/// Typed query parameter for iterating entities with specific components
+/// Typed query parameter for iterating entities with specific components.
+/// Standalone Bevy-style query that directly uses the low-level TinyEcs.Query infrastructure.
 /// </summary>
-public class Query<TQueryData> : ISystemParam
+public class Query<TQueryData> : Query<TQueryData, Empty>
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
-
 {
-	private TinyEcs.World? _world;
-	private TinyEcs.Query<TQueryData>? _query;
-
-	private static readonly SystemParamAccess _access = BuildAccess();
-
-	private static SystemParamAccess BuildAccess()
-	{
-		var access = new SystemParamAccess();
-		foreach (var component in TQueryData.ReadComponents)
-			access.ReadResources.Add(component);
-
-		foreach (var component in TQueryData.WriteComponents)
-			access.WriteResources.Add(component);
-
-		return access;
-	}
-
-	public void Initialize(TinyEcs.World world)
-	{
-		_world = world;
-	}
-
-	public void Fetch(TinyEcs.World world)
-	{
-		_query ??= world.Query<TQueryData>();
-	}
-
-	public TinyEcs.Query<TQueryData> Inner => _query!;
-
-	public int Count() => _query!.Count();
-
-	public bool Contains(ulong id) => _query!.Contains(id);
-
-	public TQueryData Get(ulong id) => _query!.Get(id);
-
-	public TinyEcs.QueryIter<TQueryData, Empty> GetEnumerator() => _query!.GetEnumerator();
-
-	public SystemParamAccess GetAccess() => _access;
+	public Query() : base() { }
 }
 
-
-
+/// <summary>
+/// Typed query parameter with filtering for iterating entities with specific components.
+/// Standalone implementation that bypasses the Bevy.cs Query wrapper.
+/// </summary>
 public class Query<TQueryData, TQueryFilter> : ISystemParam
 	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
 	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
 {
+	private TinyEcs.Query? _lowLevelQuery;
 	private TinyEcs.World? _world;
-	private TinyEcs.Query<TQueryData, TQueryFilter>? _query;
-
 	private static readonly SystemParamAccess _access = BuildAccess();
 
 	private static SystemParamAccess BuildAccess()
 	{
 		var access = new SystemParamAccess();
+
+		// Add read/write access from data components
 		foreach (var component in TQueryData.ReadComponents)
 			access.ReadResources.Add(component);
-
 		foreach (var component in TQueryData.WriteComponents)
 			access.WriteResources.Add(component);
 
+		// Add read/write access from filter components
 		foreach (var component in TQueryFilter.ReadComponents)
 			access.ReadResources.Add(component);
-
 		foreach (var component in TQueryFilter.WriteComponents)
 			access.WriteResources.Add(component);
 
@@ -662,28 +629,141 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_world = world;
+		// Initialization handled in Fetch
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_query ??= world.Query<TQueryData, TQueryFilter>();
+		_world = world;
+		if (_lowLevelQuery == null)
+		{
+			// Build query directly using QueryBuilder (no Bevy.cs dependency)
+			var builder = world.QueryBuilder();
+			TQueryData.Build(builder);
+			TQueryFilter.Build(builder);
+			_lowLevelQuery = builder.Build();
+		}
 	}
 
-	public TinyEcs.Query<TQueryData, TQueryFilter> Inner => _query!;
+	/// <summary>
+	/// Access to the underlying low-level query
+	/// </summary>
+	public TinyEcs.Query Inner => _lowLevelQuery!;
 
-	public int Count() => _query!.Count();
+	// ============================================================================
+	// Query Methods (standalone implementation)
+	// ============================================================================
 
-	public bool Contains(ulong id) => _query!.Contains(id);
+	/// <summary>
+	/// Returns the number of entities matching this query
+	/// </summary>
+	public int Count() => _lowLevelQuery!.Count();
 
-	public TQueryData Get(ulong id) => _query!.Get(id);
+	/// <summary>
+	/// Checks if an entity with the given ID matches this query
+	/// </summary>
+	public bool Contains(ulong id)
+	{
+		var iter = GetIter(id);
+		return iter.MoveNext();
+	}
 
-	public QueryIter<TQueryData, TQueryFilter> GetEnumerator() => _query!.GetEnumerator();
+	/// <summary>
+	/// Gets the query data for a specific entity ID
+	/// </summary>
+	public TQueryData Get(ulong id)
+	{
+		var iter = GetIter(id);
+		var success = iter.MoveNext();
+		return success ? iter.Current : default;
+	}
 
+	/// <summary>
+	/// Gets a single entity matching this query (throws if not exactly one match)
+	/// </summary>
+	public TQueryData Single()
+	{
+		if (_lowLevelQuery!.Count() != 1)
+			throw new InvalidOperationException("'Single' must match one and only one entity.");
+
+		var iter = GetEnumerator();
+		if (!iter.MoveNext())
+			throw new InvalidOperationException("'Single' is not matching any entity.");
+
+		return iter.Current;
+	}
+
+	/// <summary>
+	/// Gets an enumerator for iterating over all matching entities
+	/// </summary>
+	public BevyQueryIter<TQueryData, TQueryFilter> GetEnumerator() => GetIter();
+
+	private BevyQueryIter<TQueryData, TQueryFilter> GetIter(ulong id = 0)
+	{
+		// Use world's tick system for change detection
+		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
+		// We check for changes in the current frame: [currentTick-1, currentTick)
+		// This detects components modified with the current tick
+		uint currentTick = _world!.CurrentTick;
+		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
+
+		var rawIter = id == 0 ? _lowLevelQuery!.Iter() : _lowLevelQuery!.Iter(id);
+		return new BevyQueryIter<TQueryData, TQueryFilter>(lastTick, currentTick, rawIter);
+	}
+
+	/// <summary>
+	/// Gets the access pattern for this query (used for parallel execution scheduling)
+	/// </summary>
 	public SystemParamAccess GetAccess() => _access;
 }
 
+// ============================================================================
+// Query Iterator - Standalone iterator for Bevy queries
+// ============================================================================
 
+/// <summary>
+/// Iterator for Bevy-style queries. Wraps QueryIterator and provides typed iteration.
+/// </summary>
+public ref struct BevyQueryIter<TQueryData, TQueryFilter>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
+{
+	private TQueryData _dataIterator;
+	private TQueryFilter _filterIterator;
+
+	internal BevyQueryIter(uint lastTick, uint currentTick, TinyEcs.QueryIterator iterator)
+	{
+		_dataIterator = TQueryData.CreateIterator(iterator);
+		_filterIterator = TQueryFilter.CreateIterator(iterator);
+		// Set ticks for change detection (Changed<T>/Added<T> filters)
+		_filterIterator.SetTicks(lastTick, currentTick);
+	}
+
+	[UnscopedRef]
+	public ref TQueryData Current
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => ref _dataIterator;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public bool MoveNext()
+	{
+		while (true)
+		{
+			if (!_dataIterator.MoveNext())
+				return false;
+
+			if (!_filterIterator.MoveNext())
+				continue;
+
+			return true;
+		}
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly BevyQueryIter<TQueryData, TQueryFilter> GetEnumerator() => this;
+}
 
 // ============================================================================
 // Parameterized System - Supports dependency injection

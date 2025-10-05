@@ -228,7 +228,7 @@ public ref struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal readonly Span<uint> GetChangedTicks(int index)
+	public readonly Span<uint> GetChangedTicks(int index)
 	{
 		if (index >= _indices.Length)
 		{
@@ -252,7 +252,7 @@ public ref struct QueryIterator
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal readonly Span<uint> GetAddedTicks(int index)
+	public readonly Span<uint> GetAddedTicks(int index)
 	{
 		if (index >= _indices.Length)
 		{

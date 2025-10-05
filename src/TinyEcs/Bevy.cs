@@ -1481,7 +1481,7 @@ public ref struct QueryIter<D, F>
 	private D _dataIterator;
 	private F _filterIterator;
 
-	internal QueryIter(uint lastRun, uint thisRun, QueryIterator iterator)
+	public QueryIter(uint lastRun, uint thisRun, QueryIterator iterator)
 	{
 		_dataIterator = D.CreateIterator(iterator);
 		_filterIterator = F.CreateIterator(iterator);

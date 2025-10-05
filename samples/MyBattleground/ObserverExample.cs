@@ -61,7 +61,7 @@ public static class ObserverExample
 		// Observer with system parameters - check if it's an enemy when health is added
 		app.Observe<OnInsert<Health>, TinyEcs.Bevy.Query<Data<Enemy>>>((trigger, query) =>
 		{
-			if (query.Inner.Contains(trigger.EntityId))
+			if (query.Contains(trigger.EntityId))
 			{
 				Console.WriteLine($"⚔️  Enemy {trigger.EntityId} has {trigger.Component.Value} HP");
 			}

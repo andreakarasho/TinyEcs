@@ -33,6 +33,11 @@ public sealed partial class World : IDisposable
 	/// </summary>
 	public EcsID MaxComponentId => _maxCmpId;
 
+	/// <summary>
+	/// Current tick value used for change detection.
+	/// </summary>
+	public uint CurrentTick => _ticks;
+
 	public uint Update() => ++_ticks;
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
@@ -232,6 +237,7 @@ public sealed partial class World : IDisposable
 		if (size > 0)
 		{
 			record.Chunk.MarkAdded(column, record.Row, _ticks);
+			record.Chunk.MarkChanged(column, record.Row, _ticks);
 		}
 		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 	}

@@ -211,17 +211,46 @@ public static class WorldExtensions
 	}
 
 	// Query helpers - create cached queries
-	public static TinyEcs.Query<TQueryData> Query<TQueryData>(this TinyEcs.World world)
+	/// <summary>
+	/// Create a query with automatic tick tracking for Changed/Added filters
+	/// </summary>
+	public static BevyQueryIter<TQueryData, TinyEcs.Empty> Query<TQueryData>(this TinyEcs.World world)
 		where TQueryData : struct, TinyEcs.IData<TQueryData>, TinyEcs.IQueryIterator<TQueryData>, allows ref struct
 	{
-		return (TinyEcs.Query<TQueryData>)TinyEcs.Query<TQueryData>.Generate(world);
+		// Use world's tick system for change detection
+		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
+		// We check for changes in the current frame: [currentTick-1, currentTick)
+		// This detects components modified with the current tick
+		uint currentTick = world.CurrentTick;
+		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
+
+		var builder = world.QueryBuilder();
+		TQueryData.Build(builder);
+		var query = builder.Build();
+
+		return new BevyQueryIter<TQueryData, TinyEcs.Empty>(lastTick, currentTick, query.Iter());
 	}
 
-	public static TinyEcs.Query<TQueryData, TQueryFilter> Query<TQueryData, TQueryFilter>(this TinyEcs.World world)
+	/// <summary>
+	/// Create a query with automatic tick tracking for Changed/Added filters
+	/// </summary>
+	public static BevyQueryIter<TQueryData, TQueryFilter> Query<TQueryData, TQueryFilter>(this TinyEcs.World world)
 		where TQueryData : struct, TinyEcs.IData<TQueryData>, TinyEcs.IQueryIterator<TQueryData>, allows ref struct
 		where TQueryFilter : struct, TinyEcs.IFilter<TQueryFilter>, allows ref struct
 	{
-		return (TinyEcs.Query<TQueryData, TQueryFilter>)TinyEcs.Query<TQueryData, TQueryFilter>.Generate(world);
+		// Use world's tick system for change detection
+		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
+		// We check for changes in the current frame: [currentTick-1, currentTick)
+		// This detects components modified with the current tick
+		uint currentTick = world.CurrentTick;
+		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
+
+		var builder = world.QueryBuilder();
+		TQueryData.Build(builder);
+		TQueryFilter.Build(builder);
+		var query = builder.Build();
+
+		return new BevyQueryIter<TQueryData, TQueryFilter>(lastTick, currentTick, query.Iter());
 	}
 }
 
@@ -737,6 +766,10 @@ public class App
 		// Build execution order once before first run
 		BuildExecutionOrder();
 
+		// Increment world tick for change detection
+		// This marks all modifications in Startup with tick 1
+		_world.Update();
+
 		ExecuteSystemsParallel(Stage.Startup);
 
 		// Auto-flush observers after startup stage
@@ -749,6 +782,10 @@ public class App
 	public void Run()
 	{
 		RunStartup();
+
+		// Increment world tick for change detection
+		// This marks all modifications in this frame with the new tick
+		_world.Update();
 
 		// Use cached sorted stages (already built in RunStartup)
 		foreach (var stageDesc in _sortedStages!)
