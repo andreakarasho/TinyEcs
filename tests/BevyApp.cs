@@ -103,6 +103,37 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void NextStateQueuesTransitionsUntilEndOfFrame()
+        {
+            using var world = new World();
+            var app = new App(world);
+            app.AddState(GameState.Menu);
+
+            var observed = new List<GameState>();
+
+            app.AddSystem((Res<State<GameState>> state, ResMut<NextState<GameState>> next) =>
+            {
+                observed.Add(state.Value.Current);
+                ref var nextState = ref next.Value;
+                if (state.Value.Current == GameState.Menu && !nextState.IsQueued)
+                {
+                    nextState.Set(GameState.Playing);
+                }
+            })
+            .InStage(Stage.Update)
+            .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { GameState.Menu }, observed);
+            Assert.Equal(GameState.Playing, world.GetState<GameState>());
+
+            observed.Clear();
+            app.Run();
+            Assert.Equal(new[] { GameState.Playing }, observed);
+        }
+
+        [Fact]
         public void AppFiresSpawnAndDespawnTriggers()
         {
             using var world = new World();

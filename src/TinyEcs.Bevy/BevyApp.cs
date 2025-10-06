@@ -196,6 +196,7 @@ public static class WorldExtensions
 				worldState.PreviousStates[type] = current;
 			}
 			worldState.States[type] = state;
+			worldState.PendingStateChanges.Remove(type);
 			worldState.StatesProcessedThisFrame.Remove(type); // Mark for reprocessing
 		}
 	}
@@ -223,6 +224,42 @@ public static class WorldExtensions
 		}
 	}
 
+	public static void QueueState<TState>(this TinyEcs.World world, TState nextState) where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
+		{
+			if (worldState.States.TryGetValue(type, out var current) &&
+				EqualityComparer<TState>.Default.Equals((TState)current, nextState))
+			{
+				worldState.PendingStateChanges.Remove(type);
+				return;
+			}
+
+			worldState.PendingStateChanges[type] = new QueuedStateTransition<TState>(nextState);
+			worldState.StatesProcessedThisFrame.Remove(type);
+		}
+	}
+
+	internal static bool HasQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
+	{
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
+		{
+			return worldState.PendingStateChanges.ContainsKey(typeof(TState));
+		}
+	}
+
+	internal static void ClearQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
+	{
+		var worldState = world.GetState();
+		lock (worldState.SyncRoot)
+		{
+			worldState.PendingStateChanges.Remove(typeof(TState));
+		}
+	}
+
 	internal static TState? GetPreviousState<TState>(this TinyEcs.World world) where TState : struct, Enum
 	{
 		var type = typeof(TState);
@@ -237,11 +274,11 @@ public static class WorldExtensions
 		return null;
 	}
 
-	internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var state = world.GetState();
-		var type = typeof(TState);
-		lock (state.SyncRoot)
+internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
+{
+	var state = world.GetState();
+	var type = typeof(TState);
+	lock (state.SyncRoot)
 		{
 			if (!state.States.TryGetValue(type, out var current))
 				return false;
@@ -306,6 +343,7 @@ internal class WorldState
 	public Dictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
 	public List<Action> StateChangeDetectors { get; } = new();
+	public Dictionary<Type, IQueuedStateTransition> PendingStateChanges { get; } = new();
 }
 
 internal sealed class ResourceBox<T> where T : notnull
@@ -316,6 +354,55 @@ internal sealed class ResourceBox<T> where T : notnull
 	{
 		Value = value;
 	}
+}
+
+public sealed class State<TState> where TState : struct, Enum
+{
+	private readonly TinyEcs.World _world;
+
+	internal State(TinyEcs.World world)
+	{
+		_world = world;
+	}
+
+	public TState Current => _world.GetState<TState>();
+	public TState Previous => _world.GetPreviousState<TState>() ?? _world.GetState<TState>();
+	public bool IsChanged => _world.StateChanged<TState>();
+	public bool IsQueued => _world.HasQueuedState<TState>();
+}
+
+public sealed class NextState<TState> where TState : struct, Enum
+{
+	private readonly TinyEcs.World _world;
+
+	internal NextState(TinyEcs.World world)
+	{
+		_world = world;
+	}
+
+	public void Set(TState nextState) => _world.QueueState(nextState);
+	public bool IsQueued => _world.HasQueuedState<TState>();
+	public void Clear() => _world.ClearQueuedState<TState>();
+}
+
+internal interface IQueuedStateTransition
+{
+	void Apply(TinyEcs.World world);
+	Type StateType { get; }
+}
+
+internal sealed class QueuedStateTransition<TState> : IQueuedStateTransition where TState : struct, Enum
+{
+	private readonly TState _next;
+
+	public QueuedStateTransition(TState next)
+	{
+		_next = next;
+	}
+
+	public void Apply(TinyEcs.World world) => world.SetState(_next);
+
+	public Type StateType => typeof(TState);
 }
 
 internal interface IEventChannel
@@ -646,14 +733,25 @@ public class App
 	public App AddResource<T>(T resource) where T : notnull
 	{
 		_world.AddResource(resource);
-		return this;
+	return this;
+}
+
+public App AddState<TState>(TState initialState) where TState : struct, Enum
+{
+	_world.SetState(initialState);
+
+	if (!_world.HasResource<State<TState>>())
+	{
+		_world.AddResource(new State<TState>(_world));
 	}
 
-	public App AddState<TState>(TState initialState) where TState : struct, Enum
+	if (!_world.HasResource<NextState<TState>>())
 	{
-		_world.SetState(initialState);
-		return this;
+		_world.AddResource(new NextState<TState>(_world));
 	}
+
+	return this;
+}
 
 	internal StageDescriptor GetOrCreateStageDescriptor(Stage stage)
 	{
@@ -1020,20 +1118,27 @@ public class App
 		return batches;
 	}
 
-	private void ProcessStateTransitions()
+private void ProcessStateTransitions()
+{
+	var worldState = _world.GetState();
+	List<IQueuedStateTransition> transitions;
+	List<Action> detectors;
+	lock (worldState.SyncRoot)
 	{
-		var worldState = _world.GetState();
-		List<Action> detectors;
-		lock (worldState.SyncRoot)
-		{
-			detectors = worldState.StateChangeDetectors.ToList();
-			worldState.StatesProcessedThisFrame.Clear();
-		}
-		foreach (var detector in detectors)
-		{
-			detector();
-		}
+		transitions = worldState.PendingStateChanges.Values.ToList();
+		worldState.PendingStateChanges.Clear();
+		detectors = worldState.StateChangeDetectors.ToList();
+		worldState.StatesProcessedThisFrame.Clear();
 	}
+	foreach (var transition in transitions)
+	{
+		transition.Apply(_world);
+	}
+	foreach (var detector in detectors)
+	{
+		detector();
+	}
+}
 
 	public void Update() => Run();
 

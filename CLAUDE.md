@@ -213,6 +213,8 @@ app.AddSystem(StopMusic)
 world.SetState(GameState.Paused);
 var current = world.GetState<GameState>();
 ```
+- `Res<State<GameState>>` exposes the current/previous values (`state.Value.Current`)
+- `ResMut<NextState<GameState>>` queues transitions (`next.Value.Set(GameState.Playing)`) that apply after the frame
 
 ### Plugins
 ```csharp
@@ -421,6 +423,7 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 ### Resource Access Refinements
 - Resources now live inside reusable boxes so systems can borrow by `ref`
 - `Res<T>` exposes `ref readonly T` while `ResMut<T>` exposes `ref T` to enforce read-only vs. mutable access
+- Added `State<T>` / `NextState<T>` resources mirroring Bevy’s queuing semantics for state transitions
 
 ### Bundle System
 - Implemented `IBundle` interface for component grouping
