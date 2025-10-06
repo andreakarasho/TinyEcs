@@ -153,13 +153,14 @@ public static class WorldExtensions
 	{
 		var state = world.GetState();
 		List<IEventChannel> channels;
+		var currentTick = world.CurrentTick;
 		lock (state.SyncRoot)
 		{
 			channels = state.EventChannels.Values.ToList();
 		}
 		foreach (var channel in channels)
 		{
-			channel.Flush();
+			channel.Flush(currentTick);
 		}
 	}
 
@@ -289,7 +290,7 @@ internal class WorldState
 
 internal interface IEventChannel
 {
-	void Flush();
+	void Flush(uint currentTick);
 }
 
 internal sealed class EventChannel<T> : IEventChannel
@@ -299,6 +300,8 @@ internal sealed class EventChannel<T> : IEventChannel
 	private List<T> _writeBuffer = new();
 	private readonly List<Action<T>> _observers = new();
 	private ulong _epoch;
+	private uint _activeTick = uint.MaxValue;
+	private int _observerCursor;
 
 	internal void Enqueue(T evt)
 	{
@@ -340,29 +343,88 @@ internal sealed class EventChannel<T> : IEventChannel
 		}
 	}
 
-	public void Flush()
+	public void Flush(uint currentTick)
 	{
 		List<T>? snapshot = null;
 		List<Action<T>>? observers = null;
 
 		lock (_lock)
 		{
-			if (_writeBuffer.Count == 0 && _readBuffer.Count == 0)
+			var newFrame = _activeTick != currentTick;
+			if (newFrame)
 			{
-				return;
+				_activeTick = currentTick;
+				_observerCursor = 0;
+
+				if (_writeBuffer.Count > 0)
+				{
+					(_readBuffer, _writeBuffer) = (_writeBuffer, _readBuffer);
+					_writeBuffer.Clear();
+					_epoch++;
+
+					if (_observers.Count > 0 && _readBuffer.Count > 0)
+					{
+						snapshot = new List<T>(_readBuffer);
+						observers = new List<Action<T>>(_observers);
+					}
+				}
+				else if (_readBuffer.Count > 0)
+				{
+					_readBuffer.Clear();
+					_epoch++;
+				}
 			}
 
-			(_readBuffer, _writeBuffer) = (_writeBuffer, _readBuffer);
-			_writeBuffer.Clear();
-			_epoch++;
-
-			if (_readBuffer.Count == 0 || _observers.Count == 0)
+			if (!newFrame && _writeBuffer.Count > 0)
 			{
-				return;
+				var startIndex = _readBuffer.Count;
+				if (_writeBuffer.Count == 1)
+				{
+					_readBuffer.Add(_writeBuffer[0]);
+				}
+				else
+				{
+					_readBuffer.AddRange(_writeBuffer);
+				}
+				_writeBuffer.Clear();
+
+				if (_observers.Count > 0 && startIndex < _readBuffer.Count)
+				{
+					var count = _readBuffer.Count - startIndex;
+					snapshot = new List<T>(count);
+					for (var i = startIndex; i < _readBuffer.Count; i++)
+					{
+						snapshot.Add(_readBuffer[i]);
+					}
+					observers = new List<Action<T>>(_observers);
+				}
+
+				_observerCursor = _readBuffer.Count;
+			}
+			else if (snapshot == null && _observers.Count > 0 && _observerCursor < _readBuffer.Count)
+			{
+				var count = _readBuffer.Count - _observerCursor;
+				if (count > 0)
+				{
+					snapshot = new List<T>(count);
+					for (var i = _observerCursor; i < _readBuffer.Count; i++)
+					{
+						snapshot.Add(_readBuffer[i]);
+					}
+					observers = new List<Action<T>>(_observers);
+				}
+
+				_observerCursor = _readBuffer.Count;
+			}
+			else
+			{
+				_observerCursor = _readBuffer.Count;
 			}
 
-			snapshot = new List<T>(_readBuffer);
-			observers = new List<Action<T>>(_observers);
+			if (snapshot != null)
+			{
+				_observerCursor = _readBuffer.Count;
+			}
 		}
 
 		if (snapshot == null || observers == null)

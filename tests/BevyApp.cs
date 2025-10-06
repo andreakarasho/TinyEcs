@@ -301,6 +301,62 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void EventQueuesRemainVisibleAcrossAllStagesForSingleFrame()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var preUpdateEvents = new List<int>();
+            var postUpdateEvents = new List<int>();
+
+            var writerSystem = SystemFunctionAdapters.Create<Local<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((counter, writer) =>
+            {
+                writer.Send(new ScoreEvent(counter.Value.Value));
+                counter.Value.Value++;
+            });
+
+            app.AddSystem(writerSystem)
+                .InStage(Stage.Update)
+                .Build();
+
+            var preReader = SystemFunctionAdapters.Create<TinyEcs.Bevy.EventReader<ScoreEvent>>(reader =>
+            {
+                foreach (var evt in reader.Read())
+                {
+                    preUpdateEvents.Add(evt.Value);
+                }
+            });
+
+            app.AddSystem(preReader)
+                .InStage(Stage.PreUpdate)
+                .Build();
+
+            var postReader = SystemFunctionAdapters.Create<TinyEcs.Bevy.EventReader<ScoreEvent>>(reader =>
+            {
+                foreach (var evt in reader.Read())
+                {
+                    postUpdateEvents.Add(evt.Value);
+                }
+            });
+
+            app.AddSystem(postReader)
+                .InStage(Stage.PostUpdate)
+                .Build();
+
+            app.Run();
+            Assert.Empty(preUpdateEvents);
+            Assert.Empty(postUpdateEvents);
+
+            app.Run();
+            Assert.Equal(new[] { 0 }, preUpdateEvents);
+            Assert.Equal(new[] { 0 }, postUpdateEvents);
+
+            app.Run();
+            Assert.Equal(new[] { 0, 1 }, preUpdateEvents);
+            Assert.Equal(new[] { 0, 1 }, postUpdateEvents);
+        }
+
+        [Fact]
         public void SystemsRunInDeclarationOrderWithNoDependencies()
         {
             using var world = new World();
