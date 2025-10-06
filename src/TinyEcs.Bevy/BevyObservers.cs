@@ -87,6 +87,22 @@ public readonly record struct OnDespawn(ulong EntityId) : ITrigger
 	}
 }
 
+/// <summary>
+/// Trigger when a custom event is fired via Commands.Trigger.
+/// </summary>
+public readonly record struct On<TEvent>(TEvent Event) : ITrigger
+	where TEvent : struct
+{
+#if NET9_0_OR_GREATER
+	public static void Register(TinyEcs.World world)
+#else
+	public readonly void Register(TinyEcs.World world)
+#endif
+	{
+		// Custom events don't require registration.
+	}
+}
+
 // ============================================================================
 // Observer System - React to entity/component changes
 // ============================================================================

@@ -340,6 +340,14 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
+	/// Trigger a custom observer event.
+	/// </summary>
+	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
+	{
+		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
+	}
+
+	/// <summary>
 	/// Internal method to queue a deferred command
 	/// </summary>
 	internal void QueueCommand(IDeferredCommand command)
@@ -561,6 +569,24 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
 		world.AddResource(_resource);
+	}
+}
+
+/// <summary>
+/// Command to trigger a custom observer event
+/// </summary>
+internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : struct
+{
+	private readonly TEvent _event;
+
+	public TriggerEventCommand(TEvent evt)
+	{
+		_event = evt;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		world.EmitTrigger(new On<TEvent>(_event));
 	}
 }
 
