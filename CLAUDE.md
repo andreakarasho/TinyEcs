@@ -115,6 +115,8 @@ Query<Data<Sprite>, Filter<Changed<Position>>> filtered
 Res<TimeResource> time        // Immutable resource
 ResMut<ScoreTracker> score    // Mutable resource
 ```
+- `Res<T>.Value` returns `ref readonly T`, ensuring read-only borrowing
+- `ResMut<T>.Value` returns `ref T` for exclusive write access
 
 **Deferred Commands**:
 ```csharp
@@ -415,6 +417,10 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 - Per-system `.SingleThreaded()` and `.WithThreadingMode()` overrides
 - Fixed parallel batching to respect single-threaded systems
 - Proper ordering within batches maintained
+
+### Resource Access Refinements
+- Resources now live inside reusable boxes so systems can borrow by `ref`
+- `Res<T>` exposes `ref readonly T` while `ResMut<T>` exposes `ref T` to enforce read-only vs. mutable access
 
 ### Bundle System
 - Implemented `IBundle` interface for component grouping
