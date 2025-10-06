@@ -10,4 +10,4 @@ using MyBattleground.Examples;
 // CommandsExample.Run();
 
 // Run the Stage-First API example
-StageFirstAPIExample.Run();
+PerformanceTinyEcsExample.Run();
