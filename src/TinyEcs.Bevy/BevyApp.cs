@@ -101,7 +101,7 @@ public static class WorldExtensions
 		var state = world.GetState();
 		lock (state.SyncRoot)
 		{
-			state.Resources[typeof(T)] = resource;
+			state.Resources[typeof(T)] = new ResourceBox<T>(resource);
 		}
 	}
 
@@ -110,7 +110,10 @@ public static class WorldExtensions
 		var state = world.GetState();
 		lock (state.SyncRoot)
 		{
-			return (T)state.Resources[typeof(T)];
+			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
+				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+			return ((ResourceBox<T>)boxed).Value;
 		}
 	}
 
@@ -120,6 +123,23 @@ public static class WorldExtensions
 		lock (state.SyncRoot)
 		{
 			return state.Resources.ContainsKey(typeof(T));
+		}
+	}
+
+	public static ref T GetResourceRef<T>(this TinyEcs.World world) where T : notnull
+	{
+		return ref world.GetResourceBox<T>().Value;
+	}
+
+	internal static ResourceBox<T> GetResourceBox<T>(this TinyEcs.World world) where T : notnull
+	{
+		var state = world.GetState();
+		lock (state.SyncRoot)
+		{
+			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
+				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+			return (ResourceBox<T>)boxed;
 		}
 	}
 
@@ -286,6 +306,16 @@ internal class WorldState
 	public Dictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
 	public List<Action> StateChangeDetectors { get; } = new();
+}
+
+internal sealed class ResourceBox<T> where T : notnull
+{
+	public T Value;
+
+	public ResourceBox(T value)
+	{
+		Value = value;
+	}
 }
 
 internal interface IEventChannel

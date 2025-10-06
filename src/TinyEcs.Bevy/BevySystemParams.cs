@@ -60,17 +60,16 @@ public class SystemParamAccess
 /// </summary>
 public class Res<T> : ISystemParam where T : notnull
 {
-	private TinyEcs.World? _world;
-	public T Value { get; private set; } = default!;
+	private ResourceBox<T>? _box;
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_world = world;
+		_box = null;
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		Value = world.GetResource<T>();
+		_box = world.GetResourceBox<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -78,6 +77,16 @@ public class Res<T> : ISystemParam where T : notnull
 		var access = new SystemParamAccess();
 		access.ReadResources.Add(typeof(T));
 		return access;
+	}
+
+	public ref readonly T Value
+	{
+		get
+		{
+			if (_box is null)
+				throw new InvalidOperationException("Res<T> has not been fetched. Ensure the system runs through the Bevy scheduler.");
+			return ref _box.Value;
+		}
 	}
 }
 
@@ -90,17 +99,16 @@ public class Res<T> : ISystemParam where T : notnull
 /// </summary>
 public class ResMut<T> : ISystemParam where T : notnull
 {
-	private TinyEcs.World? _world;
-	public T Value { get; private set; } = default!;
+	private ResourceBox<T>? _box;
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_world = world;
+		_box = null;
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		Value = world.GetResource<T>();
+		_box = world.GetResourceBox<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -108,6 +116,16 @@ public class ResMut<T> : ISystemParam where T : notnull
 		var access = new SystemParamAccess();
 		access.WriteResources.Add(typeof(T));
 		return access;
+	}
+
+	public ref T Value
+	{
+		get
+		{
+			if (_box is null)
+				throw new InvalidOperationException("ResMut<T> has not been fetched. Ensure the system runs through the Bevy scheduler.");
+			return ref _box.Value;
+		}
 	}
 }
 
