@@ -1531,10 +1531,20 @@ public static class AppExtensions
 		return app.AddSystem(new FunctionalSystem(systemFn));
 	}
 
+	public static ISystemStageSelector AddSystem(this App app, Action systemFn)
+	{
+		return app.AddSystem(new FunctionalSystem(_ => systemFn()));
+	}
+
 	// Direct stage API - stage parameter first
 	public static App AddSystem(this App app, Stage stage, Action<TinyEcs.World> systemFn)
 	{
 		return app.AddSystem(stage, new FunctionalSystem(systemFn));
+	}
+
+	public static App AddSystem(this App app, Stage stage, Action systemFn)
+	{
+		return app.AddSystem(stage, new FunctionalSystem(_ => systemFn()));
 	}
 }
 
