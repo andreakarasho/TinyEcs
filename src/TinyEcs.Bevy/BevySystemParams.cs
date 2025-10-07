@@ -139,7 +139,7 @@ public class ResMut<T> : ISystemParam where T : notnull
 /// </summary>
 public class Local<T> : ISystemParam where T : new()
 {
-	public T Value { get; private set; } = new T();
+	public T Value { get; set; } = new T();
 
 	public void Initialize(TinyEcs.World world)
 	{
