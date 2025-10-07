@@ -388,6 +388,45 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void FilterCombinatorSelectsEntitiesMatchingAllPredicates()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            app.AddSystem(w =>
+            {
+                var includeBoth = w.Entity();
+                includeBoth.Set(new Position { X = 42 });
+                includeBoth.Set(new Velocity { Value = 3 });
+
+                var onlyPosition = w.Entity();
+                onlyPosition.Set(new Position { X = 11 });
+
+                var onlyVelocity = w.Entity();
+                onlyVelocity.Set(new Velocity { Value = 7 });
+            })
+            .InStage(Stage.Startup)
+            .Build();
+
+            var captured = new List<float>();
+
+            app.AddSystem((Query<Data<Position>, Filter<With<Position>, With<Velocity>>> query) =>
+            {
+                foreach (var row in query)
+                {
+                    row.Deconstruct(out var pos);
+                    captured.Add(pos.Ref.X);
+                }
+            })
+            .InStage(Stage.Update)
+            .Build();
+
+            app.Run();
+
+            Assert.Equal(new[] { 42f }, captured);
+        }
+
+        [Fact]
         public void SystemsRunInDeclarationOrderWithNoDependencies()
         {
             using var world = new World();

@@ -25,6 +25,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace TinyEcs.Bevy
@@ -34,7 +35,7 @@ namespace TinyEcs.Bevy
     for (var i = 0; i < MAX_GENERICS; ++i)
     {
         var genericsArgs = GenerateSequence(i + 1, ", ", j => $"T{j}");
-        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t", j => $"where T{j} : struct, IFilter<T{j}>, allows ref struct");
+        var genericsArgsWhere = GenerateSequence(i + 1, "\n\t\t", j => $"where T{j} : struct, IFilter<T{j}>, IQueryFilterAccess, allows ref struct");
         var appendTermsCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"T{j}.Build(builder);");
         var appendApplyCalls = GenerateSequence(i + 1, " | ", j => $"T{j}.Apply(in filter, row)\n");
 
@@ -44,8 +45,10 @@ namespace TinyEcs.Bevy
         var callSubIterators = GenerateSequence(i + 1, "\n\t\t\t", j => $"var i{j} = _iter{j}.MoveNext();");
         var callResultsSubIterators = GenerateSequence(i + 1, " && ", j => $"i{j}");
         var setTicksSubIterators = GenerateSequence(i + 1, "\n\t\t\t", j => $"_iter{j}.SetTicks(lastRun, thisRun);");
+        var appendReadCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"AppendTypes(builder, T{j}.ReadComponents);");
+        var appendWriteCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"AppendTypes(builder, T{j}.WriteComponents);");
 #>
-    public ref struct Filter<<#= genericsArgs #>> : IFilter<Filter<<#= genericsArgs #>>>
+    public ref struct Filter<<#= genericsArgs #>> : IFilter<Filter<<#= genericsArgs #>>>, IQueryFilterAccess
         <#= genericsArgsWhere #>
     {
         private QueryIterator _iterator;
@@ -82,6 +85,34 @@ namespace TinyEcs.Bevy
         {
             <#= callSubIterators #>
             return <#= callResultsSubIterators #>;
+        }
+
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            <#= appendReadCalls #>
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            <#= appendWriteCalls #>
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
         }
 
         public void SetTicks(uint lastRun, uint thisRun)

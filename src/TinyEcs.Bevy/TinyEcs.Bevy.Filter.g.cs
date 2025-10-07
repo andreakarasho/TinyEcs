@@ -2,13 +2,14 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace TinyEcs.Bevy
 {
 #if NET9_0_OR_GREATER
-    public ref struct Filter<T0> : IFilter<Filter<T0>>
-        where T0 : struct, IFilter<T0>, allows ref struct
+    public ref struct Filter<T0> : IFilter<Filter<T0>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -46,15 +47,43 @@ namespace TinyEcs.Bevy
             return i0;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
         }
     }
 
-    public ref struct Filter<T0, T1> : IFilter<Filter<T0, T1>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
+    public ref struct Filter<T0, T1> : IFilter<Filter<T0, T1>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -96,6 +125,36 @@ namespace TinyEcs.Bevy
             return i0 && i1;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -103,10 +162,10 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2> : IFilter<Filter<T0, T1, T2>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
+    public ref struct Filter<T0, T1, T2> : IFilter<Filter<T0, T1, T2>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -152,6 +211,38 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -160,11 +251,11 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3> : IFilter<Filter<T0, T1, T2, T3>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3> : IFilter<Filter<T0, T1, T2, T3>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -214,6 +305,40 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -223,12 +348,12 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4> : IFilter<Filter<T0, T1, T2, T3, T4>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4> : IFilter<Filter<T0, T1, T2, T3, T4>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -282,6 +407,42 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -292,13 +453,13 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5> : IFilter<Filter<T0, T1, T2, T3, T4, T5>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5> : IFilter<Filter<T0, T1, T2, T3, T4, T5>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -356,6 +517,44 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -367,14 +566,14 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -436,6 +635,46 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -448,15 +687,15 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -522,6 +761,48 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -535,16 +816,16 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -614,6 +895,50 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -628,17 +953,17 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -712,6 +1037,52 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -727,18 +1098,18 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -816,6 +1187,54 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -832,19 +1251,19 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
-		where T11 : struct, IFilter<T11>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
+		where T11 : struct, IFilter<T11>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -926,6 +1345,56 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10 && i11;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            AppendTypes(builder, T11.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            AppendTypes(builder, T11.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -943,20 +1412,20 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
-		where T11 : struct, IFilter<T11>, allows ref struct
-		where T12 : struct, IFilter<T12>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
+		where T11 : struct, IFilter<T11>, IQueryFilterAccess, allows ref struct
+		where T12 : struct, IFilter<T12>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -1042,6 +1511,58 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10 && i11 && i12;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            AppendTypes(builder, T11.ReadComponents);
+            AppendTypes(builder, T12.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            AppendTypes(builder, T11.WriteComponents);
+            AppendTypes(builder, T12.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -1060,21 +1581,21 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
-		where T11 : struct, IFilter<T11>, allows ref struct
-		where T12 : struct, IFilter<T12>, allows ref struct
-		where T13 : struct, IFilter<T13>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
+		where T11 : struct, IFilter<T11>, IQueryFilterAccess, allows ref struct
+		where T12 : struct, IFilter<T12>, IQueryFilterAccess, allows ref struct
+		where T13 : struct, IFilter<T13>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -1164,6 +1685,60 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10 && i11 && i12 && i13;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            AppendTypes(builder, T11.ReadComponents);
+            AppendTypes(builder, T12.ReadComponents);
+            AppendTypes(builder, T13.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            AppendTypes(builder, T11.WriteComponents);
+            AppendTypes(builder, T12.WriteComponents);
+            AppendTypes(builder, T13.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -1183,22 +1758,22 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
-		where T11 : struct, IFilter<T11>, allows ref struct
-		where T12 : struct, IFilter<T12>, allows ref struct
-		where T13 : struct, IFilter<T13>, allows ref struct
-		where T14 : struct, IFilter<T14>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
+		where T11 : struct, IFilter<T11>, IQueryFilterAccess, allows ref struct
+		where T12 : struct, IFilter<T12>, IQueryFilterAccess, allows ref struct
+		where T13 : struct, IFilter<T13>, IQueryFilterAccess, allows ref struct
+		where T14 : struct, IFilter<T14>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -1292,6 +1867,62 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10 && i11 && i12 && i13 && i14;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            AppendTypes(builder, T11.ReadComponents);
+            AppendTypes(builder, T12.ReadComponents);
+            AppendTypes(builder, T13.ReadComponents);
+            AppendTypes(builder, T14.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            AppendTypes(builder, T11.WriteComponents);
+            AppendTypes(builder, T12.WriteComponents);
+            AppendTypes(builder, T13.WriteComponents);
+            AppendTypes(builder, T14.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -1312,23 +1943,23 @@ namespace TinyEcs.Bevy
         }
     }
 
-    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>
-        where T0 : struct, IFilter<T0>, allows ref struct
-		where T1 : struct, IFilter<T1>, allows ref struct
-		where T2 : struct, IFilter<T2>, allows ref struct
-		where T3 : struct, IFilter<T3>, allows ref struct
-		where T4 : struct, IFilter<T4>, allows ref struct
-		where T5 : struct, IFilter<T5>, allows ref struct
-		where T6 : struct, IFilter<T6>, allows ref struct
-		where T7 : struct, IFilter<T7>, allows ref struct
-		where T8 : struct, IFilter<T8>, allows ref struct
-		where T9 : struct, IFilter<T9>, allows ref struct
-		where T10 : struct, IFilter<T10>, allows ref struct
-		where T11 : struct, IFilter<T11>, allows ref struct
-		where T12 : struct, IFilter<T12>, allows ref struct
-		where T13 : struct, IFilter<T13>, allows ref struct
-		where T14 : struct, IFilter<T14>, allows ref struct
-		where T15 : struct, IFilter<T15>, allows ref struct
+    public ref struct Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IFilter<Filter<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>, IQueryFilterAccess
+        where T0 : struct, IFilter<T0>, IQueryFilterAccess, allows ref struct
+		where T1 : struct, IFilter<T1>, IQueryFilterAccess, allows ref struct
+		where T2 : struct, IFilter<T2>, IQueryFilterAccess, allows ref struct
+		where T3 : struct, IFilter<T3>, IQueryFilterAccess, allows ref struct
+		where T4 : struct, IFilter<T4>, IQueryFilterAccess, allows ref struct
+		where T5 : struct, IFilter<T5>, IQueryFilterAccess, allows ref struct
+		where T6 : struct, IFilter<T6>, IQueryFilterAccess, allows ref struct
+		where T7 : struct, IFilter<T7>, IQueryFilterAccess, allows ref struct
+		where T8 : struct, IFilter<T8>, IQueryFilterAccess, allows ref struct
+		where T9 : struct, IFilter<T9>, IQueryFilterAccess, allows ref struct
+		where T10 : struct, IFilter<T10>, IQueryFilterAccess, allows ref struct
+		where T11 : struct, IFilter<T11>, IQueryFilterAccess, allows ref struct
+		where T12 : struct, IFilter<T12>, IQueryFilterAccess, allows ref struct
+		where T13 : struct, IFilter<T13>, IQueryFilterAccess, allows ref struct
+		where T14 : struct, IFilter<T14>, IQueryFilterAccess, allows ref struct
+		where T15 : struct, IFilter<T15>, IQueryFilterAccess, allows ref struct
     {
         private QueryIterator _iterator;
         private T0 _iter0;
@@ -1426,6 +2057,64 @@ namespace TinyEcs.Bevy
             return i0 && i1 && i2 && i3 && i4 && i5 && i6 && i7 && i8 && i9 && i10 && i11 && i12 && i13 && i14 && i15;
         }
 
+        private static Type[] BuildReadComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.ReadComponents);
+            AppendTypes(builder, T1.ReadComponents);
+            AppendTypes(builder, T2.ReadComponents);
+            AppendTypes(builder, T3.ReadComponents);
+            AppendTypes(builder, T4.ReadComponents);
+            AppendTypes(builder, T5.ReadComponents);
+            AppendTypes(builder, T6.ReadComponents);
+            AppendTypes(builder, T7.ReadComponents);
+            AppendTypes(builder, T8.ReadComponents);
+            AppendTypes(builder, T9.ReadComponents);
+            AppendTypes(builder, T10.ReadComponents);
+            AppendTypes(builder, T11.ReadComponents);
+            AppendTypes(builder, T12.ReadComponents);
+            AppendTypes(builder, T13.ReadComponents);
+            AppendTypes(builder, T14.ReadComponents);
+            AppendTypes(builder, T15.ReadComponents);
+            return builder.ToArray();
+        }
+
+        private static Type[] BuildWriteComponents()
+        {
+            var builder = new List<Type>();
+            AppendTypes(builder, T0.WriteComponents);
+            AppendTypes(builder, T1.WriteComponents);
+            AppendTypes(builder, T2.WriteComponents);
+            AppendTypes(builder, T3.WriteComponents);
+            AppendTypes(builder, T4.WriteComponents);
+            AppendTypes(builder, T5.WriteComponents);
+            AppendTypes(builder, T6.WriteComponents);
+            AppendTypes(builder, T7.WriteComponents);
+            AppendTypes(builder, T8.WriteComponents);
+            AppendTypes(builder, T9.WriteComponents);
+            AppendTypes(builder, T10.WriteComponents);
+            AppendTypes(builder, T11.WriteComponents);
+            AppendTypes(builder, T12.WriteComponents);
+            AppendTypes(builder, T13.WriteComponents);
+            AppendTypes(builder, T14.WriteComponents);
+            AppendTypes(builder, T15.WriteComponents);
+            return builder.ToArray();
+        }
+
+        private static readonly Type[] s_readComponents = BuildReadComponents();
+        private static readonly Type[] s_writeComponents = BuildWriteComponents();
+
+        public static ReadOnlySpan<Type> ReadComponents => s_readComponents;
+        public static ReadOnlySpan<Type> WriteComponents => s_writeComponents;
+
+        private static void AppendTypes(List<Type> builder, ReadOnlySpan<Type> types)
+        {
+            foreach (var type in types)
+            {
+                builder.Add(type);
+            }
+        }
+
         public void SetTicks(uint lastRun, uint thisRun)
         {
             _iter0.SetTicks(lastRun, thisRun);
@@ -1451,3 +2140,5 @@ namespace TinyEcs.Bevy
 }
 
 #pragma warning restore 1591
+
+
