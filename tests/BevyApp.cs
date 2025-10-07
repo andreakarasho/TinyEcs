@@ -427,6 +427,44 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void SingleSystemParamRetrievesMatchingEntity()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            app.AddSystem(w =>
+            {
+                var include = w.Entity();
+                include.Set(new Position { X = 7 });
+                include.Set(new Velocity { Value = 1 });
+
+                var other = w.Entity();
+                other.Set(new Position { X = 99 });
+            })
+            .InStage(Stage.Startup)
+            .Build();
+
+            int captured = 0;
+
+            app.AddSystem((Single<Data<Position>, Filter<With<Position>, With<Velocity>>> single) =>
+            {
+                Assert.True(single.TryGet(out var row));
+                row.Deconstruct(out var pos);
+                captured = pos.Ref.X;
+
+                var direct = single.Get();
+                direct.Deconstruct(out var posDirect);
+                Assert.Equal(captured, posDirect.Ref.X);
+            })
+            .InStage(Stage.Update)
+            .Build();
+
+            app.Run();
+
+            Assert.Equal(7, captured);
+        }
+
+        [Fact]
         public void SystemsRunInDeclarationOrderWithNoDependencies()
         {
             using var world = new World();

@@ -727,14 +727,31 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// </summary>
 	public TQueryData Single()
 	{
-		if (_lowLevelQuery!.Count() != 1)
-			throw new InvalidOperationException("'Single' must match one and only one entity.");
-
-		var iter = GetEnumerator();
-		if (!iter.MoveNext())
+		if (!TrySingle(out var value))
 			throw new InvalidOperationException("'Single' is not matching any entity.");
 
-		return iter.Current;
+		return value;
+	}
+
+	/// <summary>
+	/// Attempts to get a single entity matching this query.
+	/// </summary>
+	public bool TrySingle(out TQueryData value)
+	{
+		var iter = GetEnumerator();
+
+		if (!iter.MoveNext())
+		{
+			value = default;
+			return false;
+		}
+
+		value = iter.Current;
+
+		if (iter.MoveNext())
+			throw new InvalidOperationException("'Single' matched more than one entity.");
+
+		return true;
 	}
 
 	/// <summary>
@@ -759,6 +776,30 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// Gets the access pattern for this query (used for parallel execution scheduling)
 	/// </summary>
 	public SystemParamAccess GetAccess() => _access;
+}
+
+public class Single<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
+{
+	public Single() : base() { }
+
+	public bool TryGet(out TQueryData result)
+	{
+		if (base.TrySingle(out result))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	public TQueryData Get() => base.Single();
+}
+
+public sealed class Single<TQueryData> : Single<TQueryData, Empty>
+	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+{
 }
 
 // ============================================================================
