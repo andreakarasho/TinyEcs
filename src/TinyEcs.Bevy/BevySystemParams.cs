@@ -354,6 +354,18 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
+	/// Check if an entity exists in the world (at the time this method is called).
+	/// Note: Since commands are deferred, the entity state may change before execution.
+	/// </summary>
+	public bool Exists(ulong entityId)
+	{
+		if (_world == null)
+			throw new InvalidOperationException("Commands has not been initialized.");
+
+		return _world.Exists(entityId);
+	}
+
+	/// <summary>
 	/// Add a resource to the world
 	/// </summary>
 	public void InsertResource<T>(T resource) where T : notnull
