@@ -48,7 +48,7 @@ public readonly record struct OnInsert<T>(ulong EntityId, T Component) : ITrigge
 /// <summary>
 /// Trigger when a component is removed from an entity
 /// </summary>
-public readonly record struct OnRemove<T>(ulong EntityId) : ITrigger
+public readonly record struct OnRemove<T>(ulong EntityId, T Component) : ITrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -168,8 +168,8 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
 	{
-		// Direct typed call - no reflection!
-		world.EmitTrigger(new OnRemove<T>(entityId));
+		ref var component = ref world.Get<T>(entityId);
+		world.EmitTrigger(new OnRemove<T>(entityId, component));
 	}
 
 	public static void SetComponentId(ulong id)
@@ -283,7 +283,10 @@ public static class ObserverExtensions
 		var existingId = ComponentHandler<T>.GetComponentId();
 		if (existingId.HasValue)
 		{
-			// Already registered
+			if (!state.ComponentHandlers.ContainsKey(existingId.Value))
+			{
+				state.ComponentHandlers[existingId.Value] = new ComponentHandler<T>();
+			}
 			return;
 		}
 

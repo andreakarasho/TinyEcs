@@ -311,6 +311,8 @@ public sealed partial class World
 				}
 			}
 #endif
+			foreach (var type in record.Archetype.All.AsSpan())
+				OnComponentUnset?.Invoke(this, entity, type);
 
 			var removedId = record.Archetype.Remove(ref record);
 			EcsAssert.Assert(removedId == entity);

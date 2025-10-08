@@ -265,6 +265,51 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void EntityDeletionEmitsOnRemoveObservers()
+        {
+            using var world = new World();
+            var app = new App(world);
+            var events = new List<string>();
+
+            app.Observe<OnDespawn>((_, trigger) =>
+                events.Add($"despawn:{trigger.EntityId}"));
+            app.Observe<OnRemove<Position>>((_, trigger) =>
+                events.Add($"remove:position:{trigger.EntityId}"));
+            app.Observe<OnRemove<Velocity>>((_, trigger) =>
+                events.Add($"remove:velocity:{trigger.EntityId}"));
+
+            ulong entityId = 0;
+            ulong deletedEntityId = 0;
+
+            app.AddSystem(Stage.Startup, w =>
+            {
+                var entity = w.Entity();
+                entity.Set(new Position { X = 5 });
+                entity.Set(new Velocity { Value = 12 });
+                entityId = entity.ID;
+            });
+
+            app.AddSystem(Stage.Update, w =>
+            {
+                if (entityId != 0)
+                {
+                    deletedEntityId = entityId;
+                    w.Entity(entityId).Delete();
+                    entityId = 0;
+                }
+            });
+
+            app.Run();
+
+            Assert.NotEqual(0UL, deletedEntityId);
+            Assert.NotEmpty(events);
+            Assert.Equal($"despawn:{deletedEntityId}", events[0]);
+            Assert.Contains($"remove:position:{deletedEntityId}", events);
+            Assert.Contains($"remove:velocity:{deletedEntityId}", events);
+            Assert.Equal(3, events.Count);
+        }
+
+        [Fact]
         public void ParameterizedSystemWithCommandsAppliesDeferredWork()
         {
             using var world = new World();
