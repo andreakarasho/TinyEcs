@@ -51,6 +51,18 @@ public class SystemParamAccess
 	}
 }
 
+internal readonly struct DeferredEntityRef
+{
+	public readonly int SpawnIndex;
+	public readonly ulong EntityId;
+
+	public DeferredEntityRef(int spawnIndex, ulong entityId)
+	{
+		SpawnIndex = spawnIndex;
+		EntityId = entityId;
+	}
+}
+
 // ============================================================================
 // Res<T> - Immutable resource access
 // ============================================================================
@@ -365,6 +377,49 @@ public class Commands : ISystemParam
 		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
 	}
 
+	public void AddChild(ulong parentId, ulong childId)
+	{
+		_localCommands.Add(new AddChildCommand(
+			new DeferredEntityRef(-1, parentId),
+			new DeferredEntityRef(-1, childId)));
+	}
+
+	public void AddChild(EntityCommands parent, EntityCommands child)
+	{
+		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), child.ToDeferredRef()));
+	}
+
+	public void AddChild(EntityCommands parent, ulong childId)
+	{
+		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId)));
+	}
+
+	public void AddChild(ulong parentId, EntityCommands child)
+	{
+		_localCommands.Add(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef()));
+	}
+
+	public void AddChildren(EntityCommands parent, ReadOnlySpan<ulong> childIds)
+	{
+		if (childIds.IsEmpty) return;
+		foreach (var childId in childIds)
+			AddChild(parent, childId);
+	}
+
+	public void AddChildren(ulong parentId, ReadOnlySpan<ulong> childIds)
+	{
+		if (childIds.IsEmpty) return;
+		foreach (var childId in childIds)
+			AddChild(parentId, childId);
+	}
+
+	internal ulong ResolveEntityId(in DeferredEntityRef entityRef)
+	{
+		return entityRef.SpawnIndex >= 0
+			? GetSpawnedEntityId(entityRef.SpawnIndex)
+			: entityRef.EntityId;
+	}
+
 	/// <summary>
 	/// Internal method to queue a deferred command
 	/// </summary>
@@ -437,6 +492,39 @@ public ref struct EntityCommands
 			_commands.QueueCommand(new RemoveComponentCommand<T>(_entityId));
 		return this;
 	}
+
+	/// <summary>
+	/// Attach an existing entity as a child.
+	/// </summary>
+	public readonly EntityCommands AddChild(ulong childId)
+	{
+		_commands.AddChild(this, childId);
+		return this;
+	}
+
+	/// <summary>
+	/// Attach another entity builder as a child.
+	/// </summary>
+	public readonly EntityCommands AddChild(EntityCommands child)
+	{
+		_commands.AddChild(this, child);
+		return this;
+	}
+
+	/// <summary>
+	/// Attach multiple existing entities as children.
+	/// </summary>
+	public readonly EntityCommands AddChildren(ReadOnlySpan<ulong> childIds)
+	{
+		if (childIds.IsEmpty) return this;
+		_commands.AddChildren(this, childIds);
+		return this;
+	}
+
+	/// <summary>
+	/// Attach multiple deferred children.
+	/// </summary>
+	internal DeferredEntityRef ToDeferredRef() => new DeferredEntityRef(_spawnIndex, _entityId);
 
 	/// <summary>
 	/// Despawn the entity
@@ -587,6 +675,28 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
 		world.AddResource(_resource);
+	}
+}
+
+/// <summary>
+/// Command to attach a child entity to a parent.
+/// </summary>
+internal readonly struct AddChildCommand : IDeferredCommand
+{
+	private readonly DeferredEntityRef _parent;
+	private readonly DeferredEntityRef _child;
+
+	public AddChildCommand(DeferredEntityRef parent, DeferredEntityRef child)
+	{
+		_parent = parent;
+		_child = child;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var parentId = commands.ResolveEntityId(_parent);
+		var childId = commands.ResolveEntityId(_child);
+		world.AddChild(parentId, childId);
 	}
 }
 

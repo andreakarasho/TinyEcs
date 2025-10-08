@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TinyEcs;
 using TinyEcs.Bevy;
 using Xunit;
 
@@ -46,6 +47,9 @@ namespace TinyEcs.Tests
         {
             public int Value;
         }
+
+        private struct ParentTag { }
+        private struct ChildTag { }
 
         [Fact]
         public void AppExecutesStagesInConfiguredOrder()
@@ -462,6 +466,61 @@ namespace TinyEcs.Tests
             app.Run();
 
             Assert.Equal(7, captured);
+        }
+
+        [Fact]
+        public void CommandsAddChildCreatesHierarchy()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            app.AddSystem((Commands commands) =>
+            {
+                var parent = commands.Spawn().Insert(new ParentTag());
+                var child = commands.Spawn().Insert(new ChildTag());
+                commands.AddChild(parent, child);
+            })
+            .InStage(Stage.Startup)
+            .Build();
+
+            app.Run();
+
+            var parentQuery = world.QueryBuilder().With<ParentTag>().Build();
+            var parentIter = parentQuery.Iter();
+            var parentIds = new List<ulong>();
+            while (parentIter.Next())
+            {
+                foreach (var entity in parentIter.Entities())
+                {
+                    parentIds.Add(entity.ID);
+                }
+            }
+
+            var childQuery = world.QueryBuilder().With<ChildTag>().Build();
+            var childIter = childQuery.Iter();
+            var childIds = new List<ulong>();
+            while (childIter.Next())
+            {
+                foreach (var entity in childIter.Entities())
+                {
+                    childIds.Add(entity.ID);
+                }
+            }
+
+            Assert.Single(parentIds);
+            Assert.Single(childIds);
+
+            var parentId = parentIds[0];
+            var childId = childIds[0];
+
+            ref var children = ref world.Get<Children>(parentId);
+            var enumerator = children.GetEnumerator();
+            Assert.True(enumerator.MoveNext());
+            Assert.Equal(childId, enumerator.Current);
+            Assert.False(enumerator.MoveNext());
+
+            ref var parent = ref world.Get<Parent>(childId);
+            Assert.Equal(parentId, parent.Id);
         }
 
         [Fact]
