@@ -405,6 +405,18 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
+	/// Check if a resource exists in the world (at the time this method is called).
+	/// Note: Since commands are deferred, the resource state may change before execution.
+	/// </summary>
+	public bool HasResource<T>() where T : notnull
+	{
+		if (_world == null)
+			throw new InvalidOperationException("Commands has not been initialized.");
+
+		return _world.HasResource<T>();
+	}
+
+	/// <summary>
 	/// Trigger a custom observer event.
 	/// </summary>
 	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
