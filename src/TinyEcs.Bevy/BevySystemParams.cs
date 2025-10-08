@@ -346,11 +346,34 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Get entity commands for an existing entity
+	/// Get entity commands for an existing entity.
+	/// Does not validate if the entity exists - commands will silently fail if entity is invalid.
+	/// Use TryEntity() for checked access.
 	/// </summary>
 	public EntityCommands Entity(ulong entityId)
 	{
 		return new EntityCommands(this, entityId);
+	}
+
+	/// <summary>
+	/// Try to get entity commands for an existing entity.
+	/// Returns true if the entity exists, false otherwise.
+	/// Similar to Bevy's get_entity() which returns Option&lt;EntityCommands&gt;.
+	/// Note: Since commands are deferred, the entity state may change before execution.
+	/// </summary>
+	public bool TryEntity(ulong entityId, out EntityCommands entityCommands)
+	{
+		if (_world == null)
+			throw new InvalidOperationException("Commands has not been initialized.");
+
+		if (_world.Exists(entityId))
+		{
+			entityCommands = new EntityCommands(this, entityId);
+			return true;
+		}
+
+		entityCommands = default;
+		return false;
 	}
 
 	/// <summary>
