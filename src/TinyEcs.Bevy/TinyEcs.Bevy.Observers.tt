@@ -34,7 +34,7 @@ public static partial class AppObserverExtensions
 	/// <summary>
 	/// Register an observer with system parameters
 	/// </summary>
-	public static App Observe<TTrigger, <#= generics #>>(this App app, Action<TTrigger, <#= generics #>> callback)
+	public static App AddObserver<TTrigger, <#= generics #>>(this App app, Action<TTrigger, <#= generics #>> callback)
 		where TTrigger : struct, ITrigger
 		<#= whereClause #>
 	{

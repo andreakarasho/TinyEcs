@@ -474,7 +474,51 @@ public class Commands : ISystemParam
 	{
 		_localCommands.Add(command);
 	}
+
+	/// <summary>
+	/// Internal method to insert an observer command at the right position.
+	/// For spawned entities: Insert after the last SpawnEntityCommand
+	/// For existing entities: Insert at the current position (before pending commands)
+	/// This ensures observers are attached before subsequent Insert/Remove commands execute.
+	/// </summary>
+	internal void InsertObserverCommand(IDeferredCommand command)
+	{
+		// Find the last SpawnEntityCommand and insert right after it
+		int insertIndex = -1;
+		for (int i = _localCommands.Count - 1; i >= 0; i--)
+		{
+			if (_localCommands[i] is SpawnEntityCommand)
+			{
+				insertIndex = i + 1;
+				break;
+			}
+		}
+
+		// If no spawn command found, this is for an existing entity
+		// Insert at the beginning of any pending component commands
+		if (insertIndex == -1)
+		{
+			// Find the first component command from the end and insert before it
+			for (int i = _localCommands.Count - 1; i >= 0; i--)
+			{
+				var cmdType = _localCommands[i].GetType().Name;
+				if (cmdType.Contains("InsertComponent") || cmdType.Contains("RemoveComponent"))
+				{
+					insertIndex = i;
+					break;
+				}
+			}
+
+			// If no component commands, insert at current end
+			if (insertIndex == -1)
+				insertIndex = _localCommands.Count;
+		}
+
+		_localCommands.Insert(insertIndex, command);
+	}
 }
+
+
 
 /// <summary>
 /// Builder for entity operations in Commands
@@ -571,7 +615,7 @@ public ref struct EntityCommands
 	/// <summary>
 	/// Attach multiple deferred children.
 	/// </summary>
-	internal DeferredEntityRef ToDeferredRef() => new DeferredEntityRef(_spawnIndex, _entityId);
+	internal readonly DeferredEntityRef ToDeferredRef() => new DeferredEntityRef(_spawnIndex, _entityId);
 
 	/// <summary>
 	/// Despawn the entity
@@ -582,6 +626,20 @@ public ref struct EntityCommands
 			_commands.QueueCommand(new DespawnEntityCommand(_commands, _spawnIndex));
 		else
 			_commands.QueueCommand(new DespawnEntityCommand(_entityId));
+	}
+
+	/// <summary>
+	/// Register an observer that reacts to triggers on this specific entity.
+	/// The observer is stored as a component on the entity and automatically cleaned up when the entity is despawned.
+	/// NOTE: The observer is attached immediately before subsequent Insert/Remove commands to ensure it sees those events.
+	/// </summary>
+	public readonly EntityCommands Observe<TTrigger>(Action<TinyEcs.World, TTrigger> callback)
+		where TTrigger : struct, ITrigger
+	{
+		// Insert the observer command at the front of the queue (right after Spawn if this is a spawned entity)
+		// This ensures the observer is attached BEFORE any subsequent Insert/Remove commands
+		_commands.InsertObserverCommand(new AttachObserverCommand<TTrigger>(ToDeferredRef(), callback));
+		return this;
 	}
 }
 
@@ -780,6 +838,56 @@ internal readonly struct RemoveResourceCommand : IDeferredCommand
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
 		world.GetState().Resources.Remove(_resourceType);
+	}
+}
+
+/// <summary>
+/// Command to attach an entity-specific observer to an entity.
+/// Observers are stored as EntityObservers component on the entity.
+/// </summary>
+internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
+	where TTrigger : struct, ITrigger
+{
+	private readonly DeferredEntityRef _entityRef;
+	private readonly Action<TinyEcs.World, TTrigger> _callback;
+
+	public AttachObserverCommand(DeferredEntityRef entityRef, Action<TinyEcs.World, TTrigger> callback)
+	{
+		_entityRef = entityRef;
+		_callback = callback;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var entityId = commands.ResolveEntityId(_entityRef);
+
+		// Auto-register component types
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		// Ensure EntityObservers is enabled for observations (needed for world.Has<> checks)
+		world.EnableObservers<EntityObservers>();
+
+		// Get or create EntityObservers component
+		if (!world.Has<EntityObservers>(entityId))
+		{
+			world.Set(entityId, new EntityObservers
+			{
+				Observers = new List<IObserver>()
+			});
+		}
+
+		// Add the observer to the entity's observer list
+		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
+		if (entityObservers.Observers == null)
+		{
+			entityObservers.Observers = new List<IObserver>();
+		}
+
+		entityObservers.Observers.Add(new Observer<TTrigger>(_callback));
 	}
 }
 

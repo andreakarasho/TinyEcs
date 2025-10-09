@@ -35,31 +35,31 @@ public static class ObserverExample
 		// Observers automatically enable component tracking when registered!
 
 		// Observer: React when Position is updated
-		app.Observe<OnInsert<Position>>((world, trigger) =>
+		app.AddObserver<OnInsert<Position>>((world, trigger) =>
 		{
 			Console.WriteLine($"📍 Entity {trigger.EntityId} moved to ({trigger.Component.X}, {trigger.Component.Y})");
 		});
 
 		// Observer: React when Health is removed
-		app.Observe<OnRemove<Health>>((world, trigger) =>
+		app.AddObserver<OnRemove<Health>>((world, trigger) =>
 		{
 			Console.WriteLine($"💀 Entity {trigger.EntityId} lost Health component");
 		});
 
 		// Observer: React when entity spawns
-		app.Observe<OnSpawn>((world, trigger) =>
+		app.AddObserver<OnSpawn>((world, trigger) =>
 		{
 			Console.WriteLine($"✨ Entity {trigger.EntityId} spawned");
 		});
 
 		// Observer: React when entity despawns
-		app.Observe<OnDespawn>((world, trigger) =>
+		app.AddObserver<OnDespawn>((world, trigger) =>
 		{
 			Console.WriteLine($"💥 Entity {trigger.EntityId} despawned");
 		});
 
 		// Observer with system parameters - check if it's an enemy when health is added
-		app.Observe<OnInsert<Health>, TinyEcs.Bevy.Query<Data<Enemy>>>((trigger, query) =>
+		app.AddObserver<OnInsert<Health>, TinyEcs.Bevy.Query<Data<Enemy>>>((trigger, query) =>
 		{
 			if (query.Contains(trigger.EntityId))
 			{

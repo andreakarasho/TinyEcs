@@ -145,8 +145,8 @@ namespace TinyEcs.Tests
             var spawns = new List<ulong>();
             var despawns = new List<ulong>();
 
-            app.Observe<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
-            app.Observe<OnDespawn>((_, trigger) => despawns.Add(trigger.EntityId));
+            app.AddObserver<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
+            app.AddObserver<OnDespawn>((_, trigger) => despawns.Add(trigger.EntityId));
 
             ulong spawnedEntity = 0;
             bool deleted = false;
@@ -189,7 +189,7 @@ namespace TinyEcs.Tests
             app.AddResource(tracker)
                .AddResource(log);
 
-            app.Observe<OnRemove<Velocity>, TinyEcs.Bevy.Res<ScoreTracker>, TinyEcs.Bevy.ResMut<RemovalLog>>((trigger, score, removalLog) =>
+            app.AddObserver<OnRemove<Velocity>, TinyEcs.Bevy.Res<ScoreTracker>, TinyEcs.Bevy.ResMut<RemovalLog>>((trigger, score, removalLog) =>
             {
                 Assert.Equal(99, score.Value.Baseline);
                 removalLog.Value.Count++;
@@ -230,9 +230,9 @@ namespace TinyEcs.Tests
             var app = new App(world);
             var events = new List<string>();
 
-            app.Observe<OnInsert<Position>>((_, trigger) =>
+            app.AddObserver<OnInsert<Position>>((_, trigger) =>
                 events.Add($"insert:{trigger.EntityId}:{trigger.Component.X}"));
-            app.Observe<OnRemove<Position>>((_, trigger) =>
+            app.AddObserver<OnRemove<Position>>((_, trigger) =>
                 events.Add($"remove:{trigger.EntityId}"));
 
             ulong entityId = 0;
@@ -271,11 +271,11 @@ namespace TinyEcs.Tests
             var app = new App(world);
             var events = new List<string>();
 
-            app.Observe<OnDespawn>((_, trigger) =>
+            app.AddObserver<OnDespawn>((_, trigger) =>
                 events.Add($"despawn:{trigger.EntityId}"));
-            app.Observe<OnRemove<Position>>((_, trigger) =>
+            app.AddObserver<OnRemove<Position>>((_, trigger) =>
                 events.Add($"remove:position:{trigger.EntityId}"));
-            app.Observe<OnRemove<Velocity>>((_, trigger) =>
+            app.AddObserver<OnRemove<Velocity>>((_, trigger) =>
                 events.Add($"remove:velocity:{trigger.EntityId}"));
 
             ulong entityId = 0;
@@ -321,8 +321,8 @@ namespace TinyEcs.Tests
             var spawns = new List<ulong>();
             var inserts = new List<int>();
 
-            app.Observe<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
-            app.Observe<OnInsert<Health>>((_, trigger) => inserts.Add(trigger.Component.Value));
+            app.AddObserver<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
+            app.AddObserver<OnInsert<Health>>((_, trigger) => inserts.Add(trigger.Component.Value));
 
             var system = SystemFunctionAdapters.Create<TinyEcs.Bevy.ResMut<MutableCounter>, TinyEcs.Bevy.Commands>((counterParam, commands) =>
             {
@@ -921,6 +921,197 @@ namespace TinyEcs.Tests
             Assert.Equal(50, existingEntity.Get<Transform>().X);
             Assert.Equal(75, existingEntity.Get<Transform>().Y);
             Assert.Equal(123, existingEntity.Get<Sprite2>().TextureId);
+        }
+
+        [Fact]
+        public void EntitySpecificObserverTriggersOnlyForTargetEntity()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var triggeredEntityIds = new List<ulong>();
+            var triggeredHealthValues = new List<int>();
+
+            var system = SystemFunctionAdapters.Create<Commands>(commands =>
+            {
+                // Spawn entity 1 with entity-specific observer
+                var entity1 = commands.Spawn()
+                    .Insert(new Health { Value = 100 })
+                    .Observe<OnInsert<Health>>((w, trigger) =>
+                    {
+                        triggeredEntityIds.Add(trigger.EntityId);
+                        triggeredHealthValues.Add(trigger.Component.Value);
+                    });
+
+                // Spawn entity 2 without observer
+                var entity2 = commands.Spawn()
+                    .Insert(new Health { Value = 50 });
+            });
+
+            app.AddSystem(system)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            // Only entity1's observer should have fired
+            Assert.Single(triggeredEntityIds);
+            Assert.Single(triggeredHealthValues);
+            Assert.Equal(100, triggeredHealthValues[0]);
+        }
+
+        [Fact]
+        public void EntitySpecificObserverTriggersOnDespawn()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var despawnedEntityId = 0UL;
+            var targetEntityId = new List<ulong>();
+            app.AddResource(targetEntityId);
+
+            var spawnSystem = SystemFunctionAdapters.Create<Commands, ResMut<List<ulong>>>(
+                (commands, ids) =>
+            {
+                commands.Spawn()
+                    .Observe<OnDespawn>((w, trigger) =>
+                    {
+                        despawnedEntityId = trigger.EntityId;
+                        if (!ids.Value.Contains(trigger.EntityId))
+                            ids.Value.Add(trigger.EntityId);
+                    })
+                    .Observe<OnInsert<Health>>((w, trigger) =>
+                    {
+                        if (!ids.Value.Contains(trigger.EntityId))
+                            ids.Value.Add(trigger.EntityId);
+                    })
+                    .Insert(new Health { Value = 75 });
+            });
+
+            app.AddSystem(spawnSystem)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            // Entity spawned, observer registered, but not despawned yet
+            Assert.Equal(0UL, despawnedEntityId);
+            Assert.Single(targetEntityId);
+            Assert.NotEqual(0UL, targetEntityId[0]);
+
+            // Now despawn the entity
+            var entityToDelete = targetEntityId[0];
+            var despawnSystem = SystemFunctionAdapters.Create<Commands>(commands =>
+            {
+                commands.Entity(entityToDelete).Despawn();
+            });
+
+            app.AddSystem(despawnSystem)
+                .InStage(Stage.PostUpdate)
+                .Build();
+
+            app.Run();
+
+            // Observer should have fired
+            Assert.Equal(entityToDelete, despawnedEntityId);
+        }
+
+        [Fact]
+        public void EntitySpecificObserverOnlyTriggersForCorrectEntity()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var entity1Triggers = new List<int>();
+            var entity2Triggers = new List<int>();
+
+            // Resource to store entity IDs after they're spawned
+            var entityIds = new List<ulong>();
+            app.AddResource(entityIds);
+
+            var spawnSystem = SystemFunctionAdapters.Create<Commands, ResMut<List<ulong>>>(
+                (commands, ids) =>
+            {
+                // Entity 1 with observer
+                commands.Spawn()
+                    .Observe<OnInsert<Health>>((w, trigger) =>
+                    {
+                        entity1Triggers.Add(trigger.Component.Value);
+                        if (!ids.Value.Contains(trigger.EntityId))
+                            ids.Value.Add(trigger.EntityId);
+                    })
+                    .Insert(new Health { Value = 100 });
+
+                // Entity 2 with different observer
+                commands.Spawn()
+                    .Observe<OnInsert<Health>>((w, trigger) =>
+                    {
+                        entity2Triggers.Add(trigger.Component.Value);
+                        if (!ids.Value.Contains(trigger.EntityId))
+                            ids.Value.Add(trigger.EntityId);
+                    })
+                    .Insert(new Health { Value = 200 });
+            });
+
+            app.AddSystem(spawnSystem)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            // Each observer should have fired only once for its own entity
+            Assert.Single(entity1Triggers);
+            Assert.Single(entity2Triggers);
+            Assert.Equal(100, entity1Triggers[0]);
+            Assert.Equal(200, entity2Triggers[0]);
+            Assert.Equal(2, entityIds.Count);
+
+            // Now update entity1's health - only entity1's observer should fire
+            var entity1Id = entityIds[0];
+            world.Set(entity1Id, new Health { Value = 150 });
+            world.FlushObservers();
+
+            Assert.Equal(2, entity1Triggers.Count); // Fired again
+            Assert.Single(entity2Triggers); // Did not fire
+            Assert.Equal(150, entity1Triggers[1]);
+        }
+
+        [Fact]
+        public void EntitySpecificObserverWorksWithExistingEntity()
+        {
+            using var world = new World();
+            var app = new App(world);
+
+            var existingEntity = world.Entity();
+            var entityId = existingEntity.ID;
+            var triggered = new List<int>();
+
+            var system = SystemFunctionAdapters.Create<Commands>(commands =>
+            {
+                // Attach observer to existing entity BEFORE inserting component
+                commands.Entity(entityId)
+                    .Observe<OnInsert<Health>>((w, trigger) =>
+                    {
+                        triggered.Add(trigger.Component.Value);
+                    })
+                    .Insert(new Health { Value = 99 });
+            });
+
+            app.AddSystem(system)
+                .InStage(Stage.Update)
+                .Build();
+
+            app.Run();
+
+            Assert.Single(triggered);
+            Assert.Equal(99, triggered[0]);
+
+            // Update the health again
+            world.Set(entityId, new Health { Value = 88 });
+            world.FlushObservers();
+
+            Assert.Equal(2, triggered.Count);
+            Assert.Equal(88, triggered[1]);
         }
     }
 }

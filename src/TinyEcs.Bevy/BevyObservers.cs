@@ -18,9 +18,18 @@ public interface ITrigger
 }
 
 /// <summary>
+/// Marker interface for triggers that have an EntityId field.
+/// Used for reflection-free entity ID extraction.
+/// </summary>
+public interface IEntityTrigger
+{
+	ulong EntityId { get; }
+}
+
+/// <summary>
 /// Trigger when a component is added to an entity
 /// </summary>
-public readonly record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger
+public readonly record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -34,7 +43,7 @@ public readonly record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger
 /// <summary>
 /// Trigger when a component is inserted/updated on an entity
 /// </summary>
-public readonly record struct OnInsert<T>(ulong EntityId, T Component) : ITrigger
+public readonly record struct OnInsert<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -48,7 +57,7 @@ public readonly record struct OnInsert<T>(ulong EntityId, T Component) : ITrigge
 /// <summary>
 /// Trigger when a component is removed from an entity
 /// </summary>
-public readonly record struct OnRemove<T>(ulong EntityId, T Component) : ITrigger
+public readonly record struct OnRemove<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -62,7 +71,7 @@ public readonly record struct OnRemove<T>(ulong EntityId, T Component) : ITrigge
 /// <summary>
 /// Trigger when an entity is spawned
 /// </summary>
-public readonly record struct OnSpawn(ulong EntityId) : ITrigger
+public readonly record struct OnSpawn(ulong EntityId) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -76,7 +85,7 @@ public readonly record struct OnSpawn(ulong EntityId) : ITrigger
 /// <summary>
 /// Trigger when an entity is despawned
 /// </summary>
-public readonly record struct OnDespawn(ulong EntityId) : ITrigger
+public readonly record struct OnDespawn(ulong EntityId) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -114,6 +123,21 @@ public interface IObserver
 {
 	void Execute(TinyEcs.World world, object trigger);
 	Type TriggerType { get; }
+}
+
+/// <summary>
+/// Component that stores entity-specific observers.
+/// This component is automatically added to entities that have observers attached.
+/// Note: The List is a reference type, so it persists correctly even though this is a struct.
+/// </summary>
+internal struct EntityObservers
+{
+	public List<IObserver>? Observers;
+
+	public EntityObservers()
+	{
+		Observers = new List<IObserver>();
+	}
 }
 
 /// <summary>
@@ -326,18 +350,39 @@ public static class ObserverExtensions
 	}
 
 	/// <summary>
-	/// Emit a trigger to all observers
+	/// Emit a trigger to all observers (both global and entity-specific)
 	/// </summary>
 	public static void EmitTrigger<TTrigger>(this TinyEcs.World world, TTrigger trigger)
 	{
 		var state = world.GetObserverState();
 		var triggerType = typeof(TTrigger);
 
+		// Fire global observers
 		if (state.Observers.TryGetValue(triggerType, out var observers))
 		{
 			foreach (var observer in observers)
 			{
 				observer.Execute(world, trigger!);
+			}
+		}
+
+		// Fire entity-specific observers if this trigger has an entity ID
+		if (trigger is IEntityTrigger entityTrigger)
+		{
+			var entityId = entityTrigger.EntityId;
+			if (world.Has<EntityObservers>(entityId))
+			{
+				ref var entityObservers = ref world.Get<EntityObservers>(entityId);
+				if (entityObservers.Observers != null)
+				{
+					foreach (var observer in entityObservers.Observers)
+					{
+						if (observer.TriggerType == triggerType)
+						{
+							observer.Execute(world, trigger!);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -377,7 +422,7 @@ public static partial class AppObserverExtensions
 	/// <summary>
 	/// Register an observer that runs when the trigger occurs
 	/// </summary>
-	public static App Observe<TTrigger>(this App app, Action<TinyEcs.World, TTrigger> callback)
+	public static App AddObserver<TTrigger>(this App app, Action<TinyEcs.World, TTrigger> callback)
 		where TTrigger : struct, ITrigger
 	{
 		var world = app.GetWorld();
