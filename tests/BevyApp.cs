@@ -1139,7 +1139,7 @@ namespace TinyEcs.Tests
 			// Test 1: First addition - both should fire
 			var entity = world.Entity();
 			var entityId = entity.ID;
-			
+
 			entity.Set(new Health { Value = 100 });
 			world.FlushObservers();
 
@@ -1169,6 +1169,119 @@ namespace TinyEcs.Tests
 			// OnInsert fired three times total
 			Assert.Equal(3, onInsertEvents.Count);
 			Assert.Equal(200, onInsertEvents[2]);
+		}
+
+		[Fact]
+		public void ObserverPropagation_BubblesUpParentHierarchy()
+		{
+			// Test that triggers with .Propagate(true) fire on parent entities
+			using var world = new World();
+			world.EnableObservers<Health>();
+
+			var triggerLog = new List<(ulong EntityId, int Value, string Source)>();
+
+			// Create entities and set up hierarchy
+			var grandparentId = world.Entity().ID;
+			var parentId = world.Entity().ID;
+			var childId = world.Entity().ID;
+
+			world.Set(parentId, new Parent { Id = grandparentId });
+			world.Set(childId, new Parent { Id = parentId });
+
+			// Create Commands to register observers
+			var app = new App(world);
+			var system = SystemFunctionAdapters.Create<Commands>(commands =>
+			{
+				commands.Entity(childId).Observe<OnInsert<Health>>((w, trigger) =>
+				{
+					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "child observer"));
+				});
+
+				commands.Entity(parentId).Observe<OnInsert<Health>>((w, trigger) =>
+				{
+					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "parent observer"));
+				});
+
+				commands.Entity(grandparentId).Observe<OnInsert<Health>>((w, trigger) =>
+				{
+					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "grandparent observer"));
+				});
+			});
+
+			app.AddSystem(system).InStage(Stage.Update).Build();
+			app.Run();
+
+			// Test 1: Non-propagating trigger (default) - should only fire on child
+			world.Set(childId, new Health { Value = 100 });
+			world.FlushObservers();
+
+			// Only child observer should fire
+			Assert.Single(triggerLog);
+			Assert.Equal(childId, triggerLog[0].EntityId);
+			Assert.Equal(100, triggerLog[0].Value);
+			Assert.Equal("child observer", triggerLog[0].Source);
+
+			triggerLog.Clear();
+
+			// Test 2: Propagating trigger - should fire on child, parent, and grandparent
+			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 200 }).Propagate(true));
+
+			// All three observers should fire
+			Assert.Equal(3, triggerLog.Count);
+
+			// First: child observer
+			Assert.Equal(childId, triggerLog[0].EntityId);
+			Assert.Equal(200, triggerLog[0].Value);
+			Assert.Equal("child observer", triggerLog[0].Source);
+
+			// Second: parent observer (propagated)
+			Assert.Equal(childId, triggerLog[1].EntityId); // EntityId stays the same
+			Assert.Equal(200, triggerLog[1].Value);
+			Assert.Equal("parent observer", triggerLog[1].Source);
+
+			// Third: grandparent observer (propagated)
+			Assert.Equal(childId, triggerLog[2].EntityId); // EntityId stays the same
+			Assert.Equal(200, triggerLog[2].Value);
+			Assert.Equal("grandparent observer", triggerLog[2].Source);
+		}
+
+		[Fact]
+		public void ObserverPropagation_StopsAtRoot()
+		{
+			// Test that propagation stops when reaching an entity without a parent
+			using var world = new World();
+			world.EnableObservers<Health>();
+
+			var triggerLog = new List<string>();
+
+			// Create parent-child (no grandparent)
+			var parentId = world.Entity().ID;
+			var childId = world.Entity().ID;
+			world.Set(childId, new Parent { Id = parentId });
+
+			var app = new App(world);
+			var system = SystemFunctionAdapters.Create<Commands>(commands =>
+			{
+				commands.Entity(parentId).Observe<OnInsert<Health>>((w, trigger) =>
+				{
+					triggerLog.Add("parent");
+				});
+
+				commands.Entity(childId).Observe<OnInsert<Health>>((w, trigger) =>
+				{
+					triggerLog.Add("child");
+				});
+			});
+
+			app.AddSystem(system).InStage(Stage.Update).Build();
+			app.Run();
+
+			// Propagating trigger should fire on child and parent, then stop
+			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 100 }).Propagate(true));
+
+			Assert.Equal(2, triggerLog.Count);
+			Assert.Equal("child", triggerLog[0]);
+			Assert.Equal("parent", triggerLog[1]);
 		}
 	}
 }
