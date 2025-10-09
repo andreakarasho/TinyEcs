@@ -868,9 +868,6 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 		default(TTrigger).Register(world);
 #endif
 
-		// Ensure EntityObservers is enabled for observations (needed for world.Has<> checks)
-		world.EnableObservers<EntityObservers>();
-
 		// Get or create EntityObservers component
 		if (!world.Has<EntityObservers>(entityId))
 		{

@@ -274,11 +274,11 @@ public static class WorldExtensions
 		return null;
 	}
 
-internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
-{
-	var state = world.GetState();
-	var type = typeof(TState);
-	lock (state.SyncRoot)
+	internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
+	{
+		var state = world.GetState();
+		var type = typeof(TState);
+		lock (state.SyncRoot)
 		{
 			if (!state.States.TryGetValue(type, out var current))
 				return false;
@@ -685,6 +685,7 @@ public class App
 	private List<StageDescriptor>? _sortedStages = null;
 	private readonly Dictionary<Stage, List<SystemDescriptor>> _sortedStageSystems = new();
 	private readonly Dictionary<Stage, List<List<SystemDescriptor>>> _cachedBatches = new();
+	private bool _executionOrderDirty = false;
 
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
@@ -712,8 +713,16 @@ public class App
 	// Call this after all systems and stages are added (before first Run())
 	private void BuildExecutionOrder()
 	{
-		if (_sortedStages != null)
-			return; // Already built
+		if (_sortedStages != null && !_executionOrderDirty)
+			return; // Already built and not dirty
+
+		// Clear caches if rebuilding
+		if (_executionOrderDirty)
+		{
+			_sortedStageSystems.Clear();
+			_cachedBatches.Clear();
+			_executionOrderDirty = false;
+		}
 
 		// Sort stages once
 		_sortedStages = TopologicalSortStages();
@@ -733,25 +742,25 @@ public class App
 	public App AddResource<T>(T resource) where T : notnull
 	{
 		_world.AddResource(resource);
-	return this;
-}
-
-public App AddState<TState>(TState initialState) where TState : struct, Enum
-{
-	_world.SetState(initialState);
-
-	if (!_world.HasResource<State<TState>>())
-	{
-		_world.AddResource(new State<TState>(_world));
+		return this;
 	}
 
-	if (!_world.HasResource<NextState<TState>>())
+	public App AddState<TState>(TState initialState) where TState : struct, Enum
 	{
-		_world.AddResource(new NextState<TState>(_world));
-	}
+		_world.SetState(initialState);
 
-	return this;
-}
+		if (!_world.HasResource<State<TState>>())
+		{
+			_world.AddResource(new State<TState>(_world));
+		}
+
+		if (!_world.HasResource<NextState<TState>>())
+		{
+			_world.AddResource(new NextState<TState>(_world));
+		}
+
+		return this;
+	}
 
 	internal StageDescriptor GetOrCreateStageDescriptor(Stage stage)
 	{
@@ -827,6 +836,12 @@ public App AddState<TState>(TState initialState) where TState : struct, Enum
 		}
 		descriptor.Stage = stage; // Set the stage on the descriptor
 		_stageSystems[stage].Add(descriptor);
+
+		// Mark execution order as dirty if systems are added after initial build
+		if (_sortedStages != null)
+		{
+			_executionOrderDirty = true;
+		}
 	}
 
 	internal void RegisterLabel(string label, SystemDescriptor descriptor)
@@ -939,13 +954,13 @@ public App AddState<TState>(TState initialState) where TState : struct, Enum
 
 	public void RunStartup()
 	{
+		// Build execution order once before first run
+		BuildExecutionOrder();
+
 		if (_startupHasRun)
 			return;
 
 		_startupHasRun = true;
-
-		// Build execution order once before first run
-		BuildExecutionOrder();
 
 		// Increment world tick for change detection
 		// This marks all modifications in Startup with tick 1
@@ -1118,27 +1133,27 @@ public App AddState<TState>(TState initialState) where TState : struct, Enum
 		return batches;
 	}
 
-private void ProcessStateTransitions()
-{
-	var worldState = _world.GetState();
-	List<IQueuedStateTransition> transitions;
-	List<Action> detectors;
-	lock (worldState.SyncRoot)
+	private void ProcessStateTransitions()
 	{
-		transitions = worldState.PendingStateChanges.Values.ToList();
-		worldState.PendingStateChanges.Clear();
-		detectors = worldState.StateChangeDetectors.ToList();
-		worldState.StatesProcessedThisFrame.Clear();
+		var worldState = _world.GetState();
+		List<IQueuedStateTransition> transitions;
+		List<Action> detectors;
+		lock (worldState.SyncRoot)
+		{
+			transitions = worldState.PendingStateChanges.Values.ToList();
+			worldState.PendingStateChanges.Clear();
+			detectors = worldState.StateChangeDetectors.ToList();
+			worldState.StatesProcessedThisFrame.Clear();
+		}
+		foreach (var transition in transitions)
+		{
+			transition.Apply(_world);
+		}
+		foreach (var detector in detectors)
+		{
+			detector();
+		}
 	}
-	foreach (var transition in transitions)
-	{
-		transition.Apply(_world);
-	}
-	foreach (var detector in detectors)
-	{
-		detector();
-	}
-}
 
 	public void Update() => Run();
 

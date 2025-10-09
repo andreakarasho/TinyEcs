@@ -75,6 +75,7 @@ public sealed partial class World
 
 	public event Action<World, EcsID>? OnEntityCreated, OnEntityDeleted;
 	public event Action<World, EcsID, ComponentInfo>? OnComponentSet, OnComponentUnset;
+	public event Action<World, EcsID, ComponentInfo>? OnComponentAdded;
 	public static event Action<World>? OnPluginInitialization;
 
 

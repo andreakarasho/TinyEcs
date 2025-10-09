@@ -135,10 +135,8 @@ namespace TinyEcs.Tests
 				if (i % 4 == 0) e.Set(new FloatComponent { Value = i });
 				if (i % 4 == 1) e.Set(new IntComponent { Value = i });
 				if (i % 4 == 2) e.Set(new BoolComponent { Value = i % 2 == 0 });
-				if (i % 4 == 3) e.Add<NormalTag>();
-			}
-
-			// Verify final state based on count
+				if (i % 4 == 3) e.Set<NormalTag>();
+			}           // Verify final state based on count
 			var hasFloat = count > 0;
 			var hasInt = count > 1;
 			var hasBool = count > 2;

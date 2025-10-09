@@ -166,6 +166,9 @@ public sealed partial class World : IDisposable
 		var column = size > 0 ? oldArch.GetComponentIndex(id) : oldArch.GetAnyIndex(id);
 		if (column >= 0)
 		{
+			// Component already exists - this is an update, not an add
+			OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size));
+
 			if (size > 0)
 			{
 				record.Chunk.MarkChanged(column, record.Row, _ticks);
@@ -173,6 +176,7 @@ public sealed partial class World : IDisposable
 			return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
 		}
 
+		// Component doesn't exist - this is a new addition
 		BeginDeferred();
 
 		var foundArch = oldArch.TraverseRight(id);
@@ -209,6 +213,8 @@ public sealed partial class World : IDisposable
 		record.Archetype = foundArch!;
 		EndDeferred();
 
+		// Fire both OnComponentAdded (first time) and OnComponentSet (all times)
+		OnComponentAdded?.Invoke(this, entity, new ComponentInfo(id, size));
 		OnComponentSet?.Invoke(this, entity, new ComponentInfo(id, size));
 
 #if USE_PAIR
