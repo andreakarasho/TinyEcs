@@ -141,6 +141,64 @@ Local<int> counter  // Per-system persistent state
 counter.Value++;
 ```
 
+**Composite System Parameters**:
+
+You can create custom system parameters that group multiple parameters together, reducing clutter and improving code organization. This mirrors Bevy's `SystemParam` derive macro.
+
+```csharp
+// Define a composite parameter
+public class PhysicsParams : ISystemParam
+{
+    public Query<Data<Position, Velocity>> MovingEntities = new();
+    public Res<TimeResource> Time = new();
+    public Commands Commands = new();
+
+    public void Initialize(World world)
+    {
+        MovingEntities.Initialize(world);
+        Time.Initialize(world);
+        Commands.Initialize(world);
+    }
+
+    public void Fetch(World world)
+    {
+        MovingEntities.Fetch(world);
+        Time.Fetch(world);
+        Commands.Fetch(world);
+    }
+
+    public SystemParamAccess GetAccess()
+    {
+        var access = new SystemParamAccess();
+        // Combine access from all sub-parameters
+        foreach (var read in MovingEntities.GetAccess().ReadResources)
+            access.ReadResources.Add(read);
+        foreach (var write in MovingEntities.GetAccess().WriteResources)
+            access.WriteResources.Add(write);
+        // ... repeat for Time and Commands
+        return access;
+    }
+}
+
+// Use in a system (replaces 3 parameters with 1)
+app.AddSystem((PhysicsParams physics) =>
+{
+    foreach (var (pos, vel) in physics.MovingEntities)
+    {
+        pos.Ref.X += vel.Ref.X * physics.Time.Value.Delta;
+    }
+}).InStage(Stage.Update).Build();
+```
+
+**Benefits**:
+- Reduces parameter count (1 composite param vs 3+ individual params)
+- Groups related functionality together
+- Makes systems more readable and maintainable
+- Reusable across multiple systems
+- Still maintains proper access tracking for parallel execution
+
+See `samples/MyBattleground/CompositeParamExample.cs` for a complete working example.
+
 ### Component Bundles
 ```csharp
 // Define a bundle
@@ -477,6 +535,21 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 - Made `Ptr<T>.Ref` public (previously `.Value`)
 - `Changed<T>`, `Added<T>`, `MarkChanged<T>` filters
 - Tick-based tracking per component
+
+### Composite System Parameters (NEW - 2025-10-10)
+- Added support for custom `ISystemParam` implementations that group multiple parameters
+- Mirrors Bevy's `SystemParam` derive macro pattern
+- Reduces parameter count and improves code organization
+- Example: Combine `Query`, `Res`, and `Commands` into a single `PhysicsParams` type
+- See [BevySystemParams.cs:1186-1249](src/TinyEcs.Bevy/BevySystemParams.cs#L1186-L1249) for documentation
+- See [CompositeParamExample.cs](samples/MyBattleground/CompositeParamExample.cs) for working example
+
+### State Transition Bug Fix (2025-10-10)
+- **Fixed critical bug**: `OnEnter` and `OnExit` systems were firing every frame instead of once per transition
+- Root cause: `PreviousStates` dictionary was not being updated after state transitions processed
+- Fix: Update `PreviousStates` to match `States` after running OnEnter/OnExit systems in `ProcessStateTransitions()`
+- All existing tests pass (31/31)
+- See [StateTransitionExample.cs](samples/MyBattleground/StateTransitionExample.cs) for verification test
 
 ## Migration Notes
 

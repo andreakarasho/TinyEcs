@@ -1004,10 +1004,6 @@ public class App
 	/// </summary>
 	private void ExecuteSystemsParallel(Stage stage)
 	{
-		// Use cached batches (already computed during BuildExecutionOrder)
-		if (!_cachedBatches.TryGetValue(stage, out var batches))
-			return;
-
 		// Determine if we should use parallel execution
 		bool useParallel = _threadingMode switch
 		{
@@ -1017,23 +1013,42 @@ public class App
 			_ => false
 		};
 
+		// In single-threaded mode, skip batching and just run systems in topological order
+		// This preserves declaration order and respects explicit dependencies
+		if (!useParallel)
+		{
+			if (!_sortedStageSystems.TryGetValue(stage, out var systems))
+				return;
+
+			foreach (var descriptor in systems)
+			{
+				if (descriptor.ShouldRun(_world))
+				{
+					descriptor.System.Run(_world);
+				}
+			}
+			return;
+		}
+
+		// Parallel mode: use cached batches (already computed during BuildExecutionOrder)
+		if (!_cachedBatches.TryGetValue(stage, out var batches))
+			return;
+
 		// Execute each batch (systems within a batch run in parallel)
 		foreach (var batch in batches)
 		{
-			if (batch.Count == 1 || !useParallel)
+			if (batch.Count == 1)
 			{
-				// Single system or single-threaded mode - run sequentially
-				foreach (var descriptor in batch)
+				// Single system - run directly
+				var descriptor = batch[0];
+				if (descriptor.ShouldRun(_world))
 				{
-					if (descriptor.ShouldRun(_world))
-					{
-						descriptor.System.Run(_world);
-					}
+					descriptor.System.Run(_world);
 				}
 			}
 			else
 			{
-				// Multiple systems and parallel mode enabled - run in parallel
+				// Multiple systems - run in parallel
 				Parallel.ForEach(batch, descriptor =>
 				{
 					if (descriptor.ShouldRun(_world))
@@ -1106,8 +1121,23 @@ public class App
 					access.WriteResources.Add(descriptor.System.GetType());
 				}
 
+				// Check if this system has explicit ordering dependencies with systems already in the batch
+				bool hasOrderingConflict = false;
+				foreach (var batchedSystem in batch)
+				{
+					// If this system must run before/after a system already in the batch, they can't be parallel
+					if (descriptor.BeforeSystems.Contains(batchedSystem) ||
+						descriptor.AfterSystems.Contains(batchedSystem) ||
+						batchedSystem.BeforeSystems.Contains(descriptor) ||
+						batchedSystem.AfterSystems.Contains(descriptor))
+					{
+						hasOrderingConflict = true;
+						break;
+					}
+				}
+
 				// Check if this system conflicts with the current batch
-				if (!batchAccess.ConflictsWith(access))
+				if (!hasOrderingConflict && !batchAccess.ConflictsWith(access))
 				{
 					// No conflict - add to batch
 					batch.Add(descriptor);
@@ -1225,7 +1255,7 @@ public class App
 			// Visit dependencies in their original declaration order
 			// Sort BeforeSystems by their position in the original systems list to preserve declaration order
 			var orderedBefore = node.BeforeSystems
-				.OrderBy(systems.IndexOf)
+				.OrderBy(s => systems.IndexOf(s))
 				.ToList();
 
 			foreach (var before in orderedBefore)
