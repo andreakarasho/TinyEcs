@@ -1153,6 +1153,16 @@ public class App
 		{
 			detector();
 		}
+
+		// After processing all state transitions and running OnEnter/OnExit systems,
+		// update PreviousStates to match current States so StateChanged returns false next frame
+		lock (worldState.SyncRoot)
+		{
+			foreach (var kvp in worldState.States)
+			{
+				worldState.PreviousStates[kvp.Key] = kvp.Value;
+			}
+		}
 	}
 
 	public void Update() => Run();
