@@ -318,15 +318,26 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Spawn a new entity and return a builder for adding components
+	/// Spawn a new entity and return a builder for adding components.
+	/// The entity is created immediately, but component insertions are still deferred.
+	/// This allows the entity ID to be known immediately for tracking purposes.
+	///
+	/// Thread-safety: This method modifies world state directly. However, systems using Commands
+	/// are prevented from running in parallel (Commands has exclusive resource access),
+	/// so this is safe when used through the Bevy scheduler.
 	/// </summary>
 	public EntityCommands Spawn()
 	{
-		// Reserve a slot in the list for the entity ID (will be filled when command executes)
-		int index = _spawnedEntityIds.Count;
-		_spawnedEntityIds.Add(0); // Placeholder - will be filled in Apply()
-		_localCommands.Add(new SpawnEntityCommand(index));
-		return new EntityCommands(this, index);
+		if (_world == null)
+			throw new InvalidOperationException("Commands has not been initialized.");
+
+		// Spawn the entity immediately to get the real ID
+		// This is safe because systems with Commands never run in parallel
+		var entity = _world.Entity();
+		ulong entityId = entity.ID;
+
+		// Component insertions are still deferred for thread-safety
+		return new EntityCommands(this, entityId);
 	}
 
 	/// <summary>
