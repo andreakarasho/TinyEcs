@@ -151,12 +151,14 @@ public class ResMut<T> : ISystemParam where T : notnull
 /// </summary>
 public class Local<T> : ISystemParam where T : new()
 {
-	public T Value { get; set; } = new T();
+	private T? _value;
+
+	public ref T? Value => ref _value;
 
 	public void Initialize(TinyEcs.World world)
 	{
 		// Local state is initialized once and persists
-		Value = new T();
+		_value = new T();
 	}
 
 	public void Fetch(TinyEcs.World world)
