@@ -51,9 +51,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
         }
 
@@ -130,9 +130,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
         }
@@ -215,9 +215,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -306,9 +306,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -403,9 +403,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -506,9 +506,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -615,9 +615,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -730,9 +730,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -851,9 +851,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -978,9 +978,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1111,9 +1111,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1250,9 +1250,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1395,9 +1395,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1546,9 +1546,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1703,9 +1703,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13, out Ptr<T14> ptr14)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13, out Ptr<T14> ptr14)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
@@ -1866,9 +1866,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13, out Ptr<T14> ptr14, out Ptr<T15> ptr15)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, out Ptr<T0> ptr0, out Ptr<T1> ptr1, out Ptr<T2> ptr2, out Ptr<T3> ptr3, out Ptr<T4> ptr4, out Ptr<T5> ptr5, out Ptr<T6> ptr6, out Ptr<T7> ptr7, out Ptr<T8> ptr8, out Ptr<T9> ptr9, out Ptr<T10> ptr10, out Ptr<T11> ptr11, out Ptr<T12> ptr12, out Ptr<T13> ptr13, out Ptr<T14> ptr14, out Ptr<T15> ptr15)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;

@@ -87,9 +87,9 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Deconstruct(out PtrRO<EntityView> entity, <#= fieldSign #>)
+        public readonly void Deconstruct(out PtrRO<ulong> entity, <#= fieldSign #>)
         {
-            entity = new (in _entities[_index]);
+            entity = new (in _entities[_index].ID);
             <#= fieldAssignments #>
         }
 
