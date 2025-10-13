@@ -1004,8 +1004,12 @@ public class App
 	/// </summary>
 	private void ExecuteSystemsParallel(Stage stage)
 	{
+		// Stage.Startup always runs in single-threaded mode by default
+		// This ensures deterministic initialization and proper resource setup
+		bool forceStartupSingleThreaded = stage == Stage.Startup;
+
 		// Determine if we should use parallel execution
-		bool useParallel = _threadingMode switch
+		bool useParallel = forceStartupSingleThreaded ? false : _threadingMode switch
 		{
 			ThreadingMode.Single => false,
 			ThreadingMode.Multi => true,

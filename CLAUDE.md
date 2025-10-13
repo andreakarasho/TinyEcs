@@ -56,7 +56,7 @@ while (running) app.Update(); // Run all stages
 ```
 
 **Default Stages** (in execution order):
-- `Stage.Startup` - Runs once on first frame
+- `Stage.Startup` - Runs once on first frame (always single-threaded)
 - `Stage.First` - First regular update stage
 - `Stage.PreUpdate` - Before main update
 - `Stage.Update` - Main gameplay logic
@@ -101,6 +101,7 @@ app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 - **Per-system override**: `.SingleThreaded()` or `.WithThreadingMode(mode)`
 - **Batching** - Systems without conflicts run in parallel batches
 - **Declaration order in batches** - Batches preserve system declaration order
+- **Startup stage**: `Stage.Startup` always runs in single-threaded mode regardless of app threading mode. This ensures deterministic initialization and proper resource setup.
 
 ### System Parameters
 

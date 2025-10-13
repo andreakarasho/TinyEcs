@@ -1283,5 +1283,60 @@ namespace TinyEcs.Tests
 			Assert.Equal("child", triggerLog[0]);
 			Assert.Equal("parent", triggerLog[1]);
 		}
+
+		[Fact]
+		public void StartupStageRunsSingleThreadedByDefault()
+		{
+			// Test that Stage.Startup runs single-threaded even when app uses ThreadingMode.Multi
+			using var world = new World();
+			var app = new App(world, ThreadingMode.Multi);
+
+			var executed = new List<string>();
+			var lockObj = new object();
+			var sharedCounter = new MutableCounter();
+			app.AddResource(sharedCounter);
+
+			// Add multiple systems in Startup - they should run in declaration order
+			// even with Multi threading mode because Startup forces single-threaded
+			app.AddSystem((ResMut<MutableCounter> counter) =>
+				{
+					lock (lockObj)
+					{
+						counter.Value.Value = 1;
+						executed.Add($"First:{counter.Value.Value}");
+					}
+				})
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.AddSystem((ResMut<MutableCounter> counter) =>
+				{
+					lock (lockObj)
+					{
+						counter.Value.Value = 2;
+						executed.Add($"Second:{counter.Value.Value}");
+					}
+				})
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.AddSystem((ResMut<MutableCounter> counter) =>
+				{
+					lock (lockObj)
+					{
+						counter.Value.Value = 3;
+						executed.Add($"Third:{counter.Value.Value}");
+					}
+				})
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.RunStartup();
+
+			// Systems should have run in strict declaration order
+			// This demonstrates single-threaded execution
+			Assert.Equal(new[] { "First:1", "Second:2", "Third:3" }, executed);
+			Assert.Equal(3, sharedCounter.Value);
+		}
 	}
 }

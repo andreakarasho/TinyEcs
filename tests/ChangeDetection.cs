@@ -40,7 +40,7 @@ namespace TinyEcs.Tests
             {
                 foreach (var (entity, _) in w.Query<Data<Position>, Added<Position>>())
                 {
-                    addedEntities.Add(entity.Ref.ID);
+                    addedEntities.Add(entity.Ref);
                 }
             });
 
@@ -89,7 +89,7 @@ namespace TinyEcs.Tests
             {
                 foreach (var (entity, _) in w.Query<Data<Position>, Changed<Position>>())
                 {
-                    changedEntities.Add(entity.Ref.ID);
+                    changedEntities.Add(entity.Ref);
                 }
             });
 
