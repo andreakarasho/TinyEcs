@@ -136,8 +136,9 @@ public readonly record struct OnDespawn(ulong EntityId, bool ShouldPropagate = f
 
 /// <summary>
 /// Trigger when a custom event is fired via Commands.Trigger.
+/// Can be used for both global events (EntityId = 0) and entity-specific events.
 /// </summary>
-public readonly record struct On<TEvent>(TEvent Event) : ITrigger
+public readonly record struct On<TEvent>(ulong EntityId, TEvent Event) : ITrigger, IEntityTrigger
 	where TEvent : struct
 {
 #if NET9_0_OR_GREATER
@@ -148,6 +149,11 @@ public readonly record struct On<TEvent>(TEvent Event) : ITrigger
 	{
 		// Custom events don't require registration.
 	}
+
+	/// <summary>
+	/// Create a global event (not tied to a specific entity)
+	/// </summary>
+	public On(TEvent evt) : this(0, evt) { }
 }
 
 // ============================================================================

@@ -1339,18 +1339,8 @@ namespace TinyEcs.Tests
 			Assert.Equal(3, sharedCounter.Value);
 		}
 
-		// Custom trigger for testing entity.EmitTrigger()
-		private readonly record struct OnClicked(ulong EntityId, int X, int Y, bool ShouldPropagate = false)
-			: ITrigger, IEntityTrigger, IPropagatingTrigger
-		{
-#if NET9_0_OR_GREATER
-			public static void Register(World world) { }
-#else
-			public readonly void Register(World world) { }
-#endif
-
-			public OnClicked Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
-		}
+		// Simple event struct for testing entity.EmitTrigger()
+		private readonly record struct OnClicked(int X, int Y);
 
 		[Fact]
 		public void EntityEmitTriggerFiresObserverViaCommands()
@@ -1367,9 +1357,9 @@ namespace TinyEcs.Tests
 			{
 				var entity = commands.Spawn()
 					.Insert(new Position { X = 100 })
-					.Observe<OnClicked>((trigger) =>
+					.Observe<On<OnClicked>>((trigger) =>
 					{
-						clickedEvents.Add((trigger.EntityId, trigger.X, trigger.Y));
+						clickedEvents.Add((trigger.EntityId, trigger.Event.X, trigger.Event.Y));
 					});
 				entityId = entity.Id;
 			})
@@ -1386,7 +1376,7 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				commands.Entity(entityId)
-					.EmitTrigger(new OnClicked(entityId, 50, 75));
+					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(50, 75)));
 			})
 			.InStage(Stage.Update)
 			.Build();
@@ -1416,16 +1406,16 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				var e1 = commands.Spawn()
-					.Observe<OnClicked>((trigger) =>
+					.Observe<On<OnClicked>>((trigger) =>
 					{
-						entity1Events.Add(trigger.X);
+						entity1Events.Add(trigger.Event.X);
 					});
 				entity1Id = e1.Id;
 
 				var e2 = commands.Spawn()
-					.Observe<OnClicked>((trigger) =>
+					.Observe<On<OnClicked>>((trigger) =>
 					{
-						entity2Events.Add(trigger.Y);
+						entity2Events.Add(trigger.Event.Y);
 					});
 				entity2Id = e2.Id;
 			})
@@ -1444,7 +1434,7 @@ namespace TinyEcs.Tests
 				if (!entity1Triggered)
 				{
 					commands.Entity(entity1Id)
-						.EmitTrigger(new OnClicked(entity1Id, 100, 200));
+						.EmitTrigger(new On<OnClicked>(entity1Id, new OnClicked(100, 200)));
 					entity1Triggered = true;
 				}
 			})
@@ -1468,7 +1458,7 @@ namespace TinyEcs.Tests
 				if (!entity2Triggered)
 				{
 					commands.Entity(entity2Id)
-						.EmitTrigger(new OnClicked(entity2Id, 300, 400));
+						.EmitTrigger(new On<OnClicked>(entity2Id, new OnClicked(300, 400)));
 					entity2Triggered = true;
 				}
 			})
@@ -1499,10 +1489,10 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				var entity = commands.Spawn()
-					.Observe<OnClicked, ResMut<MutableCounter>>((trigger, cnt) =>
+					.Observe<On<OnClicked>, ResMut<MutableCounter>>((trigger, cnt) =>
 					{
 						cnt.Value.Value++;
-						events.Add($"Clicked at ({trigger.X},{trigger.Y}) count={cnt.Value.Value}");
+						events.Add($"Clicked at ({trigger.Event.X},{trigger.Event.Y}) count={cnt.Value.Value}");
 					});
 				entityId = entity.Id;
 			})
@@ -1517,9 +1507,9 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				commands.Entity(entityId)
-					.EmitTrigger(new OnClicked(entityId, 10, 20));
+					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(10, 20)));
 				commands.Entity(entityId)
-					.EmitTrigger(new OnClicked(entityId, 30, 40));
+					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(30, 40)));
 			})
 			.InStage(Stage.Update)
 			.Build();
