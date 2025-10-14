@@ -680,14 +680,13 @@ public ref struct EntityCommands
 
 	/// <summary>
 	/// Emit a trigger for this specific entity.
-	/// The trigger must implement IEntityTrigger to work with entity-specific observers.
+	/// The entity ID is automatically injected - just provide the event data.
 	/// </summary>
-	public readonly void EmitTrigger<TTrigger>(TTrigger trigger)
-		where TTrigger : struct, ITrigger, IEntityTrigger
+	public readonly void EmitTrigger<TEvent>(TEvent evt)
+		where TEvent : struct
 	{
-		// Just use the entity ID directly - since Commands.Spawn() now creates entities immediately,
-		// _entityId is always valid
-		_commands.QueueCommand(new EntityTriggerCommand<TTrigger>(_entityId, trigger));
+		// Automatically wrap the event with On<TEvent> and inject the entity ID
+		_commands.QueueCommand(new EntityTriggerCommand<TEvent>(_entityId, evt));
 	}
 
 }
@@ -881,25 +880,25 @@ internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TE
 }
 
 /// <summary>
-/// Command to trigger an entity-specific observer event
+/// Command to trigger an entity-specific observer event.
+/// Automatically wraps the event with On&lt;TEvent&gt; and injects the entity ID.
 /// </summary>
-internal readonly struct EntityTriggerCommand<TTrigger> : IDeferredCommand
-	where TTrigger : struct, ITrigger, IEntityTrigger
+internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
+	where TEvent : struct
 {
 	private readonly ulong _entityId;
-	private readonly TTrigger _trigger;
+	private readonly TEvent _event;
 
-	public EntityTriggerCommand(ulong entityId, TTrigger trigger)
+	public EntityTriggerCommand(ulong entityId, TEvent evt)
 	{
 		_entityId = entityId;
-		_trigger = trigger;
+		_event = evt;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		// Emit the trigger with the entity ID
-		// The trigger should have a constructor or with method to set entity ID
-		world.EmitTrigger(_trigger);
+		// Wrap the event with On<TEvent> and inject the entity ID
+		world.EmitTrigger(new On<TEvent>(_entityId, _event));
 	}
 }
 

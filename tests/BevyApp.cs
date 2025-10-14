@@ -1376,7 +1376,7 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				commands.Entity(entityId)
-					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(50, 75)));
+					.EmitTrigger(new OnClicked(50, 75));
 			})
 			.InStage(Stage.Update)
 			.Build();
@@ -1434,7 +1434,7 @@ namespace TinyEcs.Tests
 				if (!entity1Triggered)
 				{
 					commands.Entity(entity1Id)
-						.EmitTrigger(new On<OnClicked>(entity1Id, new OnClicked(100, 200)));
+						.EmitTrigger(new OnClicked(100, 200));
 					entity1Triggered = true;
 				}
 			})
@@ -1458,7 +1458,7 @@ namespace TinyEcs.Tests
 				if (!entity2Triggered)
 				{
 					commands.Entity(entity2Id)
-						.EmitTrigger(new On<OnClicked>(entity2Id, new OnClicked(300, 400)));
+						.EmitTrigger(new OnClicked(300, 400));
 					entity2Triggered = true;
 				}
 			})
@@ -1507,9 +1507,9 @@ namespace TinyEcs.Tests
 			app.AddSystem((Commands commands) =>
 			{
 				commands.Entity(entityId)
-					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(10, 20)));
+					.EmitTrigger(new OnClicked(10, 20));
 				commands.Entity(entityId)
-					.EmitTrigger(new On<OnClicked>(entityId, new OnClicked(30, 40)));
+					.EmitTrigger(new OnClicked(30, 40));
 			})
 			.InStage(Stage.Update)
 			.Build();
