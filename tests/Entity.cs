@@ -80,7 +80,7 @@ namespace TinyEcs.Tests
 			var entity = ctx.World.Entity();
 
 			ctx.World.Set(entity, new FloatComponent());
-			ctx.World.Add<NormalTag>(entity);
+			ctx.World.Set<NormalTag>(entity);
 
 			Assert.True(ctx.World.Has<FloatComponent>(entity));
 			Assert.True(ctx.World.Has<NormalTag>(entity));
@@ -93,7 +93,7 @@ namespace TinyEcs.Tests
 			var entity = ctx.World.Entity();
 
 			ctx.World.Set(entity, new FloatComponent());
-			ctx.World.Add<NormalTag>(entity);
+			ctx.World.Set<NormalTag>(entity);
 			ctx.World.Set(entity, new LargeComponent());
 
 			Assert.True(ctx.World.Has<FloatComponent>(entity));
@@ -120,7 +120,7 @@ namespace TinyEcs.Tests
 			var entity = ctx.World.Entity();
 
 			ctx.World.Set(entity, new FloatComponent());
-			ctx.World.Add<NormalTag>(entity);
+			ctx.World.Set<NormalTag>(entity);
 
 			Assert.True(ctx.World.Has<FloatComponent>(entity));
 			Assert.True(ctx.World.Has<NormalTag>(entity));
@@ -413,9 +413,10 @@ namespace TinyEcs.Tests
 		public void Entity_Ensure_Tag_Is_Empty_When_Using_Add()
 		{
 			using var ctx = new Context();
-			var ent = ctx.World.Entity().Add<NormalTag>();
+			var ent = ctx.World.Entity().Set<NormalTag>();
 
 			Assert.Throws<Exception>(() => ctx.World.Get<NormalTag>(ent));
 		}
 	}
 }
+

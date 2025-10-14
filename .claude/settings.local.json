@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet run:*)",
+      "Bash(dotnet build)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dir:*)",
+      "Bash(dotnet t4:*)",
+      "Bash(ls:*)",
+      "Bash(dotnet tool:*)",
+      "Bash(t4:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

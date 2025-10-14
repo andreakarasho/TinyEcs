@@ -39,7 +39,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	  <ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />
+	  <ProjectReference Include="..\..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
 	</ItemGroup>
 
 </Project>

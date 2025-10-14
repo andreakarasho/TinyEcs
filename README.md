@@ -1,22 +1,25 @@
 # TinyEcs
-TinyEcs: a reflection-free dotnet ECS library, born to meet your needs.
+TinyEcs: a high-performance, reflection-free entity component system (ECS) framework for .NET with Bevy-inspired scheduling.
 
 ## Key Features
 
--   Fast
--   Reflection-free design
--   NativeAOT & bflat support
--   Zero runtime allocations
--   Relationships support
--   `Bevy systems` concept
+-   **Reflection-free**: No `GetType()` or runtime reflection - perfect for NativeAOT/bflat
+-   **Zero allocations**: Designed for minimal GC pressure in hot paths
+-   **Cache-friendly**: Archetype-based storage for optimal memory layout
+-   **Thread-safe**: Deferred command system with parallel execution support
+-   **Modern scheduling**: Bevy-inspired App, stages, system parameters, and plugins
+-   **Change detection**: Built-in tick tracking with `Changed<T>` and `Added<T>` filters
+-   **Component bundles**: Group related components for cleaner entity spawning
+-   **Observer system**: React to entity lifecycle events (spawn, despawn, component changes)
+-   **State management**: Enum-based state transitions with OnEnter/OnExit systems
 
 ## Requirements
--   `net8.0` for classic ecs only
--   `net9.0+` will include the `Bevy systems` support
+-   .NET 8.0+ for core ECS
+-   .NET 9.0+ recommended for full Bevy layer support
 
 ## Status
 
-🚧 Early development stage: Expect breaking changes! 🚧
+Active development - API stable for core features. Production-ready for single and multi-threaded scenarios.
 
 
 # Documentation
@@ -113,126 +116,127 @@ root.RemoveChild(anotherchild);
 root.Delete();
 ```
 
-## Scheduler
-The scheduler class is highly ispired by the [bevy scheduler concept](https://bevy-cheatbook.github.io/programming/schedules.html).
-This is the real deal for modern game engines which want to implement their game beahviour fast and easy.
+## Bevy-Inspired App & Scheduling
 
-### Create a scheduler
-A scheduler can handle one world only.
+TinyEcs includes a powerful scheduling layer inspired by [Bevy](https://bevyengine.org/), bringing modern ECS patterns to .NET.
+
+### Quick Start with App
+
 ```csharp
+using TinyEcs;
+using TinyEcs.Bevy;
+
 var world = new World();
-var scheduler = new Scheduler(world);
-```
----
-### Run a scheduler
-Control each tick using
-```csharp
-while (!exit) {
-    scheduler.RunOnce();
-}
-```
-or just run until a certain condition is met.
-```csharp
-var exitCalledFn = ExitCalled;
-scheduler.Run(exitCalledFn);
+var app = new App(world, ThreadingMode.Auto); // Auto, Single, or Multi
 
-bool ExitCalled() {
-    // handle your logic here
-}
-```
----
-### Systems
-Systems are where "things" happen. 
-You should wrap your game logic using systems!
+// Add systems to stages
+app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
+{
+    foreach (var (pos, vel) in query)
+        pos.Ref.Value += vel.Ref.Value * time.Value.Delta;
+})
+.InStage(Stage.Update)
+.Build();
 
-```csharp
-var printSomethingFn = PrintSomething;
-scheduler.OnUpdate(printSomethingFn);
-
-// The scheduler will run all systems registered before once
-scheduler.RunOnce();
-
-void PrintSomething() => Console.WriteLine("Hello from TinyEcs!");
+// Game loop (startup runs automatically on first call)
+while (running)
+    app.Run();
 ```
 
-The systems declaraction order matters.
-```csharp
-scheduler.OnUpdate(() => Console.WriteLine("Foo"));
-scheduler.OnUpdate(() => Console.WriteLine("Bar"));
-scheduler.OnUpdate(() => Console.WriteLine("Baz"));
-
-// This will print:
-// Foo
-// Bar
-// Baz
-scheduler.RunOnce();
-```
----
 ### Stages
-Systems are organized in stages:
+
+Systems execute in predefined stages (in order):
+- `Stage.Startup` - Runs once on first frame (always single-threaded)
+- `Stage.First` - First regular update stage
+- `Stage.PreUpdate` - Before main update
+- `Stage.Update` - Main gameplay logic
+- `Stage.PostUpdate` - After main update
+- `Stage.Last` - Final stage (rendering, cleanup)
+
+Custom stages supported:
 ```csharp
-scheduler.OnStartup(() => Console.WriteLine("1"));
-scheduler.OnFrameStart(() => Console.WriteLine("2"));
-scheduler.OnBeforeUpdate(() => Console.WriteLine("3"));
-scheduler.OnUpdate(() => Console.WriteLine("4"));
-scheduler.OnAfterUpdate(() => Console.WriteLine("5"));
-scheduler.OnFrameEnd(() => Console.WriteLine("6"));
-scheduler.OnStartup(() => Console.WriteLine("7"));
+var stage = Stage.Custom("Physics");
+app.AddStage(stage).After(Stage.Update).Before(Stage.PostUpdate);
+```
 
-// This will print:
-// 1 to 7 in order
-scheduler.RunOnce();
+### System Ordering
 
-// This will print:
-// 2 to 6 in order. "1" & "2" get excluded because the OnStartup are one-shot systems.
-scheduler.RunOnce();
+```csharp
+app.AddSystem(ProcessInput)
+   .InStage(Stage.Update)
+   .Label("input")
+   .Build();
+
+app.AddSystem(MovePlayer)
+   .InStage(Stage.Update)
+   .After("input")  // Runs after ProcessInput
+   .Build();
+```
+
+### Threading
+
+```csharp
+// Parallel execution (default with ThreadingMode.Auto)
+app.AddSystem(ParallelSystem).InStage(Stage.Update).Build();
+
+// Force single-threaded (e.g., for UI or graphics)
+app.AddSystem(RenderSystem)
+   .InStage(Stage.Last)
+   .SingleThreaded()
+   .Build();
 ```
 ---
 ### System parameters
 You can set 0 to 16 parameters in any order of any type per system.
 ```csharp
-scheduler.OnUpdate((
+app.AddSystem((
     World world,
     Query<Data<Position>> query1,
     Query<Data<Position>, Without<Velocity>> query2,
     Res<TileMap> tileMap
 ) => {
-});
+    // system logic
+})
+.InStage(Stage.Update)
+.Build();
 ```
 
 #### World
 Access to the `World` instance.
 ```csharp
 // Spawn an entity during the startup phase
-scheduler.OnStartup((World world) => world.Entity());
+app.AddSystem((World world) => world.Entity())
+   .InStage(Stage.Startup)
+   .Build();
 ```
 ---
 #### Commands
-Access to the `World` instance, but in deferred mode.
+Deferred command buffer for thread-safe entity operations.
 ```csharp
-// Spawn an entity during the startup phase in deferred mode
-scheduler.OnStartup((Commands commands) => commands.Entity());
+// Spawn an entity during the startup phase
+app.AddSystem((Commands commands) => commands.Spawn())
+   .InStage(Stage.Startup)
+   .Build();
 ```
 ---
 #### `Query<TData>`
 `TData` constraint is a `Data<T0...TN>` type which is used to express the set of components that contains data (no tags).
-Queries are one of the most type used in systems. They allow you to pick entities and manipulate the data associated with them.
+Queries are one of the most used types in systems. They allow you to pick entities and manipulate the data associated with them.
 ```csharp
-scheduler.OnUpdate((
-    Query<Data<Position, Velocity>> query
-) => {
-    // access to the entity data
+app.AddSystem((Query<Data<Position, Velocity>> query) => {
+    // Access component data
     foreach ((Ptr<Position> pos, Ptr<Velocity> vel) in query) {
         pos.Ref.X += vel.Ref.X;
-        pos.Ref.Y += vel.Ref.Y
+        pos.Ref.Y += vel.Ref.Y;
     }
 
-     // Access to the entity using the same query
-     foreach ((PtrRO<EntityView> entity, Ptr<Position> pos, Ptr<Velocity> vel) in query) {
-        pos.Ref.X += vel.Ref.X;
-        pos.Ref.Y += vel.Ref.Y
+    // Access entity ID along with components
+    foreach ((PtrRO<ulong> entityId, Ptr<Position> pos, Ptr<Velocity> vel) in query) {
+        Console.WriteLine($"Entity {entityId.Ref}: pos=({pos.Ref.X}, {pos.Ref.Y})");
     }
-});
+})
+.InStage(Stage.Update)
+.Build();
 ```
 
 
@@ -312,247 +316,281 @@ Query<
 ---
 #### Resources
 
-##### `Res<T>`
-`Res<T>` is a special system parameter which allow you to inject singleton classes/structs of any type globally.
-Here is where you gonna put your `GameNetworkSocket` implementation, your super `TileMap` code, the `GraphicDevice`, etc.
-Now guess what? Yeah you did it. They can get called in systems sign.
-```csharp
-// Declare the resource
-scheduler.AddResource(new GameNetworkSocket());
+##### `Res<T>` and `ResMut<T>`
+Resources are global singletons accessible across systems with proper borrowing semantics:
 
-scheduler.OnUpdate((Res<GameNetworkSocket> socket) => {
-    socket.Value.SendAttackPacket();
-});
+```csharp
+// Add resource
+app.AddResource(new Time { Delta = 0.016f });
+
+// Read-only access
+app.AddSystem((Res<Time> time) => {
+    Console.WriteLine($"Delta: {time.Value.Delta}");
+}).InStage(Stage.Update).Build();
+
+// Mutable access
+app.AddSystem((ResMut<Score> score) => {
+    score.Value.Points += 10;
+}).InStage(Stage.Update).Build();
 ```
+
+- `Res<T>.Value` returns `ref readonly T` (read-only borrowing)
+- `ResMut<T>.Value` returns `ref T` (exclusive write access)
+
 ##### `Local<T>`
-`Local<T>` are the same of `Res<T>` but it exists in the declared system only.
+Per-system persistent state:
 ```csharp
-scheduler.OnUpdate((Local<int> counter) => {
+app.AddSystem((Local<int> counter) => {
     counter.Value++;
-    Console.WriteLine("counter system A: {0}, counter.Value);
-});
+    Console.WriteLine($"System A: {counter.Value}");
+}).InStage(Stage.Update).Build();
 
-scheduler.OnUpdate((Local<int> counter) => {
+app.AddSystem((Local<int> counter) => {
     counter.Value++;
-    Console.WriteLine("counter system B: {0}, counter.Value);
-});
+    Console.WriteLine($"System B: {counter.Value}");
+}).InStage(Stage.Update).Build();
 
-// This will print
-// counter system A: 1
-// counter system B: 1
-scheduler.RunOnce();
+// Prints: System A: 1, System B: 1 (separate counters)
 ```
 ---
 #### Events
-Events are used to trigger behaviours between systems. Multiple system can read the same data using `EventReader<T>`. Events lives for 1 frame only.
+Events enable communication between systems. They persist across stages but clear between frames.
+
 ```csharp
-// Register the event
-scheduler.AddEvent<OnClicked>();
+struct ScoreEvent { public int Points; }
 
-// Read the events
-scheduler.OnUpdate((EventReader<OnClicked> reader) => {
-    foreach (var clickedEvent in reader) {
-        
-    }
-});
+// Write events
+app.AddSystem((EventWriter<ScoreEvent> writer) => {
+    writer.Send(new ScoreEvent { Points = 100 });
+}).InStage(Stage.Update).Build();
 
-// Create the events
-scheduler.OnUpdate((EventWriter<OnClicked> writer, Res<MouseContext> mouseCtx) => {
-    if (mouseCtx.Value.IsLeftClicked()) {
-        writer.Enqueue(new OnClicked() { MouseLeft = true });
-    }
-});
-
-struct OnClicked { public bool MouseLeft; }
+// Read events (available in same frame, after writer runs)
+app.AddSystem((EventReader<ScoreEvent> reader) => {
+    foreach (var evt in reader.Read())
+        Console.WriteLine($"Score: {evt.Points}");
+})
+.InStage(Stage.PostUpdate)
+.Build();
 ```
 ---
-#### SchedulerState
-`SchedulerState` is a system parameter which expose few Scheduler behaviour into the systems.
-```csharp
-scheduler.OnUpdate((SchedulerState sched) => {
-    sched.AddResource(new TileMap());
-});
-```
----
-#### State
-State are simply enums useful to run certain systems in certain conditions.
-
-##### `State<T>`
-This is a special system parameter which keeps the current state of `T`.
+#### State Management
+Enum-based state machines with transition systems:
 
 ```csharp
-// Register the state. No systems get triggered yet
-scheduler.AddState(GameState.Loading);
+enum GameState { Menu, Playing, Paused }
 
-// OnEnter/OnExit runs only when the state changes
-scheduler.OnEnter(GameState.Loading, () => Console.WriteLine("enter Loading"));
-scheduler.OnExit(GameState.Loading, () => Console.WriteLine("exit Loading"));
+app.AddState(GameState.Menu);
 
-scheduler.OnEnter(GameState.GamePlay, () => Console.WriteLine("enter GamePlay"));
-scheduler.OnExit(GameState.GamePlay, () => Console.WriteLine("exit GamePlay"));
+// Run on state entry
+app.AddSystem((Commands cmd) => {
+    cmd.Spawn().Insert(new Player());
+})
+.OnEnter(GameState.Playing)
+.Build();
 
-scheduler.OnUpdate((State<GameState> state, Local<int> currentStateIndex) => {
-    var states = Enum.GetValues<GameState>();
+// Run on state exit
+app.AddSystem((Query<Data<Player>> query, Commands cmd) => {
+    foreach (var player in query)
+        cmd.Entity(player.EntityId).Delete();
+})
+.OnExit(GameState.Playing)
+.Build();
 
-    // Switch to the next state
-    state.Set(states[currentStateIndex.Value % states.Length]);
-
-    currentStateIndex.Value += 1;
-});
-
-// This will run:
-// exit Loading
-// enter GamePlay
-schduler.RunOnce();
-
-// This will run:
-// exit GamePlay
-// enter Loading
-schduler.RunOnce();
-
-enum GameState
-{
-    Loading,
-    Gameplay
-}
+// Trigger transition
+app.AddSystem((ResMut<NextState<GameState>> next) => {
+    next.Value.Set(GameState.Playing);
+})
+.InStage(Stage.Update)
+.Build();
 ```
 ---
 #### System conditions
 Often you need to run a system only when a condition is met.
 ```csharp
-scheduler.OnUpdate((Res<int> val) => val.Value++);
-scheduler.OnUpdate((Res<int> val) => Console.WriteLine("val: {0}", val.Value))
-         // Run the system only when `val` is even...
-         .RunIf((Res<int> val) => val.Value % 2 == 0)
-         // and when exist entities with [Position + Velocity]
-         .RunIf((Query<Data<Position, Velocity>> query) => query.Count() > 0)
-         // and when the scheduler is in a specific state
-         .RunIf((SchedulerState sched) => sched.InState(GameState.Gameplay));
+app.AddSystem((ResMut<int> val) => val.Value++)
+   .InStage(Stage.Update)
+   .Build();
+
+app.AddSystem((Res<int> val) => Console.WriteLine($"val: {val.Value}"))
+   .InStage(Stage.Update)
+   // Run only when val is even
+   .RunIf((Res<int> val) => val.Value % 2 == 0)
+   // And when entities with [Position + Velocity] exist
+   .RunIf((Query<Data<Position, Velocity>> query) => query.Count() > 0)
+   .Build();
 ```
 ---
-### Plugin
-Plugins are a way to organize your code better.
+### Component Bundles
+
+Group related components for cleaner entity spawning:
 
 ```csharp
-scheduler.AddPlugin<UIPlugin>();
-scheduler.AddPlugin(new GameplayPlugin(1000));
-
-struct GameplayPlugin : IPlugin {
-    public GameplayPlugin(int entitiesToSpawn) {
-        EntitiesToSpawn = entitiesToSpawn;
-    }
-
-    public int EntitiesToSpawn { get; }
-    
-    public void Build(Scheduler scheduler) {
-        // declare your logic, use properties to apply any behaviour
-    }
-}
-
-struct UIPlugin : IPlugin {
-    public void Build(Scheduler scheduler) {
-        // declare your logic
-    }
-}
-```
----
-
-
-## Sample code
-
-This is a very basic example which doens't show the whole features set of this library.
-
-```csharp
-using var world = new World();
-var scheduler = new Scheduler(world);
-
-// create the Time variable accessible globally by any system which stays fixed at 60fps
-scheduler.AddResource(new Time() { FrameTime = 1000.0f / 60.0f });
-scheduler.AddResource(new AssetManager());
-
-var setupSysFn = Setup;
-scheduler.OnStartup(setupSysFn);
-
-var moveSysFn = MoveEntities;
-scheduler.OnUpdate(moveSysFn);
-
-var countSomethingSysFn = CountSomething;
-scheduler.OnUpdate(countSomethingSysFn);
-
-
-while (true)
-    scheduler.RunOnce();
-
-void Setup(World world, Res<AssetManager> assets)
+struct PlayerBundle : IBundle
 {
-    // spawn an entity and attach some components to it
-    world.Entity()
-        .Set(new Position() { X = 20f, Y = 9f  })
-        .Set(new Velocity() { X = 1f, Y = 1.3f });
+    public Position Position;
+    public Health Health;
+    public Sprite Sprite;
 
-    var texture = new Texture(0, 2, 2);
-    texture.SetData(new byte[] { 0, 0, 0, 0 });
-    assets.Value.Register("image.png", texture);
-}
-
-void MoveEntities(Query<Data<Position, Velocity>> query, Res<Time> time)
-{
-    foreach ((Ptr<Position> pos, Ptr<Velocity> vel) in query)
+    public readonly void Insert(EntityView entity)
     {
-        pos.Ref.X += vel.Ref.X * time.Value.FrameTime;
-        pos.Ref.Y += vel.Ref.Y * time.Value.FrameTime;
+        entity.Set(Position);
+        entity.Set(Health);
+        entity.Set(Sprite);
+    }
+
+    public readonly void Insert(EntityCommands entity)
+    {
+        entity.Insert(Position);
+        entity.Insert(Health);
+        entity.Insert(Sprite);
     }
 }
 
-void CountSomething(Local<int> localCounter, Res<Time> time)
+// Use bundle
+commands.SpawnBundle(new PlayerBundle
 {
-    localCounter.Value += 1;
+    Position = new Position { X = 0, Y = 0 },
+    Health = new Health { Value = 100 },
+    Sprite = new Sprite { Color = Color.Red }
+});
+```
+
+### Observers
+
+React to entity lifecycle events:
+
+```csharp
+// OnSpawn - fired when entity is created
+app.AddObserver<OnSpawn>((world, trigger) => {
+    Console.WriteLine($"Entity {trigger.EntityId} spawned");
+});
+
+// OnDespawn - fired when entity is deleted
+app.AddObserver<OnDespawn>((world, trigger) => {
+    Console.WriteLine($"Entity {trigger.EntityId} despawned");
+});
+
+// OnAdd<T> - fired when component is added for the FIRST time
+app.AddObserver<OnAdd<Health>>((world, trigger) => {
+    Console.WriteLine($"Health added first time: {trigger.Component.Value}");
+});
+
+// OnInsert<T> - fired when component is added OR updated
+app.AddObserver<OnInsert<Health>>((world, trigger) => {
+    Console.WriteLine($"Health set to: {trigger.Component.Value}");
+});
+
+// OnRemove<T> - fired when component is removed
+app.AddObserver<OnRemove<Health>>((world, trigger) => {
+    Console.WriteLine($"Health removed: {trigger.Component.Value}");
+});
+
+// Entity-specific observers (fire only for specific entity)
+commands.Spawn()
+    .Observe<OnInsert<Health>>((w, trigger) =>
+        Console.WriteLine($"My health: {trigger.Component.Value}"))
+    .Insert(new Health { Value = 100 });
+
+// Custom events with On<T>
+app.AddObserver<On<CustomEvent>>((world, trigger) => {
+    Console.WriteLine($"Custom event: {trigger.Event.Message}");
+});
+// Trigger custom event
+world.EmitTrigger(new On<CustomEvent>(new CustomEvent { Message = "Hello" }));
+```
+
+**Available Observer Events:**
+- `OnSpawn` - Entity created
+- `OnDespawn` - Entity deleted
+- `OnAdd<T>` - Component added (first time only)
+- `OnInsert<T>` - Component added or updated
+- `OnRemove<T>` - Component removed
+- `On<TEvent>` - Custom user-defined events
+
+### Plugins
+
+Organize code into reusable modules:
+
+```csharp
+struct PhysicsPlugin : IPlugin
+{
+    public float Gravity;
+
+    public void Build(App app)
+    {
+        app.AddResource(new PhysicsSettings { Gravity = Gravity });
+        app.AddSystem(ApplyGravity).InStage(Stage.Update).Build();
+    }
 }
+
+app.AddPlugin(new PhysicsPlugin { Gravity = 9.81f });
+```
+---
+
+
+## Complete Example
+
+A simple but complete example using the modern App API:
+
+```csharp
+using TinyEcs;
+using TinyEcs.Bevy;
+
+var world = new World();
+var app = new App(world, ThreadingMode.Auto);
+
+// Add resources
+app.AddResource(new Time { Delta = 1.0f / 60.0f });
+
+// Spawn entities in startup
+app.AddSystem((Commands commands) =>
+{
+    for (int i = 0; i < 1000; i++)
+    {
+        commands.Spawn()
+            .Insert(new Position { X = i * 10, Y = 0 })
+            .Insert(new Velocity { X = 1, Y = 1 });
+    }
+})
+.InStage(Stage.Startup)
+.Build();
+
+// Move entities
+app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
+{
+    foreach (var (pos, vel) in query)
+    {
+        pos.Ref.X += vel.Ref.X * time.Value.Delta;
+        pos.Ref.Y += vel.Ref.Y * time.Value.Delta;
+    }
+})
+.InStage(Stage.Update)
+.Label("movement")
+.Build();
+
+// Check bounds (runs after movement)
+app.AddSystem((Query<Data<Position, Velocity>> query) =>
+{
+    foreach (var (pos, vel) in query)
+    {
+        if (pos.Ref.X > 800) vel.Ref.X = -Math.Abs(vel.Ref.X);
+        if (pos.Ref.X < 0) vel.Ref.X = Math.Abs(vel.Ref.X);
+        if (pos.Ref.Y > 600) vel.Ref.Y = -Math.Abs(vel.Ref.Y);
+        if (pos.Ref.Y < 0) vel.Ref.Y = Math.Abs(vel.Ref.Y);
+    }
+})
+.InStage(Stage.Update)
+.After("movement")
+.Build();
+
+// Game loop (Run() automatically runs startup systems on first call)
+while (running)
+    app.Run();
 
 
 struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
-
-class Time
-{
-    public float FrameTime;
-}
-
-class Texture
-{
-    public Texture(int id, int width, int height)
-    {
-        Id = id;
-        Width = width;
-        Height = height;
-    }
-
-    public int Id { get; }
-    public int Width { get; }
-    public int Height { get; }
-
-    public void SetData(byte[] data)
-    {
-        // ...
-    }
-}
-
-class AssetManager
-{
-    private readonly Dictionary<string, Texture> _assets = new ();
-
-    public void Register(string name, Texture texture)
-    {
-        _assets[name] = texture;
-    }
-
-    public Texture? Get(string name)
-    {
-        _assets.TryGetValue(name, out var texture);
-        return texture;
-    }
-}
-
+class Time { public float Delta; }
 ```
 
 ## Run the pepe game!

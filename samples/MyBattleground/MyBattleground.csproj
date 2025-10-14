@@ -8,6 +8,9 @@
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<PublishAot>true</PublishAot>
+
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+		<CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\Generated</CompilerGeneratedFilesOutputPath>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="$(PublishAot) == 'true'">
@@ -32,7 +35,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\src\TinyEcs.csproj" />
+	  <ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />
+  <ProjectReference Include="..\..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
 	</ItemGroup>
 
 </Project>
