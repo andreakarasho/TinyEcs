@@ -937,7 +937,7 @@ namespace TinyEcs.Tests
 				// Spawn entity 1 with entity-specific observer
 				var entity1 = commands.Spawn()
 					.Insert(new Health { Value = 100 })
-					.Observe<OnInsert<Health>>((w, trigger) =>
+					.Observe<OnInsert<Health>>((trigger) =>
 					{
 						triggeredEntityIds.Add(trigger.EntityId);
 						triggeredHealthValues.Add(trigger.Component.Value);
@@ -975,13 +975,13 @@ namespace TinyEcs.Tests
 				(commands, ids) =>
 			{
 				commands.Spawn()
-					.Observe<OnDespawn>((w, trigger) =>
+					.Observe<OnDespawn>((trigger) =>
 					{
 						despawnedEntityId = trigger.EntityId;
 						if (!ids.Value.Contains(trigger.EntityId))
 							ids.Value.Add(trigger.EntityId);
 					})
-					.Observe<OnInsert<Health>>((w, trigger) =>
+					.Observe<OnInsert<Health>>((trigger) =>
 					{
 						if (!ids.Value.Contains(trigger.EntityId))
 							ids.Value.Add(trigger.EntityId);
@@ -1035,7 +1035,7 @@ namespace TinyEcs.Tests
 			{
 				// Entity 1 with observer
 				commands.Spawn()
-					.Observe<OnInsert<Health>>((w, trigger) =>
+					.Observe<OnInsert<Health>>((trigger) =>
 					{
 						entity1Triggers.Add(trigger.Component.Value);
 						if (!ids.Value.Contains(trigger.EntityId))
@@ -1045,7 +1045,7 @@ namespace TinyEcs.Tests
 
 				// Entity 2 with different observer
 				commands.Spawn()
-					.Observe<OnInsert<Health>>((w, trigger) =>
+					.Observe<OnInsert<Health>>((trigger) =>
 					{
 						entity2Triggers.Add(trigger.Component.Value);
 						if (!ids.Value.Contains(trigger.EntityId))
@@ -1091,7 +1091,7 @@ namespace TinyEcs.Tests
 			{
 				// Attach observer to existing entity BEFORE inserting component
 				commands.Entity(entityId)
-					.Observe<OnInsert<Health>>((w, trigger) =>
+					.Observe<OnInsert<Health>>((trigger) =>
 					{
 						triggered.Add(trigger.Component.Value);
 					})
@@ -1192,17 +1192,17 @@ namespace TinyEcs.Tests
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(childId).Observe<OnInsert<Health>>((w, trigger) =>
+				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
 				{
 					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "child observer"));
 				});
 
-				commands.Entity(parentId).Observe<OnInsert<Health>>((w, trigger) =>
+				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
 				{
 					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "parent observer"));
 				});
 
-				commands.Entity(grandparentId).Observe<OnInsert<Health>>((w, trigger) =>
+				commands.Entity(grandparentId).Observe<OnInsert<Health>>((trigger) =>
 				{
 					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "grandparent observer"));
 				});
@@ -1262,12 +1262,12 @@ namespace TinyEcs.Tests
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(parentId).Observe<OnInsert<Health>>((w, trigger) =>
+				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
 				{
 					triggerLog.Add("parent");
 				});
 
-				commands.Entity(childId).Observe<OnInsert<Health>>((w, trigger) =>
+				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
 				{
 					triggerLog.Add("child");
 				});

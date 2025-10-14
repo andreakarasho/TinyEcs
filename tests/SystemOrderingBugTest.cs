@@ -51,7 +51,7 @@ namespace TinyEcs.Tests
 		public void SystemsWithoutDependenciesShouldPreserveDeclarationOrder()
 		{
 			using var world = new World();
-			var app = new App(world);
+			var app = new App(world, ThreadingMode.Single);
 			var executed = new List<string>();
 
 			app.AddSystem(() => executed.Add("system1"))
