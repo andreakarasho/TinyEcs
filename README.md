@@ -600,10 +600,6 @@ cd samples/TinyEcsGame
 dotnet run -c Release
 ```
 
-## Bechmarks
-
--   [friflo - ECS.CSharp.Benchmark-common-use-cases](https://github.com/friflo/ECS.CSharp.Benchmark-common-use-cases/tree/main?tab=readme-ov-file#feature-matrix)
-
 ## Credits
 
 Inspired by:
