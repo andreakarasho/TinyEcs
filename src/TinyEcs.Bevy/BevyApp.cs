@@ -391,7 +391,7 @@ internal interface IQueuedStateTransition
 	Type StateType { get; }
 }
 
-internal sealed class QueuedStateTransition<TState> : IQueuedStateTransition where TState : struct, Enum
+internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition where TState : struct, Enum
 {
 	private readonly TState _next;
 

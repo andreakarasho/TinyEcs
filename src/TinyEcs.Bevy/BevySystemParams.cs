@@ -489,6 +489,17 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
+	/// Reflection-free check if a command is a component insertion or removal command.
+	/// Uses interface marker pattern instead of reflection.
+	/// </summary>
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private static bool IsComponentCommand(IDeferredCommand command)
+	{
+		// Use interface marker to identify component commands without reflection
+		return command is IComponentCommand;
+	}
+
+	/// <summary>
 	/// Internal method to insert an observer command at the right position.
 	/// For spawned entities: Insert after the last SpawnEntityCommand
 	/// For existing entities: Insert at the current position (before pending commands)
@@ -512,10 +523,12 @@ public class Commands : ISystemParam
 		if (insertIndex == -1)
 		{
 			// Find the first component command from the end and insert before it
+			// Use pattern matching to avoid reflection
 			for (int i = _localCommands.Count - 1; i >= 0; i--)
 			{
-				var cmdType = _localCommands[i].GetType().Name;
-				if (cmdType.Contains("InsertComponent") || cmdType.Contains("RemoveComponent"))
+				var cmd = _localCommands[i];
+				// Check if this is a component insertion or removal command using pattern matching
+				if (IsComponentCommand(cmd))
 				{
 					insertIndex = i;
 					break;
@@ -669,6 +682,14 @@ internal interface IDeferredCommand
 }
 
 /// <summary>
+/// Marker interface for component-related commands (Insert/Remove).
+/// Used to identify component commands without reflection.
+/// </summary>
+internal interface IComponentCommand : IDeferredCommand
+{
+}
+
+/// <summary>
 /// Command to spawn a new entity
 /// </summary>
 internal readonly struct SpawnEntityCommand : IDeferredCommand
@@ -690,7 +711,7 @@ internal readonly struct SpawnEntityCommand : IDeferredCommand
 /// <summary>
 /// Command to insert a component on an entity
 /// </summary>
-internal readonly struct InsertComponentCommand<T> : IDeferredCommand where T : struct
+internal readonly struct InsertComponentCommand<T> : IComponentCommand where T : struct
 {
 	private readonly int _spawnIndex; // -1 if existing entity
 	private readonly ulong _entityId;
@@ -722,7 +743,7 @@ internal readonly struct InsertComponentCommand<T> : IDeferredCommand where T : 
 /// <summary>
 /// Command to remove a component from an entity
 /// </summary>
-internal readonly struct RemoveComponentCommand<T> : IDeferredCommand where T : struct
+internal readonly struct RemoveComponentCommand<T> : IComponentCommand where T : struct
 {
 	private readonly int _spawnIndex; // -1 if existing entity
 	private readonly ulong _entityId;
