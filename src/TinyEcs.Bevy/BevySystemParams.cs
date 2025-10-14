@@ -678,6 +678,18 @@ public ref struct EntityCommands
 		return this;
 	}
 
+	/// <summary>
+	/// Emit a trigger for this specific entity.
+	/// The trigger must implement IEntityTrigger to work with entity-specific observers.
+	/// </summary>
+	public readonly void EmitTrigger<TTrigger>(TTrigger trigger)
+		where TTrigger : struct, ITrigger, IEntityTrigger
+	{
+		// Just use the entity ID directly - since Commands.Spawn() now creates entities immediately,
+		// _entityId is always valid
+		_commands.QueueCommand(new EntityTriggerCommand<TTrigger>(_entityId, trigger));
+	}
+
 }
 
 // ============================================================================
@@ -865,6 +877,29 @@ internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TE
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
 		world.EmitTrigger(new On<TEvent>(_event));
+	}
+}
+
+/// <summary>
+/// Command to trigger an entity-specific observer event
+/// </summary>
+internal readonly struct EntityTriggerCommand<TTrigger> : IDeferredCommand
+	where TTrigger : struct, ITrigger, IEntityTrigger
+{
+	private readonly ulong _entityId;
+	private readonly TTrigger _trigger;
+
+	public EntityTriggerCommand(ulong entityId, TTrigger trigger)
+	{
+		_entityId = entityId;
+		_trigger = trigger;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		// Emit the trigger with the entity ID
+		// The trigger should have a constructor or with method to set entity ID
+		world.EmitTrigger(_trigger);
 	}
 }
 

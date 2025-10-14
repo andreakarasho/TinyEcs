@@ -1338,5 +1338,199 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { "First:1", "Second:2", "Third:3" }, executed);
 			Assert.Equal(3, sharedCounter.Value);
 		}
+
+		// Custom trigger for testing entity.EmitTrigger()
+		private readonly record struct OnClicked(ulong EntityId, int X, int Y, bool ShouldPropagate = false)
+			: ITrigger, IEntityTrigger, IPropagatingTrigger
+		{
+#if NET9_0_OR_GREATER
+			public static void Register(World world) { }
+#else
+			public readonly void Register(World world) { }
+#endif
+
+			public OnClicked Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
+		}
+
+		[Fact]
+		public void EntityEmitTriggerFiresObserverViaCommands()
+		{
+			// Test that entity.EmitTrigger() works with commands
+			using var world = new World();
+			var app = new App(world);
+
+			var clickedEvents = new List<(ulong EntityId, int X, int Y)>();
+			ulong entityId = 0;
+
+			// System 1: Spawn entity with observer
+			app.AddSystem((Commands commands) =>
+			{
+				var entity = commands.Spawn()
+					.Insert(new Position { X = 100 })
+					.Observe<OnClicked>((trigger) =>
+					{
+						clickedEvents.Add((trigger.EntityId, trigger.X, trigger.Y));
+					});
+				entityId = entity.Id;
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			app.Run();
+
+			// Entity spawned and observer registered, but not triggered yet
+			Assert.Empty(clickedEvents);
+			Assert.NotEqual(0UL, entityId);
+
+			// System 2: Trigger the observer using entity.EmitTrigger()
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(entityId)
+					.EmitTrigger(new OnClicked(entityId, 50, 75));
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			// Observer should have fired
+			Assert.Single(clickedEvents);
+			Assert.Equal(entityId, clickedEvents[0].EntityId);
+			Assert.Equal(50, clickedEvents[0].X);
+			Assert.Equal(75, clickedEvents[0].Y);
+		}
+
+		[Fact]
+		public void EntityEmitTriggerOnlyFiresForSpecificEntity()
+		{
+			// Test that entity.EmitTrigger() only triggers the specific entity's observer
+			using var world = new World();
+			var app = new App(world);
+
+			var entity1Events = new List<int>();
+			var entity2Events = new List<int>();
+			ulong entity1Id = 0;
+			ulong entity2Id = 0;
+
+			// Spawn two entities with different observers
+			app.AddSystem((Commands commands) =>
+			{
+				var e1 = commands.Spawn()
+					.Observe<OnClicked>((trigger) =>
+					{
+						entity1Events.Add(trigger.X);
+					});
+				entity1Id = e1.Id;
+
+				var e2 = commands.Spawn()
+					.Observe<OnClicked>((trigger) =>
+					{
+						entity2Events.Add(trigger.Y);
+					});
+				entity2Id = e2.Id;
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			app.Run();
+
+			Assert.NotEqual(0UL, entity1Id);
+			Assert.NotEqual(0UL, entity2Id);
+
+			// Trigger only entity1
+			bool entity1Triggered = false;
+			app.AddSystem((Commands commands) =>
+			{
+				if (!entity1Triggered)
+				{
+					commands.Entity(entity1Id)
+						.EmitTrigger(new OnClicked(entity1Id, 100, 200));
+					entity1Triggered = true;
+				}
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			// Only entity1's observer should have fired
+			Assert.Single(entity1Events);
+			Assert.Empty(entity2Events);
+			Assert.Equal(100, entity1Events[0]);
+
+			// Now trigger only entity2
+			entity1Events.Clear();
+			entity2Events.Clear();
+
+			bool entity2Triggered = false;
+			app.AddSystem((Commands commands) =>
+			{
+				if (!entity2Triggered)
+				{
+					commands.Entity(entity2Id)
+						.EmitTrigger(new OnClicked(entity2Id, 300, 400));
+					entity2Triggered = true;
+				}
+			})
+			.InStage(Stage.PostUpdate)
+			.Build();
+
+			app.Run();
+
+			// Only entity2's observer should have fired
+			Assert.Empty(entity1Events);
+			Assert.Single(entity2Events);
+			Assert.Equal(400, entity2Events[0]);
+		}
+
+		[Fact]
+		public void EntityEmitTriggerWorksWithSystemParameters()
+		{
+			// Test that entity observers with system parameters work with EmitTrigger
+			using var world = new World();
+			var app = new App(world);
+
+			var events = new List<string>();
+			var counter = new MutableCounter();
+			app.AddResource(counter);
+			ulong entityId = 0;
+
+			// Spawn entity with observer that uses system parameters
+			app.AddSystem((Commands commands) =>
+			{
+				var entity = commands.Spawn()
+					.Observe<OnClicked, ResMut<MutableCounter>>((trigger, cnt) =>
+					{
+						cnt.Value.Value++;
+						events.Add($"Clicked at ({trigger.X},{trigger.Y}) count={cnt.Value.Value}");
+					});
+				entityId = entity.Id;
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			app.Run();
+
+			Assert.NotEqual(0UL, entityId);
+
+			// Trigger the observer twice
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(entityId)
+					.EmitTrigger(new OnClicked(entityId, 10, 20));
+				commands.Entity(entityId)
+					.EmitTrigger(new OnClicked(entityId, 30, 40));
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			// Observer should have fired twice with system parameter access
+			Assert.Equal(2, events.Count);
+			Assert.Equal("Clicked at (10,20) count=1", events[0]);
+			Assert.Equal("Clicked at (30,40) count=2", events[1]);
+			Assert.Equal(2, counter.Value);
+		}
 	}
 }
