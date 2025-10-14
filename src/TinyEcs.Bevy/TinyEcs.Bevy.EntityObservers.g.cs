@@ -15,9 +15,9 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			callback(trigger, p1);
@@ -32,10 +32,10 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -51,11 +51,11 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -72,12 +72,12 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
 		var p4 = new T4();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -95,13 +95,13 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
 		var p4 = new T4();
 		var p5 = new T5();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -120,14 +120,14 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
 		var p4 = new T4();
 		var p5 = new T5();
 		var p6 = new T6();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -147,7 +147,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -155,7 +155,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p5 = new T5();
 		var p6 = new T6();
 		var p7 = new T7();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -176,7 +176,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -185,7 +185,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p6 = new T6();
 		var p7 = new T7();
 		var p8 = new T8();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -207,7 +207,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -217,7 +217,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p7 = new T7();
 		var p8 = new T8();
 		var p9 = new T9();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -240,7 +240,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -251,7 +251,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p8 = new T8();
 		var p9 = new T9();
 		var p10 = new T10();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -275,7 +275,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -287,7 +287,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p9 = new T9();
 		var p10 = new T10();
 		var p11 = new T11();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -312,7 +312,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -325,7 +325,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p10 = new T10();
 		var p11 = new T11();
 		var p12 = new T12();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -351,7 +351,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -365,7 +365,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p11 = new T11();
 		var p12 = new T12();
 		var p13 = new T13();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -392,7 +392,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -407,7 +407,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p12 = new T12();
 		var p13 = new T13();
 		var p14 = new T14();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);
@@ -435,7 +435,7 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new()
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var p1 = new T1();
 		var p2 = new T2();
 		var p3 = new T3();
@@ -451,7 +451,7 @@ public static partial class EntityCommandsObserverExtensions
 		var p13 = new T13();
 		var p14 = new T14();
 		var p15 = new T15();
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
 			p2.Fetch(w);

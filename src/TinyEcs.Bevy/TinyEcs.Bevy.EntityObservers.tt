@@ -39,9 +39,9 @@ public static partial class EntityCommandsObserverExtensions
 		where TTrigger : struct, ITrigger
 		<#= whereClause #>
 	{
-		// Create the observer with system parameter injection
+		// Use ObserveWithWorld to get World access, then fetch system parameters
 		<#= paramDecls #>
-		return entity.Observe<TTrigger>((w, trigger) =>
+		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			<#= fetchCalls #>
 			callback(trigger, <#= callbackParams #>);

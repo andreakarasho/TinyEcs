@@ -659,7 +659,7 @@ public ref struct EntityCommands
 	/// The observer is stored as a component on the entity and automatically cleaned up when the entity is despawned.
 	/// NOTE: The observer is attached immediately before subsequent Insert/Remove commands to ensure it sees those events.
 	/// </summary>
-	public readonly EntityCommands Observe<TTrigger>(Action<TinyEcs.World, TTrigger> callback)
+	public readonly EntityCommands Observe<TTrigger>(Action<TTrigger> callback)
 		where TTrigger : struct, ITrigger
 	{
 		// Insert the observer command at the front of the queue (right after Spawn if this is a spawned entity)
@@ -667,6 +667,17 @@ public ref struct EntityCommands
 		_commands.InsertObserverCommand(new AttachObserverCommand<TTrigger>(ToDeferredRef(), callback));
 		return this;
 	}
+
+	/// <summary>
+	/// Internal method for system parameter support. Use the Observe overloads with system parameters instead.
+	/// </summary>
+	internal readonly EntityCommands ObserveWithWorld<TTrigger>(Action<World, TTrigger> callback)
+		where TTrigger : struct, ITrigger
+	{
+		_commands.InsertObserverCommand(new AttachObserverWithWorldCommand<TTrigger>(ToDeferredRef(), callback));
+		return this;
+	}
+
 }
 
 // ============================================================================
@@ -883,9 +894,9 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 	where TTrigger : struct, ITrigger
 {
 	private readonly DeferredEntityRef _entityRef;
-	private readonly Action<TinyEcs.World, TTrigger> _callback;
+	private readonly Action<TTrigger> _callback;
 
-	public AttachObserverCommand(DeferredEntityRef entityRef, Action<TinyEcs.World, TTrigger> callback)
+	public AttachObserverCommand(DeferredEntityRef entityRef, Action<TTrigger> callback)
 	{
 		_entityRef = entityRef;
 		_callback = callback;
@@ -918,6 +929,57 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 			entityObservers.Observers = new List<IObserver>();
 		}
 
+		// Copy callback to local variable (required for struct lambda capture)
+		var callback = _callback;
+		// Wrap callback to ignore World parameter
+		entityObservers.Observers.Add(new Observer<TTrigger>((w, trigger) => callback(trigger)));
+	}
+}
+
+/// <summary>
+/// Command to attach an entity-specific observer with World access.
+/// Used internally for system parameter support in entity observers.
+/// </summary>
+internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCommand
+	where TTrigger : struct, ITrigger
+{
+	private readonly DeferredEntityRef _entityRef;
+	private readonly Action<World, TTrigger> _callback;
+
+	public AttachObserverWithWorldCommand(DeferredEntityRef entityRef, Action<World, TTrigger> callback)
+	{
+		_entityRef = entityRef;
+		_callback = callback;
+	}
+
+	public void Execute(World world, Commands commands)
+	{
+		var entityId = commands.ResolveEntityId(_entityRef);
+
+		// Auto-register component types
+#if NET9_0_OR_GREATER
+		TTrigger.Register(world);
+#else
+		default(TTrigger).Register(world);
+#endif
+
+		// Get or create EntityObservers component
+		if (!world.Has<EntityObservers>(entityId))
+		{
+			world.Set(entityId, new EntityObservers
+			{
+				Observers = new List<IObserver>()
+			});
+		}
+
+		// Add the observer to the entity's observer list
+		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
+		if (entityObservers.Observers == null)
+		{
+			entityObservers.Observers = new List<IObserver>();
+		}
+
+		// Directly use the callback with World parameter
 		entityObservers.Observers.Add(new Observer<TTrigger>(_callback));
 	}
 }

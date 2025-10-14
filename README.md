@@ -487,8 +487,17 @@ app.AddObserver<OnRemove<Health>>((world, trigger) => {
 
 // Entity-specific observers (fire only for specific entity)
 commands.Spawn()
-    .Observe<OnInsert<Health>>((w, trigger) =>
+    .Observe<OnInsert<Health>>((trigger) =>
         Console.WriteLine($"My health: {trigger.Component.Value}"))
+    .Insert(new Health { Value = 100 });
+
+// Entity observer with system parameters (World access hidden internally)
+commands.Spawn()
+    .Observe<OnInsert<Health>, Commands>((trigger, cmds) =>
+    {
+        // Spawn a particle effect when health changes
+        cmds.Spawn().Insert(new Particle { X = 10, Y = 20 });
+    })
     .Insert(new Health { Value = 100 });
 
 // Custom events with On<T>
