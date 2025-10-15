@@ -34,6 +34,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// <summary>
 	/// Register an entity-specific observer with system parameters.
 	/// The observer reacts to triggers on this specific entity only.
+	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, <#= generics #>>(this EntityCommands entity, Action<TTrigger, <#= generics #>> callback)
 		where TTrigger : struct, ITrigger
@@ -45,6 +46,23 @@ public static partial class EntityCommandsObserverExtensions
 		{
 			<#= fetchCalls #>
 			callback(trigger, <#= callbackParams #>);
+
+			// Auto-apply Commands if any parameter is Commands type
+			// Collect all Commands instances and apply them in one pass
+			Commands? cmd = null;
+<#
+		for (var j = 1; j <= i; j++)
+		{
+#>
+			if (p<#= j #> is Commands c<#= j #>) cmd = c<#= j #>;
+<#
+		}
+#>
+			if (cmd != null)
+			{
+				cmd.Apply();
+				w.FlushObservers();
+			}
 		});
 	}
 
