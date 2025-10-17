@@ -411,6 +411,13 @@ public sealed class Archetype : IComparable<Archetype>
 
 	private static void MakeEdges(Archetype left, Archetype right, EcsID id)
 	{
+		// Check if edge already exists to avoid duplicates
+		foreach (ref var edge in CollectionsMarshal.AsSpan(left._add))
+		{
+			if (edge.Archetype == right && edge.Id == id)
+				return; // Edge already exists
+		}
+
 		left._add.Add(new EcsEdge() { Archetype = right, Id = id });
 		right._remove.Add(new EcsEdge() { Archetype = left, Id = id });
 	}
@@ -420,53 +427,56 @@ public sealed class Archetype : IComparable<Archetype>
 		var nodeTypeLen = All.Length;
 		var newTypeLen = newNode.All.Length;
 
-		// if (nodeTypeLen > newTypeLen - 1)
-		// {
-		// 	foreach (ref var edge in CollectionsMarshal.AsSpan(_remove))
-		// 	{
-		// 		edge.Archetype.InsertVertex(newNode);
-		// 	}
-
-		// 	return;
-		// }
-
-		if (nodeTypeLen < newTypeLen - 1)
+		// Base case: if newNode differs by exactly 1 component from current node
+		// and current node is a subset of newNode, create direct edge
+		if (Math.Abs(nodeTypeLen - newTypeLen) == 1 && IsSubsetOf(newNode.All.AsSpan()))
 		{
-			foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
+			// Find which component differs
+			int i = 0;
+			for (; i < Math.Min(All.Length, newNode.All.Length); ++i)
+			{
+				if (i >= All.Length || All[i].ID != newNode.All[i].ID)
+					break;
+			}
+
+			EcsID diffComponent = i < newNode.All.Length ? newNode.All[i].ID : All[i].ID;
+			MakeEdges(this, newNode, diffComponent);
+		}
+
+		// Recursive case: propagate to children that are subsets of newNode
+		foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
+		{
+			// Only propagate if child is a subset of newNode (otherwise child can't reach newNode)
+			if (edge.Archetype.IsSubsetOf(newNode.All.AsSpan()))
 			{
 				edge.Archetype.InsertVertex(newNode);
 			}
-
-			return;
 		}
-
-		if (!IsSuperset(newNode.All.AsSpan()))
-		{
-			return;
-		}
-
-		var i = 0;
-		var newNodeTypeLen = newNode.All.Length;
-		for (; i < newNodeTypeLen && All[i].ID == newNode.All[i].ID; ++i) { }
-
-		MakeEdges(newNode, this, All[i].ID);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private bool IsSuperset(ReadOnlySpan<ComponentInfo> other)
+	private bool IsSubsetOf(ReadOnlySpan<ComponentInfo> other)
 	{
+		// Check if 'this' is a subset of 'other' (all components in 'this' exist in 'other')
 		int i = 0, j = 0;
 		while (i < All.Length && j < other.Length)
 		{
 			if (All[i].ID == other[j].ID)
 			{
+				i++;
 				j++;
 			}
-
-			i++;
+			else if (All[i].ID < other[j].ID)
+			{
+				return false; // Component in 'this' not in 'other'
+			}
+			else
+			{
+				j++; // Skip component in 'other'
+			}
 		}
 
-		return j == other.Length;
+		return i == All.Length; // All components of 'this' were found in 'other'
 	}
 
 	internal Archetype? TraverseLeft(EcsID nodeId)
@@ -495,13 +505,19 @@ public sealed class Archetype : IComparable<Archetype>
 
 	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
 	{
+		GetSuperSetsInternal(terms, matched, new HashSet<ulong>());
+	}
+
+	private void GetSuperSetsInternal(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched, HashSet<ulong> visited)
+	{
 		var result = MatchWith(terms);
 		if (result == ArchetypeSearchResult.Stop)
 		{
 			return;
 		}
 
-		if (result == ArchetypeSearchResult.Found && _count > 0)
+		// Only add if we haven't visited this archetype yet
+		if (result == ArchetypeSearchResult.Found && _count > 0 && visited.Add(Id))
 		{
 			matched.Add(this);
 		}
@@ -512,7 +528,7 @@ public sealed class Archetype : IComparable<Archetype>
 
 		foreach (ref var edge in CollectionsMarshal.AsSpan(add))
 		{
-			edge.Archetype.GetSuperSets(terms, matched);
+			edge.Archetype.GetSuperSetsInternal(terms, matched, visited);
 		}
 	}
 
