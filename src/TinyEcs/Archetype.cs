@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Threading;
 
 namespace TinyEcs;
 
@@ -138,6 +139,8 @@ public sealed class Archetype : IComparable<Archetype>
 	internal const int CHUNK_LOG2 = 12;
 	internal const int CHUNK_THRESHOLD = CHUNK_SIZE - 1;
 
+	private static long _traversalVersion;
+
 
 	private readonly World _world;
 	private ArchetypeChunk[] _chunks;
@@ -149,6 +152,7 @@ public sealed class Archetype : IComparable<Archetype>
 		;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
+	private long _lastTraversalVersion;
 	private readonly int[] _fastLookup;
 
 	internal Archetype(
@@ -424,59 +428,21 @@ public sealed class Archetype : IComparable<Archetype>
 
 	private void InsertVertex(Archetype newNode)
 	{
-		var nodeTypeLen = All.Length;
-		var newTypeLen = newNode.All.Length;
+		var all = newNode.All;
+		if (all.Length == 0)
+			return;
 
-		// Base case: if newNode differs by exactly 1 component from current node
-		// and current node is a subset of newNode, create direct edge
-		if (Math.Abs(nodeTypeLen - newTypeLen) == 1 && IsSubsetOf(newNode.All.AsSpan()))
+		var world = newNode._world;
+		for (var i = 0; i < all.Length; ++i)
 		{
-			// Find which component differs
-			int i = 0;
-			for (; i < Math.Min(All.Length, newNode.All.Length); ++i)
-			{
-				if (i >= All.Length || All[i].ID != newNode.All[i].ID)
-					break;
-			}
+			ref readonly var component = ref all[i];
+			var subsetId = newNode.ComputeHashWithout(component.ID);
 
-			EcsID diffComponent = i < newNode.All.Length ? newNode.All[i].ID : All[i].ID;
-			MakeEdges(this, newNode, diffComponent);
-		}
-
-		// Recursive case: propagate to children that are subsets of newNode
-		foreach (ref var edge in CollectionsMarshal.AsSpan(_add))
-		{
-			// Only propagate if child is a subset of newNode (otherwise child can't reach newNode)
-			if (edge.Archetype.IsSubsetOf(newNode.All.AsSpan()))
+			if (world.TryGetArchetype(subsetId, out var subset))
 			{
-				edge.Archetype.InsertVertex(newNode);
+				MakeEdges(subset, newNode, component.ID);
 			}
 		}
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private bool IsSubsetOf(ReadOnlySpan<ComponentInfo> other)
-	{
-		// Check if 'this' is a subset of 'other' (all components in 'this' exist in 'other')
-		int i = 0, j = 0;
-		while (i < All.Length && j < other.Length)
-		{
-			if (All[i].ID == other[j].ID)
-			{
-				i++;
-				j++;
-			}
-			else if (All[i].ID < other[j].ID)
-			{
-				return false; // Component in 'this' not in 'other'
-			}
-			else
-			{
-				j++; // Skip component in 'other'
-			}
-		}
-
-		return i == All.Length; // All components of 'this' were found in 'other'
 	}
 
 	internal Archetype? TraverseLeft(EcsID nodeId)
@@ -505,30 +471,53 @@ public sealed class Archetype : IComparable<Archetype>
 
 	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
 	{
-		GetSuperSetsInternal(terms, matched, new HashSet<ulong>());
-	}
-
-	private void GetSuperSetsInternal(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched, HashSet<ulong> visited)
-	{
-		var result = MatchWith(terms);
-		if (result == ArchetypeSearchResult.Stop)
+		var stack = Renting<Stack<Archetype>>.Rent();
+		try
 		{
-			return;
+			var version = Interlocked.Increment(ref _traversalVersion);
+
+			stack.Clear();
+			stack.Push(this);
+
+			while (stack.TryPop(out var node))
+			{
+				if (node._lastTraversalVersion == version)
+				{
+					continue;
+				}
+
+				node._lastTraversalVersion = version;
+
+				var result = node.MatchWith(terms);
+				if (result == ArchetypeSearchResult.Stop)
+				{
+					continue;
+				}
+
+				if (result == ArchetypeSearchResult.Found && node._count > 0)
+				{
+					matched.Add(node);
+				}
+
+				var add = node._add;
+				if (add.Count <= 0)
+				{
+					continue;
+				}
+
+				foreach (ref var edge in CollectionsMarshal.AsSpan(add))
+				{
+					if (edge.Archetype._lastTraversalVersion != version)
+					{
+						stack.Push(edge.Archetype);
+					}
+				}
+			}
 		}
-
-		// Only add if we haven't visited this archetype yet
-		if (result == ArchetypeSearchResult.Found && _count > 0 && visited.Add(Id))
+		finally
 		{
-			matched.Add(this);
-		}
-
-		var add = _add;
-		if (add.Count <= 0)
-			return;
-
-		foreach (ref var edge in CollectionsMarshal.AsSpan(add))
-		{
-			edge.Archetype.GetSuperSetsInternal(terms, matched, visited);
+			stack.Clear();
+			Renting<Stack<Archetype>>.Return(stack);
 		}
 	}
 

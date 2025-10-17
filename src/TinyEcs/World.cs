@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TinyEcs;
 
 public sealed partial class World : IDisposable
@@ -331,6 +333,11 @@ public sealed partial class World : IDisposable
 		_typeIndex.Add(archetype.Id, archetype);
 		LastArchetypeId = archetype.Id;
 		return archetype;
+	}
+
+	internal bool TryGetArchetype(EcsID id, out Archetype? archetype)
+	{
+		return _typeIndex.TryGetValue(id, out archetype);
 	}
 
 	internal ref T GetUntrusted<T>(EcsID entity, EcsID id, int size) where T : struct
