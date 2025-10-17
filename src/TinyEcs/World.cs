@@ -12,6 +12,7 @@ public sealed partial class World : IDisposable
 	private readonly FastIdLookup<EcsID> _cachedComponents = new();
 	private readonly object _newEntLock = new();
 	private uint _ticks;
+	private ulong _structuralChangeVersion;
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
 		=> ComponentComparer.CompareTerms(null!, a.ID, b.ID);
@@ -24,6 +25,7 @@ public sealed partial class World : IDisposable
 
 	internal Archetype Root => _archRoot;
 	internal EcsID LastArchetypeId { get; set; }
+	internal ulong StructuralChangeVersion => _structuralChangeVersion;
 	internal RelationshipEntityMapper RelationshipEntityMapper { get; }
 	internal NamingEntityMapper NamingEntityMapper { get; }
 
@@ -133,6 +135,7 @@ public sealed partial class World : IDisposable
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
 		record.Archetype = foundArch!;
+		_structuralChangeVersion++;
 		EndDeferred();
 
 #if USE_PAIR
@@ -211,6 +214,7 @@ public sealed partial class World : IDisposable
 
 		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
 		record.Archetype = foundArch!;
+		_structuralChangeVersion++;
 		EndDeferred();
 
 		// Fire both OnComponentAdded (first time) and OnComponentSet (all times)

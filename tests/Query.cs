@@ -318,6 +318,79 @@ namespace TinyEcs.Tests
 			Assert.Equal(3, count);
 		}
 
+		[Fact]
+		public void Query_CacheInvalidation_OnComponentRemoval()
+		{
+			// This test verifies the fix for the query cache invalidation bug.
+			// Previously, queries would use stale archetype matches when entities
+			// moved between existing archetypes (component add/remove).
+			// This caused Has<T>() to return false even when the component existed.
+
+			using var ctx = new Context();
+
+			// Create an entity with multiple components
+			var entity = ctx.World.Entity();
+			ctx.World.Set(entity, new FloatComponent());
+			ctx.World.Set(entity, new IntComponent());
+			ctx.World.Set(entity, new BoolComponent());
+
+			// Build a query and execute it (this caches the archetype match)
+			var query = ctx.World.QueryBuilder()
+				.With<FloatComponent>()
+				.With<IntComponent>()
+				.Build();
+
+			// First query should find the entity
+			Assert.Equal(1, query.Count());
+			Assert.True(ctx.World.Has<IntComponent>(entity));
+
+			// Remove BoolComponent - entity moves to different archetype
+			// (but no NEW archetype is created, so LastArchetypeId doesn't change)
+			ctx.World.Unset<BoolComponent>(entity);
+
+			// BUG (before fix): Query cache was stale because LastArchetypeId didn't change
+			// The query would use the old cached archetype list, which didn't include
+			// the entity's new archetype after removing BoolComponent.
+
+			// After fix: StructuralChangeVersion increments, cache invalidates correctly
+			Assert.Equal(1, query.Count());  // Should still find the entity
+			Assert.True(ctx.World.Has<IntComponent>(entity));  // Should still have IntComponent
+
+			// Remove IntComponent - entity should no longer match query
+			ctx.World.Unset<IntComponent>(entity);
+
+			Assert.Equal(0, query.Count());  // Should not find the entity
+			Assert.False(ctx.World.Has<IntComponent>(entity));  // Should not have IntComponent
+		}
+
+		[Fact]
+		public void Query_CacheInvalidation_OnComponentAddition()
+		{
+			// Test that query cache invalidates when adding components to existing archetype
+
+			using var ctx = new Context();
+
+			// Create an entity with one component
+			var entity = ctx.World.Entity();
+			ctx.World.Set(entity, new FloatComponent());
+
+			// Build a query that requires two components
+			var query = ctx.World.QueryBuilder()
+				.With<FloatComponent>()
+				.With<IntComponent>()
+				.Build();
+
+			// Query should not find the entity (missing IntComponent)
+			Assert.Equal(0, query.Count());
+
+			// Add IntComponent - entity moves to different archetype
+			ctx.World.Set(entity, new IntComponent());
+
+			// After fix: Query cache should invalidate and find the entity
+			Assert.Equal(1, query.Count());
+			Assert.True(ctx.World.Has<IntComponent>(entity));
+		}
+
 		// [Fact]
 		// public void Query_AtLeast()
 		// {

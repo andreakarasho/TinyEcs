@@ -83,6 +83,7 @@ public sealed class Query
 	private readonly IQueryTerm[] _terms;
 	private readonly List<Archetype> _matchedArchetypes;
 	private EcsID _lastArchetypeIdMatched;
+	private ulong _lastStructuralVersion;
 	private readonly int[] _indices;
 
 	internal Query(World world, IQueryTerm[] terms)
@@ -109,10 +110,13 @@ public sealed class Query
 
 	private void Match()
 	{
-		if (_lastArchetypeIdMatched == World.LastArchetypeId)
+		// Check if either new archetypes were created OR entities moved between archetypes
+		if (_lastArchetypeIdMatched == World.LastArchetypeId &&
+		    _lastStructuralVersion == World.StructuralChangeVersion)
 			return;
 
 		_lastArchetypeIdMatched = World.LastArchetypeId;
+		_lastStructuralVersion = World.StructuralChangeVersion;
 		_matchedArchetypes.Clear();
 		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
 	}
