@@ -341,10 +341,19 @@ public sealed class Archetype : IComparable<Archetype>
 	internal Archetype InsertVertex(Archetype left, ComponentInfo[] sign, EcsID id)
 	{
 		var vertex = new Archetype(left._world, sign, _comparer);
-		var a = left.All.Length < vertex.All.Length ? left : vertex;
-		var b = left.All.Length < vertex.All.Length ? vertex : left;
-		MakeEdges(a, b, id);
-		InsertVertex(vertex);
+		var leftIsSubset = left.All.Length < vertex.All.Length;
+
+		if (leftIsSubset)
+		{
+			ConnectSubsetSuperset(left, vertex, id, true);
+			InsertVertex(vertex, left);
+		}
+		else
+		{
+			ConnectSubsetSuperset(vertex, left, id, false);
+			InsertVertex(vertex, null);
+		}
+
 		return vertex;
 	}
 
@@ -413,35 +422,84 @@ public sealed class Archetype : IComparable<Archetype>
 		}
 	}
 
-	private static void MakeEdges(Archetype left, Archetype right, EcsID id)
+	private static void ConnectSubsetSuperset(Archetype subset, Archetype superset, EcsID id, bool registerInSubsetAdd)
 	{
-		// Check if edge already exists to avoid duplicates
-		foreach (ref var edge in CollectionsMarshal.AsSpan(left._add))
+		if (registerInSubsetAdd)
 		{
-			if (edge.Archetype == right && edge.Id == id)
-				return; // Edge already exists
+			var addEdges = CollectionsMarshal.AsSpan(subset._add);
+			var exists = false;
+			foreach (ref var edge in addEdges)
+			{
+				if (edge.Archetype == superset && edge.Id == id)
+				{
+					exists = true;
+					break;
+				}
+			}
+
+			if (!exists)
+			{
+				subset._add.Add(new EcsEdge { Archetype = superset, Id = id });
+			}
 		}
 
-		left._add.Add(new EcsEdge() { Archetype = right, Id = id });
-		right._remove.Add(new EcsEdge() { Archetype = left, Id = id });
+		var removeEdges = CollectionsMarshal.AsSpan(superset._remove);
+		foreach (ref var edge in removeEdges)
+		{
+			if (edge.Archetype == subset && edge.Id == id)
+				return;
+		}
+
+		superset._remove.Add(new EcsEdge { Archetype = subset, Id = id });
 	}
 
-	private void InsertVertex(Archetype newNode)
+	private static void AddEdgeOnly(Archetype subset, Archetype superset, EcsID id)
+	{
+		var addEdges = CollectionsMarshal.AsSpan(subset._add);
+		foreach (ref var edge in addEdges)
+		{
+			if (edge.Archetype == superset && edge.Id == id)
+				return;
+		}
+
+		subset._add.Add(new EcsEdge { Archetype = superset, Id = id });
+	}
+
+	private void InsertVertex(Archetype newNode, Archetype? preferredParent)
 	{
 		var all = newNode.All;
 		if (all.Length == 0)
 			return;
 
 		var world = newNode._world;
-		for (var i = 0; i < all.Length; ++i)
+		var addParent = preferredParent;
+
+		for (var i = all.Length - 1; i >= 0; --i)
 		{
 			ref readonly var component = ref all[i];
 			var subsetId = newNode.ComputeHashWithout(component.ID);
 
-			if (world.TryGetArchetype(subsetId, out var subset))
+			if (!world.TryGetArchetype(subsetId, out var subset))
+				continue;
+
+			var register = false;
+			if (preferredParent != null && ReferenceEquals(subset, preferredParent))
 			{
-				MakeEdges(subset!, newNode, component.ID);
+				register = true;
+				addParent = preferredParent;
 			}
+			else if (addParent == null)
+			{
+				addParent = subset;
+				register = true;
+			}
+
+			ConnectSubsetSuperset(subset!, newNode, component.ID, register);
+		}
+
+		if (addParent == null)
+		{
+			AddEdgeOnly(this, newNode, all[^1].ID);
 		}
 	}
 
