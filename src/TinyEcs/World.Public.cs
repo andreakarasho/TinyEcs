@@ -112,7 +112,7 @@ public sealed partial class World
 		var removed = 0;
 		_archRoot?.RemoveEmptyArchetypes(ref removed, _typeIndex);
 		if (removed > 0)
-			LastArchetypeId = ulong.MaxValue;
+			_structuralChangeVersion++;
 		return removed;
 	}
 

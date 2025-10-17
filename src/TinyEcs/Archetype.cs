@@ -501,7 +501,7 @@ public sealed class Archetype : IComparable<Archetype>
 			return;
 		}
 
-		if (result == ArchetypeSearchResult.Found)
+		if (result == ArchetypeSearchResult.Found && _count > 0)
 		{
 			matched.Add(this);
 		}

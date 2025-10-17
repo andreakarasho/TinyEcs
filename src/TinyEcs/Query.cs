@@ -112,11 +112,12 @@ public sealed class Query
 	{
 		// Check if either new archetypes were created OR entities moved between archetypes
 		if (_lastArchetypeIdMatched == World.LastArchetypeId &&
-		    _lastStructuralVersion == World.StructuralChangeVersion)
+			_lastStructuralVersion == World.StructuralChangeVersion)
 			return;
 
 		_lastArchetypeIdMatched = World.LastArchetypeId;
 		_lastStructuralVersion = World.StructuralChangeVersion;
+
 		_matchedArchetypes.Clear();
 		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
 	}
