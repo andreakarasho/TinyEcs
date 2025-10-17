@@ -440,7 +440,7 @@ public sealed class Archetype : IComparable<Archetype>
 
 			if (world.TryGetArchetype(subsetId, out var subset))
 			{
-				MakeEdges(subset, newNode, component.ID);
+				MakeEdges(subset!, newNode, component.ID);
 			}
 		}
 	}
@@ -471,16 +471,18 @@ public sealed class Archetype : IComparable<Archetype>
 
 	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
 	{
-		var stack = Renting<Stack<Archetype>>.Rent();
+		var stack = ArrayPool<Archetype>.Shared.Rent(64);
+		var version = Interlocked.Increment(ref _traversalVersion);
+		var top = 0;
+
 		try
 		{
-			var version = Interlocked.Increment(ref _traversalVersion);
+			stack[top++] = this;
 
-			stack.Clear();
-			stack.Push(this);
-
-			while (stack.TryPop(out var node))
+			while (top > 0)
 			{
+				var node = stack[--top];
+
 				if (node._lastTraversalVersion == version)
 				{
 					continue;
@@ -507,17 +509,27 @@ public sealed class Archetype : IComparable<Archetype>
 
 				foreach (ref var edge in CollectionsMarshal.AsSpan(add))
 				{
-					if (edge.Archetype._lastTraversalVersion != version)
+					var next = edge.Archetype;
+					if (next._lastTraversalVersion == version)
 					{
-						stack.Push(edge.Archetype);
+						continue;
 					}
+
+					if (top == stack.Length)
+					{
+						var newStack = ArrayPool<Archetype>.Shared.Rent(stack.Length << 1);
+						Array.Copy(stack, 0, newStack, 0, top);
+						ArrayPool<Archetype>.Shared.Return(stack, clearArray: false);
+						stack = newStack;
+					}
+
+					stack[top++] = next;
 				}
 			}
 		}
 		finally
 		{
-			stack.Clear();
-			Renting<Stack<Archetype>>.Return(stack);
+			ArrayPool<Archetype>.Shared.Return(stack, clearArray: false);
 		}
 	}
 
