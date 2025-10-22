@@ -80,42 +80,42 @@ public static class ButtonWidget
         {
             var evt = trigger.Event;
             var id = evt.CurrentTarget;
-            foreach (var (entityId, styleParam, stateParam, nodeParam) in buttons)
+
+            if (!buttons.Contains(id))
+                return;
+
+            var data = buttons.Get(id);
+            data.Deconstruct(out var styleParam, out var stateParam, out var nodeParam);
+
+            ref var stateRef = ref stateParam.Ref;
+            ref var nodeRef = ref nodeParam.Ref;
+            var styleRef = styleParam.Ref;
+
+            switch (evt.Type)
             {
-                if (entityId.Ref != id) continue;
-
-                ref var stateRef = ref stateParam.Ref;
-                ref var nodeRef = ref nodeParam.Ref;
-                var styleRef = styleParam.Ref;
-
-                switch (evt.Type)
-                {
-                    case UiPointerEventType.PointerEnter:
-                        stateRef.IsHovered = true;
-                        nodeRef.Declaration.backgroundColor = styleRef.HoverBackground;
-                        break;
-                    case UiPointerEventType.PointerExit:
-                        stateRef.IsHovered = false;
-                        nodeRef.Declaration.backgroundColor = stateRef.IsPressed
-                            ? styleRef.PressedBackground
-                            : styleRef.Background;
-                        break;
-                    case UiPointerEventType.PointerDown:
-                        if (evt.IsPrimaryButton)
-                        {
-                            stateRef.IsPressed = true;
-                            nodeRef.Declaration.backgroundColor = styleRef.PressedBackground;
-                        }
-                        break;
-                    case UiPointerEventType.PointerUp:
-                        stateRef.IsPressed = false;
-                        nodeRef.Declaration.backgroundColor = stateRef.IsHovered
-                            ? styleRef.HoverBackground
-                            : styleRef.Background;
-                        break;
-                }
-
-                break; // handled
+                case UiPointerEventType.PointerEnter:
+                    stateRef.IsHovered = true;
+                    nodeRef.Declaration.backgroundColor = styleRef.HoverBackground;
+                    break;
+                case UiPointerEventType.PointerExit:
+                    stateRef.IsHovered = false;
+                    nodeRef.Declaration.backgroundColor = stateRef.IsPressed
+                        ? styleRef.PressedBackground
+                        : styleRef.Background;
+                    break;
+                case UiPointerEventType.PointerDown:
+                    if (evt.IsPrimaryButton)
+                    {
+                        stateRef.IsPressed = true;
+                        nodeRef.Declaration.backgroundColor = styleRef.PressedBackground;
+                    }
+                    break;
+                case UiPointerEventType.PointerUp:
+                    stateRef.IsPressed = false;
+                    nodeRef.Declaration.backgroundColor = stateRef.IsHovered
+                        ? styleRef.HoverBackground
+                        : styleRef.Background;
+                    break;
             }
         });
 

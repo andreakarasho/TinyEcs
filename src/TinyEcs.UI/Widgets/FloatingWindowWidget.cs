@@ -229,20 +229,20 @@ public static class FloatingWindowWidget
 		}
 
 		// Handle dragging via entity-specific observer (works in tests and runtime)
-		window.Observe<UiPointerTrigger,
-			Query<Data<FloatingWindowState, UiNode, FloatingWindowLinks>>,
-			Query<Data<Parent>>,
-			ResMut<UiWindowOrder>>((trigger, windows, parents, windowOrder) =>
-		{
-			var evt = trigger.Event;
-			var id = evt.CurrentTarget;
-			foreach (var (entityId, stateParam, nodeParam, linksParam) in windows)
-			{
-				if (entityId.Ref != id) continue;
+        window.Observe<UiPointerTrigger,
+            Query<Data<FloatingWindowState, UiNode, FloatingWindowLinks>>,
+            Query<Data<Parent>>,
+            ResMut<UiWindowOrder>>((trigger, windows, parents, windowOrder) =>
+        {
+            var evt = trigger.Event;
+            var id = evt.CurrentTarget;
+            if (!windows.Contains(id)) return;
+            var winData = windows.Get(id);
+            winData.Deconstruct(out var stateParam, out var nodeParam, out var linksParam);
 
-				ref var st = ref stateParam.Ref;
-				ref var node = ref nodeParam.Ref;
-				var links = linksParam.Ref;
+            ref var st = ref stateParam.Ref;
+            ref var node = ref nodeParam.Ref;
+            var links = linksParam.Ref;
 
 				if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
 				{
@@ -299,9 +299,8 @@ public static class FloatingWindowWidget
 					}
 				}
 
-				break; // handled
-			}
-		});
+            // handled
+        });
 
 		return window;
 	}

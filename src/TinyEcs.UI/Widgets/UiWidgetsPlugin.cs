@@ -90,38 +90,30 @@ public sealed class UiWidgetsPlugin : IPlugin
 								}
 
 							var changed = false;
-							// Update fill width
-							if (links.FillEntity != 0)
-							{
-								foreach (var (fillEntityId, fillNode) in nodes)
-								{
-									if (fillEntityId.Ref != links.FillEntity) continue;
-
-									ref var fillNodeRef = ref fillNode.Ref;
-									var fillWidth = style.Width * normalized;
-									fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
-										Clay_SizingAxis.Fixed(fillWidth),
-										Clay_SizingAxis.Fixed(style.TrackHeight));
-									changed = true;
-									break;
-								}
-							}
+                    // Update fill width
+                    if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
+                    {
+                        var fillData = nodes.Get(links.FillEntity);
+                        fillData.Deconstruct(out var fillNode);
+                        ref var fillNodeRef = ref fillNode.Ref;
+                        var fillWidth = style.Width * normalized;
+                        fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+                            Clay_SizingAxis.Fixed(fillWidth),
+                            Clay_SizingAxis.Fixed(style.TrackHeight));
+                        changed = true;
+                    }
 
 							// Update handle position
-							if (links.HandleEntity != 0)
-							{
-								foreach (var (handleEntityId, handleNode) in nodes)
-								{
-									if (handleEntityId.Ref != links.HandleEntity) continue;
-
-									ref var handleNodeRef = ref handleNode.Ref;
-									var handleX = (style.Width - style.HandleSize) * normalized;
-									var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
-									handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
-									changed = true;
-									break;
-								}
-							}
+                    if (links.HandleEntity != 0 && nodes.Contains(links.HandleEntity))
+                    {
+                        var handleData = nodes.Get(links.HandleEntity);
+                        handleData.Deconstruct(out var handleNode);
+                        ref var handleNodeRef = ref handleNode.Ref;
+                        var handleX = (style.Width - style.HandleSize) * normalized;
+                        var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
+                        handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+                        changed = true;
+                    }
 
 							if (changed)
 							{
@@ -206,36 +198,30 @@ public sealed class UiWidgetsPlugin : IPlugin
 					}
 				}
 
-				// Update visuals (fill width and handle position)
-				var changed = false;
-				if (links.FillEntity != 0)
-				{
-					foreach (var (fillEntityId, fillNode) in nodes)
-					{
-						if (fillEntityId.Ref != links.FillEntity) continue;
-						ref var fillNodeRef = ref fillNode.Ref;
-						var fillWidth = style.Width * normalized;
-						fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
-							Clay_SizingAxis.Fixed(fillWidth),
-							Clay_SizingAxis.Fixed(style.TrackHeight));
-						changed = true;
-						break;
-					}
-				}
+        // Update visuals (fill width and handle position)
+        var changed = false;
+        if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
+        {
+            var fillData = nodes.Get(links.FillEntity);
+            fillData.Deconstruct(out var fillNode);
+            ref var fillNodeRef = ref fillNode.Ref;
+            var fillWidth = style.Width * normalized;
+            fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+                Clay_SizingAxis.Fixed(fillWidth),
+                Clay_SizingAxis.Fixed(style.TrackHeight));
+            changed = true;
+        }
 
-				if (links.HandleEntity != 0)
-				{
-					foreach (var (handleEntityId, handleNode) in nodes)
-					{
-						if (handleEntityId.Ref != links.HandleEntity) continue;
-						ref var handleNodeRef = ref handleNode.Ref;
-						var handleX = (style.Width - style.HandleSize) * normalized;
-						var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
-						handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
-						changed = true;
-						break;
-					}
-				}
+        if (links.HandleEntity != 0 && nodes.Contains(links.HandleEntity))
+        {
+            var handleData = nodes.Get(links.HandleEntity);
+            handleData.Deconstruct(out var handleNode);
+            ref var handleNodeRef = ref handleNode.Ref;
+            var handleX = (style.Width - style.HandleSize) * normalized;
+            var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
+            handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+            changed = true;
+        }
 
 				if (changed)
 				{

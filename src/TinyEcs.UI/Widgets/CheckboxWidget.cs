@@ -178,38 +178,37 @@ public static class CheckboxWidget
             if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
                 return;
 
-            foreach (var (entityId, stateParam, nodeParam, styleParam) in boxes)
+            if (!boxes.Contains(boxId))
+                return;
+
+            var boxed = boxes.Get(boxId);
+            boxed.Deconstruct(out var stateParam, out var nodeParam, out var styleParam);
+
+            ref var stateRef = ref stateParam.Ref;
+            ref var nodeRef = ref nodeParam.Ref;
+            var styleRef = styleParam.Ref;
+
+            // Toggle state
+            stateRef.Checked = !stateRef.Checked;
+
+            // Update visuals on the box
+            nodeRef.Declaration.backgroundColor = stateRef.Checked
+                ? styleRef.CheckedColor
+                : styleRef.BoxColor;
+
+            // Update checkmark text
+            if (stateRef.Checked)
             {
-                if (entityId.Ref != boxId) continue;
-
-                ref var stateRef = ref stateParam.Ref;
-                ref var nodeRef = ref nodeParam.Ref;
-                var styleRef = styleParam.Ref;
-
-                // Toggle state
-                stateRef.Checked = !stateRef.Checked;
-
-                // Update visuals on the box
-                nodeRef.Declaration.backgroundColor = stateRef.Checked
-                    ? styleRef.CheckedColor
-                    : styleRef.BoxColor;
-
-                // Update checkmark text
-                if (stateRef.Checked)
+                commands.Entity(boxId).Insert(UiText.From("x", new Clay_TextElementConfig
                 {
-                    commands.Entity(boxId).Insert(UiText.From("x", new Clay_TextElementConfig
-                    {
-                        textColor = new Clay_Color(255, 255, 255, 255),
-                        fontSize = (ushort)(styleRef.BoxSize * 0.8f),
-                        textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
-                    }));
-                }
-                else
-                {
-                    commands.Entity(boxId).Insert(UiText.From("", new Clay_TextElementConfig()));
-                }
-
-                break; // handled
+                    textColor = new Clay_Color(255, 255, 255, 255),
+                    fontSize = (ushort)(styleRef.BoxSize * 0.8f),
+                    textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
+                }));
+            }
+            else
+            {
+                commands.Entity(boxId).Insert(UiText.From("", new Clay_TextElementConfig()));
             }
         });
 
