@@ -5,22 +5,33 @@ using System.Numerics;
 using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcsGame;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
 
 app.AddPlugin(new RaylibPlugin
 {
-	Title = "TinyEcs using raylib",
-	WindowSize = new WindowSize { Value = new Vector2(800, 600) },
+	Title = "TinyEcs with Clay UI Demo",
+	WindowSize = new WindowSize { Value = new Vector2(1280, 720) },
 	VSync = true
 });
 
-app.AddPlugin(new GameRootPlugin
+var gameRoot = new GameRootPlugin
 {
 	EntitiesToSpawn = 100_000,
 	Velocity = 250
+};
+app.AddPlugin(gameRoot);
+
+// Add Clay UI integration AFTER rendering plugin so we can reference render labels
+app.AddPlugin(new RaylibClayUiPlugin
+{
+	RenderingStage = gameRoot.RenderingStage
 });
+
+// Add comprehensive UI demo
+app.AddPlugin(new UiDemoPlugin { ShowUI = true });
 
 app.RunStartup();
 
@@ -71,15 +82,32 @@ sealed class GameRootPlugin : IPlugin
 	public int EntitiesToSpawn { get; set; }
 	public int Velocity { get; set; }
 
+	public Stage RenderingStage { get; private set; } = default!;
+
 	public void Build(App app)
 	{
+		// Create custom rendering stages
+		var beginRendering = Stage.Custom("BeginRendering");
+		RenderingStage = Stage.Custom("Rendering");
+		var endRendering = Stage.Custom("EndRendering");
+
+		// Add stages in order: Update -> BeginRendering -> Rendering -> EndRendering -> Last
+		app.AddStage(beginRendering).After(Stage.Update);
+		app.AddStage(RenderingStage).After(beginRendering);
+		app.AddStage(endRendering).After(RenderingStage);
+
 		app.AddPlugin(new GameplayPlugin
 		{
 			EntitiesToSpawn = EntitiesToSpawn,
 			Velocity = Velocity
 		});
 
-		app.AddPlugin(new RenderingPlugin());
+		app.AddPlugin(new RenderingPlugin
+		{
+			BeginRenderingStage = beginRendering,
+			RenderingStage = RenderingStage,
+			EndRenderingStage = endRendering
+		});
 	}
 }
 
@@ -183,19 +211,25 @@ sealed class GameplayPlugin : IPlugin
 
 sealed class RenderingPlugin : IPlugin
 {
+	public required Stage BeginRenderingStage { get; set; }
+	public required Stage RenderingStage { get; set; }
+	public required Stage EndRenderingStage { get; set; }
+
 	public void Build(App app)
 	{
+		// BeginRendering Stage: BeginDrawing + ClearBackground
 		app.AddSystem((World _) =>
 		{
 			Raylib.BeginDrawing();
 			Raylib.ClearBackground(Color.Black);
 		})
-		.InStage(Stage.Last)
+		.InStage(BeginRenderingStage)
 		.Label("render:begin")
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 
+		// Rendering Stage: Draw all game content
 		app.AddSystem((Query<Data<Sprite, Position, Rotation>> query, Res<AssetsManager> assets) =>
 		{
 			var currentTextureId = 0u;
@@ -215,20 +249,15 @@ sealed class RenderingPlugin : IPlugin
 				}
 			}
 		})
-		.InStage(Stage.Last)
-		.Label("render:draw")
-		.After("render:begin")
+		.InStage(RenderingStage)
+		.Label("render:sprites")
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 
 		app.AddSystem((Query<Data<Position>> query, Res<TimeResource> time, Local<DebugOverlay> overlay) =>
 		{
-			var entityCount = 0;
-			foreach (var _ in query)
-			{
-				entityCount++;
-			}
+			var entityCount = query.Count();
 
 			var data = overlay.Value;
 			data.Text = $"""
@@ -240,16 +269,20 @@ sealed class RenderingPlugin : IPlugin
 
 			Raylib.DrawText(data.Text, 15, 15, 24, Color.White);
 		})
-		.InStage(Stage.Last)
+		.InStage(RenderingStage)
 		.Label("render:debug")
-		.After("render:draw")
+		.After("render:sprites")
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 
-		app.AddSystem((World _) => Raylib.EndDrawing())
-		.InStage(Stage.Last)
-		.After("render:debug")
+		// EndRendering Stage: EndDrawing
+		app.AddSystem((World _) =>
+		{
+			Raylib.EndDrawing();
+		})
+		.InStage(EndRenderingStage)
+		.Label("render:end")
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();

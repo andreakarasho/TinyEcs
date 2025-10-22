@@ -506,6 +506,32 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 - `src/TinyEcs.Bevy/TinyEcs.Bevy.Data.g.cs` - Data<T1..T16> tuples
 - `src/TinyEcs.Bevy/TinyEcs.Bevy.Filter.g.cs` - Filter<T1..T16> combinators
 
+## UI Layer (src/TinyEcs.UI/)
+
+TinyEcs.UI integrates the Clay immediate-mode layout engine with the TinyEcs/Bevy runtime while remaining reflection-free and AOT friendly.
+
+### ClayUiPlugin & State
+- `ClayUiPlugin` registers `ClayUiState`, optional `ClayPointerState`, and default systems for hierarchy sync, pointer ingestion, layout invalidation, and the Stage.Update layout pass.
+- `ClayUiState` owns the Clay arena/context, installs a custom measure-text callback, tracks element-to-entity mappings, hover/capture state, and exposes the latest `ReadOnlySpan<Clay_RenderCommand>` for renderer integration.
+- `ClayUiEntityLayout` can materialize entity-driven UI (`UiNode`, `UiText`, `UiNodeParent`) into Clay layout trees when enabled.
+
+### Pointer Flow
+- `ClayPointerState` captures pointer position/button/scroll deltas each frame.
+- `UiPointerEvent` is published via the global event channel.
+- `UiPointerTrigger` implements `ITrigger`, `IEntityTrigger`, and `IPropagatingTrigger`, enabling `entity.Observe<UiPointerTrigger>()` with bubbling up the TinyEcs `Parent` chain.
+
+### UI Components
+- `UiNode`: wraps a `Clay_ElementDeclaration` for layout/styling.
+- `UiText`: stores Clay strings/config for labels.
+- `UiNodeParent`: declarative hierarchy instruction mirrored into TinyEcs `Parent`/`Children`.
+
+### Widgets (src/TinyEcs.UI/Widgets/)
+- `PanelWidget`: padded containers with configurable sizing/background/gaps.
+- `ButtonWidget`: styled buttons with hover/pressed colors and text configuration, ready to consume pointer events.
+
+### Sample Reference
+- `samples/MyBattleground/UiClayExample.cs` demonstrates plugin setup, widget composition, simulated pointer input, pointer logging (`EventReader<UiPointerEvent>` + `Observe<UiPointerTrigger>`), and render command inspection for renderer integration.
+
 ## Recent Improvements (2025)
 
 ### System Ordering Fixes

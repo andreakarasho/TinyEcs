@@ -172,7 +172,7 @@ public unsafe sealed class ClayUiState : IDisposable
 		}
 
 		_lastRenderCommands = ClayInterop.Clay_EndLayout();
-		Clay.ClayStrings.Clear();
+		// Clay.ClayStrings.Clear();
 		if (!_options.AutoRunLayout)
 			CompleteLayoutPass();
 		else
