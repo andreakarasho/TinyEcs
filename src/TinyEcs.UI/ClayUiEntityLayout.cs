@@ -7,97 +7,68 @@ namespace TinyEcs.UI;
 
 internal static class ClayUiEntityLayout
 {
-    public static void Build(
-        ClayUiLayoutContext context,
-        Query<Data<UiNode>, Filter<Without<Parent>>> roots,
-        Query<Data<UiNode>> allNodes,
-        Query<Data<UiText>> uiTexts,
-        Query<Data<Children>> childLists)
-    {
-        var state = context.State;
-        var world = state.World;
+	public static void Build(
+		ClayUiLayoutContext context,
+		Query<Data<UiNode>, Filter<Without<Parent>>> roots,
+		Query<Data<UiNode>> allNodes,
+		Query<Data<UiText>> uiTexts,
+		Query<Data<Children>> childLists,
+		Query<Data<FloatingWindowState>> floatingWindows,
+		Local<List<ulong>> windows)
+	{
+		windows.Value!.Clear();
 
-        // If we have a window order resource, render non-windows first, then windows in ordered stack
-        UiWindowOrder? windowOrder = null;
-        if (world.HasResource<UiWindowOrder>())
-            windowOrder = world.GetResource<UiWindowOrder>();
+		var state = context.State;
+		var world = context.World;
 
-        if (windowOrder is null)
-        {
-            foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
-            {
-                var entityId = entityPtr.Ref;
-                ref var node = ref nodePtr.Ref;
-                AssignElementId(ref node, entityId);
-                state.RegisterElement(entityId, node.Declaration.id);
-                RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
-            }
-            return;
-        }
+		// If we have a window order resource, render non-windows first, then windows in ordered stack
+		UiWindowOrder? windowOrder = null;
+		if (world.HasResource<UiWindowOrder>())
+			windowOrder = world.GetResource<UiWindowOrder>();
 
-        // Collect roots into windows vs others
-        var windows = new System.Collections.Generic.List<ulong>();
-        var others = new System.Collections.Generic.List<(ulong id, UiNode node)>();
+		if (windowOrder is null)
+		{
+			foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
+			{
+				var entityId = entityPtr.Ref;
+				ref var node = ref nodePtr.Ref;
+				AssignElementId(ref node, entityId);
+				state.RegisterElement(entityId, node.Declaration.id);
+				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
+			}
+			return;
+		}
 
-        foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
-        {
-            var entityId = entityPtr.Ref;
-            ref var node = ref nodePtr.Ref;
-            if (world.Has<FloatingWindowState>(entityId))
-            {
-                windows.Add(entityId);
-            }
-            else
-            {
-                // Render others in discovery order after assigning ids
-                AssignElementId(ref node, entityId);
-                state.RegisterElement(entityId, node.Declaration.id);
-                others.Add((entityId, node));
-            }
-        }
+		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
+		{
+			var entityId = entityPtr.Ref;
+			ref var node = ref nodePtr.Ref;
+			if (floatingWindows.Contains(entityId))
+			{
+				windows.Value!.Add(entityId);
+			}
+			else
+			{
+				// Render others in discovery order after assigning ids
+				AssignElementId(ref node, entityId);
+				state.RegisterElement(entityId, node.Declaration.id);
+				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
+			}
+		}
 
-        // Render non-window roots first
-        foreach (var (id, node) in others)
-        {
-            var n = node; // copy to ref-compatible variable
-            RenderNode(state, id, ref n, allNodes, uiTexts, childLists);
-        }
-
-        // Determine which windows are tracked in order
-        var ordered = new System.Collections.Generic.HashSet<ulong>();
-
-        // First render any windows not tracked yet (background)
-        foreach (var id in windows)
-        {
-            // We'll fill 'ordered' next; for now, consider any id not present in the order list
-            bool isTracked = false;
-            foreach (var orderedId in windowOrder.Enumerate())
-            {
-                if (orderedId == id) { isTracked = true; break; }
-            }
-            if (isTracked) continue;
-
-            var data = allNodes.Get(id);
-            data.Deconstruct(out _, out var nodePtr);
-            ref var node = ref nodePtr.Ref;
-            AssignElementId(ref node, id);
-            state.RegisterElement(id, node.Declaration.id);
-            RenderNode(state, id, ref node, allNodes, uiTexts, childLists);
-        }
-
-        // Then render windows using linked list order (last = topmost)
-        foreach (var id in windowOrder.Enumerate())
-        {
-            if (!windows.Contains(id)) continue;
-            var data = allNodes.Get(id);
-            data.Deconstruct(out _, out var nodePtr);
-            ref var node = ref nodePtr.Ref;
-            AssignElementId(ref node, id);
-            state.RegisterElement(id, node.Declaration.id);
-            RenderNode(state, id, ref node, allNodes, uiTexts, childLists);
-            ordered.Add(id);
-        }
-    }
+		// Then render windows using linked list order (last = topmost)
+		foreach (var id in windowOrder.Enumerate())
+		{
+			if (!windows.Value!.Contains(id))
+				continue;
+			var data = allNodes.Get(id);
+			data.Deconstruct(out _, out var nodePtr);
+			ref var node = ref nodePtr.Ref;
+			AssignElementId(ref node, id);
+			state.RegisterElement(id, node.Declaration.id);
+			RenderNode(state, id, ref node, allNodes, uiTexts, childLists);
+		}
+	}
 
 	private static void RenderNode(
 		ClayUiState state,

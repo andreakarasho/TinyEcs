@@ -17,10 +17,16 @@ public sealed class UiWidgetsPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		// Maintain window stacking without z-index using an order resource
-		var worldInit = app.GetWorld();
-		if (!worldInit.HasResource<UiWindowOrder>())
-			worldInit.AddResource(new UiWindowOrder());
+		app.AddResource(new UiWindowOrder());
+
+		// Global observer: Register floating windows in window order when FloatingWindowState is added
+		// (Entity observers don't fire for components added in the same command batch, so we use a global observer)
+		app.AddObserver((OnAdd<FloatingWindowState> trigger, ResMut<UiWindowOrder> windowsOrder) =>
+		{
+			Console.WriteLine($"FloatingWindowWidget: Registered window {trigger.EntityId} in window order.");
+			windowsOrder.Value.MoveToTop(trigger.EntityId);
+		});
+
 		// (Removed) Button hover/press system — handled by entity observers
 
 		// (Removed) Checkbox toggle system — handled by entity observers
@@ -54,8 +60,8 @@ public sealed class UiWidgetsPlugin : IPlugin
 					bool acceptEvent = isThisSlider || st.IsDragging;
 					if (!acceptEvent) continue;
 
-						switch (evt.Type)
-						{
+					switch (evt.Type)
+					{
 						case UiPointerEventType.PointerDown:
 							if (!isThisSlider) break; // only start drag when pressing this slider
 							if (evt.IsPrimaryButton)
@@ -64,62 +70,62 @@ public sealed class UiWidgetsPlugin : IPlugin
 							}
 							break;
 
-							case UiPointerEventType.PointerUp:
-								st.IsDragging = false;
-								break;
+						case UiPointerEventType.PointerUp:
+							st.IsDragging = false;
+							break;
 
 						case UiPointerEventType.PointerMove:
 							if (!st.IsDragging) break;
 
 							// Compute normalized value from absolute pointer X relative to container bounds
 							var normalized = st.NormalizedValue;
-								unsafe
+							unsafe
+							{
+								var ctx = uiState.Value.Context;
+								if (ctx is not null)
 								{
-									var ctx = uiState.Value.Context;
-									if (ctx is not null)
+									Clay.SetCurrentContext(ctx);
+									var containerElemIdMove = ClayId.Global($"slider-container-{entityId.Ref}").ToElementId();
+									var elemMove = Clay.GetElementData(containerElemIdMove);
+									if (elemMove.found && elemMove.boundingBox.width > 0)
 									{
-										Clay.SetCurrentContext(ctx);
-										var containerElemIdMove = ClayId.Global($"slider-container-{entityId.Ref}").ToElementId();
-										var elemMove = Clay.GetElementData(containerElemIdMove);
-										if (elemMove.found && elemMove.boundingBox.width > 0)
-										{
-											normalized = (evt.Position.X - elemMove.boundingBox.x) / Math.Max(1f, style.Width);
-											normalized = Math.Clamp(normalized, 0f, 1f);
-											st.SetNormalizedValue(normalized);
-										}
+										normalized = (evt.Position.X - elemMove.boundingBox.x) / Math.Max(1f, style.Width);
+										normalized = Math.Clamp(normalized, 0f, 1f);
+										st.SetNormalizedValue(normalized);
 									}
 								}
+							}
 
 							var changed = false;
-                    // Update fill width
-                    if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
-                    {
-                        var fillData = nodes.Get(links.FillEntity);
-                        fillData.Deconstruct(out var fillNode);
-                        ref var fillNodeRef = ref fillNode.Ref;
-                        var fillWidth = style.Width * normalized;
-                        fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
-                            Clay_SizingAxis.Fixed(fillWidth),
-                            Clay_SizingAxis.Fixed(style.TrackHeight));
-                        changed = true;
-                    }
+							// Update fill width
+							if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
+							{
+								var fillData = nodes.Get(links.FillEntity);
+								fillData.Deconstruct(out var fillNode);
+								ref var fillNodeRef = ref fillNode.Ref;
+								var fillWidth = style.Width * normalized;
+								fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+									Clay_SizingAxis.Fixed(fillWidth),
+									Clay_SizingAxis.Fixed(style.TrackHeight));
+								changed = true;
+							}
 
 							// Update handle position via handleLayer padding
-                    if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
-                    {
-                        var layerData = nodes.Get(links.HandleLayerEntity);
-                        layerData.Deconstruct(out var layerNode);
-                        ref var layerNodeRef = ref layerNode.Ref;
-                        var handleX = (style.Width - style.HandleSize) * normalized;
-                        layerNodeRef.Declaration.layout.padding = new Clay_Padding
-                        {
-                            left = (ushort)handleX,
-                            right = 0,
-                            top = 0,
-                            bottom = 0
-                        };
-                        changed = true;
-                    }
+							if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
+							{
+								var layerData = nodes.Get(links.HandleLayerEntity);
+								layerData.Deconstruct(out var layerNode);
+								ref var layerNodeRef = ref layerNode.Ref;
+								var handleX = (style.Width - style.HandleSize) * normalized;
+								layerNodeRef.Declaration.layout.padding = new Clay_Padding
+								{
+									left = (ushort)handleX,
+									right = 0,
+									top = 0,
+									bottom = 0
+								};
+								changed = true;
+							}
 
 							if (changed)
 							{
@@ -204,35 +210,35 @@ public sealed class UiWidgetsPlugin : IPlugin
 					}
 				}
 
-        // Update visuals (fill width and handle position)
-        var changed = false;
-        if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
-        {
-            var fillData = nodes.Get(links.FillEntity);
-            fillData.Deconstruct(out var fillNode);
-            ref var fillNodeRef = ref fillNode.Ref;
-            var fillWidth = style.Width * normalized;
-            fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
-                Clay_SizingAxis.Fixed(fillWidth),
-                Clay_SizingAxis.Fixed(style.TrackHeight));
-            changed = true;
-        }
+				// Update visuals (fill width and handle position)
+				var changed = false;
+				if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
+				{
+					var fillData = nodes.Get(links.FillEntity);
+					fillData.Deconstruct(out var fillNode);
+					ref var fillNodeRef = ref fillNode.Ref;
+					var fillWidth = style.Width * normalized;
+					fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(fillWidth),
+						Clay_SizingAxis.Fixed(style.TrackHeight));
+					changed = true;
+				}
 
-        if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
-        {
-            var layerData = nodes.Get(links.HandleLayerEntity);
-            layerData.Deconstruct(out var layerNode);
-            ref var layerNodeRef = ref layerNode.Ref;
-            var handleX = (style.Width - style.HandleSize) * normalized;
-            layerNodeRef.Declaration.layout.padding = new Clay_Padding
-            {
-                left = (ushort)handleX,
-                right = 0,
-                top = 0,
-                bottom = 0
-            };
-            changed = true;
-        }
+				if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
+				{
+					var layerData = nodes.Get(links.HandleLayerEntity);
+					layerData.Deconstruct(out var layerNode);
+					ref var layerNodeRef = ref layerNode.Ref;
+					var handleX = (style.Width - style.HandleSize) * normalized;
+					layerNodeRef.Declaration.layout.padding = new Clay_Padding
+					{
+						left = (ushort)handleX,
+						right = 0,
+						top = 0,
+						bottom = 0
+					};
+					changed = true;
+				}
 
 				if (changed)
 				{

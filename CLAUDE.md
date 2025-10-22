@@ -701,6 +701,89 @@ app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState>> ch
 2. Update `UiNode.Declaration` properties every frame based on that state
 3. Handle `UiPointerEvent` to modify the state when clicked
 
+### Scrolling and Clipping
+
+**FloatingWindowWidget Scroll Container Structure**:
+```
+Window (floating)
+├─ Title Bar
+└─ Scroll Container (clip enabled, Grow sizing)
+    └─ Content Area (no clip, Fit sizing for overflow)
+        └─ User Widgets
+```
+
+**Critical Implementation Details**:
+
+1. **Two-Layer Clipping Approach**:
+   - Parent container has `clip` config with fixed/grow dimensions (the viewport)
+   - Child content has `Fit(0, float.MaxValue)` sizing to allow unlimited growth
+   - This creates overflow that Clay can scroll
+
+2. **Clay Scroll Offset Integration**:
+   ```csharp
+   // In ClayUiEntityLayout.RenderNode, before Clay.ConfigureOpenElement:
+   if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+   {
+       var scrollOffset = Clay.GetScrollOffset();
+       node.Declaration.clip.childOffset = scrollOffset;
+   }
+   ```
+   - Clay internally manages scroll state via `Clay.UpdateScrollContainers()`
+   - Must retrieve and apply `childOffset` every frame using `Clay.GetScrollOffset()`
+   - This is the key to making scrolling work!
+
+3. **Scroll Input Processing**:
+   ```csharp
+   // Raylib scroll direction (in RaylibClayUiPlugin):
+   var scrollY = Raylib.GetMouseWheelMove();
+   // Raylib: positive = scroll up, negative = scroll down
+   // Clay: positive Y = scroll content down (reveal upper content)
+   var scrollDelta = new Vector2(0, scrollY * 20f); // No negation needed
+   state.AddScroll(scrollDelta);
+   ```
+
+4. **Disable Drag Scrolling** (to avoid conflicts with window dragging):
+   ```csharp
+   // In ClayUiSystems.ApplyPointerInput:
+   pointer.EnableDragScrolling = false; // Only use wheel/touchpad scrolling
+   ```
+
+5. **Hierarchy Redirection**:
+   - `FloatingWindowLinks` must track `ScrollContainerId` to exclude it from parent redirection
+   - User widgets with `parent: window.Id` are redirected to `ContentAreaId`
+   - But scroll container itself must stay attached to window (not be redirected)
+
+**Floating Elements and Clipping Limitation**:
+
+Floating elements (`Clay_FloatingElementConfig`) **bypass clipping** by design. This is a Clay engine behavior.
+
+**Problem**: Slider handles originally used floating positioning, causing them to render outside scroll containers.
+
+**Solution**: Redesigned `SliderWidget` to use layout-based positioning:
+```
+Container (vertical layout)
+├─ Track Layer
+│   ├─ Track (background)
+│   └─ Fill (value indicator)
+└─ Handle Layer (positioned via padding.left)
+    └─ Handle (regular child, respects clipping)
+```
+
+**Key Implementation**:
+- Handle position controlled via `handleLayer.Declaration.layout.padding.left`
+- Systems update padding when dragging: `padding.left = (ushort)((width - handleSize) * normalized)`
+- Handle stays in normal layout flow, respects ancestor clipping
+- Requires stable Clay ID on container for drag systems to query bounding box
+
+**Scroll Container Checklist**:
+- ✅ Parent has `clip: { vertical: true }`
+- ✅ Parent uses fixed or grow sizing (defines viewport)
+- ✅ Child uses `Fit(0, float.MaxValue)` for scrollable axis
+- ✅ Update `childOffset` every frame with `Clay.GetScrollOffset()`
+- ✅ Call `Clay.UpdateScrollContainers()` before layout pass
+- ✅ Avoid floating elements inside scrollable areas
+- ✅ Pass scroll wheel delta without negation (Raylib → Clay)
+
 ### Sample References
 - `samples/MyBattleground/UiClayExample.cs` - Basic plugin setup, widget composition, simulated pointer input
 - `samples/TinyEcsGame/UiDemoPlugin.cs` - 4 floating windows showcasing all 7 widget types with full interaction
@@ -751,6 +834,18 @@ app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState>> ch
 - Fix: Update `PreviousStates` to match `States` after running OnEnter/OnExit systems in `ProcessStateTransitions()`
 - All existing tests pass (31/31)
 - See [StateTransitionExample.cs](samples/MyBattleground/StateTransitionExample.cs) for verification test
+
+### UI Scrolling & Clipping System (2025-10-22)
+- **Fixed FloatingWindowWidget scrolling**: Implemented two-layer scroll container structure
+- **Clay scroll offset integration**: Added `Clay.GetScrollOffset()` call in layout pass to update `childOffset` every frame
+- **Scroll direction fix**: Removed incorrect negation of Raylib scroll wheel input
+- **Disabled drag scrolling**: Prevents conflicts with window dragging by setting `EnableDragScrolling = false`
+- **Hierarchy redirection fix**: Added `ScrollContainerId` to `FloatingWindowLinks` to exclude from parent redirection
+- **Slider clipping fix**: Redesigned `SliderWidget` to use layout-based positioning instead of floating elements
+  - Changed from floating handle to handle layer with padding-based positioning
+  - Handle now respects ancestor clipping (no more escaping scroll containers)
+  - Requires stable Clay ID on container for drag systems
+- **Key discovery**: Floating elements bypass clipping by design - must use layout-based approaches for clippable widgets
 
 ### UI Widgets & Interaction System (2025-10-22)
 - **Added 7 new widgets**: LabelWidget, ImageWidget, CheckboxWidget, SliderWidget, ScrollContainerWidget, SeparatorWidget, FloatingWindowWidget

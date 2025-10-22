@@ -6,6 +6,7 @@ using System.Text;
 using Clay_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcs.UI.Widgets;
 
 namespace TinyEcs.UI;
 
@@ -144,7 +145,9 @@ public unsafe sealed class ClayUiState : IDisposable
 		Query<Data<UiNode>, Filter<Without<Parent>>> rootNodes,
 		Query<Data<UiNode>> allNodes,
 		Query<Data<UiText>> uiTexts,
-		Query<Data<Children>> childLists)
+		Query<Data<Children>> childLists,
+		Query<Data<FloatingWindowState>> floatingWindows,
+		Local<List<ulong>> windows)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, typeof(ClayUiState));
 
@@ -163,7 +166,7 @@ public unsafe sealed class ClayUiState : IDisposable
 		var context = CreateContext();
 		if (_useEntityHierarchy)
 		{
-			ClayUiEntityLayout.Build(context, rootNodes, allNodes, uiTexts, childLists);
+			ClayUiEntityLayout.Build(context, rootNodes, allNodes, uiTexts, childLists, floatingWindows, windows);
 		}
 
 		foreach (var build in _layoutRoots)

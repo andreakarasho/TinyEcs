@@ -86,10 +86,12 @@ public sealed class ClayUiPlugin : IPlugin
 			Query<Data<UiNode>, Filter<Without<Parent>>> roots,
 			Query<Data<UiNode>> allNodes,
 			Query<Data<UiText>> texts,
-			Query<Data<Children>> childLists) =>
+			Query<Data<Children>> childLists,
+			Query<Data<FloatingWindowState>> floatingWindows,
+			Local<List<ulong>> windows) =>
 		{
 			ref var state = ref stateParam.Value;
-			state.RunLayoutPass(roots, allNodes, texts, childLists);
+			state.RunLayoutPass(roots, allNodes, texts, childLists, floatingWindows, windows);
 		})
 		.InStage(Stage.Update)
 		.Label("ui:clay:layout")

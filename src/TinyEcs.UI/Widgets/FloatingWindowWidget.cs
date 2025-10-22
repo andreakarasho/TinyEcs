@@ -35,7 +35,7 @@ public struct FloatingWindowLinks
 	public EcsID TitleBarId;
 	public EcsID ResizeHandleId;
 	public EcsID ScrollContainerId;
-    public EcsID ContentAreaId;
+	public EcsID ContentAreaId;
 }
 
 /// <summary>
@@ -122,17 +122,17 @@ public static class FloatingWindowWidget
 	/// <param name="style">Visual style configuration.</param>
 	/// <param name="title">Window title text.</param>
 	/// <param name="initialPosition">Starting position on screen.</param>
-    /// <param name="parent">Optional parent entity ID.</param>
-    /// <param name="includeContentArea">When true (default), creates a padded content container (body) under the title bar. Set to false for title-bar-only windows.</param>
-    /// <returns>EntityCommands for the window container (use .Id to parent content to it).</returns>
-    public static EntityCommands Create(
-        Commands commands,
-        ClayFloatingWindowStyle style,
-        ReadOnlySpan<char> title,
-        Vector2 initialPosition,
-        EcsID? parent = default,
-        bool includeContentArea = true)
-    {
+	/// <param name="parent">Optional parent entity ID.</param>
+	/// <param name="includeContentArea">When true (default), creates a padded content container (body) under the title bar. Set to false for title-bar-only windows.</param>
+	/// <returns>EntityCommands for the window container (use .Id to parent content to it).</returns>
+	public static EntityCommands Create(
+		Commands commands,
+		ClayFloatingWindowStyle style,
+		ReadOnlySpan<char> title,
+		Vector2 initialPosition,
+		EcsID? parent = default,
+		bool includeContentArea = true)
+	{
 		// Create main window container with floating behavior
 		var window = commands.Spawn();
 
@@ -154,17 +154,17 @@ public static class FloatingWindowWidget
 					color = style.BorderColor,
 					width = style.BorderWidth
 				},
-                floating = new Clay_FloatingElementConfig
-                {
-                    attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
-                    offset = new Clay_Vector2 { x = initialPosition.X, y = initialPosition.Y },
-                    // zIndex neutral; global stacking controlled by UiWindowOrder + render pass
-                    zIndex = 0,
-                    parentId = 0, // Float relative to root
-                    attachPoints = new Clay_FloatingAttachPoints
-                    {
-                        element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-                        parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
+				floating = new Clay_FloatingElementConfig
+				{
+					attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
+					offset = new Clay_Vector2 { x = initialPosition.X, y = initialPosition.Y },
+					// zIndex neutral; global stacking controlled by UiWindowOrder + render pass
+					zIndex = 0,
+					parentId = 0, // Float relative to root
+					attachPoints = new Clay_FloatingAttachPoints
+					{
+						element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
+						parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
 					},
 					pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE
 				}
@@ -262,79 +262,82 @@ public static class FloatingWindowWidget
 			CreateResizeHandle(commands, window.Id, style);
 		}
 
+		// Note: Window registration in UiWindowOrder happens via global observer system in UiWidgetsPlugin
+		// (Entity observers don't fire for components added in the same command batch)
+
 		// Handle dragging via entity-specific observer (works in tests and runtime)
-        window.Observe<UiPointerTrigger,
-            Query<Data<FloatingWindowState, UiNode, FloatingWindowLinks>>,
-            Query<Data<Parent>>,
-            ResMut<UiWindowOrder>>((trigger, windows, parents, windowOrder) =>
-        {
-            var evt = trigger.Event;
-            var id = evt.CurrentTarget;
-            if (!windows.Contains(id)) return;
-            var winData = windows.Get(id);
-            winData.Deconstruct(out var stateParam, out var nodeParam, out var linksParam);
+		window.Observe<UiPointerTrigger,
+			Query<Data<FloatingWindowState, UiNode, FloatingWindowLinks>>,
+			Query<Data<Parent>>,
+			ResMut<UiWindowOrder>>((trigger, windows, parents, windowOrder) =>
+		{
+			var evt = trigger.Event;
+			var id = evt.CurrentTarget;
+			if (!windows.Contains(id)) return;
+			var winData = windows.Get(id);
+			winData.Deconstruct(out var stateParam, out var nodeParam, out var linksParam);
 
-            ref var st = ref stateParam.Ref;
-            ref var node = ref nodeParam.Ref;
-            var links = linksParam.Ref;
+			ref var st = ref stateParam.Ref;
+			ref var node = ref nodeParam.Ref;
+			var links = linksParam.Ref;
 
-				if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
+			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
+			{
+				// Bring window to front on any click within the window hierarchy
+				windowOrder.Value.MoveToTop(id);
+
+				// Start drag when clicking on title bar or any of its descendants
+				bool onTitleBar = false;
+				if (links.TitleBarId != 0)
 				{
-					// Bring window to front on any click within the window hierarchy
-					windowOrder.Value.MoveToTop(id);
-
-					// Start drag when clicking on title bar or any of its descendants
-					bool onTitleBar = false;
-					if (links.TitleBarId != 0)
+					onTitleBar = evt.Target == links.TitleBarId;
+					if (!onTitleBar)
 					{
-						onTitleBar = evt.Target == links.TitleBarId;
-						if (!onTitleBar)
+						// climb parents from target to see if we hit the title bar
+						var current = evt.Target;
+						int safety = 0;
+						while (current != 0 && safety++ < 256)
 						{
-							// climb parents from target to see if we hit the title bar
-							var current = evt.Target;
-							int safety = 0;
-							while (current != 0 && safety++ < 256)
-							{
-								if (current == links.TitleBarId) { onTitleBar = true; break; }
-								if (!parents.Contains(current)) break;
-								var parentData = parents.Get(current);
-								parentData.Deconstruct(out _, out var parentPtr);
-								var parentId = parentPtr.Ref.Id;
-								if (parentId == 0 || parentId == current) break;
-								current = parentId;
-							}
+							if (current == links.TitleBarId) { onTitleBar = true; break; }
+							if (!parents.Contains(current)) break;
+							var parentData = parents.Get(current);
+							parentData.Deconstruct(out _, out var parentPtr);
+							var parentId = parentPtr.Ref.Id;
+							if (parentId == 0 || parentId == current) break;
+							current = parentId;
 						}
 					}
-
-					if (onTitleBar && st.CanDrag)
-					{
-						st.IsDragging = true;
-						st.DragOffset = evt.Position - st.Position;
-					}
-				}
-				else if (evt.Type == UiPointerEventType.PointerUp)
-				{
-					st.IsDragging = false;
-				}
-				else if (evt.Type == UiPointerEventType.PointerMove)
-				{
-					if (st.IsDragging)
-					{
-						// Prefer absolute pointer when available; fall back to delta (used by tests)
-						if (evt.MoveDelta != Vector2.Zero)
-							st.Position += evt.MoveDelta;
-						else
-							st.Position = evt.Position - st.DragOffset;
-						node.Declaration.floating.offset = new Clay_Vector2
-						{
-							x = st.Position.X,
-							y = st.Position.Y
-						};
-					}
 				}
 
-            // handled
-        });
+				if (onTitleBar && st.CanDrag)
+				{
+					st.IsDragging = true;
+					st.DragOffset = evt.Position - st.Position;
+				}
+			}
+			else if (evt.Type == UiPointerEventType.PointerUp)
+			{
+				st.IsDragging = false;
+			}
+			else if (evt.Type == UiPointerEventType.PointerMove)
+			{
+				if (st.IsDragging)
+				{
+					// Prefer absolute pointer when available; fall back to delta (used by tests)
+					if (evt.MoveDelta != Vector2.Zero)
+						st.Position += evt.MoveDelta;
+					else
+						st.Position = evt.Position - st.DragOffset;
+					node.Declaration.floating.offset = new Clay_Vector2
+					{
+						x = st.Position.X,
+						y = st.Position.Y
+					};
+				}
+			}
+
+			// handled
+		});
 
 		return window;
 	}
@@ -545,19 +548,19 @@ public static class FloatingWindowWidget
 					bottomLeft = 0,
 					bottomRight = (float)style.CornerRadius.bottomRight
 				},
-                floating = new Clay_FloatingElementConfig
-                {
-                    offset = new Clay_Vector2
-                    {
-                        x = style.InitialSize.X - handleSize,
-                        y = style.InitialSize.Y - handleSize
-                    },
-                    zIndex = 0,
-                    parentId = windowId.GetHashCode() > 0 ? (uint)windowId.GetHashCode() : 0,
-                    attachPoints = new Clay_FloatingAttachPoints
-                    {
-                        element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-                        parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
+				floating = new Clay_FloatingElementConfig
+				{
+					offset = new Clay_Vector2
+					{
+						x = style.InitialSize.X - handleSize,
+						y = style.InitialSize.Y - handleSize
+					},
+					zIndex = 0,
+					parentId = windowId.GetHashCode() > 0 ? (uint)windowId.GetHashCode() : 0,
+					attachPoints = new Clay_FloatingAttachPoints
+					{
+						element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
+						parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
 					},
 					pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE
 				}
