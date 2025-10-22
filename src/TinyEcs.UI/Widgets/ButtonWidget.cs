@@ -75,6 +75,50 @@ public static class ButtonWidget
             button.Insert(UiNodeParent.For(parent.Value));
         }
 
+        // React to pointer events immediately via an entity-specific observer so tests using EmitTrigger work
+        button.Observe<UiPointerTrigger, Query<Data<ClayButtonStyle, ButtonState, UiNode>>>((trigger, buttons) =>
+        {
+            var evt = trigger.Event;
+            var id = evt.CurrentTarget;
+            foreach (var (entityId, styleParam, stateParam, nodeParam) in buttons)
+            {
+                if (entityId.Ref != id) continue;
+
+                ref var stateRef = ref stateParam.Ref;
+                ref var nodeRef = ref nodeParam.Ref;
+                var styleRef = styleParam.Ref;
+
+                switch (evt.Type)
+                {
+                    case UiPointerEventType.PointerEnter:
+                        stateRef.IsHovered = true;
+                        nodeRef.Declaration.backgroundColor = styleRef.HoverBackground;
+                        break;
+                    case UiPointerEventType.PointerExit:
+                        stateRef.IsHovered = false;
+                        nodeRef.Declaration.backgroundColor = stateRef.IsPressed
+                            ? styleRef.PressedBackground
+                            : styleRef.Background;
+                        break;
+                    case UiPointerEventType.PointerDown:
+                        if (evt.IsPrimaryButton)
+                        {
+                            stateRef.IsPressed = true;
+                            nodeRef.Declaration.backgroundColor = styleRef.PressedBackground;
+                        }
+                        break;
+                    case UiPointerEventType.PointerUp:
+                        stateRef.IsPressed = false;
+                        nodeRef.Declaration.backgroundColor = stateRef.IsHovered
+                            ? styleRef.HoverBackground
+                            : styleRef.Background;
+                        break;
+                }
+
+                break; // handled
+            }
+        });
+
         return button;
     }
 }

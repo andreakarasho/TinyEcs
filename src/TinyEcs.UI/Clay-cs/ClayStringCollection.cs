@@ -11,22 +11,26 @@ namespace Clay_cs;
 public readonly struct ClayStringCollection() : IDisposable
 {
     private readonly Dictionary<string, (GCHandle handle, int length)> _dictionary = new();
+    private readonly object _sync = new();
 
     public Clay_String Get(ReadOnlySpan<char> txt)
     {
-        var lookup = _dictionary.GetAlternateLookup<ReadOnlySpan<char>>();
-        if (lookup.TryGetValue(txt, out var pair)) return Get(pair);
+        lock (_sync)
+        {
+            var lookup = _dictionary.GetAlternateLookup<ReadOnlySpan<char>>();
+            if (lookup.TryGetValue(txt, out var pair)) return Get(pair);
 
-        var count = Encoding.UTF8.GetByteCount(txt);
+            var count = Encoding.UTF8.GetByteCount(txt);
 
-        var buffer = new byte[count];
-        var read = Encoding.UTF8.GetBytes(txt, buffer.AsSpan(0, count));
+            var buffer = new byte[count];
+            var read = Encoding.UTF8.GetBytes(txt, buffer.AsSpan(0, count));
 
-        pair.handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
-        pair.length = read;
+            pair.handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            pair.length = read;
 
-        _ = lookup.TryAdd(txt, pair);
-        return Get(pair);
+            _ = lookup.TryAdd(txt, pair);
+            return Get(pair);
+        }
     }
 
     private static unsafe Clay_String Get((GCHandle handle, int length) pair)
@@ -40,12 +44,15 @@ public readonly struct ClayStringCollection() : IDisposable
 
     public void Clear()
     {
-        foreach (var pair in _dictionary)
+        lock (_sync)
         {
-            pair.Value.handle.Free();
-        }
+            foreach (var pair in _dictionary)
+            {
+                pair.Value.handle.Free();
+            }
 
-        _dictionary.Clear();
+            _dictionary.Clear();
+        }
     }
 
     public void Dispose()

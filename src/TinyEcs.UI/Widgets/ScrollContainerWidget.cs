@@ -213,31 +213,30 @@ public static class ScrollContainerWidget
 		var offsetX = isVertical ? width - 8f : 0f;
 		var offsetY = isVertical ? 0f : height - 8f;
 
-		scrollbar.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
-				{
+        scrollbar.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
+                {
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(isVertical ? 8f : width),
 						Clay_SizingAxis.Fixed(isVertical ? height : 8f))
 				},
 				backgroundColor = color,
 				cornerRadius = Clay_CornerRadius.All(4),
-				floating = new Clay_FloatingElementConfig
-				{
-					offset = new Clay_Vector2 { x = offsetX, y = offsetY },
-					zIndex = 10,
-					parentId = parent.GetHashCode() > 0 ? (uint)parent.GetHashCode() : 0,
-					attachPoints = new Clay_FloatingAttachPoints
-					{
-						element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-						parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
-					}
-				}
-			}
-		});
+                floating = new Clay_FloatingElementConfig
+                {
+                    offset = new Clay_Vector2 { x = offsetX, y = offsetY },
+                    parentId = parent.GetHashCode() > 0 ? (uint)parent.GetHashCode() : 0,
+                    attachPoints = new Clay_FloatingAttachPoints
+                    {
+                        element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
+                        parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
+                    }
+                }
+            }
+        });
 		scrollbar.Insert(UiNodeParent.For(parent));
 
 		// Create scrollbar thumb

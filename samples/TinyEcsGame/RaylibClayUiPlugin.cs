@@ -65,21 +65,43 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 
-		// Render Clay UI with Raylib (after debug text, before EndDrawing)
-		app.AddSystem((Res<ClayUiState> uiState) =>
+		// Load UI font (Roboto) after window is created
+		app.AddSystem((World world) =>
 		{
-			RenderClayUI(uiState.Value);
+			var fontPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Content", "fonts", "Roboto-Regular.ttf");
+			try
+			{
+				var font = Raylib.LoadFont(fontPath);
+				if (!world.HasResource<UiTextFont>())
+					world.AddResource(new UiTextFont { Value = font });
+				else
+					world.GetResource<UiTextFont>().Value = font;
+			}
+			catch { }
+		})
+		.InStage(Stage.Startup)
+		.Label("ui:raylib:load-font")
+		.After("raylib:create-window")
+		.SingleThreaded()
+		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
+
+		// Render Clay UI with Raylib (after debug text, before EndDrawing)
+		app.AddSystem((Res<ClayUiState> uiState, Res<UiTextFont> uiFont) =>
+		{
+			RenderClayUI(uiState.Value, uiFont.Value.Value);
 		})
 		.InStage(RenderingStage)
 		.Label("ui:raylib:render")
 		.After("render:debug")
 		.SingleThreaded()
 		.RunIfResourceExists<ClayUiState>()
+		.RunIfResourceExists<UiTextFont>()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 	}
 
-	private void RenderClayUI(ClayUiState uiState)
+	private void RenderClayUI(ClayUiState uiState, Font uiFont)
 	{
 		var commands = uiState.RenderCommands;
 
@@ -98,7 +120,7 @@ public sealed class RaylibClayUiPlugin : IPlugin
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_TEXT:
-					RenderText(cmd);
+					RenderText(cmd, uiFont);
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_IMAGE:
@@ -125,11 +147,11 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		var rect = new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height);
 
 		if (config.cornerRadius.topLeft > 0 || config.cornerRadius.topRight > 0 ||
-		    config.cornerRadius.bottomLeft > 0 || config.cornerRadius.bottomRight > 0)
+			config.cornerRadius.bottomLeft > 0 || config.cornerRadius.bottomRight > 0)
 		{
 			// Use average corner radius for rounded rectangle
 			var avgRadius = (config.cornerRadius.topLeft + config.cornerRadius.topRight +
-			                config.cornerRadius.bottomLeft + config.cornerRadius.bottomRight) / 4f;
+							config.cornerRadius.bottomLeft + config.cornerRadius.bottomRight) / 4f;
 			Raylib.DrawRectangleRounded(rect, avgRadius / Math.Min(bounds.width, bounds.height), 8, color);
 		}
 		else
@@ -186,7 +208,7 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		}
 	}
 
-	private unsafe void RenderText(Clay_RenderCommand cmd)
+	private unsafe void RenderText(Clay_RenderCommand cmd, Font font)
 	{
 		var textData = cmd.renderData.text;
 		var bounds = cmd.boundingBox;
@@ -197,12 +219,12 @@ public sealed class RaylibClayUiPlugin : IPlugin
 
 		// Calculate text position
 		var fontSize = textData.fontSize;
-		var textSize = Raylib.MeasureTextEx(Raylib.GetFontDefault(), text, fontSize, 1f);
+		var textSize = Raylib.MeasureTextEx(font, text, fontSize, 1f);
 
 		float x = bounds.x;
 		float y = bounds.y + (bounds.height - textSize.Y) / 2f; // Vertically center
 
-		Raylib.DrawText(text, (int)x, (int)y, fontSize, color);
+		Raylib.DrawTextEx(font, text, new Vector2(x, y), fontSize, 1f, color);
 	}
 
 	private unsafe void RenderImage(Clay_RenderCommand cmd)
@@ -244,4 +266,9 @@ public sealed class RaylibClayUiPlugin : IPlugin
 			(byte)clayColor.b,
 			(byte)clayColor.a);
 	}
+}
+
+sealed class UiTextFont
+{
+	public Font Value;
 }

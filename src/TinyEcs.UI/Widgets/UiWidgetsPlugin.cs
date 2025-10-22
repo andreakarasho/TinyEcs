@@ -15,209 +15,24 @@ namespace TinyEcs.UI.Widgets;
 /// </summary>
 public sealed class UiWidgetsPlugin : IPlugin
 {
-    public void Build(App app)
-    {
-		// System 1: Handle button hover/press interactions
-		app.AddSystem((
-			EventReader<UiPointerEvent> events,
-			Query<Data<ClayButtonStyle, ButtonState, UiNode>> buttons) =>
-		{
-			foreach (var evt in events.Read())
-			{
-				var id = evt.CurrentTarget;
-				foreach (var (entityId, style, state, node) in buttons)
-				{
-					if (entityId.Ref != id) continue;
+	public void Build(App app)
+	{
+		// Maintain window stacking without z-index using an order resource
+		var worldInit = app.GetWorld();
+		if (!worldInit.HasResource<UiWindowOrder>())
+			worldInit.AddResource(new UiWindowOrder());
+		// (Removed) Button hover/press system — handled by entity observers
 
-					ref var stateRef = ref state.Ref;
-					ref var nodeRef = ref node.Ref;
-					var styleRef = style.Ref;
+		// (Removed) Checkbox toggle system — handled by entity observers
 
-					switch (evt.Type)
-					{
-						case UiPointerEventType.PointerEnter:
-							stateRef.IsHovered = true;
-							nodeRef.Declaration.backgroundColor = styleRef.HoverBackground;
-							break;
-						case UiPointerEventType.PointerExit:
-							stateRef.IsHovered = false;
-							nodeRef.Declaration.backgroundColor = stateRef.IsPressed
-								? styleRef.PressedBackground
-								: styleRef.Background;
-							break;
-						case UiPointerEventType.PointerDown:
-							if (evt.IsPrimaryButton)
-							{
-								stateRef.IsPressed = true;
-								nodeRef.Declaration.backgroundColor = styleRef.PressedBackground;
-							}
-							break;
-						case UiPointerEventType.PointerUp:
-							stateRef.IsPressed = false;
-							nodeRef.Declaration.backgroundColor = stateRef.IsHovered
-								? styleRef.HoverBackground
-								: styleRef.Background;
-							break;
-					}
-					break;
-				}
-			}
-        })
-        .InStage(Stage.Update)
-        .Label("ui:widgets:buttons")
-        .Before("ui:clay:layout")
-        .Build();
-
-		// System 2: Handle checkbox toggle interactions
-		app.AddSystem((
-			EventReader<UiPointerEvent> events,
-			Query<Data<CheckboxLinks>> checkboxContainers,
-			Query<Data<CheckboxState, UiNode, ClayCheckboxStyle>> checkboxBoxes,
-			Commands commands) =>
-		{
-			foreach (var evt in events.Read())
-			{
-				if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
-					continue;
-
-				var id = evt.CurrentTarget;
-
-				// Find the checkbox container that was clicked
-				foreach (var (containerEntityId, links) in checkboxContainers)
-				{
-					if (containerEntityId.Ref != id) continue;
-
-					var boxEntity = links.Ref.BoxEntity;
-					if (boxEntity == 0) continue;
-
-					// Find the box entity and toggle it
-					foreach (var (boxEntityId, checkboxState, boxNode, checkboxStyle) in checkboxBoxes)
-					{
-						if (boxEntityId.Ref != boxEntity) continue;
-
-						ref var stateRef = ref checkboxState.Ref;
-						ref var nodeRef = ref boxNode.Ref;
-						var styleRef = checkboxStyle.Ref;
-
-						// Toggle checked state
-						stateRef.Checked = !stateRef.Checked;
-
-						// Update background color
-						nodeRef.Declaration.backgroundColor = stateRef.Checked
-							? styleRef.CheckedColor
-							: styleRef.BoxColor;
-
-						// Update checkmark text
-						if (stateRef.Checked)
-						{
-							commands.Entity(boxEntity).Insert(UiText.From("✓", new Clay_TextElementConfig
-							{
-								textColor = new Clay_Color(255, 255, 255, 255),
-								fontSize = (ushort)(styleRef.BoxSize * 0.8f),
-								textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
-							}));
-						}
-						else
-						{
-							// Remove checkmark by inserting empty text
-							commands.Entity(boxEntity).Insert(UiText.From("", new Clay_TextElementConfig()));
-						}
-						break;
-					}
-					break;
-				}
-			}
-        })
-        .InStage(Stage.Update)
-        .Label("ui:widgets:checkboxes")
-        .Build();
-
-		// System 3: Handle floating window dragging
-		app.AddSystem((
-			EventReader<UiPointerEvent> events,
-			Query<Data<FloatingWindowState, FloatingWindowLinks, UiNode>> windows,
-			Query<Data<Parent>> hierarchy) =>
-		{
-			foreach (var evt in events.Read())
-			{
-				switch (evt.Type)
-				{
-					case UiPointerEventType.PointerDown:
-						if (!evt.IsPrimaryButton) break;
-
-						// Try to find a window to start dragging
-						foreach (var (windowEntityId, winState, winLinks, winNode) in windows)
-						{
-							ref var win = ref winState.Ref;
-							var links = winLinks.Ref;
-							var windowId = windowEntityId.Ref;
-
-							// Check if event is on this window or its descendants
-							bool isRelevant = evt.CurrentTarget == windowId ||
-							                  IsDescendantOf(evt.CurrentTarget, windowId, hierarchy);
-
-							if (!isRelevant) continue;
-
-							// Check if clicking on title bar or its descendants
-							bool isOnTitleBar = evt.Target == links.TitleBarId ||
-							                   IsDescendantOf(evt.Target, links.TitleBarId, hierarchy);
-
-							if (isOnTitleBar && win.CanDrag)
-							{
-								win.IsDragging = true;
-								win.DragOffset = evt.Position - win.Position;
-								Console.WriteLine($"[Window] Started dragging window {windowId} at {win.Position}, pointer at {evt.Position}, offset {win.DragOffset}");
-							}
-						}
-						break;
-
-					case UiPointerEventType.PointerUp:
-						// Stop all dragging windows
-						foreach (var (windowEntityId, winState, winLinks, winNode) in windows)
-						{
-							ref var win = ref winState.Ref;
-							if (win.IsDragging)
-							{
-								Console.WriteLine($"[Window] Stopped dragging window {windowEntityId.Ref}");
-								win.IsDragging = false;
-							}
-						}
-						break;
-
-					case UiPointerEventType.PointerMove:
-						// Update all dragging windows using absolute pointer position
-						foreach (var (windowEntityId, winState, winLinks, winNode) in windows)
-						{
-							ref var win = ref winState.Ref;
-							ref var node = ref winNode.Ref;
-
-							if (win.IsDragging)
-							{
-								// Calculate absolute position: pointer position minus the drag offset
-								win.Position = evt.Position - win.DragOffset;
-
-								node.Declaration.floating.offset = new Clay_Vector2
-								{
-									x = win.Position.X,
-									y = win.Position.Y
-								};
-								Console.WriteLine($"[Window] Moving window {windowEntityId.Ref} to {win.Position}, pointer at {evt.Position}");
-							}
-						}
-						break;
-				}
-			}
-        })
-        .InStage(Stage.Update)
-        .Label("ui:widgets:windows")
-        .Before("ui:clay:layout")  // Run BEFORE layout so position updates are applied this frame
-        .Build();
+		// (Removed) Floating window drag system — handled by entity observers; fallback remains below
 
 		// System 4: Handle slider dragging
 		app.AddSystem((
 			EventReader<UiPointerEvent> events,
 			Query<Data<SliderState, SliderLinks, ClaySliderStyle>> sliders,
-			Query<Data<UiNode>> nodes) =>
+			Query<Data<UiNode>> nodes,
+			ResMut<ClayUiState> uiState) =>
 		{
 			foreach (var evt in events.Read())
 			{
@@ -225,31 +40,56 @@ public sealed class UiWidgetsPlugin : IPlugin
 
 				foreach (var (entityId, sliderState, sliderLinks, sliderStyle) in sliders)
 				{
-					if (entityId.Ref != id) continue;
-
 					ref var st = ref sliderState.Ref;
 					var links = sliderLinks.Ref;
 					var style = sliderStyle.Ref;
 
-					switch (evt.Type)
-					{
+					// Accept events coming from the slider container or any of its parts,
+					// OR if this slider is currently being dragged (so it keeps updating outside its bounds)
+					bool isThisSlider = entityId.Ref == id ||
+										links.TrackEntity == id ||
+										links.FillEntity == id ||
+										links.HandleEntity == id;
+					bool acceptEvent = isThisSlider || st.IsDragging;
+					if (!acceptEvent) continue;
+
+						switch (evt.Type)
+						{
 						case UiPointerEventType.PointerDown:
+							if (!isThisSlider) break; // only start drag when pressing this slider
 							if (evt.IsPrimaryButton)
+							{
 								st.IsDragging = true;
+							}
 							break;
 
-						case UiPointerEventType.PointerUp:
-							st.IsDragging = false;
-							break;
+							case UiPointerEventType.PointerUp:
+								st.IsDragging = false;
+								break;
 
 						case UiPointerEventType.PointerMove:
 							if (!st.IsDragging) break;
 
-							// Adjust normalized value by horizontal motion
-							var normalized = st.NormalizedValue + (style.Width <= 0 ? 0 : (evt.MoveDelta.X / style.Width));
-							normalized = Math.Clamp(normalized, 0f, 1f);
-							st.SetNormalizedValue(normalized);
+							// Compute normalized value from absolute pointer X relative to container bounds
+							var normalized = st.NormalizedValue;
+								unsafe
+								{
+									var ctx = uiState.Value.Context;
+									if (ctx is not null)
+									{
+										Clay.SetCurrentContext(ctx);
+										var containerElemIdMove = ClayId.Global($"slider-container-{entityId.Ref}").ToElementId();
+										var elemMove = Clay.GetElementData(containerElemIdMove);
+										if (elemMove.found && elemMove.boundingBox.width > 0)
+										{
+											normalized = (evt.Position.X - elemMove.boundingBox.x) / Math.Max(1f, style.Width);
+											normalized = Math.Clamp(normalized, 0f, 1f);
+											st.SetNormalizedValue(normalized);
+										}
+									}
+								}
 
+							var changed = false;
 							// Update fill width
 							if (links.FillEntity != 0)
 							{
@@ -262,6 +102,7 @@ public sealed class UiWidgetsPlugin : IPlugin
 									fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
 										Clay_SizingAxis.Fixed(fillWidth),
 										Clay_SizingAxis.Fixed(style.TrackHeight));
+									changed = true;
 									break;
 								}
 							}
@@ -277,18 +118,25 @@ public sealed class UiWidgetsPlugin : IPlugin
 									var handleX = (style.Width - style.HandleSize) * normalized;
 									var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
 									handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+									changed = true;
 									break;
 								}
+							}
+
+							if (changed)
+							{
+								// Force a layout pass so the graphical position updates this frame
+								uiState.Value.RequestLayoutPass();
 							}
 							break;
 					}
 					break;
 				}
 			}
-        })
-        .InStage(Stage.Update)
-        .Label("ui:widgets:sliders")
-        .Build();
+		})
+		.InStage(Stage.Update)
+		.Label("ui:widgets:sliders")
+		.Build();
 
 		// System 5: Fallback for window dragging when pointer leaves Clay elements
 		// This system ensures windows keep updating even when mouse is outside UI bounds
@@ -318,7 +166,85 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.Update)
 		.Label("ui:widgets:windows:fallback")
-		.Before("ui:clay:layout")
+		// No explicit dependency to allow running without Clay
+		.RunIfResourceExists<ClayPointerState>()
+		.Build();
+
+		// System 6: Fallback for slider dragging when pointer leaves slider/current target
+		app.AddSystem((
+			Res<ClayPointerState> pointerState,
+			ResMut<ClayUiState> uiState,
+			Query<Data<SliderState, SliderLinks, ClaySliderStyle>> sliders,
+			Query<Data<UiNode>> nodes) =>
+		{
+			var pointerPos = pointerState.Value.Position;
+
+			foreach (var (entityId, sliderState, sliderLinks, sliderStyle) in sliders)
+			{
+				ref var st = ref sliderState.Ref;
+				if (!st.IsDragging) continue;
+
+				var links = sliderLinks.Ref;
+				var style = sliderStyle.Ref;
+
+				// Compute normalized from absolute pointer position relative to container bounds
+				float normalized = st.NormalizedValue;
+				unsafe
+				{
+					var ctx = uiState.Value.Context;
+					if (ctx is not null)
+					{
+						Clay.SetCurrentContext(ctx);
+						var containerElemId = ClayId.Global($"slider-container-{entityId.Ref}").ToElementId();
+						var elem = Clay.GetElementData(containerElemId);
+						if (elem.found && elem.boundingBox.width > 0)
+						{
+							normalized = (pointerPos.X - elem.boundingBox.x) / Math.Max(1f, style.Width);
+							normalized = Math.Clamp(normalized, 0f, 1f);
+							st.SetNormalizedValue(normalized);
+						}
+					}
+				}
+
+				// Update visuals (fill width and handle position)
+				var changed = false;
+				if (links.FillEntity != 0)
+				{
+					foreach (var (fillEntityId, fillNode) in nodes)
+					{
+						if (fillEntityId.Ref != links.FillEntity) continue;
+						ref var fillNodeRef = ref fillNode.Ref;
+						var fillWidth = style.Width * normalized;
+						fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(fillWidth),
+							Clay_SizingAxis.Fixed(style.TrackHeight));
+						changed = true;
+						break;
+					}
+				}
+
+				if (links.HandleEntity != 0)
+				{
+					foreach (var (handleEntityId, handleNode) in nodes)
+					{
+						if (handleEntityId.Ref != links.HandleEntity) continue;
+						ref var handleNodeRef = ref handleNode.Ref;
+						var handleX = (style.Width - style.HandleSize) * normalized;
+						var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
+						handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+						changed = true;
+						break;
+					}
+				}
+
+				if (changed)
+				{
+					uiState.Value.RequestLayoutPass();
+				}
+			}
+		})
+		.InStage(Stage.Update)
+		.Label("ui:widgets:sliders:fallback")
 		.RunIfResourceExists<ClayPointerState>()
 		.Build();
 	}
@@ -360,3 +286,5 @@ public static class UiWidgetsAppExtensions
 		return app;
 	}
 }
+// Window order resource moved to TinyEcs.UI namespace (UiWindowOrder.cs)
+

@@ -131,7 +131,7 @@ public static class CheckboxWidget
         // Add checkmark text when checked
         if (initialChecked)
         {
-            box.Insert(UiText.From("✓", new Clay_TextElementConfig
+            box.Insert(UiText.From("x", new Clay_TextElementConfig
             {
                 textColor = new Clay_Color(255, 255, 255, 255),
                 fontSize = (ushort)(style.BoxSize * 0.8f),
@@ -170,7 +170,50 @@ public static class CheckboxWidget
 			labelEntity.Insert(UiNodeParent.For(container.Id));
 		}
 
-		return container;
+        // Toggle behavior via entity-specific observer on the container so tests using EmitTrigger work
+        var boxId = box.Id;
+        container.Observe<UiPointerTrigger, Query<Data<CheckboxState, UiNode, ClayCheckboxStyle>>, Commands>((trigger, boxes, commands) =>
+        {
+            var evt = trigger.Event;
+            if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
+                return;
+
+            foreach (var (entityId, stateParam, nodeParam, styleParam) in boxes)
+            {
+                if (entityId.Ref != boxId) continue;
+
+                ref var stateRef = ref stateParam.Ref;
+                ref var nodeRef = ref nodeParam.Ref;
+                var styleRef = styleParam.Ref;
+
+                // Toggle state
+                stateRef.Checked = !stateRef.Checked;
+
+                // Update visuals on the box
+                nodeRef.Declaration.backgroundColor = stateRef.Checked
+                    ? styleRef.CheckedColor
+                    : styleRef.BoxColor;
+
+                // Update checkmark text
+                if (stateRef.Checked)
+                {
+                    commands.Entity(boxId).Insert(UiText.From("x", new Clay_TextElementConfig
+                    {
+                        textColor = new Clay_Color(255, 255, 255, 255),
+                        fontSize = (ushort)(styleRef.BoxSize * 0.8f),
+                        textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
+                    }));
+                }
+                else
+                {
+                    commands.Entity(boxId).Insert(UiText.From("", new Clay_TextElementConfig()));
+                }
+
+                break; // handled
+            }
+        });
+
+        return container;
 	}
 
 	/// <summary>
@@ -203,3 +246,5 @@ public static class CheckboxWidget
 		}
 	}
 }
+
+
