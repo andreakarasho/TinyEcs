@@ -23,7 +23,7 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		{
 			LayoutDimensions = new Clay_Dimensions(1280f, 720f),
 			ArenaSize = 512 * 1024,
-			EnableDebugMode = false,
+			EnableDebugMode = true,
 			UseEntityHierarchy = true,
 			AutoCreatePointerState = true,
 			AutoRegisterDefaultSystems = true
@@ -51,7 +51,11 @@ public sealed class RaylibClayUiPlugin : IPlugin
 			var scrollY = Raylib.GetMouseWheelMove();
 			if (scrollY != 0f)
 			{
-				state.AddScroll(new Vector2(0, scrollY * 20f)); // Multiply for better feel
+				// Raylib: positive = scroll up, negative = scroll down
+				// Clay: positive Y = scroll down (reveal upper content), negative Y = scroll up (reveal lower content)
+				var scrollDelta = new Vector2(0, scrollY * 20f);
+				state.AddScroll(scrollDelta);
+				Console.WriteLine($"[Scroll] Raylib scrollY={scrollY}, delta={scrollDelta}");
 			}
 
 			// Update delta time

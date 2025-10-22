@@ -49,7 +49,8 @@ public sealed class UiWidgetsPlugin : IPlugin
 					bool isThisSlider = entityId.Ref == id ||
 										links.TrackEntity == id ||
 										links.FillEntity == id ||
-										links.HandleEntity == id;
+										links.HandleEntity == id ||
+										links.HandleLayerEntity == id;
 					bool acceptEvent = isThisSlider || st.IsDragging;
 					if (!acceptEvent) continue;
 
@@ -103,15 +104,20 @@ public sealed class UiWidgetsPlugin : IPlugin
                         changed = true;
                     }
 
-							// Update handle position
-                    if (links.HandleEntity != 0 && nodes.Contains(links.HandleEntity))
+							// Update handle position via handleLayer padding
+                    if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
                     {
-                        var handleData = nodes.Get(links.HandleEntity);
-                        handleData.Deconstruct(out var handleNode);
-                        ref var handleNodeRef = ref handleNode.Ref;
+                        var layerData = nodes.Get(links.HandleLayerEntity);
+                        layerData.Deconstruct(out var layerNode);
+                        ref var layerNodeRef = ref layerNode.Ref;
                         var handleX = (style.Width - style.HandleSize) * normalized;
-                        var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
-                        handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+                        layerNodeRef.Declaration.layout.padding = new Clay_Padding
+                        {
+                            left = (ushort)handleX,
+                            right = 0,
+                            top = 0,
+                            bottom = 0
+                        };
                         changed = true;
                     }
 
@@ -212,14 +218,19 @@ public sealed class UiWidgetsPlugin : IPlugin
             changed = true;
         }
 
-        if (links.HandleEntity != 0 && nodes.Contains(links.HandleEntity))
+        if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
         {
-            var handleData = nodes.Get(links.HandleEntity);
-            handleData.Deconstruct(out var handleNode);
-            ref var handleNodeRef = ref handleNode.Ref;
+            var layerData = nodes.Get(links.HandleLayerEntity);
+            layerData.Deconstruct(out var layerNode);
+            ref var layerNodeRef = ref layerNode.Ref;
             var handleX = (style.Width - style.HandleSize) * normalized;
-            var yOffset = -(style.HandleSize - style.TrackHeight) / 2f;
-            handleNodeRef.Declaration.floating.offset = new Clay_Vector2 { x = handleX, y = yOffset };
+            layerNodeRef.Declaration.layout.padding = new Clay_Padding
+            {
+                left = (ushort)handleX,
+                right = 0,
+                top = 0,
+                bottom = 0
+            };
             changed = true;
         }
 

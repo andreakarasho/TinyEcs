@@ -1,5 +1,6 @@
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcs.UI.Widgets;
 
 namespace TinyEcs.UI;
 
@@ -48,8 +49,8 @@ public sealed class ClayUiPlugin : IPlugin
 
 	private void RegisterDefaultSystems(App app)
 	{
-		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>> desired, Query<Data<Parent>> current, Query<Data<Children>> children) =>
-			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children))
+		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>> desired, Query<Data<Parent>> current, Query<Data<Children>> children, Query<Data<FloatingWindowLinks>> windowLinks) =>
+			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children, windowLinks))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:sync-hierarchy")
 		.RunIfResourceExists<ClayUiState>()

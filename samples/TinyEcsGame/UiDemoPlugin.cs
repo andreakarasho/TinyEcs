@@ -45,13 +45,12 @@ public sealed class UiDemoPlugin : IPlugin
 
 		var window = FloatingWindowWidget.Create(
 			commands,
-			ClayFloatingWindowStyle.Default with
-			{
-				InitialSize = new Vector2(panelWidth, panelHeight),
-				TitleBarColor = new Clay_Color(79, 70, 229, 255), // Indigo
-				TitleFontSize = 18,
-				ZIndex = 200
-			},
+            ClayFloatingWindowStyle.Default with
+            {
+                InitialSize = new Vector2(panelWidth, panelHeight),
+                TitleBarColor = new Clay_Color(79, 70, 229, 255), // Indigo
+                TitleFontSize = 18
+            },
 			"Game Controls",
 			new Vector2(x, y));
 
@@ -102,12 +101,11 @@ public sealed class UiDemoPlugin : IPlugin
 	{
 		var window = FloatingWindowWidget.Create(
 			commands,
-			ClayFloatingWindowStyle.Default with
-			{
-				InitialSize = new Vector2(400f, 450f),
-				TitleBarColor = new Clay_Color(16, 185, 129, 255), // Emerald
-				ZIndex = 150
-			},
+            ClayFloatingWindowStyle.Default with
+            {
+                InitialSize = new Vector2(400f, 450f),
+                TitleBarColor = new Clay_Color(16, 185, 129, 255) // Emerald
+            },
 			"Settings",
 			new Vector2(50f, 100f));
 

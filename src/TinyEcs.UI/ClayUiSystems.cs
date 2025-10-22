@@ -2,6 +2,7 @@ using System.Numerics;
 using Clay_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcs.UI.Widgets;
 
 namespace TinyEcs.UI;
 
@@ -12,16 +13,17 @@ internal static class ClayUiSystems
 		Commands commands,
 		Query<Data<UiNodeParent>> desiredParents,
 		Query<Data<Parent>> currentParents,
-		Query<Data<Children>> childrenLists)
+		Query<Data<Children>> childrenLists,
+		Query<Data<FloatingWindowLinks>> windowLinks)
 	{
 		var layoutDirty = false;
 
-		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in desiredParents)
-		{
-			var entityId = entityPtr.Ref;
-			ref var desired = ref desiredPtr.Ref;
+        foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in desiredParents)
+        {
+            var entityId = entityPtr.Ref;
+            ref var desired = ref desiredPtr.Ref;
 
-			// Get current parent (if any) from query, avoid direct world access
+            // Get current parent (if any) from query, avoid direct world access
 			ulong currentParent = 0;
 			if (currentParents.Contains(entityId))
 			{
@@ -30,7 +32,24 @@ internal static class ClayUiSystems
 				currentParent = parentPtr.Ref.Id;
 			}
 
-			var targetParent = desired.Parent;
+            var targetParent = desired.Parent;
+            // If target is a floating window, reparent to its content area when available
+            if (targetParent != 0 && windowLinks.Contains(targetParent))
+            {
+                var linksData = windowLinks.Get(targetParent);
+                linksData.Deconstruct(out var linksPtr);
+                var links = linksPtr.Ref;
+                // Only redirect external children to the content area.
+                // Keep the window's own parts (title bar, scroll container, content area) attached where they are.
+                if (links.ContentAreaId != 0)
+                {
+                    var childId = entityId;
+                    if (childId != links.ContentAreaId &&
+                        childId != links.TitleBarId &&
+                        childId != links.ScrollContainerId)
+                        targetParent = links.ContentAreaId;
+                }
+            }
 
 			// Ignore reordering hints to avoid oscillation; only reparent when parent actually changes
 			if (targetParent == currentParent)
@@ -119,13 +138,24 @@ internal static class ClayUiSystems
 
 		Clay.SetCurrentContext(state.Context);
 
-		if (pointerChanged)
-		{
-			Clay.SetPointerState(pointer.Position, pointer.PrimaryDown);
-			Clay.UpdateScrollContainers(pointer.EnableDragScrolling, pointer.ScrollDelta + pointer.MoveDelta, pointer.DeltaTime);
-		}
+        if (pointerChanged)
+        {
+            Clay.SetPointerState(pointer.Position, pointer.PrimaryDown);
 
-		var hoveredIds = Clay.GetPointerOverIds();
+            // Only apply drag-based scrolling from MoveDelta when explicitly enabled;
+            // always pass ScrollDelta from wheel/touchpad.
+            var scrollInput = scrollDelta;
+            if (pointer.EnableDragScrolling)
+                scrollInput += moveDelta;
+
+            Clay.UpdateScrollContainers(pointer.EnableDragScrolling, scrollInput, pointer.DeltaTime);
+        }
+
+        var hoveredIds = Clay.GetPointerOverIds();
+
+        // Disable drag-based scrolling to avoid conflicts with window dragging
+        // Only use wheel/touchpad scrolling (handled via ScrollDelta)
+        pointer.EnableDragScrolling = false;
 		var newCount = hoveredIds.Length;
 
 #pragma warning disable CS9081

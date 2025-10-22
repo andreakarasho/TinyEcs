@@ -35,6 +35,7 @@ public struct SliderLinks
 	public EcsID TrackEntity;
 	public EcsID FillEntity;
 	public EcsID HandleEntity;
+	public EcsID HandleLayerEntity;
 }
 
 /// <summary>
@@ -96,7 +97,7 @@ public static class SliderWidget
 		// Clamp initial value
 		initialValue = Math.Clamp(initialValue, minValue, maxValue);
 
-		// Create container
+		// Create container - holds both track layer and handle layer
 		var container = commands.Spawn();
 		var containerNode = new UiNode
 		{
@@ -107,13 +108,14 @@ public static class SliderWidget
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(style.Width),
 						Clay_SizingAxis.Fixed(Math.Max(style.TrackHeight, style.HandleSize))),
+					layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
 					childAlignment = new Clay_ChildAlignment(
 						Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
 						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
 				}
 			}
 		};
-		// Stable id for anchoring floating children
+		// Give container a stable Clay ID for drag systems to query bounds
 		containerNode.SetId(Clay_cs.ClayId.Global($"slider-container-{container.Id}"));
 		container.Insert(containerNode);
 
@@ -125,9 +127,26 @@ public static class SliderWidget
 			container.Insert(UiNodeParent.For(parent.Value));
 		}
 
+		// Create track layer (background + fill, overlapped via child positioning)
+		var trackLayer = commands.Spawn();
+		trackLayer.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(style.Width),
+						Clay_SizingAxis.Fixed(style.TrackHeight)),
+					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
+				}
+			}
+		});
+		trackLayer.Insert(UiNodeParent.For(container.Id, index: 0));
+
 		// Create track background
 		var track = commands.Spawn();
-		var trackNode = new UiNode
+		track.Insert(new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
 			{
@@ -140,11 +159,8 @@ public static class SliderWidget
 				backgroundColor = style.TrackColor,
 				cornerRadius = style.TrackRadius
 			}
-		};
-		// Give the track a stable Clay id so floating children can attach to it
-		trackNode.SetId(Clay_cs.ClayId.Global($"slider-track-{track.Id}"));
-		track.Insert(trackNode);
-		track.Insert(UiNodeParent.For(container.Id));
+		});
+		track.Insert(UiNodeParent.For(trackLayer.Id));
 
 		// Create fill track (shows current value)
 		var normalized = (initialValue - minValue) / (maxValue - minValue);
@@ -165,14 +181,36 @@ public static class SliderWidget
 				cornerRadius = style.TrackRadius
 			}
 		});
-		// Place the fill inside the track so it overlays the track background
 		fill.Insert(UiNodeParent.For(track.Id));
 
-		// Create handle (draggable thumb)
+		// Create handle layer - uses padding to position handle
 		var handleX = (style.Width - style.HandleSize) * normalized;
+		var handleLayer = commands.Spawn();
+		handleLayer.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(style.Width),
+						Clay_SizingAxis.Fixed(style.HandleSize)),
+					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+					padding = new Clay_Padding
+					{
+						left = (ushort)handleX,
+						right = 0,
+						top = 0,
+						bottom = 0
+					}
+				}
+			}
+		});
+		handleLayer.Insert(UiNodeParent.For(container.Id, index: 1));
 
+		// Create handle (draggable thumb) - now uses layout-based positioning
 		var handle = commands.Spawn();
-		var handleNode = new UiNode
+		handle.Insert(new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
 			{
@@ -183,27 +221,10 @@ public static class SliderWidget
 						Clay_SizingAxis.Fixed(style.HandleSize))
 				},
 				backgroundColor = style.HandleColor,
-				cornerRadius = style.HandleRadius,
-				floating = new Clay_FloatingElementConfig
-				{
-					// Anchor to the slider container (its parent element)
-					attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
-					offset = new Clay_Vector2 { x = handleX, y = -(style.HandleSize - style.TrackHeight) / 2f },
-					expand = new Clay_Dimensions(0, 0),
-					zIndex = 0,
-					parentId = 0,
-					attachPoints = new Clay_FloatingAttachPoints
-					{
-						element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-						parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
-					},
-					pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE
-				}
+				cornerRadius = style.HandleRadius
 			}
-		};
-		handleNode.SetId(Clay_cs.ClayId.Global($"slider-handle-{handle.Id}"));
-		handle.Insert(handleNode);
-		handle.Insert(UiNodeParent.For(container.Id));
+		});
+		handle.Insert(UiNodeParent.For(handleLayer.Id));
 
 		// Add slider state
 		container.Insert(new SliderState
@@ -219,10 +240,59 @@ public static class SliderWidget
 		{
 			TrackEntity = track.Id,
 			FillEntity = fill.Id,
-			HandleEntity = handle.Id
+			HandleEntity = handle.Id,
+			HandleLayerEntity = handleLayer.Id
 		});
 
 		return container;
+	}
+
+	/// <summary>
+	/// System to update slider visual state when SliderState changes.
+	/// Must run in PreUpdate before layout to update UiNode declarations.
+	/// </summary>
+	public static void UpdateSliderVisuals(
+		Query<Data<SliderState, SliderLinks, ClaySliderStyle>, Filter<Changed<SliderState>>> changedSliders,
+		Query<Data<UiNode>> allNodes)
+	{
+		foreach (var (statePtr, linksPtr, stylePtr) in changedSliders)
+		{
+			ref readonly var state = ref statePtr.Ref;
+			ref readonly var links = ref linksPtr.Ref;
+			ref readonly var style = ref stylePtr.Ref;
+
+			var normalized = state.NormalizedValue;
+
+			// Update fill width
+			if (allNodes.Contains(links.FillEntity))
+			{
+				var fillData = allNodes.Get(links.FillEntity);
+				fillData.Deconstruct(out _, out var fillNodePtr);
+				ref var fillNode = ref fillNodePtr.Ref;
+
+				var fillWidth = style.Width * normalized;
+				fillNode.Declaration.layout.sizing = new Clay_Sizing(
+					Clay_SizingAxis.Fixed(fillWidth),
+					Clay_SizingAxis.Fixed(style.TrackHeight));
+			}
+
+			// Update handle position via handleLayer padding
+			if (allNodes.Contains(links.HandleLayerEntity))
+			{
+				var layerData = allNodes.Get(links.HandleLayerEntity);
+				layerData.Deconstruct(out _, out var layerNodePtr);
+				ref var layerNode = ref layerNodePtr.Ref;
+
+				var handleX = (style.Width - style.HandleSize) * normalized;
+				layerNode.Declaration.layout.padding = new Clay_Padding
+				{
+					left = (ushort)handleX,
+					right = 0,
+					top = 0,
+					bottom = 0
+				};
+			}
+		}
 	}
 
 	/// <summary>

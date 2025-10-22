@@ -108,6 +108,14 @@ internal static class ClayUiEntityLayout
 		Query<Data<Children>> childLists)
 	{
 		Clay.OpenElement();
+
+		// Update scroll offset for clipped containers before configuring
+		if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+		{
+			var scrollOffset = Clay.GetScrollOffset();
+			node.Declaration.clip.childOffset = scrollOffset;
+		}
+
 		Clay.ConfigureOpenElement(node.Declaration);
 
 		if (uiTexts.Contains(entityId))

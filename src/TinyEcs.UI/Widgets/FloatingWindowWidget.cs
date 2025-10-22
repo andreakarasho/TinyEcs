@@ -34,6 +34,8 @@ public struct FloatingWindowLinks
 {
 	public EcsID TitleBarId;
 	public EcsID ResizeHandleId;
+	public EcsID ScrollContainerId;
+    public EcsID ContentAreaId;
 }
 
 /// <summary>
@@ -45,7 +47,6 @@ public readonly record struct ClayFloatingWindowStyle(
 	Vector2 MaxSize,
 	float TitleBarHeight,
 	Clay_Color TitleBarColor,
-	Clay_Color TitleBarHoverColor,
 	Clay_Color WindowBackgroundColor,
 	Clay_Color BorderColor,
 	Clay_BorderWidth BorderWidth,
@@ -58,8 +59,7 @@ public readonly record struct ClayFloatingWindowStyle(
 	bool ShowMinimizeButton,
 	bool ShowMaximizeButton,
 	bool Resizable,
-	bool Draggable,
-	short ZIndex)
+	bool Draggable)
 {
 	public static ClayFloatingWindowStyle Default => new(
 		new Vector2(400f, 300f),
@@ -67,7 +67,6 @@ public readonly record struct ClayFloatingWindowStyle(
 		new Vector2(1200f, 900f),
 		32f,
 		new Clay_Color(55, 65, 81, 255),
-		new Clay_Color(75, 85, 99, 255),
 		new Clay_Color(31, 41, 55, 255),
 		new Clay_Color(107, 114, 128, 255),
 		new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 },
@@ -80,8 +79,7 @@ public readonly record struct ClayFloatingWindowStyle(
 		true,
 		true,
 		true,
-		true,
-		100);
+		true);
 
 	public static ClayFloatingWindowStyle Dialog => Default with
 	{
@@ -89,7 +87,7 @@ public readonly record struct ClayFloatingWindowStyle(
 		ShowMinimizeButton = false,
 		ShowMaximizeButton = false,
 		Resizable = false,
-		ZIndex = 200
+		// z-order handled by UiWindowOrder
 	};
 
 	public static ClayFloatingWindowStyle Tool => Default with
@@ -98,7 +96,7 @@ public readonly record struct ClayFloatingWindowStyle(
 		TitleBarHeight = 24f,
 		TitleFontSize = 14,
 		ContentPadding = Clay_Padding.All(12),
-		ZIndex = 150
+		// z-order handled by UiWindowOrder
 	};
 
 	public static ClayFloatingWindowStyle Panel => Default with
@@ -108,8 +106,7 @@ public readonly record struct ClayFloatingWindowStyle(
 		ShowMinimizeButton = false,
 		ShowMaximizeButton = false,
 		Draggable = true,
-		Resizable = true,
-		ZIndex = 50
+		Resizable = true
 	};
 }
 
@@ -125,15 +122,17 @@ public static class FloatingWindowWidget
 	/// <param name="style">Visual style configuration.</param>
 	/// <param name="title">Window title text.</param>
 	/// <param name="initialPosition">Starting position on screen.</param>
-	/// <param name="parent">Optional parent entity ID.</param>
-	/// <returns>EntityCommands for the window container (use .Id to parent content to it).</returns>
-	public static EntityCommands Create(
-		Commands commands,
-		ClayFloatingWindowStyle style,
-		ReadOnlySpan<char> title,
-		Vector2 initialPosition,
-		EcsID? parent = default)
-	{
+    /// <param name="parent">Optional parent entity ID.</param>
+    /// <param name="includeContentArea">When true (default), creates a padded content container (body) under the title bar. Set to false for title-bar-only windows.</param>
+    /// <returns>EntityCommands for the window container (use .Id to parent content to it).</returns>
+    public static EntityCommands Create(
+        Commands commands,
+        ClayFloatingWindowStyle style,
+        ReadOnlySpan<char> title,
+        Vector2 initialPosition,
+        EcsID? parent = default,
+        bool includeContentArea = true)
+    {
 		// Create main window container with floating behavior
 		var window = commands.Spawn();
 
@@ -195,32 +194,67 @@ public static class FloatingWindowWidget
 		// Create title bar
 		var titleBar = CreateTitleBar(commands, window.Id, style, title);
 
-		// Link parts for observers
+		// Optionally create a content/body area below the title bar
+		EcsID scrollContainerId = 0;
+		EcsID contentAreaId = 0;
+		if (includeContentArea)
+		{
+			// Create scroll container wrapper (fixed size with clipping)
+			var scrollContainer = commands.Spawn();
+			scrollContainer.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Grow(),
+							Clay_SizingAxis.Grow()),
+						layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+					},
+					clip = new Clay_ClipElementConfig
+					{
+						// Enable vertical scrolling with clipping
+						vertical = true,
+						horizontal = false,
+						childOffset = new Clay_Vector2 { x = 0, y = 0 }
+					}
+				}
+			});
+			// Scroll container appears after title bar
+			scrollContainer.Insert(UiNodeParent.For(window.Id, 1));
+			scrollContainerId = scrollContainer.Id;
+
+			// Create scrollable content area inside the scroll container
+			var contentArea = commands.Spawn();
+			contentArea.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Grow(),
+							Clay_SizingAxis.Fit(0, float.MaxValue)),
+						padding = style.ContentPadding,
+						childGap = style.ContentGap,
+						layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+					}
+				}
+			});
+			// Content area is child of scroll container
+			contentArea.Insert(UiNodeParent.For(scrollContainer.Id));
+			contentAreaId = contentArea.Id;
+		}
+
+		// Link parts for observers and external access
 		window.Insert(new FloatingWindowLinks
 		{
 			TitleBarId = titleBar.Id,
-			ResizeHandleId = 0
+			ResizeHandleId = 0,
+			ScrollContainerId = scrollContainerId,
+			ContentAreaId = contentAreaId
 		});
-
-		// Create content area container
-		var contentArea = commands.Spawn();
-		contentArea.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Grow(),
-						Clay_SizingAxis.Grow()),
-					padding = style.ContentPadding,
-					childGap = style.ContentGap,
-					layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
-				}
-			}
-		});
-		// Ensure content appears after title bar
-		contentArea.Insert(UiNodeParent.For(window.Id, 1));
 
 		// Add resize handle if resizable
 		if (style.Resizable)
