@@ -12,7 +12,16 @@ namespace TinyEcs.UI.Widgets;
 /// </summary>
 public struct CheckboxState
 {
-	public bool Checked;
+    public bool Checked;
+}
+
+/// <summary>
+/// Helper links to locate parts of a composed checkbox.
+/// Stored on the container entity.
+/// </summary>
+public struct CheckboxLinks
+{
+    public EcsID BoxEntity;
 }
 
 /// <summary>
@@ -59,16 +68,16 @@ public static class CheckboxWidget
 	/// <summary>
 	/// Creates a checkbox entity with an optional label.
 	/// </summary>
-	public static EntityCommands Create(
-		Commands commands,
-		ClayCheckboxStyle style,
-		bool initialChecked = false,
-		ReadOnlySpan<char> label = default,
-		EcsID? parent = default)
-	{
-		// Create container for checkbox + label
-		var container = commands.Spawn();
-		container.Insert(new UiNode
+    public static EntityCommands Create(
+        Commands commands,
+        ClayCheckboxStyle style,
+        bool initialChecked = false,
+        ReadOnlySpan<char> label = default,
+        EcsID? parent = default)
+    {
+        // Create container for checkbox + label
+        var container = commands.Spawn();
+        container.Insert(new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
 			{
@@ -89,41 +98,46 @@ public static class CheckboxWidget
 		if (parent.HasValue && parent.Value != 0)
 		{
 			container.Insert(UiNodeParent.For(parent.Value));
-		}
+        }
 
-		// Create the checkbox box itself
-		var box = commands.Spawn();
-		var boxColor = initialChecked ? style.CheckedColor : style.BoxColor;
+        // Create the checkbox box itself
+        var box = commands.Spawn();
+        var boxColor = initialChecked ? style.CheckedColor : style.BoxColor;
 
-		box.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fixed(style.BoxSize),
-						Clay_SizingAxis.Fixed(style.BoxSize))
-				},
-				backgroundColor = boxColor,
-				cornerRadius = style.CornerRadius,
-				border = style.Border
-			}
-		});
+        box.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
+                {
+                    sizing = new Clay_Sizing(
+                        Clay_SizingAxis.Fixed(style.BoxSize),
+                        Clay_SizingAxis.Fixed(style.BoxSize))
+                },
+                backgroundColor = boxColor,
+                cornerRadius = style.CornerRadius,
+                border = style.Border
+            }
+        });
 
-		box.Insert(new CheckboxState { Checked = initialChecked });
-		box.Insert(UiNodeParent.For(container.Id));
+        // Style on the box for hover/toggle visuals
+        box.Insert(style);
+        box.Insert(new CheckboxState { Checked = initialChecked });
+        box.Insert(UiNodeParent.For(container.Id));
 
-		// Add checkmark text when checked
-		if (initialChecked)
-		{
-			box.Insert(UiText.From("✓", new Clay_TextElementConfig
-			{
-				textColor = new Clay_Color(255, 255, 255, 255),
-				fontSize = (ushort)(style.BoxSize * 0.8f),
-				textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
-			}));
-		}
+        // Link parts on the container for observer logic
+        container.Insert(new CheckboxLinks { BoxEntity = box.Id });
+
+        // Add checkmark text when checked
+        if (initialChecked)
+        {
+            box.Insert(UiText.From("✓", new Clay_TextElementConfig
+            {
+                textColor = new Clay_Color(255, 255, 255, 255),
+                fontSize = (ushort)(style.BoxSize * 0.8f),
+                textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
+            }));
+        }
 
 		// Add label if provided
 		if (label.Length > 0)

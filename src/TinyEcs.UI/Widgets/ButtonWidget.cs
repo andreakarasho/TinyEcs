@@ -30,41 +30,51 @@ public readonly record struct ClayButtonStyle(
 		});
 }
 
+public struct ButtonState
+{
+    public bool IsHovered;
+    public bool IsPressed;
+}
+
 public static class ButtonWidget
 {
-	public static EntityCommands Create(
-		Commands commands,
-		ClayButtonStyle style,
-		ReadOnlySpan<char> label,
-		EcsID? parent = default)
-	{
-		var button = commands.Spawn();
-		button.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fixed(style.Size.X),
-						Clay_SizingAxis.Fixed(style.Size.Y)),
-					childAlignment = new Clay_ChildAlignment(
-						Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
-						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER),
-					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
-				},
-				backgroundColor = style.Background,
-				cornerRadius = style.CornerRadius
-			}
-		});
+    public static EntityCommands Create(
+        Commands commands,
+        ClayButtonStyle style,
+        ReadOnlySpan<char> label,
+        EcsID? parent = default)
+    {
+        var button = commands.Spawn();
+        button.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
+                {
+                    sizing = new Clay_Sizing(
+                        Clay_SizingAxis.Fixed(style.Size.X),
+                        Clay_SizingAxis.Fixed(style.Size.Y)),
+                    childAlignment = new Clay_ChildAlignment(
+                        Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
+                        Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER),
+                    layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
+                },
+                backgroundColor = style.Background,
+                cornerRadius = style.CornerRadius
+            }
+        });
 
-		button.Insert(UiText.From(label, style.Text));
+        // Store style and interaction state for observer-driven behavior
+        button.Insert(style);
+        button.Insert(new ButtonState { IsHovered = false, IsPressed = false });
 
-		if (parent.HasValue && parent.Value != 0)
-		{
-			button.Insert(UiNodeParent.For(parent.Value));
-		}
+        button.Insert(UiText.From(label, style.Text));
 
-		return button;
-	}
+        if (parent.HasValue && parent.Value != 0)
+        {
+            button.Insert(UiNodeParent.For(parent.Value));
+        }
+
+        return button;
+    }
 }

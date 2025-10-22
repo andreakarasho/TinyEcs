@@ -27,6 +27,9 @@ public static class FloatingWindowExample
 			EnableDebugMode = false
 		});
 
+		// Default widget interactions (buttons/checkboxes/windows) via observers
+		app.AddUiWidgets();
+
 		app.AddSystem((Commands commands) =>
 		{
 			// Create main application window

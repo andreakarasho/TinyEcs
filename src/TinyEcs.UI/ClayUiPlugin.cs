@@ -48,8 +48,8 @@ public sealed class ClayUiPlugin : IPlugin
 
 	private void RegisterDefaultSystems(App app)
 	{
-		app.AddSystem((ResMut<ClayUiState> ui, Query<Data<UiNodeParent>> parents) =>
-			ClayUiSystems.SyncUiHierarchy(ui, parents))
+		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>> desired, Query<Data<Parent>> current, Query<Data<Children>> children) =>
+			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:sync-hierarchy")
 		.RunIfResourceExists<ClayUiState>()

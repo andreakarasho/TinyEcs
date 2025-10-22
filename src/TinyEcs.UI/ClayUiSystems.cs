@@ -7,38 +7,80 @@ namespace TinyEcs.UI;
 
 internal static class ClayUiSystems
 {
-	public static void SyncUiHierarchy(ResMut<ClayUiState> uiState, Query<Data<UiNodeParent>> parents)
+	public static void SyncUiHierarchy(
+		ResMut<ClayUiState> uiState,
+		Commands commands,
+		Query<Data<UiNodeParent>> desiredParents,
+		Query<Data<Parent>> currentParents,
+		Query<Data<Children>> childrenLists)
 	{
 		var layoutDirty = false;
-		var world = uiState.Value.World;
 
-		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in parents)
+		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in desiredParents)
 		{
 			var entityId = entityPtr.Ref;
 			ref var desired = ref desiredPtr.Ref;
 
-			var hasParent = world.Has<Parent>(entityId);
-			var currentParent = hasParent ? world.Get<Parent>(entityId).Id : 0;
-			var requiresReorder = desired.Index >= 0;
+			// Get current parent (if any) from query, avoid direct world access
+			ulong currentParent = 0;
+			if (currentParents.Contains(entityId))
+			{
+				var parentData = currentParents.Get(entityId);
+				parentData.Deconstruct(out _, out var parentPtr);
+				currentParent = parentPtr.Ref.Id;
+			}
 
-			var needsUpdate = desired.Parent == 0
-				? currentParent != 0
-				: currentParent != desired.Parent || requiresReorder;
+			var targetParent = desired.Parent;
 
-			if (!needsUpdate)
+			// Ignore reordering hints to avoid oscillation; only reparent when parent actually changes
+			if (targetParent == currentParent)
+			{
+				// Same parent; apply index if provided and different
+				if (targetParent != 0 && desired.Index >= 0 && childrenLists.Contains(targetParent))
+				{
+					var data = childrenLists.Get(targetParent);
+					data.Deconstruct(out _, out var childListPtr);
+					ref var list = ref childListPtr.Ref;
+
+					// Find current index
+					int currentIndex = -1;
+					int idx = 0;
+					foreach (var child in list)
+					{
+						if (child == entityId) { currentIndex = idx; break; }
+						idx++;
+					}
+
+					if (currentIndex != desired.Index)
+					{
+						commands.RemoveChild(entityId);
+						var clamped = desired.Index;
+						if (clamped < 0) clamped = 0;
+						if (clamped > list.Count) clamped = list.Count;
+						commands.AddChild(targetParent, entityId, clamped);
+						layoutDirty = true;
+					}
+				}
 				continue;
-
-			if (currentParent != 0)
-			{
-				world.RemoveChild(entityId);
 			}
 
-			if (desired.Parent != 0)
+			// Detach if moving to root
+			if (targetParent == 0 && currentParent != 0)
 			{
-				world.AddChild(desired.Parent, entityId, desired.Index);
+				commands.RemoveChild(entityId);
+				layoutDirty = true;
+				continue;
 			}
 
-			layoutDirty = true;
+			// Attach when moving under a new parent
+			if (targetParent != 0)
+			{
+				if (desired.Index >= 0)
+					commands.AddChild(targetParent, entityId, desired.Index);
+				else
+					commands.AddChild(targetParent, entityId);
+				layoutDirty = true;
+			}
 		}
 
 		if (layoutDirty)

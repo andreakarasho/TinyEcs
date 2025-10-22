@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\src\TinyEcs\TinyEcs.csproj" />
     <ProjectReference Include="..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+    <ProjectReference Include="..\src\TinyEcs.UI\TinyEcs.UI.csproj" />
   </ItemGroup>
 
 </Project>

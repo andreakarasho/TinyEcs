@@ -27,6 +27,16 @@ public struct FloatingWindowState
 }
 
 /// <summary>
+/// Links to key parts of a floating window for observer-driven behavior.
+/// Stored on the window entity.
+/// </summary>
+public struct FloatingWindowLinks
+{
+	public EcsID TitleBarId;
+	public EcsID ResizeHandleId;
+}
+
+/// <summary>
 /// Style configuration for floating window widgets.
 /// </summary>
 public readonly record struct ClayFloatingWindowStyle(
@@ -147,6 +157,7 @@ public static class FloatingWindowWidget
 				},
 				floating = new Clay_FloatingElementConfig
 				{
+					attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
 					offset = new Clay_Vector2 { x = initialPosition.X, y = initialPosition.Y },
 					zIndex = style.ZIndex,
 					parentId = 0, // Float relative to root
@@ -179,8 +190,16 @@ public static class FloatingWindowWidget
 			RestoreSize = style.InitialSize
 		});
 
+
 		// Create title bar
 		var titleBar = CreateTitleBar(commands, window.Id, style, title);
+
+		// Link parts for observers
+		window.Insert(new FloatingWindowLinks
+		{
+			TitleBarId = titleBar.Id,
+			ResizeHandleId = 0
+		});
 
 		// Create content area container
 		var contentArea = commands.Spawn();
@@ -199,7 +218,8 @@ public static class FloatingWindowWidget
 				}
 			}
 		});
-		contentArea.Insert(UiNodeParent.For(window.Id));
+		// Ensure content appears after title bar
+		contentArea.Insert(UiNodeParent.For(window.Id, 1));
 
 		// Add resize handle if resizable
 		if (style.Resizable)
@@ -280,7 +300,8 @@ public static class FloatingWindowWidget
 				backgroundColor = style.TitleBarColor
 			}
 		});
-		titleBar.Insert(UiNodeParent.For(windowId));
+		// Ensure title bar is first child (index 0)
+		titleBar.Insert(UiNodeParent.For(windowId, 0));
 
 		// Add title text
 		var titleText = commands.Spawn();

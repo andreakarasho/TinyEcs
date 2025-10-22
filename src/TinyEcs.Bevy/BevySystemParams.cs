@@ -473,6 +473,25 @@ public class Commands : ISystemParam
 			AddChild(parentId, childId);
 	}
 
+	/// <summary>
+	/// Attach an existing child at a specific index under a parent.
+	/// </summary>
+	public void AddChild(ulong parentId, ulong childId, int index)
+	{
+		_localCommands.Add(new AddChildAtCommand(
+			new DeferredEntityRef(-1, parentId),
+			new DeferredEntityRef(-1, childId),
+			index));
+	}
+
+	/// <summary>
+	/// Detach a child from its current parent (uses relationship mapper).
+	/// </summary>
+	public void RemoveChild(ulong childId)
+	{
+		_localCommands.Add(new RemoveChildCommand(new DeferredEntityRef(-1, childId)));
+	}
+
 	internal ulong ResolveEntityId(in DeferredEntityRef entityRef)
 	{
 		return entityRef.SpawnIndex >= 0
@@ -700,7 +719,7 @@ public ref struct EntityCommands
 /// </summary>
 internal interface IDeferredCommand
 {
-	void Execute(TinyEcs.World world, Commands commands);
+    void Execute(TinyEcs.World world, Commands commands);
 }
 
 /// <summary>
@@ -844,8 +863,8 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 /// </summary>
 internal readonly struct AddChildCommand : IDeferredCommand
 {
-	private readonly DeferredEntityRef _parent;
-	private readonly DeferredEntityRef _child;
+    private readonly DeferredEntityRef _parent;
+    private readonly DeferredEntityRef _child;
 
 	public AddChildCommand(DeferredEntityRef parent, DeferredEntityRef child)
 	{
@@ -853,12 +872,58 @@ internal readonly struct AddChildCommand : IDeferredCommand
 		_child = child;
 	}
 
-	public void Execute(TinyEcs.World world, Commands commands)
-	{
-		var parentId = commands.ResolveEntityId(_parent);
-		var childId = commands.ResolveEntityId(_child);
-		world.AddChild(parentId, childId);
-	}
+    public void Execute(TinyEcs.World world, Commands commands)
+    {
+        var parentId = commands.ResolveEntityId(_parent);
+        var childId = commands.ResolveEntityId(_child);
+        world.AddChild(parentId, childId);
+    }
+}
+
+/// <summary>
+/// Command to attach a child at a given index.
+/// </summary>
+internal readonly struct AddChildAtCommand : IDeferredCommand
+{
+    private readonly DeferredEntityRef _parent;
+    private readonly DeferredEntityRef _child;
+    private readonly int _index;
+
+    public AddChildAtCommand(DeferredEntityRef parent, DeferredEntityRef child, int index)
+    {
+        _parent = parent;
+        _child = child;
+        _index = index;
+    }
+
+    public void Execute(TinyEcs.World world, Commands commands)
+    {
+        var parentId = commands.ResolveEntityId(_parent);
+        var childId = commands.ResolveEntityId(_child);
+        world.AddChild(parentId, childId, _index);
+    }
+}
+
+/// <summary>
+/// Command to detach a child from its current parent using the relationship mapper.
+/// </summary>
+internal readonly struct RemoveChildCommand : IDeferredCommand
+{
+    private readonly DeferredEntityRef _child;
+
+    public RemoveChildCommand(DeferredEntityRef child)
+    {
+        _child = child;
+    }
+
+    public void Execute(TinyEcs.World world, Commands commands)
+    {
+        var childId = commands.ResolveEntityId(_child);
+        if (childId != 0 && world.Exists(childId))
+        {
+            world.RemoveChild(childId);
+        }
+    }
 }
 
 /// <summary>

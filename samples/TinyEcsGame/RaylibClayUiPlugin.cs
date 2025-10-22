@@ -59,7 +59,7 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:raylib:update-pointer")
-		.After("ui:clay:pointer")
+		.Before("ui:clay:pointer")
 		.SingleThreaded()
 		.RunIfResourceExists<ClayPointerState>()
 		.RunIf(_ => Raylib.IsWindowReady())

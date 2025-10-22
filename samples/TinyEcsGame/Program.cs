@@ -6,6 +6,7 @@ using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcsGame;
+using TinyEcs.UI.Widgets;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -32,6 +33,9 @@ app.AddPlugin(new RaylibClayUiPlugin
 
 // Add comprehensive UI demo
 app.AddPlugin(new UiDemoPlugin { ShowUI = true });
+
+// Enable default widget interactions (hover/press/toggle/drag) via observers
+app.AddUiWidgets();
 
 app.RunStartup();
 

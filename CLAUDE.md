@@ -127,6 +127,22 @@ commands.Entity(id).Insert(new Health { Value = 100 });
 commands.InsertResource(new GameSettings());
 ```
 
+**EntityCommands Methods**:
+- `.Insert<T>(T component)` - Add or update a component
+- `.InsertBundle(bundle)` - Add multiple components at once
+- `.Observe<TTrigger>(callback)` - Attach entity-specific observer
+- `.Id` - Get the entity ID (ulong)
+
+```csharp
+// Fluent entity building
+commands.Spawn()
+    .Insert(new Position { X = 10 })
+    .Insert(new Health { Value = 100 })
+    .Observe<OnInsert<Damage>>((w, trigger) =>
+        Console.WriteLine($"Took damage: {trigger.Component.Value}"))
+    .Id; // Get the spawned entity ID
+```
+
 **Events**:
 ```csharp
 EventWriter<ScoreEvent> writer
@@ -342,21 +358,36 @@ app.AddPlugin(new PhysicsPlugin { Gravity = 9.81f });
 
 ### Query Iteration Patterns
 ```csharp
-// Multi-component query
+// Multi-component query - deconstructs to tuple of Ptr<T>
 var query = world.Query<Data<Position, Velocity>>();
 foreach (var (pos, vel) in query)
 {
     pos.Ref.Value += vel.Ref.Value; // Direct ref access
 }
 
+// Single-component query with entity ID - use two-parameter deconstruction
+var query = world.Query<Data<CheckboxState>>();
+foreach (var (entityId, state) in query)
+{
+    if (entityId.Ref == targetEntityId)
+    {
+        state.Ref.Checked = true;
+    }
+}
+
 // With filters
 var query = world.Query<Data<Health>, Filter<Changed<Health>>>();
-foreach (var health in query)
+foreach (var (health) in query)
 {
     if (health.Ref.Value <= 0)
         Console.WriteLine("Entity died!");
 }
 ```
+
+**Important**: `Data<T>` supports two deconstruction patterns:
+- `(Ptr<T> component)` - Single component access
+- `(PtrRO<ulong> entityId, Ptr<T> component)` - Entity ID + component access
+- For multi-component queries like `Data<T1, T2>`, use `(Ptr<T1> c1, Ptr<T2> c2)`
 
 ### Change Detection
 - Each component has a "changed tick"
@@ -419,16 +450,20 @@ dotnet test --filter "FullyQualifiedName~SystemsRun"     # Specific test name
 
 ## Sample: TinyEcsGame
 
-Located at `samples/TinyEcsGame/Program.cs` - Full game with Raylib integration.
+Located at `samples/TinyEcsGame/Program.cs` - Full game with Raylib and Clay UI integration.
 
 **Key Patterns Demonstrated**:
-- Plugin architecture (RaylibPlugin, GameplayPlugin, RenderingPlugin)
+- Plugin architecture (RaylibPlugin, GameRootPlugin, GameplayPlugin, RenderingPlugin, RaylibClayUiPlugin, UiDemoPlugin)
+- Custom rendering stages (BeginRendering, Rendering, EndRendering)
 - Bundles (SpriteBundle)
 - System ordering with labels and `.After()`
 - Single-threaded systems (all Raylib calls)
 - Resources (TimeResource, WindowSize, AssetsManager)
 - Deferred commands for entity spawning
 - 100,000 entity stress test
+- **Full UI integration**: 4 floating windows with 7 widget types
+- **Interactive widgets**: Checkboxes, sliders, buttons with state management
+- **Clay → Raylib rendering**: Complete bridge for UI rendering
 
 **Component Bundle Example**:
 ```csharp
@@ -441,7 +476,84 @@ commands.SpawnBundle(new SpriteBundle
 });
 ```
 
+**UI Plugin Structure**:
+- `RaylibClayUiPlugin` - Converts Raylib mouse input to `ClayPointerState`, renders `Clay_RenderCommand` to Raylib draw calls
+- `UiDemoPlugin` - Creates 4 demo windows (Game Controls, Settings, Performance, Tools), registers interaction systems
+- Systems update checkbox/slider visuals every frame in PreUpdate, handle pointer events in Update
+
 ## Common Patterns & Best Practices
+
+### Custom Rendering Stages
+
+For rendering pipelines, create explicit custom stages instead of using `Stage.Last`:
+
+```csharp
+// In your root plugin
+sealed class GameRootPlugin : IPlugin
+{
+    public Stage RenderingStage { get; private set; } = default!;
+
+    public void Build(App app)
+    {
+        var beginRendering = Stage.Custom("BeginRendering");
+        RenderingStage = Stage.Custom("Rendering");
+        var endRendering = Stage.Custom("EndRendering");
+
+        app.AddStage(beginRendering).After(Stage.Update);
+        app.AddStage(RenderingStage).After(beginRendering);
+        app.AddStage(endRendering).After(RenderingStage);
+
+        app.AddPlugin(new RenderingPlugin
+        {
+            BeginRenderingStage = beginRendering,
+            RenderingStage = RenderingStage,
+            EndRenderingStage = endRendering
+        });
+    }
+}
+
+// In your rendering plugin
+sealed class RenderingPlugin : IPlugin
+{
+    public required Stage BeginRenderingStage { get; set; }
+    public required Stage RenderingStage { get; set; }
+    public required Stage EndRenderingStage { get; set; }
+
+    public void Build(App app)
+    {
+        // Begin frame
+        app.AddSystem((World _) => {
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(Color.Black);
+        })
+        .InStage(BeginRenderingStage)
+        .Label("render:begin")
+        .Build();
+
+        // Draw content
+        app.AddSystem(DrawSprites).InStage(RenderingStage).Label("render:sprites").Build();
+        app.AddSystem(DrawDebug).InStage(RenderingStage).Label("render:debug").After("render:sprites").Build();
+
+        // End frame
+        app.AddSystem((World _) => Raylib.EndDrawing())
+        .InStage(EndRenderingStage)
+        .Label("render:end")
+        .Build();
+    }
+}
+
+// UI plugin can now target the Rendering stage
+app.AddPlugin(new RaylibClayUiPlugin
+{
+    RenderingStage = gameRoot.RenderingStage
+});
+```
+
+**Benefits**:
+- Explicit control over rendering phases
+- UI always renders inside BeginDrawing/EndDrawing
+- Easy to add new rendering stages
+- Clear execution order guarantees
 
 ### Thread Safety
 - Mark Raylib/UI systems as `.SingleThreaded()`
@@ -526,11 +638,73 @@ TinyEcs.UI integrates the Clay immediate-mode layout engine with the TinyEcs/Bev
 - `UiNodeParent`: declarative hierarchy instruction mirrored into TinyEcs `Parent`/`Children`.
 
 ### Widgets (src/TinyEcs.UI/Widgets/)
-- `PanelWidget`: padded containers with configurable sizing/background/gaps.
-- `ButtonWidget`: styled buttons with hover/pressed colors and text configuration, ready to consume pointer events.
 
-### Sample Reference
-- `samples/MyBattleground/UiClayExample.cs` demonstrates plugin setup, widget composition, simulated pointer input, pointer logging (`EventReader<UiPointerEvent>` + `Observe<UiPointerTrigger>`), and render command inspection for renderer integration.
+**Container Widgets**:
+- `PanelWidget` - Padded containers with configurable sizing/background/gaps
+- `FloatingWindowWidget` - Draggable/resizable windows with title bars, close/minimize/maximize buttons
+- `ScrollContainerWidget` - Scrollable containers with clipping
+
+**Input Widgets**:
+- `ButtonWidget` - Styled buttons with hover/pressed colors and text configuration
+- `CheckboxWidget` - Toggle boolean input with visual state (includes `CheckboxState` component)
+- `SliderWidget` - Horizontal slider for numeric ranges (includes `SliderState` component with drag tracking)
+
+**Display Widgets**:
+- `LabelWidget` - Text labels with 5 predefined styles (Heading1-3, Body, Caption)
+- `ImageWidget` - Display images with presets (Thumbnail, Icon, Avatar)
+- `SeparatorWidget` - Visual dividers (horizontal/vertical/thick/dotted) and spacers
+
+**Widget Interaction Pattern**:
+```csharp
+// Widgets need two systems for interactivity:
+
+// 1. Update visuals every frame based on state (runs in PreUpdate)
+app.AddSystem((Query<Data<CheckboxState, UiNode>> checkboxes) =>
+{
+    foreach (var (state, node) in checkboxes)
+    {
+        ref var nodeRef = ref node.Ref;
+        nodeRef.Declaration.backgroundColor = state.Ref.Checked
+            ? ClayCheckboxStyle.Default.CheckedColor
+            : ClayCheckboxStyle.Default.BoxColor;
+    }
+})
+.InStage(Stage.PreUpdate)
+.Build();
+
+// 2. Handle pointer events to update state (runs in Update after layout)
+app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState>> checkboxes) =>
+{
+    foreach (var evt in events.Read())
+    {
+        if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
+        {
+            foreach (var (entityId, state) in checkboxes)
+            {
+                if (entityId.Ref == evt.Target)
+                {
+                    ref var stateRef = ref state.Ref;
+                    stateRef.Checked = !stateRef.Checked;
+                    break;
+                }
+            }
+        }
+    }
+})
+.InStage(Stage.Update)
+.After("ui:clay:layout")
+.Build();
+```
+
+**Key Insight**: Widgets created at startup have static declarations. For interactive widgets, you must:
+1. Store mutable state in components (e.g., `CheckboxState`, `SliderState`)
+2. Update `UiNode.Declaration` properties every frame based on that state
+3. Handle `UiPointerEvent` to modify the state when clicked
+
+### Sample References
+- `samples/MyBattleground/UiClayExample.cs` - Basic plugin setup, widget composition, simulated pointer input
+- `samples/TinyEcsGame/UiDemoPlugin.cs` - 4 floating windows showcasing all 7 widget types with full interaction
+- `samples/TinyEcsGame/RaylibClayUiPlugin.cs` - Bridges Clay render commands to Raylib draw calls
 
 ## Recent Improvements (2025)
 
@@ -578,6 +752,14 @@ TinyEcs.UI integrates the Clay immediate-mode layout engine with the TinyEcs/Bev
 - All existing tests pass (31/31)
 - See [StateTransitionExample.cs](samples/MyBattleground/StateTransitionExample.cs) for verification test
 
+### UI Widgets & Interaction System (2025-10-22)
+- **Added 7 new widgets**: LabelWidget, ImageWidget, CheckboxWidget, SliderWidget, ScrollContainerWidget, SeparatorWidget, FloatingWindowWidget
+- **Documented widget interaction pattern**: Two-system approach (visual update + event handling)
+- **Custom rendering stages**: Created BeginRendering/Rendering/EndRendering stages for explicit rendering control
+- **Raylib integration**: Complete Clay UI → Raylib renderer bridge in TinyEcsGame sample
+- **Full demo**: UiDemoPlugin showcases all widgets in 4 floating windows with interaction
+- **Key insight**: Entity ID deconstruction pattern for matching pointer events to widgets: `foreach (var (entityId, state) in query)`
+
 ## Migration Notes
 
 If updating from older TinyEcs versions:
@@ -617,6 +799,113 @@ When adding features:
 
 **Commands not applying**
 → Commands are deferred - check after system/frame completes
+
+**UI widgets not responding to clicks**
+→ Widgets need two systems: (1) Visual update system in PreUpdate to sync `UiNode.Declaration` with state, and (2) Event handler in Update after layout to modify state based on `UiPointerEvent`
+
+**Widget state changes but visuals don't update**
+→ Add a system in `Stage.PreUpdate` that updates `UiNode.Declaration` properties based on component state (e.g., `CheckboxState.Checked` → `backgroundColor`)
+
+**Floating windows not moving when dragged**
+→ Ensure `floating` config includes `attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT` in `UiNode.Declaration.floating`
+→ Verify only system-parameter-based widget systems are active (no old observers using `world.Has()` / `world.Get()`)
+
+**Window dragging stops when mouse leaves window bounds**
+→ This is expected - Clay only fires `PointerMove` events when pointer is over UI elements
+→ Use fallback system with `Res<ClayPointerState>` to continue updating `IsDragging` windows every frame regardless of Clay events (see UiWidgetsPlugin System 5)
+
+## Window Dragging Implementation Pattern
+
+Floating window dragging requires a **two-system approach** to handle both Clay pointer events and global mouse tracking:
+
+**System 1: Event-based dragging** (handles pointer down/up/move events from Clay):
+```csharp
+app.AddSystem((
+    EventReader<UiPointerEvent> events,
+    Query<Data<FloatingWindowState, FloatingWindowLinks, UiNode>> windows,
+    Query<Data<Parent>> hierarchy) =>
+{
+    foreach (var evt in events.Read())
+    {
+        switch (evt.Type)
+        {
+            case UiPointerEventType.PointerDown:
+                // Check if clicking on title bar
+                if (isOnTitleBar && win.CanDrag)
+                {
+                    win.IsDragging = true;
+                    win.DragOffset = evt.Position - win.Position;
+                }
+                break;
+
+            case UiPointerEventType.PointerUp:
+                win.IsDragging = false;
+                break;
+
+            case UiPointerEventType.PointerMove:
+                if (win.IsDragging)
+                {
+                    // Absolute position calculation (NOT delta accumulation)
+                    win.Position = evt.Position - win.DragOffset;
+                    node.Declaration.floating.offset = new Clay_Vector2
+                    {
+                        x = win.Position.X,
+                        y = win.Position.Y
+                    };
+                }
+                break;
+        }
+    }
+})
+.InStage(Stage.Update)
+.Label("ui:widgets:windows")
+.Before("ui:clay:layout")
+.Build();
+```
+
+**System 2: Fallback for global mouse tracking** (runs every frame):
+```csharp
+app.AddSystem((
+    Res<ClayPointerState> pointerState,
+    Query<Data<FloatingWindowState, UiNode>> windows) =>
+{
+    var pointerPos = pointerState.Value.Position;
+
+    foreach (var (entityId, winState, winNode) in windows)
+    {
+        ref var win = ref winState.Ref;
+        ref var node = ref winNode.Ref;
+
+        if (win.IsDragging)
+        {
+            // Update position using global pointer state
+            win.Position = pointerPos - win.DragOffset;
+            node.Declaration.floating.offset = new Clay_Vector2
+            {
+                x = win.Position.X,
+                y = win.Position.Y
+            };
+        }
+    }
+})
+.InStage(Stage.Update)
+.Label("ui:widgets:windows:fallback")
+.Before("ui:clay:layout")
+.RunIfResourceExists<ClayPointerState>()
+.Build();
+```
+
+**Why two systems?**
+- Clay's `UiPointerEvent` only fires when pointer is over UI elements
+- When dragging outside window bounds, no Clay events are received
+- Fallback system uses `ClayPointerState` (updated from Raylib every frame) to continue tracking
+- Both systems use **absolute position calculation**: `position = pointer - dragOffset` (NOT delta accumulation)
+
+**Critical requirements:**
+1. Must run `.Before("ui:clay:layout")` so position updates apply before Clay layout pass
+2. Must use absolute positioning, NOT delta accumulation
+3. Must include `attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT` in floating config
+4. Must use system parameters (EventReader, Query) instead of World access for reflection-free operation
 
 ## Status
 Active development - API stable for core features. Bevy layer under refinement. Production-ready for single-threaded and deterministic multi-threaded scenarios.

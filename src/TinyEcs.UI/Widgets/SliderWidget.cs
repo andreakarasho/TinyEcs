@@ -12,10 +12,10 @@ namespace TinyEcs.UI.Widgets;
 /// </summary>
 public struct SliderState
 {
-	public float Value;
-	public float MinValue;
-	public float MaxValue;
-	public bool IsDragging;
+    public float Value;
+    public float MinValue;
+    public float MaxValue;
+    public bool IsDragging;
 
 	public readonly float NormalizedValue => (Value - MinValue) / (MaxValue - MinValue);
 
@@ -24,6 +24,17 @@ public struct SliderState
 		Value = MinValue + normalized * (MaxValue - MinValue);
 		Value = Math.Clamp(Value, MinValue, MaxValue);
 	}
+}
+
+/// <summary>
+/// Links to parts of the slider for interaction updates.
+/// Stored on the container entity.
+/// </summary>
+public struct SliderLinks
+{
+    public EcsID TrackEntity;
+    public EcsID FillEntity;
+    public EcsID HandleEntity;
 }
 
 /// <summary>
@@ -74,23 +85,23 @@ public static class SliderWidget
 	/// <summary>
 	/// Creates a slider entity with the specified range and initial value.
 	/// </summary>
-	public static EntityCommands Create(
-		Commands commands,
-		ClaySliderStyle style,
-		float minValue,
-		float maxValue,
-		float initialValue,
-		EcsID? parent = default)
-	{
+    public static EntityCommands Create(
+        Commands commands,
+        ClaySliderStyle style,
+        float minValue,
+        float maxValue,
+        float initialValue,
+        EcsID? parent = default)
+    {
 		// Clamp initial value
 		initialValue = Math.Clamp(initialValue, minValue, maxValue);
 
-		// Create container
-		var container = commands.Spawn();
-		container.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
+        // Create container
+        var container = commands.Spawn();
+        container.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
 				layout = new Clay_LayoutConfig
 				{
 					sizing = new Clay_Sizing(
@@ -103,18 +114,21 @@ public static class SliderWidget
 			}
 		});
 
-		if (parent.HasValue && parent.Value != 0)
-		{
-			container.Insert(UiNodeParent.For(parent.Value));
-		}
+        // Store style on the container for interaction logic
+        container.Insert(style);
+
+        if (parent.HasValue && parent.Value != 0)
+        {
+            container.Insert(UiNodeParent.For(parent.Value));
+        }
 
 		// Create track background
-		var track = commands.Spawn();
-		track.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
+        var track = commands.Spawn();
+        track.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
 				{
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(style.Width),
@@ -130,12 +144,12 @@ public static class SliderWidget
 		var normalized = (initialValue - minValue) / (maxValue - minValue);
 		var fillWidth = style.Width * normalized;
 
-		var fill = commands.Spawn();
-		fill.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
+        var fill = commands.Spawn();
+        fill.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
 				{
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(fillWidth),
@@ -150,12 +164,12 @@ public static class SliderWidget
 		// Create handle (draggable thumb)
 		var handleX = (style.Width - style.HandleSize) * normalized;
 
-		var handle = commands.Spawn();
-		handle.Insert(new UiNode
-		{
-			Declaration = new Clay_ElementDeclaration
-			{
-				layout = new Clay_LayoutConfig
+        var handle = commands.Spawn();
+        handle.Insert(new UiNode
+        {
+            Declaration = new Clay_ElementDeclaration
+            {
+                layout = new Clay_LayoutConfig
 				{
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(style.HandleSize),
@@ -179,17 +193,25 @@ public static class SliderWidget
 		});
 		handle.Insert(UiNodeParent.For(container.Id));
 
-		// Add slider state
-		container.Insert(new SliderState
-		{
-			Value = initialValue,
-			MinValue = minValue,
-			MaxValue = maxValue,
-			IsDragging = false
-		});
+        // Add slider state
+        container.Insert(new SliderState
+        {
+            Value = initialValue,
+            MinValue = minValue,
+            MaxValue = maxValue,
+            IsDragging = false
+        });
 
-		return container;
-	}
+        // Link parts for observer-driven updates
+        container.Insert(new SliderLinks
+        {
+            TrackEntity = track.Id,
+            FillEntity = fill.Id,
+            HandleEntity = handle.Id
+        });
+
+        return container;
+    }
 
 	/// <summary>
 	/// Creates a percentage slider (0 to 100).

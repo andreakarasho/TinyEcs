@@ -33,7 +33,7 @@ public sealed class UiDemoPlugin : IPlugin
 		.Build();
 
 		// Add UI interaction systems
-		AddInteractionSystems(app);
+		AddLoggingOnly(app);
 	}
 
 	private void CreateMainControlPanel(Commands commands, WindowSize windowSize)
@@ -236,53 +236,8 @@ public sealed class UiDemoPlugin : IPlugin
 			parent: window.Id);
 	}
 
-	private void AddInteractionSystems(App app)
+	private void AddLoggingOnly(App app)
 	{
-		// Update checkbox visuals based on state (runs every frame before layout)
-		app.AddSystem((Query<Data<CheckboxState, UiNode>> checkboxes) =>
-		{
-			foreach (var (state, node) in checkboxes)
-			{
-				ref var nodeRef = ref node.Ref;
-				var style = ClayCheckboxStyle.Default;
-
-				// Update background color based on checked state
-				nodeRef.Declaration.backgroundColor = state.Ref.Checked
-					? style.CheckedColor
-					: style.BoxColor;
-			}
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("ui:demo:update-checkbox-visuals")
-		.Build();
-
-		// Handle checkbox interactions - toggle state when clicked
-		app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState>> checkboxes) =>
-		{
-			foreach (var evt in events.Read())
-			{
-				if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
-				{
-					// Check if the clicked entity is a checkbox - use entity ID deconstruction
-					foreach (var (entityId, state) in checkboxes)
-					{
-						// Match the clicked element ID with the entity
-						if (entityId.Ref == evt.Target)
-						{
-							ref var stateRef = ref state.Ref;
-							stateRef.Checked = !stateRef.Checked;
-							Console.WriteLine($"[UI] Checkbox {evt.Target} toggled: {stateRef.Checked}");
-							break;
-						}
-					}
-				}
-			}
-		})
-		.InStage(Stage.Update)
-		.Label("ui:demo:checkbox-toggle")
-		.After("ui:clay:layout")
-		.Build();
-
 		// Log UI pointer events for debugging
 		app.AddSystem((EventReader<UiPointerEvent> events) =>
 		{
@@ -296,7 +251,7 @@ public sealed class UiDemoPlugin : IPlugin
 		})
 		.InStage(Stage.Update)
 		.Label("ui:demo:log-events")
-		.After("ui:demo:checkbox-toggle")
+		.After("ui:clay:layout")
 		.Build();
 	}
 }
