@@ -138,7 +138,7 @@ public unsafe sealed class ClayUiState : IDisposable
 		_world = world;
 	}
 
-	public ClayUiLayoutContext CreateContext() => new(GetWorld(), this);
+	public ClayUiLayoutContext CreateContext() => new(this);
 
 	public void RunLayoutPass(
 		Query<Data<UiNode>, Filter<Without<Parent>>> rootNodes,
@@ -146,6 +146,7 @@ public unsafe sealed class ClayUiState : IDisposable
 		Query<Data<UiText>> uiTexts,
 		Query<Data<Children>> childLists,
 		Query<Data<FloatingWindowState>> floatingWindows,
+		ResMut<UiWindowOrder> windowOrder,
 		Local<List<ulong>> windows)
 	{
 		ObjectDisposedException.ThrowIf(_disposed, typeof(ClayUiState));
@@ -168,7 +169,7 @@ public unsafe sealed class ClayUiState : IDisposable
 		var context = CreateContext();
 		if (_useEntityHierarchy)
 		{
-			ClayUiEntityLayout.Build(context, rootNodes, allNodes, uiTexts, childLists, floatingWindows, windows);
+			ClayUiEntityLayout.Build(context, rootNodes, allNodes, uiTexts, childLists, floatingWindows, windowOrder, windows);
 		}
 
 		foreach (var build in _layoutRoots)
@@ -360,15 +361,6 @@ public unsafe sealed class ClayUiState : IDisposable
 		return new Clay_Dimensions(width, effectiveLineHeight);
 	}
 
-	private World GetWorld()
-	{
-		if (_world is null)
-			throw new InvalidOperationException("ClayUiState has not been attached to a world yet.");
-		return _world;
-	}
-
-	internal World World => GetWorld();
-
 	internal void SetEntityHierarchyEnabled(bool enabled)
 	{
 		if (_useEntityHierarchy == enabled)
@@ -420,7 +412,7 @@ public readonly record struct ClayUiOptions
 	public static ClayUiOptions Default => new();
 }
 
-public readonly record struct ClayUiLayoutContext(World World, ClayUiState State)
+public readonly record struct ClayUiLayoutContext(ClayUiState State)
 {
 	public ClayUiOptions Options => State.Options;
 

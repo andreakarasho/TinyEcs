@@ -109,6 +109,7 @@ internal static class ClayUiSystems
 	}
 
 	public static unsafe void ApplyPointerInput(
+		Commands commands,
 		ResMut<ClayPointerState> pointerState,
 		ResMut<ClayUiState> uiState,
 		EventWriter<UiPointerEvent> events,
@@ -224,6 +225,7 @@ internal static class ClayUiSystems
 				scrollDelta,
 				isPrimaryDown,
 				state,
+				commands,
 				events,
 				parents,
 				allNodes);
@@ -244,6 +246,7 @@ internal static class ClayUiSystems
 				scrollDelta,
 				isPrimaryDown,
 				state,
+				commands,
 				events,
 				parents,
 				allNodes);
@@ -263,6 +266,7 @@ internal static class ClayUiSystems
 						scrollDelta,
 						true,
 						state,
+						commands,
 						events,
 						parents,
 						allNodes))
@@ -291,7 +295,6 @@ internal static class ClayUiSystems
 
 			if (targetKey != 0)
 			{
-				Console.WriteLine($"[ClayPointer] Dispatching PointerUp event for key {targetKey}");
 				DispatchPointerEventForKey(
 					UiPointerEventType.PointerUp,
 					targetKey,
@@ -300,15 +303,11 @@ internal static class ClayUiSystems
 					scrollDelta,
 					true,  // isPrimaryButton should be true for left mouse button
 					state,
+					commands,
 					events,
 					parents,
 					allNodes);
 			}
-			else
-			{
-				Console.WriteLine($"[ClayPointer] No targetKey for PointerUp");
-			}
-
 			state.SetActivePointerTarget(0);
 		}
 
@@ -326,6 +325,7 @@ internal static class ClayUiSystems
 					Vector2.Zero,
 					isPrimaryDown,
 					state,
+					commands,
 					events,
 					parents,
 					allNodes);
@@ -346,6 +346,7 @@ internal static class ClayUiSystems
 					scrollDelta,
 					isPrimaryDown,
 					state,
+					commands,
 					events,
 					parents,
 					allNodes);
@@ -417,6 +418,7 @@ internal static class ClayUiSystems
 		Vector2 scrollDelta,
 		bool isPrimary,
 		ClayUiState state,
+		Commands commands,
 		EventWriter<UiPointerEvent> events,
 		Query<Data<Parent>> parents,
 		Query<Data<UiNode>> allNodes)
@@ -438,6 +440,7 @@ internal static class ClayUiSystems
 					scrollDelta,
 					isPrimary,
 					state,
+					commands,
 					events,
 					parents);
 			}
@@ -455,6 +458,7 @@ internal static class ClayUiSystems
 		Vector2 scrollDelta,
 		bool isPrimary,
 		ClayUiState state,
+		Commands commands,
 		EventWriter<UiPointerEvent> events,
 		Query<Data<Parent>> parents)
 	{
@@ -467,11 +471,6 @@ internal static class ClayUiSystems
 
 		while (current != 0 && depth++ < 256)
 		{
-			// Check if entity still exists before emitting events
-			// (observers may have despawned entities earlier in the propagation chain)
-			if (!state.World.Exists(current))
-				break;
-
 			var pointerEvent = new UiPointerEvent(
 				type,
 				targetEntity,
@@ -482,11 +481,8 @@ internal static class ClayUiSystems
 				scrollDelta,
 				isPrimary);
 			events.Send(pointerEvent);
-			state.World.EmitTrigger(new UiPointerTrigger(pointerEvent));
-
-			dispatched = true;
-
-			if (!parents.Contains(current))
+			commands.EmitTrigger(new UiPointerTrigger(pointerEvent));
+			dispatched = true; if (!parents.Contains(current))
 				break;
 
 			var parentData = parents.Get(current);

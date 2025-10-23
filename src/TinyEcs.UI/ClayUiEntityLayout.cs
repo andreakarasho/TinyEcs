@@ -14,17 +14,12 @@ internal static class ClayUiEntityLayout
 		Query<Data<UiText>> uiTexts,
 		Query<Data<Children>> childLists,
 		Query<Data<FloatingWindowState>> floatingWindows,
+		ResMut<UiWindowOrder> windowOrder,
 		Local<List<ulong>> windows)
 	{
 		windows.Value!.Clear();
 
 		var state = context.State;
-		var world = context.World;
-
-		// If we have a window order resource, render non-windows first, then windows in ordered stack
-		UiWindowOrder? windowOrder = null;
-		if (world.HasResource<UiWindowOrder>())
-			windowOrder = world.GetResource<UiWindowOrder>();
 
 		if (windowOrder is null)
 		{
@@ -55,7 +50,7 @@ internal static class ClayUiEntityLayout
 		}
 
 		// Then render windows using linked list order (last = topmost)
-		foreach (var id in windowOrder.Enumerate())
+		foreach (var id in windowOrder.Value.Enumerate())
 		{
 			if (!windows.Value!.Contains(id))
 				continue;

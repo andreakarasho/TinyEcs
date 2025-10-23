@@ -56,8 +56,8 @@ public sealed class ClayUiPlugin : IPlugin
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
 
-		app.AddSystem((ResMut<ClayPointerState> pointer, ResMut<ClayUiState> ui, EventWriter<UiPointerEvent> events, Query<Data<Parent>> parents, Query<Data<UiNode>> allNodes) =>
-			ClayUiSystems.ApplyPointerInput(pointer, ui, events, parents, allNodes))
+		app.AddSystem((Commands commands, ResMut<ClayPointerState> pointer, ResMut<ClayUiState> ui, EventWriter<UiPointerEvent> events, Query<Data<Parent>> parents, Query<Data<UiNode>> allNodes) =>
+			ClayUiSystems.ApplyPointerInput(commands, pointer, ui, events, parents, allNodes))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:pointer")
 		.RunIfResourceExists<ClayUiState>()
@@ -88,10 +88,11 @@ public sealed class ClayUiPlugin : IPlugin
 			Query<Data<UiText>> texts,
 			Query<Data<Children>> childLists,
 			Query<Data<FloatingWindowState>> floatingWindows,
+			ResMut<UiWindowOrder> windowOrder,
 			Local<List<ulong>> windows) =>
 		{
 			ref var state = ref stateParam.Value;
-			state.RunLayoutPass(roots, allNodes, texts, childLists, floatingWindows, windows);
+			state.RunLayoutPass(roots, allNodes, texts, childLists, floatingWindows, windowOrder, windows);
 		})
 		.InStage(Stage.Update)
 		.Label("ui:clay:layout")
