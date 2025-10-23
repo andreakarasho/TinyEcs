@@ -18,12 +18,12 @@ internal static class ClayUiSystems
 	{
 		var layoutDirty = false;
 
-        foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in desiredParents)
-        {
-            var entityId = entityPtr.Ref;
-            ref var desired = ref desiredPtr.Ref;
+		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNodeParent> desiredPtr) in desiredParents)
+		{
+			var entityId = entityPtr.Ref;
+			ref var desired = ref desiredPtr.Ref;
 
-            // Get current parent (if any) from query, avoid direct world access
+			// Get current parent (if any) from query, avoid direct world access
 			ulong currentParent = 0;
 			if (currentParents.Contains(entityId))
 			{
@@ -32,24 +32,24 @@ internal static class ClayUiSystems
 				currentParent = parentPtr.Ref.Id;
 			}
 
-            var targetParent = desired.Parent;
-            // If target is a floating window, reparent to its content area when available
-            if (targetParent != 0 && windowLinks.Contains(targetParent))
-            {
-                var linksData = windowLinks.Get(targetParent);
-                linksData.Deconstruct(out var linksPtr);
-                var links = linksPtr.Ref;
-                // Only redirect external children to the content area.
-                // Keep the window's own parts (title bar, scroll container, content area) attached where they are.
-                if (links.ContentAreaId != 0)
-                {
-                    var childId = entityId;
-                    if (childId != links.ContentAreaId &&
-                        childId != links.TitleBarId &&
-                        childId != links.ScrollContainerId)
-                        targetParent = links.ContentAreaId;
-                }
-            }
+			var targetParent = desired.Parent;
+			// If target is a floating window, reparent to its content area when available
+			if (targetParent != 0 && windowLinks.Contains(targetParent))
+			{
+				var linksData = windowLinks.Get(targetParent);
+				linksData.Deconstruct(out var linksPtr);
+				var links = linksPtr.Ref;
+				// Only redirect external children to the content area.
+				// Keep the window's own parts (title bar, scroll container, content area) attached where they are.
+				if (links.ContentAreaId != 0)
+				{
+					var childId = entityId;
+					if (childId != links.ContentAreaId &&
+						childId != links.TitleBarId &&
+						childId != links.ScrollContainerId)
+						targetParent = links.ContentAreaId;
+				}
+			}
 
 			// Ignore reordering hints to avoid oscillation; only reparent when parent actually changes
 			if (targetParent == currentParent)
@@ -112,7 +112,8 @@ internal static class ClayUiSystems
 		ResMut<ClayPointerState> pointerState,
 		ResMut<ClayUiState> uiState,
 		EventWriter<UiPointerEvent> events,
-		Query<Data<Parent>> parents)
+		Query<Data<Parent>> parents,
+		Query<Data<UiNode>> allNodes)
 	{
 		ref var pointer = ref pointerState.Value;
 		ref var state = ref uiState.Value;
@@ -138,24 +139,24 @@ internal static class ClayUiSystems
 
 		Clay.SetCurrentContext(state.Context);
 
-        if (pointerChanged)
-        {
-            Clay.SetPointerState(pointer.Position, pointer.PrimaryDown);
+		if (pointerChanged)
+		{
+			Clay.SetPointerState(pointer.Position, pointer.PrimaryDown);
 
-            // Only apply drag-based scrolling from MoveDelta when explicitly enabled;
-            // always pass ScrollDelta from wheel/touchpad.
-            var scrollInput = scrollDelta;
-            if (pointer.EnableDragScrolling)
-                scrollInput += moveDelta;
+			// Only apply drag-based scrolling from MoveDelta when explicitly enabled;
+			// always pass ScrollDelta from wheel/touchpad.
+			var scrollInput = scrollDelta;
+			if (pointer.EnableDragScrolling)
+				scrollInput += moveDelta;
 
-            Clay.UpdateScrollContainers(pointer.EnableDragScrolling, scrollInput, pointer.DeltaTime);
-        }
+			Clay.UpdateScrollContainers(pointer.EnableDragScrolling, scrollInput, pointer.DeltaTime);
+		}
 
-        var hoveredIds = Clay.GetPointerOverIds();
+		var hoveredIds = Clay.GetPointerOverIds();
 
-        // Disable drag-based scrolling to avoid conflicts with window dragging
-        // Only use wheel/touchpad scrolling (handled via ScrollDelta)
-        pointer.EnableDragScrolling = false;
+		// Disable drag-based scrolling to avoid conflicts with window dragging
+		// Only use wheel/touchpad scrolling (handled via ScrollDelta)
+		pointer.EnableDragScrolling = false;
 		var newCount = hoveredIds.Length;
 
 #pragma warning disable CS9081
@@ -224,7 +225,8 @@ internal static class ClayUiSystems
 				isPrimaryDown,
 				state,
 				events,
-				parents);
+				parents,
+				allNodes);
 		}
 
 		// Pointer enters
@@ -243,13 +245,14 @@ internal static class ClayUiSystems
 				isPrimaryDown,
 				state,
 				events,
-				parents);
+				parents,
+				allNodes);
 		}
 
 		// Pointer down
 		if (isPrimaryDown && !wasPrimaryDown)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, state);
+			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
 			if (targetKey != 0)
 			{
 				if (DispatchPointerEventForKey(
@@ -261,7 +264,8 @@ internal static class ClayUiSystems
 						true,
 						state,
 						events,
-						parents))
+						parents,
+						allNodes))
 				{
 					state.SetActivePointerTarget(targetKey);
 				}
@@ -282,21 +286,27 @@ internal static class ClayUiSystems
 			uint targetKey;
 			if (!state.TryConsumeActivePointerTarget(out targetKey) || targetKey == 0)
 			{
-				targetKey = FindTopElementKey(currentReadOnly, state);
+				targetKey = FindTopElementKey(currentReadOnly, allNodes);
 			}
 
 			if (targetKey != 0)
 			{
+				Console.WriteLine($"[ClayPointer] Dispatching PointerUp event for key {targetKey}");
 				DispatchPointerEventForKey(
 					UiPointerEventType.PointerUp,
 					targetKey,
 					pointer.Position,
 					moveDelta,
 					scrollDelta,
-					false,
+					true,  // isPrimaryButton should be true for left mouse button
 					state,
 					events,
-					parents);
+					parents,
+					allNodes);
+			}
+			else
+			{
+				Console.WriteLine($"[ClayPointer] No targetKey for PointerUp");
 			}
 
 			state.SetActivePointerTarget(0);
@@ -305,7 +315,7 @@ internal static class ClayUiSystems
 		// Pointer move
 		if (moveDelta != Vector2.Zero)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, state);
+			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
 			if (targetKey != 0)
 			{
 				DispatchPointerEventForKey(
@@ -317,14 +327,15 @@ internal static class ClayUiSystems
 					isPrimaryDown,
 					state,
 					events,
-					parents);
+					parents,
+					allNodes);
 			}
 		}
 
 		// Pointer scroll
 		if (scrollDelta != Vector2.Zero)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, state);
+			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
 			if (targetKey != 0)
 			{
 				DispatchPointerEventForKey(
@@ -336,7 +347,8 @@ internal static class ClayUiSystems
 					isPrimaryDown,
 					state,
 					events,
-					parents);
+					parents,
+					allNodes);
 			}
 		}
 
@@ -377,13 +389,21 @@ internal static class ClayUiSystems
 		return false;
 	}
 
-	private static uint FindTopElementKey(ReadOnlySpan<uint> keys, ClayUiState state)
+	private static uint FindTopElementKey(ReadOnlySpan<uint> keys, Query<Data<UiNode>> allNodes)
 	{
 		for (var i = keys.Length - 1; i >= 0; --i)
 		{
 			var key = keys[i];
-			if (key != 0 && state.HasElementForKey(key))
-				return key;
+			if (key == 0)
+				continue;
+
+			// Check if any entity has this Clay element ID
+			foreach (var (entityId, nodePtr) in allNodes)
+			{
+				ref var node = ref nodePtr.Ref;
+				if (node.Declaration.id.id == key)
+					return key;
+			}
 		}
 
 		return 0;
@@ -398,26 +418,29 @@ internal static class ClayUiSystems
 		bool isPrimary,
 		ClayUiState state,
 		EventWriter<UiPointerEvent> events,
-		Query<Data<Parent>> parents)
+		Query<Data<Parent>> parents,
+		Query<Data<UiNode>> allNodes)
 	{
-		if (!state.TryGetEntitiesForElement(elementKey, out var entities) || entities.Count == 0)
-			return false;
-
+		// Find all entities with this Clay element ID
 		var dispatched = false;
-		for (var i = 0; i < entities.Count; ++i)
+		foreach (var (entityIdPtr, nodePtr) in allNodes)
 		{
-			var entityId = entities[i];
-			dispatched |= PropagatePointerEvent(
-				type,
-				elementKey,
-				entityId,
-				position,
-				moveDelta,
-				scrollDelta,
-				isPrimary,
-				state,
-				events,
-				parents);
+			ref var node = ref nodePtr.Ref;
+			if (node.Declaration.id.id == elementKey)
+			{
+				var entityId = entityIdPtr.Ref;
+				dispatched |= PropagatePointerEvent(
+					type,
+					elementKey,
+					entityId,
+					position,
+					moveDelta,
+					scrollDelta,
+					isPrimary,
+					state,
+					events,
+					parents);
+			}
 		}
 
 		return dispatched;
@@ -444,6 +467,11 @@ internal static class ClayUiSystems
 
 		while (current != 0 && depth++ < 256)
 		{
+			// Check if entity still exists before emitting events
+			// (observers may have despawned entities earlier in the propagation chain)
+			if (!state.World.Exists(current))
+				break;
+
 			var pointerEvent = new UiPointerEvent(
 				type,
 				targetEntity,

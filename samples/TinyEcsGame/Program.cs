@@ -6,6 +6,7 @@ using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcsGame;
+using TinyEcs.UI;
 using TinyEcs.UI.Widgets;
 
 using var world = new World();
@@ -25,17 +26,19 @@ var gameRoot = new GameRootPlugin
 };
 app.AddPlugin(gameRoot);
 
-// Add Clay UI integration AFTER rendering plugin so we can reference render labels
+// Add Clay UI integration with REACTIVE SYSTEM
 app.AddPlugin(new RaylibClayUiPlugin
 {
 	RenderingStage = gameRoot.RenderingStage
 });
 
-// Add comprehensive UI demo
-app.AddPlugin(new UiDemoPlugin { ShowUI = true });
+// Enable reactive UI system (Bevy-style observers)
+app.AddUiWidgets();        // Window ordering and slider/window drag handling
+app.AddUiInteraction();    // Interaction state tracking
+app.AddUiWidgetObservers(); // Reactive visual updates
 
-// Enable default widget interactions (hover/press/toggle/drag) via observers
-app.AddUiWidgets();
+// Add comprehensive UI demo (now with reactive interactions!)
+app.AddPlugin(new UiDemoPlugin { ShowUI = true });
 
 app.RunStartup();
 
@@ -262,6 +265,9 @@ sealed class RenderingPlugin : IPlugin
 		app.AddSystem((Query<Data<Position>> query, Res<TimeResource> time, Local<DebugOverlay> overlay) =>
 		{
 			var entityCount = query.Count();
+
+			if (overlay.Value == null)
+				overlay.Value = new DebugOverlay();
 
 			var data = overlay.Value;
 			data.Text = $"""

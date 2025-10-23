@@ -56,8 +56,8 @@ public sealed class ClayUiPlugin : IPlugin
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
 
-		app.AddSystem((ResMut<ClayPointerState> pointer, ResMut<ClayUiState> ui, EventWriter<UiPointerEvent> events, Query<Data<Parent>> parents) =>
-			ClayUiSystems.ApplyPointerInput(pointer, ui, events, parents))
+		app.AddSystem((ResMut<ClayPointerState> pointer, ResMut<ClayUiState> ui, EventWriter<UiPointerEvent> events, Query<Data<Parent>> parents, Query<Data<UiNode>> allNodes) =>
+			ClayUiSystems.ApplyPointerInput(pointer, ui, events, parents, allNodes))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:pointer")
 		.RunIfResourceExists<ClayUiState>()

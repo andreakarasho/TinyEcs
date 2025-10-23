@@ -11,7 +11,7 @@ public class UiButtonWidgetTests
     public void Button_Hover_Press_Updates_Background()
     {
         var app = new App();
-        app.AddUiWidgets();
+        app.AddReactiveUi(); // Use the new reactive UI system
 
         ulong buttonId = 0;
         var style = ClayButtonStyle.Default with
@@ -30,70 +30,41 @@ public class UiButtonWidgetTests
         app.RunStartup();
         var world = app.GetWorld();
 
-        // Initial
+        // Initial - button should have Interaction and Interactive components
         Assert.True(world.Has<UiNode>(buttonId));
-        Assert.True(world.Has<ButtonState>(buttonId));
+        Assert.True(world.Has<Interaction>(buttonId));
+        Assert.True(world.Has<Interactive>(buttonId));
         Assert.True(world.Has<ClayButtonStyle>(buttonId));
 
-        // Hover -> HoverBackground
-        world.EmitTrigger(new UiPointerTrigger(new UiPointerEvent(
-            UiPointerEventType.PointerEnter,
-            target: buttonId,
-            currentTarget: buttonId,
-            elementKey: 0,
-            position: Vector2.Zero,
-            moveDelta: Vector2.Zero,
-            scrollDelta: Vector2.Zero,
-            isPrimaryButton: false
-        )));
+        var interaction = world.Get<Interaction>(buttonId);
+        Assert.Equal(Interaction.None, interaction);
+
+        // Simulate hover by setting Interaction to Hovered
+        world.Set(buttonId, Interaction.Hovered);
+        app.Update(); // Run observers to update visuals
 
         var node = world.Get<UiNode>(buttonId);
         Assert.Equal(style.HoverBackground, node.Declaration.backgroundColor);
 
-        // Press -> PressedBackground
-        world.EmitTrigger(new UiPointerTrigger(new UiPointerEvent(
-            UiPointerEventType.PointerDown,
-            target: buttonId,
-            currentTarget: buttonId,
-            elementKey: 0,
-            position: Vector2.Zero,
-            moveDelta: Vector2.Zero,
-            scrollDelta: Vector2.Zero,
-            isPrimaryButton: true
-        )));
+        // Simulate press by setting Interaction to Pressed
+        world.Set(buttonId, Interaction.Pressed);
+        app.Update(); // Run observers to update visuals
 
         node = world.Get<UiNode>(buttonId);
         Assert.Equal(style.PressedBackground, node.Declaration.backgroundColor);
 
-        // Release -> HoverBackground again
-        world.EmitTrigger(new UiPointerTrigger(new UiPointerEvent(
-            UiPointerEventType.PointerUp,
-            target: buttonId,
-            currentTarget: buttonId,
-            elementKey: 0,
-            position: Vector2.Zero,
-            moveDelta: Vector2.Zero,
-            scrollDelta: Vector2.Zero,
-            isPrimaryButton: false
-        )));
+        // Simulate release by setting Interaction back to Hovered
+        world.Set(buttonId, Interaction.Hovered);
+        app.Update(); // Run observers to update visuals
 
         node = world.Get<UiNode>(buttonId);
         Assert.Equal(style.HoverBackground, node.Declaration.backgroundColor);
 
-        // Exit -> Normal background
-        world.EmitTrigger(new UiPointerTrigger(new UiPointerEvent(
-            UiPointerEventType.PointerExit,
-            target: buttonId,
-            currentTarget: buttonId,
-            elementKey: 0,
-            position: Vector2.Zero,
-            moveDelta: Vector2.Zero,
-            scrollDelta: Vector2.Zero,
-            isPrimaryButton: false
-        )));
+        // Simulate exit by setting Interaction to None
+        world.Set(buttonId, Interaction.None);
+        app.Update(); // Run observers to update visuals
 
         node = world.Get<UiNode>(buttonId);
         Assert.Equal(style.Background, node.Declaration.backgroundColor);
     }
 }
-

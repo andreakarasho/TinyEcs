@@ -12,7 +12,7 @@ namespace TinyEcs.UI.Widgets;
 /// </summary>
 public struct CheckboxState
 {
-    public bool Checked;
+	public bool Checked;
 }
 
 /// <summary>
@@ -21,7 +21,7 @@ public struct CheckboxState
 /// </summary>
 public struct CheckboxLinks
 {
-    public EcsID BoxEntity;
+	public EcsID BoxEntity;
 }
 
 /// <summary>
@@ -61,23 +61,29 @@ public readonly record struct ClayCheckboxStyle(
 }
 
 /// <summary>
-/// Creates checkbox widgets with toggleable boolean state.
+/// Creates checkbox widgets using the reactive Interaction-based pattern.
+/// Checkboxes automatically update their visuals via the UiWidgetObservers system
+/// when their CheckboxState component changes.
+///
+/// To react to checkbox toggles, add an observer:
+/// app.AddObserver&lt;OnToggle&gt;((trigger) => Console.WriteLine($"Checkbox {trigger.EntityId} = {trigger.NewValue}"));
 /// </summary>
 public static class CheckboxWidget
 {
 	/// <summary>
 	/// Creates a checkbox entity with an optional label.
+	/// Visual updates happen automatically via observers when state changes.
 	/// </summary>
-    public static EntityCommands Create(
-        Commands commands,
-        ClayCheckboxStyle style,
-        bool initialChecked = false,
-        ReadOnlySpan<char> label = default,
-        EcsID? parent = default)
-    {
-        // Create container for checkbox + label
-        var container = commands.Spawn();
-        container.Insert(new UiNode
+	public static EntityCommands Create(
+		Commands commands,
+		ClayCheckboxStyle style,
+		bool initialChecked = false,
+		ReadOnlySpan<char> label = default,
+		EcsID? parent = default)
+	{
+		// Create container for checkbox + label
+		var container = commands.Spawn();
+		var containerNode = new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
 			{
@@ -93,51 +99,64 @@ public static class CheckboxWidget
 					childGap = style.Spacing
 				}
 			}
-		});
+		};
+
+		// Assign Clay ID so the checkbox can receive pointer events
+		containerNode.SetId(ClayId.Global($"checkbox-{container.Id}"));
+		container.Insert(containerNode);
 
 		if (parent.HasValue && parent.Value != 0)
 		{
 			container.Insert(UiNodeParent.For(parent.Value));
-        }
+		}
 
-        // Create the checkbox box itself
-        var box = commands.Spawn();
-        var boxColor = initialChecked ? style.CheckedColor : style.BoxColor;
+		// Create the checkbox box itself
+		var box = commands.Spawn();
+		var boxColor = initialChecked ? style.CheckedColor : style.BoxColor;
 
-        box.Insert(new UiNode
-        {
-            Declaration = new Clay_ElementDeclaration
-            {
-                layout = new Clay_LayoutConfig
-                {
-                    sizing = new Clay_Sizing(
-                        Clay_SizingAxis.Fixed(style.BoxSize),
-                        Clay_SizingAxis.Fixed(style.BoxSize))
-                },
-                backgroundColor = boxColor,
-                cornerRadius = style.CornerRadius,
-                border = style.Border
-            }
-        });
+		box.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(style.BoxSize),
+						Clay_SizingAxis.Fixed(style.BoxSize)),
+					childAlignment = new Clay_ChildAlignment(
+						Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
+						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+				},
+				backgroundColor = boxColor,
+				cornerRadius = style.CornerRadius,
+				border = style.Border
+			}
+		});
 
-        // Style on the box for hover/toggle visuals
-        box.Insert(style);
-        box.Insert(new CheckboxState { Checked = initialChecked });
-        box.Insert(UiNodeParent.For(container.Id));
+		box.Insert(UiNodeParent.For(container.Id));
 
-        // Link parts on the container for observer logic
-        container.Insert(new CheckboxLinks { BoxEntity = box.Id });
+		// Add checkmark text when checked
+		if (initialChecked)
+		{
+			box.Insert(UiText.From("✓", new Clay_TextElementConfig
+			{
+				textColor = new Clay_Color(255, 255, 255, 255),
+				fontSize = (ushort)(style.BoxSize * 0.8f),
+				textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
+			}));
+		}
 
-        // Add checkmark text when checked
-        if (initialChecked)
-        {
-            box.Insert(UiText.From("x", new Clay_TextElementConfig
-            {
-                textColor = new Clay_Color(255, 255, 255, 255),
-                fontSize = (ushort)(style.BoxSize * 0.8f),
-                textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
-            }));
-        }
+		// Add state and style to container for observer-driven updates
+		container.Insert(new CheckboxState { Checked = initialChecked });
+		container.Insert(style);
+		container.Insert(new CheckboxLinks { BoxEntity = box.Id });
+
+		// Mark as interactive
+		container.Insert(Interactive.Default);
+		container.Insert(Interaction.None);
+
+		// Add marker for checkbox-specific observers
+		container.Insert(new UiWidgetObservers.Checkbox());
 
 		// Add label if provided
 		if (label.Length > 0)
@@ -170,79 +189,7 @@ public static class CheckboxWidget
 			labelEntity.Insert(UiNodeParent.For(container.Id));
 		}
 
-        // Toggle behavior via entity-specific observer on the container so tests using EmitTrigger work
-        var boxId = box.Id;
-        container.Observe<UiPointerTrigger, Query<Data<CheckboxState, UiNode, ClayCheckboxStyle>>, Commands>((trigger, boxes, commands) =>
-        {
-            var evt = trigger.Event;
-            if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
-                return;
-
-            if (!boxes.Contains(boxId))
-                return;
-
-            var boxed = boxes.Get(boxId);
-            boxed.Deconstruct(out var stateParam, out var nodeParam, out var styleParam);
-
-            ref var stateRef = ref stateParam.Ref;
-            ref var nodeRef = ref nodeParam.Ref;
-            var styleRef = styleParam.Ref;
-
-            // Toggle state
-            stateRef.Checked = !stateRef.Checked;
-
-            // Update visuals on the box
-            nodeRef.Declaration.backgroundColor = stateRef.Checked
-                ? styleRef.CheckedColor
-                : styleRef.BoxColor;
-
-            // Update checkmark text
-            if (stateRef.Checked)
-            {
-                commands.Entity(boxId).Insert(UiText.From("x", new Clay_TextElementConfig
-                {
-                    textColor = new Clay_Color(255, 255, 255, 255),
-                    fontSize = (ushort)(styleRef.BoxSize * 0.8f),
-                    textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
-                }));
-            }
-            else
-            {
-                commands.Entity(boxId).Insert(UiText.From("", new Clay_TextElementConfig()));
-            }
-        });
-
-        return container;
-	}
-
-	/// <summary>
-	/// System to toggle checkbox state on click.
-	/// Use this as a reference for implementing checkbox interactions.
-	/// </summary>
-	public static void ToggleCheckboxOnClick(
-		EventReader<UiPointerEvent> events,
-		Query<Data<CheckboxState, UiNode>> checkboxes,
-		Commands commands)
-	{
-		foreach (var evt in events.Read())
-		{
-			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
-			{
-				foreach (var (state, node) in checkboxes)
-				{
-					// You would need to match evt.Target with the entity ID
-					// This is a simplified example
-					ref var stateRef = ref state.Ref;
-					stateRef.Checked = !stateRef.Checked;
-
-					// Update the visual appearance
-					ref var nodeRef = ref node.Ref;
-					nodeRef.Declaration.backgroundColor = stateRef.Checked
-						? ClayCheckboxStyle.Default.CheckedColor
-						: ClayCheckboxStyle.Default.BoxColor;
-				}
-			}
-		}
+		return container;
 	}
 }
 

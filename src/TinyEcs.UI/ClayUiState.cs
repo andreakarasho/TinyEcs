@@ -19,7 +19,6 @@ public unsafe sealed class ClayUiState : IDisposable
 	private ClayUiOptions _options = ClayUiOptions.Default;
 	private World? _world;
 	private bool _useEntityHierarchy;
-	private readonly Dictionary<uint, List<ulong>> _elementRegistry = new();
 	private readonly HashSet<uint> _hoveredElementIds = new();
 	private uint _activePointerElementId;
 	private bool _hasActivePointerElement;
@@ -155,7 +154,6 @@ public unsafe sealed class ClayUiState : IDisposable
 		if (!shouldRun)
 			return;
 
-		ResetElementRegistry();
 		EnsureContext();
 
 		Clay.SetCurrentContext(_context);
@@ -192,7 +190,6 @@ public unsafe sealed class ClayUiState : IDisposable
 			return;
 
 		DisposeContext();
-		_elementRegistry.Clear();
 		_hoveredElementIds.Clear();
 		_hasActivePointerElement = false;
 		_disposed = true;
@@ -259,42 +256,8 @@ public unsafe sealed class ClayUiState : IDisposable
 		_lastRenderCommands = default;
 	}
 
-	internal void ResetElementRegistry()
-	{
-		_elementRegistry.Clear();
-	}
-
-	internal void RegisterElement(ulong entityId, Clay_ElementId elementId)
-	{
-		var key = elementId.id;
-		if (key == 0)
-			return;
-
-		if (!_elementRegistry.TryGetValue(key, out var list))
-		{
-			list = new List<ulong>();
-			_elementRegistry[key] = list;
-		}
-
-		if (!list.Contains(entityId))
-		{
-			list.Add(entityId);
-		}
-	}
-
-	internal bool TryGetEntitiesForElement(uint key, out IReadOnlyList<ulong> entities)
-	{
-		if (_elementRegistry.TryGetValue(key, out var list) && list.Count > 0)
-		{
-			entities = list;
-			return true;
-		}
-
-		entities = Array.Empty<ulong>();
-		return false;
-	}
-
-	internal bool HasElementForKey(uint key) => _elementRegistry.ContainsKey(key);
+	// Element registry methods removed - now using ECS queries directly in ClayUiSystems
+	// No need to maintain a separate dictionary when we can query UiNode components by their Clay ID
 
 	internal int GetHoveredElementCount() => _hoveredElementIds.Count;
 

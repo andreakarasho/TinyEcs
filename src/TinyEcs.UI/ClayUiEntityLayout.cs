@@ -33,7 +33,6 @@ internal static class ClayUiEntityLayout
 				var entityId = entityPtr.Ref;
 				ref var node = ref nodePtr.Ref;
 				AssignElementId(ref node, entityId);
-				state.RegisterElement(entityId, node.Declaration.id);
 				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
 			}
 			return;
@@ -51,7 +50,6 @@ internal static class ClayUiEntityLayout
 			{
 				// Render others in discovery order after assigning ids
 				AssignElementId(ref node, entityId);
-				state.RegisterElement(entityId, node.Declaration.id);
 				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
 			}
 		}
@@ -65,7 +63,6 @@ internal static class ClayUiEntityLayout
 			data.Deconstruct(out _, out var nodePtr);
 			ref var node = ref nodePtr.Ref;
 			AssignElementId(ref node, id);
-			state.RegisterElement(id, node.Declaration.id);
 			RenderNode(state, id, ref node, allNodes, uiTexts, childLists);
 		}
 	}
@@ -112,7 +109,6 @@ internal static class ClayUiEntityLayout
 
 				ref var childNode = ref childNodePtr.Ref;
 				AssignElementId(ref childNode, childId);
-				state.RegisterElement(childId, childNode.Declaration.id);
 				RenderNode(state, childId, ref childNode, allNodes, uiTexts, childLists);
 			}
 		}
