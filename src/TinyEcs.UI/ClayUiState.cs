@@ -161,6 +161,10 @@ public unsafe sealed class ClayUiState : IDisposable
 		Clay.SetCurrentContext(_context);
 		Clay.SetDebugModeEnabled(_options.EnableDebugMode);
 		Clay.SetLayoutDimensions(_options.LayoutDimensions);
+
+		// Restore scroll positions from previous frame BEFORE BeginLayout clears them
+		RestoreScrollPositions(allNodes);
+
 		Clay.BeginLayout();
 
 		var context = CreateContext();
@@ -411,6 +415,28 @@ public unsafe sealed class ClayUiState : IDisposable
 	}
 
 	internal bool IsEntityHierarchyEnabled => _useEntityHierarchy;
+
+	private void RestoreScrollPositions(Query<Data<UiNode>> allNodes)
+	{
+		// Query all nodes with clipping enabled and update their childOffset directly
+		// from the previous frame's scroll position (before BeginLayout clears it)
+		foreach (var (entityId, nodePtr) in allNodes)
+		{
+			ref var node = ref nodePtr.Ref;
+			if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+			{
+				if (node.Declaration.id.id != 0)
+				{
+					var scrollData = Clay.GetScrollContainerData(node.Declaration.id);
+					if (scrollData.found && scrollData.scrollPosition != null)
+					{
+						// Update the node's childOffset directly with the previous frame's scroll position
+						node.Declaration.clip.childOffset = *scrollData.scrollPosition;
+					}
+				}
+			}
+		}
+	}
 }
 
 public readonly record struct ClayUiOptions

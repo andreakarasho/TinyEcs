@@ -80,12 +80,8 @@ internal static class ClayUiEntityLayout
 	{
 		Clay.OpenElement();
 
-		// Update scroll offset for clipped containers before configuring
-		if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
-		{
-			var scrollOffset = Clay.GetScrollOffset();
-			node.Declaration.clip.childOffset = scrollOffset;
-		}
+		// Note: scroll positions were already restored in CacheScrollPositions()
+		// before BeginLayout() was called, so childOffset is already correct
 
 		Clay.ConfigureOpenElement(node.Declaration);
 

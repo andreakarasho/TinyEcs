@@ -20,7 +20,7 @@ app.AddPlugin(new RaylibPlugin
 
 var gameRoot = new GameRootPlugin
 {
-	EntitiesToSpawn = 100_000,
+	EntitiesToSpawn = 100,
 	Velocity = 250
 };
 app.AddPlugin(gameRoot);

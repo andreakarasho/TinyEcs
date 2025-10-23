@@ -23,8 +23,12 @@ public sealed class UiWidgetsPlugin : IPlugin
 		// (Entity observers don't fire for components added in the same command batch, so we use a global observer)
 		app.AddObserver((OnAdd<FloatingWindowState> trigger, ResMut<UiWindowOrder> windowsOrder) =>
 		{
-			Console.WriteLine($"FloatingWindowWidget: Registered window {trigger.EntityId} in window order.");
 			windowsOrder.Value.MoveToTop(trigger.EntityId);
+		});
+
+		app.AddObserver((OnRemove<FloatingWindowState> trigger, ResMut<UiWindowOrder> windowsOrder) =>
+		{
+			windowsOrder.Value.Remove(trigger.EntityId);
 		});
 
 		// (Removed) Button hover/press system — handled by entity observers

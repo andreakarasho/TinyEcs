@@ -36,6 +36,9 @@ public struct FloatingWindowLinks
 	public EcsID ResizeHandleId;
 	public EcsID ScrollContainerId;
 	public EcsID ContentAreaId;
+	public EcsID CloseButtonId;
+	public EcsID MinimizeButtonId;
+	public EcsID MaximizeButtonId;
 }
 
 /// <summary>
@@ -191,8 +194,8 @@ public static class FloatingWindowWidget
 		});
 
 
-		// Create title bar
-		var titleBar = CreateTitleBar(commands, window.Id, style, title);
+		// Create title bar and capture button IDs
+		var titleBarInfo = CreateTitleBar(commands, window.Id, style, title);
 
 		// Optionally create a content/body area below the title bar
 		EcsID scrollContainerId = 0;
@@ -250,10 +253,13 @@ public static class FloatingWindowWidget
 		// Link parts for observers and external access
 		window.Insert(new FloatingWindowLinks
 		{
-			TitleBarId = titleBar.Id,
+			TitleBarId = titleBarInfo.TitleBarId,
 			ResizeHandleId = 0,
 			ScrollContainerId = scrollContainerId,
-			ContentAreaId = contentAreaId
+			ContentAreaId = contentAreaId,
+			CloseButtonId = titleBarInfo.CloseButtonId,
+			MinimizeButtonId = titleBarInfo.MinimizeButtonId,
+			MaximizeButtonId = titleBarInfo.MaximizeButtonId
 		});
 
 		// Add resize handle if resizable
@@ -283,10 +289,22 @@ public static class FloatingWindowWidget
 
 			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
 			{
+				// Check if clicking on a window control button - if so, don't start dragging
+				bool onButton = evt.Target == links.CloseButtonId ||
+								evt.Target == links.MinimizeButtonId ||
+								evt.Target == links.MaximizeButtonId;
+
+				if (onButton)
+				{
+					// Don't drag when clicking buttons, but still bring to front
+					windowOrder.Value.MoveToTop(id);
+					return;
+				}
+
 				// Bring window to front on any click within the window hierarchy
 				windowOrder.Value.MoveToTop(id);
 
-				// Start drag when clicking on title bar or any of its descendants
+				// Start drag when clicking on title bar or any of its descendants (but not buttons)
 				bool onTitleBar = false;
 				if (links.TitleBarId != 0)
 				{
@@ -339,6 +357,45 @@ public static class FloatingWindowWidget
 			// handled
 		});
 
+		// Handle window control button clicks via entity-specific observer
+		window.Observe<UiPointerTrigger,
+			Query<Data<FloatingWindowLinks>>,
+			Commands>((trigger, windows, commands) =>
+		{
+			var evt = trigger.Event;
+			var windowId = evt.CurrentTarget;
+
+			// Only handle pointer down events (immediate button response)
+			if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
+				return;
+
+			// Check if the window still exists and get its links
+			if (!windows.Contains(windowId)) return;
+			var winData = windows.Get(windowId);
+			winData.Deconstruct(out _, out var linksPtr);
+			var links = linksPtr.Ref;
+
+			// Check if the close button was clicked
+			if (links.CloseButtonId != 0 && evt.Target == links.CloseButtonId)
+			{
+				// Despawn the window entity (which will trigger OnRemove<FloatingWindowState>
+				// and clean up the UiWindowOrder via the global observer in UiWidgetsPlugin)
+				commands.Entity(windowId).Despawn();
+			}
+
+			// Handle minimize button (if implemented later)
+			// if (links.MinimizeButtonId != 0 && evt.Target == links.MinimizeButtonId)
+			// {
+			//     // Toggle minimize state
+			// }
+
+			// Handle maximize button (if implemented later)
+			// if (links.MaximizeButtonId != 0 && evt.Target == links.MaximizeButtonId)
+			// {
+			//     // Toggle maximize state
+			// }
+		});
+
 		return window;
 	}
 
@@ -378,7 +435,15 @@ public static class FloatingWindowWidget
 		return Create(commands, ClayFloatingWindowStyle.Panel, title, position, parent);
 	}
 
-	private static EntityCommands CreateTitleBar(
+	private struct TitleBarInfo
+	{
+		public EcsID TitleBarId;
+		public EcsID CloseButtonId;
+		public EcsID MinimizeButtonId;
+		public EcsID MaximizeButtonId;
+	}
+
+	private static TitleBarInfo CreateTitleBar(
 		Commands commands,
 		EcsID windowId,
 		ClayFloatingWindowStyle style,
@@ -465,28 +530,38 @@ public static class FloatingWindowWidget
 		// Add window control buttons
 		var buttonSize = style.TitleBarHeight - 8;
 
+		EcsID minimizeButtonId = 0;
+		EcsID maximizeButtonId = 0;
+		EcsID closeButtonId = 0;
+
 		if (style.ShowMinimizeButton)
 		{
-			CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "_",
+			minimizeButtonId = CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "_",
 				new Clay_Color(59, 130, 246, 255));
 		}
 
 		if (style.ShowMaximizeButton)
 		{
-			CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "□",
+			maximizeButtonId = CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "□",
 				new Clay_Color(34, 197, 94, 255));
 		}
 
 		if (style.ShowCloseButton)
 		{
-			CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "×",
+			closeButtonId = CreateTitleBarButton(commands, buttonContainer.Id, buttonSize, "×",
 				new Clay_Color(239, 68, 68, 255));
 		}
 
-		return titleBar;
+		return new TitleBarInfo
+		{
+			TitleBarId = titleBar.Id,
+			CloseButtonId = closeButtonId,
+			MinimizeButtonId = minimizeButtonId,
+			MaximizeButtonId = maximizeButtonId
+		};
 	}
 
-	private static void CreateTitleBarButton(
+	private static EcsID CreateTitleBarButton(
 		Commands commands,
 		EcsID parentId,
 		float size,
@@ -520,6 +595,8 @@ public static class FloatingWindowWidget
 		}));
 
 		button.Insert(UiNodeParent.For(parentId));
+
+		return button.Id;
 	}
 
 	private static void CreateResizeHandle(
