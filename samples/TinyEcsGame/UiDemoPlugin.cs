@@ -16,15 +16,6 @@ public sealed class UiDemoPlugin : IPlugin
 {
 	public bool ShowUI { get; set; } = true;
 
-	// Store entity IDs for interaction
-	private ulong _vsyncCheckbox;
-	private ulong _debugCheckbox;
-	private ulong _entityCountSlider;
-	private ulong _velocitySlider;
-	private ulong _spawnButton;
-	private ulong _clearButton;
-	private ulong _pauseButton;
-
 	public void Build(App app)
 	{
 		// Spawn UI elements on startup
@@ -41,9 +32,6 @@ public sealed class UiDemoPlugin : IPlugin
 		.Label("ui:demo:spawn")
 		.After("raylib:create-window")
 		.Build();
-
-		// Add reactive UI interaction handlers
-		AddReactiveInteractions(app);
 	}
 
 	private void CreateMainControlPanel(Commands commands, WindowSize windowSize)
@@ -74,39 +62,66 @@ public sealed class UiDemoPlugin : IPlugin
 			"Entity Count: 100,000",
 			parent: window.Id);
 
-		_entityCountSlider = SliderWidget.CreateNormalized(commands,
+		var entityCountSlider = SliderWidget.CreateNormalized(commands,
 			ClaySliderStyle.Default with { Width = 300f },
 			initialValue: 1.0f,
-			parent: window.Id).Id;
+			parent: window.Id);
 
-		SeparatorWidget.CreateSpacer(commands, 8f, parent: window.Id);
+		entityCountSlider.Observe((OnValueChanged trigger, Query<Data<SliderState>> sliders) =>
+		{
+			if (!sliders.Contains(trigger.EntityId))
+				return;
+			var sliderData = sliders.Get(trigger.EntityId);
+			sliderData.Deconstruct(out var state);
+			var normalized = state.Ref.NormalizedValue;
+			var count = (int)(normalized * 100000);
+			// Entity count target: count
+		}); SeparatorWidget.CreateSpacer(commands, 8f, parent: window.Id);
 
 		// Velocity slider
 		LabelWidget.Create(commands, ClayLabelStyle.Body,
 			"Velocity: 250",
 			parent: window.Id);
 
-		_velocitySlider = SliderWidget.CreatePercent(commands,
+		var velocitySlider = SliderWidget.CreatePercent(commands,
 			ClaySliderStyle.Default with { Width = 300f },
 			initialPercent: 50f,
-			parent: window.Id).Id;
+			parent: window.Id);
 
-		SeparatorWidget.CreateSpacer(commands, 12f, parent: window.Id);
+		velocitySlider.Observe((OnValueChanged trigger, Query<Data<SliderState>> sliders) =>
+		{
+			if (!sliders.Contains(trigger.EntityId))
+				return;
+			var sliderData = sliders.Get(trigger.EntityId);
+			sliderData.Deconstruct(out var state);
+			var normalized = state.Ref.NormalizedValue;
+			var velocity = (int)(normalized * 500);
+			// Velocity: velocity
+		}); SeparatorWidget.CreateSpacer(commands, 12f, parent: window.Id);
 
-		// Checkboxes (now with reactive interaction)
-		_vsyncCheckbox = CheckboxWidget.Create(commands,
+		// Checkboxes with entity-specific observers
+		var vsyncCheckbox = CheckboxWidget.Create(commands,
 			ClayCheckboxStyle.Default,
 			initialChecked: true,
 			label: "Enable VSync",
-			parent: window.Id).Id;
+			parent: window.Id);
 
-		_debugCheckbox = CheckboxWidget.Create(commands,
+		vsyncCheckbox.Observe((OnToggle trigger) =>
+		{
+			// VSync: trigger.NewValue
+			// In a real app: Raylib.SetConfigFlags(trigger.NewValue ? ConfigFlags.VSyncHint : 0);
+		}); var debugCheckbox = CheckboxWidget.Create(commands,
 			ClayCheckboxStyle.Default,
 			initialChecked: true,
 			label: "Show Debug Info",
-			parent: window.Id).Id;
-	}
+		parent: window.Id);
 
+		debugCheckbox.Observe((OnToggle trigger) =>
+		{
+			// Debug Info: trigger.NewValue
+			// In a real app: world.SetResource(new ShowDebugInfo { Value = trigger.NewValue });
+		});
+	}
 	private void CreateSettingsWindow(Commands commands)
 	{
 		var window = FloatingWindowWidget.Create(
@@ -232,11 +247,26 @@ public sealed class UiDemoPlugin : IPlugin
 			Background = new Clay_Color(124, 58, 237, 255) // Purple
 		};
 
-		_spawnButton = ButtonWidget.Create(commands, buttonStyle, "Spawn Entities", window.Id).Id;
-		_clearButton = ButtonWidget.Create(commands, buttonStyle, "Clear All", window.Id).Id;
-		_pauseButton = ButtonWidget.Create(commands, buttonStyle, "Pause Simulation", window.Id).Id;
+		var spawnButton = ButtonWidget.Create(commands, buttonStyle, "Spawn Entities", window.Id);
+		spawnButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		{
+			// Spawning 1000 new entities
+			// In a real app, you'd emit a command or event to spawn entities
+		});
 
-		ButtonWidget.Create(commands, buttonStyle, "Reset Camera", window.Id);
+		var clearButton = ButtonWidget.Create(commands, buttonStyle, "Clear All", window.Id);
+		clearButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		{
+			// Clearing all entities
+			// In a real app, you'd emit a command to clear entities
+		});
+
+		var pauseButton = ButtonWidget.Create(commands, buttonStyle, "Pause Simulation", window.Id);
+		pauseButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		{
+			// Toggling pause
+			// In a real app, you'd toggle a pause resource
+		}); ButtonWidget.Create(commands, buttonStyle, "Reset Camera", window.Id);
 
 		SeparatorWidget.CreateHorizontal(commands, parent: window.Id);
 
@@ -245,120 +275,4 @@ public sealed class UiDemoPlugin : IPlugin
 			parent: window.Id);
 	}
 
-	private void AddLoggingOnly(App app)
-	{
-		// Log UI pointer events for debugging
-		app.AddSystem((EventReader<UiPointerEvent> events) =>
-		{
-			foreach (var evt in events.Read())
-			{
-				if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
-				{
-					Console.WriteLine($"[UI] Pointer down on element {evt.Target}");
-				}
-			}
-		})
-		.InStage(Stage.Update)
-		.Label("ui:demo:log-events")
-		.After("ui:clay:layout")
-		.Build();
-	}
-
-	/// <summary>
-	/// Adds reactive observers for UI interactions using the new Bevy-style pattern.
-	/// </summary>
-	private void AddReactiveInteractions(App app)
-	{
-		// React to ALL button clicks globally
-		app.AddObserver((OnClick<UiWidgetObservers.Button> trigger) =>
-		{
-			Console.WriteLine($"[UI Reactive] Button {trigger.EntityId} clicked!");
-
-			// Handle specific buttons
-			if (trigger.EntityId == _spawnButton)
-			{
-				Console.WriteLine("  → Spawning 1000 new entities...");
-				// In a real app, you'd emit a command or event to spawn entities
-			}
-			else if (trigger.EntityId == _clearButton)
-			{
-				Console.WriteLine("  → Clearing all entities...");
-				// In a real app, you'd emit a command to clear entities
-			}
-			else if (trigger.EntityId == _pauseButton)
-			{
-				Console.WriteLine("  → Toggling pause...");
-				// In a real app, you'd toggle a pause resource
-			}
-		});
-
-		// React to ALL checkbox toggles globally
-		app.AddObserver((OnToggle trigger) =>
-		{
-			Console.WriteLine($"[UI Reactive] Checkbox {trigger.EntityId} toggled to: {trigger.NewValue}");
-
-			// Handle specific checkboxes
-			if (trigger.EntityId == _vsyncCheckbox)
-			{
-				Console.WriteLine($"  → VSync: {(trigger.NewValue ? "ON" : "OFF")}");
-				// In a real app: Raylib.SetConfigFlags(trigger.NewValue ? ConfigFlags.VSyncHint : 0);
-			}
-			else if (trigger.EntityId == _debugCheckbox)
-			{
-				Console.WriteLine($"  → Debug Info: {(trigger.NewValue ? "SHOWN" : "HIDDEN")}");
-				// In a real app: world.SetResource(new ShowDebugInfo { Value = trigger.NewValue });
-			}
-		});
-
-		// React to slider value changes and update corresponding labels
-		app.AddObserver((OnValueChanged trigger, Query<Data<SliderState>> sliders) =>
-		{
-			if (!sliders.Contains(trigger.EntityId))
-				return;
-
-			var sliderData = sliders.Get(trigger.EntityId);
-			sliderData.Deconstruct(out var state);
-			var normalized = state.Ref.NormalizedValue;
-
-			Console.WriteLine($"[UI Reactive] Slider {trigger.EntityId} changed to: {normalized:F2}");
-
-			if (trigger.EntityId == _entityCountSlider)
-			{
-				var count = (int)(normalized * 100000);
-				Console.WriteLine($"  → Entity count target: {count}");
-				// In a real app, you'd update a resource or emit an event
-			}
-			else if (trigger.EntityId == _velocitySlider)
-			{
-				var velocity = (int)(normalized * 500);
-				Console.WriteLine($"  → Velocity: {velocity}");
-				// In a real app, you'd update the velocity configuration
-			}
-		});
-
-		// Demonstration: React to interaction state changes on buttons for visual feedback
-		// This shows how you can add custom effects when buttons are hovered/pressed
-		app.AddSystem((Query<Data<Interaction, UiWidgetObservers.Button>, Filter<Changed<Interaction>>> changedButtons) =>
-		{
-			foreach (var (interaction, _) in changedButtons)
-			{
-				var state = interaction.Ref;
-				// You could trigger sound effects here:
-				// if (state == Interaction.Pressed)
-				//     PlaySound("button_press");
-				// else if (state == Interaction.Hovered)
-				//     PlaySound("button_hover");
-			}
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("ui:demo:button-feedback")
-		.After("ui:observers:button-visuals")
-		.Build();
-
-		Console.WriteLine("[UI Demo] Reactive interactions installed!");
-		Console.WriteLine("  - OnClick<Button> observers will trigger on button clicks");
-		Console.WriteLine("  - OnToggle observers will trigger on checkbox changes");
-		Console.WriteLine("  - OnValueChanged observers will trigger on slider adjustments");
-		Console.WriteLine("  - Button interaction state changes will be logged");
-	}
 }

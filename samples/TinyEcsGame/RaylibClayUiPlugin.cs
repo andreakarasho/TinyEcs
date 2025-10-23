@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.Numerics;
+using System.Text;
 using Clay_cs;
 using Raylib_cs;
 using TinyEcs;
@@ -55,10 +57,7 @@ public sealed class RaylibClayUiPlugin : IPlugin
 				// Clay: positive Y = scroll down (reveal upper content), negative Y = scroll up (reveal lower content)
 				var scrollDelta = new Vector2(0, scrollY * 20f);
 				state.AddScroll(scrollDelta);
-				Console.WriteLine($"[Scroll] Raylib scrollY={scrollY}, delta={scrollDelta}");
-			}
-
-			// Update delta time
+			}           // Update delta time
 			state.DeltaTime = Raylib.GetFrameTime();
 		})
 		.InStage(Stage.PreUpdate)
@@ -218,17 +217,29 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		var bounds = cmd.boundingBox;
 
 		// Convert Clay_String to C# string
-		var text = new string(textData.stringContents.chars, 0, textData.stringContents.length);
+
+		var buff = ArrayPool<sbyte>.Shared.Rent(textData.stringContents.length + 1);
+		var textSpan = buff.AsSpan(0, textData.stringContents.length + 1);
+		textSpan[textData.stringContents.length] = 0; // Null-terminate
+		var sp = new ReadOnlySpan<sbyte>(textData.stringContents.chars, textData.stringContents.length);
+		sp.CopyTo(textSpan);
+
 		var color = ToRaylibColor(textData.textColor);
 
 		// Calculate text position
 		var fontSize = textData.fontSize;
-		var textSize = Raylib.MeasureTextEx(font, text, fontSize, 1f);
+		Vector2 textSize;
+		fixed (sbyte* textPtr = textSpan)
+		{
+			textSize = Raylib.MeasureTextEx(font, textPtr, fontSize, 1f);
 
-		float x = bounds.x;
-		float y = bounds.y + (bounds.height - textSize.Y) / 2f; // Vertically center
+			float x = bounds.x;
+			float y = bounds.y; // + (bounds.height - textSize.Y) / 2f; // Vertically center
 
-		Raylib.DrawTextEx(font, text, new Vector2(x, y), fontSize, 1f, color);
+			Raylib.DrawTextPro(font, textPtr, new Vector2(x, y), new Vector2(0, 0), 0f, fontSize, 1f, color);
+		}
+
+		ArrayPool<sbyte>.Shared.Return(buff);
 	}
 
 	private unsafe void RenderImage(Clay_RenderCommand cmd)

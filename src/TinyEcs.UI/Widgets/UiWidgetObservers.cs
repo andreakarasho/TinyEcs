@@ -108,16 +108,8 @@ public static class UiWidgetObservers
 			lastStates.Value = new Dictionary<ulong, bool>();
 		}
 
-		var count = changedCheckboxes.Count();
-		if (count > 0 && lastStates.Value.Count == 0)
-		{
-			Console.WriteLine($"[CheckboxObserver] First call - initializing lastStates");
-		}
-
 		var layoutPassNeeded = false;
-		var actualChanges = 0;
-
-		var checkboxIndex = 0;
+		var actualChanges = 0; var checkboxIndex = 0;
 		foreach (var (state, links, style) in changedCheckboxes)
 		{
 			var stateRef = state.Ref;
@@ -142,8 +134,6 @@ public static class UiWidgetObservers
 			actualChanges++;
 			lastStates.Value[trackingId] = stateRef.Checked;
 
-			Console.WriteLine($"[CheckboxObserver] ACTUAL CHANGE - Checkbox #{checkboxIndex}, Checked: {lastState} -> {stateRef.Checked}, BoxEntity={linksRef.BoxEntity}");
-
 			// Update box background color
 			if (linksRef.BoxEntity != 0 && nodes.Contains(linksRef.BoxEntity))
 			{
@@ -151,23 +141,15 @@ public static class UiWidgetObservers
 				boxData.Deconstruct(out var boxNode);
 				ref var boxNodeRef = ref boxNode.Ref;
 
-				var oldColor = boxNodeRef.Declaration.backgroundColor;
 				var newColor = stateRef.Checked ? styleRef.CheckedColor : styleRef.BoxColor;
 				boxNodeRef.Declaration.backgroundColor = newColor;
-
-				Console.WriteLine($"[CheckboxObserver] Box color changed: ({oldColor.r},{oldColor.g},{oldColor.b}) -> ({newColor.r},{newColor.g},{newColor.b})");
 				layoutPassNeeded = true;
-			}
-			else
-			{
-				Console.WriteLine($"[CheckboxObserver] WARNING: Box entity {linksRef.BoxEntity} not found!");
 			}
 
 			// Update checkmark text
 			if (linksRef.BoxEntity != 0)
 			{
 				var checkmarkText = stateRef.Checked ? "✓" : "";
-				Console.WriteLine($"[CheckboxObserver] Setting checkmark text to '{checkmarkText}'");
 				commands.Entity(linksRef.BoxEntity).Insert(UiText.From(checkmarkText, new Clay_TextElementConfig
 				{
 					textColor = new Clay_Color(255, 255, 255, 255),
@@ -179,64 +161,35 @@ public static class UiWidgetObservers
 
 			checkboxIndex++;
 		}
-
-		if (actualChanges > 0)
-		{
-			Console.WriteLine($"[CheckboxObserver] Processed {actualChanges} actual changes (out of {count} detected by filter)");
-		}
-
 		if (layoutPassNeeded)
 		{
-			Console.WriteLine("[CheckboxObserver] Requesting layout pass!");
 			uiState.Value.RequestLayoutPass();
 		}
-	}
-
-	/// <summary>
-	/// Handles checkbox toggle on click.
-	/// Emits OnToggle event for user observers to react to.
-	/// </summary>
+	}   /// <summary>
+		/// Handles checkbox toggle on click.
+		/// Emits OnToggle event for user observers to react to.
+		/// </summary>
 	public static void OnCheckboxClicked(
 		EventReader<UiPointerEvent> events,
 		Query<Data<CheckboxState, CheckboxLinks, Checkbox>> checkboxes,
 		Commands commands,
 		Local<ulong> pressedCheckbox)
 	{
-		var eventCount = 0;
-		var pointerDownCount = 0;
-		var pointerUpCount = 0;
 		var toggleHappened = false;
 
 		foreach (var evt in events.Read())
 		{
-			eventCount++;
-
-			if (evt.Type == UiPointerEventType.PointerDown)
-			{
-				pointerDownCount++;
-			}
-			else if (evt.Type == UiPointerEventType.PointerUp)
-			{
-				pointerUpCount++;
-				Console.WriteLine($"[CheckboxClick] PointerUp detected - IsPrimaryButton={evt.IsPrimaryButton}, pressedCheckbox={pressedCheckbox.Value}");
-			}
-
 			// Track which checkbox container was pressed
 			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
 			{
-				Console.WriteLine($"[CheckboxClick] PointerDown event - Target={evt.Target}, CurrentTarget={evt.CurrentTarget}");
-
 				// Check if clicking on a checkbox container (use CurrentTarget for event bubbling)
 				foreach (var (entityId, state, links, _) in checkboxes)
 				{
 					var id = entityId.Ref;
 
-					Console.WriteLine($"[CheckboxClick] Checking checkbox entity {id} against CurrentTarget {evt.CurrentTarget}");
-
 					// Use CurrentTarget which is the interactive element in the propagation chain
 					if (id == evt.CurrentTarget)
 					{
-						Console.WriteLine($"[CheckboxClick] ✓ MATCH! Storing pressedCheckbox={id}");
 						pressedCheckbox.Value = id;
 						break;
 					}
@@ -244,31 +197,22 @@ public static class UiWidgetObservers
 			}
 			else if (evt.Type == UiPointerEventType.PointerUp && evt.IsPrimaryButton)
 			{
-				Console.WriteLine($"[CheckboxClick] PointerUp event - Target={evt.Target}, CurrentTarget={evt.CurrentTarget}, pressedCheckbox={pressedCheckbox.Value}");
-
 				// Check if released on same checkbox
 				foreach (var (entityId, statePtr, linksPtr, _) in checkboxes)
 				{
 					var id = entityId.Ref;
 
-					Console.WriteLine($"[CheckboxClick] Checking checkbox {id}: pressedCheckbox={pressedCheckbox.Value}, CurrentTarget={evt.CurrentTarget}");
-
 					if (id != pressedCheckbox.Value)
 					{
-						Console.WriteLine($"[CheckboxClick]   -> Skipped (not pressed checkbox)");
 						continue;
 					}
 
 					// Use CurrentTarget which is the interactive element in the propagation chain
 					if (id == evt.CurrentTarget)
 					{
-						Console.WriteLine($"[CheckboxClick] ✓ TOGGLE! Checkbox {id}");
-
 						// Toggle the state
 						var currentState = statePtr.Ref;
 						var newState = new CheckboxState { Checked = !currentState.Checked };
-
-						Console.WriteLine($"[CheckboxClick] State: {currentState.Checked} -> {newState.Checked}");
 
 						// Use Commands to trigger change detection
 						commands.Entity(id).Insert(newState);
@@ -276,33 +220,19 @@ public static class UiWidgetObservers
 						// Emit event for observers
 						commands.EmitTrigger(new OnToggle(id, newState.Checked));
 
-						Console.WriteLine($"[CheckboxClick] Commands issued for entity {id}");
 						toggleHappened = true;
-					}
-					else
-					{
-						Console.WriteLine($"[CheckboxClick]   -> Skipped (CurrentTarget mismatch)");
 					}
 				}
 			}
-		}
-
-		// Reset pressed checkbox after processing all events in this frame
-		if (toggleHappened || pointerUpCount > 0)
+		}   // Reset pressed checkbox after processing all events in this frame
+		if (toggleHappened)
 		{
 			pressedCheckbox.Value = 0;
 		}
-
-		if (eventCount > 0)
-		{
-			Console.WriteLine($"[CheckboxClick] Processed {eventCount} events this frame (Down:{pointerDownCount}, Up:{pointerUpCount})");
-		}
-	}
-
-	/// <summary>
-	/// Observes slider state changes and updates visual position.
-	/// Triggered when SliderState.NormalizedValue changes.
-	/// </summary>
+	}   /// <summary>
+		/// Observes slider state changes and updates visual position.
+		/// Triggered when SliderState.NormalizedValue changes.
+		/// </summary>
 	public static void OnSliderValueChanged(
 		Query<Data<SliderState, SliderLinks, ClaySliderStyle>, Filter<Changed<SliderState>>> changedSliders,
 		Query<Data<UiNode>> nodes,
