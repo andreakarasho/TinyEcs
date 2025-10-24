@@ -152,118 +152,9 @@ public static class UiWidgetObservers
 			checkboxIndex++;
 		}
 	}   /// <summary>
-		/// Handles checkbox toggle on click.
-		/// Emits OnToggle event for user observers to react to.
-		/// </summary>
-	public static void OnCheckboxClicked(
-		EventReader<UiPointerEvent> events,
-		Query<Data<CheckboxState, CheckboxLinks, Checkbox>> checkboxes,
-		Commands commands,
-		Local<ulong> pressedCheckbox)
-	{
-		var toggleHappened = false;
 
-		foreach (var evt in events.Read())
-		{
-			// Track which checkbox container was pressed
-			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
-			{
-				// Check if clicking on a checkbox container (use CurrentTarget for event bubbling)
-				foreach (var (entityId, state, links, _) in checkboxes)
-				{
-					var id = entityId.Ref;
+	// NOTE: OnCheckboxClicked and OnSliderValueChanged functions removed (moved to entity observers)
 
-					// Use CurrentTarget which is the interactive element in the propagation chain
-					if (id == evt.CurrentTarget)
-					{
-						pressedCheckbox.Value = id;
-						break;
-					}
-				}
-			}
-			else if (evt.Type == UiPointerEventType.PointerUp && evt.IsPrimaryButton)
-			{
-				// Check if released on same checkbox
-				foreach (var (entityId, statePtr, linksPtr, _) in checkboxes)
-				{
-					var id = entityId.Ref;
-
-					if (id != pressedCheckbox.Value)
-					{
-						continue;
-					}
-
-					// Use CurrentTarget which is the interactive element in the propagation chain
-					if (id == evt.CurrentTarget)
-					{
-						// Toggle the state
-						var currentState = statePtr.Ref;
-						var newState = new CheckboxState { Checked = !currentState.Checked };
-
-						// Use Commands to trigger change detection
-						commands.Entity(id).Insert(newState);
-
-						// Emit event for observers
-						commands.Entity(id).EmitTrigger(new ToggleEvent(newState.Checked));
-
-						toggleHappened = true;
-					}
-				}
-			}
-		}   // Reset pressed checkbox after processing all events in this frame
-		if (toggleHappened)
-		{
-			pressedCheckbox.Value = 0;
-		}
-	}   /// <summary>
-		/// Observes slider state changes and updates visual position.
-		/// Triggered when SliderState.NormalizedValue changes.
-		/// </summary>
-	public static void OnSliderValueChanged(
-		Query<Data<SliderState, SliderLinks, ClaySliderStyle>, Filter<Changed<SliderState>>> changedSliders,
-		Query<Data<UiNode>> nodes,
-		Commands commands)
-	{
-		foreach (var (state, links, style) in changedSliders)
-		{
-			var stateRef = state.Ref;
-			var linksRef = links.Ref;
-			var styleRef = style.Ref;
-			var normalized = stateRef.NormalizedValue;
-
-			// Update fill width
-			if (linksRef.FillEntity != 0 && nodes.Contains(linksRef.FillEntity))
-			{
-				var fillData = nodes.Get(linksRef.FillEntity);
-				fillData.Deconstruct(out var fillNode);
-				ref var fillNodeRef = ref fillNode.Ref;
-				var fillWidth = styleRef.Width * normalized;
-				fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(fillWidth),
-					Clay_SizingAxis.Fixed(styleRef.TrackHeight));
-			}
-
-			// Update handle position via handleLayer padding
-			if (linksRef.HandleLayerEntity != 0 && nodes.Contains(linksRef.HandleLayerEntity))
-			{
-				var layerData = nodes.Get(linksRef.HandleLayerEntity);
-				layerData.Deconstruct(out var layerNode);
-				ref var layerNodeRef = ref layerNode.Ref;
-				var handleX = (styleRef.Width - styleRef.HandleSize) * normalized;
-				layerNodeRef.Declaration.layout.padding = new Clay_Padding
-				{
-					left = (ushort)handleX,
-					right = 0,
-					top = 0,
-					bottom = 0
-				};
-			}
-
-			// Emit value changed event
-			// We need the entity ID, but we can't get it from the query result directly in a Changed filter
-			// So we'll emit it in the slider drag system instead
-		}
-	}
 
 	/// <summary>
 	/// Plugin that registers all widget observers with the app.
@@ -298,13 +189,9 @@ public static class UiWidgetObservers
 			// NOTE: OnCheckboxClicked system removed - checkboxes now handle toggle via entity observers
 			// (see CheckboxWidget.Create() where the entity observer is attached)
 
-			// Slider observers
-			app.AddSystem((Query<Data<SliderState, SliderLinks, ClaySliderStyle>, Filter<Changed<SliderState>>> changedSliders, Query<Data<UiNode>> nodes, Commands commands) =>
-				OnSliderValueChanged(changedSliders, nodes, commands))
-				.InStage(Stage.PreUpdate)
-				.Label("ui:observers:slider-visuals")
-				.After("ui:interaction:update")
-				.Build();
+			// NOTE: Slider visual update system removed - sliders now update visuals during drag
+			// Sliders are only modified via dragging, and the drag observers already update fill/handle
+			// (see SliderWidget.Create() entity observer and UiWidgetsPlugin fallback system)
 		}
 	}
 }

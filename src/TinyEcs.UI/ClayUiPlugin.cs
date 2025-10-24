@@ -69,31 +69,9 @@ public sealed class ClayUiPlugin : IPlugin
 		.After("ui:clay:sync-hierarchy")
 		.Build();
 
-		// Save scroll positions from Clay's internal state to UiNode declarations
-		// Only processes entities marked with UiScrollContainer for efficiency
-		app.AddSystem((Query<Data<UiNode>, Filter<With<UiScrollContainer>>> scrollContainers) =>
-		{
-			foreach (var (entityId, nodePtr) in scrollContainers)
-			{
-				ref var node = ref nodePtr.Ref;
-				if (node.Declaration.id.id == 0)
-					continue;
-
-				var scroll = Clay.GetScrollContainerData(node.Declaration.id);
-				unsafe
-				{
-					if (scroll.found && scroll.scrollPosition != null)
-					{
-						node.Declaration.clip.childOffset = *scroll.scrollPosition;
-					}
-				}
-			}
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("ui:clay:save-scroll")
-		.RunIfResourceExists<ClayUiState>()
-		.After("ui:clay:pointer")
-		.Build();
+		// NOTE: Scroll offset save system removed - it was duplicate work
+		// ClayUiEntityLayout.RenderNode already retrieves scroll offsets during layout pass
+		// (see ClayUiEntityLayout.cs:65-70)
 
 		app.AddSystem((
 			ResMut<ClayUiState> stateParam,
