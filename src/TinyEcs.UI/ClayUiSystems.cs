@@ -260,7 +260,7 @@ internal static class ClayUiSystems
 		// Pointer down
 		if (isPrimaryDown && !wasPrimaryDown)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
+			var targetKey = FindTopElementKey(currentReadOnly, state);
 			if (targetKey != 0)
 			{
 				if (DispatchPointerEventForKey(
@@ -305,7 +305,7 @@ internal static class ClayUiSystems
 
 			if (targetKey == 0)
 			{
-				targetKey = FindTopElementKey(currentReadOnly, allNodes);
+				targetKey = FindTopElementKey(currentReadOnly, state);
 			}
 
 			if (targetKey != 0)
@@ -330,7 +330,7 @@ internal static class ClayUiSystems
 		// Pointer move
 		if (moveDelta != Vector2.Zero)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
+			var targetKey = FindTopElementKey(currentReadOnly, state);
 			if (targetKey != 0)
 			{
 				DispatchPointerEventForKey(
@@ -351,7 +351,7 @@ internal static class ClayUiSystems
 		// Pointer scroll
 		if (scrollDelta != Vector2.Zero)
 		{
-			var targetKey = FindTopElementKey(currentReadOnly, allNodes);
+			var targetKey = FindTopElementKey(currentReadOnly, state);
 			if (targetKey != 0)
 			{
 				DispatchPointerEventForKey(
@@ -385,21 +385,23 @@ internal static class ClayUiSystems
 		return false;
 	}
 
-	private static uint FindTopElementKey(ReadOnlySpan<uint> keys, Query<Data<UiNode>> allNodes)
+	private static uint FindTopElementKey(ReadOnlySpan<uint> keys, ClayUiState state)
 	{
+		// Clay.GetPointerOverIds() returns elements from bottom to top
+		// The last element is the topmost one, which is what we want for interactions
+		if (keys.Length == 0)
+			return 0;
+
+		// Start from the topmost element (last in array)
 		for (var i = keys.Length - 1; i >= 0; --i)
 		{
 			var key = keys[i];
 			if (key == 0)
 				continue;
 
-			// Check if any entity has this Clay element ID
-			foreach (var (entityId, nodePtr) in allNodes)
-			{
-				ref var node = ref nodePtr.Ref;
-				if (node.Declaration.id.id == key)
-					return key;
-			}
+			// O(1) lookup using the element ID → entity ID map built during layout
+			if (state.ElementToEntityMap.ContainsKey(key))
+				return key;
 		}
 
 		return 0;

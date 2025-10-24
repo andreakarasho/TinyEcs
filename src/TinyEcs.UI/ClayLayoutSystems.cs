@@ -39,7 +39,7 @@ public static unsafe class ClayLayoutSystems
 
 		if (state.UseEntityHierarchy)
 		{
-			ClayUiEntityLayout.Build(rootNodes, allNodes, uiTexts, childLists, floatingWindows, windowOrder, windows);
+			ClayUiEntityLayout.Build(ref state, rootNodes, allNodes, uiTexts, childLists, floatingWindows, windowOrder, windows);
 		}
 
 		state.LastRenderCommands = ClayInterop.Clay_EndLayout();

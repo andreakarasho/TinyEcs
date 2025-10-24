@@ -30,6 +30,9 @@ public sealed class ClayUiPlugin : IPlugin
 		{
 			RegisterDefaultSystems(app);
 		}
+
+		// Register observer to clean up element ID mapping when UiNode is removed
+		app.AddObserver<OnRemove<UiNode>, ResMut<ClayUiState>>(OnUiNodeRemoved);
 	}
 
 	private static ClayUiState EnsureState(World world)
@@ -67,24 +70,21 @@ public sealed class ClayUiPlugin : IPlugin
 		.Build();
 
 		// Save scroll positions from Clay's internal state to UiNode declarations
-		// This ensures scroll positions persist even when AutoRunLayout = false
-		app.AddSystem((Query<Data<UiNode>> allNodes) =>
+		// Only processes entities marked with UiScrollContainer for efficiency
+		app.AddSystem((Query<Data<UiNode>, Filter<With<UiScrollContainer>>> scrollContainers) =>
 		{
-			foreach (var (entityId, nodePtr) in allNodes)
+			foreach (var (entityId, nodePtr) in scrollContainers)
 			{
 				ref var node = ref nodePtr.Ref;
 				if (node.Declaration.id.id == 0)
 					continue;
 
-				if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+				var scroll = Clay.GetScrollContainerData(node.Declaration.id);
+				unsafe
 				{
-					var scroll = Clay.GetScrollContainerData(node.Declaration.id);
-					unsafe
+					if (scroll.found && scroll.scrollPosition != null)
 					{
-						if (scroll.found && scroll.scrollPosition != null)
-						{
-							node.Declaration.clip.childOffset = *scroll.scrollPosition;
-						}
+						node.Declaration.clip.childOffset = *scroll.scrollPosition;
 					}
 				}
 			}
@@ -111,6 +111,17 @@ public sealed class ClayUiPlugin : IPlugin
 		.Label("ui:clay:layout")
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
+	}
+
+	private static void OnUiNodeRemoved(OnRemove<UiNode> trigger, ResMut<ClayUiState> uiState)
+	{
+		ref var state = ref uiState.Value;
+
+		// Remove the element ID → entity ID mapping when UiNode is removed
+		if (trigger.Component.Declaration.id.id != 0)
+		{
+			state.ElementToEntityMap.Remove(trigger.Component.Declaration.id.id);
+		}
 	}
 }
 

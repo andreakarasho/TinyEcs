@@ -17,6 +17,11 @@ public unsafe sealed class ClayUiState : IDisposable
 	internal uint ActivePointerElementId;
 	internal bool HasActivePointerElement;
 
+	// Fast lookup: Clay element ID → ECS entity ID
+	// Built during layout, used during pointer event handling
+	// Cleaned up when UiNode components are removed
+	internal readonly Dictionary<uint, ulong> ElementToEntityMap = new();
+
 	internal ClayArenaHandle ArenaHandle;
 	internal bool HasArena;
 	internal Clay_Context* Context;
@@ -66,6 +71,7 @@ public unsafe sealed class ClayUiState : IDisposable
 
 		LastRenderCommands = default;
 		HoveredElementIds.Clear();
+		ElementToEntityMap.Clear();
 		HasActivePointerElement = false;
 		_disposed = true;
 		GC.SuppressFinalize(this);

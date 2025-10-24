@@ -8,6 +8,7 @@ namespace TinyEcs.UI;
 internal static class ClayUiEntityLayout
 {
 	public static void Build(
+		ref ClayUiState state,
 		Query<Data<UiNode>, Filter<Without<Parent>>> roots,
 		Query<Data<UiNode>> allNodes,
 		Query<Data<UiText>> uiTexts,
@@ -17,6 +18,7 @@ internal static class ClayUiEntityLayout
 		Local<HashSet<ulong>> windows)
 	{
 		windows.Value!.Clear();
+		state.ElementToEntityMap.Clear();
 
 
 		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
@@ -30,8 +32,8 @@ internal static class ClayUiEntityLayout
 			else
 			{
 				// Render others in discovery order after assigning ids
-				AssignElementId(ref node, entityId);
-				BuildNode(entityId, ref node, allNodes, uiTexts, childLists);
+				AssignElementId(ref node, entityId, state);
+				BuildNode(entityId, ref node, allNodes, uiTexts, childLists, state);
 			}
 		}
 
@@ -43,8 +45,8 @@ internal static class ClayUiEntityLayout
 			var data = allNodes.Get(id);
 			data.Deconstruct(out _, out var nodePtr);
 			ref var node = ref nodePtr.Ref;
-			AssignElementId(ref node, id);
-			BuildNode(id, ref node, allNodes, uiTexts, childLists);
+			AssignElementId(ref node, id, state);
+			BuildNode(id, ref node, allNodes, uiTexts, childLists, state);
 		}
 	}
 
@@ -53,7 +55,8 @@ internal static class ClayUiEntityLayout
 		ref UiNode node,
 		Query<Data<UiNode>> allNodes,
 		Query<Data<UiText>> uiTexts,
-		Query<Data<Children>> childLists)
+		Query<Data<Children>> childLists,
+		ClayUiState state)
 	{
 		// update scrolls before the opening element, otherwise the scorlling get lost
 		if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
@@ -99,26 +102,34 @@ internal static class ClayUiEntityLayout
 				childNodeData.Deconstruct(out _, out var childNodePtr);
 
 				ref var childNode = ref childNodePtr.Ref;
-				AssignElementId(ref childNode, childId);
-				BuildNode(childId, ref childNode, allNodes, uiTexts, childLists);
+				AssignElementId(ref childNode, childId, state);
+				BuildNode(childId, ref childNode, allNodes, uiTexts, childLists, state);
 			}
 		}
 
 		Clay.CloseElement();
 	}
 
-	private static void AssignElementId(ref UiNode node, ulong entityId)
+	private static void AssignElementId(ref UiNode node, ulong entityId, ClayUiState state)
 	{
 		// Only compute element ID once - cache it in the node declaration
 		if (node.Declaration.id.id != 0)
+		{
+			// Element ID already assigned, just update mapping
+			state.ElementToEntityMap[node.Declaration.id.id] = entityId;
 			return;
+		}
 
 		// Use the entity ID directly as the hash to avoid string allocation
 		// This is safe because entity IDs are unique and stable
+		var elementId = (uint)(entityId ^ (entityId >> 32)); // Fold 64-bit ID into 32-bit hash
 		node.Declaration.id = new Clay_ElementId
 		{
-			id = (uint)(entityId ^ (entityId >> 32)), // Fold 64-bit ID into 32-bit hash
+			id = elementId,
 			stringId = default
 		};
+
+		// Register in the fast lookup map
+		state.ElementToEntityMap[elementId] = entityId;
 	}
 }

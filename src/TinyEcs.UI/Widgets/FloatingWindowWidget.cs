@@ -224,6 +224,8 @@ public static class FloatingWindowWidget
 					}
 				}
 			});
+			// Mark as scroll container for efficient querying
+			scrollContainer.Insert(new UiScrollContainer());
 			// Scroll container appears after title bar
 			scrollContainer.Insert(UiNodeParent.For(window.Id, 1));
 			scrollContainerId = scrollContainer.Id;
