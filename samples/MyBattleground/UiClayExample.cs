@@ -42,9 +42,9 @@ public static class UiClayExample
 			var buttonStyle = buttonBaseStyle with { Text = buttonTextConfig };
 
 			var button = ButtonWidget.Create(commands, buttonStyle, "Click Me", root.Id);
-			button.Observe<UiPointerTrigger>(trigger =>
+			button.Observe<On<UiPointerTrigger>>(trigger =>
 			{
-				var evt = trigger.Event;
+				var evt = trigger.Event.Event;
 				Console.WriteLine($"  [Observe] primary button {evt.Type,-13} target={evt.Target} current={evt.CurrentTarget} primary={evt.IsPrimaryButton}");
 			});
 
@@ -54,9 +54,9 @@ public static class UiClayExample
 				"Secondary",
 				root.Id);
 			secondaryButton.Insert(new UiNodeParent { Parent = root.Id, Index = 1 });
-			secondaryButton.Observe<UiPointerTrigger>(trigger =>
+			secondaryButton.Observe<On<UiPointerTrigger>>(trigger =>
 			{
-				var evt = trigger.Event;
+				var evt = trigger.Event.Event;
 				Console.WriteLine($"  [Observe] secondary button {evt.Type,-13} target={evt.Target} current={evt.CurrentTarget} primary={evt.IsPrimaryButton}");
 			});
 		})

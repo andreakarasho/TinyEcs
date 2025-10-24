@@ -47,18 +47,12 @@ public readonly struct UiPointerEvent
 	public bool IsOriginalTarget => Target == CurrentTarget;
 }
 
-public readonly record struct UiPointerTrigger(UiPointerEvent Event, bool Propagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+/// <summary>
+/// Trigger event data for pointer interactions.
+/// Use with On&lt;UiPointerEvent&gt; in entity observers.
+/// The entity ID is provided by the On&lt;T&gt; wrapper.
+/// </summary>
+public readonly record struct UiPointerTrigger(UiPointerEvent Event, bool Propagate = false) : IPropagatingTrigger
 {
-	public ulong EntityId => Event.CurrentTarget;
 	public bool ShouldPropagate => Propagate;
-
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world)
-	{
-	}
-#else
-	public void Register(TinyEcs.World world)
-	{
-	}
-#endif
 }

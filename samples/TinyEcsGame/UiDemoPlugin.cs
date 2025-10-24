@@ -67,7 +67,7 @@ public sealed class UiDemoPlugin : IPlugin
 			initialValue: 1.0f,
 			parent: window.Id);
 
-		entityCountSlider.Observe((OnValueChanged trigger, Query<Data<SliderState>> sliders) =>
+		entityCountSlider.Observe((On<ValueChangedEvent> trigger, Query<Data<SliderState>> sliders) =>
 		{
 			if (!sliders.Contains(trigger.EntityId))
 				return;
@@ -88,7 +88,7 @@ public sealed class UiDemoPlugin : IPlugin
 			initialPercent: 50f,
 			parent: window.Id);
 
-		velocitySlider.Observe((OnValueChanged trigger, Query<Data<SliderState>> sliders) =>
+		velocitySlider.Observe((On<ValueChangedEvent> trigger, Query<Data<SliderState>> sliders) =>
 		{
 			if (!sliders.Contains(trigger.EntityId))
 				return;
@@ -106,20 +106,20 @@ public sealed class UiDemoPlugin : IPlugin
 			label: "Enable VSync",
 			parent: window.Id);
 
-		vsyncCheckbox.Observe((OnToggle trigger) =>
+		vsyncCheckbox.Observe((On<ToggleEvent> trigger) =>
 		{
-			// VSync: trigger.NewValue
-			// In a real app: Raylib.SetConfigFlags(trigger.NewValue ? ConfigFlags.VSyncHint : 0);
+			// VSync: trigger.Event.NewValue
+			// In a real app: Raylib.SetConfigFlags(trigger.Event.NewValue ? ConfigFlags.VSyncHint : 0);
 		}); var debugCheckbox = CheckboxWidget.Create(commands,
 			ClayCheckboxStyle.Default,
 			initialChecked: true,
 			label: "Show Debug Info",
 		parent: window.Id);
 
-		debugCheckbox.Observe((OnToggle trigger) =>
+		debugCheckbox.Observe((On<ToggleEvent> trigger) =>
 		{
-			// Debug Info: trigger.NewValue
-			// In a real app: world.SetResource(new ShowDebugInfo { Value = trigger.NewValue });
+			// Debug Info: trigger.Event.NewValue
+			// In a real app: world.SetResource(new ShowDebugInfo { Value = trigger.Event.NewValue });
 		});
 	}
 	private void CreateSettingsWindow(Commands commands)
@@ -248,21 +248,21 @@ public sealed class UiDemoPlugin : IPlugin
 		};
 
 		var spawnButton = ButtonWidget.Create(commands, buttonStyle, "Spawn Entities", window.Id);
-		spawnButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		spawnButton.Observe((On<ClickEvent<UiWidgetObservers.Button>> trigger) =>
 		{
 			// Spawning 1000 new entities
 			// In a real app, you'd emit a command or event to spawn entities
 		});
 
 		var clearButton = ButtonWidget.Create(commands, buttonStyle, "Clear All", window.Id);
-		clearButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		clearButton.Observe((On<ClickEvent<UiWidgetObservers.Button>> trigger) =>
 		{
 			// Clearing all entities
 			// In a real app, you'd emit a command to clear entities
 		});
 
 		var pauseButton = ButtonWidget.Create(commands, buttonStyle, "Pause Simulation", window.Id);
-		pauseButton.Observe((OnClick<UiWidgetObservers.Button> trigger) =>
+		pauseButton.Observe((On<ClickEvent<UiWidgetObservers.Button>> trigger) =>
 		{
 			// Toggling pause
 			// In a real app, you'd toggle a pause resource

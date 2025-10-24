@@ -32,7 +32,10 @@ public static class FloatingWindowExample
 
 		app.AddSystem((Commands commands) =>
 		{
-			// Create main application window
+			// Create main application window with close/minimize/maximize buttons
+			// - Close button (×): Despawns the window
+			// - Minimize button (_): Collapses window to title bar only
+			// - Maximize button (□): Toggles full-screen mode
 			var mainWindow = FloatingWindowWidget.Create(
 				commands,
 				ClayFloatingWindowStyle.Default,

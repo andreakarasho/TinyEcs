@@ -121,7 +121,7 @@ public static class UiInteractionSystems
 				// If released on the same target we pressed on, it's a click
 				if (pointerDownTarget == evt.Target && clickables.Contains(evt.Target))
 				{
-					commands.EmitTrigger(new OnClick<TMarker>(evt.Target));
+					commands.Entity(evt.Target).EmitTrigger(new ClickEvent<TMarker>());
 				}
 				pointerDownTarget = 0;
 			}
@@ -153,16 +153,14 @@ public static class UiInteractionSystems
 			if (manager.FocusedEntity != 0 && manager.FocusedEntity != requestedEntity)
 			{
 				commands.Entity(manager.FocusedEntity).Remove<Focused>();
-				commands.EmitTrigger(new OnFocusLost(manager.FocusedEntity));
+				commands.Entity(manager.FocusedEntity).EmitTrigger(new FocusLostEvent());
 			}
 
 			// Set new focus
 			manager.PreviousFocusedEntity = manager.FocusedEntity;
 			manager.FocusedEntity = requestedEntity;
 			commands.Entity(requestedEntity).Insert(new Focused { Source = source });
-			commands.EmitTrigger(new OnFocusGained(requestedEntity, source));
-
-			// Clear request
+			commands.Entity(requestedEntity).EmitTrigger(new FocusGainedEvent(source));         // Clear request
 			manager.RequestFocusEntity = 0;
 			return;
 		}
@@ -187,14 +185,14 @@ public static class UiInteractionSystems
 						if (manager.FocusedEntity != 0)
 						{
 							commands.Entity(manager.FocusedEntity).Remove<Focused>();
-							commands.EmitTrigger(new OnFocusLost(manager.FocusedEntity));
+							commands.Entity(manager.FocusedEntity).EmitTrigger(new FocusLostEvent());
 						}
 
 						// Set new focus
 						manager.PreviousFocusedEntity = manager.FocusedEntity;
 						manager.FocusedEntity = targetId;
 						commands.Entity(targetId).Insert(new Focused { Source = FocusSource.Pointer });
-						commands.EmitTrigger(new OnFocusGained(targetId, FocusSource.Pointer));
+						commands.Entity(targetId).EmitTrigger(new FocusGainedEvent(FocusSource.Pointer));
 					}
 				}
 			}

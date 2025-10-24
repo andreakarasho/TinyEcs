@@ -26,15 +26,15 @@ public static class ReactiveUiExample
 			.Build();
 
 		// React to button clicks globally
-		app.AddObserver((OnClick<UiWidgetObservers.Button> trigger) =>
+		app.AddObserver((On<ClickEvent<UiWidgetObservers.Button>> trigger) =>
 		{
 			Console.WriteLine($"Button {trigger.EntityId} was clicked!");
 		});
 
 		// React to checkbox toggles globally
-		app.AddObserver((OnToggle trigger) =>
+		app.AddObserver((On<ToggleEvent> trigger) =>
 		{
-			Console.WriteLine($"Checkbox {trigger.EntityId} toggled to: {trigger.NewValue}");
+			Console.WriteLine($"Checkbox {trigger.EntityId} toggled to: {trigger.Event.NewValue}");
 		});
 
 		// Run the app (in a real app, this would be in a loop)
@@ -139,7 +139,7 @@ public static class CustomWidgetObserverExample
 		.Build();
 
 		// Add custom observer for this button type
-		app.AddObserver((OnClick<UiWidgetObservers.Button> trigger, Query<Data<SpecialButton>> specialButtons) =>
+		app.AddObserver((On<ClickEvent<UiWidgetObservers.Button>> trigger, Query<Data<SpecialButton>> specialButtons) =>
 		{
 			// Only react if this is a special button
 			if (specialButtons.Contains(trigger.EntityId))
@@ -198,12 +198,12 @@ public static class FocusManagementExample
 		.Build();
 
 		// React to focus changes
-		app.AddObserver((OnFocusGained trigger) =>
+		app.AddObserver((On<FocusGainedEvent> trigger) =>
 		{
-			Console.WriteLine($"Element {trigger.EntityId} gained focus via {trigger.Source}");
+			Console.WriteLine($"Element {trigger.EntityId} gained focus via {trigger.Event.Source}");
 		});
 
-		app.AddObserver((OnFocusLost trigger) =>
+		app.AddObserver((On<FocusLostEvent> trigger) =>
 		{
 			Console.WriteLine($"Element {trigger.EntityId} lost focus");
 		});

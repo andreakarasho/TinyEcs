@@ -471,7 +471,10 @@ internal static class ClayUiSystems
 				scrollDelta,
 				isPrimary);
 			events.Send(pointerEvent);
-			commands.EmitTrigger(new UiPointerTrigger(pointerEvent));
+
+			// Emit entity-specific trigger so entity observers can receive it
+			commands.Entity(current).EmitTrigger(new UiPointerTrigger(pointerEvent));
+
 			dispatched = true; if (!parents.Contains(current))
 				break;
 

@@ -130,63 +130,45 @@ public struct ZIndex
 }
 
 /// <summary>
-/// Trigger emitted when an interactive element is clicked (pointer down + up on same element).
-/// Observers can react to OnClick<TMarker> where TMarker is a component identifying the widget type.
+/// Trigger event data for click interactions.
+/// Use with On&lt;ClickEvent&lt;TMarker&gt;&gt; in entity observers.
+/// The entity ID is provided by the On&lt;T&gt; wrapper.
 /// </summary>
-public readonly record struct OnClick<TMarker>(ulong EntityId) : ITrigger, IEntityTrigger
+public readonly record struct ClickEvent<TMarker>
 	where TMarker : struct
 {
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world) { }
-#else
-	public void Register(TinyEcs.World world) { }
-#endif
+	// No data needed - the entity ID comes from On<T>
 }
 
 /// <summary>
-/// Trigger emitted when a checkbox/toggle changes state.
+/// Trigger event data for toggle/checkbox state changes.
+/// Use with On&lt;ToggleEvent&gt; in entity observers.
 /// </summary>
-public readonly record struct OnToggle(ulong EntityId, bool NewValue) : ITrigger, IEntityTrigger
+public readonly record struct ToggleEvent(bool NewValue)
 {
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world) { }
-#else
-	public void Register(TinyEcs.World world) { }
-#endif
 }
 
 /// <summary>
-/// Trigger emitted when a slider value changes.
+/// Trigger event data for slider value changes.
+/// Use with On&lt;ValueChangedEvent&gt; in entity observers.
 /// </summary>
-public readonly record struct OnValueChanged(ulong EntityId, float NewValue) : ITrigger, IEntityTrigger
+public readonly record struct ValueChangedEvent(float NewValue)
 {
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world) { }
-#else
-	public void Register(TinyEcs.World world) { }
-#endif
 }
 
 /// <summary>
-/// Trigger emitted when an element gains focus.
+/// Trigger event data for focus gain.
+/// Use with On&lt;FocusGainedEvent&gt; in entity observers.
 /// </summary>
-public readonly record struct OnFocusGained(ulong EntityId, FocusSource Source) : ITrigger, IEntityTrigger
+public readonly record struct FocusGainedEvent(FocusSource Source)
 {
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world) { }
-#else
-	public void Register(TinyEcs.World world) { }
-#endif
 }
 
 /// <summary>
-/// Trigger emitted when an element loses focus.
+/// Trigger event data for focus loss.
+/// Use with On&lt;FocusLostEvent&gt; in entity observers.
 /// </summary>
-public readonly record struct OnFocusLost(ulong EntityId) : ITrigger, IEntityTrigger
+public readonly record struct FocusLostEvent
 {
-#if NET9_0_OR_GREATER
-	public static void Register(TinyEcs.World world) { }
-#else
-	public void Register(TinyEcs.World world) { }
-#endif
+	// No data needed - the entity ID comes from On<T>
 }

@@ -130,6 +130,7 @@ public sealed class UiWidgetsPlugin : IPlugin
 		.Label("ui:widgets:windows")
 		.Build();
 
+
 		// System 4: Handle slider dragging
 		app.AddSystem((
 			EventReader<UiPointerEvent> events,

@@ -274,12 +274,12 @@ public static class FloatingWindowWidget
 		// (Entity observers don't fire for components added in the same command batch)
 
 		// Handle dragging via entity-specific observer (works in tests and runtime)
-		window.Observe<UiPointerTrigger,
+		window.Observe<On<UiPointerTrigger>,
 			Query<Data<FloatingWindowState, UiNode, FloatingWindowLinks>>,
 			Query<Data<Parent>>,
 			ResMut<UiWindowOrder>>((trigger, windows, parents, windowOrder) =>
 		{
-			var evt = trigger.Event;
+			var evt = trigger.Event.Event;
 			var id = evt.CurrentTarget;
 			if (!windows.Contains(id)) return;
 			var winData = windows.Get(id);
@@ -360,21 +360,22 @@ public static class FloatingWindowWidget
 		});
 
 		// Handle window control button clicks via entity-specific observer
-		window.Observe<UiPointerTrigger,
-			Query<Data<FloatingWindowLinks>>,
+		window.Observe<On<UiPointerTrigger>,
+			Query<Data<FloatingWindowState, FloatingWindowLinks>>,
 			Commands>((trigger, windows, commands) =>
 		{
-			var evt = trigger.Event;
-			var windowId = evt.CurrentTarget;
+			var evt = trigger.Event.Event;
+			var windowId = trigger.EntityId;
 
 			// Only handle pointer down events (immediate button response)
 			if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
 				return;
 
-			// Check if the window still exists and get its links
+			// Check if the window still exists and get its state and links
 			if (!windows.Contains(windowId)) return;
 			var winData = windows.Get(windowId);
-			winData.Deconstruct(out _, out var linksPtr);
+			winData.Deconstruct(out var statePtr, out var linksPtr);
+			ref var state = ref statePtr.Ref;
 			var links = linksPtr.Ref;
 
 			// Check if the close button was clicked
@@ -385,17 +386,19 @@ public static class FloatingWindowWidget
 				commands.Entity(windowId).Despawn();
 			}
 
-			// Handle minimize button (if implemented later)
-			// if (links.MinimizeButtonId != 0 && evt.Target == links.MinimizeButtonId)
-			// {
-			//     // Toggle minimize state
-			// }
+			// Handle minimize button
+			if (links.MinimizeButtonId != 0 && evt.Target == links.MinimizeButtonId)
+			{
+				// Toggle minimize state
+				state.IsMinimized = !state.IsMinimized;
+			}
 
-			// Handle maximize button (if implemented later)
-			// if (links.MaximizeButtonId != 0 && evt.Target == links.MaximizeButtonId)
-			// {
-			//     // Toggle maximize state
-			// }
+			// Handle maximize button
+			if (links.MaximizeButtonId != 0 && evt.Target == links.MaximizeButtonId)
+			{
+				// Toggle maximize state
+				state.IsMaximized = !state.IsMaximized;
+			}
 		});
 
 		return window;

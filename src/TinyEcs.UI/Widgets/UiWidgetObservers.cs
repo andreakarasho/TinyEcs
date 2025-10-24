@@ -77,7 +77,7 @@ public static class UiWidgetObservers
 				// Click = press and release on same button
 				if (pressedButton.Value == evt.Target && buttons.Contains(evt.Target))
 				{
-					commands.EmitTrigger(new OnClick<Button>(evt.Target));
+					commands.Entity(evt.Target).EmitTrigger(new ClickEvent<Button>());
 				}
 				pressedButton.Value = 0;
 			}
@@ -204,7 +204,7 @@ public static class UiWidgetObservers
 						commands.Entity(id).Insert(newState);
 
 						// Emit event for observers
-						commands.EmitTrigger(new OnToggle(id, newState.Checked));
+						commands.Entity(id).EmitTrigger(new ToggleEvent(newState.Checked));
 
 						toggleHappened = true;
 					}
