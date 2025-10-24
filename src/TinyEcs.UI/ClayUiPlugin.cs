@@ -66,20 +66,33 @@ public sealed class ClayUiPlugin : IPlugin
 		.After("ui:clay:sync-hierarchy")
 		.Build();
 
-		app.AddSystem((ResMut<ClayUiState> ui, Query<Data<UiNode>, Filter<Changed<UiNode>>> changedNodes) =>
-			ClayUiSystems.RequestLayoutOnNodeChange(ui, changedNodes))
+		// Save scroll positions from Clay's internal state to UiNode declarations
+		// This ensures scroll positions persist even when AutoRunLayout = false
+		app.AddSystem((Query<Data<UiNode>> allNodes) =>
+		{
+			foreach (var (entityId, nodePtr) in allNodes)
+			{
+				ref var node = ref nodePtr.Ref;
+				if (node.Declaration.id.id == 0)
+					continue;
+
+				if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+				{
+					var scroll = Clay.GetScrollContainerData(node.Declaration.id);
+					unsafe
+					{
+						if (scroll.found && scroll.scrollPosition != null)
+						{
+							node.Declaration.clip.childOffset = *scroll.scrollPosition;
+						}
+					}
+				}
+			}
+		})
 		.InStage(Stage.PreUpdate)
-		.Label("ui:clay:mark-nodes")
+		.Label("ui:clay:save-scroll")
 		.RunIfResourceExists<ClayUiState>()
 		.After("ui:clay:pointer")
-		.Build();
-
-		app.AddSystem((ResMut<ClayUiState> ui, Query<Data<UiText>, Filter<Changed<UiText>>> changedTexts) =>
-			ClayUiSystems.RequestLayoutOnTextChange(ui, changedTexts))
-		.InStage(Stage.PreUpdate)
-		.Label("ui:clay:mark-text")
-		.RunIfResourceExists<ClayUiState>()
-		.After("ui:clay:mark-nodes")
 		.Build();
 
 		app.AddSystem((
@@ -119,7 +132,6 @@ public static class ClayUiAppExtensions
 			var state = world.GetResource<ClayUiState>();
 			state.Options = options;
 			state.UseEntityHierarchy = options.UseEntityHierarchy;
-			state.HasPendingLayoutPass = true;
 		}
 
 		return app;

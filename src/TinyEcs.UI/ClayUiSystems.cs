@@ -104,7 +104,6 @@ internal static class ClayUiSystems
 
 		if (layoutDirty)
 		{
-			uiState.Value.HasPendingLayoutPass = true;
 		}
 	}
 
@@ -369,35 +368,10 @@ internal static class ClayUiSystems
 					allNodes);
 
 				// Request layout to apply scroll offset changes
-				state.HasPendingLayoutPass = true;
 			}
 		}
 
 		pointer.ResetFrame();
-
-		// Note: We don't request a layout pass on pointer move/hover because Clay internally
-		// handles hover state updates via SetPointerState(). Layout IS needed for:
-		// - Scroll events (scroll offset changes)
-		// - Drag events (position/value changes, handled by widget systems)
-		// - Component changes (handled by RequestLayoutOnNodeChange/TextChange)
-	}
-
-	public static void RequestLayoutOnNodeChange(ResMut<ClayUiState> uiState, Query<Data<UiNode>, Filter<Changed<UiNode>>> changedNodes)
-	{
-		foreach (var _ in changedNodes)
-		{
-			uiState.Value.HasPendingLayoutPass = true;
-			return;
-		}
-	}
-
-	public static void RequestLayoutOnTextChange(ResMut<ClayUiState> uiState, Query<Data<UiText>, Filter<Changed<UiText>>> changedTexts)
-	{
-		foreach (var _ in changedTexts)
-		{
-			uiState.Value.HasPendingLayoutPass = true;
-			return;
-		}
 	}
 
 	private static bool Contains(ReadOnlySpan<uint> span, uint value)

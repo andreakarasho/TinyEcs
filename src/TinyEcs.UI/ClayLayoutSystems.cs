@@ -29,10 +29,6 @@ public static unsafe class ClayLayoutSystems
 	{
 		ref var state = ref stateParam.Value;
 
-		var shouldRun = state.Options.AutoRunLayout || state.HasPendingLayoutPass;
-		if (!shouldRun)
-			return;
-
 		EnsureContext(ref state);
 
 		Clay.SetCurrentContext(state.Context);
@@ -47,18 +43,12 @@ public static unsafe class ClayLayoutSystems
 		}
 
 		state.LastRenderCommands = ClayInterop.Clay_EndLayout();
-
-		if (!state.Options.AutoRunLayout)
-			state.HasPendingLayoutPass = false;
-		else
-			state.HasPendingLayoutPass = false;
 	}
 
 	public static void ApplyOptions(ResMut<ClayUiState> stateParam, ClayUiOptions options)
 	{
 		ref var state = ref stateParam.Value;
 
-		var optionsChanged = !state.Options.Equals(options);
 		var requiresRecreate = ShouldRecreateContext(ref state, options);
 
 		state.Options = options;
@@ -73,11 +63,6 @@ public static unsafe class ClayLayoutSystems
 			Clay.SetCurrentContext(state.Context);
 			Clay.SetLayoutDimensions(options.LayoutDimensions);
 			Clay.SetDebugModeEnabled(options.EnableDebugMode);
-		}
-
-		if (optionsChanged && options.ForceLayoutOnOptionsChange)
-		{
-			state.HasPendingLayoutPass = true;
 		}
 	}
 
@@ -119,7 +104,6 @@ public static unsafe class ClayLayoutSystems
 	{
 		DisposeContext(ref state);
 		EnsureContext(ref state);
-		state.HasPendingLayoutPass = true;
 	}
 
 	private static void DisposeContext(ref ClayUiState state)

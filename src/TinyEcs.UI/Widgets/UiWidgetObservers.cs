@@ -101,7 +101,6 @@ public static class UiWidgetObservers
 			lastStates.Value = new Dictionary<ulong, bool>();
 		}
 
-		var layoutPassNeeded = false;
 		var actualChanges = 0; var checkboxIndex = 0;
 		foreach (var (state, links, style) in changedCheckboxes)
 		{
@@ -136,7 +135,6 @@ public static class UiWidgetObservers
 
 				var newColor = stateRef.Checked ? styleRef.CheckedColor : styleRef.BoxColor;
 				boxNodeRef.Declaration.backgroundColor = newColor;
-				layoutPassNeeded = true;
 			}
 
 			// Update checkmark text
@@ -149,14 +147,9 @@ public static class UiWidgetObservers
 					fontSize = (ushort)(styleRef.BoxSize * 0.8f),
 					textAlignment = Clay_TextAlignment.CLAY_TEXT_ALIGN_CENTER
 				}));
-				layoutPassNeeded = true;
 			}
 
 			checkboxIndex++;
-		}
-		if (layoutPassNeeded)
-		{
-			uiState.Value.HasPendingLayoutPass = true;
 		}
 	}   /// <summary>
 		/// Handles checkbox toggle on click.

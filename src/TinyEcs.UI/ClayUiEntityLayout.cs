@@ -18,17 +18,6 @@ internal static class ClayUiEntityLayout
 	{
 		windows.Value!.Clear();
 
-		if (windowOrder is null)
-		{
-			foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
-			{
-				var entityId = entityPtr.Ref;
-				ref var node = ref nodePtr.Ref;
-				AssignElementId(ref node, entityId);
-				BuildNode(entityId, ref node, allNodes, uiTexts, childLists);
-			}
-			return;
-		}
 
 		foreach ((PtrRO<ulong> entityPtr, Ptr<UiNode> nodePtr) in roots)
 		{

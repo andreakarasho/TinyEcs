@@ -119,7 +119,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 							};
 
 							// Request layout to apply the position change
-							uiState.Value.HasPendingLayoutPass = true;
 						}
 					}
 
@@ -228,7 +227,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 								if (changed)
 								{
 									// Force a layout pass so the graphical position updates this frame
-									uiState.Value.HasPendingLayoutPass = true;
 								}
 								break;
 						}
@@ -273,7 +271,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 			// Only request layout if we actually moved a window
 			if (anyDragging)
 			{
-				uiState.Value.HasPendingLayoutPass = true;
 			}
 		})
 		.InStage(Stage.Update)
@@ -350,7 +347,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 
 				if (changed)
 				{
-					uiState.Value.HasPendingLayoutPass = true;
 				}
 			}
 		})

@@ -12,7 +12,6 @@ public unsafe sealed class ClayUiState : IDisposable
 {
 	public ClayUiOptions Options;
 	public bool UseEntityHierarchy;
-	public bool HasPendingLayoutPass;
 
 	internal readonly HashSet<uint> HoveredElementIds = new();
 	internal uint ActivePointerElementId;
@@ -30,7 +29,6 @@ public unsafe sealed class ClayUiState : IDisposable
 	{
 		Options = ClayUiOptions.Default;
 		UseEntityHierarchy = Options.UseEntityHierarchy;
-		HasPendingLayoutPass = true;
 	}
 
 	/// <summary>
@@ -83,8 +81,6 @@ public readonly record struct ClayUiOptions
 	public Clay_Dimensions LayoutDimensions { get; init; } = new Clay_Dimensions(1920f, 1080f);
 	public uint ArenaSize { get; init; }
 	public bool AutoRegisterDefaultSystems { get; init; } = true;
-	public bool AutoRunLayout { get; init; } = true;
-	public bool ForceLayoutOnOptionsChange { get; init; } = true;
 	public bool EnableDebugMode { get; init; }
 	public bool UseEntityHierarchy { get; init; } = true;
 	public bool AutoCreatePointerState { get; init; } = true;
