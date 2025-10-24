@@ -104,7 +104,7 @@ internal static class ClayUiSystems
 
 		if (layoutDirty)
 		{
-			uiState.Value.RequestLayoutPass();
+			uiState.Value.HasPendingLayoutPass = true;
 		}
 	}
 
@@ -132,8 +132,7 @@ internal static class ClayUiSystems
 
 		if (state.Context is null)
 		{
-			if (pointerChanged)
-				state.RequestLayoutPass();
+			// Context not initialized yet - skip pointer processing
 			pointer.ResetFrame();
 			return;
 		}
@@ -180,7 +179,7 @@ internal static class ClayUiSystems
 			currentKeys[i] = hoveredIds[i].id;
 		}
 
-		var previousCount = state.GetHoveredElementCount();
+		var previousCount = state.HoveredElementIds.Count;
 		Span<uint> previousKeys;
 		if (previousCount == 0)
 		{
@@ -198,23 +197,30 @@ internal static class ClayUiSystems
 
 		if (previousCount > 0)
 		{
-			state.CopyHoveredElementIds(previousKeys);
+			var index = 0;
+			foreach (var key in state.HoveredElementIds)
+			{
+				if (index >= previousKeys.Length)
+					break;
+				previousKeys[index++] = key;
+			}
 		}
 
 		ReadOnlySpan<uint> previousReadOnly = previousKeys;
 		ReadOnlySpan<uint> currentReadOnly = currentKeys;
 
-		state.BeginHoverUpdate();
+		state.HoveredElementIds.Clear();
 		for (var i = 0; i < currentReadOnly.Length; ++i)
 		{
-			state.AddHoveredElement(currentReadOnly[i]);
+			if (currentReadOnly[i] != 0)
+				state.HoveredElementIds.Add(currentReadOnly[i]);
 		}
 
 		// Pointer exits
 		for (var i = 0; i < previousReadOnly.Length; ++i)
 		{
 			var key = previousReadOnly[i];
-			if (key == 0 || state.IsElementHovered(key))
+			if (key == 0 || state.HoveredElementIds.Contains(key))
 				continue;
 
 			DispatchPointerEventForKey(
@@ -271,24 +277,34 @@ internal static class ClayUiSystems
 						parents,
 						allNodes))
 				{
-					state.SetActivePointerTarget(targetKey);
+					state.HasActivePointerElement = true;
+					state.ActivePointerElementId = targetKey;
 				}
 				else
 				{
-					state.SetActivePointerTarget(0);
+					state.HasActivePointerElement = false;
+					state.ActivePointerElementId = 0;
 				}
 			}
 			else
 			{
-				state.SetActivePointerTarget(0);
+				state.HasActivePointerElement = false;
+				state.ActivePointerElementId = 0;
 			}
 		}
 
 		// Pointer up
 		if (!isPrimaryDown && wasPrimaryDown)
 		{
-			uint targetKey;
-			if (!state.TryConsumeActivePointerTarget(out targetKey) || targetKey == 0)
+			uint targetKey = 0;
+			if (state.HasActivePointerElement)
+			{
+				targetKey = state.ActivePointerElementId;
+				state.HasActivePointerElement = false;
+				state.ActivePointerElementId = 0;
+			}
+
+			if (targetKey == 0)
 			{
 				targetKey = FindTopElementKey(currentReadOnly, allNodes);
 			}
@@ -308,7 +324,8 @@ internal static class ClayUiSystems
 					parents,
 					allNodes);
 			}
-			state.SetActivePointerTarget(0);
+			state.HasActivePointerElement = false;
+			state.ActivePointerElementId = 0;
 		}
 
 		// Pointer move
@@ -350,22 +367,26 @@ internal static class ClayUiSystems
 					events,
 					parents,
 					allNodes);
+
+				// Request layout to apply scroll offset changes
+				state.HasPendingLayoutPass = true;
 			}
 		}
 
 		pointer.ResetFrame();
 
-		if (pointerChanged)
-		{
-			state.RequestLayoutPass();
-		}
+		// Note: We don't request a layout pass on pointer move/hover because Clay internally
+		// handles hover state updates via SetPointerState(). Layout IS needed for:
+		// - Scroll events (scroll offset changes)
+		// - Drag events (position/value changes, handled by widget systems)
+		// - Component changes (handled by RequestLayoutOnNodeChange/TextChange)
 	}
 
 	public static void RequestLayoutOnNodeChange(ResMut<ClayUiState> uiState, Query<Data<UiNode>, Filter<Changed<UiNode>>> changedNodes)
 	{
 		foreach (var _ in changedNodes)
 		{
-			uiState.Value.RequestLayoutPass();
+			uiState.Value.HasPendingLayoutPass = true;
 			return;
 		}
 	}
@@ -374,7 +395,7 @@ internal static class ClayUiSystems
 	{
 		foreach (var _ in changedTexts)
 		{
-			uiState.Value.RequestLayoutPass();
+			uiState.Value.HasPendingLayoutPass = true;
 			return;
 		}
 	}

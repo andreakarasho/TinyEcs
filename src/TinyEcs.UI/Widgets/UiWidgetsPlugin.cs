@@ -40,7 +40,8 @@ public sealed class UiWidgetsPlugin : IPlugin
 			EventReader<UiPointerEvent> events,
 			Query<Data<FloatingWindowState, FloatingWindowLinks, UiNode>> windows,
 			Query<Data<Parent>> parents,
-			ResMut<UiWindowOrder> windowOrder) =>
+			ResMut<UiWindowOrder> windowOrder,
+			ResMut<ClayUiState> uiState) =>
 		{
 			foreach (var evt in events.Read())
 			{
@@ -116,6 +117,9 @@ public sealed class UiWidgetsPlugin : IPlugin
 								x = win.Position.X,
 								y = win.Position.Y
 							};
+
+							// Request layout to apply the position change
+							uiState.Value.HasPendingLayoutPass = true;
 						}
 					}
 
@@ -224,7 +228,7 @@ public sealed class UiWidgetsPlugin : IPlugin
 								if (changed)
 								{
 									// Force a layout pass so the graphical position updates this frame
-									uiState.Value.RequestLayoutPass();
+									uiState.Value.HasPendingLayoutPass = true;
 								}
 								break;
 						}
@@ -240,9 +244,11 @@ public sealed class UiWidgetsPlugin : IPlugin
 		// This system ensures windows keep updating even when mouse is outside UI bounds
 		app.AddSystem((
 			Res<ClayPointerState> pointerState,
-			Query<Data<FloatingWindowState, UiNode>> windows) =>
+			Query<Data<FloatingWindowState, UiNode>> windows,
+			ResMut<ClayUiState> uiState) =>
 		{
 			var pointerPos = pointerState.Value.Position;
+			var anyDragging = false;
 
 			foreach (var (entityId, winState, winNode) in windows)
 			{
@@ -259,7 +265,15 @@ public sealed class UiWidgetsPlugin : IPlugin
 						x = win.Position.X,
 						y = win.Position.Y
 					};
+
+					anyDragging = true;
 				}
+			}
+
+			// Only request layout if we actually moved a window
+			if (anyDragging)
+			{
+				uiState.Value.HasPendingLayoutPass = true;
 			}
 		})
 		.InStage(Stage.Update)
@@ -336,7 +350,7 @@ public sealed class UiWidgetsPlugin : IPlugin
 
 				if (changed)
 				{
-					uiState.Value.RequestLayoutPass();
+					uiState.Value.HasPendingLayoutPass = true;
 				}
 			}
 		})

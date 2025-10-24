@@ -28,8 +28,7 @@ public static class UiWidgetObservers
 	/// Triggered automatically when Interaction component changes on any button entity.
 	/// </summary>
 	public static void OnButtonInteractionChanged(
-		Query<Data<Interaction, ClayButtonStyle, UiNode>, Filter<Changed<Interaction>, With<Button>>> changedButtons,
-		ResMut<ClayUiState> uiState)
+		Query<Data<Interaction, ClayButtonStyle, UiNode>, Filter<Changed<Interaction>, With<Button>>> changedButtons)
 	{
 		foreach (var (interaction, style, node) in changedButtons)
 		{
@@ -37,7 +36,6 @@ public static class UiWidgetObservers
 			var styleRef = style.Ref;
 			var interactionVal = interaction.Ref;
 
-			var oldColor = nodeRef.Declaration.backgroundColor;
 			var newColor = interactionVal switch
 			{
 				Interaction.Pressed => styleRef.PressedBackground,
@@ -47,14 +45,9 @@ public static class UiWidgetObservers
 
 			nodeRef.Declaration.backgroundColor = newColor;
 
-			// Request layout pass when color changes
-			if (oldColor.r != newColor.r ||
-				oldColor.g != newColor.g ||
-				oldColor.b != newColor.b ||
-				oldColor.a != newColor.a)
-			{
-				uiState.Value.RequestLayoutPass();
-			}
+			// Note: Color changes don't affect layout geometry, only visual appearance.
+			// We don't request layout here to avoid unnecessary rebuilds that could reset scroll state.
+			// The changed color will be picked up on the next layout pass (triggered by actual UI changes).
 		}
 	}
 
@@ -163,7 +156,7 @@ public static class UiWidgetObservers
 		}
 		if (layoutPassNeeded)
 		{
-			uiState.Value.RequestLayoutPass();
+			uiState.Value.HasPendingLayoutPass = true;
 		}
 	}   /// <summary>
 		/// Handles checkbox toggle on click.
@@ -288,8 +281,8 @@ public static class UiWidgetObservers
 		public void Build(App app)
 		{
 			// Button observers
-			app.AddSystem((Query<Data<Interaction, ClayButtonStyle, UiNode>, Filter<Changed<Interaction>, With<Button>>> changedButtons, ResMut<ClayUiState> uiState) =>
-				OnButtonInteractionChanged(changedButtons, uiState))
+			app.AddSystem((Query<Data<Interaction, ClayButtonStyle, UiNode>, Filter<Changed<Interaction>, With<Button>>> changedButtons) =>
+				OnButtonInteractionChanged(changedButtons))
 				.InStage(Stage.PreUpdate)
 				.Label("ui:observers:button-visuals")
 				.After("ui:interaction:update")

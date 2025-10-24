@@ -1,3 +1,4 @@
+using Clay_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.UI.Widgets;
@@ -16,8 +17,9 @@ public sealed class ClayUiPlugin : IPlugin
 		var world = app.GetWorld();
 		var state = EnsureState(world);
 
-		state.ApplyOptions(Options);
-		state.SetEntityHierarchyEnabled(Options.UseEntityHierarchy);
+		// Apply options directly to state
+		state.Options = Options;
+		state.UseEntityHierarchy = Options.UseEntityHierarchy;
 
 		if (Options.AutoCreatePointerState && !world.HasResource<ClayPointerState>())
 		{
@@ -43,7 +45,6 @@ public sealed class ClayUiPlugin : IPlugin
 			world.AddResource(state);
 		}
 
-		state.AttachWorld(world);
 		return state;
 	}
 
@@ -89,10 +90,9 @@ public sealed class ClayUiPlugin : IPlugin
 			Query<Data<Children>> childLists,
 			Query<Data<FloatingWindowState>> floatingWindows,
 			ResMut<UiWindowOrder> windowOrder,
-			Local<List<ulong>> windows) =>
+			Local<HashSet<ulong>> windows) =>
 		{
-			ref var state = ref stateParam.Value;
-			state.RunLayoutPass(roots, allNodes, texts, childLists, floatingWindows, windowOrder, windows);
+			ClayLayoutSystems.RunLayoutPass(stateParam, roots, allNodes, texts, childLists, floatingWindows, windowOrder, windows);
 		})
 		.InStage(Stage.Update)
 		.Label("ui:clay:layout")
@@ -117,9 +117,9 @@ public static class ClayUiAppExtensions
 		if (world.HasResource<ClayUiState>())
 		{
 			var state = world.GetResource<ClayUiState>();
-			state.AttachWorld(world);
-			state.ApplyOptions(options);
-			state.RequestLayoutPass();
+			state.Options = options;
+			state.UseEntityHierarchy = options.UseEntityHierarchy;
+			state.HasPendingLayoutPass = true;
 		}
 
 		return app;

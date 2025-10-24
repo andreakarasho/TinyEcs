@@ -8,18 +8,15 @@ namespace TinyEcs.UI;
 internal static class ClayUiEntityLayout
 {
 	public static void Build(
-		ClayUiLayoutContext context,
 		Query<Data<UiNode>, Filter<Without<Parent>>> roots,
 		Query<Data<UiNode>> allNodes,
 		Query<Data<UiText>> uiTexts,
 		Query<Data<Children>> childLists,
 		Query<Data<FloatingWindowState>> floatingWindows,
 		ResMut<UiWindowOrder> windowOrder,
-		Local<List<ulong>> windows)
+		Local<HashSet<ulong>> windows)
 	{
 		windows.Value!.Clear();
-
-		var state = context.State;
 
 		if (windowOrder is null)
 		{
@@ -28,7 +25,7 @@ internal static class ClayUiEntityLayout
 				var entityId = entityPtr.Ref;
 				ref var node = ref nodePtr.Ref;
 				AssignElementId(ref node, entityId);
-				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
+				BuildNode(entityId, ref node, allNodes, uiTexts, childLists);
 			}
 			return;
 		}
@@ -45,7 +42,7 @@ internal static class ClayUiEntityLayout
 			{
 				// Render others in discovery order after assigning ids
 				AssignElementId(ref node, entityId);
-				RenderNode(state, entityId, ref node, allNodes, uiTexts, childLists);
+				BuildNode(entityId, ref node, allNodes, uiTexts, childLists);
 			}
 		}
 
@@ -58,22 +55,32 @@ internal static class ClayUiEntityLayout
 			data.Deconstruct(out _, out var nodePtr);
 			ref var node = ref nodePtr.Ref;
 			AssignElementId(ref node, id);
-			RenderNode(state, id, ref node, allNodes, uiTexts, childLists);
+			BuildNode(id, ref node, allNodes, uiTexts, childLists);
 		}
 	}
 
-	private static void RenderNode(
-		ClayUiState state,
+	private static void BuildNode(
 		ulong entityId,
 		ref UiNode node,
 		Query<Data<UiNode>> allNodes,
 		Query<Data<UiText>> uiTexts,
 		Query<Data<Children>> childLists)
 	{
-		Clay.OpenElement();
+		// update scrolls before the opening element, otherwise the scorlling get lost
+		if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
+		{
+			// Save the childOffset that Clay just updated
+			var scroll = Clay.GetScrollContainerData(node.Declaration.id);
+			unsafe
+			{
+				if (scroll.found && scroll.scrollPosition != null)
+				{
+					node.Declaration.clip.childOffset = *scroll.scrollPosition;
+				}
+			}
+		}
 
-		// Note: scroll positions were already restored in CacheScrollPositions()
-		// before BeginLayout() was called, so childOffset is already correct
+		Clay.OpenElement();
 
 		Clay.ConfigureOpenElement(node.Declaration);
 
@@ -104,7 +111,7 @@ internal static class ClayUiEntityLayout
 
 				ref var childNode = ref childNodePtr.Ref;
 				AssignElementId(ref childNode, childId);
-				RenderNode(state, childId, ref childNode, allNodes, uiTexts, childLists);
+				BuildNode(childId, ref childNode, allNodes, uiTexts, childLists);
 			}
 		}
 
@@ -113,10 +120,16 @@ internal static class ClayUiEntityLayout
 
 	private static void AssignElementId(ref UiNode node, ulong entityId)
 	{
+		// Only compute element ID once - cache it in the node declaration
 		if (node.Declaration.id.id != 0)
 			return;
 
-		var text = entityId.RealId().ToString();
-		node.Declaration.id = Clay.Id(text);
+		// Use the entity ID directly as the hash to avoid string allocation
+		// This is safe because entity IDs are unique and stable
+		node.Declaration.id = new Clay_ElementId
+		{
+			id = (uint)(entityId ^ (entityId >> 32)), // Fold 64-bit ID into 32-bit hash
+			stringId = default
+		};
 	}
 }
