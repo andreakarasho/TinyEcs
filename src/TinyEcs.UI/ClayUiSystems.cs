@@ -420,30 +420,23 @@ internal static class ClayUiSystems
 		Query<Data<Parent>> parents,
 		Query<Data<UiNode>> allNodes)
 	{
-		// Find all entities with this Clay element ID
-		var dispatched = false;
-		foreach (var (entityIdPtr, nodePtr) in allNodes)
-		{
-			ref var node = ref nodePtr.Ref;
-			if (node.Declaration.id.id == elementKey)
-			{
-				var entityId = entityIdPtr.Ref;
-				dispatched |= PropagatePointerEvent(
-					type,
-					elementKey,
-					entityId,
-					position,
-					moveDelta,
-					scrollDelta,
-					isPrimary,
-					state,
-					commands,
-					events,
-					parents);
-			}
-		}
+		// O(1) lookup using the element ID → entity ID map built during layout
+		if (!state.ElementToEntityMap.TryGetValue(elementKey, out var entityId))
+			return false;
 
-		return dispatched;
+		// Dispatch event to the found entity
+		return PropagatePointerEvent(
+			type,
+			elementKey,
+			entityId,
+			position,
+			moveDelta,
+			scrollDelta,
+			isPrimary,
+			state,
+			commands,
+			events,
+			parents);
 	}
 
 	private static bool PropagatePointerEvent(
