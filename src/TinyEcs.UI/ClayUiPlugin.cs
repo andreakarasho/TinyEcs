@@ -53,7 +53,7 @@ public sealed class ClayUiPlugin : IPlugin
 
 	private void RegisterDefaultSystems(App app)
 	{
-		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>> desired, Query<Data<Parent>> current, Query<Data<Children>> children, Query<Data<FloatingWindowLinks>> windowLinks) =>
+		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>, Filter<Changed<UiNodeParent>>> desired, Query<Data<Parent>> current, Query<Data<Children>> children, Query<Data<FloatingWindowLinks>> windowLinks) =>
 			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children, windowLinks))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:sync-hierarchy")

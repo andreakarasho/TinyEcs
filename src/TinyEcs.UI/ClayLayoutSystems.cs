@@ -32,7 +32,6 @@ public static unsafe class ClayLayoutSystems
 		EnsureContext(ref state);
 
 		Clay.SetCurrentContext(state.Context);
-		Clay.SetDebugModeEnabled(state.Options.EnableDebugMode);
 		Clay.SetLayoutDimensions(state.Options.LayoutDimensions);
 
 		Clay.BeginLayout();

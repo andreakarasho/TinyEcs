@@ -217,29 +217,46 @@ public sealed class RaylibClayUiPlugin : IPlugin
 		var bounds = cmd.boundingBox;
 
 		// Convert Clay_String to C# string
-
-		var buff = ArrayPool<sbyte>.Shared.Rent(textData.stringContents.length + 1);
-		var textSpan = buff.AsSpan(0, textData.stringContents.length + 1);
-		textSpan[textData.stringContents.length] = 0; // Null-terminate
-		var sp = new ReadOnlySpan<sbyte>(textData.stringContents.chars, textData.stringContents.length);
-		sp.CopyTo(textSpan);
-
 		var color = ToRaylibColor(textData.textColor);
-
-		// Calculate text position
 		var fontSize = textData.fontSize;
-		Vector2 textSize;
-		fixed (sbyte* textPtr = textSpan)
+
+		// Use stackalloc for short strings (< 256 chars), ArrayPool for longer ones
+		var textLength = textData.stringContents.length;
+		const int StackAllocThreshold = 256;
+
+		if (textLength < StackAllocThreshold)
 		{
-			textSize = Raylib.MeasureTextEx(font, textPtr, fontSize, 1f);
+			// Fast path: stack allocation for typical UI text
+			Span<sbyte> textSpan = stackalloc sbyte[textLength + 1];
+			textSpan[textLength] = 0; // Null-terminate
+			var sourceSpan = new ReadOnlySpan<sbyte>(textData.stringContents.chars, textLength);
+			sourceSpan.CopyTo(textSpan);
 
-			float x = bounds.x;
-			float y = bounds.y; // + (bounds.height - textSize.Y) / 2f; // Vertically center
-
-			Raylib.DrawTextPro(font, textPtr, new Vector2(x, y), new Vector2(0, 0), 0f, fontSize, 1f, color);
+			fixed (sbyte* textPtr = textSpan)
+			{
+				float x = bounds.x;
+				float y = bounds.y;
+				Raylib.DrawTextPro(font, textPtr, new Vector2(x, y), new Vector2(0, 0), 0f, fontSize, 1f, color);
+			}
 		}
+		else
+		{
+			// Slow path: heap allocation for long text (rare)
+			var buff = ArrayPool<sbyte>.Shared.Rent(textLength + 1);
+			var textSpan = buff.AsSpan(0, textLength + 1);
+			textSpan[textLength] = 0; // Null-terminate
+			var sourceSpan = new ReadOnlySpan<sbyte>(textData.stringContents.chars, textLength);
+			sourceSpan.CopyTo(textSpan);
 
-		ArrayPool<sbyte>.Shared.Return(buff);
+			fixed (sbyte* textPtr = textSpan)
+			{
+				float x = bounds.x;
+				float y = bounds.y;
+				Raylib.DrawTextPro(font, textPtr, new Vector2(x, y), new Vector2(0, 0), 0f, fontSize, 1f, color);
+			}
+
+			ArrayPool<sbyte>.Shared.Return(buff);
+		}
 	}
 
 	private unsafe void RenderImage(Clay_RenderCommand cmd)

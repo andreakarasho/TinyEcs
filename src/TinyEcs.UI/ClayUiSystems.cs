@@ -11,7 +11,7 @@ internal static class ClayUiSystems
 	public static void SyncUiHierarchy(
 		ResMut<ClayUiState> uiState,
 		Commands commands,
-		Query<Data<UiNodeParent>> desiredParents,
+		Query<Data<UiNodeParent>, Filter<Changed<UiNodeParent>>> desiredParents,
 		Query<Data<Parent>> currentParents,
 		Query<Data<Children>> childrenLists,
 		Query<Data<FloatingWindowLinks>> windowLinks)

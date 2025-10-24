@@ -293,7 +293,9 @@ public static class UiWidgetObservers
 				.InStage(Stage.PreUpdate)
 				.Label("ui:observers:checkbox-visuals")
 				.After("ui:interaction:update")
-				.Build(); app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState, CheckboxLinks, Checkbox>> checkboxes, Commands commands, Local<ulong> pressedCheckbox) =>
+				.Build();
+
+			app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState, CheckboxLinks, Checkbox>> checkboxes, Commands commands, Local<ulong> pressedCheckbox) =>
 					OnCheckboxClicked(events, checkboxes, commands, pressedCheckbox))
 					.InStage(Stage.Update)
 					.Label("ui:observers:checkbox-toggle")

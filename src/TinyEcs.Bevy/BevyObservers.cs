@@ -445,6 +445,10 @@ public static class ObserverExtensions
 			// Process entity hierarchy (current entity + parents if propagating)
 			while (currentEntityId != 0)
 			{
+				// Skip if entity is dead (can happen with deferred commands)
+				if (!world.Exists(currentEntityId))
+					break;
+
 				// Fire entity-specific observers on current entity
 				if (world.Has<EntityObservers>(currentEntityId))
 				{
