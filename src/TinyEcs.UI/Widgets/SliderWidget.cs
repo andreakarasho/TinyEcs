@@ -244,6 +244,102 @@ public static class SliderWidget
 			HandleLayerEntity = handleLayer.Id
 		});
 
+		// Attach entity observer for drag interaction (replaces global system iteration)
+		container.Observe<On<UiPointerTrigger>,
+			Query<Data<SliderState, SliderLinks, ClaySliderStyle>>,
+			Query<Data<UiNode>>,
+			ResMut<ClayUiState>>((trigger, sliders, nodes, uiState) =>
+		{
+			var evt = trigger.Event.Event;
+			var sliderId = trigger.EntityId;
+
+			// Get this slider's components
+			if (!sliders.Contains(sliderId))
+				return;
+
+			var sliderData = sliders.Get(sliderId);
+			sliderData.Deconstruct(out var statePtr, out var linksPtr, out var stylePtr);
+			ref var state = ref statePtr.Ref;
+			var links = linksPtr.Ref;
+			var style = stylePtr.Ref;
+
+			// Accept events from slider container or its child parts, OR when dragging
+			bool isTargetingSlider = evt.CurrentTarget == sliderId ||
+									 links.TrackEntity == evt.CurrentTarget ||
+									 links.FillEntity == evt.CurrentTarget ||
+									 links.HandleEntity == evt.CurrentTarget ||
+									 links.HandleLayerEntity == evt.CurrentTarget;
+			bool acceptEvent = isTargetingSlider || state.IsDragging;
+			if (!acceptEvent)
+				return;
+
+			switch (evt.Type)
+			{
+				case UiPointerEventType.PointerDown:
+					if (!isTargetingSlider) break; // Only start drag when pressing this slider
+					if (evt.IsPrimaryButton)
+					{
+						state.IsDragging = true;
+					}
+					break;
+
+				case UiPointerEventType.PointerUp:
+					state.IsDragging = false;
+					break;
+
+				case UiPointerEventType.PointerMove:
+					if (!state.IsDragging) break;
+
+					// Compute normalized value from absolute pointer X relative to container bounds
+					var normalized = state.NormalizedValue;
+					unsafe
+					{
+						var ctx = uiState.Value.Context;
+						if (ctx is not null)
+						{
+							Clay.SetCurrentContext(ctx);
+							var containerElemId = ClayId.Global($"slider-container-{sliderId}").ToElementId();
+							var elem = Clay.GetElementData(containerElemId);
+							if (elem.found && elem.boundingBox.width > 0)
+							{
+								normalized = (evt.Position.X - elem.boundingBox.x) / Math.Max(1f, style.Width);
+								normalized = Math.Clamp(normalized, 0f, 1f);
+								state.SetNormalizedValue(normalized);
+							}
+						}
+					}
+
+					// Update fill width
+					if (links.FillEntity != 0 && nodes.Contains(links.FillEntity))
+					{
+						var fillData = nodes.Get(links.FillEntity);
+						fillData.Deconstruct(out var fillNode);
+						ref var fillNodeRef = ref fillNode.Ref;
+						var fillWidth = style.Width * normalized;
+						fillNodeRef.Declaration.layout.sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(fillWidth),
+							Clay_SizingAxis.Fixed(style.TrackHeight));
+					}
+
+					// Update handle position via handleLayer padding
+					if (links.HandleLayerEntity != 0 && nodes.Contains(links.HandleLayerEntity))
+					{
+						var layerData = nodes.Get(links.HandleLayerEntity);
+						layerData.Deconstruct(out var layerNode);
+						ref var layerNodeRef = ref layerNode.Ref;
+						var handleX = (style.Width - style.HandleSize) * normalized;
+						layerNodeRef.Declaration.layout.padding = new Clay_Padding
+						{
+							left = (ushort)handleX,
+							right = 0,
+							top = 0,
+							bottom = 0
+						};
+					}
+					break;
+			}
+		});
+
 		return container;
 	}
 

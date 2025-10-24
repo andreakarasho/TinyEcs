@@ -295,11 +295,8 @@ public static class UiWidgetObservers
 				.After("ui:interaction:update")
 				.Build();
 
-			app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<CheckboxState, CheckboxLinks, Checkbox>> checkboxes, Commands commands, Local<ulong> pressedCheckbox) =>
-					OnCheckboxClicked(events, checkboxes, commands, pressedCheckbox))
-					.InStage(Stage.Update)
-					.Label("ui:observers:checkbox-toggle")
-					.Build();
+			// NOTE: OnCheckboxClicked system removed - checkboxes now handle toggle via entity observers
+			// (see CheckboxWidget.Create() where the entity observer is attached)
 
 			// Slider observers
 			app.AddSystem((Query<Data<SliderState, SliderLinks, ClaySliderStyle>, Filter<Changed<SliderState>>> changedSliders, Query<Data<UiNode>> nodes, Commands commands) =>

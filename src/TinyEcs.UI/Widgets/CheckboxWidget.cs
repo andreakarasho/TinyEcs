@@ -158,6 +158,40 @@ public static class CheckboxWidget
 		// Add marker for checkbox-specific observers
 		container.Insert(new UiWidgetObservers.Checkbox());
 
+		// Attach entity observer for toggle interaction (replaces global system iteration)
+		container.Observe<On<UiPointerTrigger>, Query<Data<CheckboxState>>, Commands, Local<bool>>((trigger, checkboxes, cmds, pressedThis) =>
+		{
+			var evt = trigger.Event.Event;
+			var checkboxId = trigger.EntityId;
+
+			// Only handle events targeting this checkbox
+			if (evt.CurrentTarget != checkboxId)
+				return;
+
+			if (evt.Type == UiPointerEventType.PointerDown && evt.IsPrimaryButton)
+			{
+				pressedThis.Value = true;
+			}
+			else if (evt.Type == UiPointerEventType.PointerUp && evt.IsPrimaryButton && pressedThis.Value)
+			{
+				// Toggle the state
+				if (checkboxes.Contains(checkboxId))
+				{
+					var stateData = checkboxes.Get(checkboxId);
+					stateData.Deconstruct(out var statePtr);
+					var currentState = statePtr.Ref;
+					var newState = new CheckboxState { Checked = !currentState.Checked };
+
+					// Use Commands to trigger change detection
+					cmds.Entity(checkboxId).Insert(newState);
+
+					// Emit event for app-level observers
+					cmds.Entity(checkboxId).EmitTrigger(new ToggleEvent(newState.Checked));
+				}
+				pressedThis.Value = false;
+			}
+		});
+
 		// Add label if provided
 		if (label.Length > 0)
 		{
