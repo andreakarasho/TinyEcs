@@ -8,6 +8,8 @@ using TinyEcs.Bevy;
 using TinyEcsGame;
 using TinyEcs.UI;
 using TinyEcs.UI.Widgets;
+using TinyEcs.UI.Flexbox;
+using Flexbox;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -32,6 +34,41 @@ app.AddPlugin(new RaylibClayUiPlugin
 	RenderingStage = gameRoot.RenderingStage
 });
 
+// Flexbox UI: core + Raylib bridge
+app.AddPlugin(new FlexboxUiPlugin { AutoCreatePointerState = true, ContainerWidth = 1280f, ContainerHeight = 720f });
+app.AddPlugin(new RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
+
+// Keep Clay reactive UI; also add interaction update after Flexbox pointer for Flexbox widgets
+app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<Interaction, Interactive>> interactives, Local<HashSet<ulong>> touched, Commands commands) =>
+	UiInteractionSystems.UpdateInteractionState(events, interactives, touched, commands))
+	.InStage(Stage.PreUpdate)
+	.Label("ui:flexbox:interaction")
+	.After("ui:flexbox:pointer")
+	.Build();
+
+// Update Flexbox button visuals on Interaction changes
+app.AddSystem((Query<Data<Interaction, FlexboxNode>, Filter<Changed<Interaction>>> buttons) =>
+	FlexboxButtonSystems.UpdateButtonVisuals(buttons))
+	.InStage(Stage.PreUpdate)
+	.After("ui:flexbox:interaction")
+	.Build();
+
+// Keep Flexbox container size in sync with window
+app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
+{
+	ref var st = ref ui.Value;
+	var size = window.Value.Value;
+	if (st.ContainerWidth != size.X || st.ContainerHeight != size.Y)
+	{
+		st.ContainerWidth = size.X;
+		st.ContainerHeight = size.Y;
+		st.MarkDirty();
+	}
+})
+.InStage(Stage.PreUpdate)
+.Label("ui:flexbox:update-container")
+.Build();
+
 // Enable reactive UI system (Bevy-style observers)
 app.AddUiWidgets();        // Window ordering and slider/window drag handling
 app.AddUiInteraction();    // Interaction state tracking
@@ -39,6 +76,12 @@ app.AddUiWidgetObservers(); // Reactive visual updates
 
 // Add comprehensive UI demo (now with reactive interactions!)
 app.AddPlugin(new UiDemoPlugin { ShowUI = true });
+
+// Add a small Flexbox UI demo
+app.AddSystem((Commands commands) => BuildFlexboxUI(commands))
+	.InStage(Stage.Startup)
+	.Label("ui:flexbox:demo:spawn")
+	.Build();
 
 app.RunStartup();
 
@@ -48,6 +91,67 @@ while (!Raylib.WindowShouldClose())
 }
 
 Raylib.CloseWindow();
+
+static void BuildFlexboxUI(Commands commands)
+{
+	// Root full-screen container
+	var root = FlexboxPanelWidget.CreateColumn(commands, FlexboxPanelStyle.Transparent())
+		.Insert(new FlexboxNode
+		{
+			FlexDirection = FlexDirection.Column,
+			JustifyContent = Justify.FlexStart,
+			AlignItems = Align.Stretch,
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Percent(100f),
+			BackgroundColor = new Vector4(0.08f, 0.08f, 0.12f, 1f),
+		})
+		.Id;
+
+	// Card panel centered horizontally
+	var card = FlexboxPanelWidget.CreateColumn(commands, FlexboxPanelStyle.Card())
+		.Insert(new FlexboxNode
+		{
+			Width = FlexValue.Points(380f),
+			Height = FlexValue.Auto(),
+			MarginTop = 20f,
+			MarginLeft = FlexValue.Auto(),
+			MarginRight = FlexValue.Auto(),
+			BorderColor = new Vector4(0.6f, 0.6f, 0.65f, 1f)
+		})
+		.Insert(new FlexboxNodeParent(root))
+		.Id;
+
+	FlexboxLabelWidget.CreateHeading2(commands, "Flexbox UI in TinyEcsGame")
+		.Insert(new FlexboxNodeParent(card, index: 0))
+		.Insert(new FlexboxNode { MarginBottom = 12f });
+
+	// Row of buttons
+	var row = FlexboxPanelWidget.CreateRow(commands, FlexboxPanelStyle.Transparent())
+		.Insert(new FlexboxNode
+		{
+			FlexDirection = FlexDirection.Row,
+			JustifyContent = Justify.SpaceBetween,
+			AlignItems = Align.Center,
+			Width = FlexValue.Percent(100f),
+		})
+		.Insert(new FlexboxNodeParent(card, index: 1))
+		.Id;
+
+	FlexboxButtonWidget.Create(commands, "Primary", (On<UiPointerTrigger> _) => Console.WriteLine("[Flexbox] Primary clicked"))
+		.Insert(new FlexboxNodeParent(row, index: 0));
+
+	FlexboxButtonWidget.Create(commands, "Secondary", (On<UiPointerTrigger> _) => Console.WriteLine("[Flexbox] Secondary clicked"))
+		.Insert(new FlexboxNodeParent(row, index: 1));
+	// Add a vertical scroll container with sample items
+	var scroll = FlexboxScrollContainerWidget.CreateVertical(commands, new Vector2(320f, 160f), card)
+		.Id;
+	for (int i = 1; i <= 12; i++)
+	{
+		FlexboxLabelWidget.CreateBody(commands, $"Item {i}")
+			.Insert(new FlexboxNodeParent(scroll, index: i - 1))
+			.Insert(new FlexboxNode { MarginBottom = 8f });
+	}
+}
 
 sealed class RaylibPlugin : IPlugin
 {
@@ -64,6 +168,7 @@ sealed class RaylibPlugin : IPlugin
 		app.AddSystem((Res<WindowSize> window) =>
 		{
 			var flags = VSync ? ConfigFlags.VSyncHint : 0;
+			flags |= ConfigFlags.ResizableWindow;
 			Raylib.SetConfigFlags(flags);
 			Raylib.InitWindow((int)window.Value.Value.X, (int)window.Value.Value.Y, Title);
 		})
@@ -373,3 +478,4 @@ struct SpriteBundle : IBundle
 		entity.Insert(Rotation);
 	}
 }
+

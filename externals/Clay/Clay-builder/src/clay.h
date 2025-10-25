@@ -3966,6 +3966,44 @@ void Clay_SetLayoutDimensions(Clay_Dimensions dimensions) {
     Clay_GetCurrentContext()->layoutDimensions = dimensions;
 }
 
+// Helper function to check if a point is inside all ancestor clip regions
+// This fixes the nested scroll container clipping bug where only the immediate clip parent was checked
+static bool Clay__PointIsInsideAllAncestorClips(Clay_Vector2 position, int32_t clipElementId, Clay_Context* context) {
+    if (clipElementId == 0 || context->externalScrollHandlingEnabled) {
+        return true; // No clipping or external scroll handling
+    }
+
+    // Walk up the clip chain checking each ancestor clip region
+    const int maxClipDepth = 32; // Prevent infinite loops
+    int depth = 0;
+    int32_t currentClipId = clipElementId;
+
+    while (currentClipId != 0 && depth < maxClipDepth) {
+        depth++;
+
+        Clay_LayoutElementHashMapItem *clipItem = Clay__GetHashMapItem(currentClipId);
+        if (!clipItem) {
+            break; // Clip element not found
+        }
+
+        // Check if point is inside this clip region
+        if (!Clay__PointIsInsideRect(position, clipItem->boundingBox)) {
+            return false; // Point is outside this clip region
+        }
+
+        // Get the parent clip element (if any)
+        Clay_LayoutElement *clipElement = clipItem->layoutElement;
+        if (!clipElement) {
+            break;
+        }
+
+        int32_t clipElementIndex = (int32_t)(clipElement - context->layoutElements.internalArray);
+        currentClipId = Clay__int32_tArray_GetValue(&context->layoutElementClipElementIds, clipElementIndex);
+    }
+
+    return true; // Passed all clip checks
+}
+
 CLAY_WASM_EXPORT("Clay_SetPointerState")
 void Clay_SetPointerState(Clay_Vector2 position, bool isPointerDown) {
     Clay_Context* context = Clay_GetCurrentContext();
@@ -3990,12 +4028,12 @@ void Clay_SetPointerState(Clay_Vector2 position, bool isPointerDown) {
             Clay_LayoutElement *currentElement = Clay_LayoutElementArray_Get(&context->layoutElements, Clay__int32_tArray_GetValue(&dfsBuffer, (int)dfsBuffer.length - 1));
             Clay_LayoutElementHashMapItem *mapItem = Clay__GetHashMapItem(currentElement->id); // TODO think of a way around this, maybe the fact that it's essentially a binary tree limits the cost, but the worst case is not great
             int32_t clipElementId = Clay__int32_tArray_GetValue(&context->layoutElementClipElementIds, (int32_t)(currentElement - context->layoutElements.internalArray));
-            Clay_LayoutElementHashMapItem *clipItem = Clay__GetHashMapItem(clipElementId);
             if (mapItem) {
                 Clay_BoundingBox elementBox = mapItem->boundingBox;
                 elementBox.x -= root->pointerOffset.x;
                 elementBox.y -= root->pointerOffset.y;
-                if ((Clay__PointIsInsideRect(position, elementBox)) && (clipElementId == 0 || (Clay__PointIsInsideRect(position, clipItem->boundingBox)) || context->externalScrollHandlingEnabled)) {
+                // FIX: Check all ancestor clip regions, not just the immediate parent
+                if (Clay__PointIsInsideRect(position, elementBox) && Clay__PointIsInsideAllAncestorClips(position, clipElementId, context)) {
                     if (mapItem->onHoverFunction) {
                         mapItem->onHoverFunction(mapItem->elementId, context->pointerInfo, mapItem->hoverFunctionUserData);
                     }

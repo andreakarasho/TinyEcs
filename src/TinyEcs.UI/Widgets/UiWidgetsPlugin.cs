@@ -480,7 +480,12 @@ public sealed class UiWidgetsPlugin : IPlugin
 						continue;
 
 					// Sync scroll offset from Clay's internal state
-					state.ScrollOffsetY = scrollData.scrollPosition->y;
+					// BUT skip this if we're currently dragging the scrollbar (to prevent fighting with drag system)
+					if (!state.IsScrollbarDragging)
+					{
+						// Clay stores childOffset as negative of scroll offset
+						state.ScrollOffsetY = -scrollData.scrollPosition->y;
+					}
 					state.ViewportHeight = wrapperElem.boundingBox.height;
 
 					// Get content dimensions
@@ -500,7 +505,20 @@ public sealed class UiWidgetsPlugin : IPlugin
 					state.ContentHeight = contentHeight;
 					state.MaxScrollY = Math.Max(0, contentHeight - state.ViewportHeight);
 
-					// Update scrollbar if it exists
+					// Update scrollbar track if it exists
+					if (links.ScrollbarTrackId != 0 && nodes.Contains(links.ScrollbarTrackId))
+					{
+						var trackData = nodes.Get(links.ScrollbarTrackId);
+						trackData.Deconstruct(out var trackNode);
+						ref var trackDecl = ref trackNode.Ref.Declaration;
+
+						// Make track height match viewport height exactly
+						trackDecl.layout.sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(8f),
+							Clay_SizingAxis.Fixed(state.ViewportHeight));
+					}
+
+					// Update scrollbar thumb if it exists
 					if (links.ScrollbarThumbId == 0 || links.ScrollbarThumbLayerId == 0)
 						continue;
 
@@ -532,6 +550,11 @@ public sealed class UiWidgetsPlugin : IPlugin
 						float scrollRatio = state.MaxScrollY > 0 ? (state.ScrollOffsetY / state.MaxScrollY) : 0;
 						float thumbY = scrollRatio * maxThumbY;
 
+						// Update thumb layer sizing to match track height (prevents padding expansion)
+						thumbLayerDecl.layout.sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(8f),
+							Clay_SizingAxis.Fixed(trackHeight));
+
 						// Update thumb layer padding to position thumb
 						thumbLayerDecl.layout.padding = new Clay_Padding
 						{
@@ -554,29 +577,38 @@ public sealed class UiWidgetsPlugin : IPlugin
 		app.AddSystem((
 			EventReader<UiPointerEvent> events,
 			Query<Data<ScrollState, ScrollContainerLinks>> scrollContainers,
-			Query<Data<UiNode>> nodes) =>
+			Query<Data<UiNode>> nodes,
+			ResMut<ClayUiState> uiState) =>
 		{
 			foreach (var evt in events.Read())
 			{
 				if (evt.Type != UiPointerEventType.PointerDown || !evt.IsPrimaryButton)
 					continue;
 
-				foreach (var (entityId, scrollState, scrollLinks) in scrollContainers)
+				unsafe
 				{
-					ref var state = ref scrollState.Ref;
-					var links = scrollLinks.Ref;
+					var ctx = uiState.Value.Context;
+					if (ctx is null) continue;
 
-					if (links.ScrollbarThumbId == 0 || links.ScrollbarTrackId == 0)
-						continue;
+					Clay.SetCurrentContext(ctx);
 
-					var targetId = evt.Target;
-
-					// Check if clicking on scrollbar thumb or track
-					if (targetId == links.ScrollbarThumbId || targetId == links.ScrollbarTrackId)
+					foreach (var (entityId, scrollState, scrollLinks) in scrollContainers)
 					{
-						state.IsScrollbarDragging = true;
-						state.ScrollbarDragStartY = evt.Position.Y;
-						break;
+						ref var state = ref scrollState.Ref;
+						var links = scrollLinks.Ref;
+
+						if (links.ScrollbarThumbId == 0 || links.ScrollbarTrackId == 0)
+							continue;
+
+						var targetId = evt.Target;
+
+						// Check if clicking on scrollbar thumb or track
+						if (targetId == links.ScrollbarThumbId || targetId == links.ScrollbarTrackId || targetId == links.ScrollbarThumbLayerId)
+						{
+							state.IsScrollbarDragging = true;
+							state.ScrollbarDragStartY = evt.Position.Y;
+							break;
+						}
 					}
 				}
 			}
@@ -665,6 +697,9 @@ public sealed class UiWidgetsPlugin : IPlugin
 
 					// Convert pixel delta to scroll offset delta
 					float scrollOffsetDelta = (deltaY / maxThumbY) * state.MaxScrollY;
+
+					// Update our local scroll offset state immediately so the thumb position updates
+					state.ScrollOffsetY = Math.Clamp(state.ScrollOffsetY + scrollOffsetDelta, 0f, state.MaxScrollY);
 
 					// When dragging, always apply scroll regardless of pointer position
 					// Temporarily move pointer to the content area so Clay applies scroll to the container

@@ -172,6 +172,12 @@ internal static class ClayUiSystems
 		// Disable drag-based scrolling to avoid conflicts with window dragging
 		// Only use wheel/touchpad scrolling (handled via ScrollDelta)
 		pointer.EnableDragScrolling = false;
+
+		// FIXED: Nested scroll container clipping now works correctly
+		// We patched Clay's pointer hit testing (Clay_SetPointerState) to check ALL ancestor clip regions
+		// instead of just the immediate clip parent. See clay.h:3969-4005 for the fix.
+		// The helper function Clay__PointIsInsideAllAncestorClips walks up the entire clip chain.
+
 		var newCount = hoveredIds.Length;
 
 #pragma warning disable CS9081
@@ -507,36 +513,4 @@ internal static class ClayUiSystems
 		return dispatched;
 	}
 
-	/// <summary>
-	/// Checks if a pointer position is within all ancestor clipping bounds
-	/// </summary>
-	private static unsafe bool IsPointerWithinClipBounds(Clay_ElementId elementId, Vector2 pointerPosition)
-	{
-		// Check if this specific element has a scroll container (clip) config
-		var scrollData = Clay.GetScrollContainerData(elementId);
-		if (scrollData.found)
-		{
-			// This element has clipping - get its bounding box
-			var elementData = Clay.GetElementData(elementId);
-			if (elementData.found)
-			{
-				var bounds = elementData.boundingBox;
-
-				if (pointerPosition.X < bounds.x ||
-					pointerPosition.X > bounds.x + bounds.width ||
-					pointerPosition.Y < bounds.y ||
-					pointerPosition.Y > bounds.y + bounds.height)
-				{
-					// Pointer is outside this clipping region
-					return false;
-				}
-			}
-		}
-
-		// Note: This checks each element's own clip bounds.
-		// Clay's GetPointerOverIds returns all elements in hierarchy order,
-		// so ancestor clips will be checked before descendants.
-
-		return true;
-	}
 }
