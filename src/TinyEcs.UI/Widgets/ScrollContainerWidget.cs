@@ -17,6 +17,16 @@ public struct ScrollState
 	public Vector2 ViewportSize;
 	public bool IsScrolling;
 
+	// Scrollbar drag state
+	public bool IsScrollbarDragging;
+	public float ScrollbarDragStartY;
+
+	// Scroll metrics (similar to FloatingWindowState)
+	public float ScrollOffsetY;
+	public float MaxScrollY;
+	public float ViewportHeight;
+	public float ContentHeight;
+
 	public readonly Vector2 MaxScroll => new(
 		Math.Max(0, ContentSize.X - ViewportSize.X),
 		Math.Max(0, ContentSize.Y - ViewportSize.Y));
@@ -27,6 +37,18 @@ public struct ScrollState
 		ScrollOffset.X = Math.Clamp(ScrollOffset.X, 0, max.X);
 		ScrollOffset.Y = Math.Clamp(ScrollOffset.Y, 0, max.Y);
 	}
+}
+
+/// <summary>
+/// Links to key parts of a scroll container for system access.
+/// </summary>
+public struct ScrollContainerLinks
+{
+	public EcsID ContentWrapperId;  // The clip container
+	public EcsID ContentAreaId;     // The actual content
+	public EcsID ScrollbarTrackId;
+	public EcsID ScrollbarThumbLayerId;
+	public EcsID ScrollbarThumbId;
 }
 
 /// <summary>
@@ -83,25 +105,25 @@ public static class ScrollContainerWidget
 		ClayScrollContainerStyle style,
 		EcsID? parent = default)
 	{
-		// Create main container
+		// Create main container with horizontal layout (content + scrollbar side-by-side)
 		var container = commands.Spawn();
+
+		// Use Fit sizing to respect max dimensions
+		var sizing = new Clay_Sizing(
+			Clay_SizingAxis.Fit(0, style.Size.X),
+			Clay_SizingAxis.Fit(0, style.Size.Y));
+
 		container.Insert(new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
 			{
 				layout = new Clay_LayoutConfig
 				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fixed(style.Size.X),
-						Clay_SizingAxis.Fixed(style.Size.Y)),
-					layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+					sizing = sizing,
+					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
 				},
 				backgroundColor = style.BackgroundColor,
-				cornerRadius = style.CornerRadius,
-				clip = new Clay_ClipElementConfig()
-				{
-					// Enable clipping to hide overflow content
-				}
+				cornerRadius = style.CornerRadius
 			}
 		});
 
@@ -110,11 +132,34 @@ public static class ScrollContainerWidget
 			container.Insert(UiNodeParent.For(parent.Value));
 		}
 
-		// Create scrollable content area
-		var contentArea = commands.Spawn();
-		var scrollbarSpace = (style.ShowScrollbarY ? style.ScrollbarWidth : 0f);
-		var contentWidth = style.Size.X - scrollbarSpace;
+		// Create content wrapper (first child - left side)
+		// This is the scroll container with clipping
+		var contentWrapper = commands.Spawn();
+		contentWrapper.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Grow(),
+						Clay_SizingAxis.Grow()),
+					layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+				},
+				clip = new Clay_ClipElementConfig
+				{
+					vertical = style.ShowScrollbarY,
+					horizontal = style.ShowScrollbarX,
+					childOffset = new Clay_Vector2 { x = 0, y = 0 }
+				}
+			}
+		});
+		// Mark as scroll container for Clay scroll handling
+		contentWrapper.Insert(new UiScrollContainer());
+		contentWrapper.Insert(UiNodeParent.For(container.Id));
 
+		// Create scrollable content area (child of wrapper)
+		var contentArea = commands.Spawn();
 		contentArea.Insert(new UiNode
 		{
 			Declaration = new Clay_ElementDeclaration
@@ -122,7 +167,7 @@ public static class ScrollContainerWidget
 				layout = new Clay_LayoutConfig
 				{
 					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fixed(contentWidth),
+						Clay_SizingAxis.Grow(),
 						Clay_SizingAxis.Fit(0, float.MaxValue)),
 					padding = style.Padding,
 					childGap = style.ChildGap,
@@ -130,23 +175,32 @@ public static class ScrollContainerWidget
 				}
 			}
 		});
-		contentArea.Insert(UiNodeParent.For(container.Id));
+		contentArea.Insert(UiNodeParent.For(contentWrapper.Id));
 
-		// Create vertical scrollbar if enabled
+		// Track scrollbar entity IDs
+		EcsID scrollbarTrackId = 0;
+		EcsID scrollbarThumbLayerId = 0;
+		EcsID scrollbarThumbId = 0;
+
+		// Create vertical scrollbar (second child - right side)
 		if (style.ShowScrollbarY)
 		{
-			CreateScrollbar(
+			var scrollbarIds = CreateScrollbar(
 				commands,
 				container.Id,
 				style.ScrollbarWidth,
 				style.Size.Y,
 				style.ScrollbarColor,
 				isVertical: true);
+			scrollbarTrackId = scrollbarIds.trackId;
+			scrollbarThumbLayerId = scrollbarIds.thumbLayerId;
+			scrollbarThumbId = scrollbarIds.thumbId;
 		}
 
 		// Create horizontal scrollbar if enabled
 		if (style.ShowScrollbarX)
 		{
+			// TODO: Track horizontal scrollbar IDs if needed
 			CreateScrollbar(
 				commands,
 				container.Id,
@@ -162,7 +216,23 @@ public static class ScrollContainerWidget
 			ScrollOffset = Vector2.Zero,
 			ContentSize = Vector2.Zero,
 			ViewportSize = style.Size,
-			IsScrolling = false
+			IsScrolling = false,
+			IsScrollbarDragging = false,
+			ScrollbarDragStartY = 0,
+			ScrollOffsetY = 0,
+			MaxScrollY = 0,
+			ViewportHeight = style.Size.Y,
+			ContentHeight = 0
+		});
+
+		// Add links to scroll container parts
+		container.Insert(new ScrollContainerLinks
+		{
+			ContentWrapperId = contentWrapper.Id,
+			ContentAreaId = contentArea.Id,
+			ScrollbarTrackId = scrollbarTrackId,
+			ScrollbarThumbLayerId = scrollbarThumbLayerId,
+			ScrollbarThumbId = scrollbarThumbId
 		});
 
 		return container;
@@ -180,7 +250,8 @@ public static class ScrollContainerWidget
 		{
 			Size = size,
 			ShowScrollbarX = false,
-			ShowScrollbarY = true
+			ShowScrollbarY = true,
+			Padding = Clay_Padding.All(0)
 		}, parent);
 	}
 
@@ -200,7 +271,7 @@ public static class ScrollContainerWidget
 		}, parent);
 	}
 
-	private static void CreateScrollbar(
+	private static (EcsID trackId, EcsID thumbLayerId, EcsID thumbId) CreateScrollbar(
 		Commands commands,
 		EcsID parent,
 		float width,
@@ -208,38 +279,51 @@ public static class ScrollContainerWidget
 		Clay_Color color,
 		bool isVertical)
 	{
+		// Create scrollbar track (background bar) - uses layout positioning, no floating
 		var scrollbar = commands.Spawn();
-
-		var offsetX = isVertical ? width - 8f : 0f;
-		var offsetY = isVertical ? 0f : height - 8f;
-
-        scrollbar.Insert(new UiNode
-        {
-            Declaration = new Clay_ElementDeclaration
-            {
-                layout = new Clay_LayoutConfig
-                {
+		scrollbar.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
 					sizing = new Clay_Sizing(
 						Clay_SizingAxis.Fixed(isVertical ? 8f : width),
-						Clay_SizingAxis.Fixed(isVertical ? height : 8f))
+						isVertical ? Clay_SizingAxis.Grow() : Clay_SizingAxis.Fixed(8f))
 				},
 				backgroundColor = color,
-				cornerRadius = Clay_CornerRadius.All(4),
-                floating = new Clay_FloatingElementConfig
-                {
-                    offset = new Clay_Vector2 { x = offsetX, y = offsetY },
-                    parentId = parent.GetHashCode() > 0 ? (uint)parent.GetHashCode() : 0,
-                    attachPoints = new Clay_FloatingAttachPoints
-                    {
-                        element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-                        parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP
-                    }
-                }
-            }
-        });
+				cornerRadius = Clay_CornerRadius.All(4)
+			}
+		});
 		scrollbar.Insert(UiNodeParent.For(parent));
 
-		// Create scrollbar thumb
+		// Create thumb layer - uses padding to position thumb based on scroll offset
+		var thumbLayer = commands.Spawn();
+		thumbLayer.Insert(new UiNode
+		{
+			Declaration = new Clay_ElementDeclaration
+			{
+				layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(isVertical ? 8f : width),
+						isVertical ? Clay_SizingAxis.Grow() : Clay_SizingAxis.Fixed(8f)),
+					layoutDirection = isVertical
+						? Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+						: Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+					padding = new Clay_Padding
+					{
+						left = 0,
+						right = 0,
+						top = 0,
+						bottom = 0
+					}
+				}
+			}
+		});
+		thumbLayer.Insert(UiNodeParent.For(scrollbar.Id));
+
+		// Create scrollbar thumb (draggable handle) - layout-based positioning, respects clipping
 		var thumb = commands.Spawn();
 		thumb.Insert(new UiNode
 		{
@@ -255,7 +339,9 @@ public static class ScrollContainerWidget
 				cornerRadius = Clay_CornerRadius.All(3)
 			}
 		});
-		thumb.Insert(UiNodeParent.For(scrollbar.Id));
+		thumb.Insert(UiNodeParent.For(thumbLayer.Id));
+
+		return (scrollbar.Id, thumbLayer.Id, thumb.Id);
 	}
 
 	/// <summary>

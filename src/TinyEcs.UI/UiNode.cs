@@ -17,11 +17,16 @@ public struct UiNode
 	public Clay_ElementDeclaration Declaration;
 
 	/// <summary>
+	/// Clay element identifier (stored separately from declaration as of Clay API change).
+	/// </summary>
+	public Clay_ElementId ElementId;
+
+	/// <summary>
 	/// Assign a Clay identifier using <see cref="ClayId"/> helpers.
 	/// </summary>
 	public void SetId(ClayId id)
 	{
-		Declaration.id = id.ToElementId();
+		ElementId = id.ToElementId();
 	}
 }
 

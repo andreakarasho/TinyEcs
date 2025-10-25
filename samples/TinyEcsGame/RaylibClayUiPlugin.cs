@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
 using Clay_cs;
@@ -17,6 +18,9 @@ namespace TinyEcsGame;
 public sealed class RaylibClayUiPlugin : IPlugin
 {
 	public required Stage RenderingStage { get; set; }
+
+	// Scissor stack for nested clipping regions
+	private readonly Stack<Rectangle> _scissorStack = new();
 
 	public void Build(App app)
 	{
@@ -278,16 +282,60 @@ public sealed class RaylibClayUiPlugin : IPlugin
 	private void StartScissor(Clay_RenderCommand cmd)
 	{
 		var bounds = cmd.boundingBox;
+		var newScissor = new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height);
+
+		// If there's already a scissor active, intersect with it
+		if (_scissorStack.Count > 0)
+		{
+			var parentScissor = _scissorStack.Peek();
+			newScissor = IntersectRectangles(parentScissor, newScissor);
+		}
+
+		// Push to stack
+		_scissorStack.Push(newScissor);
+
+		// Apply to Raylib
 		Raylib.BeginScissorMode(
-			(int)bounds.x,
-			(int)bounds.y,
-			(int)bounds.width,
-			(int)bounds.height);
+			(int)newScissor.X,
+			(int)newScissor.Y,
+			(int)newScissor.Width,
+			(int)newScissor.Height);
 	}
 
 	private void EndScissor()
 	{
+		// Pop from stack
+		if (_scissorStack.Count > 0)
+		{
+			_scissorStack.Pop();
+		}
+
+		// End current scissor
 		Raylib.EndScissorMode();
+
+		// If there's a parent scissor, restore it
+		if (_scissorStack.Count > 0)
+		{
+			var parentScissor = _scissorStack.Peek();
+			Raylib.BeginScissorMode(
+				(int)parentScissor.X,
+				(int)parentScissor.Y,
+				(int)parentScissor.Width,
+				(int)parentScissor.Height);
+		}
+	}
+
+	private static Rectangle IntersectRectangles(Rectangle a, Rectangle b)
+	{
+		float x1 = Math.Max(a.X, b.X);
+		float y1 = Math.Max(a.Y, b.Y);
+		float x2 = Math.Min(a.X + a.Width, b.X + b.Width);
+		float y2 = Math.Min(a.Y + a.Height, b.Y + b.Height);
+
+		float width = Math.Max(0, x2 - x1);
+		float height = Math.Max(0, y2 - y1);
+
+		return new Rectangle(x1, y1, width, height);
 	}
 
 	private Raylib_cs.Color ToRaylibColor(Clay_Color clayColor)

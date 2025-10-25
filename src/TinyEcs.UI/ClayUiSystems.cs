@@ -14,7 +14,8 @@ internal static class ClayUiSystems
 		Query<Data<UiNodeParent>, Filter<Changed<UiNodeParent>>> desiredParents,
 		Query<Data<Parent>> currentParents,
 		Query<Data<Children>> childrenLists,
-		Query<Data<FloatingWindowLinks>> windowLinks)
+		Query<Data<FloatingWindowLinks>> windowLinks,
+		Query<Data<ScrollContainerLinks>> scrollContainerLinks)
 	{
 		var layoutDirty = false;
 
@@ -40,13 +41,33 @@ internal static class ClayUiSystems
 				linksData.Deconstruct(out var linksPtr);
 				var links = linksPtr.Ref;
 				// Only redirect external children to the content area.
-				// Keep the window's own parts (title bar, scroll container, content area) attached where they are.
+				// Keep the window's own parts (title bar, body container, scroll container, scrollbar track, content area) attached where they are.
 				if (links.ContentAreaId != 0)
 				{
 					var childId = entityId;
 					if (childId != links.ContentAreaId &&
 						childId != links.TitleBarId &&
-						childId != links.ScrollContainerId)
+						childId != links.BodyContainerId &&
+						childId != links.ScrollContainerId &&
+						childId != links.ScrollbarTrackId)
+						targetParent = links.ContentAreaId;
+				}
+			}
+
+			// If target is a scroll container, reparent to its content area when available
+			if (targetParent != 0 && scrollContainerLinks.Contains(targetParent))
+			{
+				var linksData = scrollContainerLinks.Get(targetParent);
+				linksData.Deconstruct(out var linksPtr);
+				var links = linksPtr.Ref;
+				// Only redirect external children to the content area.
+				// Keep the scroll container's own parts (wrapper, content area, scrollbar) attached where they are.
+				if (links.ContentAreaId != 0)
+				{
+					var childId = entityId;
+					if (childId != links.ContentAreaId &&
+						childId != links.ContentWrapperId &&
+						childId != links.ScrollbarTrackId)
 						targetParent = links.ContentAreaId;
 				}
 			}
@@ -142,13 +163,8 @@ internal static class ClayUiSystems
 		{
 			Clay.SetPointerState(pointer.Position, pointer.PrimaryDown);
 
-			// Only apply drag-based scrolling from MoveDelta when explicitly enabled;
-			// always pass ScrollDelta from wheel/touchpad.
-			var scrollInput = scrollDelta;
-			if (pointer.EnableDragScrolling)
-				scrollInput += moveDelta;
-
-			Clay.UpdateScrollContainers(pointer.EnableDragScrolling, scrollInput, pointer.DeltaTime);
+			// Let Clay handle scrolling automatically
+			Clay.UpdateScrollContainers(pointer.EnableDragScrolling, scrollDelta, pointer.DeltaTime);
 		}
 
 		var hoveredIds = Clay.GetPointerOverIds();
@@ -489,5 +505,38 @@ internal static class ClayUiSystems
 		}
 
 		return dispatched;
+	}
+
+	/// <summary>
+	/// Checks if a pointer position is within all ancestor clipping bounds
+	/// </summary>
+	private static unsafe bool IsPointerWithinClipBounds(Clay_ElementId elementId, Vector2 pointerPosition)
+	{
+		// Check if this specific element has a scroll container (clip) config
+		var scrollData = Clay.GetScrollContainerData(elementId);
+		if (scrollData.found)
+		{
+			// This element has clipping - get its bounding box
+			var elementData = Clay.GetElementData(elementId);
+			if (elementData.found)
+			{
+				var bounds = elementData.boundingBox;
+
+				if (pointerPosition.X < bounds.x ||
+					pointerPosition.X > bounds.x + bounds.width ||
+					pointerPosition.Y < bounds.y ||
+					pointerPosition.Y > bounds.y + bounds.height)
+				{
+					// Pointer is outside this clipping region
+					return false;
+				}
+			}
+		}
+
+		// Note: This checks each element's own clip bounds.
+		// Clay's GetPointerOverIds returns all elements in hierarchy order,
+		// so ancestor clips will be checked before descendants.
+
+		return true;
 	}
 }

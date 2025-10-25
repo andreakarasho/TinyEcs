@@ -58,11 +58,10 @@ internal static class ClayUiEntityLayout
 		Query<Data<Children>> childLists,
 		ClayUiState state)
 	{
-		// update scrolls before the opening element, otherwise the scorlling get lost
+		// Sync childOffset from Clay's automatic scroll handling
 		if (node.Declaration.clip.vertical || node.Declaration.clip.horizontal)
 		{
-			// Save the childOffset that Clay just updated
-			var scroll = Clay.GetScrollContainerData(node.Declaration.id);
+			var scroll = Clay.GetScrollContainerData(node.ElementId);
 			unsafe
 			{
 				if (scroll.found && scroll.scrollPosition != null)
@@ -72,7 +71,7 @@ internal static class ClayUiEntityLayout
 			}
 		}
 
-		Clay.OpenElement();
+		Clay.OpenElement(node.ElementId);
 
 		Clay.ConfigureOpenElement(node.Declaration);
 
@@ -112,18 +111,18 @@ internal static class ClayUiEntityLayout
 
 	private static void AssignElementId(ref UiNode node, ulong entityId, ClayUiState state)
 	{
-		// Only compute element ID once - cache it in the node declaration
-		if (node.Declaration.id.id != 0)
+		// Only compute element ID once - cache it in the node
+		if (node.ElementId.id != 0)
 		{
 			// Element ID already assigned, just update mapping
-			state.ElementToEntityMap[node.Declaration.id.id] = entityId;
+			state.ElementToEntityMap[node.ElementId.id] = entityId;
 			return;
 		}
 
 		// Use the entity ID directly as the hash to avoid string allocation
 		// This is safe because entity IDs are unique and stable
 		var elementId = (uint)(entityId ^ (entityId >> 32)); // Fold 64-bit ID into 32-bit hash
-		node.Declaration.id = new Clay_ElementId
+		node.ElementId = new Clay_ElementId
 		{
 			id = elementId,
 			stringId = default

@@ -21,6 +21,14 @@ public struct FloatingWindowState
 	public Vector2 DragOffset;
 	public Vector2 RestorePosition;
 	public Vector2 RestoreSize;
+	public bool IsScrollbarDragging;
+	public float ScrollbarDragStartY;
+
+	// Manual scroll state (independent of Clay's scroll system)
+	public float ScrollOffsetY;
+	public float MaxScrollY;
+	public float ViewportHeight;
+	public float ContentHeight;
 
 	public readonly bool CanDrag => !IsMinimized && !IsMaximized;
 	public readonly bool CanResize => !IsMinimized && !IsMaximized;
@@ -34,11 +42,15 @@ public struct FloatingWindowLinks
 {
 	public EcsID TitleBarId;
 	public EcsID ResizeHandleId;
+	public EcsID BodyContainerId;
 	public EcsID ScrollContainerId;
 	public EcsID ContentAreaId;
 	public EcsID CloseButtonId;
 	public EcsID MinimizeButtonId;
 	public EcsID MaximizeButtonId;
+	public EcsID ScrollbarTrackId;
+	public EcsID ScrollbarThumbLayerId;
+	public EcsID ScrollbarThumbId;
 }
 
 /// <summary>
@@ -198,11 +210,34 @@ public static class FloatingWindowWidget
 		var titleBarInfo = CreateTitleBar(commands, window.Id, style, title);
 
 		// Optionally create a content/body area below the title bar
+		EcsID bodyContainerId = 0;
 		EcsID scrollContainerId = 0;
 		EcsID contentAreaId = 0;
+		EcsID scrollbarTrackId = 0;
+		EcsID scrollbarThumbLayerId = 0;
+		EcsID scrollbarThumbId = 0;
 		if (includeContentArea)
 		{
-			// Create scroll container wrapper (fixed size with clipping)
+			// Create horizontal container to hold content wrapper and scrollbar side-by-side
+			var bodyContainer = commands.Spawn();
+			bodyContainerId = bodyContainer.Id;
+			bodyContainer.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Grow(),
+							Clay_SizingAxis.Grow()),
+						layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT // Side-by-side layout
+					}
+				}
+			});
+			// Body container appears after title bar (index 1)
+			bodyContainer.Insert(UiNodeParent.For(window.Id, 1));
+
+			// Create content wrapper with clipping (first child - takes most space)
 			var scrollContainer = commands.Spawn();
 			scrollContainer.Insert(new UiNode
 			{
@@ -226,8 +261,8 @@ public static class FloatingWindowWidget
 			});
 			// Mark as scroll container for efficient querying
 			scrollContainer.Insert(new UiScrollContainer());
-			// Scroll container appears after title bar
-			scrollContainer.Insert(UiNodeParent.For(window.Id, 1));
+			// First child of body container
+			scrollContainer.Insert(UiNodeParent.For(bodyContainer.Id));
 			scrollContainerId = scrollContainer.Id;
 
 			// Create scrollable content area inside the scroll container
@@ -250,6 +285,72 @@ public static class FloatingWindowWidget
 			// Content area is child of scroll container
 			contentArea.Insert(UiNodeParent.For(scrollContainer.Id));
 			contentAreaId = contentArea.Id;
+
+			// Create scrollbar track container (second child - right side, sibling to content wrapper)
+			var scrollbarTrack = commands.Spawn();
+			scrollbarTrack.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(8f),
+							Clay_SizingAxis.Grow()),
+						layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+					},
+					backgroundColor = new Clay_Color(200, 200, 200, 128),
+					cornerRadius = Clay_CornerRadius.All(4)
+				}
+			});
+			// Sibling of scroll container (second child of body container)
+			scrollbarTrack.Insert(UiNodeParent.For(bodyContainer.Id));
+			scrollbarTrackId = scrollbarTrack.Id;
+
+			// Create thumb layer (uses padding to position thumb)
+			var thumbLayer = commands.Spawn();
+			scrollbarThumbLayerId = thumbLayer.Id;
+			thumbLayer.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(8f),
+							Clay_SizingAxis.Fit(0, float.MaxValue)), // Fit child size, not Grow
+						layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+						padding = new Clay_Padding
+						{
+							left = 0,
+							right = 0,
+							top = 0,
+							bottom = 0
+						}
+					}
+				}
+			});
+			thumbLayer.Insert(UiNodeParent.For(scrollbarTrack.Id));
+
+			// Create scrollbar thumb (child of thumb layer)
+			var scrollbarThumb = commands.Spawn();
+			scrollbarThumb.Insert(new UiNode
+			{
+				Declaration = new Clay_ElementDeclaration
+				{
+					layout = new Clay_LayoutConfig
+					{
+						sizing = new Clay_Sizing(
+							Clay_SizingAxis.Fixed(6f),
+							Clay_SizingAxis.Fixed(40f)), // Will be updated by system based on content size
+						padding = new Clay_Padding { left = 1, right = 1, top = 0, bottom = 0 }
+					},
+					backgroundColor = new Clay_Color(100, 100, 100, 200),
+					cornerRadius = Clay_CornerRadius.All(3)
+				}
+			});
+			scrollbarThumb.Insert(UiNodeParent.For(thumbLayer.Id));
+			scrollbarThumbId = scrollbarThumb.Id;
 		}
 
 		// Link parts for observers and external access
@@ -257,11 +358,15 @@ public static class FloatingWindowWidget
 		{
 			TitleBarId = titleBarInfo.TitleBarId,
 			ResizeHandleId = 0,
+			BodyContainerId = bodyContainerId,
 			ScrollContainerId = scrollContainerId,
 			ContentAreaId = contentAreaId,
 			CloseButtonId = titleBarInfo.CloseButtonId,
 			MinimizeButtonId = titleBarInfo.MinimizeButtonId,
-			MaximizeButtonId = titleBarInfo.MaximizeButtonId
+			MaximizeButtonId = titleBarInfo.MaximizeButtonId,
+			ScrollbarTrackId = scrollbarTrackId,
+			ScrollbarThumbLayerId = scrollbarThumbLayerId,
+			ScrollbarThumbId = scrollbarThumbId
 		});
 
 		// Add resize handle if resizable

@@ -53,8 +53,8 @@ public sealed class ClayUiPlugin : IPlugin
 
 	private void RegisterDefaultSystems(App app)
 	{
-		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>, Filter<Changed<UiNodeParent>>> desired, Query<Data<Parent>> current, Query<Data<Children>> children, Query<Data<FloatingWindowLinks>> windowLinks) =>
-			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children, windowLinks))
+		app.AddSystem((ResMut<ClayUiState> ui, Commands commands, Query<Data<UiNodeParent>, Filter<Changed<UiNodeParent>>> desired, Query<Data<Parent>> current, Query<Data<Children>> children, Query<Data<FloatingWindowLinks>> windowLinks, Query<Data<ScrollContainerLinks>> scrollContainerLinks) =>
+			ClayUiSystems.SyncUiHierarchy(ui, commands, desired, current, children, windowLinks, scrollContainerLinks))
 		.InStage(Stage.PreUpdate)
 		.Label("ui:clay:sync-hierarchy")
 		.RunIfResourceExists<ClayUiState>()
@@ -96,9 +96,9 @@ public sealed class ClayUiPlugin : IPlugin
 		ref var state = ref uiState.Value;
 
 		// Remove the element ID → entity ID mapping when UiNode is removed
-		if (trigger.Component.Declaration.id.id != 0)
+		if (trigger.Component.ElementId.id != 0)
 		{
-			state.ElementToEntityMap.Remove(trigger.Component.Declaration.id.id);
+			state.ElementToEntityMap.Remove(trigger.Component.ElementId.id);
 		}
 	}
 }

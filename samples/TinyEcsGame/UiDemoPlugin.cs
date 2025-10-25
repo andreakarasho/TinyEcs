@@ -27,6 +27,7 @@ public sealed class UiDemoPlugin : IPlugin
 			CreateSettingsWindow(commands);
 			CreateStatsWindow(commands);
 			CreateToolPalette(commands);
+			CreateScrollContainerDemo(commands);
 		})
 		.InStage(Stage.Startup)
 		.Label("ui:demo:spawn")
@@ -272,6 +273,52 @@ public sealed class UiDemoPlugin : IPlugin
 
 		LabelWidget.Create(commands, ClayLabelStyle.Caption,
 			"Click buttons to see reactive events!",
+			parent: window.Id);
+	}
+
+	private void CreateScrollContainerDemo(Commands commands)
+	{
+		var window = FloatingWindowWidget.Create(
+			commands,
+			ClayFloatingWindowStyle.Default with
+			{
+				InitialSize = new Vector2(350f, 400f),
+				TitleBarColor = new Clay_Color(236, 72, 153, 255) // Pink
+			},
+			"Scroll Container Demo",
+			new Vector2(800f, 100f));
+
+		LabelWidget.CreateHeading(commands, "Scrollable Content", level: 3, parent: window.Id);
+
+		LabelWidget.Create(commands, ClayLabelStyle.Body,
+			"This demonstrates a ScrollContainerWidget with draggable scrollbar:",
+			parent: window.Id);
+
+		SeparatorWidget.CreateSpacer(commands, 8f, parent: window.Id);
+
+		// Create the scroll container
+		var scrollContainer = ScrollContainerWidget.CreateVertical(
+			commands,
+			new Vector2(300f, 200f),
+			parent: window.Id);
+
+		// Add lots of content to make it scrollable
+		for (int i = 1; i <= 20; i++)
+		{
+			LabelWidget.Create(commands, ClayLabelStyle.Body,
+				$"Item {i} - This is scrollable content",
+				parent: scrollContainer.Id);
+
+			if (i % 5 == 0)
+			{
+				SeparatorWidget.CreateHorizontal(commands, parent: scrollContainer.Id);
+			}
+		}
+
+		SeparatorWidget.CreateSpacer(commands, 8f, parent: window.Id);
+
+		LabelWidget.Create(commands, ClayLabelStyle.Caption,
+			"Try scrolling with mouse wheel or dragging the scrollbar!",
 			parent: window.Id);
 	}
 

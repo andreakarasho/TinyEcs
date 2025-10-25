@@ -15,7 +15,7 @@ public delegate Clay_Vector2 ClayQueryScrollOffsetDelegate(uint elementId);
 
 public static class Clay
 {
-    internal static readonly ClayStringCollection ClayStrings = new();
+    public static readonly ClayStringCollection ClayStrings = new();
 
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,6 +214,12 @@ public static class Clay
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void OpenElement(Clay_ElementId elementId)
+    {
+        ClayInterop.Clay__OpenElementWithId(elementId);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void OpenTextElement(ReadOnlySpan<char> text, Clay_TextElementConfig c)
     {
         OpenTextElement(ClayStrings.Get(text), c);
@@ -256,7 +262,7 @@ public static class Clay
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static Clay_ElementId HashId(Clay_String text, uint offset, uint seed)
+    public static Clay_ElementId HashId(Clay_String text, uint offset, uint seed)
     {
         return ClayInterop.Clay__HashStringWithOffset(text, offset, seed);
     }
