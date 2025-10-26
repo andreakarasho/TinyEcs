@@ -13,212 +13,195 @@ namespace TinyEcsGame;
 /// </summary>
 public struct RaylibFlexboxUiPlugin : IPlugin
 {
-    public Stage RenderingStage { get; set; }
+	public Stage RenderingStage { get; set; }
 
-    public void Build(App app)
-    {
-        var renderStage = RenderingStage;
+	public void Build(App app)
+	{
+		var renderStage = RenderingStage;
 
-        app.AddSystem((ResMut<FlexboxPointerState> p) => UpdatePointerState(p))
-            .InStage(Stage.PreUpdate)
-            .Label("ui:raylib:flexbox:update-pointer")
-            .RunIfResourceExists<FlexboxPointerState>()
-            .SingleThreaded()
-            .Build();
+		app.AddSystem((ResMut<FlexboxPointerState> p) => UpdatePointerState(p))
+			.InStage(Stage.PreUpdate)
+			.Label("ui:raylib:flexbox:update-pointer")
+			.Before("ui:flexbox:pointer")  // CRITICAL: Must run before pointer processing
+			.RunIfResourceExists<FlexboxPointerState>()
+			.SingleThreaded()
+			.Build();
 
-        app.AddSystem((Res<FlexboxUiState> s,
-                       Query<Data<FlexboxNode>> n,
-                       Query<Data<FlexboxText>> t,
-                       Query<Data<FlexboxScrollContainer>> sc,
-                       Query<Data<Children>> children) =>
-            RenderFlexboxUI(s, n, t, sc, children))
-            .InStage(renderStage)
-            .Label("ui:raylib:flexbox:render")
-            .After("render:debug")
-            .RunIfResourceExists<FlexboxUiState>()
-            .SingleThreaded()
-            .Build();
-    }
+		app.AddSystem((Res<FlexboxUiState> s,
+					   Query<Data<FlexboxNode>> n,
+					   Query<Data<FlexboxText>> t,
+					   Query<Data<FlexboxScrollContainer>> sc,
+					   Query<Data<Children>> children) =>
+			RenderFlexboxUI(s, n, t, sc, children))
+			.InStage(renderStage)
+			.Label("ui:raylib:flexbox:render")
+			.After("render:debug")
+			.RunIfResourceExists<FlexboxUiState>()
+			.SingleThreaded()
+			.Build();
+	}
 
-    private static void UpdatePointerState(ResMut<FlexboxPointerState> pointerState)
-    {
-        if (!Raylib.IsWindowReady())
-            return;
+	private static void UpdatePointerState(ResMut<FlexboxPointerState> pointerState)
+	{
+		if (!Raylib.IsWindowReady())
+			return;
 
-        ref var state = ref pointerState.Value;
+		ref var state = ref pointerState.Value;
 
-        state.Position = Raylib.GetMousePosition();
-        state.PrimaryDown = Raylib.IsMouseButtonDown(MouseButton.Left);
+		state.Position = Raylib.GetMousePosition();
+		state.PrimaryDown = Raylib.IsMouseButtonDown(MouseButton.Left);
 
-        var scrollY = Raylib.GetMouseWheelMove();
-        if (scrollY != 0f)
-        {
-            state.AddScroll(new Vector2(0, scrollY * 20f));
-        }
+		var scrollY = Raylib.GetMouseWheelMove();
+		if (scrollY != 0f)
+		{
+			state.AddScroll(new Vector2(0, scrollY * 20f));
+		}
 
-        state.DeltaTime = Raylib.GetFrameTime();
-    }
+		state.DeltaTime = Raylib.GetFrameTime();
+	}
 
-    private static void RenderFlexboxUI(
-        Res<FlexboxUiState> uiState,
-        Query<Data<FlexboxNode>> nodes,
-        Query<Data<FlexboxText>> texts,
-        Query<Data<FlexboxScrollContainer>> scrollers,
-        Query<Data<Children>> childrenQuery)
-    {
-        var state = uiState.Value;
+	private static void RenderFlexboxUI(
+		Res<FlexboxUiState> uiState,
+		Query<Data<FlexboxNode>> nodes,
+		Query<Data<FlexboxText>> texts,
+		Query<Data<FlexboxScrollContainer>> scrollers,
+		Query<Data<Children>> childrenQuery)
+	{
+		var state = uiState.Value;
 
-        // Render roots first (those without Parent/Children entry)
-        foreach (var (entityId, _) in nodes)
-        {
-            var id = entityId.Ref;
-            // Consider as root if there is no Children entry for its parent; safer root detection still uses absence of Parent when building tree
-            if (!state.TryGetLayout(id, out _)) { continue; }
-            // Treat nodes with no parent as roots
-            // We detect roots from the computed tree during layout; fallback to Parent query is avoided here
-            // For rendering, draw all nodes that are not found as any other node's child
-            bool isChild = false;
-            foreach (var (cid, _) in nodes)
-            {
-                if (cid.Ref == id) continue;
-                if (childrenQuery.Contains(cid.Ref))
-                {
-                    var ch = childrenQuery.Get(cid.Ref); ch.Deconstruct(out var chPtr);
-                    foreach (var c in chPtr.Ref) { if (c == id) { isChild = true; break; } }
-                }
-                if (isChild) break;
-            }
-            if (!isChild)
-            {
-                RenderNodeRecursive(id, nodes, texts, scrollers, childrenQuery, state, Vector2.Zero, null);
-            }
-        }
-    }
+		// Render root nodes (those without parents in the Flexbox tree)
+		foreach (var rootId in state.RootEntities)
+		{
+			if (state.TryGetNode(rootId, out var rootNode) && rootNode != null)
+			{
+				RenderNodeRecursive(rootId, rootNode, nodes, texts, scrollers, childrenQuery, state, Vector2.Zero, null);
+			}
+		}
+	}
 
-    private static void RenderNodeRecursive(
-        ulong entityId,
-        Query<Data<FlexboxNode>> nodes,
-        Query<Data<FlexboxText>> texts,
-        Query<Data<FlexboxScrollContainer>> scrollers,
-        Query<Data<Children>> childrenQuery,
-        FlexboxUiState state,
-        Vector2 accumulatedOffset,
-        Rectangle? clip)
-    {
-        if (!state.TryGetLayout(entityId, out var layout))
-            return;
+	private static void RenderNodeRecursive(
+		ulong entityId,
+		global::Flexbox.Node node,
+		Query<Data<FlexboxNode>> nodes,
+		Query<Data<FlexboxText>> texts,
+		Query<Data<FlexboxScrollContainer>> scrollers,
+		Query<Data<Children>> childrenQuery,
+		FlexboxUiState state,
+		Vector2 parentPosition,
+		Rectangle? clip)
+	{
+		var layout = node.layout;
 
-        // Compute child clip and offset (for scrollers)
-        var childClip = clip;
-        var childOffset = accumulatedOffset;
-        if (scrollers.Contains(entityId))
-        {
-            var contentRect = new Rectangle(
-                layout.ContentPosition.X + accumulatedOffset.X,
-                layout.ContentPosition.Y + accumulatedOffset.Y,
-                layout.ContentSize.X,
-                layout.ContentSize.Y);
-            childClip = childClip.HasValue ? Intersect(childClip.Value, contentRect) : contentRect;
+		// Flexbox positions are relative to parent
+		// Accumulate parent position to get absolute screen position
+		var drawPos = parentPosition + new Vector2(layout.left, layout.top);
+		var drawSize = new Vector2(layout.width, layout.height);
 
-            var sc = scrollers.Get(entityId);
-            sc.Deconstruct(out var sPtr);
-            childOffset += new Vector2(-sPtr.Ref.Offset.X, -sPtr.Ref.Offset.Y);
-        }
+		// Compute child clip (for scrollers)
+		var childClip = clip;
+		var childParentPosition = drawPos; // Children positioned relative to this element
 
-        // Apply current clip for this entity draw
-        if (clip.HasValue)
-        {
-            var r = clip.Value;
-            Raylib.BeginScissorMode((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height);
-        }
+		if (scrollers.Contains(entityId))
+		{
+			// For scrollers, clip to the element's bounds (full area including padding)
+			var contentRect = new Rectangle(
+				drawPos.X,
+				drawPos.Y,
+				layout.width,
+				layout.height);
+			
+			childClip = childClip.HasValue ? Intersect(childClip.Value, contentRect) : contentRect;
 
-        if (nodes.Contains(entityId))
-        {
-            var n = nodes.Get(entityId);
-            n.Deconstruct(out var nodePtr);
-            ref var fxNode = ref nodePtr.Ref;
+			// Apply scroll offset - children are offset by the scroll amount
+			var sc = scrollers.Get(entityId);
+			sc.Deconstruct(out var sPtr);
+			childParentPosition += new Vector2(-sPtr.Ref.Offset.X, -sPtr.Ref.Offset.Y);
+		}
 
-            var draw = layout; draw.Position += accumulatedOffset; draw.ContentPosition += accumulatedOffset;
-            if (fxNode.BackgroundColor.W > 0f)
-                DrawRectangle(draw, fxNode.BackgroundColor, fxNode.BorderRadius);
-            if (fxNode.BorderColor.W > 0f)
-                DrawBorder(draw, fxNode.BorderColor, fxNode.BorderRadius);
+		// Apply current clip for this entity draw
+		if (clip.HasValue)
+		{
+			var r = clip.Value;
+			Raylib.BeginScissorMode((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height);
+		}
 
-            if (texts.Contains(entityId))
-            {
-                var t = texts.Get(entityId);
-                t.Deconstruct(out var tPtr);
-                ref var td = ref tPtr.Ref;
-                var tdraw = layout; tdraw.ContentPosition += childOffset;
-                DrawText(tdraw, ref td);
-            }
-        }
+		if (nodes.Contains(entityId))
+		{
+			var n = nodes.Get(entityId);
+			n.Deconstruct(out var nodePtr);
+			ref var fxNode = ref nodePtr.Ref;
 
-        if (clip.HasValue)
-            Raylib.EndScissorMode();
+			if (fxNode.BackgroundColor.W > 0f)
+				DrawRectangle(drawPos, drawSize, fxNode.BackgroundColor, fxNode.BorderRadius);
+			if (fxNode.BorderColor.W > 0f)
+				DrawBorder(drawPos, drawSize, fxNode.BorderColor, fxNode.BorderRadius);
 
-        // Draw children in stored list order (stable)
-        if (childrenQuery.Contains(entityId))
-        {
-            var ch = childrenQuery.Get(entityId);
-            ch.Deconstruct(out var chPtr);
-            foreach (var cid in chPtr.Ref)
-            {
-                RenderNodeRecursive(cid, nodes, texts, scrollers, childrenQuery, state, childOffset, childClip);
-            }
-        }
-    }
+			if (texts.Contains(entityId))
+			{
+				var t = texts.Get(entityId);
+				t.Deconstruct(out var tPtr);
+				ref var td = ref tPtr.Ref;
+				// Text is drawn at this element's position
+				// (Flexbox already accounts for padding in child positioning)
+				DrawText(drawPos, drawSize, ref td);
+			}
+		}
 
-    private static Rectangle Intersect(Rectangle a, Rectangle b)
-    {
-        float x = MathF.Max(a.X, b.X);
-        float y = MathF.Max(a.Y, b.Y);
-        float r = MathF.Min(a.X + a.Width, b.X + b.Width);
-        float btm = MathF.Min(a.Y + a.Height, b.Y + b.Height);
-        return new Rectangle(x, y, MathF.Max(0, r - x), MathF.Max(0, btm - y));
-    }
+		if (clip.HasValue)
+			Raylib.EndScissorMode();
 
-    private static void DrawRectangle(ComputedLayout layout, Vector4 color, float borderRadius)
-    {
-        var rect = new Rectangle(layout.Position.X, layout.Position.Y, layout.Size.X, layout.Size.Y);
-        var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
+		// Draw children - pass accumulated position
+		for (int i = 0; i < node.ChildrenCount; i++)
+		{
+			var childNode = node.GetChild(i);
+			if (childNode != null && childNode.Context is ValueTuple<ulong, uint> context)
+			{
+				var (childEntityId, _) = context;
+				RenderNodeRecursive(childEntityId, childNode, nodes, texts, scrollers, childrenQuery, state, childParentPosition, childClip);
+			}
+		}
+	}
 
-        if (borderRadius > 0f)
-        {
-            Raylib.DrawRectangleRounded(rect, borderRadius / Math.Max(layout.Size.X, layout.Size.Y), 8, raylibColor);
-        }
-        else
-        {
-            Raylib.DrawRectangleRec(rect, raylibColor);
-        }
-    }
+	private static Rectangle Intersect(Rectangle a, Rectangle b)
+	{
+		float x = MathF.Max(a.X, b.X);
+		float y = MathF.Max(a.Y, b.Y);
+		float r = MathF.Min(a.X + a.Width, b.X + b.Width);
+		float btm = MathF.Min(a.Y + a.Height, b.Y + b.Height);
+		return new Rectangle(x, y, MathF.Max(0, r - x), MathF.Max(0, btm - y));
+	}
 
-    private static void DrawBorder(ComputedLayout layout, Vector4 color, float borderRadius)
-    {
-        var rect = new Rectangle(layout.Position.X, layout.Position.Y, layout.Size.X, layout.Size.Y);
-        var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
+	private static void DrawRectangle(Vector2 position, Vector2 size, Vector4 color, float borderRadius)
+	{
+		var rect = new Rectangle(position.X, position.Y, size.X, size.Y);
+		var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
 
-        // Use non-rounded border for simplicity (API differences across Raylib versions)
-        Raylib.DrawRectangleLinesEx(rect, 2f, raylibColor);
-    }
+		if (borderRadius > 0f)
+		{
+			Raylib.DrawRectangleRounded(rect, borderRadius / Math.Max(size.X, size.Y), 8, raylibColor);
+		}
+		else
+		{
+			Raylib.DrawRectangleRec(rect, raylibColor);
+		}
+	}
 
-    private static void DrawText(ComputedLayout layout, ref FlexboxText textData)
-    {
-        if (string.IsNullOrEmpty(textData.Text))
-            return;
+	private static void DrawBorder(Vector2 position, Vector2 size, Vector4 color, float borderRadius)
+	{
+		var rect = new Rectangle(position.X, position.Y, size.X, size.Y);
+		var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
 
-        var raylibColor = new Color((byte)(textData.Color.X * 255), (byte)(textData.Color.Y * 255), (byte)(textData.Color.Z * 255), (byte)(textData.Color.W * 255));
+		// Use non-rounded border for simplicity (API differences across Raylib versions)
+		Raylib.DrawRectangleLinesEx(rect, 2f, raylibColor);
+	}
 
-        var textPos = new Vector2(layout.ContentPosition.X, layout.ContentPosition.Y);
+	private static void DrawText(Vector2 contentPosition, Vector2 contentSize, ref FlexboxText textData)
+	{
+		if (string.IsNullOrEmpty(textData.Text))
+			return;
 
-        Raylib.DrawText(textData.Text, (int)textPos.X, (int)textPos.Y, (int)textData.FontSize, raylibColor);
-    }
+		var raylibColor = new Color((byte)(textData.Color.X * 255), (byte)(textData.Color.Y * 255), (byte)(textData.Color.Z * 255), (byte)(textData.Color.W * 255));
+
+		Raylib.DrawText(textData.Text, (int)contentPosition.X, (int)contentPosition.Y, (int)textData.FontSize, raylibColor);
+	}
 }
-
-
-
-
-
-
-
-

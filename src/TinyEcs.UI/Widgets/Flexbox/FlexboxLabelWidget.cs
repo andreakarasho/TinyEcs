@@ -60,6 +60,14 @@ public static class FlexboxLabelWidget
     }
 
     /// <summary>
+    /// Creates a heading label (H3).
+    /// </summary>
+    public static EntityCommands CreateHeading3(Commands commands, string text)
+    {
+        return Create(commands, text, FlexboxLabelStyle.Heading3());
+    }
+
+    /// <summary>
     /// Creates a body text label.
     /// </summary>
     public static EntityCommands CreateBody(Commands commands, string text)

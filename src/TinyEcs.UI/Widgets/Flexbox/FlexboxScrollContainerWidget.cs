@@ -57,30 +57,26 @@ public static class FlexboxScrollContainerWidget
 
 				var newOffset = sc.Offset - delta; // invert so wheel up scrolls content down
 
-				// Optional clamp using computed layouts if available
-				if (state.Value.TryGetLayout(trigger.EntityId, out var containerLayout))
+				// Optional clamp using Flexbox node layouts if available
+				if (state.Value.TryGetNode(trigger.EntityId, out var containerNode) && containerNode != null)
 				{
 					// Compute max bottom of descendants relative to container content top
-					float contentTop = containerLayout.ContentPosition.Y;
-					float viewportH = containerLayout.ContentSize.Y;
+					var containerLayout = containerNode.layout;
+					float contentTop = containerLayout.content.y;
+					float viewportH = containerLayout.content.height;
 					float maxBottom = contentTop; // at least top
 
-					if (state.Value.EntityToFlexboxNode.TryGetValue(trigger.EntityId, out var containerNode))
+					void Traverse(global::Flexbox.Node node)
 					{
-						void Traverse(global::Flexbox.Node node)
+						foreach (var child in node.Children)
 						{
-							foreach (var child in node.Children)
-							{
-								if (child.Context is ulong childId && state.Value.TryGetLayout(childId, out var childLayout))
-								{
-									var b = childLayout.Position.Y + childLayout.Size.Y;
-									if (b > maxBottom) maxBottom = b;
-								}
-								Traverse(child);
-							}
+							var childLayout = child.layout;
+							var b = childLayout.top + childLayout.height;
+							if (b > maxBottom) maxBottom = b;
+							Traverse(child);
 						}
-						Traverse(containerNode);
 					}
+					Traverse(containerNode);
 
 					var contentHeight = MathF.Max(0f, maxBottom - contentTop);
 					var maxScrollY = MathF.Max(0f, contentHeight - viewportH);

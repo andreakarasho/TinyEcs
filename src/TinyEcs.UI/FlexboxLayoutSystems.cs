@@ -8,7 +8,8 @@ namespace TinyEcs.UI;
 
 /// <summary>
 /// Systems for Flexbox layout computation.
-/// Parallel to ClayLayoutSystems but for Flexbox layout engine.
+/// NEW ARCHITECTURE: Syncs ECS components to Flexbox nodes every frame.
+/// No more ComputedLayout - read directly from Flexbox node.layout.
 /// </summary>
 public static class FlexboxLayoutSystems
 {
@@ -16,185 +17,212 @@ public static class FlexboxLayoutSystems
 	/// Synchronizes FlexboxNodeParent components with ECS Parent/Children hierarchy.
 	/// Runs in PreUpdate stage.
 	/// </summary>
-    public static void SyncHierarchy(
-        Commands commands,
-        Query<Data<FlexboxNodeParent>, Filter<Changed<FlexboxNodeParent>>> desiredParents,
-        Query<Data<Parent>> currentParents,
-        Query<Data<Children>> childrenLists)
-    {
-        foreach (var (entityId, desiredParent) in desiredParents)
-        {
-            var childId = entityId.Ref;
-            ref var desired = ref desiredParent.Ref;
+	public static void SyncHierarchy(
+		Commands commands,
+		Query<Data<FlexboxNodeParent>, Filter<Changed<FlexboxNodeParent>>> desiredParents,
+		Query<Data<Parent>> currentParents,
+		Query<Data<Children>> childrenLists)
+	{
+		foreach (var (entityId, desiredParent) in desiredParents)
+		{
+			var childId = entityId.Ref;
+			ref var desired = ref desiredParent.Ref;
 
-            // Read current parent from query
-            ulong currentParent = 0;
-            if (currentParents.Contains(childId))
-            {
-                var pdata = currentParents.Get(childId);
-                pdata.Deconstruct(out _, out var pPtr);
-                currentParent = pPtr.Ref.Id;
-            }
+			// Read current parent from query
+			ulong currentParent = 0;
+			if (currentParents.Contains(childId))
+			{
+				var pdata = currentParents.Get(childId);
+				pdata.Deconstruct(out _, out var pPtr);
+				currentParent = pPtr.Ref.Id;
+			}
 
-            var targetParent = desired.Parent;
+			var targetParent = desired.Parent;
 
-            // If parent unchanged, only adjust index if needed
-            if (targetParent == currentParent)
-            {
-                if (targetParent != 0 && desired.Index >= 0 && childrenLists.Contains(targetParent))
-                {
-                    var listData = childrenLists.Get(targetParent);
-                    listData.Deconstruct(out _, out var listPtr);
-                    ref var list = ref listPtr.Ref;
+			// If parent unchanged, only adjust index if needed
+			if (targetParent == currentParent)
+			{
+				if (targetParent != 0 && desired.Index >= 0 && childrenLists.Contains(targetParent))
+				{
+					var listData = childrenLists.Get(targetParent);
+					listData.Deconstruct(out _, out var listPtr);
+					ref var list = ref listPtr.Ref;
 
-                    // find current index
-                    int currentIndex = -1;
-                    int i = 0;
-                    foreach (var id in list)
-                    {
-                        if (id == childId) { currentIndex = i; break; }
-                        i++;
-                    }
+					// find current index
+					int currentIndex = -1;
+					int i = 0;
+					foreach (var id in list)
+					{
+						if (id == childId) { currentIndex = i; break; }
+						i++;
+					}
 
-                    if (currentIndex != desired.Index)
-                    {
-                        commands.RemoveChild(childId);
-                        var clamped = desired.Index;
-                        if (clamped < 0) clamped = 0;
-                        if (clamped > list.Count) clamped = list.Count;
-                        commands.AddChild(targetParent, childId, clamped);
-                    }
-                }
-                continue;
-            }
+					if (currentIndex != desired.Index)
+					{
+						commands.RemoveChild(childId);
+						var clamped = desired.Index;
+						if (clamped < 0) clamped = 0;
+						if (clamped > list.Count) clamped = list.Count;
+						commands.AddChild(targetParent, childId, clamped);
+					}
+				}
+				continue;
+			}
 
-            // Remove from current parent if moving to root
-            if (targetParent == 0 && currentParent != 0)
-            {
-                commands.RemoveChild(childId);
-                continue;
-            }
+			// Remove from current parent if moving to root
+			if (targetParent == 0 && currentParent != 0)
+			{
+				commands.RemoveChild(childId);
+				continue;
+			}
 
-            // Move under a new parent
-            if (targetParent != 0)
-            {
-                if (desired.Index >= 0)
-                    commands.AddChild(targetParent, childId, desired.Index);
-                else
-                    commands.AddChild(targetParent, childId);
-            }
-        }
-    }
+			// Move under a new parent
+			if (targetParent != 0)
+			{
+				if (desired.Index >= 0)
+					commands.AddChild(targetParent, childId, desired.Index);
+				else
+					commands.AddChild(targetParent, childId);
+			}
+		}
+	}
 
 	/// <summary>
-	/// Computes Flexbox layout for all FlexboxNode entities.
+	/// NEW ARCHITECTURE: Syncs ALL FlexboxNode components to Flexbox.Node objects every frame.
+	/// This allows direct editing of components to automatically update the layout.
 	/// Runs in Update stage.
 	/// </summary>
-	public static void ComputeLayout(
+	public static void SyncComponentsToFlexboxNodes(
 		ResMut<FlexboxUiState> state,
 		Query<Data<FlexboxNode>> nodes,
-		Query<Data<Parent>> parents,
-		Query<Data<Children>> childrenQuery,
-		Query<Data<FlexboxText>> texts)
+		Query<Data<FlexboxText>> texts,
+		Query<Data<FlexboxNode>, Filter<Without<Parent>>> rootNodes,
+		Query<Data<Children>> childrenQuery)
 	{
 		ref var stateRef = ref state.Value;
 
-		// Clear previous frame data
-		stateRef.EntityToFlexboxNode.Clear();
-		stateRef.EntityToLayout.Clear();
-		stateRef.ElementToEntityMap.Clear();
+		// Step 1: Sync all FlexboxNode components to their Flexbox.Node objects
+		foreach (var (entityId, flexNodeData) in nodes)
+		{
+			var id = entityId.Ref;
+			ref var flexNode = ref flexNodeData.Ref;
+
+			// Get or create Flexbox node
+			if (!stateRef.EntityToFlexboxNode.TryGetValue(id, out var flexboxNode))
+			{
+				flexboxNode = new Node();
+				stateRef.EntityToFlexboxNode[id] = flexboxNode;
+			}
+
+			// Apply all properties from FlexboxNode component to Flexbox.Node
+			ApplyFlexboxNodeToNode(ref flexNode, flexboxNode);
+			flexboxNode.Context = id;
+
+			// Configure text measurement if entity has FlexboxText
+			if (texts.Contains(id))
+			{
+				var textData = texts.Get(id);
+				textData.Deconstruct(out var textPtr);
+				ref var text = ref textPtr.Ref;
+				ConfigureTextMeasurement(flexboxNode, ref text);
+			}
+		}
+
+		// Step 2: Rebuild parent-child relationships
+		// Clear all existing relationships
+		foreach (var (_, node) in stateRef.EntityToFlexboxNode)
+		{
+			foreach (var child in node.Children)
+				child.Parent = null!;
+			node.Children.Clear();
+			node.Parent = null!;
+		}
+
+		// Rebuild hierarchy from Children components
 		stateRef.RootEntities.Clear();
+		stateRef.ElementToEntityMap.Clear();
 		stateRef.NextElementId = 1;
 
-		// Build Flexbox node tree from entity hierarchy
-		BuildFlexboxTree(ref stateRef, nodes, parents, childrenQuery, texts);
+		// Identify roots
+		foreach (var (entityId, _) in rootNodes)
+		{
+			stateRef.RootEntities.Add(entityId.Ref);
+		}
 
-		// Calculate layout for each root
+		// Attach children recursively starting from roots
+		foreach (var rootId in stateRef.RootEntities)
+		{
+			AttachChildrenRecursive(rootId, stateRef.EntityToFlexboxNode, childrenQuery);
+		}
+
+		// Step 3: Calculate layout for each root
 		foreach (var rootEntityId in stateRef.RootEntities)
 		{
 			if (!stateRef.EntityToFlexboxNode.TryGetValue(rootEntityId, out var rootNode))
 				continue;
 
-			// Compute layout with container dimensions
 			rootNode.CalculateLayout(
 				stateRef.ContainerWidth,
 				stateRef.ContainerHeight,
 				Direction.LTR);
 
-			// Extract computed layouts recursively
-			ExtractLayout(ref stateRef, rootEntityId, rootNode, Vector2.Zero);
+			// Assign element IDs for pointer hit testing
+			AssignElementIds(ref stateRef, rootEntityId, rootNode);
 		}
-
-		stateRef.IsDirty = false;
 	}
 
-	private static void BuildFlexboxTree(
-		ref FlexboxUiState state,
-		Query<Data<FlexboxNode>> nodes,
-		Query<Data<Parent>> parents,
-		Query<Data<Children>> childrenQuery,
-		Query<Data<FlexboxText>> texts)
+	private static void AttachChildrenRecursive(
+		ulong parentId,
+		Dictionary<ulong, Node> entityToNode,
+		Query<Data<Children>> childrenQuery)
 	{
-		// Create Flexbox nodes for all entities
-		foreach (var (entityId, flexNode) in nodes)
+		if (!childrenQuery.Contains(parentId))
+			return;
+
+		var childrenData = childrenQuery.Get(parentId);
+		childrenData.Deconstruct(out var childrenPtr);
+
+		if (!entityToNode.TryGetValue(parentId, out var parentNode))
+			return;
+
+		foreach (var childId in childrenPtr.Ref)
 		{
-			ref var node = ref flexNode.Ref;
-			var flexboxNode = new Node();
-
-			// Apply FlexboxNode properties to Flexbox.Node
-			ApplyFlexboxNodeToNode(ref node, flexboxNode);
-
-			// Track originating entity for extraction and hit-testing
-			flexboxNode.Context = entityId.Ref;
-
-			// If entity has FlexboxText, configure as text node with measure function
-			if (texts.Contains(entityId.Ref))
+			if (entityToNode.TryGetValue(childId, out var childNode))
 			{
-				var textDataTuple = texts.Get(entityId.Ref);
-				textDataTuple.Deconstruct(out var textPtr);
-				ref var textData = ref textPtr.Ref;
-				ConfigureTextNode(flexboxNode, ref textData);
+				parentNode.AddChild(childNode);
+				AttachChildrenRecursive(childId, entityToNode, childrenQuery);
 			}
-
-			state.EntityToFlexboxNode[entityId.Ref] = flexboxNode;
 		}
+	}
 
-        // Identify roots (entities without Parent)
-        foreach (var (entityId, _) in nodes)
-        {
-            if (!parents.Contains(entityId.Ref))
-                state.RootEntities.Add(entityId.Ref);
-        }
+	private static void AssignElementIds(
+		ref FlexboxUiState state,
+		ulong entityId,
+		Node node)
+	{
+		// Assign element ID for pointer hit testing
+		var elementId = state.NextElementId++;
+		state.ElementToEntityMap[elementId] = entityId;
 
-        // Recursively attach children in declared order using Children lists
-        foreach (var rootId in state.RootEntities)
-        {
-            if (!state.EntityToFlexboxNode.TryGetValue(rootId, out var rootNode))
-                continue;
-            AttachChildrenRecursive(ref state, rootId, rootNode, childrenQuery);
-        }
-    }
+		// Store element ID in the node's context (we'll use a tuple)
+		// Since Context is object, we can store (entityId, elementId)
+		node.Context = (entityId, elementId);
 
-    private static void AttachChildrenRecursive(
-        ref FlexboxUiState state,
-        ulong parentId,
-        Node parentNode,
-        Query<Data<Children>> childrenQuery)
-    {
-        if (!childrenQuery.Contains(parentId))
-            return;
-        var chData = childrenQuery.Get(parentId);
-        chData.Deconstruct(out var listPtr);
-        ref var list = ref listPtr.Ref;
-        foreach (var childId in list)
-        {
-            if (state.EntityToFlexboxNode.TryGetValue(childId, out var childNode))
-            {
-                parentNode.AddChild(childNode);
-                AttachChildrenRecursive(ref state, childId, childNode, childrenQuery);
-            }
-        }
-    }
+		// Recursively assign for children
+		for (int i = 0; i < node.ChildrenCount; i++)
+		{
+			var child = node.GetChild(i);
+			if (child != null && child.Context is ulong childEntityId)
+			{
+				AssignElementIds(ref state, childEntityId, child);
+			}
+			else if (child != null && child.Context is ValueTuple<ulong, uint> childContext)
+			{
+				// Already has tuple context, just reassign
+				AssignElementIds(ref state, childContext.Item1, child);
+			}
+		}
+	}
 
 	private static void ApplyFlexboxNodeToNode(ref FlexboxNode flexNode, Node node)
 	{
@@ -262,20 +290,15 @@ public static class FlexboxLayoutSystems
 		return ConvertFlexValue(flexBasis.Value);
 	}
 
-	private static void ConfigureTextNode(Node node, ref FlexboxText textData)
+	private static void ConfigureTextMeasurement(Node node, ref FlexboxText textData)
 	{
-		// Set measure function for text nodes
-		// This would need actual text measurement (e.g., via Raylib.MeasureTextEx)
-		// For now, we'll use a simple approximation
-		// Copy text properties into locals to avoid capturing a ref in the lambda
 		var capturedText = textData.Text;
 		var capturedFontSize = textData.FontSize;
 		node.SetMeasureFunc((n, width, widthMode, height, heightMode) =>
 		{
-			// Simple text measurement approximation
 			var textLength = capturedText?.Length ?? 0;
 			var fontSize = capturedFontSize;
-			var estimatedWidth = textLength * fontSize * 0.6f; // rough estimate
+			var estimatedWidth = textLength * fontSize * 0.6f;
 			var estimatedHeight = fontSize;
 
 			var measuredWidth = widthMode == MeasureMode.Exactly ? width : estimatedWidth;
@@ -283,61 +306,5 @@ public static class FlexboxLayoutSystems
 
 			return new Size(measuredWidth, measuredHeight);
 		});
-	}
-
-	private static void ExtractLayout(
-		ref FlexboxUiState state,
-		ulong entityId,
-		Node node,
-		Vector2 parentOffset)
-	{
-		var layout = node.layout;
-
-		// Assign element ID for pointer hit testing
-		var elementId = state.NextElementId++;
-		state.ElementToEntityMap[elementId] = entityId;
-
-		// Compute absolute position
-		var localPos = new Vector2(layout.left, layout.top);
-		var absolutePos = parentOffset + localPos;
-
-		// Extract computed layout
-		var computedLayout = new ComputedLayout
-		{
-			ElementId = elementId,
-			Position = absolutePos,
-			Size = new Vector2(layout.width, layout.height),
-			LocalPosition = localPos,
-			Margin = new EdgeInsets(
-				layout.margin.top,
-				layout.margin.right,
-				layout.margin.bottom,
-				layout.margin.left),
-			Padding = new EdgeInsets(
-				layout.padding.top,
-				layout.padding.right,
-				layout.padding.bottom,
-				layout.padding.left),
-			Border = new EdgeInsets(
-				layout.border.top,
-				layout.border.right,
-				layout.border.bottom,
-				layout.border.left),
-			ContentPosition = new Vector2(layout.content.x, layout.content.y),
-			ContentSize = new Vector2(layout.content.width, layout.content.height),
-			Direction = layout.direction,
-			HadOverflow = layout.hadOverflow
-		};
-
-		state.EntityToLayout[entityId] = computedLayout;
-
-		// Recursively extract layouts for children
-		foreach (var child in node.Children)
-		{
-			if (child.Context is ulong childEntityId)
-			{
-				ExtractLayout(ref state, childEntityId, child, absolutePos);
-			}
-		}
 	}
 }

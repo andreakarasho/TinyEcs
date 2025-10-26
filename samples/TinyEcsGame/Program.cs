@@ -58,12 +58,8 @@ app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 {
 	ref var st = ref ui.Value;
 	var size = window.Value.Value;
-	if (st.ContainerWidth != size.X || st.ContainerHeight != size.Y)
-	{
-		st.ContainerWidth = size.X;
-		st.ContainerHeight = size.Y;
-		st.MarkDirty();
-	}
+	st.ContainerWidth = size.X;
+	st.ContainerHeight = size.Y;
 })
 .InStage(Stage.PreUpdate)
 .Label("ui:flexbox:update-container")
@@ -137,11 +133,25 @@ static void BuildFlexboxUI(Commands commands)
 		.Insert(new FlexboxNodeParent(card, index: 1))
 		.Id;
 
-	FlexboxButtonWidget.Create(commands, "Primary", (On<UiPointerTrigger> _) => Console.WriteLine("[Flexbox] Primary clicked"))
-		.Insert(new FlexboxNodeParent(row, index: 0));
+	FlexboxButtonWidget.Create(commands, "Primary")
+		.Insert(new FlexboxNodeParent(row, index: 0))
+		.Observe<On<UiPointerTrigger>>(t =>
+		{
+			var e = t.Event.Event;
+			// Only handle direct clicks on the button itself, not bubbled events from children (text)
+			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
+				Console.WriteLine("[Flexbox] Primary clicked");
+		});
 
-	FlexboxButtonWidget.Create(commands, "Secondary", (On<UiPointerTrigger> _) => Console.WriteLine("[Flexbox] Secondary clicked"))
-		.Insert(new FlexboxNodeParent(row, index: 1));
+	FlexboxButtonWidget.Create(commands, "Secondary")
+		.Insert(new FlexboxNodeParent(row, index: 1))
+		.Observe<On<UiPointerTrigger>>(t =>
+		{
+			var e = t.Event.Event;
+			// Only handle direct clicks on the button itself, not bubbled events from children (text)
+			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
+				Console.WriteLine("[Flexbox] Secondary clicked");
+		});
 	// Add a vertical scroll container with sample items
 	var scroll = FlexboxScrollContainerWidget.CreateVertical(commands, new Vector2(320f, 160f), card)
 		.Id;
@@ -151,6 +161,30 @@ static void BuildFlexboxUI(Commands commands)
 			.Insert(new FlexboxNodeParent(scroll, index: i - 1))
 			.Insert(new FlexboxNode { MarginBottom = 8f });
 	}
+
+	// Create a floating window demo
+	var window = FlexboxFloatingWindowWidget.Create(
+		commands,
+		"Flexbox Floating Window",
+		new Vector2(100f, 100f),
+		FlexboxFloatingWindowStyle.Default());
+
+	// Add some content to the window
+	FlexboxLabelWidget.CreateHeading3(commands, "Window Content")
+		.Insert(new FlexboxNodeParent(window.ContentAreaId));
+
+	FlexboxLabelWidget.CreateBody(commands, "This is a draggable floating window built with Flexbox layout!")
+		.Insert(new FlexboxNodeParent(window.ContentAreaId))
+		.Insert(new FlexboxNode { MarginBottom = 8f });
+
+	FlexboxButtonWidget.Create(commands, "Test Button")
+		.Insert(new FlexboxNodeParent(window.ContentAreaId))
+		.Observe<On<UiPointerTrigger>>(t =>
+		{
+			var e = t.Event.Event;
+			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
+				Console.WriteLine("[Flexbox Window] Test button clicked!");
+		});
 }
 
 sealed class RaylibPlugin : IPlugin
@@ -478,4 +512,6 @@ struct SpriteBundle : IBundle
 		entity.Insert(Rotation);
 	}
 }
+
+
 

@@ -12,88 +12,73 @@ namespace TinyEcs.UI.Flexbox;
 ///
 /// Usage:
 /// <code>
-/// var buttonId = FlexboxButtonWidget.Create(
-///     commands,
-///     text: "Click Me",
-///     onClick: (world, trigger) => Console.WriteLine("Clicked!"),
-///     style: FlexboxButtonStyle.Default()
-/// ).Id;
+/// var button = FlexboxButtonWidget.Create(commands, text: "Click Me");
+/// // Bind behavior via an observer
+/// button.Observe<On<UiPointerTrigger>>(t =>
+/// {
+///     var e = t.Event.Event;
+///     if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton)
+///         Console.WriteLine("Clicked!");
+/// });
 /// </code>
 /// </summary>
 public static class FlexboxButtonWidget
 {
-    /// <summary>
-    /// Creates a button widget.
-    /// Returns EntityCommands for further configuration.
-    /// </summary>
-    public static EntityCommands Create(
-        Commands commands,
-        string text,
-        Action<On<UiPointerTrigger>> onClick,
-        FlexboxButtonStyle? style = null)
-    {
-        var buttonStyle = style ?? FlexboxButtonStyle.Default();
+	/// <summary>
+	/// Creates a button widget without binding behavior.
+	/// Returns EntityCommands so callers can attach observers.
+	/// </summary>
+	public static EntityCommands Create(
+		Commands commands,
+		string text,
+		FlexboxButtonStyle? style = null)
+	{
+		var buttonStyle = style ?? FlexboxButtonStyle.Default();
 
-        var buttonId = commands.Spawn()
-            .Insert(FlexboxNode.Row())
-            .Insert(new FlexboxInteractive())
-            .Insert(Interaction.None)
-            .Id;
+		var buttonId = commands.Spawn()
+			.Insert(FlexboxNode.Row())
+			.Insert(new FlexboxInteractive())
+			.Insert(Interaction.None)
+			.Id;
 
-        // Configure layout
-        commands.Entity(buttonId).Insert(new FlexboxNode
-        {
-            FlexDirection = FlexDirection.Row,
-            JustifyContent = Justify.Center,
-            AlignItems = Align.Center,
-            Width = buttonStyle.Width,
-            Height = buttonStyle.Height,
-            PaddingTop = buttonStyle.PaddingVertical,
-            PaddingBottom = buttonStyle.PaddingVertical,
-            PaddingLeft = buttonStyle.PaddingHorizontal,
-            PaddingRight = buttonStyle.PaddingHorizontal,
-            BackgroundColor = buttonStyle.BackgroundColor,
-            BorderRadius = buttonStyle.BorderRadius
-        });
+		// Configure layout
+		commands.Entity(buttonId).Insert(new FlexboxNode
+		{
+			FlexDirection = FlexDirection.Row,
+			JustifyContent = Justify.Center,
+			AlignItems = Align.Center,
+			Width = buttonStyle.Width,
+			Height = buttonStyle.Height,
+			PaddingTop = buttonStyle.PaddingVertical,
+			PaddingBottom = buttonStyle.PaddingVertical,
+			PaddingLeft = buttonStyle.PaddingHorizontal,
+			PaddingRight = buttonStyle.PaddingHorizontal,
+			BackgroundColor = buttonStyle.BackgroundColor,
+			BorderRadius = buttonStyle.BorderRadius
+		});
 
-        // Create text child
-        var textId = commands.Spawn()
-            .Insert(new FlexboxNode
-            {
-                Display = Display.Flex
-            })
-            .Insert(new FlexboxText(text, buttonStyle.FontSize, buttonStyle.TextColor))
-            .Insert(new FlexboxNodeParent(buttonId))
-            .Id;
+		// Create text child
+		var textId = commands.Spawn()
+			.Insert(new FlexboxNode
+			{
+				Display = Display.Flex
+			})
+			.Insert(new FlexboxText(text, buttonStyle.FontSize, buttonStyle.TextColor))
+			.Insert(new FlexboxNodeParent(buttonId))
+			.Id;
 
-        // Attach click observer
-        if (onClick != null)
-        {
-            commands.Entity(buttonId)
-                .Observe<On<UiPointerTrigger>>((trigger) =>
-                {
-                    var e = trigger.Event.Event;
-                    if (e.Type == UiPointerEventType.PointerDown &&
-                        e.IsPrimaryButton)
-                    {
-                        onClick(trigger);
-                    }
-                });
-        }
+		return commands.Entity(buttonId);
+	}
 
-        return commands.Entity(buttonId);
-    }
-
-    /// <summary>
-    /// Creates a simple text button with default styling.
-    /// </summary>
-    public static EntityCommands CreateSimple(
-        Commands commands,
-        string text,
-        Action<On<UiPointerTrigger>> onClick)
-    {
-        return Create(commands, text, onClick, FlexboxButtonStyle.Default());
-    }
+	/// <summary>
+	/// Creates a simple text button with default styling.
+	/// </summary>
+	public static EntityCommands CreateSimple(
+		Commands commands,
+		string text)
+	{
+		return Create(commands, text, FlexboxButtonStyle.Default());
+	}
 }
 
 /// <summary>
@@ -101,33 +86,33 @@ public static class FlexboxButtonWidget
 /// </summary>
 public struct FlexboxButtonStyle
 {
-    public FlexValue Width;
-    public FlexValue Height;
-    public float PaddingHorizontal;
-    public float PaddingVertical;
-    public Vector4 BackgroundColor;
-    public Vector4 HoverColor;
-    public Vector4 PressedColor;
-    public Vector4 TextColor;
-    public float FontSize;
-    public float BorderRadius;
+	public FlexValue Width;
+	public FlexValue Height;
+	public float PaddingHorizontal;
+	public float PaddingVertical;
+	public Vector4 BackgroundColor;
+	public Vector4 HoverColor;
+	public Vector4 PressedColor;
+	public Vector4 TextColor;
+	public float FontSize;
+	public float BorderRadius;
 
-    public static FlexboxButtonStyle Default()
-    {
-        return new FlexboxButtonStyle
-        {
-            Width = FlexValue.Auto(),
-            Height = FlexValue.Points(40f),
-            PaddingHorizontal = 16f,
-            PaddingVertical = 8f,
-            BackgroundColor = new Vector4(0.2f, 0.4f, 0.8f, 1f),
-            HoverColor = new Vector4(0.3f, 0.5f, 0.9f, 1f),
-            PressedColor = new Vector4(0.1f, 0.3f, 0.7f, 1f),
-            TextColor = new Vector4(1f, 1f, 1f, 1f),
-            FontSize = 16f,
-            BorderRadius = 4f
-        };
-    }
+	public static FlexboxButtonStyle Default()
+	{
+		return new FlexboxButtonStyle
+		{
+			Width = FlexValue.Auto(),
+			Height = FlexValue.Points(40f),
+			PaddingHorizontal = 16f,
+			PaddingVertical = 8f,
+			BackgroundColor = new Vector4(0.2f, 0.4f, 0.8f, 1f),
+			HoverColor = new Vector4(0.3f, 0.5f, 0.9f, 1f),
+			PressedColor = new Vector4(0.1f, 0.3f, 0.7f, 1f),
+			TextColor = new Vector4(1f, 1f, 1f, 1f),
+			FontSize = 16f,
+			BorderRadius = 4f
+		};
+	}
 }
 
 /// <summary>
@@ -136,23 +121,23 @@ public struct FlexboxButtonStyle
 /// </summary>
 public static class FlexboxButtonSystems
 {
-    public static void UpdateButtonVisuals(
-        Query<Data<Interaction, FlexboxNode>, Filter<Changed<Interaction>>> buttons)
-    {
-        var style = FlexboxButtonStyle.Default();
+	public static void UpdateButtonVisuals(
+		Query<Data<Interaction, FlexboxNode>, Filter<Changed<Interaction>>> buttons)
+	{
+		var style = FlexboxButtonStyle.Default();
 
-        foreach (var (interaction, node) in buttons)
-        {
-            ref var interactionRef = ref interaction.Ref;
-            ref var nodeRef = ref node.Ref;
+		foreach (var (interaction, node) in buttons)
+		{
+			ref var interactionRef = ref interaction.Ref;
+			ref var nodeRef = ref node.Ref;
 
-            nodeRef.BackgroundColor = interactionRef switch
-            {
-                Interaction.None => style.BackgroundColor,
-                Interaction.Hovered => style.HoverColor,
-                Interaction.Pressed => style.PressedColor,
-                _ => style.BackgroundColor
-            };
-        }
-    }
+			nodeRef.BackgroundColor = interactionRef switch
+			{
+				Interaction.None => style.BackgroundColor,
+				Interaction.Hovered => style.HoverColor,
+				Interaction.Pressed => style.PressedColor,
+				_ => style.BackgroundColor
+			};
+		}
+	}
 }
