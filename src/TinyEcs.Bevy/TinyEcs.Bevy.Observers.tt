@@ -12,6 +12,7 @@
     string ParamDecls(int count) => string.Join("\n\t\t", Enumerable.Range(1, count).Select(i => $"var p{i} = new T{i}();"));
     string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(w);"));
     string CallbackParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
+    string ApplyCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"if (p{i} is Commands cmd{i}) cmd{i}.Apply();"));
 #>
 #pragma warning disable 1591
 #nullable enable
@@ -30,6 +31,7 @@ public static partial class AppObserverExtensions
         var paramDecls = ParamDecls(i);
         var fetchCalls = FetchCalls(i);
         var callbackParams = CallbackParams(i);
+        var applyCalls = ApplyCalls(i);
 #>
 	/// <summary>
 	/// Register an observer with system parameters
@@ -52,6 +54,7 @@ public static partial class AppObserverExtensions
 		{
 			<#= fetchCalls #>
 			callback(trigger, <#= callbackParams #>);
+			<#= applyCalls #>
 		});
 
 		return app;

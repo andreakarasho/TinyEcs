@@ -28,30 +28,18 @@ var gameRoot = new GameRootPlugin
 };
 app.AddPlugin(gameRoot);
 
-// Add Clay UI integration with REACTIVE SYSTEM
-app.AddPlugin(new RaylibClayUiPlugin
-{
-	RenderingStage = gameRoot.RenderingStage
-});
+// Add Clay UI integration with REACTIVE SYSTEM (DISABLED - Using Flexbox UI instead)
+// app.AddPlugin(new RaylibClayUiPlugin
+// {
+// 	RenderingStage = gameRoot.RenderingStage
+// });
 
 // Flexbox UI: core + Raylib bridge
 app.AddPlugin(new FlexboxUiPlugin { AutoCreatePointerState = true, ContainerWidth = 1280f, ContainerHeight = 720f });
 app.AddPlugin(new RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
 
-// Keep Clay reactive UI; also add interaction update after Flexbox pointer for Flexbox widgets
-app.AddSystem((EventReader<UiPointerEvent> events, Query<Data<Interaction, Interactive>> interactives, Local<HashSet<ulong>> touched, Commands commands) =>
-	UiInteractionSystems.UpdateInteractionState(events, interactives, touched, commands))
-	.InStage(Stage.PreUpdate)
-	.Label("ui:flexbox:interaction")
-	.After("ui:flexbox:pointer")
-	.Build();
-
-// Update Flexbox button visuals on Interaction changes
-app.AddSystem((Query<Data<Interaction, FlexboxNode>, Filter<Changed<Interaction>>> buttons) =>
-	FlexboxButtonSystems.UpdateButtonVisuals(buttons))
-	.InStage(Stage.PreUpdate)
-	.After("ui:flexbox:interaction")
-	.Build();
+// Button widget functionality
+app.AddPlugin(new TinyEcs.UI.Bevy.ButtonPlugin());
 
 // Keep Flexbox container size in sync with window
 app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
@@ -65,19 +53,30 @@ app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 .Label("ui:flexbox:update-container")
 .Build();
 
-// Enable reactive UI system (Bevy-style observers)
-app.AddUiWidgets();        // Window ordering and slider/window drag handling
-app.AddUiInteraction();    // Interaction state tracking
-app.AddUiWidgetObservers(); // Reactive visual updates
-
-// Add comprehensive UI demo (now with reactive interactions!)
-app.AddPlugin(new UiDemoPlugin { ShowUI = true });
-
-// Add a small Flexbox UI demo
-app.AddSystem((Commands commands) => BuildFlexboxUI(commands))
+// Simple button demo
+app.AddSystem((Commands commands) => CreateSimpleButton(commands))
 	.InStage(Stage.Startup)
-	.Label("ui:flexbox:demo:spawn")
+	.Label("ui:simple-button:spawn")
 	.Build();
+
+// Handle button activation
+app.AddObserver((On<TinyEcs.UI.Bevy.Activate> trigger, Query<Data<TinyEcs.UI.Bevy.UiNode, TinyEcs.UI.Bevy.BackgroundColor>, With<TinyEcs.UI.Bevy.Button>> qButtons) =>
+{
+	Console.WriteLine($"[Button] Button {trigger.EntityId} activated!");
+
+	if (qButtons.Contains(trigger.EntityId))
+	{
+		(var uiNode, var backgroudColor) = qButtons.Get(trigger.EntityId);
+		// Change button color randomly on each activation
+		var rnd = Random.Shared;
+		backgroudColor.Ref.Color = new Vector4(
+			rnd.NextSingle(),
+			rnd.NextSingle(),
+			rnd.NextSingle(),
+			1f);
+		uiNode.Ref.Width.Value += 5;
+	}
+});
 
 app.RunStartup();
 
@@ -88,103 +87,28 @@ while (!Raylib.WindowShouldClose())
 
 Raylib.CloseWindow();
 
-static void BuildFlexboxUI(Commands commands)
+static void CreateSimpleButton(Commands commands)
 {
-	// Root full-screen container
-	var root = FlexboxPanelWidget.CreateColumn(commands, FlexboxPanelStyle.Transparent())
-		.Insert(new FlexboxNode
+	// Create a simple button centered on screen
+	commands.Spawn()
+		.Insert(new TinyEcs.UI.Bevy.UiNode
 		{
-			FlexDirection = FlexDirection.Column,
-			JustifyContent = Justify.FlexStart,
-			AlignItems = Align.Stretch,
-			Width = FlexValue.Percent(100f),
-			Height = FlexValue.Percent(100f),
-			BackgroundColor = new Vector4(0.08f, 0.08f, 0.12f, 1f),
-		})
-		.Id;
-
-	// Card panel centered horizontally
-	var card = FlexboxPanelWidget.CreateColumn(commands, FlexboxPanelStyle.Card())
-		.Insert(new FlexboxNode
-		{
-			Width = FlexValue.Points(380f),
-			Height = FlexValue.Auto(),
-			MarginTop = 20f,
+			Width = FlexValue.Points(200f),
+			Height = FlexValue.Points(60f),
+			JustifyContent = Justify.Center,
+			AlignItems = Align.Center,
+			// Center the button
+			MarginTop = FlexValue.Points(300f),
 			MarginLeft = FlexValue.Auto(),
 			MarginRight = FlexValue.Auto(),
-			BorderColor = new Vector4(0.6f, 0.6f, 0.65f, 1f)
 		})
-		.Insert(new FlexboxNodeParent(root))
-		.Id;
+		.Insert(TinyEcs.UI.Bevy.BackgroundColor.Blue)
+		.Insert(TinyEcs.UI.Bevy.BorderColor.FromRgba(255, 0, 0, 255))
+		.Insert(new TinyEcs.UI.Bevy.BorderRadius(8f))
+		.Insert(new TinyEcs.UI.Bevy.Button())
+		.Insert(new TinyEcs.UI.Bevy.Interactive(focusable: true));
 
-	FlexboxLabelWidget.CreateHeading2(commands, "Flexbox UI in TinyEcsGame")
-		.Insert(new FlexboxNodeParent(card, index: 0))
-		.Insert(new FlexboxNode { MarginBottom = 12f });
-
-	// Row of buttons
-	var row = FlexboxPanelWidget.CreateRow(commands, FlexboxPanelStyle.Transparent())
-		.Insert(new FlexboxNode
-		{
-			FlexDirection = FlexDirection.Row,
-			JustifyContent = Justify.SpaceBetween,
-			AlignItems = Align.Center,
-			Width = FlexValue.Percent(100f),
-		})
-		.Insert(new FlexboxNodeParent(card, index: 1))
-		.Id;
-
-	FlexboxButtonWidget.Create(commands, "Primary")
-		.Insert(new FlexboxNodeParent(row, index: 0))
-		.Observe<On<UiPointerTrigger>>(t =>
-		{
-			var e = t.Event.Event;
-			// Only handle direct clicks on the button itself, not bubbled events from children (text)
-			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
-				Console.WriteLine("[Flexbox] Primary clicked");
-		});
-
-	FlexboxButtonWidget.Create(commands, "Secondary")
-		.Insert(new FlexboxNodeParent(row, index: 1))
-		.Observe<On<UiPointerTrigger>>(t =>
-		{
-			var e = t.Event.Event;
-			// Only handle direct clicks on the button itself, not bubbled events from children (text)
-			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
-				Console.WriteLine("[Flexbox] Secondary clicked");
-		});
-	// Add a vertical scroll container with sample items
-	var scroll = FlexboxScrollContainerWidget.CreateVertical(commands, new Vector2(320f, 160f), card)
-		.Id;
-	for (int i = 1; i <= 12; i++)
-	{
-		FlexboxLabelWidget.CreateBody(commands, $"Item {i}")
-			.Insert(new FlexboxNodeParent(scroll, index: i - 1))
-			.Insert(new FlexboxNode { MarginBottom = 8f });
-	}
-
-	// Create a floating window demo
-	var window = FlexboxFloatingWindowWidget.Create(
-		commands,
-		"Flexbox Floating Window",
-		new Vector2(100f, 100f),
-		FlexboxFloatingWindowStyle.Default());
-
-	// Add some content to the window
-	FlexboxLabelWidget.CreateHeading3(commands, "Window Content")
-		.Insert(new FlexboxNodeParent(window.ContentAreaId));
-
-	FlexboxLabelWidget.CreateBody(commands, "This is a draggable floating window built with Flexbox layout!")
-		.Insert(new FlexboxNodeParent(window.ContentAreaId))
-		.Insert(new FlexboxNode { MarginBottom = 8f });
-
-	FlexboxButtonWidget.Create(commands, "Test Button")
-		.Insert(new FlexboxNodeParent(window.ContentAreaId))
-		.Observe<On<UiPointerTrigger>>(t =>
-		{
-			var e = t.Event.Event;
-			if (e.Type == UiPointerEventType.PointerDown && e.IsPrimaryButton && e.Target == e.CurrentTarget)
-				Console.WriteLine("[Flexbox Window] Test button clicked!");
-		});
+	Console.WriteLine("Simple button created - click it to see interaction");
 }
 
 sealed class RaylibPlugin : IPlugin

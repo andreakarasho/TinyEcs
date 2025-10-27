@@ -4,6 +4,7 @@ using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.UI;
+using TinyEcs.UI.Flexbox;
 
 namespace TinyEcsGame;
 
@@ -31,8 +32,9 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 					   Query<Data<FlexboxNode>> n,
 					   Query<Data<FlexboxText>> t,
 					   Query<Data<FlexboxScrollContainer>> sc,
+					   Query<Data<FlexboxScrollContainerViewport>> vp,
 					   Query<Data<Children>> children) =>
-			RenderFlexboxUI(s, n, t, sc, children))
+			RenderFlexboxUI(s, n, t, sc, vp, children))
 			.InStage(renderStage)
 			.Label("ui:raylib:flexbox:render")
 			.After("render:debug")
@@ -65,6 +67,7 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 		Query<Data<FlexboxNode>> nodes,
 		Query<Data<FlexboxText>> texts,
 		Query<Data<FlexboxScrollContainer>> scrollers,
+		Query<Data<FlexboxScrollContainerViewport>> viewports,
 		Query<Data<Children>> childrenQuery)
 	{
 		var state = uiState.Value;
@@ -74,7 +77,7 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 		{
 			if (state.TryGetNode(rootId, out var rootNode) && rootNode != null)
 			{
-				RenderNodeRecursive(rootId, rootNode, nodes, texts, scrollers, childrenQuery, state, Vector2.Zero, null);
+				RenderNodeRecursive(rootId, rootNode, nodes, texts, scrollers, viewports, childrenQuery, state, Vector2.Zero, null);
 			}
 		}
 	}
@@ -85,6 +88,7 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 		Query<Data<FlexboxNode>> nodes,
 		Query<Data<FlexboxText>> texts,
 		Query<Data<FlexboxScrollContainer>> scrollers,
+		Query<Data<FlexboxScrollContainerViewport>> viewports,
 		Query<Data<Children>> childrenQuery,
 		FlexboxUiState state,
 		Vector2 parentPosition,
@@ -97,25 +101,35 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 		var drawPos = parentPosition + new Vector2(layout.left, layout.top);
 		var drawSize = new Vector2(layout.width, layout.height);
 
-		// Compute child clip (for scrollers)
+		// Compute child clip and scroll offset
 		var childClip = clip;
 		var childParentPosition = drawPos; // Children positioned relative to this element
 
-		if (scrollers.Contains(entityId))
+		// Check if this entity is a scroll viewport (has viewport component)
+		if (viewports.Contains(entityId))
 		{
-			// For scrollers, clip to the element's bounds (full area including padding)
+			// This is a scroll viewport - apply clipping at viewport height
+			var vp = viewports.Get(entityId);
+			vp.Deconstruct(out var vpPtr);
+			var viewportHeight = vpPtr.Ref.Height;
+
 			var contentRect = new Rectangle(
 				drawPos.X,
 				drawPos.Y,
 				layout.width,
-				layout.height);
-			
-			childClip = childClip.HasValue ? Intersect(childClip.Value, contentRect) : contentRect;
+				viewportHeight);
 
-			// Apply scroll offset - children are offset by the scroll amount
+			childClip = childClip.HasValue ? Intersect(childClip.Value, contentRect) : contentRect;
+		}
+
+		// Check if this entity is a scroll content area (has scroll container component)
+		if (scrollers.Contains(entityId))
+		{
+			// This is the scrollable content area - apply scroll offset to children
 			var sc = scrollers.Get(entityId);
 			sc.Deconstruct(out var sPtr);
-			childParentPosition += new Vector2(-sPtr.Ref.Offset.X, -sPtr.Ref.Offset.Y);
+			var scrollOffset = sPtr.Ref.Offset;
+			childParentPosition += new Vector2(-scrollOffset.X, -scrollOffset.Y);
 		}
 
 		// Apply current clip for this entity draw
@@ -157,7 +171,7 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			if (childNode != null && childNode.Context is ValueTuple<ulong, uint> context)
 			{
 				var (childEntityId, _) = context;
-				RenderNodeRecursive(childEntityId, childNode, nodes, texts, scrollers, childrenQuery, state, childParentPosition, childClip);
+				RenderNodeRecursive(childEntityId, childNode, nodes, texts, scrollers, viewports, childrenQuery, state, childParentPosition, childClip);
 			}
 		}
 	}
@@ -201,7 +215,6 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			return;
 
 		var raylibColor = new Color((byte)(textData.Color.X * 255), (byte)(textData.Color.Y * 255), (byte)(textData.Color.Z * 255), (byte)(textData.Color.W * 255));
-
 		Raylib.DrawText(textData.Text, (int)contentPosition.X, (int)contentPosition.Y, (int)textData.FontSize, raylibColor);
 	}
 }

@@ -151,4 +151,108 @@ public static class FlexboxFloatingWindowSystems
 			}
 		}
 	}
+
+	/// <summary>
+	/// Syncs scrollbar position/size with content area scroll state.
+	/// - When scrollbar is dragged: updates scroll container offset
+	/// - When scroll container is scrolled: updates scrollbar position
+	/// Must run after scrollbar drag.
+	/// </summary>
+	public static void SyncWindowScrollbars(
+		Query<Data<FlexboxFloatingWindowLinks>> windows,
+		Query<Data<FlexboxScrollContainer>> scrollContainers,
+		Query<Data<FlexboxScrollbarState, FlexboxScrollbarLinks, FlexboxScrollbarStyle, FlexboxNode>> scrollbars,
+		Query<Data<FlexboxNode>> nodes,
+		Commands commands,
+		ResMut<FlexboxUiState> uiState)
+	{
+		foreach (var (entityId, linksPtr) in windows)
+		{
+			var links = linksPtr.Ref;
+
+			// Skip if window doesn't have both content area and scrollbar
+			if (links.ContentAreaId == 0 || links.ScrollbarId == 0)
+				continue;
+
+			// Get scroll container state
+			if (!scrollContainers.Contains(links.ContentAreaId))
+				continue;
+
+			var scrollData = scrollContainers.Get(links.ContentAreaId);
+			scrollData.Deconstruct(out var scrollPtr);
+			ref var scroll = ref scrollPtr.Ref;
+
+			// Get scrollbar state
+			if (!scrollbars.Contains(links.ScrollbarId))
+				continue;
+
+			var scrollbarData = scrollbars.Get(links.ScrollbarId);
+			scrollbarData.Deconstruct(out var statePtr, out var barLinksPtr, out var stylePtr, out var barNodePtr);
+			ref var scrollbarState = ref statePtr.Ref;
+			var scrollbarLinks = barLinksPtr.Ref;
+			var scrollbarStyle = stylePtr.Ref;
+			ref var scrollbarNode = ref barNodePtr.Ref;
+
+			// Get container node for layout info
+			if (!uiState.Value.TryGetNode(links.ContentAreaId, out var containerNode) || containerNode == null)
+				continue;
+
+			// Calculate total content height by measuring all children
+			float contentTop = containerNode.layout.content.y;
+			float maxBottom = contentTop;
+
+			void TraverseChildren(global::Flexbox.Node node)
+			{
+				foreach (var child in node.Children)
+				{
+					var childLayout = child.layout;
+					var bottom = childLayout.top + childLayout.height;
+					if (bottom > maxBottom) maxBottom = bottom;
+					TraverseChildren(child);
+				}
+			}
+			TraverseChildren(containerNode);
+
+			var contentHeight = MathF.Max(0f, maxBottom - contentTop);
+			var viewportHeight = containerNode.layout.content.height;
+			var maxScrollY = MathF.Max(0f, contentHeight - viewportHeight);
+
+			// If scrollbar was just dragged, update scroll container offset
+			if (scrollbarState.IsDragging)
+			{
+				var newOffset = scrollbarState.ScrollPosition * maxScrollY;
+				scroll.Offset = new Vector2(scroll.Offset.X, newOffset);
+				commands.Entity(links.ContentAreaId).Insert(scroll);
+			}
+			else
+			{
+				// Otherwise, sync scrollbar to match scroll container offset
+				var visibleRatio = contentHeight > 0 ? Math.Clamp(viewportHeight / contentHeight, 0.01f, 1.0f) : 1.0f;
+				var scrollPosition = maxScrollY > 0 ? Math.Clamp(scroll.Offset.Y / maxScrollY, 0f, 1f) : 0f;
+
+				scrollbarState.VisibleRatio = visibleRatio;
+				scrollbarState.ScrollPosition = scrollPosition;
+
+				// Update handle size and position
+				if (nodes.Contains(scrollbarLinks.HandleId))
+				{
+					var handleData = nodes.Get(scrollbarLinks.HandleId);
+					handleData.Deconstruct(out var handleNodePtr);
+					ref var handleNode = ref handleNodePtr.Ref;
+
+					var trackHeight = scrollbarNode.Height.Unit == global::Flexbox.Unit.Point
+						? scrollbarNode.Height.Value
+						: 100f;
+					var availableHeight = trackHeight - (scrollbarStyle.HandlePadding * 2f);
+					var handleHeight = Math.Max(scrollbarStyle.MinHandleSize, availableHeight * visibleRatio);
+
+					handleNode.Height = FlexValue.Points(handleHeight);
+
+					var maxHandleTravel = availableHeight - handleHeight;
+					var newTop = scrollbarStyle.HandlePadding + (maxHandleTravel * scrollPosition);
+					handleNode.Top = FlexValue.Points(newTop);
+				}
+			}
+		}
+	}
 }

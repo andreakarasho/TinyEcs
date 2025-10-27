@@ -117,7 +117,6 @@ public static class UiInteractionSystems
 				UpdateInteractionState(events, interactives, touchedEntities, commands))
 				.InStage(Stage.PreUpdate)
 				.Label("ui:interaction:update")
-				.After("ui:clay:pointer")
 				.Build();
 
 			// NOTE: Focus management and Z-index systems removed as they were unused

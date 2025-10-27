@@ -302,7 +302,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:widgets:scrollbar:update")
-		.Before("ui:clay:layout") // Run before layout so childOffset is applied
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
 
@@ -343,7 +342,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:widgets:scrollbar:click")
-		.After("ui:clay:pointer")  // Run AFTER events are generated
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
 
@@ -438,7 +436,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:widgets:scrollbar:drag")
-		.Before("ui:clay:pointer")  // Run BEFORE Clay processes input
 		.RunIfResourceExists<ClayPointerState>()
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
@@ -569,7 +566,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:widgets:scrollcontainer:update")
-		.Before("ui:clay:layout")  // Run BEFORE layout so thumb position updates are applied
 		.RunIfResourceExists<ClayUiState>()
 		.Build();
 
@@ -723,7 +719,6 @@ public sealed class UiWidgetsPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("ui:widgets:scrollcontainer:drag")
-		.Before("ui:clay:pointer")  // Run BEFORE Clay processes input
 		.RunIfResourceExists<ClayPointerState>()
 		.RunIfResourceExists<ClayUiState>()
 		.Build();

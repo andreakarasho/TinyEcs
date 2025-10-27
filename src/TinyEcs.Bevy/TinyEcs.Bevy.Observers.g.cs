@@ -28,6 +28,7 @@ public static partial class AppObserverExtensions
 		{
 			p1.Fetch(w);
 			callback(trigger, p1);
+			if (p1 is Commands cmd1) cmd1.Apply();
 		});
 
 		return app;
@@ -56,6 +57,8 @@ public static partial class AppObserverExtensions
 			p1.Fetch(w);
 			p2.Fetch(w);
 			callback(trigger, p1, p2);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
 		});
 
 		return app;
@@ -86,6 +89,9 @@ public static partial class AppObserverExtensions
 			p2.Fetch(w);
 			p3.Fetch(w);
 			callback(trigger, p1, p2, p3);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
 		});
 
 		return app;
@@ -118,6 +124,10 @@ public static partial class AppObserverExtensions
 			p3.Fetch(w);
 			p4.Fetch(w);
 			callback(trigger, p1, p2, p3, p4);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
 		});
 
 		return app;
@@ -152,6 +162,11 @@ public static partial class AppObserverExtensions
 			p4.Fetch(w);
 			p5.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
 		});
 
 		return app;
@@ -188,6 +203,12 @@ public static partial class AppObserverExtensions
 			p5.Fetch(w);
 			p6.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
 		});
 
 		return app;
@@ -226,6 +247,13 @@ public static partial class AppObserverExtensions
 			p6.Fetch(w);
 			p7.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
 		});
 
 		return app;
@@ -266,6 +294,14 @@ public static partial class AppObserverExtensions
 			p7.Fetch(w);
 			p8.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
 		});
 
 		return app;
@@ -308,6 +344,15 @@ public static partial class AppObserverExtensions
 			p8.Fetch(w);
 			p9.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
 		});
 
 		return app;
@@ -352,6 +397,16 @@ public static partial class AppObserverExtensions
 			p9.Fetch(w);
 			p10.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
 		});
 
 		return app;
@@ -398,6 +453,17 @@ public static partial class AppObserverExtensions
 			p10.Fetch(w);
 			p11.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
+			if (p11 is Commands cmd11) cmd11.Apply();
 		});
 
 		return app;
@@ -446,6 +512,18 @@ public static partial class AppObserverExtensions
 			p11.Fetch(w);
 			p12.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
+			if (p11 is Commands cmd11) cmd11.Apply();
+			if (p12 is Commands cmd12) cmd12.Apply();
 		});
 
 		return app;
@@ -496,6 +574,19 @@ public static partial class AppObserverExtensions
 			p12.Fetch(w);
 			p13.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
+			if (p11 is Commands cmd11) cmd11.Apply();
+			if (p12 is Commands cmd12) cmd12.Apply();
+			if (p13 is Commands cmd13) cmd13.Apply();
 		});
 
 		return app;
@@ -548,6 +639,20 @@ public static partial class AppObserverExtensions
 			p13.Fetch(w);
 			p14.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
+			if (p11 is Commands cmd11) cmd11.Apply();
+			if (p12 is Commands cmd12) cmd12.Apply();
+			if (p13 is Commands cmd13) cmd13.Apply();
+			if (p14 is Commands cmd14) cmd14.Apply();
 		});
 
 		return app;
@@ -602,6 +707,21 @@ public static partial class AppObserverExtensions
 			p14.Fetch(w);
 			p15.Fetch(w);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15);
+			if (p1 is Commands cmd1) cmd1.Apply();
+			if (p2 is Commands cmd2) cmd2.Apply();
+			if (p3 is Commands cmd3) cmd3.Apply();
+			if (p4 is Commands cmd4) cmd4.Apply();
+			if (p5 is Commands cmd5) cmd5.Apply();
+			if (p6 is Commands cmd6) cmd6.Apply();
+			if (p7 is Commands cmd7) cmd7.Apply();
+			if (p8 is Commands cmd8) cmd8.Apply();
+			if (p9 is Commands cmd9) cmd9.Apply();
+			if (p10 is Commands cmd10) cmd10.Apply();
+			if (p11 is Commands cmd11) cmd11.Apply();
+			if (p12 is Commands cmd12) cmd12.Apply();
+			if (p13 is Commands cmd13) cmd13.Apply();
+			if (p14 is Commands cmd14) cmd14.Apply();
+			if (p15 is Commands cmd15) cmd15.Apply();
 		});
 
 		return app;

@@ -1,0 +1,373 @@
+using TinyEcs.Bevy;
+using Flexbox;
+
+namespace TinyEcs.UI.Bevy;
+
+/// <summary>
+/// Resource that manages the Flexbox layout state.
+/// Stores the root container node.
+/// </summary>
+public class FlexboxUiState
+{
+	/// <summary>
+	/// The root Flexbox container that holds all UI nodes.
+	/// </summary>
+	public Node Root { get; }
+
+	public FlexboxUiState()
+	{
+		Root = new Node();
+		Root.nodeStyle.Display = Display.Flex;
+		Root.nodeStyle.FlexDirection = FlexDirection.Column;
+		Root.nodeStyle.Dimensions[(int)Dimension.Width] = new Value(100f, Unit.Percent);
+		Root.nodeStyle.Dimensions[(int)Dimension.Height] = new Value(100f, Unit.Percent);
+	}
+
+	/// <summary>
+	/// Calculate layout for the entire UI tree.
+	/// Call this once per frame after all style updates.
+	/// </summary>
+	public void CalculateLayout(float availableWidth, float availableHeight)
+	{
+		Root.CalculateLayout(availableWidth, availableHeight, Direction.LTR);
+	}
+}
+
+/// <summary>
+/// Plugin that integrates Flexbox layout with TinyEcs.Bevy UI components.
+/// Converts ECS component data (Style, Parent) into Flexbox nodes and manages the layout tree.
+/// </summary>
+public struct FlexboxUiPlugin : IPlugin
+{
+	/// <summary>
+	/// Default available width for layout calculation (can be overridden).
+	/// </summary>
+	public float AvailableWidth { get; set; }
+
+	/// <summary>
+	/// Default available height for layout calculation (can be overridden).
+	/// </summary>
+	public float AvailableHeight { get; set; }
+
+	public FlexboxUiPlugin()
+	{
+		AvailableWidth = 1920f;
+		AvailableHeight = 1080f;
+	}
+
+	public readonly void Build(App app)
+	{
+		// Register the FlexboxUiState resource
+		app.AddResource(new FlexboxUiState());
+
+		// Copy to local variables to avoid struct 'this' capture
+		var width = AvailableWidth;
+		var height = AvailableHeight;
+
+		// Phase 2: Node Lifecycle - Use observers for OnInsert/OnRemove
+		app.AddObserver<OnInsert<UiNode>, ResMut<FlexboxUiState>, Commands>(OnUiNodeInserted);
+		app.AddObserver<OnRemove<UiNode>, ResMut<FlexboxUiState>>(OnUiNodeRemoved);
+
+		// Phase 3: Property Synchronization
+		app.AddSystem((Query<Data<UiNode, FlexboxNodeRef>, Filter<Changed<UiNode>>> changedNodes) =>
+		{
+			SyncUiNodeToFlexbox(changedNodes);
+		})
+			.InStage(Stage.PreUpdate)
+			.Label("flexbox:sync_node")
+			.Build();
+
+		app.AddSystem((
+			Query<Data<Parent, FlexboxNodeRef>, Filter<Changed<Parent>>> changedParents,
+			Query<Data<Parent, FlexboxNodeRef>, Filter<Added<Parent>>> addedParents,
+			Query<Data<FlexboxNodeRef>> allNodeRefs,
+			ResMut<FlexboxUiState> state) =>
+		{
+			SyncHierarchyToFlexbox(changedParents, addedParents, allNodeRefs, state);
+		})
+			.InStage(Stage.PreUpdate)
+			.Label("flexbox:sync_hierarchy")
+			.After("flexbox:sync_style")
+			.Build();
+
+		// Phase 4: Layout Calculation
+		app.AddSystem((ResMut<FlexboxUiState> state) =>
+		{
+			state.Value.CalculateLayout(width, height);
+		})
+			.InStage(Stage.Update)
+			.Label("flexbox:calculate_layout")
+			.Build();
+
+		app.AddSystem((Query<Data<FlexboxNodeRef>> nodeRefs, Commands commands) =>
+		{
+			ReadComputedLayout(nodeRefs, commands);
+		})
+			.InStage(Stage.PostUpdate)
+			.Label("flexbox:read_layout")
+			.Build();
+	}
+
+	/// <summary>
+	/// Observer: Called when UiNode component is added to an entity.
+	/// Creates a new Flexbox node and attaches it to the root.
+	/// </summary>
+	private static void OnUiNodeInserted(
+		OnInsert<UiNode> trigger,
+		ResMut<FlexboxUiState> state,
+		Commands commands)
+	{
+		// Create a new Flexbox node for this UI entity
+		var node = new Node();
+
+		// Default styling - can be overridden by Style component
+		node.nodeStyle.Display = Display.Flex;
+		node.nodeStyle.FlexDirection = FlexDirection.Column;
+
+		// Add as child of root (will be reparented by hierarchy sync if needed)
+		state.Value.Root.AddChild(node);
+
+		// Store reference to the Flexbox node on the entity
+		commands.Entity(trigger.EntityId).Insert(new FlexboxNodeRef
+		{
+			Node = node,
+			ElementId = (uint)trigger.EntityId // Use entity ID as element ID for tracking
+		});
+	}
+
+	/// <summary>
+	/// Observer: Called when UiNode component is removed from an entity.
+	/// Destroys the associated Flexbox node.
+	/// </summary>
+	private static void OnUiNodeRemoved(
+		OnRemove<UiNode> trigger,
+		ResMut<FlexboxUiState> state)
+	{
+		// Note: trigger.Component contains the removed UiNode component value
+		// but FlexboxNodeRef is also already removed at this point
+		// We could store a lookup in FlexboxUiState, but user requested no dictionaries
+		// For now, orphaned nodes will remain in the tree (limitation)
+		// TODO: Consider alternative cleanup strategies
+	}
+
+	/// <summary>
+	/// Helper: Converts FlexValue to Flexbox.Value
+	/// Creates a new Value instance if target is null, otherwise updates the existing instance.
+	/// This avoids unnecessary allocations.
+	/// </summary>
+	private static void ToFlexboxValue(ref Value target, FlexValue value)
+	{
+		if (target == null)
+		{
+			// Create new instance
+			if (value.IsAuto)
+				target = new Value(float.NaN, Unit.Auto);
+			else if (value.IsUndefined)
+				target = Value.UndefinedValue;
+			else
+				target = new Value(value.Value, value.Unit);
+		}
+		else
+		{
+			// Reuse existing instance
+			if (value.IsAuto)
+			{
+				target.value = float.NaN;
+				target.unit = Unit.Auto;
+			}
+			else if (value.IsUndefined)
+			{
+				target.value = float.NaN;
+				target.unit = Unit.Undefined;
+			}
+			else
+			{
+				target.value = value.Value;
+				target.unit = value.Unit;
+			}
+		}
+	}
+
+	/// <summary>
+	/// System: Syncs UiNode component changes to Flexbox node properties.
+	/// Runs in PreUpdate stage.
+	/// </summary>
+	private static void SyncUiNodeToFlexbox(
+		Query<Data<UiNode, FlexboxNodeRef>, Filter<Changed<UiNode>>> changedNodes)
+	{
+		foreach (var (uiNode, nodeRef) in changedNodes)
+		{
+			ref var nodeData = ref uiNode.Ref;
+			var node = nodeRef.Ref.Node;
+
+			if (node == null)
+				continue;
+
+			var ns = node.nodeStyle;
+
+			// Sync all UiNode properties to Flexbox node
+			ns.Display = nodeData.Display;
+			ns.PositionType = nodeData.PositionType;
+			ns.FlexDirection = nodeData.FlexDirection;
+			ns.FlexWrap = nodeData.FlexWrap;
+			ns.Overflow = nodeData.Overflow;
+			ns.AlignItems = nodeData.AlignItems;
+			ns.AlignSelf = nodeData.AlignSelf;
+			ns.AlignContent = nodeData.AlignContent;
+			ns.JustifyContent = nodeData.JustifyContent;
+			ns.FlexGrow = nodeData.FlexGrow;
+			ns.FlexShrink = nodeData.FlexShrink;
+			ToFlexboxValue(ref ns.FlexBasis, nodeData.FlexBasis.Value);
+
+			// Dimensions
+			ToFlexboxValue(ref ns.Dimensions[(int)Dimension.Width], nodeData.Width);
+			ToFlexboxValue(ref ns.Dimensions[(int)Dimension.Height], nodeData.Height);
+			ToFlexboxValue(ref ns.MinDimensions[(int)Dimension.Width], nodeData.MinWidth);
+			ToFlexboxValue(ref ns.MinDimensions[(int)Dimension.Height], nodeData.MinHeight);
+			ToFlexboxValue(ref ns.MaxDimensions[(int)Dimension.Width], nodeData.MaxWidth);
+			ToFlexboxValue(ref ns.MaxDimensions[(int)Dimension.Height], nodeData.MaxHeight);
+
+			// Position
+			ToFlexboxValue(ref ns.Position[(int)Edge.Left], nodeData.Left);
+			ToFlexboxValue(ref ns.Position[(int)Edge.Right], nodeData.Right);
+			ToFlexboxValue(ref ns.Position[(int)Edge.Top], nodeData.Top);
+			ToFlexboxValue(ref ns.Position[(int)Edge.Bottom], nodeData.Bottom);
+
+			// Margin
+			ToFlexboxValue(ref ns.Margin[(int)Edge.Left], nodeData.MarginLeft);
+			ToFlexboxValue(ref ns.Margin[(int)Edge.Right], nodeData.MarginRight);
+			ToFlexboxValue(ref ns.Margin[(int)Edge.Top], nodeData.MarginTop);
+			ToFlexboxValue(ref ns.Margin[(int)Edge.Bottom], nodeData.MarginBottom);
+
+			// Padding
+			ToFlexboxValue(ref ns.Padding[(int)Edge.Left], nodeData.PaddingLeft);
+			ToFlexboxValue(ref ns.Padding[(int)Edge.Right], nodeData.PaddingRight);
+			ToFlexboxValue(ref ns.Padding[(int)Edge.Top], nodeData.PaddingTop);
+			ToFlexboxValue(ref ns.Padding[(int)Edge.Bottom], nodeData.PaddingBottom);
+
+			// Border
+			ToFlexboxValue(ref ns.Border[(int)Edge.Left], nodeData.BorderLeft);
+			ToFlexboxValue(ref ns.Border[(int)Edge.Right], nodeData.BorderRight);
+			ToFlexboxValue(ref ns.Border[(int)Edge.Top], nodeData.BorderTop);
+			ToFlexboxValue(ref ns.Border[(int)Edge.Bottom], nodeData.BorderBottom);
+
+			// Mark node as dirty to trigger relayout
+			node.MarkAsDirty();
+		}
+	}
+
+	/// <summary>
+	/// System: Syncs Parent component changes to Flexbox node hierarchy.
+	/// Runs in PreUpdate stage after style sync.
+	/// </summary>
+	private static void SyncHierarchyToFlexbox(
+		Query<Data<Parent, FlexboxNodeRef>, Filter<Changed<Parent>>> changedParents,
+		Query<Data<Parent, FlexboxNodeRef>, Filter<Added<Parent>>> addedParents,
+		Query<Data<FlexboxNodeRef>> allNodeRefs,
+		ResMut<FlexboxUiState> state)
+	{
+		// Handle changed parents
+		foreach (var (parent, childNodeRef) in changedParents)
+		{
+			var childNode = childNodeRef.Ref.Node;
+			if (childNode == null)
+				continue;
+
+			var parentEntityId = parent.Ref.Id;
+
+			// Remove from current parent first
+			if (childNode.Parent != null)
+			{
+				childNode.Parent.RemoveChild(childNode);
+			}
+
+			// Find parent's Flexbox node
+			Node? parentNode = null;
+			foreach (var (entityId, parentNodeRef) in allNodeRefs)
+			{
+				if (entityId.Ref == parentEntityId)
+				{
+					parentNode = parentNodeRef.Ref.Node;
+					break;
+				}
+			}
+
+			// Add to new parent (or root if parent not found)
+			if (parentNode != null)
+			{
+				parentNode.AddChild(childNode);
+			}
+			else
+			{
+				// No parent entity or parent doesn't have FlexboxNodeRef
+				// Add to root as fallback
+				state.Value.Root.AddChild(childNode);
+			}
+		}
+
+		// Also handle entities that just got a Parent component added
+		foreach (var (parent, childNodeRef) in addedParents)
+		{
+			var childNode = childNodeRef.Ref.Node;
+			if (childNode == null)
+				continue;
+
+			var parentEntityId = parent.Ref.Id;
+
+			// Remove from root if it's there
+			if (childNode.Parent != null)
+			{
+				childNode.Parent.RemoveChild(childNode);
+			}
+
+			// Find parent's Flexbox node
+			Node? parentNode = null;
+			foreach (var (entityId, parentNodeRef) in allNodeRefs)
+			{
+				if (entityId.Ref == parentEntityId)
+				{
+					parentNode = parentNodeRef.Ref.Node;
+					break;
+				}
+			}
+
+			// Add to new parent (or root if parent not found)
+			if (parentNode != null)
+			{
+				parentNode.AddChild(childNode);
+			}
+			else
+			{
+				state.Value.Root.AddChild(childNode);
+			}
+		}
+	}
+
+	/// <summary>
+	/// System: Reads computed layout from Flexbox nodes back to ComputedLayout components.
+	/// Runs in PostUpdate stage after layout calculation.
+	/// </summary>
+	private static void ReadComputedLayout(
+		Query<Data<FlexboxNodeRef>> nodeRefs,
+		Commands commands)
+	{
+		foreach (var (entityId, nodeRef) in nodeRefs)
+		{
+			var node = nodeRef.Ref.Node;
+			if (node == null)
+				continue;
+
+			// Read the computed layout from Flexbox
+			var layout = node.layout;
+
+			// Update or insert ComputedLayout component
+			commands.Entity(entityId.Ref).Insert(new ComputedLayout
+			{
+				X = layout.left,
+				Y = layout.top,
+				Width = layout.width,
+				Height = layout.height
+			});
+		}
+	}
+}

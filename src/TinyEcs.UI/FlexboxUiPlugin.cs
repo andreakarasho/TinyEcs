@@ -112,6 +112,55 @@ public struct FlexboxUiPlugin : IPlugin
 			.Label("ui:flexbox:window-drag")
 			.After("ui:flexbox:pointer")  // Run AFTER pointer events are fired
 			.Build();
+
+		// Add scrollbar drag system - must run in PreUpdate to catch events
+		app.AddSystem((EventReader<UiPointerEvent> events,
+					   Query<Data<FlexboxScrollbarState, FlexboxScrollbarLinks, FlexboxScrollbarStyle, FlexboxNode>> scrollbars,
+					   Query<Data<FlexboxNode>> nodes,
+					   Query<Data<Parent>> parents,
+					   ResMut<FlexboxUiState> uiState) =>
+			FlexboxScrollbarSystems.HandleScrollbarDrag(events, scrollbars, nodes, parents, uiState))
+			.InStage(Stage.PreUpdate)
+			.Label("ui:flexbox:scrollbar-drag")
+			.After("ui:flexbox:pointer")  // Run AFTER pointer events are fired
+			.Build();
+
+		// Add scrollbar visual update system - runs in PreUpdate before layout
+		app.AddSystem((Query<Data<FlexboxScrollbarState, FlexboxScrollbarLinks, FlexboxScrollbarStyle>> scrollbars,
+					   Query<Data<FlexboxNode>> nodes,
+					   Res<FlexboxPointerState> pointerState) =>
+			FlexboxScrollbarSystems.UpdateScrollbarVisuals(scrollbars, nodes, pointerState))
+			.InStage(Stage.PreUpdate)
+			.Label("ui:flexbox:scrollbar-visuals")
+			.After("ui:flexbox:scrollbar-drag")
+			.RunIfResourceExists<FlexboxPointerState>()
+			.Build();
+
+		// Add window scrollbar sync system - bidirectional sync between scrollbar and scroll container
+		app.AddSystem((Query<Data<FlexboxFloatingWindowLinks>> windows,
+					   Query<Data<FlexboxScrollContainer>> scrollContainers,
+					   Query<Data<FlexboxScrollbarState, FlexboxScrollbarLinks, FlexboxScrollbarStyle, FlexboxNode>> scrollbars,
+					   Query<Data<FlexboxNode>> nodes,
+					   Commands commands,
+					   ResMut<FlexboxUiState> uiState) =>
+			FlexboxFloatingWindowSystems.SyncWindowScrollbars(windows, scrollContainers, scrollbars, nodes, commands, uiState))
+			.InStage(Stage.PreUpdate)
+			.Label("ui:flexbox:sync-window-scrollbars")
+			.After("ui:flexbox:scrollbar-drag")
+			.Build();
+
+		// Add standalone scroll container scrollbar sync system
+		app.AddSystem((Query<Data<FlexboxScrollContainerLinks>> wrappers,
+					   Query<Data<FlexboxScrollContainer>> scrollContainers,
+					   Query<Data<FlexboxScrollbarState, FlexboxScrollbarLinks, FlexboxScrollbarStyle, FlexboxNode>> scrollbars,
+					   Query<Data<FlexboxNode>> nodes,
+					   Commands commands,
+					   ResMut<FlexboxUiState> uiState) =>
+			FlexboxScrollbarSystems.SyncScrollContainerScrollbars(wrappers, scrollContainers, scrollbars, nodes, commands, uiState))
+			.InStage(Stage.PreUpdate)
+			.Label("ui:flexbox:sync-container-scrollbars")
+			.After("ui:flexbox:scrollbar-drag")
+			.Build();
 	}
 }
 

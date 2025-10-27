@@ -34,6 +34,7 @@ public struct FlexboxFloatingWindowLinks
 	public ulong CloseButtonId;
 	public ulong MinimizeButtonId;
 	public ulong MaximizeButtonId;
+	public ulong ScrollbarId;  // Vertical scrollbar for content area
 }
 
 /// <summary>
@@ -174,26 +175,55 @@ public static class FlexboxFloatingWindowWidget
 		// Create title bar
 		var titleBarInfo = CreateTitleBar(commands, windowId, title, windowStyle);
 
-		// Create content area below title bar with clipping
+		// Create horizontal container for content area + scrollbar
+		var contentContainerId = commands.Spawn()
+			.Insert(new FlexboxNode
+			{
+				Display = Display.Flex,
+				FlexDirection = FlexDirection.Row,
+				PositionType = PositionType.Relative,
+				Width = FlexValue.Percent(100f),
+				FlexGrow = 1f, // Take all remaining space after title bar
+				FlexShrink = 1f,
+				FlexBasis = FlexBasis.Auto()
+			})
+			.Insert(new FlexboxNodeParent(windowId, index: 1)) // After title bar
+			.Id;
+
+		// Create content area with clipping (takes most of horizontal space)
 		var contentAreaId = commands.Spawn()
 			.Insert(new FlexboxNode
 			{
 				Display = Display.Flex,
 				FlexDirection = FlexDirection.Column,
-				PositionType = PositionType.Relative, // Position relative to parent window
-				Width = FlexValue.Percent(100f),
-				// Don't set Height - let FlexGrow handle it
-				FlexGrow = 1f, // Take all remaining space after title bar
-				FlexShrink = 1f, // Allow shrinking if needed
-				FlexBasis = FlexBasis.Auto(), // Start from content size
+				PositionType = PositionType.Relative,
+				FlexGrow = 1f, // Take remaining width after scrollbar
+				FlexShrink = 1f,
+				FlexBasis = FlexBasis.Auto(),
+				Width = FlexValue.Auto(), // Let flexbox calculate width
+				Height = FlexValue.Percent(100f), // Take full height of parent
 				PaddingTop = windowStyle.ContentPadding,
 				PaddingRight = windowStyle.ContentPadding,
 				PaddingBottom = windowStyle.ContentPadding,
 				PaddingLeft = windowStyle.ContentPadding
 			})
 			.Insert(new FlexboxScrollContainer()) // Enable clipping/scissor mode
-			.Insert(new FlexboxNodeParent(windowId, index: 1)) // After title bar
+			.Insert(new FlexboxNodeParent(contentContainerId, index: 0)) // First child of container
 			.Id;
+
+		// Create vertical scrollbar (on the right side)
+		// Calculate available height for scrollbar (window height - title bar height)
+		var scrollbarHeight = windowStyle.InitialSize.Y - windowStyle.TitleBarHeight;
+		var scrollbarHandle = FlexboxScrollbarWidget.CreateVertical(
+			commands,
+			scrollbarHeight,
+			visibleRatio: 0.5f, // Default - will be updated by sync system
+			style: null,
+			parent: 0); // No parent yet
+
+		// Position scrollbar as second child (after content area)
+		commands.Entity(scrollbarHandle.ScrollbarId)
+			.Insert(new FlexboxNodeParent(contentContainerId, index: 1));
 
 		// Store links for systems to access window parts
 		commands.Entity(windowId).Insert(new FlexboxFloatingWindowLinks
@@ -202,7 +232,8 @@ public static class FlexboxFloatingWindowWidget
 			ContentAreaId = contentAreaId,
 			CloseButtonId = titleBarInfo.CloseButtonId,
 			MinimizeButtonId = titleBarInfo.MinimizeButtonId,
-			MaximizeButtonId = titleBarInfo.MaximizeButtonId
+			MaximizeButtonId = titleBarInfo.MaximizeButtonId,
+			ScrollbarId = scrollbarHandle.ScrollbarId
 		});
 
 		// Note: Window dragging is handled by the global FlexboxFloatingWindowSystem
