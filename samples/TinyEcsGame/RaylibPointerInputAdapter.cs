@@ -25,9 +25,9 @@ public struct RaylibPointerInputAdapter : IPlugin
 	public readonly void Build(App app)
 	{
 		// System to read Raylib input and update PointerInputState resource
-		app.AddSystem((ResMut<PointerInputState> pointerState) =>
+		app.AddSystem((ResMut<PointerInputState> pointerState, ResMut<ScrollInputState> scrollState) =>
 		{
-			UpdatePointerStateFromRaylib(pointerState);
+			UpdatePointerStateFromRaylib(pointerState, scrollState);
 		})
 		.InStage(InputStage)
 		.Label("raylib:update-pointer-input")
@@ -37,9 +37,9 @@ public struct RaylibPointerInputAdapter : IPlugin
 	}
 
 	/// <summary>
-	/// Reads Raylib mouse input and updates the PointerInputState resource.
+	/// Reads Raylib mouse input and updates the PointerInputState and ScrollInputState resources.
 	/// </summary>
-	private static void UpdatePointerStateFromRaylib(ResMut<PointerInputState> pointerState)
+	private static void UpdatePointerStateFromRaylib(ResMut<PointerInputState> pointerState, ResMut<ScrollInputState> scrollState)
 	{
 		ref var state = ref pointerState.Value;
 
@@ -51,7 +51,9 @@ public struct RaylibPointerInputAdapter : IPlugin
 		state.IsPrimaryButtonPressed = Raylib.IsMouseButtonPressed(MouseButton.Left);
 		state.IsPrimaryButtonReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
 
-		// Update scroll delta
-		state.ScrollDelta = new Vector2(0, Raylib.GetMouseWheelMove());
+		// Update scroll delta (for both pointer and scroll state)
+		var scrollDelta = new Vector2(0, Raylib.GetMouseWheelMove());
+		state.ScrollDelta = scrollDelta;
+		scrollState.Value.ScrollDelta = scrollDelta;
 	}
 }

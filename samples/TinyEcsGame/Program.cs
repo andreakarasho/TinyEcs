@@ -7,6 +7,7 @@ using TinyEcs;
 using TinyEcs.Bevy;
 using Flexbox;
 using TinyEcs.UI.Bevy;
+using TinyEcs.UI;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -32,19 +33,28 @@ app.AddPlugin(gameRoot);
 // });
 
 // Flexbox UI: core + Raylib bridge
-app.AddPlugin(new TinyEcs.UI.Bevy.FlexboxUiPlugin());
+app.AddPlugin(new FlexboxUiPlugin());
 app.AddPlugin(new TinyEcsGame.RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
 
+// UI Stack for z-order management
+app.AddPlugin(new UiStackPlugin());
+
 // Pointer input: renderer-agnostic hit testing + Raylib adapter
-app.AddPlugin(new TinyEcs.UI.Bevy.UiPointerInputPlugin { InputStage = Stage.Update });
-app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.Update });
+// Must run in PostUpdate after UI stack is built
+app.AddPlugin(new UiPointerInputPlugin { InputStage = Stage.PostUpdate });
+app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.PostUpdate });
+
+// Scroll input for scrollable containers
+app.AddPlugin(new ScrollPlugin());
 
 // Button widget functionality
-app.AddPlugin(new TinyEcs.UI.Bevy.ButtonPlugin());
+app.AddPlugin(new ButtonPlugin());
 
 // Keep Flexbox container size in sync with window
-app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
+app.AddSystem((ResMut<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 {
+	window.Value.Value.X = Raylib.GetRenderWidth();
+	window.Value.Value.Y = Raylib.GetRenderHeight();
 	ref var st = ref ui.Value;
 	var size = window.Value.Value;
 	st.CalculateLayout(size.X, size.Y);
@@ -54,39 +64,26 @@ app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 .After("flexbox:sync_hierarchy")  // Run AFTER syncing UiNode changes!
 .Build();
 
-// Simple button demo
-app.AddSystem((Commands commands) => CreateSimpleButton(commands))
+// Hierarchical UI demo with root panel and child buttons
+app.AddSystem((Commands commands) => CreateButtonPanel(commands))
 	.InStage(Stage.Startup)
-	.Label("ui:simple-button:spawn")
+	.Label("ui:button-panel:spawn")
 	.Build();
 
 // Handle button activation
-app.AddObserver((On<TinyEcs.UI.Bevy.Activate> trigger, Commands commands, Query<Data<TinyEcs.UI.Bevy.UiNode, TinyEcs.UI.Bevy.BackgroundColor>, With<TinyEcs.UI.Bevy.Button>> qButtons) =>
+app.AddObserver((On<Activate> trigger, Commands commands, Query<Data<UiText>, With<Button>> qButtonTexts) =>
 {
-	Console.WriteLine($"[Button] Button {trigger.EntityId} activated!");
-
-	if (qButtons.Contains(trigger.EntityId))
+	if (qButtonTexts.Contains(trigger.EntityId))
 	{
-		(var uiNode, var backgroundColor) = qButtons.Get(trigger.EntityId);
-
-		// Change button color randomly on each activation
-		var rnd = Random.Shared;
-		backgroundColor.Ref.Color = new Vector4(
-			rnd.NextSingle(),
-			rnd.NextSingle(),
-			rnd.NextSingle(),
-			1f);
-
-		// Get a single ref and modify it
-		ref var node = ref uiNode.Ref;
-		node.Width.Value += 5;
-
-		Console.WriteLine($"  Width increased to: {node.Width.Value}");
-
-		// Insert the modified copy back
-		commands.Entity(trigger.EntityId).Insert(node);
+		var (_, text) = qButtonTexts.Get(trigger.EntityId);
+		Console.WriteLine($"[Button] '{text.Ref.Value}' (Entity {trigger.EntityId}) was clicked!");
+	}
+	else
+	{
+		Console.WriteLine($"[Button] Button {trigger.EntityId} activated!");
 	}
 });
+
 
 app.RunStartup();
 
@@ -97,41 +94,103 @@ while (!Raylib.WindowShouldClose())
 
 Raylib.CloseWindow();
 
-static void CreateSimpleButton(Commands commands)
+static void CreateButtonPanel(Commands commands)
 {
-	// Create a simple button centered on screen
-	commands.Spawn()
-		.Insert(new TinyEcs.UI.Bevy.UiNode
+	// Create a root panel container (similar to Bevy's root UI node)
+	var panel = commands.Spawn()
+		.Insert(new UiNode
 		{
-			Width = FlexValue.Points(200f),
-			Height = FlexValue.Points(60f),
+			FlexDirection = FlexDirection.Column, // Changed to Row for horizontal layout
 			JustifyContent = Justify.Center,
 			AlignItems = Align.Center,
-			// Center the button
-			MarginTop = FlexValue.Points(300f),
+			Width = FlexValue.Points(400f), // Wider to fit buttons horizontally
+			Height = FlexValue.Points(500f), // Shorter since buttons are in a row
+											 // Center the panel on screen
+			MarginTop = FlexValue.Auto(),
+			MarginBottom = FlexValue.Auto(),
 			MarginLeft = FlexValue.Auto(),
 			MarginRight = FlexValue.Auto(),
+			PaddingTop = FlexValue.Points(20f),
+			PaddingBottom = FlexValue.Points(20f),
+			PaddingLeft = FlexValue.Points(20f),
+			PaddingRight = FlexValue.Points(20f),
 		})
-		.Insert(TinyEcs.UI.Bevy.BackgroundColor.Blue)
-		.Insert(TinyEcs.UI.Bevy.BorderColor.FromRgba(255, 0, 0, 255))
-		.Insert(new TinyEcs.UI.Bevy.BorderRadius(8f))
-		.Insert(new TinyEcs.UI.Bevy.UiText("Click Me!"))
-		.Insert(new TinyEcs.UI.Bevy.Button())
-		.Insert(new TinyEcs.UI.Bevy.Interactive(focusable: true))
-		.Observe((On<TinyEcs.UI.UiPointerTrigger> trigger, Commands cmd) =>
-		{
-			if (trigger.Event.Event.Type == TinyEcs.UI.UiPointerEventType.PointerEnter)
-			{
-				cmd.Entity(trigger.EntityId).Insert(TinyEcs.UI.Bevy.BackgroundColor.FromRgba(0, 150, 255, 255));
-			}
-			else if (trigger.Event.Event.Type == TinyEcs.UI.UiPointerEventType.PointerExit)
-			{
-				cmd.Entity(trigger.EntityId).Insert(TinyEcs.UI.Bevy.BackgroundColor.Blue);
-			}
-		})
-		;
+		.Insert(BackgroundColor.FromRgba(40, 40, 50, 255))
+		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
+		.Insert(new BorderRadius(12f))
+		.Insert(new ZIndex(1)) // Panel has z-index 1
+		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f)); // Make panel scrollable
 
-	Console.WriteLine("Simple button created - click it to see interaction");
+	var panelId = panel.Id;
+	Console.WriteLine($"[UI] Created scrollable panel {panelId}");
+
+	// Create child buttons attached to the panel (more than fit in the panel to enable scrolling)
+	var buttonColors = new[]
+	{
+		(Name: "Red Button", Color: new Vector4(0.8f, 0.2f, 0.2f, 1f)),
+		(Name: "Green Button", Color: new Vector4(0.2f, 0.8f, 0.2f, 1f)),
+		(Name: "Blue Button", Color: new Vector4(0.2f, 0.2f, 0.8f, 1f)),
+		(Name: "Yellow Button", Color: new Vector4(0.9f, 0.9f, 0.2f, 1f)),
+		(Name: "Orange Button", Color: new Vector4(1f, 0.5f, 0f, 1f)),
+		(Name: "Purple Button", Color: new Vector4(0.5f, 0f, 0.5f, 1f)),
+		(Name: "Cyan Button", Color: new Vector4(0f, 0.8f, 0.8f, 1f)),
+		(Name: "Pink Button", Color: new Vector4(1f, 0.4f, 0.7f, 1f))
+	};
+
+	foreach (var (name, color) in buttonColors)
+	{
+		var button = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(300f), // Narrower for row layout
+				Height = FlexValue.Points(60f),
+				JustifyContent = Justify.Center,
+				AlignItems = Align.Center,
+				MarginLeft = FlexValue.Points(10f), // Horizontal margins for row layout
+				MarginRight = FlexValue.Points(10f),
+				MarginBottom = FlexValue.Points(10f),
+				MarginTop = FlexValue.Points(10f)
+			})
+			.Insert(new BackgroundColor(color))
+			.Insert(BorderColor.FromRgba(255, 255, 255, 200))
+			.Insert(new BorderRadius(8f))
+			.Insert(new UiText(name))
+			.Insert(new Button())
+			.Insert(new Interactive(focusable: true))
+			.Insert(new ZIndex(2)) // Buttons have z-index 2 (higher than panel)
+			.Observe((On<UiPointerTrigger> trigger, Commands cmd) =>
+			{
+				if (trigger.Event.Event.Type == UiPointerEventType.PointerEnter)
+				{
+					// Brighten on hover
+					cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(
+						new Vector4(
+							Math.Min(color.X * 1.3f, 1f),
+							Math.Min(color.Y * 1.3f, 1f),
+							Math.Min(color.Z * 1.3f, 1f),
+							1f)));
+				}
+				else if (trigger.Event.Event.Type == UiPointerEventType.PointerExit)
+				{
+					// Restore original color
+					cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(color));
+				}
+			});
+
+		var buttonId = button.Id;
+
+		// Attach button as child of panel (correct Bevy-style API)
+		panel.AddChild(button);
+
+		Console.WriteLine($"[UI] Created button '{name}' ({buttonId}) as child of panel {panelId}");
+	}
+
+	Console.WriteLine($"[UI] Button panel hierarchy created - {buttonColors.Length} buttons attached to panel");
+}
+
+class DebugLayoutState
+{
+	public bool Printed;
 }
 
 sealed class RaylibPlugin : IPlugin

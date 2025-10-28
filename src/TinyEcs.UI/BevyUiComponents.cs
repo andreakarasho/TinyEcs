@@ -298,3 +298,34 @@ public struct FlexboxNodeRef
 	/// <summary>Unique element ID for event targeting</summary>
 	public uint ElementId;
 }
+
+/// <summary>
+/// Component that makes a UI container scrollable.
+/// Allows content to overflow the container bounds with scroll offset.
+/// </summary>
+public struct Scrollable
+{
+	/// <summary>Current scroll offset (positive = scrolled down/right)</summary>
+	public Vector2 ScrollOffset;
+
+	/// <summary>Total content size (can be larger than container)</summary>
+	public Vector2 ContentSize;
+
+	/// <summary>Enable horizontal scrolling</summary>
+	public bool EnableHorizontal;
+
+	/// <summary>Enable vertical scrolling</summary>
+	public bool EnableVertical;
+
+	/// <summary>Scroll speed multiplier</summary>
+	public float ScrollSpeed;
+
+	public Scrollable(bool vertical = true, bool horizontal = false, float scrollSpeed = 20f)
+	{
+		ScrollOffset = Vector2.Zero;
+		ContentSize = Vector2.Zero;
+		EnableVertical = vertical;
+		EnableHorizontal = horizontal;
+		ScrollSpeed = scrollSpeed;
+	}
+}

@@ -112,7 +112,7 @@ public struct FlexboxUiPlugin : IPlugin
 
 		// Phase 2: Node Lifecycle - Use observers for OnInsert/OnRemove
 		app.AddObserver<OnAdd<UiNode>, ResMut<FlexboxUiState>, Commands>(OnUiNodeInserted);
-		app.AddObserver<OnRemove<UiNode>, ResMut<FlexboxUiState>>(OnUiNodeRemoved);
+		app.AddObserver<OnRemove<FlexboxNodeRef>, ResMut<FlexboxUiState>>(OnUiNodeRemoved);
 
 		// Phase 3: Property Synchronization
 		app.AddSystem((Query<Data<UiNode, FlexboxNodeRef>, Filter<Changed<UiNode>>> changedNodes) =>
@@ -136,18 +136,13 @@ public struct FlexboxUiPlugin : IPlugin
 			.After("flexbox:sync_node")
 			.Build();
 
-		// Phase 4: Layout Calculation
-		// app.AddSystem((ResMut<FlexboxUiState> state) =>
-		// {
-		// 	state.Value.CalculateLayout(width, height);
-		// })
-		// 	.InStage(Stage.Update)
-		// 	.Label("flexbox:calculate_layout")
-		// 	.Build();
-
-		app.AddSystem((Query<Data<FlexboxNodeRef>> nodeRefs, Commands commands) =>
+		app.AddSystem((
+			Query<Data<FlexboxNodeRef>> nodeRefs,
+			Query<Data<Parent>> parents,
+			Query<Data<Scrollable>> scrollables,
+			Commands commands) =>
 		{
-			ReadComputedLayout(nodeRefs, commands);
+			ReadComputedLayout(nodeRefs, parents, scrollables, commands);
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("flexbox:read_layout")
@@ -186,14 +181,17 @@ public struct FlexboxUiPlugin : IPlugin
 	/// Destroys the associated Flexbox node.
 	/// </summary>
 	private static void OnUiNodeRemoved(
-		OnRemove<UiNode> trigger,
+		OnRemove<FlexboxNodeRef> trigger,
 		ResMut<FlexboxUiState> state)
 	{
-		// Note: trigger.Component contains the removed UiNode component value
-		// but FlexboxNodeRef is also already removed at this point
-		// We could store a lookup in FlexboxUiState, but user requested no dictionaries
-		// For now, orphaned nodes will remain in the tree (limitation)
-		// TODO: Consider alternative cleanup strategies
+		if (trigger.Component.Node != null)
+		{
+			// Remove from parent if attached
+			if (trigger.Component.Node.Parent != null)
+			{
+				trigger.Component.Node.Parent.RemoveChild(trigger.Component.Node);
+			}
+		}
 	}
 
 	/// <summary>
@@ -315,7 +313,7 @@ public struct FlexboxUiPlugin : IPlugin
 		ResMut<FlexboxUiState> state)
 	{
 		// Handle changed parents
-		foreach (var (parent, childNodeRef) in changedParents)
+		foreach (var (ent, parent, childNodeRef) in changedParents)
 		{
 			var childNode = childNodeRef.Ref.Node;
 			if (childNode == null)
@@ -331,13 +329,10 @@ public struct FlexboxUiPlugin : IPlugin
 
 			// Find parent's Flexbox node
 			Node? parentNode = null;
-			foreach (var (entityId, parentNodeRef) in allNodeRefs)
+			if (allNodeRefs.Contains(parentEntityId))
 			{
-				if (entityId.Ref == parentEntityId)
-				{
-					parentNode = parentNodeRef.Ref.Node;
-					break;
-				}
+				var (_, parentNodeRef) = allNodeRefs.Get(parentEntityId);
+				parentNode = parentNodeRef.Ref.Node;
 			}
 
 			// Add to new parent (or root if parent not found)
@@ -394,9 +389,12 @@ public struct FlexboxUiPlugin : IPlugin
 	/// <summary>
 	/// System: Reads computed layout from Flexbox nodes back to ComputedLayout components.
 	/// Runs in PostUpdate stage after layout calculation.
+	/// Uses LayoutGet* methods which return absolute screen coordinates (accounting for parent offsets).
 	/// </summary>
 	private static void ReadComputedLayout(
 		Query<Data<FlexboxNodeRef>> nodeRefs,
+		Query<Data<Parent>> parents,
+		Query<Data<Scrollable>> scrollables,
 		Commands commands)
 	{
 		foreach (var (entityId, nodeRef) in nodeRefs)
@@ -406,17 +404,58 @@ public struct FlexboxUiPlugin : IPlugin
 			if (node == null)
 				continue;
 
-			// Read the computed layout from Flexbox
-			var layout = node.layout;
+			// Read absolute layout coordinates using Flexbox LayoutGet* methods
+			// LayoutGetX/Y recursively walk parent chain for absolute coordinates
+			// LayoutGetLeft/Top return relative coordinates (don't use those)
+			var x = node.LayoutGetX();
+			var y = node.LayoutGetY();
 
-			// Update or insert ComputedLayout component
+			// Apply scroll offset from parent scrollable containers
+			var scrollOffset = GetScrollOffsetFromParents(entityId.Ref, parents, scrollables);
+			x -= scrollOffset.X;
+			y -= scrollOffset.Y;
+
 			commands.Entity(entityId.Ref).Insert(new ComputedLayout
 			{
-				X = layout.left,
-				Y = layout.top,
-				Width = layout.width,
-				Height = layout.height
+				X = x,
+				Y = y,
+				Width = node.LayoutGetWidth(),
+				Height = node.LayoutGetHeight()
 			});
 		}
+	}
+
+	/// <summary>
+	/// Walks up the parent chain and accumulates scroll offsets from scrollable containers.
+	/// </summary>
+	private static System.Numerics.Vector2 GetScrollOffsetFromParents(
+		ulong entityId,
+		Query<Data<Parent>> parents,
+		Query<Data<Scrollable>> scrollables)
+	{
+		var totalOffset = System.Numerics.Vector2.Zero;
+		var currentId = entityId;
+
+		// Walk up parent chain
+		while (parents.Contains(currentId))
+		{
+			var (_, parent) = parents.Get(currentId);
+			var parentId = parent.Ref.Id;
+
+			// Check if parent is scrollable
+			if (scrollables.Contains(parentId))
+			{
+				var (_, scrollable) = scrollables.Get(parentId);
+				totalOffset += scrollable.Ref.ScrollOffset;
+			}
+
+			currentId = parentId;
+
+			// Prevent infinite loops
+			if (currentId == entityId)
+				break;
+		}
+
+		return totalOffset;
 	}
 }

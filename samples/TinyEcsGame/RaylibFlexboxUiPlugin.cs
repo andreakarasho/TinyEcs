@@ -3,13 +3,14 @@ using System.Numerics;
 using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcs.UI;
 using TinyEcs.UI.Bevy;
 
 namespace TinyEcsGame;
 
 /// <summary>
 /// Plugin that renders TinyEcs.UI.Bevy components using Raylib.
-/// Converts ComputedLayout, BackgroundColor, BorderColor, BorderRadius, and UiText to Raylib draw calls.
+/// Executes render commands from the UI stack in correct z-order.
 /// </summary>
 public struct RaylibFlexboxUiPlugin : IPlugin
 {
@@ -17,125 +18,113 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 
 	public readonly void Build(App app)
 	{
-		// Render background rectangles with borders
-		app.AddSystem((Query<Data<ComputedLayout, BackgroundColor>> backgrounds) =>
+		// Execute render commands (built from UI stack in correct z-order)
+		app.AddSystem((Res<UiRenderCommands> renderCommands) =>
 		{
-			RenderBackgrounds(backgrounds);
+			ExecuteRenderCommands(renderCommands);
 		})
 		.InStage(RenderingStage)
-		.Label("ui:render:backgrounds")
-		.SingleThreaded()
-		.Build();
-
-		// Render borders and border radius
-		app.AddSystem((Query<Data<ComputedLayout, BorderColor, UiNode>> borders) =>
-		{
-			RenderBorders(borders);
-		})
-		.InStage(RenderingStage)
-		.Label("ui:render:borders")
-		.After("ui:render:backgrounds")
-		.SingleThreaded()
-		.Build();
-
-		// Render text content
-		app.AddSystem((Query<Data<ComputedLayout, UiText>> texts) =>
-		{
-			RenderTexts(texts);
-		})
-		.InStage(RenderingStage)
-		.Label("ui:render:text")
-		.After("ui:render:borders")
+		.Label("ui:render:execute-commands")
 		.SingleThreaded()
 		.Build();
 	}
 
 	/// <summary>
-	/// Renders background colors for UI elements.
+	/// Executes all rendering commands in order.
+	/// Commands are already sorted by z-index (back to front).
 	/// </summary>
-	private static void RenderBackgrounds(Query<Data<ComputedLayout, BackgroundColor>> backgrounds)
+	private static void ExecuteRenderCommands(Res<UiRenderCommands> renderCommands)
 	{
-		foreach (var (layout, bgColor) in backgrounds)
+		foreach (var cmd in renderCommands.Value.Commands)
 		{
-			ref var l = ref layout.Ref;
-			ref var color = ref bgColor.Ref;
+			switch (cmd.Type)
+			{
+				case RenderCommandType.DrawBackground:
+					DrawBackground(cmd);
+					break;
 
-			// Convert Vector4 (0-1) to Raylib Color (0-255)
-			var raylibColor = new Color(
-				(byte)(color.Color.X * 255f),
-				(byte)(color.Color.Y * 255f),
-				(byte)(color.Color.Z * 255f),
-				(byte)(color.Color.W * 255f)
-			);
+				case RenderCommandType.DrawBorder:
+					DrawBorder(cmd);
+					break;
 
-			// Draw filled rectangle
-			Raylib.DrawRectangle(
-				(int)l.X,
-				(int)l.Y,
-				(int)l.Width,
-				(int)l.Height,
-				raylibColor
-			);
+				case RenderCommandType.DrawText:
+					DrawText(cmd);
+					break;
+
+				case RenderCommandType.BeginClip:
+					Raylib.BeginScissorMode((int)cmd.ClipX, (int)cmd.ClipY, (int)cmd.ClipWidth, (int)cmd.ClipHeight);
+					break;
+
+				case RenderCommandType.EndClip:
+					Raylib.EndScissorMode();
+					break;
+			}
 		}
 	}
 
-	/// <summary>
-	/// Renders borders for UI elements.
-	/// Handles BorderColor and BorderRadius.
-	/// </summary>
-	private static void RenderBorders(Query<Data<ComputedLayout, BorderColor, UiNode>> borders)
+	private static void DrawBackground(RenderCommand cmd)
 	{
-		foreach (var (layout, borderColor, uiNode) in borders)
+		var color = new Color(
+			(byte)(cmd.BackgroundColor.X * 255f),
+			(byte)(cmd.BackgroundColor.Y * 255f),
+			(byte)(cmd.BackgroundColor.Z * 255f),
+			(byte)(cmd.BackgroundColor.W * 255f)
+		);
+
+		Raylib.DrawRectangle((int)cmd.X, (int)cmd.Y, (int)cmd.Width, (int)cmd.Height, color);
+	}
+
+	private static void DrawBorder(RenderCommand cmd)
+	{
+		var color = new Color(
+			(byte)(cmd.BorderColor.X * 255f),
+			(byte)(cmd.BorderColor.Y * 255f),
+			(byte)(cmd.BorderColor.Z * 255f),
+			(byte)(cmd.BorderColor.W * 255f)
+		);
+
+		// Default border width (can be customized later)
+		float borderWidth = 1f;
+
+		if (cmd.BorderRadius > 0f)
 		{
-			ref var l = ref layout.Ref;
-			ref var bColor = ref borderColor.Ref;
-			ref var node = ref uiNode.Ref;
-
-			// Convert Vector4 (0-1) to Raylib Color (0-255)
-			var raylibColor = new Color(
-				(byte)(bColor.Color.X * 255f),
-				(byte)(bColor.Color.Y * 255f),
-				(byte)(bColor.Color.Z * 255f),
-				(byte)(bColor.Color.W * 255f)
-			);
-
-			// Get border widths (use BorderLeft as the thickness for now)
-			float borderWidth = node.BorderLeft.IsDefined ? node.BorderLeft.Value : 1f;
-
-			// Simple rectangle border (no rounded corners support yet)
-			// Draw border as outline
+			// Rounded rectangle border (approximation using multiple DrawRectangle calls)
+			// TODO: Implement proper rounded corners
 			Raylib.DrawRectangleLinesEx(
-				new Rectangle(l.X, l.Y, l.Width, l.Height),
+				new Rectangle(cmd.X, cmd.Y, cmd.Width, cmd.Height),
 				borderWidth,
-				raylibColor
+				color
+			);
+		}
+		else
+		{
+			// Simple rectangle border
+			Raylib.DrawRectangleLinesEx(
+				new Rectangle(cmd.X, cmd.Y, cmd.Width, cmd.Height),
+				borderWidth,
+				color
 			);
 		}
 	}
 
-	/// <summary>
-	/// Renders text content for UI elements.
-	/// Uses default white text at size 20 for now.
-	/// </summary>
-	private static void RenderTexts(Query<Data<ComputedLayout, UiText>> texts)
+	private static void DrawText(RenderCommand cmd)
 	{
-		foreach (var (layout, text) in texts)
-		{
-			ref var l = ref layout.Ref;
-			ref var t = ref text.Ref;
+		if (string.IsNullOrEmpty(cmd.Text))
+			return;
 
-			if (string.IsNullOrEmpty(t.Value))
-				continue;
+		var color = new Color(
+			(byte)(cmd.TextColor.X * 255f),
+			(byte)(cmd.TextColor.Y * 255f),
+			(byte)(cmd.TextColor.Z * 255f),
+			(byte)(cmd.TextColor.W * 255f)
+		);
 
-			// Use default text style for now
-			var fontSize = 20f;
-			var textColor = Color.White;
+		// Render text centered in the layout area
+		var fontSize = (int)cmd.FontSize;
+		var textWidth = Raylib.MeasureText(cmd.Text, fontSize);
+		var x = cmd.X + (cmd.Width - textWidth) / 2f;
+		var y = cmd.Y + (cmd.Height - fontSize) / 2f;
 
-			// Render text centered in the layout area
-			var textWidth = Raylib.MeasureText(t.Value, (int)fontSize);
-			var x = l.X + (l.Width - textWidth) / 2f;
-			var y = l.Y + (l.Height - fontSize) / 2f;
-
-			Raylib.DrawText(t.Value, (int)x, (int)y, (int)fontSize, textColor);
-		}
+		Raylib.DrawText(cmd.Text, (int)x, (int)y, fontSize, color);
 	}
 }

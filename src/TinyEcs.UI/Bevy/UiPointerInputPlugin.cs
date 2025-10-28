@@ -63,15 +63,18 @@ public struct UiPointerInputPlugin : IPlugin
 
 		// System to perform hit testing and emit pointer events
 		app.AddSystem((
-			Query<Data<ComputedLayout, Interactive>> interactiveElements,
 			Res<PointerInputState> pointerInput,
 			Commands commands,
-			Local<PointerTrackingState> trackingState) =>
+			Local<PointerTrackingState> trackingState,
+			Res<UiStack> uiStack,
+			Query<Data<Interactive>> interactiveQuery,
+			Query<Data<ComputedLayout>> layoutQuery) =>
 		{
-			ProcessPointerInput(interactiveElements, pointerInput, commands, trackingState);
+			ProcessPointerInput(pointerInput, commands, trackingState, uiStack, interactiveQuery, layoutQuery);
 		})
 		.InStage(InputStage)
 		.Label("ui:pointer:hit-test")
+		.After("ui:stack:update") // Run after UI stack is updated
 		.Build();
 	}
 
@@ -92,12 +95,15 @@ public struct UiPointerInputPlugin : IPlugin
 
 	/// <summary>
 	/// Performs hit testing against interactive elements and emits pointer events.
+	/// Uses the UI stack for proper z-order hit testing (topmost element wins).
 	/// </summary>
 	private static void ProcessPointerInput(
-		Query<Data<ComputedLayout, Interactive>> interactiveElements,
 		Res<PointerInputState> pointerInput,
 		Commands commands,
-		Local<PointerTrackingState> trackingState)
+		Local<PointerTrackingState> trackingState,
+		Res<UiStack> uiStack,
+		Query<Data<Interactive>> interactiveQuery,
+		Query<Data<ComputedLayout>> layoutQuery)
 	{
 		if (trackingState.Value == null)
 			trackingState.Value = new PointerTrackingState();
@@ -109,18 +115,32 @@ public struct UiPointerInputPlugin : IPlugin
 		var positionDelta = input.Position - tracking.LastPosition;
 
 		// Perform hit testing to find the topmost interactive element under the cursor
+		// Iterate from back to front (last entry is topmost)
 		ulong? hitEntity = null;
 
-		foreach (var (entityId, layout, interactive) in interactiveElements)
+		// Iterate the UI stack in reverse order (topmost first)
+		for (int i = uiStack.Value.Count - 1; i >= 0; i--)
 		{
-			ref var l = ref layout.Ref;
+			var entry = uiStack.Value.Entries[i];
+			var entityId = entry.EntityId;
+
+			// Check if this entity is interactive
+			if (!interactiveQuery.Contains(entityId))
+				continue;
+
+			// Get the layout
+			if (!layoutQuery.Contains(entityId))
+				continue;
+
+			var (_, layout) = layoutQuery.Get(entityId);
+			ref var layoutRef = ref layout.Ref;
 
 			// Check if pointer is inside this element's bounds
-			if (IsPointInRect(input.Position, l.X, l.Y, l.Width, l.Height))
+			if (IsPointInRect(input.Position, layoutRef.X, layoutRef.Y, layoutRef.Width, layoutRef.Height))
 			{
-				// Simple hit test - the last matching entity wins
-				// TODO: Add Z-order support for proper layering
-				hitEntity = entityId.Ref;
+				// Found the topmost interactive element under cursor
+				hitEntity = entityId;
+				break; // Stop at the first (topmost) hit
 			}
 		}
 
