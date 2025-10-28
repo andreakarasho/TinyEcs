@@ -396,6 +396,46 @@ foreach (var (health) in query)
 - `MarkChanged<T>` manually marks component as changed
 - Tick management automatic per `World.Update()` call
 
+**CRITICAL: Triggering Change Detection with In-Place Modifications**
+
+When modifying components in-place via `ref`, you must **re-insert the component via Commands** to trigger change detection:
+
+```csharp
+// ❌ WRONG - Modifies in-place but doesn't trigger Changed<T>
+app.AddSystem((Query<Data<UiNode>> nodes) =>
+{
+    foreach (var (entityId, node) in nodes)
+    {
+        ref var n = ref node.Ref;
+        n.PositionType = PositionType.Absolute;  // Modified but not tracked!
+    }
+});
+
+// ✅ CORRECT - Re-insert to trigger Changed<T>
+app.AddSystem((Commands commands, Query<Data<UiNode>> nodes) =>
+{
+    foreach (var (entityId, node) in nodes)
+    {
+        ref var n = ref node.Ref;
+        n.PositionType = PositionType.Absolute;
+
+        // Re-insert the modified component to trigger change detection
+        commands.Entity(entityId.Ref).Insert(n);
+    }
+});
+```
+
+**Why This Matters**:
+- Systems using `Filter<Changed<T>>` won't see in-place modifications without re-insertion
+- Example: `SyncUiNodeToFlexbox` uses `Changed<UiNode>` to update Flexbox only when needed
+- Without re-insertion, visual updates won't occur even though the data changed
+- This is the correct pattern for performance - only systems that need to react to changes will run
+
+**Use Cases**:
+- Drag systems modifying `UiNode` positions
+- Animation systems updating component properties
+- Any system that modifies components and expects downstream systems to react
+
 ### Deferred Commands Pattern
 - Commands queued during system execution
 - Applied after system completes (or after batch if parallel)
