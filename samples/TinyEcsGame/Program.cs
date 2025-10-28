@@ -47,6 +47,9 @@ app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.Pos
 // Scroll input for scrollable containers
 app.AddPlugin(new ScrollPlugin());
 
+// Drag input for draggable UI elements
+app.AddPlugin(new DragPlugin());
+
 // Button widget functionality
 app.AddPlugin(new ButtonPlugin());
 
@@ -119,7 +122,9 @@ static void CreateButtonPanel(Commands commands)
 		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
 		.Insert(new BorderRadius(12f))
 		.Insert(new ZIndex(1)) // Panel has z-index 1
-		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f)); // Make panel scrollable
+		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f)) // Make panel scrollable horizontally
+		.Insert(new Draggable()) // Make panel draggable
+		.Insert(new Interactive(focusable: false)); // Enable pointer events for dragging
 
 	var panelId = panel.Id;
 	Console.WriteLine($"[UI] Created scrollable panel {panelId}");

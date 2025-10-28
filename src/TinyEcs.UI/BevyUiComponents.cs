@@ -329,3 +329,30 @@ public struct Scrollable
 		ScrollSpeed = scrollSpeed;
 	}
 }
+
+/// <summary>
+/// Component that makes a UI element draggable.
+/// Allows the element to be moved by clicking and dragging.
+/// </summary>
+public struct Draggable
+{
+	/// <summary>Whether this element is currently being dragged</summary>
+	public bool IsDragging;
+
+	/// <summary>Offset from element's top-left corner to the mouse position when drag started</summary>
+	public Vector2 DragOffset;
+
+	/// <summary>The position where the element should be placed (overrides Flexbox layout)</summary>
+	public Vector2 Position;
+
+	/// <summary>Whether position has been set (used to override Flexbox)</summary>
+	public bool HasCustomPosition;
+
+	public Draggable()
+	{
+		IsDragging = false;
+		DragOffset = Vector2.Zero;
+		Position = Vector2.Zero;
+		HasCustomPosition = false;
+	}
+}
