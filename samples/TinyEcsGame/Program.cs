@@ -5,11 +5,8 @@ using System.Numerics;
 using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
-using TinyEcsGame;
-using TinyEcs.UI;
-using TinyEcs.UI.Widgets;
-using TinyEcs.UI.Flexbox;
 using Flexbox;
+using TinyEcs.UI.Bevy;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -35,8 +32,12 @@ app.AddPlugin(gameRoot);
 // });
 
 // Flexbox UI: core + Raylib bridge
-app.AddPlugin(new FlexboxUiPlugin { AutoCreatePointerState = true, ContainerWidth = 1280f, ContainerHeight = 720f });
-app.AddPlugin(new RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
+app.AddPlugin(new TinyEcs.UI.Bevy.FlexboxUiPlugin());
+app.AddPlugin(new TinyEcsGame.RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
+
+// Pointer input: renderer-agnostic hit testing + Raylib adapter
+app.AddPlugin(new TinyEcs.UI.Bevy.UiPointerInputPlugin { InputStage = Stage.Update });
+app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.Update });
 
 // Button widget functionality
 app.AddPlugin(new TinyEcs.UI.Bevy.ButtonPlugin());
@@ -46,11 +47,11 @@ app.AddSystem((Res<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 {
 	ref var st = ref ui.Value;
 	var size = window.Value.Value;
-	st.ContainerWidth = size.X;
-	st.ContainerHeight = size.Y;
+	st.CalculateLayout(size.X, size.Y);
 })
 .InStage(Stage.PreUpdate)
-.Label("ui:flexbox:update-container")
+.Label("ui:flexbox:calculate-layout")
+.After("flexbox:sync_hierarchy")  // Run AFTER syncing UiNode changes!
 .Build();
 
 // Simple button demo
@@ -60,21 +61,30 @@ app.AddSystem((Commands commands) => CreateSimpleButton(commands))
 	.Build();
 
 // Handle button activation
-app.AddObserver((On<TinyEcs.UI.Bevy.Activate> trigger, Query<Data<TinyEcs.UI.Bevy.UiNode, TinyEcs.UI.Bevy.BackgroundColor>, With<TinyEcs.UI.Bevy.Button>> qButtons) =>
+app.AddObserver((On<TinyEcs.UI.Bevy.Activate> trigger, Commands commands, Query<Data<TinyEcs.UI.Bevy.UiNode, TinyEcs.UI.Bevy.BackgroundColor>, With<TinyEcs.UI.Bevy.Button>> qButtons) =>
 {
 	Console.WriteLine($"[Button] Button {trigger.EntityId} activated!");
 
 	if (qButtons.Contains(trigger.EntityId))
 	{
-		(var uiNode, var backgroudColor) = qButtons.Get(trigger.EntityId);
+		(var uiNode, var backgroundColor) = qButtons.Get(trigger.EntityId);
+
 		// Change button color randomly on each activation
 		var rnd = Random.Shared;
-		backgroudColor.Ref.Color = new Vector4(
+		backgroundColor.Ref.Color = new Vector4(
 			rnd.NextSingle(),
 			rnd.NextSingle(),
 			rnd.NextSingle(),
 			1f);
-		uiNode.Ref.Width.Value += 5;
+
+		// Get a single ref and modify it
+		ref var node = ref uiNode.Ref;
+		node.Width.Value += 5;
+
+		Console.WriteLine($"  Width increased to: {node.Width.Value}");
+
+		// Insert the modified copy back
+		commands.Entity(trigger.EntityId).Insert(node);
 	}
 });
 
@@ -105,8 +115,21 @@ static void CreateSimpleButton(Commands commands)
 		.Insert(TinyEcs.UI.Bevy.BackgroundColor.Blue)
 		.Insert(TinyEcs.UI.Bevy.BorderColor.FromRgba(255, 0, 0, 255))
 		.Insert(new TinyEcs.UI.Bevy.BorderRadius(8f))
+		.Insert(new TinyEcs.UI.Bevy.UiText("Click Me!"))
 		.Insert(new TinyEcs.UI.Bevy.Button())
-		.Insert(new TinyEcs.UI.Bevy.Interactive(focusable: true));
+		.Insert(new TinyEcs.UI.Bevy.Interactive(focusable: true))
+		.Observe((On<TinyEcs.UI.UiPointerTrigger> trigger, Commands cmd) =>
+		{
+			if (trigger.Event.Event.Type == TinyEcs.UI.UiPointerEventType.PointerEnter)
+			{
+				cmd.Entity(trigger.EntityId).Insert(TinyEcs.UI.Bevy.BackgroundColor.FromRgba(0, 150, 255, 255));
+			}
+			else if (trigger.Event.Event.Type == TinyEcs.UI.UiPointerEventType.PointerExit)
+			{
+				cmd.Entity(trigger.EntityId).Insert(TinyEcs.UI.Bevy.BackgroundColor.Blue);
+			}
+		})
+		;
 
 	Console.WriteLine("Simple button created - click it to see interaction");
 }

@@ -3,218 +3,139 @@ using System.Numerics;
 using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
-using TinyEcs.UI;
-using TinyEcs.UI.Flexbox;
+using TinyEcs.UI.Bevy;
 
 namespace TinyEcsGame;
 
 /// <summary>
-/// Raylib integration plugin for Flexbox UI system.
-/// Updates FlexboxPointerState from Raylib and renders Flexbox layouts.
+/// Plugin that renders TinyEcs.UI.Bevy components using Raylib.
+/// Converts ComputedLayout, BackgroundColor, BorderColor, BorderRadius, and UiText to Raylib draw calls.
 /// </summary>
 public struct RaylibFlexboxUiPlugin : IPlugin
 {
-	public Stage RenderingStage { get; set; }
+	public required Stage RenderingStage { get; set; }
 
-	public void Build(App app)
+	public readonly void Build(App app)
 	{
-		var renderStage = RenderingStage;
+		// Render background rectangles with borders
+		app.AddSystem((Query<Data<ComputedLayout, BackgroundColor>> backgrounds) =>
+		{
+			RenderBackgrounds(backgrounds);
+		})
+		.InStage(RenderingStage)
+		.Label("ui:render:backgrounds")
+		.SingleThreaded()
+		.Build();
 
-		app.AddSystem((ResMut<FlexboxPointerState> p) => UpdatePointerState(p))
-			.InStage(Stage.PreUpdate)
-			.Label("ui:raylib:flexbox:update-pointer")
-			.Before("ui:flexbox:pointer")  // CRITICAL: Must run before pointer processing
-			.RunIfResourceExists<FlexboxPointerState>()
-			.SingleThreaded()
-			.Build();
+		// Render borders and border radius
+		app.AddSystem((Query<Data<ComputedLayout, BorderColor, UiNode>> borders) =>
+		{
+			RenderBorders(borders);
+		})
+		.InStage(RenderingStage)
+		.Label("ui:render:borders")
+		.After("ui:render:backgrounds")
+		.SingleThreaded()
+		.Build();
 
-		app.AddSystem((Res<FlexboxUiState> s,
-					   Query<Data<FlexboxNode>> n,
-					   Query<Data<FlexboxText>> t,
-					   Query<Data<FlexboxScrollContainer>> sc,
-					   Query<Data<FlexboxScrollContainerViewport>> vp,
-					   Query<Data<Children>> children) =>
-			RenderFlexboxUI(s, n, t, sc, vp, children))
-			.InStage(renderStage)
-			.Label("ui:raylib:flexbox:render")
-			.After("render:debug")
-			.RunIfResourceExists<FlexboxUiState>()
-			.SingleThreaded()
-			.Build();
+		// Render text content
+		app.AddSystem((Query<Data<ComputedLayout, UiText>> texts) =>
+		{
+			RenderTexts(texts);
+		})
+		.InStage(RenderingStage)
+		.Label("ui:render:text")
+		.After("ui:render:borders")
+		.SingleThreaded()
+		.Build();
 	}
 
-	private static void UpdatePointerState(ResMut<FlexboxPointerState> pointerState)
+	/// <summary>
+	/// Renders background colors for UI elements.
+	/// </summary>
+	private static void RenderBackgrounds(Query<Data<ComputedLayout, BackgroundColor>> backgrounds)
 	{
-		if (!Raylib.IsWindowReady())
-			return;
-
-		ref var state = ref pointerState.Value;
-
-		state.Position = Raylib.GetMousePosition();
-		state.PrimaryDown = Raylib.IsMouseButtonDown(MouseButton.Left);
-
-		var scrollY = Raylib.GetMouseWheelMove();
-		if (scrollY != 0f)
+		foreach (var (layout, bgColor) in backgrounds)
 		{
-			state.AddScroll(new Vector2(0, scrollY * 20f));
-		}
+			ref var l = ref layout.Ref;
+			ref var color = ref bgColor.Ref;
 
-		state.DeltaTime = Raylib.GetFrameTime();
-	}
+			// Convert Vector4 (0-1) to Raylib Color (0-255)
+			var raylibColor = new Color(
+				(byte)(color.Color.X * 255f),
+				(byte)(color.Color.Y * 255f),
+				(byte)(color.Color.Z * 255f),
+				(byte)(color.Color.W * 255f)
+			);
 
-	private static void RenderFlexboxUI(
-		Res<FlexboxUiState> uiState,
-		Query<Data<FlexboxNode>> nodes,
-		Query<Data<FlexboxText>> texts,
-		Query<Data<FlexboxScrollContainer>> scrollers,
-		Query<Data<FlexboxScrollContainerViewport>> viewports,
-		Query<Data<Children>> childrenQuery)
-	{
-		var state = uiState.Value;
-
-		// Render root nodes (those without parents in the Flexbox tree)
-		foreach (var rootId in state.RootEntities)
-		{
-			if (state.TryGetNode(rootId, out var rootNode) && rootNode != null)
-			{
-				RenderNodeRecursive(rootId, rootNode, nodes, texts, scrollers, viewports, childrenQuery, state, Vector2.Zero, null);
-			}
-		}
-	}
-
-	private static void RenderNodeRecursive(
-		ulong entityId,
-		global::Flexbox.Node node,
-		Query<Data<FlexboxNode>> nodes,
-		Query<Data<FlexboxText>> texts,
-		Query<Data<FlexboxScrollContainer>> scrollers,
-		Query<Data<FlexboxScrollContainerViewport>> viewports,
-		Query<Data<Children>> childrenQuery,
-		FlexboxUiState state,
-		Vector2 parentPosition,
-		Rectangle? clip)
-	{
-		var layout = node.layout;
-
-		// Flexbox positions are relative to parent
-		// Accumulate parent position to get absolute screen position
-		var drawPos = parentPosition + new Vector2(layout.left, layout.top);
-		var drawSize = new Vector2(layout.width, layout.height);
-
-		// Compute child clip and scroll offset
-		var childClip = clip;
-		var childParentPosition = drawPos; // Children positioned relative to this element
-
-		// Check if this entity is a scroll viewport (has viewport component)
-		if (viewports.Contains(entityId))
-		{
-			// This is a scroll viewport - apply clipping at viewport height
-			var vp = viewports.Get(entityId);
-			vp.Deconstruct(out var vpPtr);
-			var viewportHeight = vpPtr.Ref.Height;
-
-			var contentRect = new Rectangle(
-				drawPos.X,
-				drawPos.Y,
-				layout.width,
-				viewportHeight);
-
-			childClip = childClip.HasValue ? Intersect(childClip.Value, contentRect) : contentRect;
-		}
-
-		// Check if this entity is a scroll content area (has scroll container component)
-		if (scrollers.Contains(entityId))
-		{
-			// This is the scrollable content area - apply scroll offset to children
-			var sc = scrollers.Get(entityId);
-			sc.Deconstruct(out var sPtr);
-			var scrollOffset = sPtr.Ref.Offset;
-			childParentPosition += new Vector2(-scrollOffset.X, -scrollOffset.Y);
-		}
-
-		// Apply current clip for this entity draw
-		if (clip.HasValue)
-		{
-			var r = clip.Value;
-			Raylib.BeginScissorMode((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height);
-		}
-
-		if (nodes.Contains(entityId))
-		{
-			var n = nodes.Get(entityId);
-			n.Deconstruct(out var nodePtr);
-			ref var fxNode = ref nodePtr.Ref;
-
-			if (fxNode.BackgroundColor.W > 0f)
-				DrawRectangle(drawPos, drawSize, fxNode.BackgroundColor, fxNode.BorderRadius);
-			if (fxNode.BorderColor.W > 0f)
-				DrawBorder(drawPos, drawSize, fxNode.BorderColor, fxNode.BorderRadius);
-
-			if (texts.Contains(entityId))
-			{
-				var t = texts.Get(entityId);
-				t.Deconstruct(out var tPtr);
-				ref var td = ref tPtr.Ref;
-				// Text is drawn at this element's position
-				// (Flexbox already accounts for padding in child positioning)
-				DrawText(drawPos, drawSize, ref td);
-			}
-		}
-
-		if (clip.HasValue)
-			Raylib.EndScissorMode();
-
-		// Draw children - pass accumulated position
-		for (int i = 0; i < node.ChildrenCount; i++)
-		{
-			var childNode = node.GetChild(i);
-			if (childNode != null && childNode.Context is ValueTuple<ulong, uint> context)
-			{
-				var (childEntityId, _) = context;
-				RenderNodeRecursive(childEntityId, childNode, nodes, texts, scrollers, viewports, childrenQuery, state, childParentPosition, childClip);
-			}
+			// Draw filled rectangle
+			Raylib.DrawRectangle(
+				(int)l.X,
+				(int)l.Y,
+				(int)l.Width,
+				(int)l.Height,
+				raylibColor
+			);
 		}
 	}
 
-	private static Rectangle Intersect(Rectangle a, Rectangle b)
+	/// <summary>
+	/// Renders borders for UI elements.
+	/// Handles BorderColor and BorderRadius.
+	/// </summary>
+	private static void RenderBorders(Query<Data<ComputedLayout, BorderColor, UiNode>> borders)
 	{
-		float x = MathF.Max(a.X, b.X);
-		float y = MathF.Max(a.Y, b.Y);
-		float r = MathF.Min(a.X + a.Width, b.X + b.Width);
-		float btm = MathF.Min(a.Y + a.Height, b.Y + b.Height);
-		return new Rectangle(x, y, MathF.Max(0, r - x), MathF.Max(0, btm - y));
-	}
-
-	private static void DrawRectangle(Vector2 position, Vector2 size, Vector4 color, float borderRadius)
-	{
-		var rect = new Rectangle(position.X, position.Y, size.X, size.Y);
-		var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
-
-		if (borderRadius > 0f)
+		foreach (var (layout, borderColor, uiNode) in borders)
 		{
-			Raylib.DrawRectangleRounded(rect, borderRadius / Math.Max(size.X, size.Y), 8, raylibColor);
+			ref var l = ref layout.Ref;
+			ref var bColor = ref borderColor.Ref;
+			ref var node = ref uiNode.Ref;
+
+			// Convert Vector4 (0-1) to Raylib Color (0-255)
+			var raylibColor = new Color(
+				(byte)(bColor.Color.X * 255f),
+				(byte)(bColor.Color.Y * 255f),
+				(byte)(bColor.Color.Z * 255f),
+				(byte)(bColor.Color.W * 255f)
+			);
+
+			// Get border widths (use BorderLeft as the thickness for now)
+			float borderWidth = node.BorderLeft.IsDefined ? node.BorderLeft.Value : 1f;
+
+			// Simple rectangle border (no rounded corners support yet)
+			// Draw border as outline
+			Raylib.DrawRectangleLinesEx(
+				new Rectangle(l.X, l.Y, l.Width, l.Height),
+				borderWidth,
+				raylibColor
+			);
 		}
-		else
+	}
+
+	/// <summary>
+	/// Renders text content for UI elements.
+	/// Uses default white text at size 20 for now.
+	/// </summary>
+	private static void RenderTexts(Query<Data<ComputedLayout, UiText>> texts)
+	{
+		foreach (var (layout, text) in texts)
 		{
-			Raylib.DrawRectangleRec(rect, raylibColor);
+			ref var l = ref layout.Ref;
+			ref var t = ref text.Ref;
+
+			if (string.IsNullOrEmpty(t.Value))
+				continue;
+
+			// Use default text style for now
+			var fontSize = 20f;
+			var textColor = Color.White;
+
+			// Render text centered in the layout area
+			var textWidth = Raylib.MeasureText(t.Value, (int)fontSize);
+			var x = l.X + (l.Width - textWidth) / 2f;
+			var y = l.Y + (l.Height - fontSize) / 2f;
+
+			Raylib.DrawText(t.Value, (int)x, (int)y, (int)fontSize, textColor);
 		}
-	}
-
-	private static void DrawBorder(Vector2 position, Vector2 size, Vector4 color, float borderRadius)
-	{
-		var rect = new Rectangle(position.X, position.Y, size.X, size.Y);
-		var raylibColor = new Color((byte)(color.X * 255), (byte)(color.Y * 255), (byte)(color.Z * 255), (byte)(color.W * 255));
-
-		// Use non-rounded border for simplicity (API differences across Raylib versions)
-		Raylib.DrawRectangleLinesEx(rect, 2f, raylibColor);
-	}
-
-	private static void DrawText(Vector2 contentPosition, Vector2 contentSize, ref FlexboxText textData)
-	{
-		if (string.IsNullOrEmpty(textData.Text))
-			return;
-
-		var raylibColor = new Color((byte)(textData.Color.X * 255), (byte)(textData.Color.Y * 255), (byte)(textData.Color.Z * 255), (byte)(textData.Color.W * 255));
-		Raylib.DrawText(textData.Text, (int)contentPosition.X, (int)contentPosition.Y, (int)textData.FontSize, raylibColor);
 	}
 }

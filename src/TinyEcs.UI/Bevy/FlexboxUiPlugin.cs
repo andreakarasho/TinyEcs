@@ -29,8 +29,54 @@ public class FlexboxUiState
 	/// </summary>
 	public void CalculateLayout(float availableWidth, float availableHeight)
 	{
-		Root.CalculateLayout(availableWidth, availableHeight, Direction.LTR);
+		Flex.CalculateLayout(Root, availableWidth, availableHeight, Direction.LTR);
+		// Root.CalculateLayout(availableWidth, availableHeight, Direction.LTR);
 	}
+}
+
+/// <summary>
+/// Flexbox value that can be points, percent, or auto.
+/// </summary>
+public struct FlexValue
+{
+	public float Value;
+	public Unit Unit;
+
+	public FlexValue(float value, Unit unit)
+	{
+		Value = value;
+		Unit = unit;
+	}
+
+	public static FlexValue Points(float value) => new FlexValue(value, Unit.Point);
+	public static FlexValue Percent(float value) => new FlexValue(value, Unit.Percent);
+	public static FlexValue Auto() => new FlexValue(float.NaN, Unit.Auto);
+	public static FlexValue Undefined() => new FlexValue(float.NaN, Unit.Undefined);
+
+	public bool IsUndefined => Unit == Unit.Undefined;
+	public bool IsAuto => Unit == Unit.Auto;
+	public bool IsDefined => Unit != Unit.Undefined && Unit != Unit.Auto;
+
+	public static implicit operator FlexValue(float value) => Points(value);
+}
+
+/// <summary>
+/// Flexbox flex-basis value (auto, content, or length).
+/// </summary>
+public struct FlexBasis
+{
+	public FlexValue Value;
+
+	public FlexBasis(FlexValue value)
+	{
+		Value = value;
+	}
+
+	public static FlexBasis Auto() => new FlexBasis(FlexValue.Auto());
+	public static FlexBasis Points(float value) => new FlexBasis(FlexValue.Points(value));
+	public static FlexBasis Percent(float value) => new FlexBasis(FlexValue.Percent(value));
+
+	public static implicit operator FlexBasis(float value) => Points(value);
 }
 
 /// <summary>
@@ -65,7 +111,7 @@ public struct FlexboxUiPlugin : IPlugin
 		var height = AvailableHeight;
 
 		// Phase 2: Node Lifecycle - Use observers for OnInsert/OnRemove
-		app.AddObserver<OnInsert<UiNode>, ResMut<FlexboxUiState>, Commands>(OnUiNodeInserted);
+		app.AddObserver<OnAdd<UiNode>, ResMut<FlexboxUiState>, Commands>(OnUiNodeInserted);
 		app.AddObserver<OnRemove<UiNode>, ResMut<FlexboxUiState>>(OnUiNodeRemoved);
 
 		// Phase 3: Property Synchronization
@@ -87,17 +133,17 @@ public struct FlexboxUiPlugin : IPlugin
 		})
 			.InStage(Stage.PreUpdate)
 			.Label("flexbox:sync_hierarchy")
-			.After("flexbox:sync_style")
+			.After("flexbox:sync_node")
 			.Build();
 
 		// Phase 4: Layout Calculation
-		app.AddSystem((ResMut<FlexboxUiState> state) =>
-		{
-			state.Value.CalculateLayout(width, height);
-		})
-			.InStage(Stage.Update)
-			.Label("flexbox:calculate_layout")
-			.Build();
+		// app.AddSystem((ResMut<FlexboxUiState> state) =>
+		// {
+		// 	state.Value.CalculateLayout(width, height);
+		// })
+		// 	.InStage(Stage.Update)
+		// 	.Label("flexbox:calculate_layout")
+		// 	.Build();
 
 		app.AddSystem((Query<Data<FlexboxNodeRef>> nodeRefs, Commands commands) =>
 		{
@@ -113,7 +159,7 @@ public struct FlexboxUiPlugin : IPlugin
 	/// Creates a new Flexbox node and attaches it to the root.
 	/// </summary>
 	private static void OnUiNodeInserted(
-		OnInsert<UiNode> trigger,
+		OnAdd<UiNode> trigger,
 		ResMut<FlexboxUiState> state,
 		Commands commands)
 	{
@@ -198,7 +244,8 @@ public struct FlexboxUiPlugin : IPlugin
 		foreach (var (uiNode, nodeRef) in changedNodes)
 		{
 			ref var nodeData = ref uiNode.Ref;
-			var node = nodeRef.Ref.Node;
+			ref var nn = ref nodeRef.Ref;
+			ref var node = ref nn.Node;
 
 			if (node == null)
 				continue;
@@ -253,6 +300,7 @@ public struct FlexboxUiPlugin : IPlugin
 
 			// Mark node as dirty to trigger relayout
 			node.MarkAsDirty();
+			node.ResetLayout();
 		}
 	}
 
@@ -353,7 +401,8 @@ public struct FlexboxUiPlugin : IPlugin
 	{
 		foreach (var (entityId, nodeRef) in nodeRefs)
 		{
-			var node = nodeRef.Ref.Node;
+			ref var nn = ref nodeRef.Ref;
+			ref var node = ref nn.Node;
 			if (node == null)
 				continue;
 
