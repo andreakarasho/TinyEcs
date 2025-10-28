@@ -67,10 +67,11 @@ public struct UiPointerInputPlugin : IPlugin
 			Commands commands,
 			Local<PointerTrackingState> trackingState,
 			Res<UiStack> uiStack,
-			Query<Data<Interactive>> interactiveQuery,
-			Query<Data<ComputedLayout>> layoutQuery) =>
+			Query<Data<Interactive, ComputedLayout>> interactiveQuery,
+			Query<Data<Parent>> parentQuery,
+			Query<Data<Scrollable, ComputedLayout>> scrollableQuery) =>
 		{
-			ProcessPointerInput(pointerInput, commands, trackingState, uiStack, interactiveQuery, layoutQuery);
+			ProcessPointerInputSystem(pointerInput, commands, trackingState, uiStack, interactiveQuery, parentQuery, scrollableQuery);
 		})
 		.InStage(InputStage)
 		.Label("ui:pointer:hit-test")
@@ -94,16 +95,16 @@ public struct UiPointerInputPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Performs hit testing against interactive elements and emits pointer events.
-	/// Uses the UI stack for proper z-order hit testing (topmost element wins).
+	/// System method for pointer input processing.
 	/// </summary>
-	private static void ProcessPointerInput(
+	private static void ProcessPointerInputSystem(
 		Res<PointerInputState> pointerInput,
 		Commands commands,
 		Local<PointerTrackingState> trackingState,
 		Res<UiStack> uiStack,
-		Query<Data<Interactive>> interactiveQuery,
-		Query<Data<ComputedLayout>> layoutQuery)
+		Query<Data<Interactive, ComputedLayout>> interactiveQuery,
+		Query<Data<Parent>> parentQuery,
+		Query<Data<Scrollable, ComputedLayout>> scrollableQuery)
 	{
 		if (trackingState.Value == null)
 			trackingState.Value = new PointerTrackingState();
@@ -124,24 +125,23 @@ public struct UiPointerInputPlugin : IPlugin
 			var entry = uiStack.Value.Entries[i];
 			var entityId = entry.EntityId;
 
-			// Check if this entity is interactive
+			// Check if this entity is interactive and has layout using query
 			if (!interactiveQuery.Contains(entityId))
 				continue;
 
-			// Get the layout
-			if (!layoutQuery.Contains(entityId))
-				continue;
-
-			var (_, layout) = layoutQuery.Get(entityId);
-			ref var layoutRef = ref layout.Ref;
+			var (_, layout) = interactiveQuery.Get(entityId);
 
 			// Check if pointer is inside this element's bounds
-			if (IsPointInRect(input.Position, layoutRef.X, layoutRef.Y, layoutRef.Width, layoutRef.Height))
-			{
-				// Found the topmost interactive element under cursor
-				hitEntity = entityId;
-				break; // Stop at the first (topmost) hit
-			}
+			if (!IsPointInRect(input.Position, layout.Ref.X, layout.Ref.Y, layout.Ref.Width, layout.Ref.Height))
+				continue;
+
+			// Check if the point is visible (not clipped by any scrollable parent)
+			if (!IsPointVisible(input.Position, entityId, parentQuery, scrollableQuery))
+				continue;
+
+			// Found the topmost interactive element under cursor
+			hitEntity = entityId;
+			break; // Stop at the first (topmost) hit
 		}
 
 		// Handle hover enter/exit
@@ -276,5 +276,41 @@ public struct UiPointerInputPlugin : IPlugin
 		       point.X <= x + width &&
 		       point.Y >= y &&
 		       point.Y <= y + height;
+	}
+
+	/// <summary>
+	/// Checks if a point is visible (not clipped) by walking up the hierarchy and checking scrollable parent bounds.
+	/// </summary>
+	private static bool IsPointVisible(
+		Vector2 point,
+		ulong entityId,
+		Query<Data<Parent>> parentQuery,
+		Query<Data<Scrollable, ComputedLayout>> scrollableQuery)
+	{
+		// Walk up the hierarchy
+		var currentEntity = entityId;
+
+		while (parentQuery.Contains(currentEntity))
+		{
+			var (_, parentComponent) = parentQuery.Get(currentEntity);
+			var parentId = parentComponent.Ref.Id;
+
+			// Check if parent is scrollable (has clipping)
+			if (scrollableQuery.Contains(parentId))
+			{
+				var (_, parentLayout) = scrollableQuery.Get(parentId);
+
+				// Check if point is within parent's clip bounds
+				if (!IsPointInRect(point, parentLayout.Ref.X, parentLayout.Ref.Y, parentLayout.Ref.Width, parentLayout.Ref.Height))
+				{
+					return false; // Point is clipped by this scrollable parent
+				}
+			}
+
+			// Move up to next parent
+			currentEntity = parentId;
+		}
+
+		return true; // Point is visible (not clipped by any scrollable parent)
 	}
 }

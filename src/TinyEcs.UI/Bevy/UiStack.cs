@@ -155,9 +155,13 @@ public struct UiStackPlugin : IPlugin
 			Query<Data<ComputedLayout>> allUiNodes,
 			Query<Data<ZIndex>> zIndexNodes,
 			Query<Data<GlobalZIndex>> globalZIndexNodes,
-			ResMut<UiStack> uiStack) =>
+			Query<Data<Parent>> parentNodes,
+			Query<Data<Children>> childrenNodes,
+			ResMut<UiStack> uiStack,
+			Local<HashSet<ulong>> hasParentSet,
+			Local<List<ulong>> rootsList) =>
 		{
-			UpdateUiStack(allUiNodes, zIndexNodes, globalZIndexNodes, uiStack);
+			UpdateUiStack(allUiNodes, zIndexNodes, globalZIndexNodes, parentNodes, childrenNodes, uiStack, hasParentSet, rootsList);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:stack:update")
@@ -187,50 +191,147 @@ public struct UiStackPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Rebuilds the UI stack by iterating all UI nodes and sorting them by z-index.
+	/// Rebuilds the UI stack by traversing the hierarchy depth-first, respecting children order.
+	/// Within the same parent, children are added in the order specified by the Children component.
+	/// Z-index is still respected and determines final sorting order.
 	/// </summary>
 	private static void UpdateUiStack(
 		Query<Data<ComputedLayout>> allUiNodes,
 		Query<Data<ZIndex>> zIndexNodes,
 		Query<Data<GlobalZIndex>> globalZIndexNodes,
-		ResMut<UiStack> uiStack)
+		Query<Data<Parent>> parentNodes,
+		Query<Data<Children>> childrenNodes,
+		ResMut<UiStack> uiStack,
+		Local<HashSet<ulong>> hasParentSet,
+		Local<List<ulong>> rootsList)
 	{
 		ref var stack = ref uiStack.Value;
 		stack.Clear();
 
-		// Iterate all UI nodes and add them to the stack
-		foreach (var (entityId, layout) in allUiNodes)
+		// Initialize local collections if needed
+		if (hasParentSet.Value == null)
+			hasParentSet.Value = new HashSet<ulong>();
+		if (rootsList.Value == null)
+			rootsList.Value = new List<ulong>();
+
+		var hasParent = hasParentSet.Value;
+		var roots = rootsList.Value;
+
+		// Clear and rebuild the hasParent set
+		hasParent.Clear();
+		foreach (var (entityId, _) in parentNodes)
 		{
-			ref readonly var entity = ref entityId.Ref;
-
-			// Get local z-index (default to 0 if not present)
-			var localZIndex = 0;
-			if (zIndexNodes.Contains(entity))
-			{
-				var (_, zIndex) = zIndexNodes.Get(entity);
-				localZIndex = zIndex.Ref.Value;
-			}
-
-			// Get global z-index (default to 0 if not present)
-			var globalZIndex = 0;
-			if (globalZIndexNodes.Contains(entity))
-			{
-				var (_, gzIndex) = globalZIndexNodes.Get(entity);
-				globalZIndex = gzIndex.Ref.Value;
-			}
-
-			// Combined z-index is global + local
-			var combinedZIndex = globalZIndex + localZIndex;
-
-			stack.Add(new UiStackEntry(
-				entityId: entity,
-				zIndex: combinedZIndex,
-				globalZIndex: globalZIndex,
-				localZIndex: localZIndex));
+			hasParent.Add(entityId.Ref);
 		}
 
-		// Sort the stack by z-index (back to front)
-		stack.Sort();
+		// Clear and find root UI nodes (those with ComputedLayout but no Parent)
+		roots.Clear();
+		foreach (var (entityId, _) in allUiNodes)
+		{
+			var entity = entityId.Ref;
+			if (!hasParent.Contains(entity))
+			{
+				roots.Add(entity);
+			}
+		}
+
+		// Sort roots by z-index to establish base ordering
+		roots.Sort((a, b) =>
+		{
+			var aZIndex = GetCombinedZIndex(a, zIndexNodes, globalZIndexNodes);
+			var bZIndex = GetCombinedZIndex(b, zIndexNodes, globalZIndexNodes);
+			return aZIndex.CompareTo(bZIndex);
+		});
+
+		// Traverse hierarchy depth-first, starting from roots
+		foreach (var rootEntity in roots)
+		{
+			TraverseHierarchy(rootEntity, zIndexNodes, globalZIndexNodes, childrenNodes, stack);
+		}
+	}
+
+	/// <summary>
+	/// Recursively traverses the UI hierarchy depth-first, adding nodes to the stack in order.
+	/// </summary>
+	private static void TraverseHierarchy(
+		ulong entityId,
+		Query<Data<ZIndex>> zIndexNodes,
+		Query<Data<GlobalZIndex>> globalZIndexNodes,
+		Query<Data<Children>> childrenNodes,
+		UiStack stack)
+	{
+		// Add this entity to the stack
+		var (localZIndex, globalZIndex, combinedZIndex) = GetZIndices(entityId, zIndexNodes, globalZIndexNodes);
+		stack.Add(new UiStackEntry(
+			entityId: entityId,
+			zIndex: combinedZIndex,
+			globalZIndex: globalZIndex,
+			localZIndex: localZIndex));
+
+		// Recursively add children in the order they appear in the Children component
+		if (childrenNodes.Contains(entityId))
+		{
+			var (_, children) = childrenNodes.Get(entityId);
+
+			// Collect children with their z-indices
+			var childrenWithZIndex = new List<(ulong childId, int zIndex)>();
+			foreach (var childId in children.Ref)
+			{
+				var childZIndex = GetCombinedZIndex(childId, zIndexNodes, globalZIndexNodes);
+				childrenWithZIndex.Add((childId, childZIndex));
+			}
+
+			// Sort children by z-index while preserving order for equal z-indices (stable sort)
+			childrenWithZIndex.Sort((a, b) => a.zIndex.CompareTo(b.zIndex));
+
+			// Traverse each child
+			foreach (var (childId, _) in childrenWithZIndex)
+			{
+				TraverseHierarchy(childId, zIndexNodes, globalZIndexNodes, childrenNodes, stack);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Gets the combined z-index for an entity.
+	/// </summary>
+	private static int GetCombinedZIndex(
+		ulong entityId,
+		Query<Data<ZIndex>> zIndexNodes,
+		Query<Data<GlobalZIndex>> globalZIndexNodes)
+	{
+		var (_, _, combinedZIndex) = GetZIndices(entityId, zIndexNodes, globalZIndexNodes);
+		return combinedZIndex;
+	}
+
+	/// <summary>
+	/// Gets all z-index values for an entity (local, global, combined).
+	/// </summary>
+	private static (int localZIndex, int globalZIndex, int combinedZIndex) GetZIndices(
+		ulong entityId,
+		Query<Data<ZIndex>> zIndexNodes,
+		Query<Data<GlobalZIndex>> globalZIndexNodes)
+	{
+		// Get local z-index (default to 0 if not present)
+		var localZIndex = 0;
+		if (zIndexNodes.Contains(entityId))
+		{
+			var (_, zIndex) = zIndexNodes.Get(entityId);
+			localZIndex = zIndex.Ref.Value;
+		}
+
+		// Get global z-index (default to 0 if not present)
+		var globalZIndex = 0;
+		if (globalZIndexNodes.Contains(entityId))
+		{
+			var (_, gzIndex) = globalZIndexNodes.Get(entityId);
+			globalZIndex = gzIndex.Ref.Value;
+		}
+
+		// Combined z-index is global + local
+		var combinedZIndex = globalZIndex + localZIndex;
+
+		return (localZIndex, globalZIndex, combinedZIndex);
 	}
 
 	/// <summary>

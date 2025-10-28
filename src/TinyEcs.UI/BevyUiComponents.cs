@@ -284,6 +284,17 @@ public struct ComputedLayout
 		Width = width;
 		Height = height;
 	}
+
+	/// <summary>
+	/// Checks if a point is within the bounds of this layout.
+	/// </summary>
+	/// <param name="point">The point to check</param>
+	/// <returns>True if the point is within bounds, false otherwise</returns>
+	public readonly bool Contains(Vector2 point)
+	{
+		return point.X >= X && point.X <= X + Width &&
+		       point.Y >= Y && point.Y <= Y + Height;
+	}
 }
 
 /// <summary>

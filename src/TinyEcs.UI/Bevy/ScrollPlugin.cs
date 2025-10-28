@@ -46,9 +46,11 @@ public struct ScrollPlugin : IPlugin
 		app.AddSystem((
 			Res<ScrollInputState> scrollInput,
 			Res<PointerInputState> pointerInput,
-			Query<Data<Scrollable, ComputedLayout>> scrollables) =>
+			Res<UiStack> uiStack,
+			Query<Data<Scrollable, ComputedLayout>> scrollables,
+			Query<Data<Parent>> parents) =>
 		{
-			ProcessScrollInput(scrollInput, pointerInput, scrollables);
+			ProcessScrollInput(scrollInput, pointerInput, uiStack, scrollables, parents);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:scroll:process-input")
@@ -136,12 +138,14 @@ public struct ScrollPlugin : IPlugin
 
 	/// <summary>
 	/// Processes scroll input and updates scrollable containers.
-	/// Finds the scrollable container under the mouse pointer and applies scroll offset.
+	/// Uses the UI stack to find the topmost scrollable container under the mouse pointer.
 	/// </summary>
 	private static void ProcessScrollInput(
 		Res<ScrollInputState> scrollInput,
 		Res<PointerInputState> pointerInput,
-		Query<Data<Scrollable, ComputedLayout>> scrollables)
+		Res<UiStack> uiStack,
+		Query<Data<Scrollable, ComputedLayout>> scrollables,
+		Query<Data<Parent>> parents)
 	{
 		// Skip if no scroll this frame
 		if (scrollInput.Value.ScrollDelta == Vector2.Zero)
@@ -150,9 +154,17 @@ public struct ScrollPlugin : IPlugin
 		var mousePos = pointerInput.Value.Position;
 		var scrollDelta = scrollInput.Value.ScrollDelta;
 
-		// Find scrollable container under mouse
-		foreach (var (entityId, scrollable, layout) in scrollables)
+		// Iterate UI stack in reverse order (topmost first) to find scrollable under mouse
+		for (int i = uiStack.Value.Count - 1; i >= 0; i--)
 		{
+			var entry = uiStack.Value.Entries[i];
+			var entityId = entry.EntityId;
+
+			// Check if this entity is scrollable
+			if (!scrollables.Contains(entityId))
+				continue;
+
+			var (_, scrollable, layout) = scrollables.Get(entityId);
 			ref var scroll = ref scrollable.Ref;
 			ref var l = ref layout.Ref;
 
@@ -160,7 +172,11 @@ public struct ScrollPlugin : IPlugin
 			if (mousePos.X >= l.X && mousePos.X <= l.X + l.Width &&
 				mousePos.Y >= l.Y && mousePos.Y <= l.Y + l.Height)
 			{
-				// Apply scroll delta
+				// Check if the mouse position is visible (not clipped by parent scrollables)
+				if (!IsPointVisibleForScroll(mousePos, entityId, parents, scrollables))
+					continue;
+
+				// Found the topmost scrollable under mouse - apply scroll delta
 				// If only horizontal scrolling is enabled, translate vertical wheel to horizontal scroll
 				if (scroll.EnableHorizontal && !scroll.EnableVertical && scrollDelta.Y != 0)
 				{
@@ -191,5 +207,43 @@ public struct ScrollPlugin : IPlugin
 				break;
 			}
 		}
+	}
+
+	/// <summary>
+	/// Checks if a point is visible (not clipped) by walking up the hierarchy and checking scrollable parent bounds.
+	/// Similar to the hit testing version but specifically for scroll input.
+	/// </summary>
+	private static bool IsPointVisibleForScroll(
+		Vector2 point,
+		ulong entityId,
+		Query<Data<Parent>> parents,
+		Query<Data<Scrollable, ComputedLayout>> scrollables)
+	{
+		// Walk up the hierarchy
+		var currentEntity = entityId;
+
+		while (parents.Contains(currentEntity))
+		{
+			var (_, parentComponent) = parents.Get(currentEntity);
+			var parentId = parentComponent.Ref.Id;
+
+			// Check if parent is scrollable (has clipping)
+			if (scrollables.Contains(parentId))
+			{
+				var (_, _, parentLayout) = scrollables.Get(parentId);
+
+				// Check if point is within parent's clip bounds
+				if (point.X < parentLayout.Ref.X || point.X > parentLayout.Ref.X + parentLayout.Ref.Width ||
+					point.Y < parentLayout.Ref.Y || point.Y > parentLayout.Ref.Y + parentLayout.Ref.Height)
+				{
+					return false; // Point is clipped by this scrollable parent
+				}
+			}
+
+			// Move up to next parent
+			currentEntity = parentId;
+		}
+
+		return true; // Point is visible (not clipped by any scrollable parent)
 	}
 }

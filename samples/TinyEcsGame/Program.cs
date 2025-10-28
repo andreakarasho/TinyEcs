@@ -73,6 +73,12 @@ app.AddSystem((Commands commands) => CreateButtonPanel(commands))
 	.Label("ui:button-panel:spawn")
 	.Build();
 
+// Nested scroll container demo
+app.AddSystem((Commands commands) => CreateNestedScrollPanel(commands))
+	.InStage(Stage.Startup)
+	.Label("ui:nested-scroll:spawn")
+	.Build();
+
 // Handle button activation
 app.AddObserver((On<Activate> trigger, Commands commands, Query<Data<UiText>, With<Button>> qButtonTexts) =>
 {
@@ -121,7 +127,6 @@ static void CreateButtonPanel(Commands commands)
 		.Insert(BackgroundColor.FromRgba(40, 40, 50, 255))
 		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
 		.Insert(new BorderRadius(12f))
-		.Insert(new ZIndex(1)) // Panel has z-index 1
 		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f)) // Make panel scrollable horizontally
 		.Insert(new Draggable()) // Make panel draggable
 		.Insert(new Interactive(focusable: false)); // Enable pointer events for dragging
@@ -162,7 +167,6 @@ static void CreateButtonPanel(Commands commands)
 			.Insert(new UiText(name))
 			.Insert(new Button())
 			.Insert(new Interactive(focusable: true))
-			.Insert(new ZIndex(2)) // Buttons have z-index 2 (higher than panel)
 			.Observe((On<UiPointerTrigger> trigger, Commands cmd) =>
 			{
 				if (trigger.Event.Event.Type == UiPointerEventType.PointerEnter)
@@ -191,6 +195,139 @@ static void CreateButtonPanel(Commands commands)
 	}
 
 	Console.WriteLine($"[UI] Button panel hierarchy created - {buttonColors.Length} buttons attached to panel");
+}
+
+static void CreateNestedScrollPanel(Commands commands)
+{
+	// Create outer scrollable panel (vertical scrolling)
+	var outerPanel = commands.Spawn()
+		.Insert(new UiNode
+		{
+			FlexDirection = FlexDirection.Column,
+			Width = FlexValue.Points(450f),
+			Height = FlexValue.Points(400f),
+			// Position on the right side
+			// MarginTop = FlexValue.Points(50f),
+			// MarginLeft = FlexValue.Auto(),
+			// MarginRight = FlexValue.Points(50f),
+			// PaddingTop = FlexValue.Points(20f),
+			// PaddingBottom = FlexValue.Points(20f),
+			// PaddingLeft = FlexValue.Points(20f),
+			// PaddingRight = FlexValue.Points(20f),
+
+			MarginTop = FlexValue.Auto(),
+			MarginBottom = FlexValue.Auto(),
+			MarginLeft = FlexValue.Auto(),
+			MarginRight = FlexValue.Auto(),
+			PaddingTop = FlexValue.Points(20f),
+			PaddingBottom = FlexValue.Points(20f),
+			PaddingLeft = FlexValue.Points(20f),
+			PaddingRight = FlexValue.Points(20f),
+		})
+		.Insert(BackgroundColor.FromRgba(30, 50, 40, 255))
+		.Insert(BorderColor.FromRgba(80, 120, 100, 255))
+		.Insert(new BorderRadius(12f))
+		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f))
+		.Insert(new Draggable())
+		.Insert(new Interactive(focusable: false));
+
+	var outerPanelId = outerPanel.Id;
+	Console.WriteLine($"[UI] Created outer scrollable panel {outerPanelId}");
+
+	// Add title text
+	var titleText = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Height = FlexValue.Points(30f),
+			MarginBottom = FlexValue.Points(10f),
+			JustifyContent = Justify.Center,
+			AlignItems = Align.Center,
+		})
+		.Insert(new UiText("Nested Scroll Demo"));
+
+	outerPanel.AddChild(titleText);
+
+	// Create inner scrollable panels (horizontal scrolling)
+	for (int i = 0; i < 5; i++)
+	{
+		var innerPanel = commands.Spawn()
+			.Insert(new UiNode
+			{
+				FlexDirection = FlexDirection.Row, // Horizontal layout
+				Width = FlexValue.Points(380f),
+				Height = FlexValue.Points(120f),
+
+				MarginBottom = FlexValue.Points(15f),
+				PaddingTop = FlexValue.Points(10f),
+				PaddingBottom = FlexValue.Points(10f),
+				PaddingLeft = FlexValue.Points(10f),
+				PaddingRight = FlexValue.Points(10f),
+			})
+			.Insert(BackgroundColor.FromRgba(50, 70, 60, 255))
+			.Insert(BorderColor.FromRgba(100, 140, 120, 255))
+			.Insert(new BorderRadius(8f))
+			.Insert(new Scrollable(vertical: false, horizontal: true, scrollSpeed: 10f))
+			.Insert(new Interactive(focusable: true));
+
+		var innerPanelId = innerPanel.Id;
+		Console.WriteLine($"[UI] Created inner scrollable panel {innerPanelId} (#{i})");
+
+		// Add colored boxes to inner panel (more than fit to enable scrolling)
+		var colors = new[]
+		{
+			new Vector4(0.9f, 0.3f, 0.3f, 1f), // Red
+			new Vector4(0.3f, 0.9f, 0.3f, 1f), // Green
+			new Vector4(0.3f, 0.3f, 0.9f, 1f), // Blue
+			new Vector4(0.9f, 0.9f, 0.3f, 1f), // Yellow
+			new Vector4(0.9f, 0.5f, 0.2f, 1f), // Orange
+			new Vector4(0.7f, 0.3f, 0.9f, 1f), // Purple
+			new Vector4(0.3f, 0.9f, 0.9f, 1f), // Cyan
+			new Vector4(0.9f, 0.5f, 0.7f, 1f)  // Pink
+		};
+
+		foreach (var (color, index) in colors.Select((c, idx) => (c, idx)))
+		{
+			var box = commands.Spawn()
+				.Insert(new UiNode
+				{
+					Width = FlexValue.Points(80f),
+					Height = FlexValue.Points(80f),
+					MarginLeft = FlexValue.Points(5f),
+					MarginRight = FlexValue.Points(5f),
+					JustifyContent = Justify.Center,
+					AlignItems = Align.Center,
+				})
+				.Insert(new BackgroundColor(color))
+				.Insert(BorderColor.FromRgba(255, 255, 255, 200))
+				.Insert(new BorderRadius(6f))
+				.Insert(new UiText($"{i}-{index}"))
+				.Insert(new Interactive(focusable: true))
+				.Observe((On<UiPointerTrigger> trigger, Commands cmd) =>
+				{
+					if (trigger.Event.Event.Type == UiPointerEventType.PointerEnter)
+					{
+						// Brighten on hover
+						cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(
+							new Vector4(
+								Math.Min(color.X * 1.2f, 1f),
+								Math.Min(color.Y * 1.2f, 1f),
+								Math.Min(color.Z * 1.2f, 1f),
+								1f)));
+					}
+					else if (trigger.Event.Event.Type == UiPointerEventType.PointerExit)
+					{
+						// Restore original color
+						cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(color));
+					}
+				});
+
+			innerPanel.AddChild(box);
+		}
+
+		outerPanel.AddChild(innerPanel);
+	}
+
+	Console.WriteLine($"[UI] Nested scroll panel hierarchy created - 5 inner panels with 8 boxes each");
 }
 
 class DebugLayoutState
