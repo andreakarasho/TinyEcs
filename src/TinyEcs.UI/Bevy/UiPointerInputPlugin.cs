@@ -131,8 +131,14 @@ public struct UiPointerInputPlugin : IPlugin
 
 			var (_, layout) = interactiveQuery.Get(entityId);
 
-			// Check if pointer is inside this element's bounds
-			if (!IsPointInRect(input.Position, layout.Ref.X, layout.Ref.Y, layout.Ref.Width, layout.Ref.Height))
+			// ComputedLayout positions are already adjusted for scroll offsets (subtracted).
+			// For hit testing, we need to add scroll offsets back to get the actual screen position.
+			var scrollOffset = GetScrollOffsetFromParents(entityId, parentQuery, scrollableQuery);
+			var screenX = layout.Ref.X + scrollOffset.X;
+			var screenY = layout.Ref.Y + scrollOffset.Y;
+
+			// Check if pointer is inside this element's bounds (using screen-space position)
+			if (!IsPointInRect(input.Position, screenX, screenY, layout.Ref.Width, layout.Ref.Height))
 				continue;
 
 			// Check if the point is visible (not clipped by any scrollable parent)
@@ -312,5 +318,41 @@ public struct UiPointerInputPlugin : IPlugin
 		}
 
 		return true; // Point is visible (not clipped by any scrollable parent)
+	}
+
+	/// <summary>
+	/// Walks up the parent chain and accumulates scroll offsets from scrollable containers.
+	/// Returns the total scroll offset that should be added back to ComputedLayout positions
+	/// to get the actual screen-space position for hit testing.
+	/// </summary>
+	private static Vector2 GetScrollOffsetFromParents(
+		ulong entityId,
+		Query<Data<Parent>> parents,
+		Query<Data<Scrollable, ComputedLayout>> scrollables)
+	{
+		var totalOffset = Vector2.Zero;
+		var currentId = entityId;
+
+		// Walk up parent chain
+		while (parents.Contains(currentId))
+		{
+			var (_, parent) = parents.Get(currentId);
+			var parentId = parent.Ref.Id;
+
+			// Check if parent is scrollable
+			if (scrollables.Contains(parentId))
+			{
+				var (scrollable, _) = scrollables.Get(parentId);
+				totalOffset += scrollable.Ref.ScrollOffset;
+			}
+
+			currentId = parentId;
+
+			// Prevent infinite loops
+			if (currentId == entityId)
+				break;
+		}
+
+		return totalOffset;
 	}
 }
