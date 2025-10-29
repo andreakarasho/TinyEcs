@@ -82,6 +82,7 @@ public sealed class Query
 {
 	private readonly IQueryTerm[] _terms;
 	private readonly List<Archetype> _matchedArchetypes;
+	private readonly HashSet<EcsID> _archetypesIdSet;
 	private EcsID _lastArchetypeIdMatched;
 	private ulong _lastStructuralVersion;
 	private readonly int[] _indices;
@@ -90,6 +91,7 @@ public sealed class Query
 	{
 		World = world;
 		_matchedArchetypes = new();
+		_archetypesIdSet = new();
 
 		_terms = new IQueryTerm[terms.Length];
 		terms.CopyTo(_terms, 0);
@@ -120,6 +122,10 @@ public sealed class Query
 
 		_matchedArchetypes.Clear();
 		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
+
+		_archetypesIdSet.Clear();
+		foreach (var arch in _matchedArchetypes)
+			_archetypesIdSet.Add(arch.Id);
 	}
 
 	public int Count()
@@ -143,9 +149,8 @@ public sealed class Query
 		if (World.Exists(entity))
 		{
 			ref var record = ref World.GetRecord(entity);
-			foreach (var arch in _matchedArchetypes)
+			if (_archetypesIdSet.Contains(record.Archetype.Id))
 			{
-				if (arch.Id != record.Archetype.Id) continue;
 				var archetypes = new ReadOnlySpan<Archetype>(ref record.Archetype);
 				return Iter(archetypes, record.Row, 1);
 			}

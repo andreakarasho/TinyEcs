@@ -31,11 +31,10 @@ public struct ScrollPlugin : IPlugin
 
 		// System to calculate content size for scrollable containers
 		app.AddSystem((
-			Query<Data<UiNode, Scrollable, ComputedLayout>> scrollables,
-			Query<Data<Parent>> parents,
+			Query<Data<UiNode, Scrollable, ComputedLayout, Children>, Optional<Children>> scrollables,
 			Query<Data<UiNode, ComputedLayout>> allLayouts) =>
 		{
-			UpdateScrollableContentSize(scrollables, parents, allLayouts);
+			UpdateScrollableContentSize(scrollables, allLayouts);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:scroll:update-content-size")
@@ -71,11 +70,10 @@ public struct ScrollPlugin : IPlugin
 	/// Updates the content size of scrollable containers by measuring their children.
 	/// </summary>
 	private static void UpdateScrollableContentSize(
-		Query<Data<UiNode, Scrollable, ComputedLayout>> scrollables,
-		Query<Data<Parent>> parents,
+		Query<Data<UiNode, Scrollable, ComputedLayout, Children>, Optional<Children>> scrollables,
 		Query<Data<UiNode, ComputedLayout>> allLayouts)
 	{
-		foreach (var (scrollableId, containerNode, scrollable, scrollLayout) in scrollables)
+		foreach (var (containerNode, scrollable, scrollLayout, maybeChildren) in scrollables)
 		{
 			ref var node = ref containerNode.Ref;
 			ref var scroll = ref scrollable.Ref;
@@ -101,16 +99,16 @@ public struct ScrollPlugin : IPlugin
 			float maxX = float.MinValue, maxY = float.MinValue;
 			bool hasChildren = false;
 
-			// Find all children of this scrollable container
-			foreach (var (childId, childNode, childLayout) in allLayouts)
+			if (maybeChildren.IsValid())
 			{
-				// Check if this entity is a child of the scrollable
-				if (IsChildOf(childId.Ref, scrollableId.Ref, parents))
+				foreach (var childId in maybeChildren.Ref)
 				{
-					ref var child = ref childLayout.Ref;
+					if (!allLayouts.Contains(childId))
+						continue;
+
+					var (_, childNode, childLayout) = allLayouts.Get(childId);
 					hasChildren = true;
 
-					// Get margins from UiNode if available
 					float marginLeft = 0f;
 					float marginRight = 0f;
 					float marginTop = 0f;
@@ -128,10 +126,10 @@ public struct ScrollPlugin : IPlugin
 
 					// Expand bounding box to include this child + its margins
 					// Child.X/Y are positions AFTER margins, so we subtract them to get the true edges
-					minX = Math.Min(minX, child.X - marginLeft);
-					minY = Math.Min(minY, child.Y - marginTop);
-					maxX = Math.Max(maxX, child.X + child.Width + marginRight);
-					maxY = Math.Max(maxY, child.Y + child.Height + marginBottom);
+					minX = Math.Min(minX, childLayout.Ref.X - marginLeft);
+					minY = Math.Min(minY, childLayout.Ref.Y - marginTop);
+					maxX = Math.Max(maxX, childLayout.Ref.X + childLayout.Ref.Width + marginRight);
+					maxY = Math.Max(maxY, childLayout.Ref.Y + childLayout.Ref.Height + marginBottom);
 				}
 			}
 
@@ -154,27 +152,6 @@ public struct ScrollPlugin : IPlugin
 				scroll.ContentSize = Vector2.Zero;
 			}
 		}
-	}
-
-	/// <summary>
-	/// Checks if childId is a direct or indirect child of parentId.
-	/// </summary>
-	private static bool IsChildOf(ulong childId, ulong parentId, Query<Data<Parent>> parents)
-	{
-		var currentId = childId;
-		while (parents.Contains(currentId))
-		{
-			var (_, parent) = parents.Get(currentId);
-			if (parent.Ref.Id == parentId)
-				return true;
-
-			currentId = parent.Ref.Id;
-
-			// Prevent infinite loops
-			if (currentId == childId)
-				break;
-		}
-		return false;
 	}
 
 	/// <summary>

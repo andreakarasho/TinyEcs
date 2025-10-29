@@ -363,15 +363,12 @@ public struct FlexboxUiPlugin : IPlugin
 				childNode.Parent.RemoveChild(childNode);
 			}
 
-			// Find parent's Flexbox node
+			// Find parent's Flexbox node using Contains + Get (optimized)
 			Node? parentNode = null;
-			foreach (var (entityId, parentNodeRef) in allNodeRefs)
+			if (allNodeRefs.Contains(parentEntityId))
 			{
-				if (entityId.Ref == parentEntityId)
-				{
-					parentNode = parentNodeRef.Ref.Node;
-					break;
-				}
+				var (_, parentNodeRef) = allNodeRefs.Get(parentEntityId);
+				parentNode = parentNodeRef.Ref.Node;
 			}
 
 			// Add to new parent (or root if parent not found)
