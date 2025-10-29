@@ -16,7 +16,7 @@ public class FlexboxUiState
 
 	public FlexboxUiState()
 	{
-		Root = new Node();
+		Root = Flex.CreateDefaultNode();
 		Root.nodeStyle.Display = Display.Flex;
 		Root.nodeStyle.FlexDirection = FlexDirection.Column;
 		Root.nodeStyle.Dimensions[(int)Dimension.Width] = new Value(100f, Unit.Percent);
@@ -159,7 +159,7 @@ public struct FlexboxUiPlugin : IPlugin
 		Commands commands)
 	{
 		// Create a new Flexbox node for this UI entity
-		var node = new Node();
+		var node = Flex.CreateDefaultNode();
 
 		// Default styling - can be overridden by Style component
 		node.nodeStyle.Display = Display.Flex;
