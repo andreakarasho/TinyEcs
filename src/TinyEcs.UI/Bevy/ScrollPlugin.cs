@@ -33,9 +33,10 @@ public struct ScrollPlugin : IPlugin
 		app.AddSystem((
 			Query<Data<Scrollable, ComputedLayout>> scrollables,
 			Query<Data<Parent>> parents,
-			Query<Data<ComputedLayout>> allLayouts) =>
+			Query<Data<ComputedLayout>> allLayouts,
+			Query<Data<UiNode>> uiNodes) =>
 		{
-			UpdateScrollableContentSize(scrollables, parents, allLayouts);
+			UpdateScrollableContentSize(scrollables, parents, allLayouts, uiNodes);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:scroll:update-content-size")
@@ -73,12 +74,33 @@ public struct ScrollPlugin : IPlugin
 	private static void UpdateScrollableContentSize(
 		Query<Data<Scrollable, ComputedLayout>> scrollables,
 		Query<Data<Parent>> parents,
-		Query<Data<ComputedLayout>> allLayouts)
+		Query<Data<ComputedLayout>> allLayouts,
+		Query<Data<UiNode>> uiNodes)
 	{
 		foreach (var (scrollableId, scrollable, scrollLayout) in scrollables)
 		{
 			ref var scroll = ref scrollable.Ref;
 			ref var layout = ref scrollLayout.Ref;
+
+			// Get container padding to ensure all padding is included in content size
+			float paddingLeft = 0f;
+			float paddingRight = 0f;
+			float paddingTop = 0f;
+			float paddingBottom = 0f;
+			if (uiNodes.Contains(scrollableId.Ref))
+			{
+				var (_, containerNode) = uiNodes.Get(scrollableId.Ref);
+				ref var node = ref containerNode.Ref;
+
+				if (node.PaddingLeft.IsDefined)
+					paddingLeft = node.PaddingLeft.Value;
+				if (node.PaddingRight.IsDefined)
+					paddingRight = node.PaddingRight.Value;
+				if (node.PaddingTop.IsDefined)
+					paddingTop = node.PaddingTop.Value;
+				if (node.PaddingBottom.IsDefined)
+					paddingBottom = node.PaddingBottom.Value;
+			}
 
 			// Calculate bounding box of all children
 			float minX = float.MaxValue, minY = float.MaxValue;
@@ -94,18 +116,48 @@ public struct ScrollPlugin : IPlugin
 					ref var child = ref childLayout.Ref;
 					hasChildren = true;
 
-					// Expand bounding box to include this child
-					minX = Math.Min(minX, child.X);
-					minY = Math.Min(minY, child.Y);
-					maxX = Math.Max(maxX, child.X + child.Width);
-					maxY = Math.Max(maxY, child.Y + child.Height);
+					// Get margins from UiNode if available
+					float marginLeft = 0f;
+					float marginRight = 0f;
+					float marginTop = 0f;
+					float marginBottom = 0f;
+					if (uiNodes.Contains(childId.Ref))
+					{
+						var (_, childNode) = uiNodes.Get(childId.Ref);
+						ref var node = ref childNode.Ref;
+
+						// Include margins in bounding box calculation
+						if (node.MarginLeft.IsDefined)
+							marginLeft = node.MarginLeft.Value;
+						if (node.MarginRight.IsDefined)
+							marginRight = node.MarginRight.Value;
+						if (node.MarginTop.IsDefined)
+							marginTop = node.MarginTop.Value;
+						if (node.MarginBottom.IsDefined)
+							marginBottom = node.MarginBottom.Value;
+					}
+
+					// Expand bounding box to include this child + its margins
+					// Child.X/Y are positions AFTER margins, so we subtract them to get the true edges
+					minX = Math.Min(minX, child.X - marginLeft);
+					minY = Math.Min(minY, child.Y - marginTop);
+					maxX = Math.Max(maxX, child.X + child.Width + marginRight);
+					maxY = Math.Max(maxY, child.Y + child.Height + marginBottom);
 				}
 			}
 
 			if (hasChildren)
 			{
-				// Content size is the bounding box size
-				scroll.ContentSize = new Vector2(maxX - minX, maxY - minY);
+				// Content size calculation:
+				// - minX/minY = position where first child's margins start (after paddingLeft/Top)
+				// - maxX/maxY = position where last child's margins end (before paddingRight/Bottom)
+				// - (maxX - minX) = span from first margin to last margin
+				// - Add paddingLeft/Top + paddingRight/Bottom to include full padding area
+				// This ensures the content size represents the full scrollable area with symmetric padding
+				scroll.ContentSize = new Vector2(
+					maxX - minX + paddingLeft + paddingRight,
+					maxY - minY + paddingTop + paddingBottom
+				);
 			}
 			else
 			{

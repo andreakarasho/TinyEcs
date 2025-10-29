@@ -109,9 +109,9 @@ static void CreateButtonPanel(Commands commands)
 	var panel = commands.Spawn()
 		.Insert(new UiNode
 		{
-			FlexDirection = FlexDirection.Column, // Changed to Row for horizontal layout
-			JustifyContent = Justify.Center,
-			AlignItems = Align.Center,
+			FlexDirection = FlexDirection.Column, // Vertical layout for buttons stacked vertically
+			JustifyContent = Justify.FlexStart, // Start from top (not centered) for proper scrolling
+			AlignItems = Align.Center, // Center buttons horizontally
 			Width = FlexValue.Points(400f), // Wider to fit buttons horizontally
 			Height = FlexValue.Points(500f), // Shorter since buttons are in a row
 											 // Center the panel on screen
@@ -238,6 +238,7 @@ static void CreateNestedScrollPanel(Commands commands)
 	var titleText = commands.Spawn()
 		.Insert(new UiNode
 		{
+			Width = FlexValue.Percent(100f),
 			Height = FlexValue.Points(30f),
 			MarginBottom = FlexValue.Points(10f),
 			JustifyContent = Justify.Center,
@@ -257,6 +258,8 @@ static void CreateNestedScrollPanel(Commands commands)
 				Width = FlexValue.Points(380f),
 				Height = FlexValue.Points(120f),
 
+				MarginLeft = FlexValue.Auto(),
+				MarginRight = FlexValue.Auto(),
 				MarginBottom = FlexValue.Points(15f),
 				PaddingTop = FlexValue.Points(10f),
 				PaddingBottom = FlexValue.Points(10f),
