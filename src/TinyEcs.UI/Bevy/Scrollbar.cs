@@ -110,11 +110,22 @@ public struct ScrollbarPlugin : IPlugin
 		// Register all scrollbar event observers
 		// Note: We use PointerDown/PointerMove/PointerUp pattern since we don't have DragStart/Drag/DragEnd events
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb>>, Query<Data<Parent>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb>>, Query<Data<Parent>>, Query<Data<Scrollbar>>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerMove);
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb, ScrollbarDragState, Parent, ComputedLayout>>, Query<Data<Scrollbar>>, Query<Data<Scrollable, ComputedLayout>>>(ScrollbarOnPointerMove);
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb>>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerUp);
 
-		// TODO: Add system to update scrollbar thumb size and position
-		// app.AddSystem(UpdateScrollbarThumb).InStage(Stage.PostUpdate).Build();
+		// System to update scrollbar thumb size and position based on scroll state
+		app.AddSystem((
+			Commands commands,
+			Query<Data<Scrollbar, Children>> scrollbars,
+			Query<Data<ScrollbarThumb, UiNode, ComputedLayout>> thumbs,
+			Query<Data<Scrollable, ComputedLayout>> scrollables) =>
+		{
+			UpdateScrollbarThumbs(commands, scrollbars, thumbs, scrollables);
+		})
+		.InStage(Stage.PostUpdate)
+		.Label("ui:scrollbar:update-thumbs")
+		.After("ui:scroll:update-content-size")
+		.Build();
 	}
 
 	/// <summary>
@@ -151,28 +162,77 @@ public struct ScrollbarPlugin : IPlugin
 
 	/// <summary>
 	/// Handles pointer move events during dragging.
+	/// Optimized: Combines multiple queries accessing the same entities.
 	/// </summary>
 	private static void ScrollbarOnPointerMove(
 		On<UiPointerTrigger> trigger,
-		Query<Data<ScrollbarThumb>> thumbs,
-		Query<Data<Parent>> parents,
+		Query<Data<ScrollbarThumb, ScrollbarDragState, Parent, ComputedLayout>> thumbs,
 		Query<Data<Scrollbar>> scrollbars,
-		Query<Data<ScrollbarDragState>> dragStates,
-		Commands commands)
+		Query<Data<Scrollable, ComputedLayout>> scrollables)
 	{
 		var evt = trigger.Event.Event;
 		if (evt.Type != UiPointerEventType.PointerMove)
 			return;
 
-		// Check if this is a thumb being dragged
+		// Check if this is a thumb being dragged (single combined query)
 		if (!thumbs.Contains(trigger.EntityId))
 			return;
 
-		if (!dragStates.Contains(trigger.EntityId))
+		var (_, thumb, dragState, parent, thumbLayout) = thumbs.Get(trigger.EntityId);
+		var scrollbarId = parent.Ref.Id;
+
+		// Get scrollbar entity
+		if (!scrollbars.Contains(scrollbarId))
 			return;
 
-		// TODO: Calculate new scroll position based on drag delta
-		// TODO: Update target scroll position
+		var (_, scrollbar) = scrollbars.Get(scrollbarId);
+		var targetId = scrollbar.Ref.Target;
+
+		// Get target scrollable with layout (combined query)
+		if (!scrollables.Contains(targetId))
+			return;
+
+		var (_, scrollable, targetLayout) = scrollables.Get(targetId);
+
+		// Calculate new scroll position based on pointer position and thumb drag
+		ref var scroll = ref scrollable.Ref;
+		ref var containerLayout = ref targetLayout.Ref;
+		ref var thumbL = ref thumbLayout.Ref;
+
+		if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)
+		{
+			// Vertical scrollbar
+			var contentHeight = scroll.ContentSize.Y;
+			var containerHeight = containerLayout.Height;
+			var thumbHeight = thumbL.Height;
+			var trackHeight = containerHeight;
+			var maxThumbY = trackHeight - thumbHeight;
+
+			// Calculate scroll ratio from thumb position
+			var thumbY = evt.Position.Y - containerLayout.Y;
+			var thumbRatio = maxThumbY > 0 ? Math.Clamp(thumbY / maxThumbY, 0f, 1f) : 0f;
+
+			// Update scroll offset
+			var maxScroll = Math.Max(0f, contentHeight - containerHeight);
+			scroll.ScrollOffset.Y = thumbRatio * maxScroll;
+		}
+		else
+		{
+			// Horizontal scrollbar
+			var contentWidth = scroll.ContentSize.X;
+			var containerWidth = containerLayout.Width;
+			var thumbWidth = thumbL.Width;
+			var trackWidth = containerWidth;
+			var maxThumbX = trackWidth - thumbWidth;
+
+			// Calculate scroll ratio from thumb position
+			var thumbX = evt.Position.X - containerLayout.X;
+			var thumbRatio = maxThumbX > 0 ? Math.Clamp(thumbX / maxThumbX, 0f, 1f) : 0f;
+
+			// Update scroll offset
+			var maxScroll = Math.Max(0f, contentWidth - containerWidth);
+			scroll.ScrollOffset.X = thumbRatio * maxScroll;
+		}
 	}
 
 	/// <summary>
@@ -197,5 +257,97 @@ public struct ScrollbarPlugin : IPlugin
 
 		// Remove drag state to end dragging
 		commands.Entity(trigger.EntityId).Remove<ScrollbarDragState>();
+	}
+
+	/// <summary>
+	/// Updates scrollbar thumb positions and sizes based on scroll state.
+	/// </summary>
+	private static void UpdateScrollbarThumbs(
+		Commands commands,
+		Query<Data<Scrollbar, Children>> scrollbars,
+		Query<Data<ScrollbarThumb, UiNode, ComputedLayout>> thumbs,
+		Query<Data<Scrollable, ComputedLayout>> scrollables)
+	{
+		// Iterate through all scrollbars
+		foreach (var (scrollbarId, scrollbar, children) in scrollbars)
+		{
+			var targetId = scrollbar.Ref.Target;
+
+			// Get target scrollable container
+			if (!scrollables.Contains(targetId))
+				continue;
+
+			var (_, scrollable, scrollLayout) = scrollables.Get(targetId);
+			ref var scroll = ref scrollable.Ref;
+			ref var containerLayout = ref scrollLayout.Ref;
+
+			// Find thumb child entity
+			ulong thumbId = 0;
+			foreach (var childId in children.Ref)
+			{
+				if (thumbs.Contains(childId))
+				{
+					thumbId = childId;
+					break;
+				}
+			}
+
+			if (thumbId == 0)
+				continue;
+
+			var (_, thumb, thumbNode, thumbLayout) = thumbs.Get(thumbId);
+			ref var node = ref thumbNode.Ref;
+
+			if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)
+			{
+				// Vertical scrollbar
+				var contentHeight = scroll.ContentSize.Y;
+				var containerHeight = containerLayout.Height;
+
+				if (contentHeight > containerHeight)
+				{
+					// Calculate thumb size (proportional to visible area)
+					var thumbHeight = Math.Max(scrollbar.Ref.MinThumbLength,
+						(containerHeight / contentHeight) * containerHeight);
+
+					// Calculate thumb position based on scroll offset
+					var maxScroll = contentHeight - containerHeight;
+					var scrollRatio = maxScroll > 0 ? scroll.ScrollOffset.Y / maxScroll : 0f;
+					var maxThumbY = containerHeight - thumbHeight;
+					var thumbY = scrollRatio * maxThumbY;
+
+					// Update thumb node height and position
+					node.Height = FlexValue.Points(thumbHeight);
+					node.Top = FlexValue.Points(thumbY);
+
+					commands.Entity(thumbId).Insert(node);
+				}
+			}
+			else
+			{
+				// Horizontal scrollbar
+				var contentWidth = scroll.ContentSize.X;
+				var containerWidth = containerLayout.Width;
+
+				if (contentWidth > containerWidth)
+				{
+					// Calculate thumb size (proportional to visible area)
+					var thumbWidth = Math.Max(scrollbar.Ref.MinThumbLength,
+						(containerWidth / contentWidth) * containerWidth);
+
+					// Calculate thumb position based on scroll offset
+					var maxScroll = contentWidth - containerWidth;
+					var scrollRatio = maxScroll > 0 ? scroll.ScrollOffset.X / maxScroll : 0f;
+					var maxThumbX = containerWidth - thumbWidth;
+					var thumbX = scrollRatio * maxThumbX;
+
+					// Update thumb node width and position
+					node.Width = FlexValue.Points(thumbWidth);
+					node.Left = FlexValue.Points(thumbX);
+
+					commands.Entity(thumbId).Insert(node);
+				}
+			}
+		}
 	}
 }

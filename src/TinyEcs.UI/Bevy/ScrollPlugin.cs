@@ -24,7 +24,7 @@ public class ScrollInputState
 /// </summary>
 public struct ScrollPlugin : IPlugin
 {
-	public void Build(App app)
+	public readonly void Build(App app)
 	{
 		// Register scroll input state
 		app.AddResource(new ScrollInputState());

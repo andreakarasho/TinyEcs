@@ -46,6 +46,7 @@ app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.Pos
 
 // Scroll input for scrollable containers
 app.AddPlugin(new ScrollPlugin());
+app.AddPlugin(new ScrollbarPlugin());
 
 // Drag input for draggable UI elements
 app.AddPlugin(new DragPlugin());
@@ -195,6 +196,40 @@ static void CreateButtonPanel(Commands commands)
 	}
 
 	Console.WriteLine($"[UI] Button panel hierarchy created - {buttonColors.Length} buttons attached to panel");
+
+	// Create vertical scrollbar for the button panel
+	var scrollbar = commands.Spawn()
+		.Insert(new Scrollbar(target: panelId, orientation: ControlOrientation.Vertical, minThumbLength: 30f))
+		.Insert(new UiNode
+		{
+			PositionType = Flexbox.PositionType.Absolute,
+			Width = FlexValue.Points(12f),
+			Height = FlexValue.Points(500f), // Match panel height
+			Top = FlexValue.Points(40f), // Match panel's top margin (auto center)
+			Left = FlexValue.Points(620f), // Position right of panel (200 margin + 400 width + 20 offset)
+		})
+		.Insert(BackgroundColor.FromRgba(60, 60, 70, 200))
+		.Insert(new BorderRadius(6f))
+		.Insert(new ZIndex(100)); // Render on top
+
+	// Create scrollbar thumb as child of scrollbar
+	var thumb = commands.Spawn()
+		.Insert(new ScrollbarThumb())
+		.Insert(new UiNode
+		{
+			PositionType = Flexbox.PositionType.Absolute,
+			Width = FlexValue.Points(8f),
+			Height = FlexValue.Points(40f), // Initial size, will be auto-updated
+			Left = FlexValue.Points(2f), // Center in scrollbar track
+			Top = FlexValue.Points(0f), // Start at top, will be auto-updated
+		})
+		.Insert(BackgroundColor.FromRgba(120, 120, 140, 255))
+		.Insert(new BorderRadius(4f))
+		.Insert(new Interactive()); // Required for dragging
+
+	scrollbar.AddChild(thumb);
+
+	Console.WriteLine($"[UI] Created vertical scrollbar for button panel");
 }
 
 static void CreateNestedScrollPanel(Commands commands)
@@ -328,9 +363,75 @@ static void CreateNestedScrollPanel(Commands commands)
 		}
 
 		outerPanel.AddChild(innerPanel);
+
+		// Create horizontal scrollbar for this inner panel
+		var hScrollbar = commands.Spawn()
+			.Insert(new Scrollbar(target: innerPanelId, orientation: ControlOrientation.Horizontal, minThumbLength: 30f))
+			.Insert(new UiNode
+			{
+				PositionType = PositionType.Absolute,
+				Width = FlexValue.Points(380f),
+				Height = FlexValue.Points(8f),
+				Left = FlexValue.Points(0f), // Position at left edge
+				Bottom = FlexValue.Points(0f), // Position at bottom edge
+			})
+			.Insert(BackgroundColor.FromRgba(60, 70, 60, 150))
+			.Insert(new BorderRadius(4f))
+			.Insert(new ZIndex(100));
+
+		// Create horizontal scrollbar thumb
+		var hThumb = commands.Spawn()
+			.Insert(new ScrollbarThumb())
+			.Insert(new UiNode
+			{
+				PositionType = PositionType.Absolute,
+				Width = FlexValue.Points(40f),
+				Height = FlexValue.Points(6f),
+				Left = FlexValue.Points(0f), // Start at left, will be auto-updated
+				Top = FlexValue.Points(1f),
+			})
+			.Insert(BackgroundColor.FromRgba(120, 140, 120, 255))
+			.Insert(new BorderRadius(3f))
+			.Insert(new Interactive());
+
+		hScrollbar.AddChild(hThumb);
+		innerPanel.AddChild(hScrollbar);
 	}
 
-	Console.WriteLine($"[UI] Nested scroll panel hierarchy created - 5 inner panels with 8 boxes each");
+	// Create vertical scrollbar for outer panel
+	var vScrollbar = commands.Spawn()
+		.Insert(new Scrollbar(target: outerPanelId, orientation: ControlOrientation.Vertical, minThumbLength: 30f))
+		.Insert(new UiNode
+		{
+			PositionType = PositionType.Absolute,
+			Width = FlexValue.Points(10f),
+			Height = FlexValue.Points(400f),
+			Right = FlexValue.Points(0f), // Position at right edge
+			Top = FlexValue.Points(0f), // Position at top edge
+		})
+		.Insert(BackgroundColor.FromRgba(40, 60, 50, 200))
+		.Insert(new BorderRadius(5f))
+		.Insert(new ZIndex(100));
+
+	// Create vertical scrollbar thumb
+	var vThumb = commands.Spawn()
+		.Insert(new ScrollbarThumb())
+		.Insert(new UiNode
+		{
+			PositionType = PositionType.Absolute,
+			Width = FlexValue.Points(8f),
+			Height = FlexValue.Points(40f),
+			Left = FlexValue.Points(1f),
+			Top = FlexValue.Points(0f), // Start at top, will be auto-updated
+		})
+		.Insert(BackgroundColor.FromRgba(100, 140, 120, 255))
+		.Insert(new BorderRadius(4f))
+		.Insert(new Interactive());
+
+	vScrollbar.AddChild(vThumb);
+	outerPanel.AddChild(vScrollbar);
+
+	Console.WriteLine($"[UI] Nested scroll panel hierarchy created - 5 inner panels with 8 boxes each + scrollbars");
 }
 
 class DebugLayoutState
