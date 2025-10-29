@@ -31,12 +31,11 @@ public struct ScrollPlugin : IPlugin
 
 		// System to calculate content size for scrollable containers
 		app.AddSystem((
-			Query<Data<Scrollable, ComputedLayout>> scrollables,
+			Query<Data<UiNode, Scrollable, ComputedLayout>> scrollables,
 			Query<Data<Parent>> parents,
-			Query<Data<ComputedLayout>> allLayouts,
-			Query<Data<UiNode>> uiNodes) =>
+			Query<Data<UiNode, ComputedLayout>> allLayouts) =>
 		{
-			UpdateScrollableContentSize(scrollables, parents, allLayouts, uiNodes);
+			UpdateScrollableContentSize(scrollables, parents, allLayouts);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:scroll:update-content-size")
@@ -72,13 +71,13 @@ public struct ScrollPlugin : IPlugin
 	/// Updates the content size of scrollable containers by measuring their children.
 	/// </summary>
 	private static void UpdateScrollableContentSize(
-		Query<Data<Scrollable, ComputedLayout>> scrollables,
+		Query<Data<UiNode, Scrollable, ComputedLayout>> scrollables,
 		Query<Data<Parent>> parents,
-		Query<Data<ComputedLayout>> allLayouts,
-		Query<Data<UiNode>> uiNodes)
+		Query<Data<UiNode, ComputedLayout>> allLayouts)
 	{
-		foreach (var (scrollableId, scrollable, scrollLayout) in scrollables)
+		foreach (var (scrollableId, containerNode, scrollable, scrollLayout) in scrollables)
 		{
+			ref var node = ref containerNode.Ref;
 			ref var scroll = ref scrollable.Ref;
 			ref var layout = ref scrollLayout.Ref;
 
@@ -87,20 +86,15 @@ public struct ScrollPlugin : IPlugin
 			float paddingRight = 0f;
 			float paddingTop = 0f;
 			float paddingBottom = 0f;
-			if (uiNodes.Contains(scrollableId.Ref))
-			{
-				var (_, containerNode) = uiNodes.Get(scrollableId.Ref);
-				ref var node = ref containerNode.Ref;
 
-				if (node.PaddingLeft.IsDefined)
-					paddingLeft = node.PaddingLeft.Value;
-				if (node.PaddingRight.IsDefined)
-					paddingRight = node.PaddingRight.Value;
-				if (node.PaddingTop.IsDefined)
-					paddingTop = node.PaddingTop.Value;
-				if (node.PaddingBottom.IsDefined)
-					paddingBottom = node.PaddingBottom.Value;
-			}
+			if (node.PaddingLeft.IsDefined)
+				paddingLeft = node.PaddingLeft.Value;
+			if (node.PaddingRight.IsDefined)
+				paddingRight = node.PaddingRight.Value;
+			if (node.PaddingTop.IsDefined)
+				paddingTop = node.PaddingTop.Value;
+			if (node.PaddingBottom.IsDefined)
+				paddingBottom = node.PaddingBottom.Value;
 
 			// Calculate bounding box of all children
 			float minX = float.MaxValue, minY = float.MaxValue;
@@ -108,7 +102,7 @@ public struct ScrollPlugin : IPlugin
 			bool hasChildren = false;
 
 			// Find all children of this scrollable container
-			foreach (var (childId, childLayout) in allLayouts)
+			foreach (var (childId, childNode, childLayout) in allLayouts)
 			{
 				// Check if this entity is a child of the scrollable
 				if (IsChildOf(childId.Ref, scrollableId.Ref, parents))
@@ -121,21 +115,16 @@ public struct ScrollPlugin : IPlugin
 					float marginRight = 0f;
 					float marginTop = 0f;
 					float marginBottom = 0f;
-					if (uiNodes.Contains(childId.Ref))
-					{
-						var (_, childNode) = uiNodes.Get(childId.Ref);
-						ref var node = ref childNode.Ref;
 
-						// Include margins in bounding box calculation
-						if (node.MarginLeft.IsDefined)
-							marginLeft = node.MarginLeft.Value;
-						if (node.MarginRight.IsDefined)
-							marginRight = node.MarginRight.Value;
-						if (node.MarginTop.IsDefined)
-							marginTop = node.MarginTop.Value;
-						if (node.MarginBottom.IsDefined)
-							marginBottom = node.MarginBottom.Value;
-					}
+					// Include margins in bounding box calculation
+					if (childNode.Ref.MarginLeft.IsDefined)
+						marginLeft = childNode.Ref.MarginLeft.Value;
+					if (childNode.Ref.MarginRight.IsDefined)
+						marginRight = childNode.Ref.MarginRight.Value;
+					if (childNode.Ref.MarginTop.IsDefined)
+						marginTop = childNode.Ref.MarginTop.Value;
+					if (childNode.Ref.MarginBottom.IsDefined)
+						marginBottom = childNode.Ref.MarginBottom.Value;
 
 					// Expand bounding box to include this child + its margins
 					// Child.X/Y are positions AFTER margins, so we subtract them to get the true edges
