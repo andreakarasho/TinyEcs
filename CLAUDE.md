@@ -30,6 +30,46 @@ TinyEcs is a high-performance, reflection-free entity component system (ECS) fra
 - Change detection built-in with tick tracking
 - Access via `Ptr<T>` (ref struct) for zero-copy reads/writes
 
+**CRITICAL: Empty Struct Usage Rule**
+
+Empty structs (marker components with no fields) **MUST ONLY** be used in `Filter<With<T>>` or `Filter<Without<T>>`, **NEVER** in `Data<T>`.
+
+```csharp
+// ❌ WRONG - Causes memory corruption in archetype storage
+struct MarkerComponent { }  // Empty struct
+Query<Data<MarkerComponent, OtherComponent>> query;
+
+// ✅ CORRECT - Use Filter<With<T>> for marker components
+struct MarkerComponent { }  // Empty struct
+Query<Data<OtherComponent>, Filter<With<MarkerComponent>>> query;
+```
+
+**Why This Matters**:
+- Empty structs in C# are zero-sized and have special memory layout
+- Using them in `Data<>` causes corruption in ECS archetype columnar storage
+- Symptoms: `IndexOutOfRangeException`, corrupted enum values (e.g., `FlexDirection = 1142652928`)
+- The corrupted values are often float data (like 640.0f = 0x44200000) read from wrong memory offset
+
+**Examples**:
+```csharp
+// Marker components (empty structs)
+public struct ScrollbarThumb { }
+public struct PlayerTag { }
+
+// ✅ Systems should use Filter
+app.AddSystem((Query<Data<UiNode>, Filter<With<ScrollbarThumb>>> thumbs) => { ... });
+
+// ✅ Observers should use Filter
+app.AddObserver<On<Event>, Query<Data<Position>, Filter<With<PlayerTag>>>>(callback);
+
+// ❌ NEVER do this with empty structs
+Query<Data<ScrollbarThumb, UiNode>> thumbs;  // CAUSES CORRUPTION!
+```
+
+**Detection**: If you see an `IndexOutOfRangeException` with a very large corrupted value in enum fields, check if any empty structs are being used in `Data<>` instead of `Filter<With<>>`.
+
+**Fix**: Change `Query<Data<EmptyStruct, ...>>` to `Query<Data<...>, Filter<With<EmptyStruct>>>` and update all deconstruction patterns to remove the empty struct variable.
+
 ### Queries
 - `Query<Data<T1, T2, ...>>` - Multi-component iteration
 - `Filter<T1, T2, ...>` - Combine multiple filters

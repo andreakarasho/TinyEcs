@@ -109,15 +109,15 @@ public struct ScrollbarPlugin : IPlugin
 	{
 		// Register all scrollbar event observers
 		// Note: We use PointerDown/PointerMove/PointerUp pattern since we don't have DragStart/Drag/DragEnd events
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb>>, Query<Data<Parent>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb, ScrollbarDragState, Parent, ComputedLayout>>, Query<Data<Scrollbar>>, Query<Data<Scrollable, ComputedLayout>>>(ScrollbarOnPointerMove);
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarThumb>>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerUp);
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<Parent>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarDragState, Parent, ComputedLayout>, Filter<With<ScrollbarThumb>>>, Query<Data<Scrollbar>>, Query<Data<Scrollable, ComputedLayout>>>(ScrollbarOnPointerMove);
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerUp);
 
 		// System to update scrollbar thumb size and position based on scroll state
 		app.AddSystem((
 			Commands commands,
 			Query<Data<Scrollbar, Children>> scrollbars,
-			Query<Data<ScrollbarThumb, UiNode, ComputedLayout>> thumbs,
+			Query<Data<UiNode, ComputedLayout>, Filter<With<ScrollbarThumb>>> thumbs,
 			Query<Data<Scrollable, ComputedLayout>> scrollables) =>
 		{
 			UpdateScrollbarThumbs(commands, scrollbars, thumbs, scrollables);
@@ -133,17 +133,12 @@ public struct ScrollbarPlugin : IPlugin
 	/// </summary>
 	private static void ScrollbarOnPointerDown(
 		On<UiPointerTrigger> trigger,
-		Query<Data<ScrollbarThumb>> thumbs,
 		Query<Data<Parent>> parents,
 		Query<Data<Scrollbar>> scrollbars,
 		Commands commands)
 	{
 		var evt = trigger.Event.Event;
 		if (evt.Type != UiPointerEventType.PointerDown)
-			return;
-
-		// Check if clicking on a thumb
-		if (!thumbs.Contains(trigger.EntityId))
 			return;
 
 		// Get the parent scrollbar
@@ -166,7 +161,7 @@ public struct ScrollbarPlugin : IPlugin
 	/// </summary>
 	private static void ScrollbarOnPointerMove(
 		On<UiPointerTrigger> trigger,
-		Query<Data<ScrollbarThumb, ScrollbarDragState, Parent, ComputedLayout>> thumbs,
+		Query<Data<ScrollbarDragState, Parent, ComputedLayout>, Filter<With<ScrollbarThumb>>> thumbs,
 		Query<Data<Scrollbar>> scrollbars,
 		Query<Data<Scrollable, ComputedLayout>> scrollables)
 	{
@@ -178,7 +173,7 @@ public struct ScrollbarPlugin : IPlugin
 		if (!thumbs.Contains(trigger.EntityId))
 			return;
 
-		var (_, thumb, dragState, parent, thumbLayout) = thumbs.Get(trigger.EntityId);
+		var (_, dragState, parent, thumbLayout) = thumbs.Get(trigger.EntityId);
 		var scrollbarId = parent.Ref.Id;
 
 		// Get scrollbar entity
@@ -240,16 +235,11 @@ public struct ScrollbarPlugin : IPlugin
 	/// </summary>
 	private static void ScrollbarOnPointerUp(
 		On<UiPointerTrigger> trigger,
-		Query<Data<ScrollbarThumb>> thumbs,
 		Query<Data<ScrollbarDragState>> dragStates,
 		Commands commands)
 	{
 		var evt = trigger.Event.Event;
 		if (evt.Type != UiPointerEventType.PointerUp)
-			return;
-
-		// Check if this is a thumb
-		if (!thumbs.Contains(trigger.EntityId))
 			return;
 
 		if (!dragStates.Contains(trigger.EntityId))
@@ -265,7 +255,7 @@ public struct ScrollbarPlugin : IPlugin
 	private static void UpdateScrollbarThumbs(
 		Commands commands,
 		Query<Data<Scrollbar, Children>> scrollbars,
-		Query<Data<ScrollbarThumb, UiNode, ComputedLayout>> thumbs,
+		Query<Data<UiNode, ComputedLayout>, Filter<With<ScrollbarThumb>>> thumbs,
 		Query<Data<Scrollable, ComputedLayout>> scrollables)
 	{
 		// Iterate through all scrollbars
@@ -295,7 +285,8 @@ public struct ScrollbarPlugin : IPlugin
 			if (thumbId == 0)
 				continue;
 
-			var (_, thumb, thumbNode, thumbLayout) = thumbs.Get(thumbId);
+			var (_, thumbNode, thumbLayout) = thumbs.Get(thumbId);
+
 			ref var node = ref thumbNode.Ref;
 
 			if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)

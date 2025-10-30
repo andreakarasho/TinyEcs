@@ -149,6 +149,8 @@ public struct DragPlugin : IPlugin
 				node.PositionType = Flexbox.PositionType.Absolute;
 				node.Left = FlexValue.Points(drag.Position.X);
 				node.Top = FlexValue.Points(drag.Position.Y);
+				node.Right = FlexValue.Auto();
+				node.Bottom = FlexValue.Auto();
 
 				// Clear margins - they still apply to absolutely positioned elements in Flexbox
 				// This prevents the margin from being added on top of our absolute position
