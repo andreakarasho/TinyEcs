@@ -89,9 +89,9 @@ public struct ScrollbarDragState
 	public bool Dragging;
 
 	/// <summary>
-	/// The value of the scrollbar when dragging started.
+	/// Previous pointer position (used to calculate deltas between frames).
 	/// </summary>
-	public float DragOrigin;
+	public float DragOriginOffset;
 }
 
 /// <summary>
@@ -109,7 +109,7 @@ public struct ScrollbarPlugin : IPlugin
 	{
 		// Register all scrollbar event observers
 		// Note: We use PointerDown/PointerMove/PointerUp pattern since we don't have DragStart/Drag/DragEnd events
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<Parent>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<Parent>, Filter<With<ScrollbarThumb>>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarDragState, Parent, ComputedLayout>, Filter<With<ScrollbarThumb>>>, Query<Data<Scrollbar>>, Query<Data<Scrollable, ComputedLayout>>>(ScrollbarOnPointerMove);
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerUp);
 
@@ -130,10 +130,11 @@ public struct ScrollbarPlugin : IPlugin
 
 	/// <summary>
 	/// Handles pointer down events on scrollbar thumb - starts dragging.
+	/// Stores the initial pointer position for delta calculations.
 	/// </summary>
 	private static void ScrollbarOnPointerDown(
 		On<UiPointerTrigger> trigger,
-		Query<Data<Parent>> parents,
+		Query<Data<Parent>, Filter<With<ScrollbarThumb>>> thumbs,
 		Query<Data<Scrollbar>> scrollbars,
 		Commands commands)
 	{
@@ -141,23 +142,41 @@ public struct ScrollbarPlugin : IPlugin
 		if (evt.Type != UiPointerEventType.PointerDown)
 			return;
 
-		// Get the parent scrollbar
-		if (!parents.Contains(trigger.EntityId))
+		// Check if this is a thumb entity
+		if (!thumbs.Contains(trigger.EntityId))
 			return;
 
-		// TODO: Get parent entity ID and verify it's a scrollbar
-		// TODO: Start drag state
-		// For now, just add the drag state component
+		var (_, parent) = thumbs.Get(trigger.EntityId);
+		var scrollbarId = parent.Ref.Id;
+
+		// Verify parent is a scrollbar
+		if (!scrollbars.Contains(scrollbarId))
+			return;
+
+		var (_, scrollbar) = scrollbars.Get(scrollbarId);
+
+		// Store initial pointer position for delta calculation
+		float initialPointerPos;
+		if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)
+		{
+			initialPointerPos = evt.Position.Y;
+		}
+		else
+		{
+			initialPointerPos = evt.Position.X;
+		}
+
+		// Start dragging
 		commands.Entity(trigger.EntityId).Insert(new ScrollbarDragState
 		{
 			Dragging = true,
-			DragOrigin = 0f // TODO: Get current scroll position
+			DragOriginOffset = initialPointerPos
 		});
 	}
 
 	/// <summary>
 	/// Handles pointer move events during dragging.
-	/// Optimized: Combines multiple queries accessing the same entities.
+	/// Uses delta-based scrolling (inspired by sickle_ui) for smooth, predictable behavior.
 	/// </summary>
 	private static void ScrollbarOnPointerMove(
 		On<UiPointerTrigger> trigger,
@@ -174,6 +193,11 @@ public struct ScrollbarPlugin : IPlugin
 			return;
 
 		var (_, dragState, parent, thumbLayout) = thumbs.Get(trigger.EntityId);
+
+		// Only process if actually dragging
+		if (!dragState.Ref.Dragging)
+			return;
+
 		var scrollbarId = parent.Ref.Id;
 
 		// Get scrollbar entity
@@ -189,7 +213,7 @@ public struct ScrollbarPlugin : IPlugin
 
 		var (_, scrollable, targetLayout) = scrollables.Get(targetId);
 
-		// Calculate new scroll position based on pointer position and thumb drag
+		// Delta-based scrolling: accumulate drag deltas scaled by content-to-thumb ratio
 		ref var scroll = ref scrollable.Ref;
 		ref var containerLayout = ref targetLayout.Ref;
 		ref var thumbL = ref thumbLayout.Ref;
@@ -199,34 +223,54 @@ public struct ScrollbarPlugin : IPlugin
 			// Vertical scrollbar
 			var contentHeight = scroll.ContentSize.Y;
 			var containerHeight = containerLayout.Height;
+			var overflow = contentHeight - containerHeight;
+
+			if (overflow <= 0f)
+				return;
+
 			var thumbHeight = thumbL.Height;
-			var trackHeight = containerHeight;
-			var maxThumbY = trackHeight - thumbHeight;
+			var remainingSpace = containerHeight - thumbHeight;
 
-			// Calculate scroll ratio from thumb position
-			var thumbY = evt.Position.Y - containerLayout.Y;
-			var thumbRatio = maxThumbY > 0 ? Math.Clamp(thumbY / maxThumbY, 0f, 1f) : 0f;
+			if (remainingSpace <= 0f)
+				return;
 
-			// Update scroll offset
-			var maxScroll = Math.Max(0f, contentHeight - containerHeight);
-			scroll.ScrollOffset.Y = thumbRatio * maxScroll;
+			// Calculate ratio: how much content scrolls per pixel of thumb movement
+			var ratio = overflow / remainingSpace;
+
+			// Get pointer delta from previous position
+			var pointerDelta = evt.Position.Y - dragState.Ref.DragOriginOffset;
+			dragState.Ref.DragOriginOffset = evt.Position.Y;
+
+			// Apply scaled delta to scroll offset
+			var scrollDelta = pointerDelta * ratio;
+			scroll.ScrollOffset.Y = Math.Clamp(scroll.ScrollOffset.Y + scrollDelta, 0f, overflow);
 		}
 		else
 		{
 			// Horizontal scrollbar
 			var contentWidth = scroll.ContentSize.X;
 			var containerWidth = containerLayout.Width;
+			var overflow = contentWidth - containerWidth;
+
+			if (overflow <= 0f)
+				return;
+
 			var thumbWidth = thumbL.Width;
-			var trackWidth = containerWidth;
-			var maxThumbX = trackWidth - thumbWidth;
+			var remainingSpace = containerWidth - thumbWidth;
 
-			// Calculate scroll ratio from thumb position
-			var thumbX = evt.Position.X - containerLayout.X;
-			var thumbRatio = maxThumbX > 0 ? Math.Clamp(thumbX / maxThumbX, 0f, 1f) : 0f;
+			if (remainingSpace <= 0f)
+				return;
 
-			// Update scroll offset
-			var maxScroll = Math.Max(0f, contentWidth - containerWidth);
-			scroll.ScrollOffset.X = thumbRatio * maxScroll;
+			// Calculate ratio: how much content scrolls per pixel of thumb movement
+			var ratio = overflow / remainingSpace;
+
+			// Get pointer delta from previous position
+			var pointerDelta = evt.Position.X - dragState.Ref.DragOriginOffset;
+			dragState.Ref.DragOriginOffset = evt.Position.X;
+
+			// Apply scaled delta to scroll offset
+			var scrollDelta = pointerDelta * ratio;
+			scroll.ScrollOffset.X = Math.Clamp(scroll.ScrollOffset.X + scrollDelta, 0f, overflow);
 		}
 	}
 

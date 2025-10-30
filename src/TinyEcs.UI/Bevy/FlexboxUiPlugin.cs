@@ -140,9 +140,10 @@ public struct FlexboxUiPlugin : IPlugin
 			Query<Data<FlexboxNodeRef>> nodeRefs,
 			Query<Data<Parent>> parents,
 			Query<Data<Scrollable>> scrollables,
+			Query<Data<UiNode>> uiNodes,
 			Commands commands) =>
 		{
-			ReadComputedLayout(nodeRefs, parents, scrollables, commands);
+			ReadComputedLayout(nodeRefs, parents, scrollables, uiNodes, commands);
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("flexbox:read_layout")
@@ -392,6 +393,7 @@ public struct FlexboxUiPlugin : IPlugin
 		Query<Data<FlexboxNodeRef>> nodeRefs,
 		Query<Data<Parent>> parents,
 		Query<Data<Scrollable>> scrollables,
+		Query<Data<UiNode>> uiNodes,
 		Commands commands)
 	{
 		foreach (var (entityId, nodeRef) in nodeRefs)
@@ -408,9 +410,20 @@ public struct FlexboxUiPlugin : IPlugin
 			var y = node.LayoutGetY();
 
 			// Apply scroll offset from parent scrollable containers
-			var scrollOffset = GetScrollOffsetFromParents(entityId.Ref, parents, scrollables);
-			x -= scrollOffset.X;
-			y -= scrollOffset.Y;
+			// Skip absolute positioned elements - they're positioned relative to containing block, not content flow
+			bool isAbsolutePositioned = false;
+			if (uiNodes.Contains(entityId.Ref))
+			{
+				var (_, uiNode) = uiNodes.Get(entityId.Ref);
+				isAbsolutePositioned = uiNode.Ref.PositionType == Flexbox.PositionType.Absolute;
+			}
+
+			if (!isAbsolutePositioned)
+			{
+				var scrollOffset = GetScrollOffsetFromParents(entityId.Ref, parents, scrollables);
+				x -= scrollOffset.X;
+				y -= scrollOffset.Y;
+			}
 
 			commands.Entity(entityId.Ref).Insert(new ComputedLayout
 			{

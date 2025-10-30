@@ -47,6 +47,7 @@ app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.Pos
 // Scroll input for scrollable containers
 app.AddPlugin(new ScrollPlugin());
 app.AddPlugin(new ScrollbarPlugin());
+app.AddPlugin(new ScrollViewPlugin());
 
 // Drag input for draggable UI elements
 app.AddPlugin(new DragPlugin());
@@ -106,34 +107,52 @@ Raylib.CloseWindow();
 
 static void CreateButtonPanel(Commands commands)
 {
-	// Create a root panel container (similar to Bevy's root UI node)
-	var panel = commands.Spawn()
+	// Create button panel using ScrollView widget
+	var (scrollViewId, contentId) = ScrollViewHelpers.CreateScrollView(
+		commands,
+		enableVertical: true,
+		enableHorizontal: false,
+		width: FlexValue.Points(400f),
+		height: FlexValue.Points(500f),
+		scrollbarWidth: 12f
+	);
+
+	// Style the scroll view root
+	commands.Entity(scrollViewId)
 		.Insert(new UiNode
 		{
-			FlexDirection = FlexDirection.Column, // Vertical layout for buttons stacked vertically
-			JustifyContent = Justify.FlexStart, // Start from top (not centered) for proper scrolling
-			AlignItems = Align.Center, // Center buttons horizontally
-			Width = FlexValue.Points(400f), // Wider to fit buttons horizontally
-			Height = FlexValue.Points(500f), // Shorter since buttons are in a row
-											 // Center the panel on screen
+			FlexDirection = FlexDirection.Column,
+			Width = FlexValue.Points(400f),
+			Height = FlexValue.Points(500f),
 			MarginTop = FlexValue.Auto(),
 			MarginBottom = FlexValue.Auto(),
 			MarginLeft = FlexValue.Auto(),
 			MarginRight = FlexValue.Auto(),
-			PaddingTop = FlexValue.Points(20f),
-			PaddingBottom = FlexValue.Points(20f),
-			PaddingLeft = FlexValue.Points(20f),
-			PaddingRight = FlexValue.Points(20f),
 		})
 		.Insert(BackgroundColor.FromRgba(40, 40, 50, 255))
 		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
 		.Insert(new BorderRadius(12f))
-		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f)) // Make panel scrollable horizontally
-		.Insert(new Draggable()) // Make panel draggable
-		.Insert(new Interactive(focusable: false)); // Enable pointer events for dragging
+		.Insert(new Draggable())
+		.Insert(new Interactive(focusable: false));
 
-	var panelId = panel.Id;
-	Console.WriteLine($"[UI] Created scrollable panel {panelId}");
+	// Style the content container
+	commands.Entity(contentId).Insert(new UiNode
+	{
+		Width = FlexValue.Auto(),
+		Height = FlexValue.Auto(),
+		MinWidth = FlexValue.Percent(100f),
+		MinHeight = FlexValue.Percent(100f),
+		Display = Display.Flex,
+		FlexDirection = FlexDirection.Column,
+		JustifyContent = Justify.FlexStart,
+		AlignItems = Align.Center,
+		PaddingTop = FlexValue.Points(20f),
+		PaddingBottom = FlexValue.Points(20f),
+		PaddingLeft = FlexValue.Points(20f),
+		PaddingRight = FlexValue.Points(32f) // Extra padding for scrollbar
+	});
+
+	Console.WriteLine($"[UI] Created button panel ScrollView {scrollViewId}, content: {contentId}");
 
 	// Create child buttons attached to the panel (more than fit in the panel to enable scrolling)
 	var buttonColors = new[]
@@ -189,87 +208,63 @@ static void CreateButtonPanel(Commands commands)
 
 		var buttonId = button.Id;
 
-		// Attach button as child of panel (correct Bevy-style API)
-		panel.AddChild(button);
+		// Attach button as child of scroll view content
+		commands.Entity(contentId).AddChild(button.Id);
 
-		Console.WriteLine($"[UI] Created button '{name}' ({buttonId}) as child of panel {panelId}");
+		Console.WriteLine($"[UI] Created button '{name}' ({buttonId}) as child of content {contentId}");
 	}
 
-	Console.WriteLine($"[UI] Button panel hierarchy created - {buttonColors.Length} buttons attached to panel");
-
-	// Create vertical scrollbar for the button panel
-	var scrollbar = commands.Spawn()
-		.Insert(new Scrollbar(target: panelId, orientation: ControlOrientation.Vertical, minThumbLength: 30f))
-		.Insert(new UiNode
-		{
-			PositionType = Flexbox.PositionType.Absolute,
-			Width = FlexValue.Points(12f),
-			Height = FlexValue.Points(500f), // Match panel height
-			Top = FlexValue.Points(40f), // Match panel's top margin (auto center)
-			Left = FlexValue.Points(620f), // Position right of panel (200 margin + 400 width + 20 offset)
-		})
-		.Insert(BackgroundColor.FromRgba(60, 60, 70, 200))
-		.Insert(new BorderRadius(6f))
-		.Insert(new ZIndex(100)); // Render on top
-
-	// Create scrollbar thumb as child of scrollbar
-	var thumb = commands.Spawn()
-		.Insert(new ScrollbarThumb())
-		.Insert(new UiNode
-		{
-			PositionType = Flexbox.PositionType.Absolute,
-			Width = FlexValue.Points(8f),
-			Height = FlexValue.Points(40f), // Initial size, will be auto-updated
-			Left = FlexValue.Points(2f), // Center in scrollbar track
-			Top = FlexValue.Points(0f), // Start at top, will be auto-updated
-		})
-		.Insert(BackgroundColor.FromRgba(120, 120, 140, 255))
-		.Insert(new BorderRadius(4f))
-		.Insert(new Interactive()); // Required for dragging
-
-	scrollbar.AddChild(thumb);
-
-	Console.WriteLine($"[UI] Created vertical scrollbar for button panel");
+	Console.WriteLine($"[UI] Button panel hierarchy created - {buttonColors.Length} buttons attached to ScrollView");
 }
 
 static void CreateNestedScrollPanel(Commands commands)
 {
-	// Create outer scrollable panel (vertical scrolling)
-	var outerPanel = commands.Spawn()
+	// Create outer scroll view container (vertical scrolling with integrated scrollbar)
+	var (outerScrollViewId, outerContentId) = ScrollViewHelpers.CreateScrollView(
+		commands,
+		enableVertical: true,
+		enableHorizontal: false,
+		width: FlexValue.Points(450f),
+		height: FlexValue.Points(400f),
+		scrollbarWidth: 12f
+	);
+
+	// Style the outer scroll view root
+	commands.Entity(outerScrollViewId)
 		.Insert(new UiNode
 		{
 			FlexDirection = FlexDirection.Column,
 			Width = FlexValue.Points(450f),
 			Height = FlexValue.Points(400f),
-			// Position on the right side
-			// MarginTop = FlexValue.Points(50f),
-			// MarginLeft = FlexValue.Auto(),
-			// MarginRight = FlexValue.Points(50f),
-			// PaddingTop = FlexValue.Points(20f),
-			// PaddingBottom = FlexValue.Points(20f),
-			// PaddingLeft = FlexValue.Points(20f),
-			// PaddingRight = FlexValue.Points(20f),
-
 			MarginTop = FlexValue.Auto(),
 			MarginBottom = FlexValue.Auto(),
 			MarginLeft = FlexValue.Auto(),
 			MarginRight = FlexValue.Auto(),
-			PaddingTop = FlexValue.Points(20f),
-			PaddingBottom = FlexValue.Points(20f),
-			PaddingLeft = FlexValue.Points(20f),
-			PaddingRight = FlexValue.Points(20f),
 		})
 		.Insert(BackgroundColor.FromRgba(30, 50, 40, 255))
 		.Insert(BorderColor.FromRgba(80, 120, 100, 255))
 		.Insert(new BorderRadius(12f))
-		.Insert(new Scrollable(vertical: true, horizontal: false, scrollSpeed: 15f))
 		.Insert(new Draggable())
 		.Insert(new Interactive(focusable: false));
 
-	var outerPanelId = outerPanel.Id;
-	Console.WriteLine($"[UI] Created outer scrollable panel {outerPanelId}");
+	Console.WriteLine($"[UI] Created outer ScrollView {outerScrollViewId}, content: {outerContentId}");
 
-	// Add title text
+	// Add padding to content
+	commands.Entity(outerContentId).Insert(new UiNode
+	{
+		Width = FlexValue.Auto(),
+		Height = FlexValue.Auto(),
+		MinWidth = FlexValue.Percent(100f),
+		MinHeight = FlexValue.Percent(100f),
+		Display = Display.Flex,
+		FlexDirection = FlexDirection.Column,
+		PaddingTop = FlexValue.Points(20f),
+		PaddingBottom = FlexValue.Points(20f),
+		PaddingLeft = FlexValue.Points(20f),
+		PaddingRight = FlexValue.Points(32f) // Extra padding for scrollbar
+	});
+
+	// Add title text to content
 	var titleText = commands.Spawn()
 		.Insert(new UiNode
 		{
@@ -279,36 +274,54 @@ static void CreateNestedScrollPanel(Commands commands)
 			JustifyContent = Justify.Center,
 			AlignItems = Align.Center,
 		})
-		.Insert(new UiText("Nested Scroll Demo"));
+		.Insert(new UiText("Nested Scroll Demo (ScrollView Widget)"));
 
-	outerPanel.AddChild(titleText);
+	commands.Entity(outerContentId).AddChild(titleText.Id);
 
-	// Create inner scrollable panels (horizontal scrolling)
+	// Create inner scrollable panels (horizontal scrolling) using ScrollView
 	for (int i = 0; i < 5; i++)
 	{
-		var innerPanel = commands.Spawn()
+		var (innerScrollViewId, innerContentId) = ScrollViewHelpers.CreateScrollView(
+			commands,
+			enableVertical: false,
+			enableHorizontal: true,
+			width: FlexValue.Points(380f),
+			height: FlexValue.Points(120f),
+			scrollbarWidth: 8f
+		);
+
+		// Style the inner scroll view root
+		commands.Entity(innerScrollViewId)
 			.Insert(new UiNode
 			{
-				FlexDirection = FlexDirection.Row, // Horizontal layout
+				FlexDirection = FlexDirection.Row,
 				Width = FlexValue.Points(380f),
 				Height = FlexValue.Points(120f),
-
 				MarginLeft = FlexValue.Auto(),
 				MarginRight = FlexValue.Auto(),
 				MarginBottom = FlexValue.Points(15f),
-				PaddingTop = FlexValue.Points(10f),
-				PaddingBottom = FlexValue.Points(10f),
-				PaddingLeft = FlexValue.Points(10f),
-				PaddingRight = FlexValue.Points(10f),
 			})
 			.Insert(BackgroundColor.FromRgba(50, 70, 60, 255))
 			.Insert(BorderColor.FromRgba(100, 140, 120, 255))
 			.Insert(new BorderRadius(8f))
-			.Insert(new Scrollable(vertical: false, horizontal: true, scrollSpeed: 10f))
 			.Insert(new Interactive(focusable: true));
 
-		var innerPanelId = innerPanel.Id;
-		Console.WriteLine($"[UI] Created inner scrollable panel {innerPanelId} (#{i})");
+		// Style the inner content container
+		commands.Entity(innerContentId).Insert(new UiNode
+		{
+			Width = FlexValue.Auto(),
+			Height = FlexValue.Auto(),
+			MinWidth = FlexValue.Percent(100f),
+			MinHeight = FlexValue.Percent(100f),
+			Display = Display.Flex,
+			FlexDirection = FlexDirection.Row,
+			PaddingTop = FlexValue.Points(10f),
+			PaddingBottom = FlexValue.Points(18f), // Extra padding for horizontal scrollbar
+			PaddingLeft = FlexValue.Points(10f),
+			PaddingRight = FlexValue.Points(10f)
+		});
+
+		Console.WriteLine($"[UI] Created inner ScrollView {innerScrollViewId}, content: {innerContentId} (#{i})");
 
 		// Add colored boxes to inner panel (more than fit to enable scrolling)
 		var colors = new[]
@@ -359,78 +372,15 @@ static void CreateNestedScrollPanel(Commands commands)
 					}
 				});
 
-			innerPanel.AddChild(box);
+			// Add box to inner scroll view content
+			commands.Entity(innerContentId).AddChild(box.Id);
 		}
 
-		outerPanel.AddChild(innerPanel);
-
-		// Create horizontal scrollbar for this inner panel
-		var hScrollbar = commands.Spawn()
-			.Insert(new Scrollbar(target: innerPanelId, orientation: ControlOrientation.Horizontal, minThumbLength: 30f))
-			.Insert(new UiNode
-			{
-				PositionType = PositionType.Absolute,
-				Width = FlexValue.Points(380f),
-				Height = FlexValue.Points(8f),
-				Left = FlexValue.Points(0f), // Position at left edge
-				Bottom = FlexValue.Points(0f), // Position at bottom edge
-			})
-			.Insert(BackgroundColor.FromRgba(60, 70, 60, 150))
-			.Insert(new BorderRadius(4f))
-			.Insert(new ZIndex(100));
-
-		// Create horizontal scrollbar thumb
-		var hThumb = commands.Spawn()
-			.Insert(new ScrollbarThumb())
-			.Insert(new UiNode
-			{
-				PositionType = PositionType.Absolute,
-				Width = FlexValue.Points(40f),
-				Height = FlexValue.Points(6f),
-				Left = FlexValue.Points(0f), // Start at left, will be auto-updated
-				Top = FlexValue.Points(1f),
-			})
-			.Insert(BackgroundColor.FromRgba(120, 140, 120, 255))
-			.Insert(new BorderRadius(3f))
-			.Insert(new Interactive());
-
-		hScrollbar.AddChild(hThumb);
-		innerPanel.AddChild(hScrollbar);
+		// Add inner scroll view to outer scroll view content
+		commands.Entity(outerContentId).AddChild(innerScrollViewId);
 	}
 
-	// Create vertical scrollbar for outer panel
-	var vScrollbar = commands.Spawn()
-		.Insert(new Scrollbar(target: outerPanelId, orientation: ControlOrientation.Vertical, minThumbLength: 30f))
-		.Insert(new UiNode
-		{
-			PositionType = PositionType.Absolute,
-			Width = FlexValue.Points(10f),
-			Height = FlexValue.Points(400f),
-			Right = FlexValue.Points(0f), // Position at right edge
-			Top = FlexValue.Points(0f), // Position at top edge
-		})
-		.Insert(BackgroundColor.FromRgba(40, 60, 50, 200))
-		.Insert(new BorderRadius(5f))
-		.Insert(new ZIndex(100));
-
-	// Create vertical scrollbar thumb
-	var vThumb = commands.Spawn()
-		.Insert(new ScrollbarThumb())
-		.Insert(new UiNode
-		{
-			PositionType = PositionType.Absolute,
-			Width = FlexValue.Points(8f),
-			Height = FlexValue.Points(40f),
-			Left = FlexValue.Points(1f),
-			Top = FlexValue.Points(0f), // Start at top, will be auto-updated
-		})
-		.Insert(BackgroundColor.FromRgba(100, 140, 120, 255))
-		.Insert(new BorderRadius(4f))
-		.Insert(new Interactive());
-
-	vScrollbar.AddChild(vThumb);
-	outerPanel.AddChild(vScrollbar);
-
+	// Note: Outer panel vertical scrollbar is now integrated in ScrollView widget!
 	Console.WriteLine($"[UI] Nested scroll panel hierarchy created - 5 inner panels with 8 boxes each + scrollbars");
 }
 
