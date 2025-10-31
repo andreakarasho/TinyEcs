@@ -16,7 +16,7 @@ public struct DragPlugin : IPlugin
 		// System 1: Initialize drag origin when drag starts
 		app.AddSystem((
 			Res<PointerInputState> pointerInput,
-			Query<Data<Draggable>> draggables) =>
+			Query<Data<Draggable, ComputedLayout>> draggables) =>
 		{
 			InitializeDragOrigin(pointerInput, draggables);
 		})
@@ -187,30 +187,38 @@ public struct DragPlugin : IPlugin
 	/// <summary>
 	/// Initializes drag origin and position when FluxInteraction.Pressed is detected.
 	/// This is a helper system that runs early to capture the initial pointer position.
+	/// Also calculates the drag offset from the element's top-left to the mouse position.
 	/// </summary>
 	private static void InitializeDragOrigin(
 		Res<PointerInputState> pointerInput,
-		Query<Data<Draggable>> draggables)
+		Query<Data<Draggable, ComputedLayout>> draggables)
 	{
 		var mousePos = pointerInput.Value.Position;
 
-		foreach (var (_, draggable) in draggables)
+		foreach (var (_, draggable, layout) in draggables)
 		{
 			ref var drag = ref draggable.Ref;
+			ref readonly var l = ref layout.Ref;
 
 			// Set origin and initial position when MaybeDragged and no position set yet
 			if (drag.State == DragState.MaybeDragged && !drag.Position.HasValue)
 			{
 				drag.Origin = mousePos;
 				drag.Position = mousePos;
+
+				// Calculate offset from element's top-left to mouse position
+				drag.DragOffset = new System.Numerics.Vector2(
+					mousePos.X - l.X,
+					mousePos.Y - l.Y
+				);
 			}
 		}
 	}
 
 	/// <summary>
 	/// Applies drag positions by modifying UiNode to use absolute positioning.
-	/// Uses screen-absolute coordinates directly.
-	/// Updated to work with DragState state machine.
+	/// Uses the DragOffset to maintain the element's position relative to the cursor.
+	/// Elements stay floating at their dropped position after drag ends.
 	/// </summary>
 	private static void ApplyDragPositions(
 		Commands commands,
@@ -225,12 +233,19 @@ public struct DragPlugin : IPlugin
 			if ((drag.State == DragState.DragStart || drag.State == DragState.Dragging) &&
 			    drag.Position.HasValue)
 			{
-				var position = drag.Position.Value;
+				var mousePos = drag.Position.Value;
 
-				// Update UiNode to use absolute positioning with screen-absolute coordinates
+				// Calculate element position by subtracting the drag offset from mouse position
+				// This keeps the element at the same relative position to the cursor
+				var elementPos = new Vector2(
+					mousePos.X - drag.DragOffset.X,
+					mousePos.Y - drag.DragOffset.Y
+				);
+
+				// Update UiNode to use absolute positioning
 				node.PositionType = Flexbox.PositionType.Absolute;
-				node.Left = FlexValue.Points(position.X);
-				node.Top = FlexValue.Points(position.Y);
+				node.Left = FlexValue.Points(elementPos.X);
+				node.Top = FlexValue.Points(elementPos.Y);
 				node.Right = FlexValue.Auto();
 				node.Bottom = FlexValue.Auto();
 
@@ -244,16 +259,8 @@ public struct DragPlugin : IPlugin
 				// Re-insert UiNode to trigger Flexbox sync
 				commands.Entity(entityId.Ref).Insert(node);
 			}
-			// Reset to relative positioning when drag ends
-			else if (drag.State == DragState.Inactive && node.PositionType == Flexbox.PositionType.Absolute)
-			{
-				node.PositionType = Flexbox.PositionType.Relative;
-				node.Left = FlexValue.Auto();
-				node.Top = FlexValue.Auto();
-
-				// Re-insert UiNode to trigger Flexbox sync
-				commands.Entity(entityId.Ref).Insert(node);
-			}
+			// When drag ends, element stays absolutely positioned at its dropped location
+			// No restoration needed - element becomes floating
 		}
 	}
 }

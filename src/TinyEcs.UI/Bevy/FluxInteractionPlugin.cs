@@ -35,10 +35,30 @@ public struct FluxInteractionPlugin : IPlugin
 		app.AddResource(new DeltaTime());
 
 		// System execution chain:
+		// 0. Add TrackedInteraction components to Interactive entities that don't have them
 		// 1. Tick stopwatches and remove expired ones
 		// 2. Update FluxInteraction based on pointer events
 		// 3. Reset stopwatches when interaction changes
 		// 4. Update PrevInteraction to track state transitions
+
+		// Add TrackedInteraction components to Interactive entities
+		app.AddSystem((
+			Commands commands,
+			Query<Data<Interactive>, Filter<Without<FluxInteraction>>> interactiveWithoutFlux) =>
+		{
+			foreach (var (entityId, _) in interactiveWithoutFlux)
+			{
+				// Add all components needed for FluxInteraction to work
+				commands.Entity(entityId.Ref).Insert(new FluxInteraction());
+				commands.Entity(entityId.Ref).Insert(new PrevInteraction());
+				commands.Entity(entityId.Ref).Insert(new InteractionState());
+				commands.Entity(entityId.Ref).Insert(new FluxInteractionStopwatch { ElapsedSeconds = 0f });
+			}
+		})
+		.InStage(Stage.PreUpdate)
+		.Label("flux:add-to-interactive")
+		.Build();
+
 		app.AddSystem((
 			Res<FluxInteractionConfig> config,
 			Res<DeltaTime> deltaTime,
@@ -49,6 +69,7 @@ public struct FluxInteractionPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("flux:tick-stopwatch")
+		.After("flux:add-to-interactive")
 		.Build();
 
 		app.AddSystem((
