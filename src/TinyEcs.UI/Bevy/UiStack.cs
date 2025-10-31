@@ -152,16 +152,14 @@ public struct UiStackPlugin : IPlugin
 
 		// System to rebuild the UI stack each frame
 		app.AddSystem((
-			Query<Data<ComputedLayout>> allUiNodes,
+			Query<Data<ComputedLayout>, Filter<Without<Parent>>> rootNodes,
 			Query<Data<ZIndex>> zIndexNodes,
 			Query<Data<GlobalZIndex>> globalZIndexNodes,
-			Query<Data<Parent>> parentNodes,
 			Query<Data<Children>> childrenNodes,
 			ResMut<UiStack> uiStack,
-			Local<HashSet<ulong>> hasParentSet,
 			Local<List<ulong>> rootsList) =>
 		{
-			UpdateUiStack(allUiNodes, zIndexNodes, globalZIndexNodes, parentNodes, childrenNodes, uiStack, hasParentSet, rootsList);
+			UpdateUiStack(rootNodes, zIndexNodes, globalZIndexNodes, childrenNodes, uiStack, rootsList);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:stack:update")
@@ -197,43 +195,27 @@ public struct UiStackPlugin : IPlugin
 	/// Z-index is still respected and determines final sorting order.
 	/// </summary>
 	private static void UpdateUiStack(
-		Query<Data<ComputedLayout>> allUiNodes,
+		Query<Data<ComputedLayout>, Filter<Without<Parent>>> rootNodes,
 		Query<Data<ZIndex>> zIndexNodes,
 		Query<Data<GlobalZIndex>> globalZIndexNodes,
-		Query<Data<Parent>> parentNodes,
 		Query<Data<Children>> childrenNodes,
 		ResMut<UiStack> uiStack,
-		Local<HashSet<ulong>> hasParentSet,
 		Local<List<ulong>> rootsList)
 	{
 		ref var stack = ref uiStack.Value;
 		stack.Clear();
 
 		// Initialize local collections if needed
-		if (hasParentSet.Value == null)
-			hasParentSet.Value = new HashSet<ulong>();
 		if (rootsList.Value == null)
 			rootsList.Value = new List<ulong>();
 
-		var hasParent = hasParentSet.Value;
 		var roots = rootsList.Value;
 
-		// Clear and rebuild the hasParent set
-		hasParent.Clear();
-		foreach (var (entityId, _) in parentNodes)
-		{
-			hasParent.Add(entityId.Ref);
-		}
-
-		// Clear and find root UI nodes (those with ComputedLayout but no Parent)
+		// Clear and find root UI nodes using optimized query (ComputedLayout without Parent)
 		roots.Clear();
-		foreach (var (entityId, _) in allUiNodes)
+		foreach (var (entityId, _) in rootNodes)
 		{
-			var entity = entityId.Ref;
-			if (!hasParent.Contains(entity))
-			{
-				roots.Add(entity);
-			}
+			roots.Add(entityId.Ref);
 		}
 
 		// Sort roots by z-index to establish base ordering

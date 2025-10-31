@@ -78,17 +78,13 @@ public struct FluxInteractionPlugin : IPlugin
 		// Also re-add stopwatches that were removed by the tick system
 		app.AddSystem((
 			Commands commands,
-			Query<Data<FluxInteraction>> allFluxQuery,
-			Query<Data<FluxInteractionStopwatch>> stopwatchQuery) =>
+			Query<Data<FluxInteraction>, Filter<Without<FluxInteractionStopwatch>>> fluxWithoutStopwatch) =>
 		{
 			// Ensure ALL FluxInteraction entities have a stopwatch
 			// This handles both newly added entities and entities whose stopwatch was removed
-			foreach (var (entityId, _) in allFluxQuery)
+			foreach (var (entityId, _) in fluxWithoutStopwatch)
 			{
-				if (!stopwatchQuery.Contains(entityId.Ref))
-				{
-					commands.Entity(entityId.Ref).Insert(new FluxInteractionStopwatch { ElapsedSeconds = 0f });
-				}
+				commands.Entity(entityId.Ref).Insert(new FluxInteractionStopwatch { ElapsedSeconds = 0f });
 			}
 		})
 		.InStage(Stage.PreUpdate)
@@ -185,10 +181,6 @@ public struct FluxInteractionPlugin : IPlugin
 			// Only insert if state actually changed (triggers change detection)
 			if (fluxRef.State != oldState)
 			{
-				if (entityId.Ref == 363)
-				{
-					Console.WriteLine($"[FluxInteraction] Red Button: NEW STATE = {fluxRef.State}");
-				}
 				commands.Entity(entityId.Ref).Insert(fluxRef);
 			}
 		}

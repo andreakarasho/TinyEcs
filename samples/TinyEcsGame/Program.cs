@@ -157,7 +157,6 @@ Raylib.CloseWindow();
 
 static void CreateButtonPanel(Commands commands)
 {
-	return;
 	// Create button panel using ScrollView widget
 	var (scrollViewId, contentId) = ScrollViewHelpers.CreateScrollView(
 		commands,
@@ -319,9 +318,10 @@ static void CreateNestedScrollPanel(Commands commands)
 	var titleText = commands.Spawn()
 		.Insert(new UiNode
 		{
-			Width = FlexValue.Percent(100f),
+			Width = FlexValue.Auto(),
 			Height = FlexValue.Points(30f),
 			MarginBottom = FlexValue.Points(10f),
+			AlignSelf = Align.Center, // Center this element within parent
 			JustifyContent = Justify.Center,
 			AlignItems = Align.Center,
 		})

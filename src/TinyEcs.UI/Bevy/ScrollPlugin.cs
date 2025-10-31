@@ -88,113 +88,6 @@ public struct ScrollPlugin : IPlugin
 		.Label("ui:scroll:clear-input")
 		.After("ui:scroll:reset-events")
 		.Build();
-
-		// One-shot reset after first frame to cancel any spurious initial wheel input
-		app.AddSystem((ResMut<ScrollResetGuard> guard, Query<Data<Scrollable>> scrollers) =>
-		{
-			if (guard.Value.Done)
-				return;
-			foreach (var (_, s) in scrollers)
-			{
-				if (s.Ref.EnableHorizontal && s.Ref.ScrollOffset.X != 0f)
-					s.Ref.ScrollOffset.X = 0f;
-			}
-			guard.Value.Done = true;
-		})
-		.InStage(Stage.Last)
-		.Label("ui:scroll:reset-horizontal-first-frame")
-		.After("ui:scroll:clear-input")
-		.Build();
-
-		// Reset initial horizontal offset to 0 for newly-added scrollables (one-shot)
-		app.AddSystem((Query<Data<Scrollable>, Filter<Added<Scrollable>>> newly) =>
-		{
-			foreach (var (_, scr) in newly)
-			{
-				ref var s = ref scr.Ref;
-				if (s.EnableHorizontal && s.ScrollOffset.X != 0f)
-					s.ScrollOffset.X = 0f;
-			}
-		})
-		.InStage(Stage.PostUpdate)
-		.Label("ui:scroll:reset-horizontal-on-add")
-		.Build();
-
-		// Debug: log horizontal containers' visible children (accounts for scroll + clipping)
-		app.AddSystem((
-			Query<Data<Scrollable, ComputedLayout, Children>> scrollableWithChildren,
-			Query<Data<Children>> childrenLookup,
-			Query<Data<ComputedLayout>> layouts) =>
-		{
-			foreach (var (entityId, scrollable, viewportLayout, viewportChildren) in scrollableWithChildren)
-			{
-				ref var scroll = ref scrollable.Ref;
-				if (!scroll.EnableHorizontal)
-					continue;
-
-				ref var v = ref viewportLayout.Ref;
-				float clipStart = 0f;
-				float clipEnd = v.Width;
-
-				// Try to find content container as first child of the viewport
-				ulong contentId = 0;
-				foreach (var id in viewportChildren.Ref)
-				{
-					contentId = id;
-					break;
-				}
-
-				if (contentId == 0)
-				{
-					Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} no-content");
-					continue;
-				}
-
-				if (!childrenLookup.Contains(contentId))
-				{
-					Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} content={contentId} no-children");
-					continue;
-				}
-
-				var (_, contentChildren) = childrenLookup.Get(contentId);
-				int visibleCount = 0;
-				var parts = new System.Collections.Generic.List<string>(8);
-				int emitted = 0;
-
-				foreach (var childId in contentChildren.Ref)
-				{
-					if (!layouts.Contains(childId))
-						continue;
-					var (_, childLayout) = layouts.Get(childId);
-					ref var c = ref childLayout.Ref;
-
-					// Child rect in viewport-relative coordinates
-					float relX = c.X - v.X;
-					float relRight = relX + c.Width;
-					float visStart = System.MathF.Max(clipStart, relX);
-					float visEnd = System.MathF.Min(clipEnd, relRight);
-					bool visible = visEnd > clipStart && visStart < clipEnd;
-
-					if (visible)
-					{
-						visibleCount++;
-						if (emitted < 6)
-						{
-							bool clipL = relX < clipStart;
-							bool clipR = relRight > clipEnd;
-							parts.Add($"{childId}[rel={relX:0.#}-{relRight:0.#} vis={visStart:0.#}-{visEnd:0.#}{(clipL || clipR ? (clipL && clipR ? ",LR" : (clipL ? ",L" : ",R")) : "")}]");
-							emitted++;
-						}
-					}
-				}
-
-				Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} clip=[{clipStart}-{clipEnd}] vis={visibleCount} :: {string.Join(" ", parts)}");
-			}
-		})
-		.InStage(Stage.PostUpdate)
-		.Label("ui:scroll:debug-horizontal")
-		.After("ui:scroll:update-content-size")
-		.Build();
 	}
 
 	/// <summary>
@@ -226,17 +119,36 @@ public struct ScrollPlugin : IPlugin
 			if (node.PaddingBottom.IsDefined)
 				paddingBottom = node.PaddingBottom.Value;
 
+			// Get container borders (reduce available content area)
+			float borderLeft = 0f;
+			float borderRight = 0f;
+			float borderTop = 0f;
+			float borderBottom = 0f;
+
+			if (node.BorderLeft.IsDefined)
+				borderLeft = node.BorderLeft.Value;
+			if (node.BorderRight.IsDefined)
+				borderRight = node.BorderRight.Value;
+			if (node.BorderTop.IsDefined)
+				borderTop = node.BorderTop.Value;
+			if (node.BorderBottom.IsDefined)
+				borderBottom = node.BorderBottom.Value;
+
 			// Calculate bounding box of all children
 			float minX = float.MaxValue, minY = float.MaxValue;
 			float maxX = float.MinValue, maxY = float.MinValue;
 			bool hasChildren = false;
 
-			// Track actual padding to use (from content container if measuring grandchildren)
+			// Track actual padding and borders to use (from content container if measuring grandchildren)
 			float actualPaddingLeft = 0f;
 			float actualPaddingRight = 0f;
 			float actualPaddingTop = 0f;
 			float actualPaddingBottom = 0f;
-			bool usedContentContainerPadding = false;
+			float actualBorderLeft = 0f;
+			float actualBorderRight = 0f;
+			float actualBorderTop = 0f;
+			float actualBorderBottom = 0f;
+			bool usedContentContainerValues = false;
 
 			if (maybeChildren.IsValid())
 			{
@@ -248,13 +160,17 @@ public struct ScrollPlugin : IPlugin
 					// If the child has its own children (e.g., content container), measure grandchildren instead
 					if (childrenLookup.Contains(childId))
 					{
-						// Read padding from the content container (not the viewport)
+						// Read padding and borders from the content container (not the viewport)
 						var (_, contentContainerNode, contentContainerLayout) = allLayouts.Get(childId);
 						if (contentContainerNode.Ref.PaddingLeft.IsDefined) actualPaddingLeft = contentContainerNode.Ref.PaddingLeft.Value;
 						if (contentContainerNode.Ref.PaddingRight.IsDefined) actualPaddingRight = contentContainerNode.Ref.PaddingRight.Value;
 						if (contentContainerNode.Ref.PaddingTop.IsDefined) actualPaddingTop = contentContainerNode.Ref.PaddingTop.Value;
 						if (contentContainerNode.Ref.PaddingBottom.IsDefined) actualPaddingBottom = contentContainerNode.Ref.PaddingBottom.Value;
-						usedContentContainerPadding = true;
+						if (contentContainerNode.Ref.BorderLeft.IsDefined) actualBorderLeft = contentContainerNode.Ref.BorderLeft.Value;
+						if (contentContainerNode.Ref.BorderRight.IsDefined) actualBorderRight = contentContainerNode.Ref.BorderRight.Value;
+						if (contentContainerNode.Ref.BorderTop.IsDefined) actualBorderTop = contentContainerNode.Ref.BorderTop.Value;
+						if (contentContainerNode.Ref.BorderBottom.IsDefined) actualBorderBottom = contentContainerNode.Ref.BorderBottom.Value;
+						usedContentContainerValues = true;
 
 						var (_, grandChildren) = childrenLookup.Get(childId);
 						foreach (var gcId in grandChildren.Ref)
@@ -313,17 +229,22 @@ public struct ScrollPlugin : IPlugin
 				// - maxX/maxY = position where last child's margins end (before paddingRight/Bottom)
 				// - (maxX - minX) = span from first margin to last margin
 				// - Add paddingLeft/Top + paddingRight/Bottom to include full padding area
-				// This ensures the content size represents the full scrollable area with symmetric padding
+				// - Add borderLeft/Top + borderRight/Bottom since borders reduce the available content area
+				// This ensures the content size represents the full scrollable area with symmetric padding and borders
 
-				// Use content container padding if we measured grandchildren, otherwise use viewport padding
-				float finalPaddingLeft = usedContentContainerPadding ? actualPaddingLeft : paddingLeft;
-				float finalPaddingRight = usedContentContainerPadding ? actualPaddingRight : paddingRight;
-				float finalPaddingTop = usedContentContainerPadding ? actualPaddingTop : paddingTop;
-				float finalPaddingBottom = usedContentContainerPadding ? actualPaddingBottom : paddingBottom;
+				// Use content container values if we measured grandchildren, otherwise use viewport values
+				float finalPaddingLeft = usedContentContainerValues ? actualPaddingLeft : paddingLeft;
+				float finalPaddingRight = usedContentContainerValues ? actualPaddingRight : paddingRight;
+				float finalPaddingTop = usedContentContainerValues ? actualPaddingTop : paddingTop;
+				float finalPaddingBottom = usedContentContainerValues ? actualPaddingBottom : paddingBottom;
+				float finalBorderLeft = usedContentContainerValues ? actualBorderLeft : borderLeft;
+				float finalBorderRight = usedContentContainerValues ? actualBorderRight : borderRight;
+				float finalBorderTop = usedContentContainerValues ? actualBorderTop : borderTop;
+				float finalBorderBottom = usedContentContainerValues ? actualBorderBottom : borderBottom;
 
 				scroll.ContentSize = new Vector2(
-					Math.Max(0f, maxX - minX + finalPaddingLeft + finalPaddingRight),
-					Math.Max(0f, maxY - minY + finalPaddingTop + finalPaddingBottom)
+					Math.Max(0f, maxX - minX + finalPaddingLeft + finalPaddingRight + finalBorderLeft + finalBorderRight),
+					Math.Max(0f, maxY - minY + finalPaddingTop + finalPaddingBottom + finalBorderTop + finalBorderBottom)
 				);
 				// Content origin relative to container top-left
 				if (scroll.ContentOrigin == Vector2.Zero)

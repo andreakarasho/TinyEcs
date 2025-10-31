@@ -381,8 +381,6 @@ public struct ScrollbarPlugin : IPlugin
                 var containerWidth = containerLayout.Width;
                 var containerHeight = containerLayout.Height;
 
-                Console.WriteLine($"[Scrollbar] H target={targetId} contW={containerWidth} contentW={contentWidth} offset={scroll.ScrollOffset.X}");
-
                 if (contentWidth > containerWidth)
                 {
                     // Calculate thumb size (proportional to visible area)
@@ -402,7 +400,6 @@ public struct ScrollbarPlugin : IPlugin
                     node.Left = FlexValue.Points(thumbX);
 
                     commands.Entity(thumbId).Insert(node);
-                    Console.WriteLine($"[Scrollbar] HThumb={thumbId} width={thumbWidth} x={thumbX}");
                 }
             }
         }

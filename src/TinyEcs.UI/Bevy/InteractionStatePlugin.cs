@@ -17,18 +17,18 @@ public struct InteractionStatePlugin : IPlugin
 		// Add observer to update InteractionState based on pointer events
 		// This runs whenever a UiPointerTrigger is emitted on an entity
 		// Uses Commands and Query to properly trigger change detection
-		app.AddObserver<On<UiPointerTrigger>, Commands, Query<Data<InteractionState>>>(
+		app.AddObserver<On<UiPointerTrigger>, Commands, Query<Data<InteractionState>, Optional<InteractionState>>>(
 			(trigger, commands, interactionQuery) =>
 		{
 			var entityId = trigger.EntityId;
 			var pointerEvent = trigger.Event.Event;
 
-			// Get or create InteractionState
+			// Get or create InteractionState using Optional
 			InteractionState state;
 			if (interactionQuery.Contains(entityId))
 			{
-				var (_, statePtr) = interactionQuery.Get(entityId);
-				state = statePtr.Ref;
+				var (_, maybeState) = interactionQuery.Get(entityId);
+				state = maybeState.IsValid() ? maybeState.Ref : new InteractionState();
 			}
 			else
 			{
