@@ -78,24 +78,149 @@ public struct ScrollViewContent
 }
 
 /// <summary>
+/// Component for scrollbar handle/thumb that tracks which scroll view it controls.
+/// Used to identify which ScrollView to update when dragging.
+/// </summary>
+public struct ScrollBarHandle
+{
+	public ControlOrientation Axis;
+	public ulong ScrollViewEntity;
+
+	public ScrollBarHandle(ControlOrientation axis, ulong scrollViewEntity)
+	{
+		Axis = axis;
+		ScrollViewEntity = scrollViewEntity;
+	}
+}
+
+/// <summary>
 /// Plugin that adds scroll view functionality including viewport layout and scrollbar visibility management.
 /// </summary>
 public struct ScrollViewPlugin : IPlugin
 {
 	public readonly void Build(App app)
 	{
-		// System to update scrollbar visibility and handle positioning based on content size
+		// System 1: Handle scrollbar thumb dragging using Delta from Draggable
+		// This mirrors sickle_ui's approach: use drag delta * ratio to update scroll offset
 		app.AddSystem((
-			Query<Data<ScrollView, Scrollable, ComputedLayout>> scrollViews,
+			Query<Data<Draggable, ScrollBarHandle, ComputedLayout>, Filter<Changed<Draggable>>> draggables,
+			Query<Data<ScrollView, ComputedLayout>> scrollViews,
+			Query<Data<Scrollable, ComputedLayout>> scrollables,
+			Query<Data<ComputedLayout>> contentLayouts,
+			Commands commands) =>
+		{
+			UpdateScrollViewOnDrag(draggables, scrollViews, scrollables, contentLayouts, commands);
+		})
+			.InStage(Stage.PostUpdate)
+			.Label("ui:scrollview:on-drag")
+			.After("ui:drag:apply-positions")  // Updated to use new DragPlugin label
+			.Build();
+
+		// System 2: Update scrollbar visibility and handle positioning based on content size
+		app.AddSystem((
+			Query<Data<ScrollView, ComputedLayout>> scrollViews,
+			Query<Data<Scrollable, ComputedLayout>> scrollables,
 			Query<Data<UiNode, ComputedLayout>> layouts,
 			Commands commands) =>
 		{
-			UpdateScrollViewLayout(scrollViews, layouts, commands);
+			UpdateScrollViewLayout(scrollViews, scrollables, layouts, commands);
 		})
-		.InStage(Stage.PostUpdate)
-		.Label("ui:scrollview:update-layout")
-		.After("ui:scrollbar:update-thumbs")
-		.Build();
+			.InStage(Stage.PostUpdate)
+			.Label("ui:scrollview:update-layout")
+			.After("ui:scrollview:on-drag")
+			.Build();
+	}
+
+	/// <summary>
+	/// Handles scrollbar thumb dragging using the Delta from Draggable.
+	/// Mirrors sickle_ui's approach: uses drag delta multiplied by overflow ratio to update scroll offset.
+	/// This way we only update the scroll offset, and let UpdateScrollViewLayout position the thumb.
+	/// </summary>
+	private static void UpdateScrollViewOnDrag(
+		Query<Data<Draggable, ScrollBarHandle, ComputedLayout>, Filter<Changed<Draggable>>> draggables,
+		Query<Data<ScrollView, ComputedLayout>> scrollViews,
+		Query<Data<Scrollable, ComputedLayout>> scrollables,
+		Query<Data<ComputedLayout>> contentLayouts,
+		Commands commands)
+	{
+		foreach (var (_, draggable, barHandle, barLayout) in draggables)
+		{
+			ref var drag = ref draggable.Ref;
+			ref var handle = ref barHandle.Ref;
+
+			// Only process if dragging and has delta
+			if (!drag.IsDragging || !drag.Diff.HasValue || drag.Diff.Value == Vector2.Zero)
+				continue;
+
+			var scrollViewId = handle.ScrollViewEntity;
+
+			// Get scroll view and its layout
+			if (!scrollViews.Contains(scrollViewId))
+				continue;
+
+			var (_, scrollView, containerLayout) = scrollViews.Get(scrollViewId);
+			ref var view = ref scrollView.Ref;
+
+			// Get the viewport's scrollable + layout
+			if (!scrollables.Contains(view.Viewport))
+				continue;
+
+			var (_, viewportScrollable, viewportLayout) = scrollables.Get(view.Viewport);
+			ref var scroll = ref viewportScrollable.Ref;
+			ref var containerLayoutRef = ref viewportLayout.Ref;
+
+			// Get content layout
+			if (!contentLayouts.Contains(view.ContentContainer))
+				continue;
+
+			var (_, contentLayout) = contentLayouts.Get(view.ContentContainer);
+			ref var content = ref contentLayout.Ref;
+
+			// Calculate overflow
+			var containerSize = handle.Axis == ControlOrientation.Vertical
+				? containerLayoutRef.Height
+				: containerLayoutRef.Width;
+			var contentSize = handle.Axis == ControlOrientation.Vertical
+				? content.Height
+				: content.Width;
+			var overflow = contentSize - containerSize;
+
+			if (overflow <= 0f)
+				continue;
+
+			// Calculate ratio: overflow / remaining_space
+			// The thumb moves in remainingSpace, content scrolls by overflow
+			var barSize = handle.Axis == ControlOrientation.Vertical
+				? barLayout.Ref.Height
+				: barLayout.Ref.Width;
+			var remainingSpace = containerSize - barSize;
+
+			if (remainingSpace <= 0f)
+				continue;
+
+			var ratio = overflow / remainingSpace;
+
+			// Apply delta * ratio to scroll offset (this is the key insight from sickle!)
+			var deltaComponent = handle.Axis == ControlOrientation.Vertical
+				? drag.Diff.Value.Y
+				: drag.Diff.Value.X;
+			var scrollDelta = deltaComponent * ratio;
+
+
+			// Update scroll offset
+			if (handle.Axis == ControlOrientation.Vertical)
+			{
+				scroll.ScrollOffset = new Vector2(scroll.ScrollOffset.X, scroll.ScrollOffset.Y + scrollDelta);
+			}
+			else
+			{
+				scroll.ScrollOffset = new Vector2(scroll.ScrollOffset.X + scrollDelta, scroll.ScrollOffset.Y);
+			}
+
+			// Re-insert to trigger change detection
+			// Update the viewport's Scrollable component to reflect new offset
+			commands.Entity(view.Viewport).Insert(scroll);
+		}
 	}
 
 	/// <summary>
@@ -103,18 +228,26 @@ public struct ScrollViewPlugin : IPlugin
 	/// Hides scrollbars when content fits within the viewport.
 	/// </summary>
 	private static void UpdateScrollViewLayout(
-		Query<Data<ScrollView, Scrollable, ComputedLayout>> scrollViews,
+		Query<Data<ScrollView, ComputedLayout>> scrollViews,
+		Query<Data<Scrollable, ComputedLayout>> scrollables,
 		Query<Data<UiNode, ComputedLayout>> layouts,
 		Commands commands)
 	{
-		foreach (var (entityId, scrollView, scrollable, scrollViewLayout) in scrollViews)
+		foreach (var (entityId, scrollView, scrollViewLayout) in scrollViews)
 		{
 			ref var view = ref scrollView.Ref;
-			ref var scroll = ref scrollable.Ref;
 			ref var viewLayout = ref scrollViewLayout.Ref;
 
-			var containerWidth = viewLayout.Width;
-			var containerHeight = viewLayout.Height;
+			// Use viewport's scrollable and layout for sizing/offsets
+			if (!scrollables.Contains(view.Viewport))
+				continue;
+
+			var (_, viewportScrollable, viewportLayout) = scrollables.Get(view.Viewport);
+			ref var scroll = ref viewportScrollable.Ref;
+
+			var containerWidth = viewportLayout.Ref.Width;
+			var containerHeight = viewportLayout.Ref.Height;
+
 
 			if (containerWidth <= 0f || containerHeight <= 0f)
 				continue;
@@ -144,7 +277,7 @@ public struct ScrollViewPlugin : IPlugin
 					// Show vertical scrollbar
 					if (layouts.Contains(verticalBarId))
 					{
-						var (_, barNode, _) = layouts.Get(verticalBarId);
+						var (_, barNode, barLayout) = layouts.Get(verticalBarId);
 						ref var node = ref barNode.Ref;
 						node.Display = Display.Flex;
 					}
@@ -153,6 +286,7 @@ public struct ScrollViewPlugin : IPlugin
 					if (layouts.Contains(verticalHandleId))
 					{
 						var (_, handleNode, handleLayout) = layouts.Get(verticalHandleId);
+						var (_, _, railLayout) = layouts.Get(verticalBarId);
 
 						var overflow = contentHeight - containerHeight;
 						var visibleRatio = Math.Clamp(containerHeight / contentHeight, 0f, 1f);
@@ -163,7 +297,12 @@ public struct ScrollViewPlugin : IPlugin
 
 						ref var node = ref handleNode.Ref;
 						node.Height = FlexValue.Points(handleHeight);
+						node.Width = FlexValue.Points(railLayout.Ref.Width);
+						node.Left = FlexValue.Points(0f);
 						node.Top = FlexValue.Points(handleOffset);
+
+						// Ensure change is written back for sync
+						commands.Entity(verticalHandleId).Insert(node);
 					}
 				}
 			}
@@ -190,7 +329,7 @@ public struct ScrollViewPlugin : IPlugin
 					// Show horizontal scrollbar
 					if (layouts.Contains(horizontalBarId))
 					{
-						var (_, barNode, _) = layouts.Get(horizontalBarId);
+						var (_, barNode, barLayout) = layouts.Get(horizontalBarId);
 						ref var node = ref barNode.Ref;
 						node.Display = Display.Flex;
 					}
@@ -199,6 +338,7 @@ public struct ScrollViewPlugin : IPlugin
 					if (layouts.Contains(horizontalHandleId))
 					{
 						var (_, handleNode, handleLayout) = layouts.Get(horizontalHandleId);
+						var (_, _, railLayout) = layouts.Get(horizontalBarId);
 
 						var overflow = contentWidth - containerWidth;
 						var visibleRatio = Math.Clamp(containerWidth / contentWidth, 0f, 1f);
@@ -209,7 +349,12 @@ public struct ScrollViewPlugin : IPlugin
 
 						ref var node = ref handleNode.Ref;
 						node.Width = FlexValue.Points(handleWidth);
+						node.Height = FlexValue.Points(railLayout.Ref.Height);
+						node.Top = FlexValue.Points(0f);
 						node.Left = FlexValue.Points(handleOffset);
+
+						// Ensure change is written back for sync
+						commands.Entity(horizontalHandleId).Insert(node);
 					}
 				}
 			}
@@ -252,12 +397,6 @@ public static class ScrollViewHelpers
 				Display = Display.Flex,
 				FlexDirection = FlexDirection.Column
 			})
-			.Insert(new Scrollable
-			{
-				EnableVertical = enableVertical,
-				EnableHorizontal = enableHorizontal,
-				ScrollSpeed = 20f
-			})
 			.Id;
 
 		// Create viewport (clips content)
@@ -267,7 +406,15 @@ public static class ScrollViewHelpers
 				Width = FlexValue.Percent(100f),
 				Height = FlexValue.Percent(100f),
 				PositionType = PositionType.Absolute,
-				Overflow = Overflow.Hidden
+				Overflow = Overflow.Hidden,
+				AlignItems = Align.FlexStart, // Left-align content container (don't center it)
+				JustifyContent = Justify.FlexStart // Top-align content container
+			})
+			.Insert(new Scrollable
+			{
+				EnableVertical = enableVertical,
+				EnableHorizontal = enableHorizontal,
+				ScrollSpeed = 20f
 			})
 			.Insert(new ScrollViewViewport(scrollViewId))
 			.Id;
@@ -282,6 +429,7 @@ public static class ScrollViewHelpers
 				MinHeight = FlexValue.Percent(100f),
 				Display = Display.Flex,
 				FlexDirection = FlexDirection.Column,
+				AlignSelf = Align.FlexStart, // Ensure content starts at top-left, not centered
 				PaddingRight = enableVertical ? FlexValue.Points(scrollbarWidth) : FlexValue.Points(0f),
 				PaddingBottom = enableHorizontal ? FlexValue.Points(scrollbarWidth) : FlexValue.Points(0f)
 			})
@@ -298,7 +446,6 @@ public static class ScrollViewHelpers
 				Display = Display.Flex,
 				JustifyContent = Justify.FlexEnd
 			})
-			.Insert(new ZIndex(1))
 			.Id;
 
 		ulong? verticalBarId = null;
@@ -331,10 +478,13 @@ public static class ScrollViewHelpers
 				})
 				.Insert(BackgroundColor.FromRgba(180, 180, 180, 220))
 				.Insert(new ScrollbarThumb())
+				.Insert(new ScrollBarHandle(ControlOrientation.Vertical, scrollViewId))
+				.Insert(new Draggable())
+				.Insert(new Interactive())
 				.Id;
 
 			// Set up scrollbar component
-			commands.Entity(verticalBarId.Value).Insert(new Scrollbar(scrollViewId, ControlOrientation.Vertical, 20f));
+			commands.Entity(verticalBarId.Value).Insert(new Scrollbar(viewportId, ControlOrientation.Vertical, 20f));
 
 			// Set up hierarchy
 			commands.Entity(verticalBarId.Value).AddChild(verticalHandleId.Value);
@@ -366,10 +516,13 @@ public static class ScrollViewHelpers
 				})
 				.Insert(BackgroundColor.FromRgba(180, 180, 180, 220))
 				.Insert(new ScrollbarThumb())
+				.Insert(new ScrollBarHandle(ControlOrientation.Horizontal, scrollViewId))
+				.Insert(new Draggable())
+				.Insert(new Interactive())
 				.Id;
 
 			// Set up scrollbar component
-			commands.Entity(horizontalBarId.Value).Insert(new Scrollbar(scrollViewId, ControlOrientation.Horizontal, 20f));
+			commands.Entity(horizontalBarId.Value).Insert(new Scrollbar(viewportId, ControlOrientation.Horizontal, 20f));
 
 			// Set up hierarchy
 			commands.Entity(horizontalBarId.Value).AddChild(horizontalHandleId.Value);

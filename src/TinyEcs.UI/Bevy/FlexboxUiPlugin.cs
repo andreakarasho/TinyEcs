@@ -136,6 +136,15 @@ public struct FlexboxUiPlugin : IPlugin
 			.After("flexbox:sync_node")
 			.Build();
 
+		// Calculate layout after syncing nodes and hierarchy, before reading ComputedLayout
+		app.AddSystem((ResMut<FlexboxUiState> state) =>
+		{
+			state.Value.CalculateLayout(width, height);
+		})
+			.InStage(Stage.PostUpdate)
+			.Label("flexbox:calc_layout")
+			.Build();
+
 		app.AddSystem((
 			Query<Data<FlexboxNodeRef>> nodeRefs,
 			Query<Data<Parent>> parents,
@@ -147,7 +156,19 @@ public struct FlexboxUiPlugin : IPlugin
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("flexbox:read_layout")
+			.After("flexbox:calc_layout")
 			.Build();
+
+		// Add Phase 1 interaction plugins (from sickle_ui port)
+		// These must be added AFTER flexbox systems are registered (they reference flexbox labels)
+		// Order matters: FluxInteraction must be added before InteractionState (InteractionState references FluxInteraction labels)
+		app.AddPlugin(new FluxInteractionPlugin());
+		app.AddPlugin(new InteractionStatePlugin());
+		app.AddPlugin(new DragPlugin());
+		app.AddPlugin(new ScrollPlugin());
+
+		// Add Phase 2 animation plugin (from sickle_ui port)
+		app.AddPlugin(new AnimatedInteractionPlugin());
 	}
 
 	/// <summary>
@@ -409,21 +430,11 @@ public struct FlexboxUiPlugin : IPlugin
 			var x = node.LayoutGetX();
 			var y = node.LayoutGetY();
 
-			// Apply scroll offset from parent scrollable containers
-			// Skip absolute positioned elements - they're positioned relative to containing block, not content flow
-			bool isAbsolutePositioned = false;
-			if (uiNodes.Contains(entityId.Ref))
-			{
-				var (_, uiNode) = uiNodes.Get(entityId.Ref);
-				isAbsolutePositioned = uiNode.Ref.PositionType == Flexbox.PositionType.Absolute;
-			}
-
-			if (!isAbsolutePositioned)
-			{
-				var scrollOffset = GetScrollOffsetFromParents(entityId.Ref, parents, scrollables);
-				x -= scrollOffset.X;
-				y -= scrollOffset.Y;
-			}
+			// Apply scroll transform from ancestor scrollables: sum of their ScrollOffset, plus
+			// the nearest scrollable's ContentOrigin to normalize initial view.
+			var scrollTransform = GetScrollTransformWithNearestOrigin(entityId.Ref, parents, scrollables);
+			x -= scrollTransform.X;
+			y -= scrollTransform.Y;
 
 			commands.Entity(entityId.Ref).Insert(new ComputedLayout
 			{
@@ -438,12 +449,12 @@ public struct FlexboxUiPlugin : IPlugin
 	/// <summary>
 	/// Walks up the parent chain and accumulates scroll offsets from scrollable containers.
 	/// </summary>
-	private static System.Numerics.Vector2 GetScrollOffsetFromParents(
+private static System.Numerics.Vector2 GetScrollTransformWithNearestOrigin(
 		ulong entityId,
 		Query<Data<Parent>> parents,
 		Query<Data<Scrollable>> scrollables)
 	{
-		var totalOffset = System.Numerics.Vector2.Zero;
+		var total = System.Numerics.Vector2.Zero;
 		var currentId = entityId;
 
 		// Walk up parent chain
@@ -456,7 +467,8 @@ public struct FlexboxUiPlugin : IPlugin
 			if (scrollables.Contains(parentId))
 			{
 				var (_, scrollable) = scrollables.Get(parentId);
-				totalOffset += scrollable.Ref.ScrollOffset;
+				var s = scrollable.Ref;
+				total += s.ScrollOffset;
 			}
 
 			currentId = parentId;
@@ -466,6 +478,6 @@ public struct FlexboxUiPlugin : IPlugin
 				break;
 		}
 
-		return totalOffset;
+		return total;
 	}
 }

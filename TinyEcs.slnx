@@ -1,8 +1,5 @@
 <Solution>
-  <Folder Name="/externals/" />
-  <Folder Name="/externals/Clay/">
-    <Project Path="externals/Clay/Clay-cs/Clay-cs.csproj" />
-  </Folder>
+  
   <Folder Name="/samples/">
     <Project Path="samples/MyBattleground/MyBattleground.csproj" />
     <Project Path="samples/TinyEcsGame/TinyEcsGame.csproj" />

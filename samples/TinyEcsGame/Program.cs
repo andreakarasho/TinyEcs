@@ -8,6 +8,7 @@ using TinyEcs.Bevy;
 using Flexbox;
 using TinyEcs.UI.Bevy;
 using TinyEcs.UI;
+using TinyEcs.UI.Easing;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -44,13 +45,13 @@ app.AddPlugin(new UiStackPlugin());
 app.AddPlugin(new UiPointerInputPlugin { InputStage = Stage.PostUpdate });
 app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.PostUpdate });
 
+// Drag input for draggable UI elements (must be before ScrollViewPlugin)
+app.AddPlugin(new DragPlugin());
+
 // Scroll input for scrollable containers
 app.AddPlugin(new ScrollPlugin());
 app.AddPlugin(new ScrollbarPlugin());
 app.AddPlugin(new ScrollViewPlugin());
-
-// Drag input for draggable UI elements
-app.AddPlugin(new DragPlugin());
 
 // Button widget functionality
 app.AddPlugin(new ButtonPlugin());
@@ -74,6 +75,55 @@ app.AddSystem((Commands commands) => CreateButtonPanel(commands))
 	.InStage(Stage.Startup)
 	.Label("ui:button-panel:spawn")
 	.Build();
+
+// Phase 2 Demo: Animated button color transitions using AnimatedInteractionState
+// Simplified: Lerp directly from base color to target based on progress
+app.AddSystem((
+	Commands commands,
+	Query<Data<AnimatedInteractionState, ButtonBaseColor, BackgroundColor>> buttons) =>
+{
+	foreach (var (entityId, animState, baseColor, bgColor) in buttons)
+	{
+		ref readonly var anim = ref animState.Ref;
+		ref readonly var originalColor = ref baseColor.Ref;
+
+		// Calculate target color based on current interaction state
+		var targetColor = anim.CurrentState switch
+		{
+			FluxInteractionState.PointerEnter => new Vector4(
+				Math.Min(originalColor.Color.X * 1.3f, 1f),
+				Math.Min(originalColor.Color.Y * 1.3f, 1f),
+				Math.Min(originalColor.Color.Z * 1.3f, 1f),
+				1f
+			),
+			FluxInteractionState.Pressed => new Vector4(
+				originalColor.Color.X * 0.7f,
+				originalColor.Color.Y * 0.7f,
+				originalColor.Color.Z * 0.7f,
+				1f
+			),
+			FluxInteractionState.Released => new Vector4(
+				Math.Min(originalColor.Color.X * 1.5f, 1f),
+				Math.Min(originalColor.Color.Y * 1.5f, 1f),
+				Math.Min(originalColor.Color.Z * 1.5f, 1f),
+				1f
+			),
+			_ => originalColor.Color
+		};
+
+		// Interpolate directly from base color to target using animation progress
+		var t = anim.Progress.Value; // 0-1 based on easing function
+		var newColor = originalColor.Color.Lerp(targetColor, t);
+
+		// Update color with smooth animation
+		if (originalColor.Color != newColor)
+			commands.Entity(entityId.Ref).Insert(new BackgroundColor(newColor));
+	}
+})
+.InStage(Stage.Update)
+.Label("ui:button-animated-colors")
+.After("animated-interaction:update-progress")
+.Build();
 
 // Nested scroll container demo
 app.AddSystem((Commands commands) => CreateNestedScrollPanel(commands))
@@ -107,6 +157,7 @@ Raylib.CloseWindow();
 
 static void CreateButtonPanel(Commands commands)
 {
+	return;
 	// Create button panel using ScrollView widget
 	var (scrollViewId, contentId) = ScrollViewHelpers.CreateScrollView(
 		commands,
@@ -187,24 +238,23 @@ static void CreateButtonPanel(Commands commands)
 			.Insert(new UiText(name))
 			.Insert(new Button())
 			.Insert(new Interactive(focusable: true))
-			.Observe((On<UiPointerTrigger> trigger, Commands cmd) =>
+			// Phase 1: Add FluxInteraction components for state tracking
+			.Insert(new InteractionState())
+			.Insert(new FluxInteraction())
+			.Insert(new PrevInteraction())
+			.Insert(new FluxInteractionStopwatch())
+			// Phase 2: Add animation components for smooth color transitions
+			.Insert(new AnimatedInteractionState()
+				.WithBase(0.15f, Ease.OutQuad)       // Default: 150ms OutQuad
+				.WithHover(0.2f, Ease.OutCubic)      // Hover: 200ms OutCubic
+				.WithPress(0.05f, Ease.InQuad, 0.1f, Ease.OutQuad)) // Press: 50ms in, 100ms out
+			.Insert(new ButtonBaseColor { Color = color })  // Store original color
+			.Insert(new ButtonColorTransition
 			{
-				if (trigger.Event.Event.Type == UiPointerEventType.PointerEnter)
-				{
-					// Brighten on hover
-					cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(
-						new Vector4(
-							Math.Min(color.X * 1.3f, 1f),
-							Math.Min(color.Y * 1.3f, 1f),
-							Math.Min(color.Z * 1.3f, 1f),
-							1f)));
-				}
-				else if (trigger.Event.Event.Type == UiPointerEventType.PointerExit)
-				{
-					// Restore original color
-					cmd.Entity(trigger.EntityId).Insert(new BackgroundColor(color));
-				}
-			});
+				StartColor = color,
+				TargetColor = color,
+				LastState = FluxInteractionState.None
+			}); // Track color transitions
 
 		var buttonId = button.Id;
 
@@ -219,7 +269,8 @@ static void CreateButtonPanel(Commands commands)
 
 static void CreateNestedScrollPanel(Commands commands)
 {
-	// Create outer scroll view container (vertical scrolling with integrated scrollbar)
+	// return;
+	// Create outer scroll view container (verticalok  scrolling with integrated scrollbar)
 	var (outerScrollViewId, outerContentId) = ScrollViewHelpers.CreateScrollView(
 		commands,
 		enableVertical: true,
@@ -413,14 +464,26 @@ sealed class RaylibPlugin : IPlugin
 		.SingleThreaded()
 		.Build();
 
+		// Update TimeResource FIRST (must run before DeltaTime update)
 		app.AddSystem((ResMut<TimeResource> time) =>
 		{
 			var t = time.Value;
 			t.Frame = Raylib.GetFrameTime();
 			t.Total += t.Frame;
 		})
-		.InStage(Stage.Update)
+		.InStage(Stage.First)
+		.Label("raylib:update-time")
 		.RunIf(_ => Raylib.IsWindowReady())
+		.Build();
+
+		// Update DeltaTime for UI systems (Phase 2 requirement)
+		// MUST run in Stage.First, AFTER TimeResource update, BEFORE Stage.PreUpdate where stopwatches are ticked!
+		app.AddSystem((ResMut<DeltaTime> deltaTime, Res<TimeResource> time) =>
+		{
+			deltaTime.Value.Seconds = time.Value.Frame;
+		})
+		.InStage(Stage.First)
+		.After("raylib:update-time")
 		.Build();
 	}
 }
@@ -686,6 +749,26 @@ struct Rotation
 {
 	public float Value;
 	public float Acceleration;
+}
+
+/// <summary>
+/// Component that stores the original base color of a button for FluxInteraction color changes.
+/// Phase 1 demo component.
+/// </summary>
+struct ButtonBaseColor
+{
+	public Vector4 Color;
+}
+
+/// <summary>
+/// Tracks the animation state for color transitions.
+/// Stores the start and target colors for smooth interpolation.
+/// </summary>
+struct ButtonColorTransition
+{
+	public Vector4 StartColor;
+	public Vector4 TargetColor;
+	public FluxInteractionState LastState;
 }
 
 /// <summary>

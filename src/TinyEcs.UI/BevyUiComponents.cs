@@ -313,14 +313,22 @@ public struct FlexboxNodeRef
 /// <summary>
 /// Component that makes a UI container scrollable.
 /// Allows content to overflow the container bounds with scroll offset.
+/// Enhanced version that tracks both cumulative scroll offset and last scroll event.
 /// </summary>
 public struct Scrollable
 {
 	/// <summary>Current scroll offset (positive = scrolled down/right)</summary>
 	public Vector2 ScrollOffset;
 
-	/// <summary>Total content size (can be larger than container)</summary>
-	public Vector2 ContentSize;
+    /// <summary>Total content size (can be larger than container)</summary>
+    public Vector2 ContentSize;
+
+    /// <summary>
+    /// Local origin of the content within the container, in container space.
+    /// Typically equals the minimum X/Y of child bounds relative to the container's top-left.
+    /// Used to normalize content so that initial view shows the first elements at offset 0.
+    /// </summary>
+    public Vector2 ContentOrigin;
 
 	/// <summary>Enable horizontal scrolling</summary>
 	public bool EnableHorizontal;
@@ -328,42 +336,143 @@ public struct Scrollable
 	/// <summary>Enable vertical scrolling</summary>
 	public bool EnableVertical;
 
-	/// <summary>Scroll speed multiplier</summary>
+	/// <summary>Scroll speed multiplier for wheel events</summary>
 	public float ScrollSpeed;
 
-	public Scrollable(bool vertical = true, bool horizontal = false, float scrollSpeed = 20f)
+	// === Last Scroll Event Tracking (from sickle_ui) ===
+
+	/// <summary>Axis of the last scroll event (null if no event this frame)</summary>
+	public ScrollAxis? LastScrollAxis;
+
+	/// <summary>Delta of the last scroll event</summary>
+	public float LastScrollDelta;
+
+	/// <summary>Unit of the last scroll event (Line or Pixel)</summary>
+	public ScrollUnit LastScrollUnit;
+
+    public Scrollable(bool vertical = true, bool horizontal = false, float scrollSpeed = 20f)
+    {
+        ScrollOffset = Vector2.Zero;
+        ContentSize = Vector2.Zero;
+        ContentOrigin = Vector2.Zero;
+        EnableVertical = vertical;
+        EnableHorizontal = horizontal;
+        ScrollSpeed = scrollSpeed;
+        LastScrollAxis = null;
+        LastScrollDelta = 0f;
+		LastScrollUnit = ScrollUnit.Pixel;
+	}
+
+	/// <summary>
+	/// Gets the last scroll change if any occurred this frame.
+	/// Returns null if no scroll event happened.
+	/// </summary>
+	public readonly (ScrollAxis axis, float delta, ScrollUnit unit)? GetLastChange()
 	{
-		ScrollOffset = Vector2.Zero;
-		ContentSize = Vector2.Zero;
-		EnableVertical = vertical;
-		EnableHorizontal = horizontal;
-		ScrollSpeed = scrollSpeed;
+		if (LastScrollAxis.HasValue)
+		{
+			return (LastScrollAxis.Value, LastScrollDelta, LastScrollUnit);
+		}
+		return null;
 	}
 }
 
 /// <summary>
+/// Scroll axis direction.
+/// </summary>
+public enum ScrollAxis
+{
+	Horizontal,
+	Vertical
+}
+
+/// <summary>
+/// Scroll unit type (from Bevy's MouseScrollUnit).
+/// </summary>
+public enum ScrollUnit
+{
+	/// <summary>Scroll by lines (typically 20px per line)</summary>
+	Line,
+	/// <summary>Scroll by exact pixels</summary>
+	Pixel
+}
+
+/// <summary>
 /// Component that makes a UI element draggable.
-/// Allows the element to be moved by clicking and dragging.
+/// Enhanced version with state machine from sickle_ui.
+/// Tracks drag lifecycle: Inactive → MaybeDragged → DragStart → Dragging → DragEnd/DragCanceled.
 /// </summary>
 public struct Draggable
 {
-	/// <summary>Whether this element is currently being dragged</summary>
-	public bool IsDragging;
+	/// <summary>Current drag state</summary>
+	public DragState State;
+
+	/// <summary>Position where the drag originated (where the mouse was pressed)</summary>
+	public Vector2? Origin;
+
+	/// <summary>Current position during drag</summary>
+	public Vector2? Position;
+
+	/// <summary>Delta/difference in position since last frame</summary>
+	public Vector2? Diff;
+
+	/// <summary>Source of the drag (Mouse or Touch)</summary>
+	public DragSource Source;
+
+	// Legacy fields for backwards compatibility
+	/// <summary>Whether this element is currently being dragged (computed from State)</summary>
+	public readonly bool IsDragging => State == DragState.DragStart || State == DragState.Dragging;
 
 	/// <summary>Offset from element's top-left corner to the mouse position when drag started</summary>
 	public Vector2 DragOffset;
-
-	/// <summary>The position where the element should be placed (overrides Flexbox layout)</summary>
-	public Vector2 Position;
 
 	/// <summary>Whether position has been set (used to override Flexbox)</summary>
 	public bool HasCustomPosition;
 
 	public Draggable()
 	{
-		IsDragging = false;
+		State = DragState.Inactive;
+		Origin = null;
+		Position = null;
+		Diff = null;
+		Source = DragSource.Mouse;
 		DragOffset = Vector2.Zero;
-		Position = Vector2.Zero;
 		HasCustomPosition = false;
 	}
+
+	/// <summary>Clears drag tracking state</summary>
+	public void Clear()
+	{
+		Origin = null;
+		Position = null;
+		Diff = Vector2.Zero;
+	}
+}
+
+/// <summary>
+/// Drag state lifecycle (from sickle_ui).
+/// </summary>
+public enum DragState
+{
+	/// <summary>Not dragging</summary>
+	Inactive,
+	/// <summary>Pointer pressed but not moved yet - waiting to see if this is a drag</summary>
+	MaybeDragged,
+	/// <summary>First frame of drag (movement detected)</summary>
+	DragStart,
+	/// <summary>Actively dragging</summary>
+	Dragging,
+	/// <summary>Drag completed successfully</summary>
+	DragEnd,
+	/// <summary>Drag cancelled (ESC key or pointer released outside)</summary>
+	DragCanceled
+}
+
+/// <summary>
+/// Source of drag input (from sickle_ui).
+/// </summary>
+public enum DragSource
+{
+	Mouse,
+	Touch // Note: Touch ID tracking not implemented yet
 }

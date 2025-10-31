@@ -9,7 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\externals\Clay\Clay-cs\Clay-cs.csproj" />
     <ProjectReference Include="..\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
   </ItemGroup>
 </Project>

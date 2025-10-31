@@ -18,6 +18,12 @@ public class ScrollInputState
 	}
 }
 
+// One-shot guard used to clear any spurious initial horizontal offsets on the first frame.
+public class ScrollResetGuard
+{
+	public bool Done;
+}
+
 /// <summary>
 /// Plugin that handles scrolling for UI containers with the Scrollable component.
 /// Processes mouse wheel input and updates scroll offsets.
@@ -28,13 +34,15 @@ public struct ScrollPlugin : IPlugin
 	{
 		// Register scroll input state
 		app.AddResource(new ScrollInputState());
+		app.AddResource(new ScrollResetGuard());
 
 		// System to calculate content size for scrollable containers
 		app.AddSystem((
 			Query<Data<UiNode, Scrollable, ComputedLayout, Children>, Optional<Children>> scrollables,
-			Query<Data<UiNode, ComputedLayout>> allLayouts) =>
+			Query<Data<UiNode, ComputedLayout>> allLayouts,
+			Query<Data<Children>> childrenLookup) =>
 		{
-			UpdateScrollableContentSize(scrollables, allLayouts);
+			UpdateScrollableContentSize(scrollables, allLayouts, childrenLookup);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("ui:scroll:update-content-size")
@@ -56,6 +64,21 @@ public struct ScrollPlugin : IPlugin
 		.After("ui:scroll:update-content-size")
 		.Build();
 
+		// Clear scroll event tracking after all systems have processed scroll events
+		app.AddSystem((Query<Data<Scrollable>> scrollables) =>
+		{
+			foreach (var (_, scrollable) in scrollables)
+			{
+				ref var scroll = ref scrollable.Ref;
+				// Reset event tracking for next frame
+				scroll.LastScrollAxis = null;
+				scroll.LastScrollDelta = 0f;
+			}
+		})
+		.InStage(Stage.Last)
+		.Label("ui:scroll:reset-events")
+		.Build();
+
 		// Clear scroll input at end of frame
 		app.AddSystem((ResMut<ScrollInputState> scrollInput) =>
 		{
@@ -63,6 +86,114 @@ public struct ScrollPlugin : IPlugin
 		})
 		.InStage(Stage.Last)
 		.Label("ui:scroll:clear-input")
+		.After("ui:scroll:reset-events")
+		.Build();
+
+		// One-shot reset after first frame to cancel any spurious initial wheel input
+		app.AddSystem((ResMut<ScrollResetGuard> guard, Query<Data<Scrollable>> scrollers) =>
+		{
+			if (guard.Value.Done)
+				return;
+			foreach (var (_, s) in scrollers)
+			{
+				if (s.Ref.EnableHorizontal && s.Ref.ScrollOffset.X != 0f)
+					s.Ref.ScrollOffset.X = 0f;
+			}
+			guard.Value.Done = true;
+		})
+		.InStage(Stage.Last)
+		.Label("ui:scroll:reset-horizontal-first-frame")
+		.After("ui:scroll:clear-input")
+		.Build();
+
+		// Reset initial horizontal offset to 0 for newly-added scrollables (one-shot)
+		app.AddSystem((Query<Data<Scrollable>, Filter<Added<Scrollable>>> newly) =>
+		{
+			foreach (var (_, scr) in newly)
+			{
+				ref var s = ref scr.Ref;
+				if (s.EnableHorizontal && s.ScrollOffset.X != 0f)
+					s.ScrollOffset.X = 0f;
+			}
+		})
+		.InStage(Stage.PostUpdate)
+		.Label("ui:scroll:reset-horizontal-on-add")
+		.Build();
+
+		// Debug: log horizontal containers' visible children (accounts for scroll + clipping)
+		app.AddSystem((
+			Query<Data<Scrollable, ComputedLayout, Children>> scrollableWithChildren,
+			Query<Data<Children>> childrenLookup,
+			Query<Data<ComputedLayout>> layouts) =>
+		{
+			foreach (var (entityId, scrollable, viewportLayout, viewportChildren) in scrollableWithChildren)
+			{
+				ref var scroll = ref scrollable.Ref;
+				if (!scroll.EnableHorizontal)
+					continue;
+
+				ref var v = ref viewportLayout.Ref;
+				float clipStart = 0f;
+				float clipEnd = v.Width;
+
+				// Try to find content container as first child of the viewport
+				ulong contentId = 0;
+				foreach (var id in viewportChildren.Ref)
+				{
+					contentId = id;
+					break;
+				}
+
+				if (contentId == 0)
+				{
+					Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} no-content");
+					continue;
+				}
+
+				if (!childrenLookup.Contains(contentId))
+				{
+					Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} content={contentId} no-children");
+					continue;
+				}
+
+				var (_, contentChildren) = childrenLookup.Get(contentId);
+				int visibleCount = 0;
+				var parts = new System.Collections.Generic.List<string>(8);
+				int emitted = 0;
+
+				foreach (var childId in contentChildren.Ref)
+				{
+					if (!layouts.Contains(childId))
+						continue;
+					var (_, childLayout) = layouts.Get(childId);
+					ref var c = ref childLayout.Ref;
+
+					// Child rect in viewport-relative coordinates
+					float relX = c.X - v.X;
+					float relRight = relX + c.Width;
+					float visStart = System.MathF.Max(clipStart, relX);
+					float visEnd = System.MathF.Min(clipEnd, relRight);
+					bool visible = visEnd > clipStart && visStart < clipEnd;
+
+					if (visible)
+					{
+						visibleCount++;
+						if (emitted < 6)
+						{
+							bool clipL = relX < clipStart;
+							bool clipR = relRight > clipEnd;
+							parts.Add($"{childId}[rel={relX:0.#}-{relRight:0.#} vis={visStart:0.#}-{visEnd:0.#}{(clipL || clipR ? (clipL && clipR ? ",LR" : (clipL ? ",L" : ",R")) : "")}]");
+							emitted++;
+						}
+					}
+				}
+
+				Console.WriteLine($"[HDebug] target={entityId.Ref} viewW={v.Width} contentW={scroll.ContentSize.X} offsetX={scroll.ScrollOffset.X} clip=[{clipStart}-{clipEnd}] vis={visibleCount} :: {string.Join(" ", parts)}");
+			}
+		})
+		.InStage(Stage.PostUpdate)
+		.Label("ui:scroll:debug-horizontal")
+		.After("ui:scroll:update-content-size")
 		.Build();
 	}
 
@@ -71,7 +202,8 @@ public struct ScrollPlugin : IPlugin
 	/// </summary>
 	private static void UpdateScrollableContentSize(
 		Query<Data<UiNode, Scrollable, ComputedLayout, Children>, Optional<Children>> scrollables,
-		Query<Data<UiNode, ComputedLayout>> allLayouts)
+		Query<Data<UiNode, ComputedLayout>> allLayouts,
+		Query<Data<Children>> childrenLookup)
 	{
 		foreach (var (containerNode, scrollable, scrollLayout, maybeChildren) in scrollables)
 		{
@@ -99,6 +231,13 @@ public struct ScrollPlugin : IPlugin
 			float maxX = float.MinValue, maxY = float.MinValue;
 			bool hasChildren = false;
 
+			// Track actual padding to use (from content container if measuring grandchildren)
+			float actualPaddingLeft = 0f;
+			float actualPaddingRight = 0f;
+			float actualPaddingTop = 0f;
+			float actualPaddingBottom = 0f;
+			bool usedContentContainerPadding = false;
+
 			if (maybeChildren.IsValid())
 			{
 				foreach (var childId in maybeChildren.Ref)
@@ -106,30 +245,64 @@ public struct ScrollPlugin : IPlugin
 					if (!allLayouts.Contains(childId))
 						continue;
 
-					var (_, childNode, childLayout) = allLayouts.Get(childId);
-					hasChildren = true;
+					// If the child has its own children (e.g., content container), measure grandchildren instead
+					if (childrenLookup.Contains(childId))
+					{
+						// Read padding from the content container (not the viewport)
+						var (_, contentContainerNode, contentContainerLayout) = allLayouts.Get(childId);
+						if (contentContainerNode.Ref.PaddingLeft.IsDefined) actualPaddingLeft = contentContainerNode.Ref.PaddingLeft.Value;
+						if (contentContainerNode.Ref.PaddingRight.IsDefined) actualPaddingRight = contentContainerNode.Ref.PaddingRight.Value;
+						if (contentContainerNode.Ref.PaddingTop.IsDefined) actualPaddingTop = contentContainerNode.Ref.PaddingTop.Value;
+						if (contentContainerNode.Ref.PaddingBottom.IsDefined) actualPaddingBottom = contentContainerNode.Ref.PaddingBottom.Value;
+						usedContentContainerPadding = true;
 
-					float marginLeft = 0f;
-					float marginRight = 0f;
-					float marginTop = 0f;
-					float marginBottom = 0f;
+						var (_, grandChildren) = childrenLookup.Get(childId);
+						foreach (var gcId in grandChildren.Ref)
+						{
+							if (!allLayouts.Contains(gcId))
+								continue;
+							var (_, gcNode, gcLayout) = allLayouts.Get(gcId);
+							hasChildren = true;
 
-					// Include margins in bounding box calculation
-					if (childNode.Ref.MarginLeft.IsDefined)
-						marginLeft = childNode.Ref.MarginLeft.Value;
-					if (childNode.Ref.MarginRight.IsDefined)
-						marginRight = childNode.Ref.MarginRight.Value;
-					if (childNode.Ref.MarginTop.IsDefined)
-						marginTop = childNode.Ref.MarginTop.Value;
-					if (childNode.Ref.MarginBottom.IsDefined)
-						marginBottom = childNode.Ref.MarginBottom.Value;
+							float gml = 0f, gmr = 0f, gmt = 0f, gmb = 0f;
+							if (gcNode.Ref.MarginLeft.IsDefined) gml = gcNode.Ref.MarginLeft.Value;
+							if (gcNode.Ref.MarginRight.IsDefined) gmr = gcNode.Ref.MarginRight.Value;
+							if (gcNode.Ref.MarginTop.IsDefined) gmt = gcNode.Ref.MarginTop.Value;
+							if (gcNode.Ref.MarginBottom.IsDefined) gmb = gcNode.Ref.MarginBottom.Value;
 
-					// Expand bounding box to include this child + its margins
-					// Child.X/Y are positions AFTER margins, so we subtract them to get the true edges
-					minX = Math.Min(minX, childLayout.Ref.X - marginLeft);
-					minY = Math.Min(minY, childLayout.Ref.Y - marginTop);
-					maxX = Math.Max(maxX, childLayout.Ref.X + childLayout.Ref.Width + marginRight);
-					maxY = Math.Max(maxY, childLayout.Ref.Y + childLayout.Ref.Height + marginBottom);
+							// Calculate position relative to container WITHOUT scroll offset
+							// (ContentSize should measure the natural/unscrolled content bounds)
+							// var gcRelX = gcLayout.Ref.X - layout.X;
+							// var gcRelY = gcLayout.Ref.Y - layout.Y;
+							var gcRelX = (gcLayout.Ref.X - layout.X) + scroll.ScrollOffset.X;
+							var gcRelY = (gcLayout.Ref.Y - layout.Y) + scroll.ScrollOffset.Y;
+							minX = Math.Min(minX, gcRelX - gml);
+							minY = Math.Min(minY, gcRelY - gmt);
+							maxX = Math.Max(maxX, gcRelX + gcLayout.Ref.Width + gmr);
+							maxY = Math.Max(maxY, gcRelY + gcLayout.Ref.Height + gmb);
+						}
+					}
+					else
+					{
+						var (_, childNode, childLayout) = allLayouts.Get(childId);
+						hasChildren = true;
+
+						float marginLeft = 0f, marginRight = 0f, marginTop = 0f, marginBottom = 0f;
+						if (childNode.Ref.MarginLeft.IsDefined) marginLeft = childNode.Ref.MarginLeft.Value;
+						if (childNode.Ref.MarginRight.IsDefined) marginRight = childNode.Ref.MarginRight.Value;
+						if (childNode.Ref.MarginTop.IsDefined) marginTop = childNode.Ref.MarginTop.Value;
+						if (childNode.Ref.MarginBottom.IsDefined) marginBottom = childNode.Ref.MarginBottom.Value;
+
+						// Calculate position relative to container WITHOUT scroll offset
+						// var relX = childLayout.Ref.X - layout.X;
+						// var relY = childLayout.Ref.Y - layout.Y;
+						var relX = (childLayout.Ref.X - layout.X) + scroll.ScrollOffset.X;
+						var relY = (childLayout.Ref.Y - layout.Y) + scroll.ScrollOffset.Y;
+						minX = Math.Min(minX, relX - marginLeft);
+						minY = Math.Min(minY, relY - marginTop);
+						maxX = Math.Max(maxX, relX + childLayout.Ref.Width + marginRight);
+						maxY = Math.Max(maxY, relY + childLayout.Ref.Height + marginBottom);
+					}
 				}
 			}
 
@@ -141,15 +314,27 @@ public struct ScrollPlugin : IPlugin
 				// - (maxX - minX) = span from first margin to last margin
 				// - Add paddingLeft/Top + paddingRight/Bottom to include full padding area
 				// This ensures the content size represents the full scrollable area with symmetric padding
+
+				// Use content container padding if we measured grandchildren, otherwise use viewport padding
+				float finalPaddingLeft = usedContentContainerPadding ? actualPaddingLeft : paddingLeft;
+				float finalPaddingRight = usedContentContainerPadding ? actualPaddingRight : paddingRight;
+				float finalPaddingTop = usedContentContainerPadding ? actualPaddingTop : paddingTop;
+				float finalPaddingBottom = usedContentContainerPadding ? actualPaddingBottom : paddingBottom;
+
 				scroll.ContentSize = new Vector2(
-					maxX - minX + paddingLeft + paddingRight,
-					maxY - minY + paddingTop + paddingBottom
+					Math.Max(0f, maxX - minX + finalPaddingLeft + finalPaddingRight),
+					Math.Max(0f, maxY - minY + finalPaddingTop + finalPaddingBottom)
 				);
+				// Content origin relative to container top-left
+				if (scroll.ContentOrigin == Vector2.Zero)
+					scroll.ContentOrigin = new Vector2(minX, minY);
+
 			}
 			else
 			{
 				// No children, content size is 0
 				scroll.ContentSize = Vector2.Zero;
+				scroll.ContentOrigin = Vector2.Zero;
 			}
 		}
 	}
@@ -157,6 +342,7 @@ public struct ScrollPlugin : IPlugin
 	/// <summary>
 	/// Processes scroll input and updates scrollable containers.
 	/// Uses the UI stack to find the topmost scrollable container under the mouse pointer.
+	/// Enhanced with sickle_ui features: event tracking and scroll-through support.
 	/// </summary>
 	private static void ProcessScrollInput(
 		Res<ScrollInputState> scrollInput,
@@ -171,6 +357,8 @@ public struct ScrollPlugin : IPlugin
 
 		var mousePos = pointerInput.Value.Position;
 		var scrollDelta = scrollInput.Value.ScrollDelta;
+
+
 
 		// Iterate UI stack in reverse order (topmost first) to find scrollable under mouse
 		for (int i = uiStack.Value.Count - 1; i >= 0; i--)
@@ -194,34 +382,44 @@ public struct ScrollPlugin : IPlugin
 				if (!IsPointVisibleForScroll(mousePos, entityId, parents, scrollables))
 					continue;
 
-				// Found the topmost scrollable under mouse - apply scroll delta
+				// Determine scroll axis and delta
+				var axis = ScrollAxis.Vertical;
+				var delta = -scrollDelta.Y;
+
 				// If only horizontal scrolling is enabled, translate vertical wheel to horizontal scroll
 				if (scroll.EnableHorizontal && !scroll.EnableVertical && scrollDelta.Y != 0)
 				{
-					// Mouse wheel scrolling horizontally (inverted for natural direction)
-					scroll.ScrollOffset.X -= scrollDelta.Y * scroll.ScrollSpeed;
+					axis = ScrollAxis.Horizontal;
+					delta = -scrollDelta.Y;
+				}
+				else if (scrollDelta.X != 0)
+				{
+					axis = ScrollAxis.Horizontal;
+					delta = -scrollDelta.X;
+				}
+
+				// Update scroll event tracking (sickle_ui feature)
+				scroll.LastScrollAxis = axis;
+				scroll.LastScrollDelta = delta;
+				scroll.LastScrollUnit = ScrollUnit.Line; // Default to Line for wheel events
+
+				// Apply scroll delta
+				if (axis == ScrollAxis.Horizontal && scroll.EnableHorizontal)
+				{
+					scroll.ScrollOffset.X += delta * scroll.ScrollSpeed;
 					var maxScroll = Math.Max(0f, scroll.ContentSize.X - l.Width);
 					scroll.ScrollOffset.X = Math.Clamp(scroll.ScrollOffset.X, 0f, maxScroll);
 				}
-				else
+				else if (axis == ScrollAxis.Vertical && scroll.EnableVertical)
 				{
-					// Normal vertical/horizontal scrolling
-					if (scroll.EnableVertical)
-					{
-						scroll.ScrollOffset.Y -= scrollDelta.Y * scroll.ScrollSpeed;
-						var maxScroll = Math.Max(0f, scroll.ContentSize.Y - l.Height);
-						scroll.ScrollOffset.Y = Math.Clamp(scroll.ScrollOffset.Y, 0f, maxScroll);
-					}
+					scroll.ScrollOffset.Y += delta * scroll.ScrollSpeed;
+					var maxScroll = Math.Max(0f, scroll.ContentSize.Y - l.Height);
+					scroll.ScrollOffset.Y = Math.Clamp(scroll.ScrollOffset.Y, 0f, maxScroll);
 
-					if (scroll.EnableHorizontal)
-					{
-						scroll.ScrollOffset.X += scrollDelta.X * scroll.ScrollSpeed;
-						var maxScroll = Math.Max(0f, scroll.ContentSize.X - l.Width);
-						scroll.ScrollOffset.X = Math.Clamp(scroll.ScrollOffset.X, 0f, maxScroll);
-					}
 				}
 
 				// Only apply to the topmost scrollable (don't propagate)
+				// TODO: Implement ScrollThrough marker for scroll event bubbling
 				break;
 			}
 		}
