@@ -168,25 +168,25 @@ public struct UiStackPlugin : IPlugin
 
 		// Build render commands from UI stack (in correct z-order)
 		app.AddResource(new UiRenderCommands());
-        app.AddSystem((
-            Res<UiStack> uiStack,
-            ResMut<UiRenderCommands> renderCommands,
-            Query<Data<ComputedLayout>> layouts,
-            Query<Data<BackgroundColor>> backgrounds,
-            Query<Data<BorderColor>> borderColors,
-            Query<Data<UiNode>> uiNodes,
-            Query<Data<UiText>> texts,
-            Query<Data<Scrollable>> scrollables,
-            Query<Data<Parent>> parents,
-            Query<Data<ScrollbarThumb>> scrollbarThumbs,
-            Local<Stack<(ulong entityId, bool hasClip)>> clipStack) =>
-        {
-            BuildRenderCommands(uiStack, renderCommands, layouts, backgrounds, borderColors, uiNodes, texts, scrollables, parents, scrollbarThumbs, clipStack);
-        })
-            .InStage(Stage.PostUpdate)
-            .Label("ui:build-render-commands")
-            .After("ui:stack:update")
-            .Build();
+		app.AddSystem((
+			Res<UiStack> uiStack,
+			ResMut<UiRenderCommands> renderCommands,
+			Query<Data<ComputedLayout>> layouts,
+			Query<Data<BackgroundColor>> backgrounds,
+			Query<Data<BorderColor>> borderColors,
+			Query<Data<UiNode>> uiNodes,
+			Query<Data<UiText>> texts,
+			Query<Data<TextStyle>> textStyles,
+			Query<Data<Scrollable>> scrollables,
+			Query<Data<Parent>> parents,
+			Local<Stack<(ulong entityId, bool hasClip)>> clipStack) =>
+		{
+			BuildRenderCommands(uiStack, renderCommands, layouts, backgrounds, borderColors, uiNodes, texts, textStyles, scrollables, parents, clipStack);
+		})
+			.InStage(Stage.PostUpdate)
+			.Label("ui:build-render-commands")
+			.After("ui:stack:update")
+			.Build();
 	}
 
 	/// <summary>
@@ -322,19 +322,19 @@ public struct UiStackPlugin : IPlugin
 	/// For each entity, emits commands for background, border, text, and clipping.
 	/// Handles scrollable containers by emitting BeginClip/EndClip commands.
 	/// </summary>
-    private static void BuildRenderCommands(
-        Res<UiStack> uiStack,
-        ResMut<UiRenderCommands> renderCommands,
-        Query<Data<ComputedLayout>> layouts,
-        Query<Data<BackgroundColor>> backgrounds,
-        Query<Data<BorderColor>> borderColors,
-        Query<Data<UiNode>> uiNodes,
-        Query<Data<UiText>> texts,
-        Query<Data<Scrollable>> scrollables,
-        Query<Data<Parent>> parents,
-        Query<Data<ScrollbarThumb>> scrollbarThumbs,
-        Local<Stack<(ulong entityId, bool hasClip)>> clipStack)
-    {
+	private static void BuildRenderCommands(
+		Res<UiStack> uiStack,
+		ResMut<UiRenderCommands> renderCommands,
+		Query<Data<ComputedLayout>> layouts,
+		Query<Data<BackgroundColor>> backgrounds,
+		Query<Data<BorderColor>> borderColors,
+		Query<Data<UiNode>> uiNodes,
+		Query<Data<UiText>> texts,
+		Query<Data<TextStyle>> textStyles,
+		Query<Data<Scrollable>> scrollables,
+		Query<Data<Parent>> parents,
+		Local<Stack<(ulong entityId, bool hasClip)>> clipStack)
+	{
 		ref var commands = ref renderCommands.Value;
 		commands.Clear();
 
@@ -376,13 +376,13 @@ public struct UiStackPlugin : IPlugin
 
 			// Check if this is a scrollable container - emit BeginClip
 			bool isScrollable = scrollables.Contains(entityId);
-            if (isScrollable)
-            {
-                // Emit clip command before rendering this entity's content
-                commands.Add(RenderCommand.BeginClip(l.X, l.Y, l.Width, l.Height));
-                
-                clipStack.Value!.Push((entityId, true));
-            }
+			if (isScrollable)
+			{
+				// Emit clip command before rendering this entity's content
+				commands.Add(RenderCommand.BeginClip(l.X, l.Y, l.Width, l.Height));
+
+				clipStack.Value!.Push((entityId, true));
+			}
 			else
 			{
 				// Not scrollable, but track in stack to know when children end
@@ -390,18 +390,12 @@ public struct UiStackPlugin : IPlugin
 			}
 
 			// Emit background command if entity has BackgroundColor
-            if (backgrounds.Contains(entityId))
-            {
-                var (_, bg) = backgrounds.Get(entityId);
-                commands.Add(RenderCommand.DrawBackground(
-                    entityId, l.X, l.Y, l.Width, l.Height, bg.Ref.Color));
-
-                // Debug: log when drawing scrollbar thumbs
-                if (scrollbarThumbs.Contains(entityId))
-                {
-                    
-                }
-            }
+			if (backgrounds.Contains(entityId))
+			{
+				var (_, bg) = backgrounds.Get(entityId);
+				commands.Add(RenderCommand.DrawBackground(
+					entityId, l.X, l.Y, l.Width, l.Height, bg.Ref.Color));
+			}
 
 			// Emit border command if entity has BorderColor
 			if (borderColors.Contains(entityId) && uiNodes.Contains(entityId))
@@ -422,12 +416,25 @@ public struct UiStackPlugin : IPlugin
 			if (texts.Contains(entityId))
 			{
 				var (_, text) = texts.Get(entityId);
-				// Default text color and size (will be customizable later)
-				var textColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f); // White
+
+				// Get text style if present, otherwise use defaults
 				var fontSize = 20f;
+				var textColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f); // White
+				var horizontalAlign = TextAlign.Left;
+				var verticalAlign = TextVerticalAlign.Top;
+
+				if (textStyles.Contains(entityId))
+				{
+					var (_, style) = textStyles.Get(entityId);
+					ref readonly var s = ref style.Ref;
+					fontSize = s.FontSize;
+					textColor = s.Color;
+					horizontalAlign = s.HorizontalAlign;
+					verticalAlign = s.VerticalAlign;
+				}
 
 				commands.Add(RenderCommand.DrawText(
-					entityId, l.X, l.Y, l.Width, l.Height, text.Ref.Value, fontSize, textColor));
+					entityId, l.X, l.Y, l.Width, l.Height, text.Ref.Value, fontSize, textColor, horizontalAlign, verticalAlign));
 			}
 		}
 

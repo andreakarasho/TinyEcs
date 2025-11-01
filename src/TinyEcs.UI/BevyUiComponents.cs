@@ -234,20 +234,54 @@ public struct UiText
 }
 
 /// <summary>
+/// Text alignment options for horizontal positioning within the layout area.
+/// </summary>
+public enum TextAlign
+{
+	/// <summary>Align text to the left (default)</summary>
+	Left,
+	/// <summary>Center text horizontally</summary>
+	Center,
+	/// <summary>Align text to the right</summary>
+	Right
+}
+
+/// <summary>
+/// Text alignment options for vertical positioning within the layout area.
+/// </summary>
+public enum TextVerticalAlign
+{
+	/// <summary>Align text to the top (default)</summary>
+	Top,
+	/// <summary>Center text vertically</summary>
+	Middle,
+	/// <summary>Align text to the bottom</summary>
+	Bottom
+}
+
+/// <summary>
 /// Component that defines text styling properties.
 /// </summary>
 public struct TextStyle
 {
 	public float FontSize;
 	public Vector4 Color;
+	public TextAlign HorizontalAlign;
+	public TextVerticalAlign VerticalAlign;
 
-	public TextStyle(float fontSize = 16f, Vector4 color = default)
+	public TextStyle(
+		float fontSize = 16f,
+		Vector4 color = default,
+		TextAlign horizontalAlign = TextAlign.Left,
+		TextVerticalAlign verticalAlign = TextVerticalAlign.Top)
 	{
 		FontSize = fontSize;
 		Color = color == default ? new Vector4(1, 1, 1, 1) : color;
+		HorizontalAlign = horizontalAlign;
+		VerticalAlign = verticalAlign;
 	}
 
-	public static TextStyle Default() => new(16f, new Vector4(1, 1, 1, 1));
+	public static TextStyle Default() => new(16f, new Vector4(1, 1, 1, 1), TextAlign.Left, TextVerticalAlign.Top);
 }
 
 /// <summary>
@@ -475,4 +509,28 @@ public enum DragSource
 {
 	Mouse,
 	Touch // Note: Touch ID tracking not implemented yet
+}
+
+/// <summary>
+/// Resource that provides text measurement functionality.
+/// Renderers must register their measurement implementation here.
+/// The callback receives the text content and style, and returns intrinsic dimensions.
+/// </summary>
+public class TextMeasureContext
+{
+	/// <summary>
+	/// Callback to measure text dimensions.
+	/// Parameters: (text, textStyle) => (width, height)
+	/// The callback should measure the text with the given style (fontSize, etc.)
+	/// and return the intrinsic dimensions in pixels.
+	/// Note: Alignment properties don't affect intrinsic measurement, only rendering.
+	/// </summary>
+	public Func<string, TextStyle, (float width, float height)>? MeasureText { get; set; }
+
+	/// <summary>
+	/// Internal: Callback to get component data for an entity during measurement.
+	/// Parameters: (entityId) => (text, textStyle)
+	/// Set by the FlexboxUiPlugin.
+	/// </summary>
+	internal Func<ulong, (string text, TextStyle style)>? GetTextData { get; set; }
 }

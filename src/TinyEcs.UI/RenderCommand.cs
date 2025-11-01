@@ -1,4 +1,5 @@
 using System.Numerics;
+using TinyEcs.UI.Bevy;
 
 namespace TinyEcs.UI;
 
@@ -38,6 +39,8 @@ public struct RenderCommand
 	public string Text;
 	public float FontSize;
 	public Vector4 TextColor;
+	public TextAlign TextHorizontalAlign;
+	public TextVerticalAlign TextVerticalAlign;
 
 	// Image
 	public string ImagePath;
@@ -68,7 +71,14 @@ public struct RenderCommand
 		};
 	}
 
-	public static RenderCommand DrawText(ulong entityId, float x, float y, float w, float h, string text, float fontSize, Vector4 color)
+	public static RenderCommand DrawText(
+		ulong entityId,
+		float x, float y, float w, float h,
+		string text,
+		float fontSize,
+		Vector4 color,
+		TextAlign horizontalAlign = TextAlign.Left,
+		TextVerticalAlign verticalAlign = TextVerticalAlign.Top)
 	{
 		return new RenderCommand
 		{
@@ -77,7 +87,9 @@ public struct RenderCommand
 			X = x, Y = y, Width = w, Height = h,
 			Text = text,
 			FontSize = fontSize,
-			TextColor = color
+			TextColor = color,
+			TextHorizontalAlign = horizontalAlign,
+			TextVerticalAlign = verticalAlign
 		};
 	}
 

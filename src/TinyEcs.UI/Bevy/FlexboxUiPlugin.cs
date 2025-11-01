@@ -106,6 +106,27 @@ public struct FlexboxUiPlugin : IPlugin
 		// Register the FlexboxUiState resource
 		app.AddResource(new FlexboxUiState());
 
+		// Register the TextMeasureContext resource (renderer will populate it)
+		var textMeasureContext = new TextMeasureContext();
+		app.AddResource(textMeasureContext);
+
+		// Set up the GetTextData callback once at plugin build time
+		// The callback captures World in its closure to allow the measure function to query entities
+		var world = app.GetWorld();
+		textMeasureContext.GetTextData = (entityId) =>
+		{
+			var entity = world.Entity(entityId);
+			if (!entity.Has<UiText>())
+				return (string.Empty, TextStyle.Default());
+
+			var text = entity.Get<UiText>().Value;
+			var style = entity.Has<TextStyle>()
+				? entity.Get<TextStyle>()
+				: TextStyle.Default();
+
+			return (text, style);
+		};
+
 		// Copy to local variables to avoid struct 'this' capture
 		var width = AvailableWidth;
 		var height = AvailableHeight;
@@ -113,6 +134,13 @@ public struct FlexboxUiPlugin : IPlugin
 		// Phase 2: Node Lifecycle - Use observers for OnInsert/OnRemove
 		app.AddObserver<OnAdd<UiNode>, ResMut<FlexboxUiState>, Commands>(OnUiNodeInserted);
 		app.AddObserver<OnRemove<FlexboxNodeRef>, ResMut<FlexboxUiState>>(OnUiNodeRemoved);
+
+		// Attach measure function when UiText is added
+		app.AddObserver<OnAdd<UiText>, Query<Data<FlexboxNodeRef>>, Res<TextMeasureContext>>(OnTextAdded);
+
+		// Update measure function when UiText or TextStyle changes
+		app.AddObserver<OnInsert<UiText>, Query<Data<FlexboxNodeRef>>>(OnTextChanged);
+		app.AddObserver<OnInsert<TextStyle>, Query<Data<FlexboxNodeRef>>>(OnTextStyleChanged);
 
 		// Phase 3: Property Synchronization
 		app.AddSystem((Query<Data<UiNode, FlexboxNodeRef>, Filter<Changed<UiNode>>> changedNodes) =>
@@ -123,18 +151,7 @@ public struct FlexboxUiPlugin : IPlugin
 			.Label("flexbox:sync_node")
 			.Build();
 
-		app.AddSystem((
-			Query<Data<Parent, FlexboxNodeRef>, Filter<Changed<Parent>>> changedParents,
-			Query<Data<Parent, FlexboxNodeRef>, Filter<Added<Parent>>> addedParents,
-			Query<Data<FlexboxNodeRef>> allNodeRefs,
-			ResMut<FlexboxUiState> state) =>
-		{
-			SyncHierarchyToFlexbox(changedParents, addedParents, allNodeRefs, state);
-		})
-			.InStage(Stage.PreUpdate)
-			.Label("flexbox:sync_hierarchy")
-			.After("flexbox:sync_node")
-			.Build();
+		app.AddObserver<OnAdd<Parent>, Query<Data<FlexboxNodeRef>>, ResMut<FlexboxUiState>>(SyncHierarchyToFlexbox2);
 
 		// Calculate layout after syncing nodes and hierarchy, before reading ComputedLayout
 		app.AddSystem((ResMut<FlexboxUiState> state) =>
@@ -214,6 +231,127 @@ public struct FlexboxUiPlugin : IPlugin
 				trigger.Component.Node.Parent.RemoveChild(trigger.Component.Node);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Context data stored in Node.Context for text measurement.
+	/// Contains the entity ID and the measure context reference.
+	/// </summary>
+	private class TextNodeContext
+	{
+		public ulong EntityId;
+		public TextMeasureContext MeasureContext;
+
+		public TextNodeContext(ulong entityId, TextMeasureContext measureContext)
+		{
+			EntityId = entityId;
+			MeasureContext = measureContext;
+		}
+	}
+
+	/// <summary>
+	/// Observer: Called when UiText component is added to an entity.
+	/// Attaches a measure function to the Flexbox node for automatic text sizing.
+	/// </summary>
+	private static void OnTextAdded(
+		OnAdd<UiText> trigger,
+		Query<Data<FlexboxNodeRef>> nodeRefs,
+		Res<TextMeasureContext> measureContext)
+	{
+		var entityId = trigger.EntityId;
+		if (!nodeRefs.Contains(entityId))
+			return;
+
+		var (_, nodeRef) = nodeRefs.Get(entityId);
+		var node = nodeRef.Ref.Node;
+		if (node == null)
+			return;
+
+		// Store entity ID and measure context in node context for lookup in measure function
+		node.Context = new TextNodeContext(entityId, measureContext.Value);
+
+		// Attach measure function to the Flexbox node
+		node.SetMeasureFunc(MeasureText);
+		node.MarkAsDirty();
+		node.ResetLayout();
+	}
+
+	/// <summary>
+	/// Observer: Called when UiText component is updated.
+	/// Marks the Flexbox node as dirty to trigger remeasurement.
+	/// </summary>
+	private static void OnTextChanged(
+		OnInsert<UiText> trigger,
+		Query<Data<FlexboxNodeRef>> nodeRefs)
+	{
+		var entityId = trigger.EntityId;
+		if (!nodeRefs.Contains(entityId))
+			return;
+
+		var (_, nodeRef) = nodeRefs.Get(entityId);
+		var node = nodeRef.Ref.Node;
+		if (node == null)
+			return;
+
+		// Mark node as dirty to trigger remeasurement
+		node.MarkAsDirty();
+		node.ResetLayout();
+	}
+
+	/// <summary>
+	/// Observer: Called when TextStyle component is updated.
+	/// Marks the Flexbox node as dirty to trigger remeasurement.
+	/// </summary>
+	private static void OnTextStyleChanged(
+		OnInsert<TextStyle> trigger,
+		Query<Data<FlexboxNodeRef>> nodeRefs)
+	{
+		var entityId = trigger.EntityId;
+		if (!nodeRefs.Contains(entityId))
+			return;
+
+		var (_, nodeRef) = nodeRefs.Get(entityId);
+		var node = nodeRef.Ref.Node;
+		if (node == null)
+			return;
+
+		// Mark node as dirty to trigger remeasurement
+		node.MarkAsDirty();
+		node.ResetLayout();
+	}
+
+	/// <summary>
+	/// Measure function called by Flexbox to determine text intrinsic dimensions.
+	/// Uses the entity ID stored in node.Context to query for UiText and TextStyle components.
+	/// </summary>
+	private static Size MeasureText(
+		Node node,
+		float width,
+		MeasureMode widthMode,
+		float height,
+		MeasureMode heightMode)
+	{
+		// Get the TextNodeContext from node.Context
+		if (node.Context is not TextNodeContext context)
+			return new Size(0, 0);
+
+		var entityId = context.EntityId;
+		var measureContext = context.MeasureContext;
+
+		// Verify callbacks are set
+		if (measureContext.GetTextData == null || measureContext.MeasureText == null)
+			return new Size(0, 0);
+
+		// Get text and style from the entity using the callback
+		var (text, style) = measureContext.GetTextData(entityId);
+
+		if (string.IsNullOrEmpty(text))
+			return new Size(0, 0);
+
+		// Call the renderer's measurement function
+		var (measuredWidth, measuredHeight) = measureContext.MeasureText(text, style);
+
+		return new Size(measuredWidth, measuredHeight);
 	}
 
 	/// <summary>
@@ -325,83 +463,49 @@ public struct FlexboxUiPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// System: Syncs Parent component changes to Flexbox node hierarchy.
-	/// Runs in PreUpdate stage after style sync.
+	/// Observer: Syncs Parent component changes to Flexbox node hierarchy.
 	/// </summary>
-	private static void SyncHierarchyToFlexbox(
-		Query<Data<Parent, FlexboxNodeRef>, Filter<Changed<Parent>>> changedParents,
-		Query<Data<Parent, FlexboxNodeRef>, Filter<Added<Parent>>> addedParents,
+	private static void SyncHierarchyToFlexbox2(
+		OnAdd<Parent> trigger,
 		Query<Data<FlexboxNodeRef>> allNodeRefs,
-		ResMut<FlexboxUiState> state)
+		ResMut<FlexboxUiState> state
+	)
 	{
-		// Handle changed parents
-		foreach (var (ent, parent, childNodeRef) in changedParents)
+		var childEntityId = trigger.EntityId;
+		var parentEntityId = trigger.Component.Id;
+
+		if (!allNodeRefs.Contains(childEntityId))
+			return;
+
+		var (_, childNodeRef) = allNodeRefs.Get(childEntityId);
+		var childNode = childNodeRef.Ref.Node;
+		if (childNode == null)
+			return;
+
+		// Remove from current parent first
+		if (childNode.Parent != null)
 		{
-			var childNode = childNodeRef.Ref.Node;
-			if (childNode == null)
-				continue;
-
-			var parentEntityId = parent.Ref.Id;
-
-			// Remove from current parent first
-			if (childNode.Parent != null)
-			{
-				childNode.Parent.RemoveChild(childNode);
-			}
-
-			// Find parent's Flexbox node
-			Node? parentNode = null;
-			if (allNodeRefs.Contains(parentEntityId))
-			{
-				var (_, parentNodeRef) = allNodeRefs.Get(parentEntityId);
-				parentNode = parentNodeRef.Ref.Node;
-			}
-
-			// Add to new parent (or root if parent not found)
-			if (parentNode != null)
-			{
-				parentNode.AddChild(childNode);
-			}
-			else
-			{
-				// No parent entity or parent doesn't have FlexboxNodeRef
-				// Add to root as fallback
-				state.Value.Root.AddChild(childNode);
-			}
+			childNode.Parent.RemoveChild(childNode);
 		}
 
-		// Also handle entities that just got a Parent component added
-		foreach (var (parent, childNodeRef) in addedParents)
+		// Find parent's Flexbox node
+		Node? parentNode = null;
+		if (allNodeRefs.Contains(parentEntityId))
 		{
-			var childNode = childNodeRef.Ref.Node;
-			if (childNode == null)
-				continue;
+			var (_, parentNodeRef) = allNodeRefs.Get(parentEntityId);
+			parentNode = parentNodeRef.Ref.Node;
+		}
 
-			var parentEntityId = parent.Ref.Id;
-
-			// Remove from root if it's there
-			if (childNode.Parent != null)
-			{
-				childNode.Parent.RemoveChild(childNode);
-			}
-
-			// Find parent's Flexbox node using Contains + Get (optimized)
-			Node? parentNode = null;
-			if (allNodeRefs.Contains(parentEntityId))
-			{
-				var (_, parentNodeRef) = allNodeRefs.Get(parentEntityId);
-				parentNode = parentNodeRef.Ref.Node;
-			}
-
-			// Add to new parent (or root if parent not found)
-			if (parentNode != null)
-			{
-				parentNode.AddChild(childNode);
-			}
-			else
-			{
-				state.Value.Root.AddChild(childNode);
-			}
+		// Add to new parent (or root if parent not found)
+		if (parentNode != null)
+		{
+			parentNode.AddChild(childNode);
+		}
+		else
+		{
+			// No parent entity or parent doesn't have FlexboxNodeRef
+			// Add to root as fallback
+			state.Value.Root.AddChild(childNode);
 		}
 	}
 
@@ -449,10 +553,10 @@ public struct FlexboxUiPlugin : IPlugin
 	/// <summary>
 	/// Walks up the parent chain and accumulates scroll offsets from scrollable containers.
 	/// </summary>
-private static System.Numerics.Vector2 GetScrollTransformWithNearestOrigin(
-		ulong entityId,
-		Query<Data<Parent>> parents,
-		Query<Data<Scrollable>> scrollables)
+	private static System.Numerics.Vector2 GetScrollTransformWithNearestOrigin(
+			ulong entityId,
+			Query<Data<Parent>> parents,
+			Query<Data<Scrollable>> scrollables)
 	{
 		var total = System.Numerics.Vector2.Zero;
 		var currentId = entityId;

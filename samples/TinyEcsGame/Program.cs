@@ -33,28 +33,15 @@ app.AddPlugin(gameRoot);
 // 	RenderingStage = gameRoot.RenderingStage
 // });
 
-// Flexbox UI: core + Raylib bridge
-app.AddPlugin(new FlexboxUiPlugin());
+// Core UI system (Flexbox, pointer input, drag/drop, scrolling)
+app.AddPlugin(new TinyEcsUiPlugin { InputStage = Stage.PostUpdate });
+
+// UI widgets (buttons, scrollbars, scrollviews)
+app.AddPlugin(new TinyEcsUiWidgetsPlugin());
+
+// Raylib-specific UI plugins (rendering and pointer input adapter)
 app.AddPlugin(new TinyEcsGame.RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
-
-// UI Stack for z-order management
-app.AddPlugin(new UiStackPlugin());
-
-// Pointer input: renderer-agnostic hit testing + Raylib adapter
-// Must run in PostUpdate after UI stack is built
-app.AddPlugin(new UiPointerInputPlugin { InputStage = Stage.PostUpdate });
 app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.PostUpdate });
-
-// Drag input for draggable UI elements (must be before ScrollViewPlugin)
-app.AddPlugin(new DragPlugin());
-
-// Scroll input for scrollable containers
-app.AddPlugin(new ScrollPlugin());
-app.AddPlugin(new ScrollbarPlugin());
-app.AddPlugin(new ScrollViewPlugin());
-
-// Button widget functionality
-app.AddPlugin(new ButtonPlugin());
 
 // Keep Flexbox container size in sync with window
 app.AddSystem((ResMut<WindowSize> window, ResMut<FlexboxUiState> ui) =>
@@ -67,7 +54,6 @@ app.AddSystem((ResMut<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 })
 .InStage(Stage.PreUpdate)
 .Label("ui:flexbox:calculate-layout")
-.After("flexbox:sync_hierarchy")  // Run AFTER syncing UiNode changes!
 .Build();
 
 // Hierarchical UI demo with root panel and child buttons
@@ -122,7 +108,7 @@ app.AddSystem((
 })
 .InStage(Stage.Update)
 .Label("ui:button-animated-colors")
-.After("animated-interaction:update-progress")
+// .After("animated-interaction:update-progress")
 .Build();
 
 // Nested scroll container demo
@@ -130,6 +116,28 @@ app.AddSystem((Commands commands) => CreateNestedScrollPanel(commands))
 	.InStage(Stage.Startup)
 	.Label("ui:nested-scroll:spawn")
 	.Build();
+
+// Checkbox demo
+app.AddSystem((Commands commands) => CreateCheckboxDemo(commands))
+	.InStage(Stage.Startup)
+	.Label("ui:checkbox:spawn")
+	.Build();
+
+// Handle checkbox changes
+app.AddObserver((On<CheckboxChanged> trigger, Commands commands, Query<Data<UiText>> qTexts) =>
+{
+	Console.WriteLine($"[Checkbox] Checkbox {trigger.EntityId} changed to: {trigger.Event.Checked}");
+
+	// Update text label if there's one associated
+	if (qTexts.Contains(trigger.EntityId))
+	{
+		var (_, text) = qTexts.Get(trigger.EntityId);
+		var currentText = text.Ref.Value;
+		// Toggle between checked/unchecked text
+		var newText = trigger.Event.Checked ? currentText.Replace("[ ]", "[X]") : currentText.Replace("[X]", "[ ]");
+		commands.Entity(trigger.EntityId).Insert(new UiText(newText));
+	}
+});
 
 // Handle button activation
 app.AddObserver((On<Activate> trigger, Commands commands, Query<Data<UiText>, With<Button>> qButtonTexts) =>
@@ -235,6 +243,7 @@ static void CreateButtonPanel(Commands commands)
 			.Insert(BorderColor.FromRgba(255, 255, 255, 200))
 			.Insert(new BorderRadius(8f))
 			.Insert(new UiText(name))
+			.Insert(new TextStyle(fontSize: 24, horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
 			.Insert(new Button())
 			.Insert(new Interactive(focusable: true))
 			// Phase 1: Add FluxInteraction components for state tracking
@@ -325,7 +334,9 @@ static void CreateNestedScrollPanel(Commands commands)
 			JustifyContent = Justify.Center,
 			AlignItems = Align.Center,
 		})
-		.Insert(new UiText("Nested Scroll Demo (ScrollView Widget)"));
+		.Insert(new UiText("Nested Scroll Demo (ScrollView Widget)"))
+		.Insert(new TextStyle(fontSize: 22f, horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
+;
 
 	commands.Entity(outerContentId).AddChild(titleText.Id);
 
@@ -403,6 +414,7 @@ static void CreateNestedScrollPanel(Commands commands)
 				.Insert(BorderColor.FromRgba(255, 255, 255, 200))
 				.Insert(new BorderRadius(6f))
 				.Insert(new UiText($"{i}-{index}"))
+				.Insert(new TextStyle(horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
 				.Insert(new Interactive(focusable: true))
 				.Observe((On<UiPointerTrigger> trigger, Commands cmd) =>
 				{
@@ -433,6 +445,130 @@ static void CreateNestedScrollPanel(Commands commands)
 
 	// Note: Outer panel vertical scrollbar is now integrated in ScrollView widget!
 	Console.WriteLine($"[UI] Nested scroll panel hierarchy created - 5 inner panels with 8 boxes each + scrollbars");
+}
+
+static void CreateCheckboxDemo(Commands commands)
+{
+	// Create a panel to hold checkboxes
+	var panelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			PositionType = PositionType.Absolute,
+			FlexDirection = FlexDirection.Column,
+			Width = FlexValue.Points(300f),
+			Height = FlexValue.Auto(),
+			Top = FlexValue.Points(100f),
+			Left = FlexValue.Points(200f),
+			PaddingTop = FlexValue.Points(20f),
+			PaddingBottom = FlexValue.Points(20f),
+			PaddingLeft = FlexValue.Points(20f),
+			PaddingRight = FlexValue.Points(20f),
+		})
+		.Insert(BackgroundColor.FromRgba(60, 50, 70, 255))
+		.Insert(BorderColor.FromRgba(120, 100, 140, 255))
+		.Insert(new BorderRadius(10f))
+		.Id;
+
+	Console.WriteLine($"[UI] Created checkbox panel {panelId}");
+
+	// Create checkboxes with labels
+	var checkboxOptions = new[]
+	{
+		"Enable Sound",
+		"Show FPS",
+		"Fullscreen Mode",
+		"Enable Particles"
+	};
+
+	foreach (var option in checkboxOptions)
+	{
+		// Create checkbox container (row layout with checkbox + label)
+		var rowId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				FlexDirection = FlexDirection.Row,
+				Width = FlexValue.Percent(100f),
+				Height = FlexValue.Auto(),
+				AlignItems = Align.Center,
+				MarginBottom = FlexValue.Points(15f),
+			})
+			.Insert(BorderColor.FromRgba(255, 0, 0, 255))
+			.Id;
+
+		// Create checkbox box (the clickable square)
+		var checkboxId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(24f),
+				Height = FlexValue.Points(24f),
+				JustifyContent = Justify.Center,
+				AlignItems = Align.Center,
+				BorderTop = FlexValue.Points(2f),
+				BorderRight = FlexValue.Points(2f),
+				BorderBottom = FlexValue.Points(2f),
+				BorderLeft = FlexValue.Points(2f),
+			})
+			.Insert(BackgroundColor.FromRgba(240, 240, 240, 255))
+			.Insert(BorderColor.FromRgba(100, 100, 100, 255))
+			.Insert(new BorderRadius(4f))
+			.Insert(new Interactive(focusable: true))
+			// Add FluxInteraction components for checkbox interaction
+			.Insert(new InteractionState())
+			.Insert(new FluxInteraction())
+			.Insert(new PrevInteraction())
+			.Insert(new FluxInteractionStopwatch())
+			.Id;
+
+		// Create checkmark visual (green check)
+		var checkmarkId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(16f),
+				Height = FlexValue.Points(16f),
+				Display = Flexbox.Display.None, // Hidden by default
+			})
+			.Insert(BackgroundColor.FromRgba(0, 200, 0, 255)) // Green checkmark
+			.Insert(new BorderRadius(2f))
+			.Id;
+
+		// Add checkmark as child of checkbox
+		commands.Entity(checkboxId).AddChild(checkmarkId);
+
+		// Link checkmark to checkbox and set initial state
+		commands.Entity(checkboxId).Insert(new Checkbox
+		{
+			Checked = false,
+			CheckmarkEntity = checkmarkId
+		});
+
+		// Create label text with automatic text measurement
+		var labelId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Auto(), // Auto width - measured from text
+				Height = FlexValue.Auto(),  // Auto height - measured from text
+				MarginLeft = FlexValue.Points(10f),  // Space between checkbox and label
+				AlignSelf = Align.Center,
+				BorderTop = FlexValue.Points(2f),
+				BorderRight = FlexValue.Points(2f),
+				BorderBottom = FlexValue.Points(2f),
+				BorderLeft = FlexValue.Points(2f),
+			})
+			.Insert(BorderColor.FromRgba(0, 255, 0, 255))
+			.Insert(new UiText(option))
+			.Insert(new TextStyle(fontSize: 16f, color: new Vector4(1f, 1f, 1f, 1f)))
+			.Id;
+
+		// Add checkbox and label to row (checkbox first = left, label second = right)
+		// Use explicit index to ensure correct order
+		commands.AddChild(rowId, checkboxId);
+		commands.AddChild(rowId, labelId);
+
+		// Add row to panel
+		commands.Entity(panelId).AddChild(rowId);
+	}
+
+	Console.WriteLine($"[UI] Created {checkboxOptions.Length} checkboxes");
 }
 
 class DebugLayoutState

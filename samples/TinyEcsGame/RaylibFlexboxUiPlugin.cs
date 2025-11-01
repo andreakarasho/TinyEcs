@@ -5,7 +5,8 @@ using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.UI;
-using TinyEcs.UI.Bevy;
+using TextAlign = TinyEcs.UI.Bevy.TextAlign;
+using TextVerticalAlign = TinyEcs.UI.Bevy.TextVerticalAlign;
 
 namespace TinyEcsGame;
 
@@ -57,6 +58,25 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 
 	public readonly void Build(App app)
 	{
+		// Register Raylib text measurement function in startup
+		app.AddSystem((ResMut<TinyEcs.UI.Bevy.TextMeasureContext> measureContext) =>
+		{
+			// Set up the measurement callback
+			measureContext.Value.MeasureText = (text, style) =>
+			{
+				if (string.IsNullOrEmpty(text))
+					return (0f, 0f);
+
+				var fontSize = (int)style.FontSize;
+				var width = Raylib.MeasureText(text, fontSize);
+				var height = fontSize;
+				return (width, height);
+			};
+		})
+		.InStage(Stage.Startup)
+		.Label("raylib:setup-text-measure")
+		.Build();
+
 		// Execute render commands (built from UI stack in correct z-order)
 		app.AddSystem((Res<UiRenderCommands> renderCommands, Local<Stack<ScissorRect>> scissorStack) =>
 		{
@@ -196,11 +216,26 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			(byte)(cmd.TextColor.W * 255f)
 		);
 
-		// Render text centered in the layout area
 		var fontSize = (int)cmd.FontSize;
 		var textWidth = Raylib.MeasureText(cmd.Text, fontSize);
-		var x = cmd.X + (cmd.Width - textWidth) / 2f;
-		var y = cmd.Y + (cmd.Height - fontSize) / 2f;
+
+		// Calculate horizontal position based on alignment
+		float x = cmd.TextHorizontalAlign switch
+		{
+			TextAlign.Left => cmd.X,
+			TextAlign.Center => cmd.X + (cmd.Width - textWidth) / 2f,
+			TextAlign.Right => cmd.X + cmd.Width - textWidth,
+			_ => cmd.X
+		};
+
+		// Calculate vertical position based on alignment
+		float y = cmd.TextVerticalAlign switch
+		{
+			TextVerticalAlign.Top => cmd.Y,
+			TextVerticalAlign.Middle => cmd.Y + (cmd.Height - fontSize) / 2f,
+			TextVerticalAlign.Bottom => cmd.Y + cmd.Height - fontSize,
+			_ => cmd.Y
+		};
 
 		Raylib.DrawText(cmd.Text, (int)x, (int)y, fontSize, color);
 	}
