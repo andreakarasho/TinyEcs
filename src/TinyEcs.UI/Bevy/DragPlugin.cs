@@ -13,6 +13,19 @@ public struct DragPlugin : IPlugin
 {
 	public readonly void Build(App app)
 	{
+		// System 0: Bring window to front when dragging starts (update ZIndex)
+		app.AddSystem((
+			Commands commands,
+			Query<Data<ZIndex>> zIndexQuery,
+			Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux) =>
+		{
+			BringToFrontOnPress(commands, zIndexQuery, changedFlux);
+		})
+		.InStage(Stage.PreUpdate)
+		.Label("drag:bring-to-front")
+		.After("flux:update-prev")
+		.Build();
+
 		// System 1: Initialize drag origin when drag starts
 		app.AddSystem((
 			Res<PointerInputState> pointerInput,
@@ -22,7 +35,7 @@ public struct DragPlugin : IPlugin
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("drag:init-origin")
-		.After("flux:update-prev")
+		.After("drag:bring-to-front")
 		.Build();
 
 		// System 2: Update drag progress (tracks position changes during drag)
@@ -61,6 +74,37 @@ public struct DragPlugin : IPlugin
 		.Label("ui:drag:apply-positions")
 		.After("flexbox:read_layout") // Override positions after Flexbox calculates them
 		.Build();
+	}
+
+	/// <summary>
+	/// Brings draggable elements to the front when they are pressed.
+	/// Finds the highest ZIndex among all draggable elements and sets the pressed element's ZIndex to highest + 1.
+	/// This ensures floating windows/panels come to the front when selected.
+	/// </summary>
+	private static void BringToFrontOnPress(
+		Commands commands,
+		Query<Data<ZIndex>> zIndexQuery,
+		Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux)
+	{
+		foreach (var (entityId, _, fluxInteraction) in changedFlux)
+		{
+			ref readonly var flux = ref fluxInteraction.Ref;
+
+			// When element is pressed, bring it to front
+			if (flux.State == FluxInteractionState.Pressed)
+			{
+				// Find the highest ZIndex among all entities
+				int maxZIndex = 0;
+				foreach (var (_, zIndex) in zIndexQuery)
+				{
+					if (zIndex.Ref.Value > maxZIndex)
+						maxZIndex = zIndex.Ref.Value;
+				}
+
+				// Set this element's ZIndex to highest + 1
+				commands.Entity(entityId.Ref).Insert(new ZIndex(maxZIndex + 1));
+			}
+		}
 	}
 
 	/// <summary>

@@ -9,6 +9,11 @@ namespace TinyEcs.UI.Bevy;
 /// - Checkboxes
 /// - Scrollbars
 /// - ScrollViews
+/// - Sliders
+/// - TextInputs
+/// - RadioButtons
+/// - Toggles/Switches
+/// - ProgressBars
 ///
 /// Note: This plugin requires TinyEcsUiPlugin to be added first.
 ///
@@ -33,5 +38,20 @@ public struct TinyEcsUiWidgetsPlugin : IPlugin
 
 		// ScrollView compound widget
 		app.AddPlugin(new ScrollViewPlugin());
+
+		// Slider widget
+		app.AddPlugin(new SliderPlugin());
+
+		// TextInput widget
+		app.AddPlugin(new TextInputPlugin());
+
+		// RadioButton widget
+		app.AddPlugin(new RadioButtonPlugin());
+
+		// Toggle/Switch widget
+		app.AddPlugin(new TogglePlugin());
+
+		// ProgressBar widget
+		app.AddPlugin(new ProgressBarPlugin());
 	}
 }

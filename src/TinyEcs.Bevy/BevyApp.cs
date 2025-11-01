@@ -166,7 +166,7 @@ public static class WorldExtensions
 
 	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer) where T : notnull
 	{
-		world.GetEventChannel<T>().RegisterObserver(observer);
+		world.RegisterObserver<T>((w, t) => observer(t));
 	}
 
 	internal static void ProcessEvents(this TinyEcs.World world)

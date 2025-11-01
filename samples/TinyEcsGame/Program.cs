@@ -123,6 +123,12 @@ app.AddSystem((Commands commands) => CreateCheckboxDemo(commands))
 	.Label("ui:checkbox:spawn")
 	.Build();
 
+// Widget showcase demo
+app.AddSystem((Commands commands) => CreateWidgetShowcase(commands))
+	.InStage(Stage.Startup)
+	.Label("ui:widget-showcase:spawn")
+	.Build();
+
 // Handle checkbox changes
 app.AddObserver((On<CheckboxChanged> trigger, Commands commands, Query<Data<UiText>> qTexts) =>
 {
@@ -151,6 +157,40 @@ app.AddObserver((On<Activate> trigger, Commands commands, Query<Data<UiText>, Wi
 	{
 		Console.WriteLine($"[Button] Button {trigger.EntityId} activated!");
 	}
+});
+
+// Handle slider changes
+app.AddObserver((On<SliderChanged> trigger) =>
+{
+	Console.WriteLine($"[Slider] Entity {trigger.EntityId} value changed to: {trigger.Event.Value:F2} ({trigger.Event.NormalizedValue:F2})");
+});
+
+// Handle toggle changes
+app.AddObserver((On<ToggleChanged> trigger) =>
+{
+	Console.WriteLine($"[Toggle] Entity {trigger.EntityId} toggled to: {(trigger.Event.IsOn ? "ON" : "OFF")}");
+});
+
+// Handle radio button selection
+app.AddObserver((On<RadioButtonSelected> trigger) =>
+{
+	Console.WriteLine($"[RadioButton] Entity {trigger.EntityId} selected in group {trigger.Event.GroupId}, value: {trigger.Event.Value}");
+});
+
+// Handle text input changes
+app.AddObserver((On<TextInputChanged> trigger) =>
+{
+	Console.WriteLine($"[TextInput] Entity {trigger.EntityId} text changed to: '{trigger.Event.Text}'");
+});
+
+app.AddObserver((On<TextInputFocused> trigger) =>
+{
+	Console.WriteLine($"[TextInput] Entity {trigger.EntityId} gained focus");
+});
+
+app.AddObserver((On<TextInputBlurred> trigger) =>
+{
+	Console.WriteLine($"[TextInput] Entity {trigger.EntityId} lost focus");
 });
 
 
@@ -191,6 +231,7 @@ static void CreateButtonPanel(Commands commands)
 		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
 		.Insert(new BorderRadius(12f))
 		.Insert(new Draggable())
+		.Insert(new ZIndex(0)) // Start at 0, will increment when pressed
 		.Insert(new Interactive(focusable: false));
 
 	// Style the content container
@@ -304,6 +345,7 @@ static void CreateNestedScrollPanel(Commands commands)
 		.Insert(BorderColor.FromRgba(80, 120, 100, 255))
 		.Insert(new BorderRadius(12f))
 		.Insert(new Draggable())
+		.Insert(new ZIndex(0)) // Start at 0, will increment when pressed
 		.Insert(new Interactive(focusable: false));
 
 	Console.WriteLine($"[UI] Created outer ScrollView {outerScrollViewId}, content: {outerContentId}");
@@ -569,6 +611,402 @@ static void CreateCheckboxDemo(Commands commands)
 	}
 
 	Console.WriteLine($"[UI] Created {checkboxOptions.Length} checkboxes");
+}
+
+static void CreateWidgetShowcase(Commands commands)
+{
+	// Create main showcase panel using ScrollView
+	var (scrollViewId, contentId) = ScrollViewHelpers.CreateScrollView(
+		commands,
+		enableVertical: true,
+		enableHorizontal: false,
+		width: FlexValue.Points(500f),
+		height: FlexValue.Points(600f),
+		scrollbarWidth: 12f
+	);
+
+	// Style the scroll view root
+	commands.Entity(scrollViewId)
+		.Insert(new UiNode
+		{
+			PositionType = PositionType.Absolute,
+			FlexDirection = FlexDirection.Column,
+			Width = FlexValue.Points(500f),
+			Height = FlexValue.Points(600f),
+			Top = FlexValue.Points(50f),
+			Right = FlexValue.Points(50f),
+		})
+		.Insert(BackgroundColor.FromRgba(30, 30, 40, 255))
+		.Insert(BorderColor.FromRgba(80, 80, 100, 255))
+		.Insert(new BorderRadius(12f))
+		.Insert(new Draggable())
+		.Insert(new ZIndex(0))
+		.Insert(new Interactive(focusable: false));
+
+	// Style content container
+	commands.Entity(contentId).Insert(new UiNode
+	{
+		Width = FlexValue.Auto(),
+		Height = FlexValue.Auto(),
+		MinWidth = FlexValue.Percent(100f),
+		MinHeight = FlexValue.Percent(100f),
+		FlexDirection = FlexDirection.Column,
+		AlignItems = Align.Stretch, // Stretch children to full width
+		PaddingTop = FlexValue.Points(20f),
+		PaddingBottom = FlexValue.Points(20f),
+		PaddingLeft = FlexValue.Points(20f),
+		PaddingRight = FlexValue.Points(32f)
+	});
+
+	// Add title
+	var titleId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			MarginBottom = FlexValue.Points(20f),
+		})
+		.Insert(new UiText("Widget Showcase"))
+		.Insert(new TextStyle(fontSize: 24f, color: new Vector4(1f, 1f, 1f, 1f), horizontalAlign: TextAlign.Center))
+		.Id;
+	commands.Entity(contentId).AddChild(titleId);
+
+	// === Slider Demo ===
+	CreateSectionHeader(commands, contentId, "Slider Widget");
+
+	var sliderContainerId = CreateWidgetContainer(commands, contentId);
+
+	// Horizontal slider
+	var sliderTrackId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(400f), // Explicit width instead of percentage
+			Height = FlexValue.Points(10f),
+			MarginBottom = FlexValue.Points(20f),
+		})
+		.Insert(BackgroundColor.FromRgba(60, 60, 70, 255))
+		.Insert(new BorderRadius(5f))
+		.Insert(new Interactive(focusable: false))
+		.Insert(new InteractionState())
+		.Insert(new FluxInteraction())
+		.Insert(new PrevInteraction())
+		.Insert(new FluxInteractionStopwatch())
+		.Id;
+
+	var sliderFillId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(50f),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+		})
+		.Insert(BackgroundColor.FromRgba(100, 150, 255, 255))
+		.Insert(new BorderRadius(5f))
+		.Id;
+
+	var sliderThumbId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(20f),
+			Height = FlexValue.Points(20f),
+			PositionType = PositionType.Absolute,
+			Left = FlexValue.Percent(50f),
+			Top = FlexValue.Points(-5f),
+		})
+		.Insert(BackgroundColor.FromRgba(255, 255, 255, 255))
+		.Insert(new BorderRadius(10f))
+		.Insert(new SliderThumb()) // Marker component to identify slider thumbs
+		.Insert(new Interactive(focusable: false))
+		.Insert(new InteractionState())
+		.Insert(new FluxInteraction())
+		.Insert(new PrevInteraction())
+		.Insert(new FluxInteractionStopwatch())
+		.Id;
+
+	commands.Entity(sliderTrackId).AddChild(sliderFillId);
+	commands.Entity(sliderTrackId).AddChild(sliderThumbId);
+	commands.Entity(sliderTrackId).Insert(new Slider(0f, 100f, 50f, SliderDirection.Horizontal)
+	{
+		ThumbEntity = sliderThumbId,
+		TrackEntity = sliderTrackId,
+		FillEntity = sliderFillId
+	});
+
+	commands.Entity(sliderContainerId).AddChild(sliderTrackId);
+
+	// === Toggle Demo ===
+	CreateSectionHeader(commands, contentId, "Toggle/Switch Widget");
+
+	var toggleContainerId = CreateWidgetContainer(commands, contentId);
+
+	for (int i = 0; i < 2; i++)
+	{
+		var toggleTrackId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(60f),
+				Height = FlexValue.Points(30f),
+				MarginBottom = FlexValue.Points(10f),
+			})
+			.Insert(BackgroundColor.FromRgba(158, 158, 158, 255)) // Gray when off
+			.Insert(new BorderRadius(15f))
+			.Insert(new Interactive(focusable: false))
+			.Insert(new FluxInteraction())
+			.Insert(new PrevInteraction())
+			.Insert(new FluxInteractionStopwatch())
+			.Id;
+
+		var toggleThumbId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(24f),
+				Height = FlexValue.Points(24f),
+				PositionType = PositionType.Absolute,
+				Left = FlexValue.Points(3f),
+				Top = FlexValue.Points(3f),
+			})
+			.Insert(BackgroundColor.FromRgba(255, 255, 255, 255))
+			.Insert(new BorderRadius(12f))
+			.Id;
+
+		commands.Entity(toggleTrackId).AddChild(toggleThumbId);
+		commands.Entity(toggleTrackId).Insert(new Toggle(i == 0)
+		{
+			ThumbEntity = toggleThumbId,
+			TrackEntity = toggleTrackId
+		});
+
+		commands.Entity(toggleContainerId).AddChild(toggleTrackId);
+	}
+
+	// === Progress Bar Demo ===
+	CreateSectionHeader(commands, contentId, "Progress Bar Widget");
+
+	var progressContainerId = CreateWidgetContainer(commands, contentId);
+
+	var progressTrackId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Points(25f),
+			MarginBottom = FlexValue.Points(15f),
+		})
+		.Insert(BackgroundColor.FromRgba(50, 50, 60, 255))
+		.Insert(new BorderRadius(5f))
+		.Id;
+
+	var progressFillId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(75f),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+		})
+		.Insert(BackgroundColor.FromRgba(76, 175, 80, 255)) // Green
+		.Insert(new BorderRadius(5f))
+		.Id;
+
+	var progressLabelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+			JustifyContent = Justify.Center,
+			AlignItems = Align.Center,
+		})
+		.Insert(new UiText("75%"))
+		.Insert(new TextStyle(fontSize: 14f, color: new Vector4(1f, 1f, 1f, 1f), horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
+		.Id;
+
+	commands.Entity(progressTrackId).AddChild(progressFillId);
+	commands.Entity(progressTrackId).AddChild(progressLabelId);
+	commands.Entity(progressTrackId).Insert(new ProgressBar(0.75f, ProgressBarDirection.LeftToRight, showPercentage: true)
+	{
+		FillEntity = progressFillId,
+		TrackEntity = progressTrackId,
+		LabelEntity = progressLabelId
+	});
+
+	commands.Entity(progressContainerId).AddChild(progressTrackId);
+
+	// === Radio Button Demo ===
+	CreateSectionHeader(commands, contentId, "Radio Button Widget");
+
+	var radioContainerId = CreateWidgetContainer(commands, contentId);
+
+	var radioOptions = new[] { "Option A", "Option B", "Option C" };
+	for (int i = 0; i < radioOptions.Length; i++)
+	{
+		var radioRow = commands.Spawn()
+			.Insert(new UiNode
+			{
+				FlexDirection = FlexDirection.Row,
+				Width = FlexValue.Percent(100f),
+				Height = FlexValue.Auto(),
+				MarginBottom = FlexValue.Points(10f),
+				AlignItems = Align.Center,
+			})
+			.Id;
+
+		var radioButtonId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(20f),
+				Height = FlexValue.Points(20f),
+				JustifyContent = Justify.Center,
+				AlignItems = Align.Center,
+			})
+			.Insert(BackgroundColor.FromRgba(40, 40, 50, 255))
+			.Insert(BorderColor.FromRgba(100, 100, 120, 255))
+			.Insert(new BorderRadius(10f))
+			.Insert(new Interactive(focusable: false))
+			.Insert(new FluxInteraction())
+			.Insert(new PrevInteraction())
+			.Insert(new FluxInteractionStopwatch())
+			.Id;
+
+		var radioIndicatorId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Points(12f),
+				Height = FlexValue.Points(12f),
+				Display = i == 0 ? Flexbox.Display.Flex : Flexbox.Display.None,
+			})
+			.Insert(BackgroundColor.FromRgba(100, 150, 255, 255))
+			.Insert(new BorderRadius(6f))
+			.Id;
+
+		commands.Entity(radioButtonId).AddChild(radioIndicatorId);
+		commands.Entity(radioButtonId).Insert(new RadioButton(i, i == 0)
+		{
+			IndicatorEntity = radioIndicatorId
+		});
+		commands.Entity(radioButtonId).Insert(new RadioGroup(1));
+
+		var radioLabel = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Auto(),
+				Height = FlexValue.Auto(),
+				MarginLeft = FlexValue.Points(10f),
+			})
+			.Insert(new UiText(radioOptions[i]))
+			.Insert(new TextStyle(fontSize: 16f, color: new Vector4(1f, 1f, 1f, 1f)))
+			.Id;
+
+		commands.AddChild(radioRow, radioButtonId);
+		commands.AddChild(radioRow, radioLabel);
+		commands.Entity(radioContainerId).AddChild(radioRow);
+	}
+
+	// === Text Input Demo ===
+	CreateSectionHeader(commands, contentId, "Text Input Widget (Click to Focus)");
+
+	var inputContainerId = CreateWidgetContainer(commands, contentId);
+
+	var textInputId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Points(40f),
+			PaddingLeft = FlexValue.Points(10f),
+			PaddingRight = FlexValue.Points(10f),
+			JustifyContent = Justify.FlexStart,
+			AlignItems = Align.Center,
+		})
+		.Insert(BackgroundColor.FromRgba(40, 40, 50, 255))
+		.Insert(BorderColor.FromRgba(80, 80, 100, 255))
+		.Insert(new BorderRadius(5f))
+		.Insert(new Interactive(focusable: true))
+		.Insert(new FluxInteraction())
+		.Insert(new PrevInteraction())
+		.Insert(new FluxInteractionStopwatch())
+		.Id;
+
+	var inputTextId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Auto(),
+			Height = FlexValue.Auto(),
+		})
+		.Insert(new UiText("Type here..."))
+		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(0.7f, 0.7f, 0.7f, 1f)))
+		.Id;
+
+	var inputPlaceholderId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Auto(),
+			Height = FlexValue.Auto(),
+			Display = Flexbox.Display.Flex,
+		})
+		.Insert(new UiText("Enter your name..."))
+		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(0.5f, 0.5f, 0.5f, 1f)))
+		.Id;
+
+	var inputCursorId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(2f),
+			Height = FlexValue.Points(20f),
+			MarginLeft = FlexValue.Points(2f),
+			Display = Flexbox.Display.None,
+		})
+		.Insert(BackgroundColor.FromRgba(255, 255, 255, 255))
+		.Id;
+
+	commands.Entity(textInputId).AddChild(inputPlaceholderId);
+	commands.Entity(textInputId).AddChild(inputTextId);
+	commands.Entity(textInputId).AddChild(inputCursorId);
+	commands.Entity(textInputId).Insert(new TextInput("Enter your name...")
+	{
+		TextEntity = inputTextId,
+		PlaceholderEntity = inputPlaceholderId,
+		CursorEntity = inputCursorId
+	});
+
+	commands.Entity(inputContainerId).AddChild(textInputId);
+
+	Console.WriteLine($"[UI] Created widget showcase panel {scrollViewId}");
+}
+
+static void CreateSectionHeader(Commands commands, ulong parentId, string title)
+{
+	var headerId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			MarginTop = FlexValue.Points(15f),
+			MarginBottom = FlexValue.Points(10f),
+		})
+		.Insert(new UiText(title))
+		.Insert(new TextStyle(fontSize: 18f, color: new Vector4(0.8f, 0.9f, 1f, 1f)))
+		.Id;
+	commands.Entity(parentId).AddChild(headerId);
+}
+
+static ulong CreateWidgetContainer(Commands commands, ulong parentId)
+{
+	var containerId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			MarginBottom = FlexValue.Points(20f),
+			PaddingTop = FlexValue.Points(10f),
+			PaddingBottom = FlexValue.Points(10f),
+			PaddingLeft = FlexValue.Points(10f),
+			PaddingRight = FlexValue.Points(10f),
+			FlexDirection = FlexDirection.Column,
+			AlignItems = Align.FlexStart, // Align children to the left
+		})
+		.Insert(BackgroundColor.FromRgba(45, 45, 55, 255))
+		.Insert(new BorderRadius(8f))
+		.Id;
+	commands.Entity(parentId).AddChild(containerId);
+	return containerId;
 }
 
 class DebugLayoutState
