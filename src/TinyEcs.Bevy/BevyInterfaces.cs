@@ -42,6 +42,7 @@ public ref struct Empty : IData<Empty>, IFilter<Empty>, TinyEcs.IQueryComponentA
 	public static System.ReadOnlySpan<System.Type> ReadComponents => s_emptyTypes;
 	public static System.ReadOnlySpan<System.Type> WriteComponents => s_emptyTypes;
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal Empty(QueryIterator iterator, bool asFilter)
 	{
 		_iterator = iterator;

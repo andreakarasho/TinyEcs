@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Numerics;
 using Raylib_cs;
@@ -204,7 +205,7 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 		}
 	}
 
-	private static void DrawText(RenderCommand cmd)
+	private static unsafe void DrawText(RenderCommand cmd)
 	{
 		if (string.IsNullOrEmpty(cmd.Text))
 			return;
@@ -237,6 +238,23 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			_ => cmd.Y
 		};
 
-		Raylib.DrawText(cmd.Text, (int)x, (int)y, fontSize, color);
+
+		var font = Raylib.GetFontDefault();
+		var utf8Bytes = System.Text.Encoding.UTF8.GetByteCount(cmd.Text) + 1;
+		var buf = ArrayPool<byte>.Shared.Rent(utf8Bytes);
+		try
+		{
+			System.Text.Encoding.UTF8.TryGetBytes(cmd.Text, buf.AsSpan(0, utf8Bytes - 1), out int bytesWritten);
+			buf[bytesWritten] = 0; // Null-terminate
+
+			fixed (byte* ptr = buf)
+			{
+				Raylib.DrawTextEx(font, (sbyte*)ptr, new Vector2(x, y), fontSize, 0f, color);
+			}
+		}
+		finally
+		{
+			ArrayPool<byte>.Shared.Return(buf);
+		}
 	}
 }

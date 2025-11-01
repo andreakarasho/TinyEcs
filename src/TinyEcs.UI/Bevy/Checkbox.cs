@@ -95,10 +95,10 @@ public struct CheckboxPlugin : IPlugin
 				// Re-insert to trigger change detection
 				commands.Entity(entityId.Ref).Insert(cb);
 
-			// Emit CheckboxChanged event both globally and per-entity
-			var changeEvent = new CheckboxChanged(cb.Checked);
-			commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-			commands.EmitTrigger(new On<CheckboxChanged>(entityId.Ref, changeEvent));  // Global (EventChannel)
+				// Emit CheckboxChanged event both globally and per-entity
+				var changeEvent = new CheckboxChanged(cb.Checked);
+				commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
+				commands.EmitTrigger(new On<CheckboxChanged>(entityId.Ref, changeEvent));  // Global (EventChannel)
 			}
 		}
 	}

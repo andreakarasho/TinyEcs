@@ -100,10 +100,10 @@ public struct TogglePlugin : IPlugin
 				// Re-insert to trigger change detection
 				commands.Entity(entityId.Ref).Insert(t);
 
-			// Emit ToggleChanged event both globally and per-entity
-			var changeEvent = new ToggleChanged(t.IsOn);
-			commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-			commands.EmitTrigger(new On<ToggleChanged>(entityId.Ref, changeEvent));  // Global (EventChannel)
+				// Emit ToggleChanged event both globally and per-entity
+				var changeEvent = new ToggleChanged(t.IsOn);
+				commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
+				commands.EmitTrigger(new On<ToggleChanged>(entityId.Ref, changeEvent));  // Global (EventChannel)
 			}
 		}
 	}
