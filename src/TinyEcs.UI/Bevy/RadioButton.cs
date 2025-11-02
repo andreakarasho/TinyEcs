@@ -132,10 +132,10 @@ public struct RadioButtonPlugin : IPlugin
 				rb.Selected = true;
 				commands.Entity(entityId.Ref).Insert(rb);
 
-			// Emit RadioButtonSelected event both globally and per-entity
-			var selectEvent = new RadioButtonSelected(rb.Value, group.GroupId);
-			commands.Entity(entityId.Ref).EmitTrigger(selectEvent);  // Per-entity (BevyObservers)
-			commands.EmitTrigger(new On<RadioButtonSelected>(entityId.Ref, selectEvent));  // Global (EventChannel)
+				// Emit RadioButtonSelected event both globally and per-entity
+				var selectEvent = new RadioButtonSelected(rb.Value, group.GroupId);
+				commands.Entity(entityId.Ref).EmitTrigger(selectEvent);  // Per-entity (BevyObservers)
+				commands.EmitTrigger(new On<RadioButtonSelected>(entityId.Ref, selectEvent));  // Global (EventChannel)
 			}
 		}
 	}

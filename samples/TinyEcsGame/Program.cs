@@ -43,6 +43,9 @@ app.AddPlugin(new TinyEcsUiWidgetsPlugin());
 app.AddPlugin(new TinyEcsGame.RaylibFlexboxUiPlugin { RenderingStage = gameRoot.RenderingStage });
 app.AddPlugin(new TinyEcsGame.RaylibPointerInputAdapter { InputStage = Stage.PostUpdate });
 
+// Add UI theme resource (can switch between Dark, Light, HighContrast)
+app.AddResource(UiTheme.Dark());
+
 // Keep Flexbox container size in sync with window
 app.AddSystem((ResMut<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 {
@@ -54,6 +57,51 @@ app.AddSystem((ResMut<WindowSize> window, ResMut<FlexboxUiState> ui) =>
 })
 .InStage(Stage.PreUpdate)
 .Label("ui:flexbox:calculate-layout")
+.Build();
+
+// Theme switching system (Press T to cycle through themes)
+// Uses Local to track the themed showcase panel entity ID
+app.AddSystem((ResMut<UiTheme> theme, Commands commands, Local<ulong> themedPanelId) =>
+{
+	if (Raylib.IsKeyPressed(KeyboardKey.T))
+	{
+		ref var currentTheme = ref theme.Value;
+
+		// Cycle through themes: Dark -> Light -> HighContrast -> Dark
+		// Check based on background brightness:
+		// - Dark: 0.52 (0.16 + 0.16 + 0.2)
+		// - Light: 2.88 (0.96 + 0.96 + 0.96)
+		// - HighContrast: 0.0 (0 + 0 + 0)
+		var brightness = currentTheme.Background.X + currentTheme.Background.Y + currentTheme.Background.Z;
+
+		if (brightness < 0.1f) // Currently HighContrast (black background)
+		{
+			currentTheme = UiTheme.Dark();
+			Console.WriteLine("[Theme] Switched to Dark theme - recreating themed showcase...");
+		}
+		else if (brightness < 1.0f) // Currently Dark (dark gray background)
+		{
+			currentTheme = UiTheme.Light();
+			Console.WriteLine("[Theme] Switched to Light theme - recreating themed showcase...");
+		}
+		else // Currently Light (light gray background)
+		{
+			currentTheme = UiTheme.HighContrast();
+			Console.WriteLine("[Theme] Switched to HighContrast theme - recreating themed showcase...");
+		}
+
+		// Destroy old themed showcase panel if it exists
+		if (themedPanelId.Value != 0)
+		{
+			commands.Entity(themedPanelId.Value).Despawn();
+		}
+
+		// Recreate themed showcase with new theme
+		themedPanelId.Value = CreateThemedShowcase(commands, currentTheme);
+	}
+})
+.InStage(Stage.PreUpdate)
+.Label("ui:theme:switch")
 .Build();
 
 // Hierarchical UI demo with root panel and child buttons
@@ -127,6 +175,16 @@ app.AddSystem((Commands commands) => CreateCheckboxDemo(commands))
 app.AddSystem((Commands commands) => CreateWidgetShowcase(commands))
 	.InStage(Stage.Startup)
 	.Label("ui:widget-showcase:spawn")
+	.Build();
+
+// Themed UI showcase demo (using ThemedWidgetBuilders)
+// Note: This is called once at startup, then recreated on theme changes by the theme-switch system
+app.AddSystem((Commands commands, Res<UiTheme> theme, Local<ulong> themedPanelId) =>
+{
+	themedPanelId.Value = CreateThemedShowcase(commands, theme.Value);
+})
+	.InStage(Stage.Startup)
+	.Label("ui:themed-showcase:spawn")
 	.Build();
 
 // Handle checkbox changes
@@ -1009,6 +1067,148 @@ static ulong CreateWidgetContainer(Commands commands, ulong parentId)
 	return containerId;
 }
 
+static ulong CreateThemedShowcase(Commands commands, UiTheme theme)
+{
+	Console.WriteLine("[UI] Creating themed widget showcase...");
+
+	// Create main themed panel using themed builder with absolute positioning
+	var panelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(400f),
+			Height = FlexValue.Points(600f),
+			FlexDirection = FlexDirection.Column,
+			PaddingTop = FlexValue.Points(theme.Padding),
+			PaddingBottom = FlexValue.Points(theme.Padding),
+			PaddingLeft = FlexValue.Points(theme.Padding),
+			PaddingRight = FlexValue.Points(theme.Padding),
+			PositionType = PositionType.Absolute,
+			Top = FlexValue.Points(50f),
+			Right = FlexValue.Points(50f),
+		})
+		.Insert(theme.Background.ToBackgroundColor())
+		.Insert(theme.Border.ToBorderColor())
+		.Insert(new BorderRadius(theme.BorderRadius))
+		.Id;
+
+	// Title
+	var titleId = ThemedWidgetBuilders.CreateLabel(commands, theme, "Themed UI Showcase", fontSize: 24f);
+	commands.Entity(panelId).AddChild(titleId);
+
+	// Instructions
+	var instructionsId = ThemedWidgetBuilders.CreateLabel(commands, theme, "Press 'T' to switch themes", fontSize: 12f);
+	commands.Entity(panelId).AddChild(instructionsId);
+
+	// Buttons Section
+	var buttonSectionId = CreateThemedSection(commands, theme, panelId, "Buttons");
+
+	var button1 = ThemedWidgetBuilders.CreateButton(commands, theme, "Primary");
+	commands.Entity(buttonSectionId).AddChild(button1);
+
+	var button2 = ThemedWidgetBuilders.CreateButton(commands, theme, "Secondary");
+	commands.Entity(buttonSectionId).AddChild(button2);
+
+	// Sliders Section
+	var sliderSectionId = CreateThemedSection(commands, theme, panelId, "Sliders");
+
+	var slider1 = ThemedWidgetBuilders.CreateSlider(commands, theme, 0f, 100f, 50f, SliderDirection.Horizontal);
+	commands.Entity(sliderSectionId).AddChild(slider1);
+
+	var slider2 = ThemedWidgetBuilders.CreateSlider(commands, theme, 0f, 10f, 7.5f, SliderDirection.Horizontal);
+	commands.Entity(sliderSectionId).AddChild(slider2);
+
+	// Checkboxes Section
+	var checkboxSectionId = CreateThemedSection(commands, theme, panelId, "Checkboxes");
+
+	var checkboxRow1 = CreateThemedRow(commands, theme, checkboxSectionId);
+	var checkbox1 = ThemedWidgetBuilders.CreateCheckbox(commands, theme, initiallyChecked: true);
+	commands.Entity(checkboxRow1).AddChild(checkbox1);
+	var checkboxLabel1 = ThemedWidgetBuilders.CreateLabel(commands, theme, "Option 1", fontSize: 14f);
+	commands.Entity(checkboxRow1).AddChild(checkboxLabel1);
+
+	var checkboxRow2 = CreateThemedRow(commands, theme, checkboxSectionId);
+	var checkbox2 = ThemedWidgetBuilders.CreateCheckbox(commands, theme, initiallyChecked: false);
+	commands.Entity(checkboxRow2).AddChild(checkbox2);
+	var checkboxLabel2 = ThemedWidgetBuilders.CreateLabel(commands, theme, "Option 2", fontSize: 14f);
+	commands.Entity(checkboxRow2).AddChild(checkboxLabel2);
+
+	// Toggles Section
+	var toggleSectionId = CreateThemedSection(commands, theme, panelId, "Toggles");
+
+	var toggleRow1 = CreateThemedRow(commands, theme, toggleSectionId);
+	var toggle1 = ThemedWidgetBuilders.CreateToggle(commands, theme, initialValue: true);
+	commands.Entity(toggleRow1).AddChild(toggle1);
+	var toggleLabel1 = ThemedWidgetBuilders.CreateLabel(commands, theme, "Enable Feature", fontSize: 14f);
+	commands.Entity(toggleRow1).AddChild(toggleLabel1);
+
+	var toggleRow2 = CreateThemedRow(commands, theme, toggleSectionId);
+	var toggle2 = ThemedWidgetBuilders.CreateToggle(commands, theme, initialValue: false);
+	commands.Entity(toggleRow2).AddChild(toggle2);
+	var toggleLabel2 = ThemedWidgetBuilders.CreateLabel(commands, theme, "Auto Save", fontSize: 14f);
+	commands.Entity(toggleRow2).AddChild(toggleLabel2);
+
+	// Radio Buttons Section
+	var radioSectionId = CreateThemedSection(commands, theme, panelId, "Radio Buttons");
+
+	for (int i = 0; i < 3; i++)
+	{
+		var radioRow = CreateThemedRow(commands, theme, radioSectionId);
+		var radio = ThemedWidgetBuilders.CreateRadioButton(commands, theme, groupId: 1, value: i, initiallySelected: i == 0);
+		commands.Entity(radioRow).AddChild(radio);
+		var radioLabel = ThemedWidgetBuilders.CreateLabel(commands, theme, $"Choice {i + 1}", fontSize: 14f);
+		commands.Entity(radioRow).AddChild(radioLabel);
+	}
+
+	// Make the panel draggable
+	commands.Entity(panelId).Insert(new Draggable());
+	commands.Entity(panelId).Insert(new ZIndex(0));
+
+	Console.WriteLine($"[UI] Created themed showcase panel {panelId}");
+	return panelId;
+}
+
+static ulong CreateThemedSection(Commands commands, UiTheme theme, ulong parentId, string title)
+{
+	// Section title
+	var titleId = ThemedWidgetBuilders.CreateLabel(commands, theme, title, fontSize: 16f);
+	commands.Entity(titleId).Insert(new UiNode
+	{
+		Width = FlexValue.Percent(100f),
+		Height = FlexValue.Auto(),
+		MarginBottom = FlexValue.Points(theme.Gap),
+	});
+	commands.Entity(parentId).AddChild(titleId);
+
+	// Section container
+	var sectionId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			FlexDirection = FlexDirection.Column,
+		})
+		.Id;
+	commands.Entity(parentId).AddChild(sectionId);
+
+	return sectionId;
+}
+
+static ulong CreateThemedRow(Commands commands, UiTheme theme, ulong parentId)
+{
+	var rowId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			FlexDirection = FlexDirection.Row,
+			AlignItems = Align.Center,
+			MarginBottom = FlexValue.Points(theme.Gap),
+		})
+		.Id;
+	commands.Entity(parentId).AddChild(rowId);
+	return rowId;
+}
+
 class DebugLayoutState
 {
 	public bool Printed;
@@ -1371,6 +1571,3 @@ struct SpriteBundle : IBundle
 		entity.Insert(Rotation);
 	}
 }
-
-
-

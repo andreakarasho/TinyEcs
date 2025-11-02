@@ -1,4 +1,3 @@
-using System;
 using TinyEcs.Bevy;
 
 namespace TinyEcs.UI.Bevy;
@@ -81,6 +80,7 @@ public struct FluxInteractionPlugin : IPlugin
 		.InStage(Stage.PreUpdate)
 		.Label("flux:update-interaction")
 		.After("flux:tick-stopwatch")
+		.SingleThreaded()  // Must be single-threaded since we're modifying in-place and using Commands
 		.Build();
 
 		// Reset stopwatch when FluxInteraction changes
@@ -114,13 +114,14 @@ public struct FluxInteractionPlugin : IPlugin
 		.Build();
 
 		app.AddSystem((
+			Commands commands,
 			Query<Data<PrevInteraction, InteractionState>, Filter<Changed<InteractionState>>> changedQuery) =>
 		{
-			UpdatePrevInteraction(changedQuery);
+			UpdatePrevInteraction(commands, changedQuery);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("flux:update-prev")
-		.After("flux:reset-stopwatch")
+		.After("flux:update-interaction")  // Must run AFTER flux state is updated
 		.Build();
 	}
 
@@ -199,7 +200,8 @@ public struct FluxInteractionPlugin : IPlugin
 				fluxRef.State = FluxInteractionState.Released;
 			}
 
-			// Only insert if state actually changed (triggers change detection)
+			// Modify in-place (for immediate visibility in same-frame systems)
+			// AND re-insert via Commands (to trigger change detection for other systems)
 			if (fluxRef.State != oldState)
 			{
 				commands.Entity(entityId.Ref).Insert(fluxRef);
@@ -224,22 +226,30 @@ public struct FluxInteractionPlugin : IPlugin
 	/// <summary>
 	/// Update PrevInteraction to match current InteractionState.
 	/// This must run after UpdateFluxInteraction to track transitions correctly.
+	/// Uses Commands to defer the update, ensuring it doesn't interfere with state transition detection.
 	/// </summary>
 	private static void UpdatePrevInteraction(
+		Commands commands,
 		Query<Data<PrevInteraction, InteractionState>, Filter<Changed<InteractionState>>> changedQuery)
 	{
-		foreach (var (prev, curr) in changedQuery)
+		foreach (var (entityId, prev, curr) in changedQuery)
 		{
-			ref var prevRef = ref prev.Ref;
+			ref readonly var prevRef = ref prev.Ref;
 			ref readonly var currState = ref curr.Ref;
 
-			prevRef.State = currState.State switch
+			var newState = currState.State switch
 			{
 				InteractionStateEnum.Pressed => PrevInteractionState.Pressed,
 				InteractionStateEnum.Hovered => PrevInteractionState.Hovered,
 				InteractionStateEnum.None => PrevInteractionState.None,
 				_ => PrevInteractionState.None
 			};
+
+			// Use Commands to defer the update (critical for state transition detection)
+			if (newState != prevRef.State)
+			{
+				commands.Entity(entityId.Ref).Insert(new PrevInteraction { State = newState });
+			}
 		}
 	}
 }
