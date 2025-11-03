@@ -1,4 +1,5 @@
 using System.Numerics;
+using Flexbox;
 using TinyEcs.Bevy;
 
 namespace TinyEcs.UI.Bevy;
@@ -35,6 +36,29 @@ public struct ScrollPlugin : IPlugin
 		// Register scroll input state
 		app.AddResource(new ScrollInputState());
 		app.AddResource(new ScrollResetGuard());
+
+		// System to auto-set Overflow.Scroll when Scrollable component is added
+		app.AddSystem((
+			Commands commands,
+			Query<Data<UiNode, Scrollable>, Filter<Added<Scrollable>>> newScrollables) =>
+		{
+			foreach (var (entityId, node, scrollable) in newScrollables)
+			{
+				ref var n = ref node.Ref;
+
+				// Only update if not already set to Scroll
+				if (n.Overflow != Overflow.Scroll)
+				{
+					n.Overflow = Overflow.Scroll;
+					// Re-insert to trigger layout recalculation
+					commands.Entity(entityId.Ref).Insert(n);
+				}
+			}
+		})
+		.InStage(Stage.PostUpdate)
+		.Label("ui:scroll:auto-set-overflow")
+		.After("flexbox:sync_node")
+		.Build();
 
 		// System to calculate content size for scrollable containers
 		app.AddSystem((

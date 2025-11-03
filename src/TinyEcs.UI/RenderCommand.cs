@@ -33,7 +33,14 @@ public struct RenderCommand
 
 	// Border
 	public Vector4 BorderColor;
-	public float BorderRadius;
+	public float BorderRadiusTopLeft;
+	public float BorderRadiusTopRight;
+	public float BorderRadiusBottomRight;
+	public float BorderRadiusBottomLeft;
+	public float BorderThicknessTop;
+	public float BorderThicknessRight;
+	public float BorderThicknessBottom;
+	public float BorderThicknessLeft;
 
 	// Text
 	public string Text;
@@ -48,18 +55,28 @@ public struct RenderCommand
 	// Clip region
 	public float ClipX, ClipY, ClipWidth, ClipHeight;
 
-	public static RenderCommand DrawBackground(ulong entityId, float x, float y, float w, float h, Vector4 color)
+	public static RenderCommand DrawBackground(ulong entityId, float x, float y, float w, float h, Vector4 color, BorderRadius borderRadius)
 	{
 		return new RenderCommand
 		{
 			Type = RenderCommandType.DrawBackground,
 			EntityId = entityId,
 			X = x, Y = y, Width = w, Height = h,
-			BackgroundColor = color
+			BackgroundColor = color,
+			BorderRadiusTopLeft = borderRadius.TopLeft,
+			BorderRadiusTopRight = borderRadius.TopRight,
+			BorderRadiusBottomRight = borderRadius.BottomRight,
+			BorderRadiusBottomLeft = borderRadius.BottomLeft
 		};
 	}
 
-	public static RenderCommand DrawBorder(ulong entityId, float x, float y, float w, float h, Vector4 color, float radius)
+	/// <summary>Overload for no border radius (backward compatibility)</summary>
+	public static RenderCommand DrawBackground(ulong entityId, float x, float y, float w, float h, Vector4 color)
+	{
+		return DrawBackground(entityId, x, y, w, h, color, new BorderRadius(0f));
+	}
+
+	public static RenderCommand DrawBorder(ulong entityId, float x, float y, float w, float h, Vector4 color, BorderRadius borderRadius, BorderThickness borderThickness)
 	{
 		return new RenderCommand
 		{
@@ -67,8 +84,27 @@ public struct RenderCommand
 			EntityId = entityId,
 			X = x, Y = y, Width = w, Height = h,
 			BorderColor = color,
-			BorderRadius = radius
+			BorderRadiusTopLeft = borderRadius.TopLeft,
+			BorderRadiusTopRight = borderRadius.TopRight,
+			BorderRadiusBottomRight = borderRadius.BottomRight,
+			BorderRadiusBottomLeft = borderRadius.BottomLeft,
+			BorderThicknessTop = borderThickness.Top,
+			BorderThicknessRight = borderThickness.Right,
+			BorderThicknessBottom = borderThickness.Bottom,
+			BorderThicknessLeft = borderThickness.Left
 		};
+	}
+
+	/// <summary>Overload for no border thickness (backward compatibility - defaults to 1px uniform)</summary>
+	public static RenderCommand DrawBorder(ulong entityId, float x, float y, float w, float h, Vector4 color, BorderRadius borderRadius)
+	{
+		return DrawBorder(entityId, x, y, w, h, color, borderRadius, new BorderThickness(1f));
+	}
+
+	/// <summary>Overload for uniform border radius (backward compatibility)</summary>
+	public static RenderCommand DrawBorder(ulong entityId, float x, float y, float w, float h, Vector4 color, float radius)
+	{
+		return DrawBorder(entityId, x, y, w, h, color, new BorderRadius(radius), new BorderThickness(1f));
 	}
 
 	public static RenderCommand DrawText(

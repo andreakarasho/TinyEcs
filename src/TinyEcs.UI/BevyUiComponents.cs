@@ -204,17 +204,126 @@ public struct BorderColor
 
 /// <summary>
 /// Component that defines border radius for rounded corners.
+/// Supports individual corner radii (like CSS border-radius).
 /// </summary>
 public struct BorderRadius
 {
-	public float Radius;
+	/// <summary>Top-left corner radius</summary>
+	public float TopLeft;
 
+	/// <summary>Top-right corner radius</summary>
+	public float TopRight;
+
+	/// <summary>Bottom-right corner radius</summary>
+	public float BottomRight;
+
+	/// <summary>Bottom-left corner radius</summary>
+	public float BottomLeft;
+
+	/// <summary>Creates a BorderRadius with the same radius for all corners</summary>
 	public BorderRadius(float radius)
 	{
-		Radius = radius;
+		TopLeft = radius;
+		TopRight = radius;
+		BottomRight = radius;
+		BottomLeft = radius;
 	}
 
+	/// <summary>Creates a BorderRadius with individual corner radii</summary>
+	public BorderRadius(float topLeft, float topRight, float bottomRight, float bottomLeft)
+	{
+		TopLeft = topLeft;
+		TopRight = topRight;
+		BottomRight = bottomRight;
+		BottomLeft = bottomLeft;
+	}
+
+	/// <summary>Creates a BorderRadius with separate top and bottom radii (top-left/top-right, bottom-right/bottom-left)</summary>
+	public static BorderRadius FromTopBottom(float top, float bottom)
+	{
+		return new BorderRadius(top, top, bottom, bottom);
+	}
+
+	/// <summary>Creates a BorderRadius with separate left and right radii (top-left/bottom-left, top-right/bottom-right)</summary>
+	public static BorderRadius FromLeftRight(float left, float right)
+	{
+		return new BorderRadius(left, right, right, left);
+	}
+
+	/// <summary>Gets the uniform radius value (returns TopLeft if all corners are equal)</summary>
+	public readonly float Radius => TopLeft;
+
+	/// <summary>Checks if all corners have the same radius</summary>
+	public readonly bool IsUniform => TopLeft == TopRight && TopRight == BottomRight && BottomRight == BottomLeft;
+
 	public static implicit operator BorderRadius(float radius) => new(radius);
+}
+
+/// <summary>
+/// Component that defines border thickness for each edge.
+/// Supports individual edge thickness (like CSS border-width).
+/// Similar to Bevy's UiRect for borders.
+/// </summary>
+public struct BorderThickness
+{
+	/// <summary>Top edge thickness</summary>
+	public float Top;
+
+	/// <summary>Right edge thickness</summary>
+	public float Right;
+
+	/// <summary>Bottom edge thickness</summary>
+	public float Bottom;
+
+	/// <summary>Left edge thickness</summary>
+	public float Left;
+
+	/// <summary>Creates a BorderThickness with the same thickness for all edges</summary>
+	public BorderThickness(float thickness)
+	{
+		Top = thickness;
+		Right = thickness;
+		Bottom = thickness;
+		Left = thickness;
+	}
+
+	/// <summary>Creates a BorderThickness with individual edge thickness</summary>
+	public BorderThickness(float top, float right, float bottom, float left)
+	{
+		Top = top;
+		Right = right;
+		Bottom = bottom;
+		Left = left;
+	}
+
+	/// <summary>Creates a BorderThickness with horizontal (left/right) and vertical (top/bottom) values</summary>
+	public static BorderThickness FromHorizontalVertical(float horizontal, float vertical)
+	{
+		return new BorderThickness(vertical, horizontal, vertical, horizontal);
+	}
+
+	/// <summary>Creates a BorderThickness with only horizontal edges (left/right)</summary>
+	public static BorderThickness Horizontal(float thickness)
+	{
+		return new BorderThickness(0f, thickness, 0f, thickness);
+	}
+
+	/// <summary>Creates a BorderThickness with only vertical edges (top/bottom)</summary>
+	public static BorderThickness Vertical(float thickness)
+	{
+		return new BorderThickness(thickness, 0f, thickness, 0f);
+	}
+
+	/// <summary>Gets the uniform thickness value (returns Top if all edges are equal)</summary>
+	public readonly float Thickness => Top;
+
+	/// <summary>Checks if all edges have the same thickness</summary>
+	public readonly bool IsUniform => Top == Right && Right == Bottom && Bottom == Left;
+
+	/// <summary>Gets the maximum thickness value across all edges</summary>
+	public readonly float Max => Math.Max(Math.Max(Top, Right), Math.Max(Bottom, Left));
+
+	public static implicit operator BorderThickness(float thickness) => new(thickness);
 }
 
 /// <summary>

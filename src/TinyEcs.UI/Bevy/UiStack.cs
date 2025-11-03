@@ -174,6 +174,8 @@ public struct UiStackPlugin : IPlugin
 			Query<Data<ComputedLayout>> layouts,
 			Query<Data<BackgroundColor>> backgrounds,
 			Query<Data<BorderColor>> borderColors,
+			Query<Data<BorderRadius>> borderRadii,
+			Query<Data<BorderThickness>> borderThicknesses,
 			Query<Data<UiNode>> uiNodes,
 			Query<Data<UiText>> texts,
 			Query<Data<TextStyle>> textStyles,
@@ -181,7 +183,7 @@ public struct UiStackPlugin : IPlugin
 			Query<Data<Parent>> parents,
 			Local<Stack<(ulong entityId, bool hasClip)>> clipStack) =>
 		{
-			BuildRenderCommands(uiStack, renderCommands, layouts, backgrounds, borderColors, uiNodes, texts, textStyles, scrollables, parents, clipStack);
+			BuildRenderCommands(uiStack, renderCommands, layouts, backgrounds, borderColors, borderRadii, borderThicknesses, uiNodes, texts, textStyles, scrollables, parents, clipStack);
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("ui:build-render-commands")
@@ -328,6 +330,8 @@ public struct UiStackPlugin : IPlugin
 		Query<Data<ComputedLayout>> layouts,
 		Query<Data<BackgroundColor>> backgrounds,
 		Query<Data<BorderColor>> borderColors,
+		Query<Data<BorderRadius>> borderRadii,
+		Query<Data<BorderThickness>> borderThicknesses,
 		Query<Data<UiNode>> uiNodes,
 		Query<Data<UiText>> texts,
 		Query<Data<TextStyle>> textStyles,
@@ -389,27 +393,36 @@ public struct UiStackPlugin : IPlugin
 				clipStack.Value!.Push((entityId, false));
 			}
 
+			// Get border radius if present (used by both background and border)
+			var borderRadius = new BorderRadius(0f);
+			if (borderRadii.Contains(entityId))
+			{
+				var (_, br) = borderRadii.Get(entityId);
+				borderRadius = br.Ref;
+			}
+
+			// Get border thickness if present (default to 1px uniform)
+			var borderThickness = new BorderThickness(1f);
+			if (borderThicknesses.Contains(entityId))
+			{
+				var (_, bt) = borderThicknesses.Get(entityId);
+				borderThickness = bt.Ref;
+			}
+
 			// Emit background command if entity has BackgroundColor
 			if (backgrounds.Contains(entityId))
 			{
 				var (_, bg) = backgrounds.Get(entityId);
 				commands.Add(RenderCommand.DrawBackground(
-					entityId, l.X, l.Y, l.Width, l.Height, bg.Ref.Color));
+					entityId, l.X, l.Y, l.Width, l.Height, bg.Ref.Color, borderRadius));
 			}
 
 			// Emit border command if entity has BorderColor
-			if (borderColors.Contains(entityId) && uiNodes.Contains(entityId))
+			if (borderColors.Contains(entityId))
 			{
 				var (_, borderColor) = borderColors.Get(entityId);
-				var (_, uiNode) = uiNodes.Get(entityId);
-
-				// Get border radius if present
-				var borderRadius = 0f;
-				// BorderRadius is stored in UiNode component, need to check if it exists
-				// For now, use 0f as default
-
 				commands.Add(RenderCommand.DrawBorder(
-					entityId, l.X, l.Y, l.Width, l.Height, borderColor.Ref.Color, borderRadius));
+					entityId, l.X, l.Y, l.Width, l.Height, borderColor.Ref.Color, borderRadius, borderThickness));
 			}
 
 			// Emit text command if entity has UiText

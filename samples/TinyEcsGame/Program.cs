@@ -110,6 +110,12 @@ app.AddSystem((Commands commands) => CreateButtonPanel(commands))
 	.Label("ui:button-panel:spawn")
 	.Build();
 
+// Rounded Corners showcase (demonstrates individual corner radius support)
+app.AddSystem((Commands commands, Res<UiTheme> theme) => CreateRoundedCornersShowcase(commands, theme.Value))
+	.InStage(Stage.Startup)
+	.Label("ui:rounded-corners:spawn")
+	.Build();
+
 // Phase 2 Demo: Animated button color transitions using AnimatedInteractionState
 // Simplified: Lerp directly from base color to target based on progress
 app.AddSystem((
@@ -1165,6 +1171,139 @@ static ulong CreateThemedShowcase(Commands commands, UiTheme theme)
 
 	Console.WriteLine($"[UI] Created themed showcase panel {panelId}");
 	return panelId;
+}
+
+static ulong CreateRoundedCornersShowcase(Commands commands, UiTheme theme)
+{
+	Console.WriteLine("[UI] Creating rounded corners showcase...");
+
+	// Create main panel with uniform rounded corners
+	var panelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(450f),
+			Height = FlexValue.Points(650f),
+			FlexDirection = FlexDirection.Column,
+			PaddingTop = FlexValue.Points(theme.Padding),
+			PaddingBottom = FlexValue.Points(theme.Padding),
+			PaddingLeft = FlexValue.Points(theme.Padding),
+			PaddingRight = FlexValue.Points(theme.Padding),
+			PositionType = PositionType.Absolute,
+			Top = FlexValue.Points(50f),
+			Left = FlexValue.Points(50f),
+		})
+		.Insert(theme.Background.ToBackgroundColor())
+		.Insert(theme.Border.ToBorderColor())
+		.Insert(new BorderRadius(theme.BorderRadiusLarge)) // Large radius for the main panel
+		.Id;
+
+	// Title
+	var titleId = ThemedWidgetBuilders.CreateLabel(commands, theme, "Rounded Corners Showcase", fontSize: 24f);
+	commands.Entity(panelId).AddChild(titleId);
+
+	// Instructions
+	var instructionsId = ThemedWidgetBuilders.CreateLabel(commands, theme, "Demonstrating individual corner radii", fontSize: 12f);
+	commands.Entity(panelId).AddChild(instructionsId);
+
+	// Example 1: Uniform radius (all corners equal)
+	CreateRoundedExample(commands, theme, panelId, "Uniform Radius (12px all corners)",
+		new BorderRadius(12f), new Vector4(0.2f, 0.6f, 0.8f, 1f));
+
+	// Example 2: Top corners only (common for cards)
+	CreateRoundedExample(commands, theme, panelId, "Rounded Top (card style)",
+		BorderRadius.FromTopBottom(top: 16f, bottom: 0f), new Vector4(0.6f, 0.3f, 0.8f, 1f));
+
+	// Example 3: Bottom corners only
+	CreateRoundedExample(commands, theme, panelId, "Rounded Bottom",
+		BorderRadius.FromTopBottom(top: 0f, bottom: 16f), new Vector4(0.8f, 0.5f, 0.2f, 1f));
+
+	// Example 4: Left corners only
+	CreateRoundedExample(commands, theme, panelId, "Rounded Left",
+		BorderRadius.FromLeftRight(left: 16f, right: 0f), new Vector4(0.3f, 0.7f, 0.3f, 1f));
+
+	// Example 5: Right corners only
+	CreateRoundedExample(commands, theme, panelId, "Rounded Right",
+		BorderRadius.FromLeftRight(left: 0f, right: 16f), new Vector4(0.7f, 0.3f, 0.3f, 1f));
+
+	// Example 6: Diagonal corners (asymmetric design effect)
+	CreateRoundedExample(commands, theme, panelId, "Diagonal Corners (TL+BR)",
+		new BorderRadius(topLeft: 20f, topRight: 0f, bottomRight: 20f, bottomLeft: 0f),
+		new Vector4(0.9f, 0.6f, 0.2f, 1f));
+
+	// Example 7: Opposite diagonal
+	CreateRoundedExample(commands, theme, panelId, "Diagonal Corners (TR+BL)",
+		new BorderRadius(topLeft: 0f, topRight: 20f, bottomRight: 0f, bottomLeft: 20f),
+		new Vector4(0.2f, 0.9f, 0.6f, 1f));
+
+	// Example 8: Pill shape (height/2 for fully rounded ends)
+	var pillId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(200f),
+			Height = FlexValue.Points(40f),
+			MarginTop = FlexValue.Points(theme.Gap),
+			MarginBottom = FlexValue.Points(theme.Gap),
+			JustifyContent = Justify.Center,
+			AlignItems = Align.Center,
+		})
+		.Insert(new BackgroundColor(0.3f, 0.6f, 0.9f, 1f))
+		.Insert(theme.Border.ToBorderColor())
+		.Insert(new BorderRadius(20f)) // Height/2 for pill shape
+		.Id;
+	commands.Entity(panelId).AddChild(pillId);
+
+	var pillLabelId = ThemedWidgetBuilders.CreateLabel(commands, theme, "Pill Shape (height/2)", fontSize: 12f);
+	commands.Entity(pillId).AddChild(pillLabelId);
+
+	// Make the panel draggable
+	commands.Entity(panelId).Insert(new Draggable());
+	commands.Entity(panelId).Insert(new ZIndex(0));
+
+	Console.WriteLine($"[UI] Created rounded corners showcase panel {panelId}");
+	return panelId;
+}
+
+static void CreateRoundedExample(Commands commands, UiTheme theme, ulong parentId, string label, BorderRadius borderRadius, Vector4 color)
+{
+	// Container for each example (label + colored box)
+	var exampleId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			FlexDirection = FlexDirection.Row,
+			AlignItems = Align.Center,
+			MarginTop = FlexValue.Points(theme.Gap),
+			MarginBottom = FlexValue.Points(theme.Gap),
+		})
+		.Id;
+	commands.Entity(parentId).AddChild(exampleId);
+
+	// Label (left side)
+	var labelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(200f),
+			Height = FlexValue.Auto(),
+		})
+		.Insert(new UiText(label))
+		.Insert(new TextStyle(fontSize: 13f, color: theme.Text, horizontalAlign: TextAlign.Left, verticalAlign: TextVerticalAlign.Middle))
+		.Id;
+	commands.Entity(exampleId).AddChild(labelId);
+
+	// Colored box with rounded corners (right side)
+	var boxId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(150f),
+			Height = FlexValue.Points(50f),
+			MarginLeft = FlexValue.Points(theme.Gap),
+		})
+		.Insert(new BackgroundColor(color))
+		.Insert(theme.Border.ToBorderColor())
+		.Insert(borderRadius)
+		.Id;
+	commands.Entity(exampleId).AddChild(boxId);
 }
 
 static ulong CreateThemedSection(Commands commands, UiTheme theme, ulong parentId, string title)

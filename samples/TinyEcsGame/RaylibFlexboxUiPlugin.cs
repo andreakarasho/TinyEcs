@@ -169,7 +169,28 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			(byte)(cmd.BackgroundColor.W * 255f)
 		);
 
-		Raylib.DrawRectangle((int)cmd.X, (int)cmd.Y, (int)cmd.Width, (int)cmd.Height, color);
+		// Check if any corner has a radius
+		bool hasRoundedCorners = cmd.BorderRadiusTopLeft > 0f || cmd.BorderRadiusTopRight > 0f ||
+		                         cmd.BorderRadiusBottomRight > 0f || cmd.BorderRadiusBottomLeft > 0f;
+
+		if (hasRoundedCorners)
+		{
+			// For now, use uniform radius (average of all corners) for Raylib rendering
+			// TODO: Implement proper individual corner radius rendering
+			float avgRadius = (cmd.BorderRadiusTopLeft + cmd.BorderRadiusTopRight +
+			                   cmd.BorderRadiusBottomRight + cmd.BorderRadiusBottomLeft) / 4f;
+
+			Raylib.DrawRectangleRounded(
+				new Rectangle(cmd.X, cmd.Y, cmd.Width, cmd.Height),
+				avgRadius / Math.Min(cmd.Width, cmd.Height), // Normalize to 0-1 range
+				8, // segments
+				color
+			);
+		}
+		else
+		{
+			Raylib.DrawRectangle((int)cmd.X, (int)cmd.Y, (int)cmd.Width, (int)cmd.Height, color);
+		}
 	}
 
 	private static void DrawBorder(RenderCommand cmd)
@@ -181,18 +202,54 @@ public struct RaylibFlexboxUiPlugin : IPlugin
 			(byte)(cmd.BorderColor.W * 255f)
 		);
 
-		// Default border width (can be customized later)
-		float borderWidth = 1f;
+		// Get border thickness - use maximum value if edges differ (Raylib limitation)
+		// Raylib only supports uniform border thickness, so we take the max to ensure all borders are visible
+		float borderWidth = Math.Max(
+			Math.Max(cmd.BorderThicknessTop, cmd.BorderThicknessRight),
+			Math.Max(cmd.BorderThicknessBottom, cmd.BorderThicknessLeft)
+		);
 
-		if (cmd.BorderRadius > 0f)
+		// Check if any corner has a radius
+		bool hasRoundedCorners = cmd.BorderRadiusTopLeft > 0f || cmd.BorderRadiusTopRight > 0f ||
+		                         cmd.BorderRadiusBottomRight > 0f || cmd.BorderRadiusBottomLeft > 0f;
+
+		if (hasRoundedCorners)
 		{
-			// Rounded rectangle border (approximation using multiple DrawRectangle calls)
-			// TODO: Implement proper rounded corners
-			Raylib.DrawRectangleLinesEx(
-				new Rectangle(cmd.X, cmd.Y, cmd.Width, cmd.Height),
-				borderWidth,
-				color
-			);
+			// For now, use uniform radius (average of all corners) for Raylib rendering
+			// TODO: Implement proper individual corner radius rendering
+			float avgRadius = (cmd.BorderRadiusTopLeft + cmd.BorderRadiusTopRight +
+			                   cmd.BorderRadiusBottomRight + cmd.BorderRadiusBottomLeft) / 4f;
+
+			// DrawRectangleRoundedLines takes: (rect, roundness, segments, color)
+			// Roundness is 0.0-1.0, so normalize the radius
+			float roundness = Math.Min(avgRadius / Math.Min(cmd.Width, cmd.Height) * 2f, 1.0f);
+
+			// DrawRectangleRoundedLines in Raylib-cs 7.0.1 doesn't support lineThick parameter
+			// Workaround: Draw multiple rounded rectangles with decreasing sizes for thickness
+			if (borderWidth > 1f)
+			{
+				// For thicker borders, draw filled rounded rect and inset it
+				// This is not perfect but works for most cases
+				for (int i = 0; i < (int)borderWidth; i++)
+				{
+					float offset = i * 0.5f;
+					Raylib.DrawRectangleRoundedLines(
+						new Rectangle(cmd.X + offset, cmd.Y + offset, cmd.Width - offset * 2, cmd.Height - offset * 2),
+						roundness,
+						8, // segments
+						color
+					);
+				}
+			}
+			else
+			{
+				Raylib.DrawRectangleRoundedLines(
+					new Rectangle(cmd.X, cmd.Y, cmd.Width, cmd.Height),
+					roundness,
+					8, // segments
+					color
+				);
+			}
 		}
 		else
 		{

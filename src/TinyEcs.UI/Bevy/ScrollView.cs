@@ -119,7 +119,7 @@ public struct ScrollViewPlugin : IPlugin
 		// System 2: Update scrollbar visibility and handle positioning based on content size
 		app.AddSystem((
 			Query<Data<ScrollView, ComputedLayout>> scrollViews,
-			Query<Data<Scrollable, ComputedLayout>> scrollables,
+			Query<Data<Scrollable, ComputedLayout, FlexboxNodeRef>> scrollables,
 			Query<Data<UiNode, ComputedLayout>> layouts,
 			Commands commands) =>
 		{
@@ -229,7 +229,7 @@ public struct ScrollViewPlugin : IPlugin
 	/// </summary>
 	private static void UpdateScrollViewLayout(
 		Query<Data<ScrollView, ComputedLayout>> scrollViews,
-		Query<Data<Scrollable, ComputedLayout>> scrollables,
+		Query<Data<Scrollable, ComputedLayout, FlexboxNodeRef>> scrollables,
 		Query<Data<UiNode, ComputedLayout>> layouts,
 		Commands commands)
 	{
@@ -242,8 +242,9 @@ public struct ScrollViewPlugin : IPlugin
 			if (!scrollables.Contains(view.Viewport))
 				continue;
 
-			var (_, viewportScrollable, viewportLayout) = scrollables.Get(view.Viewport);
+			var (_, viewportScrollable, viewportLayout, viewportNodeRef) = scrollables.Get(view.Viewport);
 			ref var scroll = ref viewportScrollable.Ref;
+			ref var nodeRef = ref viewportNodeRef.Ref;
 
 			var containerWidth = viewportLayout.Ref.Width;
 			var containerHeight = viewportLayout.Ref.Height;
@@ -255,14 +256,20 @@ public struct ScrollViewPlugin : IPlugin
 			var contentWidth = scroll.ContentSize.X;
 			var contentHeight = scroll.ContentSize.Y;
 
+			// Check if content overflowed using Flexbox's HadOverflow flag
+			bool hadOverflow = nodeRef.Node != null && nodeRef.Node.LayoutGetHadOverflow();
+
 			// Update vertical scrollbar
 			if (view.VerticalScrollBar.HasValue && view.VerticalScrollBarHandle.HasValue)
 			{
 				var verticalBarId = view.VerticalScrollBar.Value;
 				var verticalHandleId = view.VerticalScrollBarHandle.Value;
 
-				// Check if vertical scrolling is needed
-				if (containerHeight >= contentHeight || containerHeight <= 5f)
+				// Check if vertical scrolling is needed using both HadOverflow and explicit size check
+				// We use contentHeight check as fallback for when Flexbox hasn't computed overflow yet
+				bool needsVerticalScroll = hadOverflow || (contentHeight > containerHeight && containerHeight > 5f);
+
+				if (!needsVerticalScroll)
 				{
 					// Hide vertical scrollbar by setting display to None
 					if (layouts.Contains(verticalBarId))
@@ -313,8 +320,10 @@ public struct ScrollViewPlugin : IPlugin
 				var horizontalBarId = view.HorizontalScrollBar.Value;
 				var horizontalHandleId = view.HorizontalScrollBarHandle.Value;
 
-				// Check if horizontal scrolling is needed
-				if (containerWidth >= contentWidth || containerWidth <= 5f)
+				// Check if horizontal scrolling is needed using both HadOverflow and explicit size check
+				bool needsHorizontalScroll = hadOverflow || (contentWidth > containerWidth && containerWidth > 5f);
+
+				if (!needsHorizontalScroll)
 				{
 					// Hide horizontal scrollbar
 					if (layouts.Contains(horizontalBarId))
@@ -406,7 +415,7 @@ public static class ScrollViewHelpers
 				Width = FlexValue.Percent(100f),
 				Height = FlexValue.Percent(100f),
 				PositionType = PositionType.Absolute,
-				Overflow = Overflow.Hidden,
+				Overflow = Overflow.Scroll, // Use Scroll to indicate scrollable behavior
 				AlignItems = Align.FlexStart, // Left-align content container (don't center it)
 				JustifyContent = Justify.FlexStart // Top-align content container
 			})
