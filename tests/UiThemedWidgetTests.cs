@@ -38,6 +38,9 @@ public class UiThemedWidgetTests
 		pointerState.IsPrimaryButtonReleased = true;
 		app.Update(); // Process release
 
+		// Keep released state for one more frame (some widgets check this flag during their update)
+		app.Update();
+
 		// Clear state
 		pointerState.IsPrimaryButtonReleased = false;
 	}
@@ -572,6 +575,223 @@ public class UiThemedWidgetTests
 	}
 
 	[Fact]
+	public void ThemedDropdown_Click_TogglesOpenState()
+	{
+		var app = new App(ThreadingMode.Single);
+		app.AddPlugin(new TinyEcsUiPlugin());
+		app.AddPlugin(new TinyEcsUiWidgetsPlugin());
+		app.AddResource(UiTheme.Dark());
+
+		ulong dropdownId = 0;
+		var options = new List<string> { "Option 1", "Option 2", "Option 3" };
+
+		// Create dropdown
+		app.AddSystem((Commands commands, Res<UiTheme> theme) =>
+		{
+			dropdownId = ThemedWidgetBuilders.CreateDropdown(commands, theme.Value, options);
+
+			// Set fixed position
+			commands.Entity(dropdownId).Insert(new UiNode
+			{
+				Width = FlexValue.Points(150f),
+				Height = FlexValue.Points(40f),
+				PositionType = PositionType.Absolute,
+				Left = FlexValue.Points(100f),
+				Top = FlexValue.Points(350f),
+			});
+		})
+		.InStage(Stage.Startup)
+		.Build();
+
+		app.RunStartup();
+		var world = app.GetWorld();
+
+		// Set up delta time for flux interaction
+		var deltaTime = world.GetResource<DeltaTime>();
+		deltaTime.Seconds = 0.016f; // 60 FPS
+
+		// Verify dropdown was created
+		Assert.True(world.Has<Dropdown>(dropdownId));
+		Assert.True(world.Has<DropdownOptions>(dropdownId));
+
+		var dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.False(dropdown.IsOpen, "Dropdown should start closed");
+		Assert.Null(dropdown.Value);
+
+		// Run layout calculation
+		app.Update();
+
+		// Simulate click on dropdown button
+		var center = GetWidgetCenter(world, dropdownId);
+		SimulatePointerClick(app, center);
+
+		// Run update to process the pointer events and trigger FluxInteraction transition
+		app.Update();
+
+		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		app.Update();
+
+		// Run additional updates to ensure all systems process (dropdowns need more cycles)
+		app.Update();
+		app.Update();
+
+		// Verify dropdown is now open
+		dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.True(dropdown.IsOpen, $"Dropdown should be open after click (IsOpen={dropdown.IsOpen})");
+
+		// Click again to close
+		SimulatePointerClick(app, center);
+
+		// Run updates to process the click
+		app.Update();
+		app.Update();
+
+		// Verify dropdown is closed
+		dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.False(dropdown.IsOpen, "Dropdown should be closed after second click");
+	}
+
+	[Fact]
+	public void ThemedDropdown_ClickOption_UpdatesValue()
+	{
+		var app = new App();
+		app.AddPlugin(new TinyEcsUiPlugin());
+		app.AddPlugin(new TinyEcsUiWidgetsPlugin());
+		app.AddResource(UiTheme.Dark());
+
+		ulong dropdownId = 0;
+		var options = new List<string> { "Option 1", "Option 2", "Option 3" };
+
+		// Create dropdown
+		app.AddSystem((Commands commands, Res<UiTheme> theme) =>
+		{
+			dropdownId = ThemedWidgetBuilders.CreateDropdown(commands, theme.Value, options, selectedIndex: 0);
+
+			// Set fixed position
+			commands.Entity(dropdownId).Insert(new UiNode
+			{
+				Width = FlexValue.Points(150f),
+				Height = FlexValue.Points(40f),
+				PositionType = PositionType.Absolute,
+				Left = FlexValue.Points(100f),
+				Top = FlexValue.Points(400f),
+			});
+		})
+		.InStage(Stage.Startup)
+		.Build();
+
+		app.RunStartup();
+		var world = app.GetWorld();
+
+		// Set up delta time for flux interaction
+		var deltaTime = world.GetResource<DeltaTime>();
+		deltaTime.Seconds = 0.016f; // 60 FPS
+
+		// Verify dropdown was created with initial value
+		var dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.Equal(0, dropdown.Value);
+
+		// Run layout calculation
+		app.Update();
+
+		// Open dropdown by clicking button
+		var center = GetWidgetCenter(world, dropdownId);
+		SimulatePointerClick(app, center);
+		app.Update();
+		app.Update();
+		app.Update();
+		app.Update();
+
+		// Verify dropdown is open
+		dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.True(dropdown.IsOpen, $"Dropdown should be open (IsOpen={dropdown.IsOpen})");
+
+		// Find any option entity and click it
+		var dropdownOptions = world.Get<DropdownOptions>(dropdownId);
+
+		// Query all option entities
+		var optionsQuery = world.Query<Data<DropdownOption>>();
+		ulong optionId = 0;
+		int clickedOptionIndex = -1;
+		foreach (var (entityId, option) in optionsQuery)
+		{
+			if (option.Ref.DropdownEntity == dropdownId && option.Ref.OptionIndex == 1)
+			{
+				optionId = entityId.Ref;
+				clickedOptionIndex = option.Ref.OptionIndex;
+				break;
+			}
+		}
+
+		Assert.NotEqual(0ul, optionId);
+		Assert.NotEqual(-1, clickedOptionIndex);
+
+		// Click the option
+		var optionCenter = GetWidgetCenter(world, optionId);
+		SimulatePointerClick(app, optionCenter);
+		app.Update();
+		app.Update();
+
+		// Verify dropdown value changed and closed
+		dropdown = world.Get<Dropdown>(dropdownId);
+		Assert.NotEqual(0, dropdown.Value); // Value should have changed from 0
+		Assert.False(dropdown.IsOpen, "Dropdown should close after selecting option");
+	}
+
+	[Fact]
+	public void ThemedDropdown_UpdatesLabelText()
+	{
+		var app = new App(ThreadingMode.Single);
+		app.AddPlugin(new TinyEcsUiPlugin());
+		app.AddPlugin(new TinyEcsUiWidgetsPlugin());
+		app.AddResource(UiTheme.Dark());
+
+		ulong dropdownId = 0;
+		var options = new List<string> { "First", "Second", "Third" };
+
+		// Create dropdown with initial selection
+		app.AddSystem((Commands commands, Res<UiTheme> theme) =>
+		{
+			dropdownId = ThemedWidgetBuilders.CreateDropdown(commands, theme.Value, options, selectedIndex: 0);
+		})
+		.InStage(Stage.Startup)
+		.Build();
+
+		app.RunStartup();
+		var world = app.GetWorld();
+
+		// Get the label entity
+		var dropdown = world.Get<Dropdown>(dropdownId);
+		var labelId = dropdown.ButtonLabel;
+
+		// Run update to trigger label update system
+		app.Update();
+
+		// Verify label shows first option
+		var labelText = world.Get<UiText>(labelId);
+		Assert.Equal("First", labelText.Value);
+
+		// Change selection via commands
+		app.AddSystem((Commands commands) =>
+		{
+			commands.Entity(dropdownId).Insert(new Dropdown(dropdown.PanelEntity, dropdown.ButtonLabel)
+			{
+				Value = 2,
+				IsOpen = false
+			});
+		})
+		.InStage(Stage.Update)
+		.Build();
+
+		app.Update();
+		app.Update();
+
+		// Verify label updated to third option
+		labelText = world.Get<UiText>(labelId);
+		Assert.Equal("Third", labelText.Value);
+	}
+
+	[Fact]
 	public void AllThemedWidgets_HaveRequiredInteractionComponents()
 	{
 		var app = new App();
@@ -590,6 +810,7 @@ public class UiThemedWidgetTests
 			widgetIds["toggle"] = ThemedWidgetBuilders.CreateToggle(commands, theme.Value);
 			widgetIds["radio"] = ThemedWidgetBuilders.CreateRadioButton(commands, theme.Value, 1, 1);
 			widgetIds["textinput"] = ThemedWidgetBuilders.CreateTextInput(commands, theme.Value);
+			widgetIds["dropdown"] = ThemedWidgetBuilders.CreateDropdown(commands, theme.Value, new List<string> { "A", "B" });
 			widgetIds["label"] = ThemedWidgetBuilders.CreateLabel(commands, theme.Value, "Label");
 			widgetIds["panel"] = ThemedWidgetBuilders.CreatePanel(commands, theme.Value);
 		})
@@ -600,7 +821,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Verify all interactive widgets have required components
-		var interactiveWidgets = new[] { "button", "slider", "checkbox", "toggle", "radio", "textinput" };
+		var interactiveWidgets = new[] { "button", "slider", "checkbox", "toggle", "radio", "textinput", "dropdown" };
 
 		foreach (var widgetName in interactiveWidgets)
 		{

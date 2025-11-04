@@ -44,6 +44,9 @@ public struct TinyEcsUiPlugin : IPlugin
 		// Pointer input system (renderer-agnostic)
 		app.AddPlugin(new UiPointerInputPlugin { InputStage = InputStage });
 
+		// Floating panels for dropdowns and popups
+		app.AddPlugin(new FloatingPanelPlugin());
+
 		// Note: Platform-specific pointer input adapters (e.g., RaylibPointerInputAdapter)
 		// must be added separately by the user since they depend on the specific rendering backend
 

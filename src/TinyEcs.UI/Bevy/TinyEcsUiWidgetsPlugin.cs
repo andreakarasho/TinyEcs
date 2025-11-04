@@ -14,6 +14,7 @@ namespace TinyEcs.UI.Bevy;
 /// - RadioButtons
 /// - Toggles/Switches
 /// - ProgressBars
+/// - Dropdowns
 ///
 /// Note: This plugin requires TinyEcsUiPlugin to be added first.
 ///
@@ -53,5 +54,8 @@ public struct TinyEcsUiWidgetsPlugin : IPlugin
 
 		// ProgressBar widget
 		app.AddPlugin(new ProgressBarPlugin());
+
+		// Dropdown widget
+		app.AddPlugin(new DropdownPlugin());
 	}
 }

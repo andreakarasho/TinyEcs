@@ -1032,6 +1032,211 @@ static void CreateWidgetShowcase(Commands commands)
 
 	commands.Entity(inputContainerId).AddChild(textInputId);
 
+	// === Dropdown Demo ===
+	CreateSectionHeader(commands, contentId, "Dropdown Widget");
+
+	var dropdownContainerId = CreateWidgetContainer(commands, contentId);
+
+	var dropdownOptions = new List<string>();
+	for (var i = 0; i < 20; i++)
+	{
+		dropdownOptions.Add($"Option {i + 1}");
+	}
+	var dropdownId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(200f),
+			Height = FlexValue.Points(40f),
+			JustifyContent = Justify.FlexStart,
+			AlignItems = Align.Center,
+			PaddingLeft = FlexValue.Points(10f),
+			PaddingRight = FlexValue.Points(10f),
+			MarginBottom = FlexValue.Points(10f),
+		})
+		.Insert(BackgroundColor.FromRgba(60, 60, 70, 255))
+		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
+		.Insert(new BorderRadius(5f))
+		.Insert(new Interactive(focusable: false))
+		.Insert(new InteractionState())
+		.Insert(new FluxInteraction())
+		.Insert(new PrevInteraction())
+		.Insert(new FluxInteractionStopwatch())
+		.Insert(new DropdownOptions(dropdownOptions))
+		.Id;
+
+	// Create dropdown button label
+	var dropdownLabelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Auto(),
+			Height = FlexValue.Auto(),
+		})
+		.Insert(new UiText("---"))
+		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(1f, 1f, 1f, 1f)))
+		.Id;
+
+	// Create dropdown panel as a floating panel (hidden by default)
+	// The panel is a ScrollView container with viewport and content
+	var dropdownPanelId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(200f),
+			Height = FlexValue.Points(150f),
+			FlexDirection = FlexDirection.Column,
+			Display = Flexbox.Display.None,
+		})
+		.Insert(BackgroundColor.FromRgba(50, 50, 60, 255))
+		.Insert(BorderColor.FromRgba(100, 100, 120, 255))
+		.Insert(new BorderRadius(5f))
+		.Insert(new BorderThickness(1f))
+		.Insert(new DropdownPanel(dropdownId))
+		.Insert(new FloatingPanel
+		{
+			Size = new Vector2(200f, 150f),
+			Position = new Vector2(0f, 0f), // Will be updated when dropdown opens
+			Priority = false
+		})
+		.Id;
+
+	// Create viewport (clips content and handles scrolling)
+	var dropdownViewportId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+			Overflow = Overflow.Scroll, // Enable clipping
+			AlignItems = Align.FlexStart,
+			JustifyContent = Justify.FlexStart,
+		})
+		.Insert(new Scrollable
+		{
+			EnableVertical = true,
+			EnableHorizontal = false,
+			ScrollSpeed = 20f,
+		})
+		.Insert(new ScrollViewViewport(dropdownPanelId))
+		.Id;
+
+	// Create content container (holds options)
+	var dropdownScrollbarWidth = 8f;
+	var dropdownContentId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Auto(),
+			Display = Display.Flex,
+			FlexDirection = FlexDirection.Column,
+			AlignSelf = Align.FlexStart,
+			PaddingBottom = FlexValue.Points(10f),
+			PaddingLeft = FlexValue.Points(10f),
+			PaddingRight = FlexValue.Points(10f),
+			PaddingTop = FlexValue.Points(10f)
+			// JustifyContent = Justify.FlexStart,
+			// PaddingRight = FlexValue.Points(dropdownScrollbarWidth), // Add padding to content, not individual options
+		})
+		.Insert(new ScrollViewContent(dropdownPanelId))
+		.Id;
+
+	// Create scrollbar container (absolute positioned overlay)
+	var dropdownScrollbarContainerId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+			Display = Display.Flex,
+			JustifyContent = Justify.FlexEnd
+		})
+		.Id;
+
+	// Create vertical scrollbar (scrollbarWidth already defined above)
+	var dropdownVerticalBarId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Points(dropdownScrollbarWidth),
+			Height = FlexValue.Percent(100f),
+			PositionType = PositionType.Absolute,
+			Right = FlexValue.Points(0f),
+			Display = Display.Flex,
+			FlexDirection = FlexDirection.Column
+		})
+		.Insert(BackgroundColor.FromRgba(100, 100, 120, 150))
+		.Id;
+
+	// Create scrollbar handle/thumb (draggable)
+	var dropdownVerticalHandleId = commands.Spawn()
+		.Insert(new UiNode
+		{
+			Width = FlexValue.Percent(100f),
+			Height = FlexValue.Points(40f),
+			PositionType = PositionType.Absolute
+		})
+		.Insert(BackgroundColor.FromRgba(180, 180, 200, 220))
+		.Insert(new ScrollbarThumb())
+		.Insert(new ScrollBarHandle(ControlOrientation.Vertical, dropdownPanelId))
+		.Insert(new Draggable())
+		.Insert(new Interactive())
+		.Id;
+
+	// Set up scrollbar component
+	commands.Entity(dropdownVerticalBarId).Insert(new Scrollbar(dropdownViewportId, ControlOrientation.Vertical, 20f));
+
+	// Set up scrollbar hierarchy
+	commands.Entity(dropdownVerticalBarId).AddChild(dropdownVerticalHandleId);
+	commands.Entity(dropdownScrollbarContainerId).AddChild(dropdownVerticalBarId);
+
+	// Create options
+	for (int i = 0; i < dropdownOptions.Count; i++)
+	{
+		var optionId = commands.Spawn()
+			.Insert(new UiNode
+			{
+				Width = FlexValue.Percent(100f),
+				Height = FlexValue.Points(30f),
+				PaddingLeft = FlexValue.Points(10f),
+				PaddingRight = FlexValue.Points(10f),
+				JustifyContent = Justify.FlexStart,
+				AlignItems = Align.Center,
+			})
+			.Insert(new UiText(dropdownOptions[i]))
+			.Insert(new TextStyle(fontSize: 14f, color: new Vector4(1f, 1f, 1f, 1f)))
+			.Insert(new Interactive(focusable: false))
+			.Insert(new InteractionState())
+			.Insert(new FluxInteraction())
+			.Insert(new PrevInteraction())
+			.Insert(new FluxInteractionStopwatch())
+			.Insert(new DropdownOption(dropdownId, i))
+			.Id;
+
+		commands.Entity(dropdownContentId).AddChild(optionId);
+	}
+
+	// Set up ScrollView component
+	commands.Entity(dropdownPanelId).Insert(new ScrollView(dropdownViewportId, dropdownContentId)
+	{
+		VerticalScrollBar = dropdownVerticalBarId,
+		VerticalScrollBarHandle = dropdownVerticalHandleId,
+		HorizontalScrollBar = null,
+		HorizontalScrollBarHandle = null
+	});
+
+	// Set up hierarchy: panel -> [viewport -> content -> options, scrollbarContainer -> scrollbar -> handle]
+	commands.Entity(dropdownViewportId).AddChild(dropdownContentId);
+	commands.Entity(dropdownPanelId).AddChild(dropdownViewportId);
+	commands.Entity(dropdownPanelId).AddChild(dropdownScrollbarContainerId);
+
+	// Build hierarchy (panel is NOT a child - it's a floating panel)
+	commands.Entity(dropdownId).AddChild(dropdownLabelId);
+
+	// Add Dropdown component
+	commands.Entity(dropdownId).Insert(new Dropdown(dropdownPanelId, dropdownLabelId)
+	{
+		Value = null
+	});
+
+	commands.Entity(dropdownContainerId).AddChild(dropdownId);
+
 	Console.WriteLine($"[UI] Created widget showcase panel {scrollViewId}");
 }
 
