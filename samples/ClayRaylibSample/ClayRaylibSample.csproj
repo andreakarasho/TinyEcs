@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>preview</LangVersion>
+		<RootNamespace>ClayRaylibSample</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Raylib-cs" Version="7.0.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />
+		<ProjectReference Include="..\..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+		<ProjectReference Include="..\..\src\TinyEcs.UI\TinyEcs.UI.csproj" />
+		<ProjectReference Include="..\..\src\TinyEcs.UI.Clay\TinyEcs.UI.Clay.csproj" />
+	</ItemGroup>
+
+</Project>

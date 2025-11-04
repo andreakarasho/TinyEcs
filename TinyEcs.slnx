@@ -1,15 +1,20 @@
 <Solution>
-  
+
   <Folder Name="/samples/">
     <Project Path="samples/MyBattleground/MyBattleground.csproj" />
     <Project Path="samples/TinyEcsGame/TinyEcsGame.csproj" />
+    <Project Path="samples/ClayRaylibSample/ClayRaylibSample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/TinyEcs/TinyEcs.csproj" />
     <Project Path="src/TinyEcs.Bevy/TinyEcs.Bevy.csproj" />
     <Project Path="src/TinyEcs.UI/TinyEcs.UI.csproj" />
+	<Project Path="src/TinyEcs.UI.Clay/TinyEcs.UI.Clay.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TinyEcs.Tests.csproj" />
+  </Folder>
+  <Folder Name="/externals/">
+	<Project Path="externals/clay/Clay-cs/Clay-cs.csproj" />
   </Folder>
 </Solution>

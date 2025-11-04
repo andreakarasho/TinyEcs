@@ -432,9 +432,13 @@ public class Commands : ISystemParam
 	/// <summary>
 	/// Trigger a custom observer event.
 	/// </summary>
-	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
+	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct, IEntityTrigger
 	{
 		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
+		if (evt.EntityId != 0)
+		{
+			_localCommands.Add(new EntityTriggerCommand<TEvent>(evt.EntityId, evt));
+		}
 	}
 
 	public void AddChild(ulong parentId, ulong childId)
@@ -719,7 +723,7 @@ public ref struct EntityCommands
 /// </summary>
 internal interface IDeferredCommand
 {
-    void Execute(TinyEcs.World world, Commands commands);
+	void Execute(TinyEcs.World world, Commands commands);
 }
 
 /// <summary>
@@ -863,8 +867,8 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 /// </summary>
 internal readonly struct AddChildCommand : IDeferredCommand
 {
-    private readonly DeferredEntityRef _parent;
-    private readonly DeferredEntityRef _child;
+	private readonly DeferredEntityRef _parent;
+	private readonly DeferredEntityRef _child;
 
 	public AddChildCommand(DeferredEntityRef parent, DeferredEntityRef child)
 	{
@@ -872,12 +876,12 @@ internal readonly struct AddChildCommand : IDeferredCommand
 		_child = child;
 	}
 
-    public void Execute(TinyEcs.World world, Commands commands)
-    {
-        var parentId = commands.ResolveEntityId(_parent);
-        var childId = commands.ResolveEntityId(_child);
-        world.AddChild(parentId, childId);
-    }
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var parentId = commands.ResolveEntityId(_parent);
+		var childId = commands.ResolveEntityId(_child);
+		world.AddChild(parentId, childId);
+	}
 }
 
 /// <summary>
@@ -885,23 +889,23 @@ internal readonly struct AddChildCommand : IDeferredCommand
 /// </summary>
 internal readonly struct AddChildAtCommand : IDeferredCommand
 {
-    private readonly DeferredEntityRef _parent;
-    private readonly DeferredEntityRef _child;
-    private readonly int _index;
+	private readonly DeferredEntityRef _parent;
+	private readonly DeferredEntityRef _child;
+	private readonly int _index;
 
-    public AddChildAtCommand(DeferredEntityRef parent, DeferredEntityRef child, int index)
-    {
-        _parent = parent;
-        _child = child;
-        _index = index;
-    }
+	public AddChildAtCommand(DeferredEntityRef parent, DeferredEntityRef child, int index)
+	{
+		_parent = parent;
+		_child = child;
+		_index = index;
+	}
 
-    public void Execute(TinyEcs.World world, Commands commands)
-    {
-        var parentId = commands.ResolveEntityId(_parent);
-        var childId = commands.ResolveEntityId(_child);
-        world.AddChild(parentId, childId, _index);
-    }
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var parentId = commands.ResolveEntityId(_parent);
+		var childId = commands.ResolveEntityId(_child);
+		world.AddChild(parentId, childId, _index);
+	}
 }
 
 /// <summary>
@@ -909,21 +913,21 @@ internal readonly struct AddChildAtCommand : IDeferredCommand
 /// </summary>
 internal readonly struct RemoveChildCommand : IDeferredCommand
 {
-    private readonly DeferredEntityRef _child;
+	private readonly DeferredEntityRef _child;
 
-    public RemoveChildCommand(DeferredEntityRef child)
-    {
-        _child = child;
-    }
+	public RemoveChildCommand(DeferredEntityRef child)
+	{
+		_child = child;
+	}
 
-    public void Execute(TinyEcs.World world, Commands commands)
-    {
-        var childId = commands.ResolveEntityId(_child);
-        if (childId != 0 && world.Exists(childId))
-        {
-            world.RemoveChild(childId);
-        }
-    }
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var childId = commands.ResolveEntityId(_child);
+		if (childId != 0 && world.Exists(childId))
+		{
+			world.RemoveChild(childId);
+		}
+	}
 }
 
 /// <summary>
