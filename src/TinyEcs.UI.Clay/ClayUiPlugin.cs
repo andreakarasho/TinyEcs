@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Clay_cs;
 using TinyEcs.Bevy;
 
@@ -30,14 +31,29 @@ public struct ClayUiPlugin : IPlugin
 		}
 
 		var arena = Clay_cs.Clay.CreateArena(arenaSize);
+
+		// Get error handler function pointer if provided
+		var errorHandlerPtr = IntPtr.Zero;
+		if (Options.ErrorHandler != null)
+		{
+			errorHandlerPtr = Marshal.GetFunctionPointerForDelegate(Options.ErrorHandler);
+		}
+
 		var context = Clay_cs.Clay.Initialize(
 			arena,
 			Options.LayoutDimensions,
-			IntPtr.Zero); // Error handler - can be set later
+			errorHandlerPtr);
 
 		Clay_cs.Clay.SetLayoutDimensions(Options.LayoutDimensions);
 		Clay_cs.Clay.SetCullingEnabled(Options.EnableCulling);
 		Clay_cs.Clay.SetDebugModeEnabled(Options.EnableDebugMode);
+
+		// Set text measurement function if provided
+		if (Options.MeasureTextFunction != null)
+		{
+			var functionPtr = Marshal.GetFunctionPointerForDelegate(Options.MeasureTextFunction);
+			Clay_cs.Clay.SetMeasureTextFunction(functionPtr);
+		}
 
 		// Create and insert resources
 		var uiState = new ClayUiState
@@ -92,7 +108,7 @@ public struct ClayHierarchyPlugin : IPlugin
 		// This runs after Commands are applied to sync Parent components
 		app.AddSystem((
 			Commands commands,
-			Query<Data<ClayElement>> elements
+			Query<Data<ClayNode>> elements
 		) =>
 		{
 			// Note: Parent components would be set by custom AddChild implementation
@@ -134,7 +150,6 @@ public static class ClayUiExtensions
 	public static EntityCommands SpawnClayElement(this Commands commands, ClayNode node)
 	{
 		var entity = commands.Spawn();
-		entity.Insert(new ClayElement());
 		entity.Insert(node);
 		entity.Insert(ClayElementId.From(entity.Id));
 		entity.Insert(new ClayComputedLayout());

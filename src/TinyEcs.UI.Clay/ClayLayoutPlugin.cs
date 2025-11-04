@@ -29,8 +29,8 @@ public struct ClayLayoutPlugin : IPlugin
 
 		app.AddSystem((
 			ResMut<ClayUiState> state,
-			Query<Data<ClayElement>, Filter<Without<Parent>>> rootQuery,
-			Query<Data<ClayElement>, Filter<With<Parent>>> childQuery
+			Query<Data<ClayNode>, Filter<Without<Parent>>> rootQuery,
+			Query<Data<ClayNode>, Filter<With<Parent>>> childQuery
 		) => TrackRootEntities(state, rootQuery, childQuery))
 			.InStage(Stage.PreUpdate)
 			.Label("clay:track-roots")
@@ -47,7 +47,7 @@ public struct ClayLayoutPlugin : IPlugin
 
 		app.AddSystem((
 			ResMut<ClayUiState> state,
-			Query<Data<Parent>, Filter<Changed<Parent>>> changedParents
+			Query<Data<Parent>, Filter<With<ClayNode>, Changed<Parent>>> changedParents
 		) => MarkDirtyOnHierarchyChange(state, changedParents))
 			.InStage(Stage.PreUpdate)
 			.Label("clay:mark-dirty-hierarchy")
@@ -59,7 +59,7 @@ public struct ClayLayoutPlugin : IPlugin
 			ResMut<ClayPointerState> pointer,
 			Query<Data<ClayNode, ClayElementId>> nodeQuery,
 			Query<Data<Children>> childrenQuery,
-			Query<Data<ClayText>, Filter<With<ClayElement>>> textQuery
+			Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery
 		) => CalculateLayout(state, pointer, nodeQuery, childrenQuery, textQuery))
 			.InStage(Stage.PreUpdate)
 			.Label("clay:calculate-layout")
@@ -82,8 +82,8 @@ public struct ClayLayoutPlugin : IPlugin
 	/// </summary>
 	private static void TrackRootEntities(
 		ResMut<ClayUiState> state,
-		Query<Data<ClayElement>, Filter<Without<Parent>>> rootQuery,
-		Query<Data<ClayElement>, Filter<With<Parent>>> childQuery)
+		Query<Data<ClayNode>, Filter<Without<Parent>>> rootQuery,
+		Query<Data<ClayNode>, Filter<With<Parent>>> childQuery)
 	{
 		state.Value.RootEntities.Clear();
 
@@ -120,7 +120,7 @@ public struct ClayLayoutPlugin : IPlugin
 	/// </summary>
 	private static void MarkDirtyOnHierarchyChange(
 		ResMut<ClayUiState> state,
-		Query<Data<Parent>, Filter<Changed<Parent>>> changedParents)
+		Query<Data<Parent>, Filter<With<ClayNode>, Changed<Parent>>> changedParents)
 	{
 		// Check if any parent relationships changed
 		bool hasChanges = false;
@@ -145,7 +145,7 @@ public struct ClayLayoutPlugin : IPlugin
 		ResMut<ClayPointerState> pointer,
 		Query<Data<ClayNode, ClayElementId>> nodeQuery,
 		Query<Data<Children>> childrenQuery,
-		Query<Data<ClayText>, Filter<With<ClayElement>>> textQuery)
+		Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery)
 	{
 		if (!state.Value.LayoutDirty)
 		{
@@ -189,7 +189,7 @@ public struct ClayLayoutPlugin : IPlugin
 		ulong entityId,
 		Query<Data<ClayNode, ClayElementId>> nodeQuery,
 		Query<Data<Children>> childrenQuery,
-		Query<Data<ClayText>, Filter<With<ClayElement>>> textQuery,
+		Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery,
 		ClayUiState state)
 	{
 		if (!nodeQuery.Contains(entityId))
@@ -198,8 +198,6 @@ public struct ClayLayoutPlugin : IPlugin
 		}
 
 		var (node, clayId) = nodeQuery.Get(entityId);
-
-		// var id = Clay_cs.Clay.Id(clayId.Ref.Id.ToString());
 
 		// Open element
 		Clay_cs.Clay.OpenElement(new Clay_ElementId() { id = clayId.Ref.Id });
@@ -234,6 +232,11 @@ public struct ClayLayoutPlugin : IPlugin
 		if (node.Ref.Clip.HasValue)
 		{
 			decl.clip = node.Ref.Clip.Value;
+			if (decl.clip.vertical || decl.clip.horizontal)
+			{
+				// Reset scroll offset to zero; Clay manages this internally
+				decl.clip.childOffset = Clay_cs.Clay.GetScrollOffset();
+			}
 		}
 
 		if (node.Ref.Custom.HasValue)
@@ -267,9 +270,6 @@ public struct ClayLayoutPlugin : IPlugin
 
 		// Close element
 		Clay_cs.Clay.CloseElement();
-
-		// Track entity ID for interaction
-		state.ClayIdToEntity[clayId.Ref.Id] = entityId;
 	}
 
 	/// <summary>

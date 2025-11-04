@@ -50,11 +50,6 @@ public struct ClayNode
 }
 
 /// <summary>
-/// Marker component indicating this entity is managed by Clay layout system.
-/// </summary>
-public struct ClayElement { }
-
-/// <summary>
 /// Links an ECS entity to a Clay element ID.
 /// Used for retained mode rendering and interaction tracking.
 /// </summary>
