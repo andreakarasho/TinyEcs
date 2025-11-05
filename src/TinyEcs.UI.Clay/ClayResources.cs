@@ -198,19 +198,11 @@ public enum ClayPointerEventType
 
 /// <summary>
 /// Pointer event data emitted by Clay interaction system.
+/// This is wrapped with On&lt;ClayPointerEvent&gt; when emitted as a trigger.
+/// Use app.AddObserver&lt;On&lt;ClayPointerEvent&gt;&gt;(...) to observe pointer events.
 /// </summary>
 public struct ClayPointerEvent
 {
-	/// <summary>
-	/// Entity that was interacted with (the target element).
-	/// </summary>
-	public ulong EntityId;
-
-	/// <summary>
-	/// Current entity in the bubbling chain (may differ from EntityId during bubbling).
-	/// </summary>
-	public ulong CurrentTarget;
-
 	/// <summary>
 	/// Type of pointer event.
 	/// </summary>
@@ -238,34 +230,8 @@ public struct ClayPointerEvent
 
 	/// <summary>
 	/// Whether this event should bubble up to parent elements.
-	/// Set to false to stop propagation (like event.stopPropagation() in web).
+	/// Controls propagation behavior when wrapped with On&lt;ClayPointerEvent&gt;.
 	/// </summary>
 	public bool Bubbles;
-
-	/// <summary>
-	/// Internal flag set by observers to stop event propagation.
-	/// </summary>
-	internal bool PropagationStopped;
-}
-
-/// <summary>
-/// Trigger wrapper for ClayPointerEvent.
-/// Used with observers: app.AddObserver&lt;On&lt;ClayPointerTrigger&gt;&gt;(...)
-/// Implements IPropagatingTrigger to enable automatic event bubbling up parent hierarchy.
-/// </summary>
-public struct ClayPointerTrigger : TinyEcs.Bevy.IEntityTrigger, TinyEcs.Bevy.IPropagatingTrigger
-{
-	public required ClayPointerEvent Event { get; init; }
-	public required ulong EntityId { get; init; }
-
-	/// <summary>
-	/// Whether this trigger should propagate up the parent hierarchy.
-	/// Controlled by the Event.Bubbles field.
-	/// </summary>
-	public readonly bool ShouldPropagate => Event.Bubbles;
-
-	public void Propagate(bool propagate = true)
-	{
-	}
 }
 

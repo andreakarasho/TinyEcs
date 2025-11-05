@@ -45,7 +45,7 @@ public interface IPropagatingTrigger
 /// <summary>
 /// Trigger when a component is added to an entity
 /// </summary>
-public record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -54,18 +54,12 @@ public record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate 
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
 }
 
 /// <summary>
 /// Trigger when a component is inserted/updated on an entity
 /// </summary>
-public record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -74,18 +68,12 @@ public record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropaga
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
 }
 
 /// <summary>
 /// Trigger when a component is removed from an entity
 /// </summary>
-public record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -94,18 +82,12 @@ public record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropaga
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
 }
 
 /// <summary>
 /// Trigger when an entity is spawned
 /// </summary>
-public record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -114,18 +96,12 @@ public record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITr
 #endif
 	{
 	}
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
 }
 
 /// <summary>
 /// Trigger when an entity is despawned
 /// </summary>
-public record struct OnDespawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public record struct OnDespawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -134,31 +110,33 @@ public record struct OnDespawn(ulong EntityId, bool ShouldPropagate = false) : I
 #endif
 	{
 	}
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
 }
 
 /// <summary>
 /// Trigger when a custom event is fired via Commands.Trigger.
 /// Can be used for both global events (EntityId = 0) and entity-specific events.
 /// </summary>
-public class On<TEvent> : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct On<TEvent> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	where TEvent : struct
 {
-	public On(ulong entity, TEvent ev, bool propagate = false)
+	private bool* _propagate;
+
+	internal On(ulong entity, TEvent ev, ref bool propagate)
 	{
 		EntityId = entity;
 		Event = ev;
-		ShouldPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
 	}
+
+	/// <summary>
+	/// Create a global event (not tied to a specific entity)
+	/// </summary>
+	internal On(TEvent evt) : this(0, evt, ref Unsafe.NullRef<bool>()) { }
 
 	public ulong EntityId { get; }
 	public TEvent Event { get; }
-	public bool ShouldPropagate { get; private set; }
+	public readonly bool ShouldPropagate => _propagate != null && *_propagate;
+
 
 
 #if NET9_0_OR_GREATER
@@ -171,15 +149,14 @@ public class On<TEvent> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	}
 
 	/// <summary>
-	/// Create a global event (not tied to a specific entity)
-	/// </summary>
-	public On(TEvent evt) : this(0, evt, false) { }
-
-	/// <summary>
 	/// Returns a new trigger with propagation enabled.
 	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
 	/// </summary>
-	public void Propagate(bool propagate = true) => ShouldPropagate = propagate;
+	public void Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+			*_propagate = propagate;
+	}
 }
 
 // ============================================================================
@@ -491,7 +468,6 @@ public static class ObserverExtensions
 						{
 							if (observer.TriggerType == triggerType)
 							{
-								// Pass the boxed trigger - observers can cast and modify it
 								observer.Execute(world, trigger);
 							}
 						}

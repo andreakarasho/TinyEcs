@@ -51,19 +51,16 @@ public struct ClayInteractionPlugin : IPlugin
 	/// </summary>
 	private static void EmitEvent(
 		ClayPointerEvent evt,
+		ulong entityId,
 		Commands commands,
 		EventWriter<ClayPointerEvent> events)
 	{
 		// Send to event stream
 		events.Send(evt);
 
-		// Emit trigger - TinyEcs will handle bubbling automatically if evt.Bubbles is true
-		// via the IPropagatingTrigger interface implemented by ClayPointerTrigger
-		commands.EmitTrigger(new ClayPointerTrigger
-		{
-			EntityId = evt.CurrentTarget,
-			Event = evt
-		});
+		// Emit trigger - EntityCommands.EmitTrigger automatically wraps with On<ClayPointerEvent>
+		// and injects the entity ID. Propagation is controlled by evt.Bubbles.
+		commands.Entity(entityId).EmitTrigger(evt);
 	}
 
 	/// <summary>
@@ -123,8 +120,6 @@ public struct ClayInteractionPlugin : IPlugin
 
 					var enterEvent = new ClayPointerEvent
 					{
-						EntityId = entityId,
-						CurrentTarget = entityId,
 						EventType = ClayPointerEventType.Enter,
 						Position = pointer.Value.Position,
 						LocalPosition = localPos,
@@ -133,7 +128,7 @@ public struct ClayInteractionPlugin : IPlugin
 						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 					};
 
-					EmitEvent(enterEvent, commands, events);
+					EmitEvent(enterEvent, entityId, commands, events);
 				}
 			}
 
@@ -150,8 +145,6 @@ public struct ClayInteractionPlugin : IPlugin
 
 					var exitEvent = new ClayPointerEvent
 					{
-						EntityId = entityId,
-						CurrentTarget = entityId,
 						EventType = ClayPointerEventType.Exit,
 						Position = state.Value!.PreviousPointerPosition,
 						LocalPosition = localPos,
@@ -160,7 +153,7 @@ public struct ClayInteractionPlugin : IPlugin
 						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 					};
 
-					EmitEvent(exitEvent, commands, events);
+					EmitEvent(exitEvent, entityId, commands, events);
 				}
 			}
 
@@ -177,8 +170,6 @@ public struct ClayInteractionPlugin : IPlugin
 
 					var moveEvent = new ClayPointerEvent
 					{
-						EntityId = entityId,
-						CurrentTarget = entityId,
 						EventType = ClayPointerEventType.Move,
 						Position = pointer.Value.Position,
 						LocalPosition = localPos,
@@ -187,7 +178,7 @@ public struct ClayInteractionPlugin : IPlugin
 						Bubbles = false // Move events don't bubble by default
 					};
 
-					EmitEvent(moveEvent, commands, events);
+					EmitEvent(moveEvent, entityId, commands, events);
 				}
 			}
 
@@ -216,8 +207,6 @@ public struct ClayInteractionPlugin : IPlugin
 			{
 				var downEvent = new ClayPointerEvent
 				{
-					EntityId = entityId,
-					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Pressed,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
@@ -226,7 +215,7 @@ public struct ClayInteractionPlugin : IPlugin
 					Bubbles = true // Mouse events bubble
 				};
 
-				EmitEvent(downEvent, commands, events);
+				EmitEvent(downEvent, entityId, commands, events);
 				found = true;
 			}
 
@@ -234,8 +223,6 @@ public struct ClayInteractionPlugin : IPlugin
 			{
 				var upEvent = new ClayPointerEvent
 				{
-					EntityId = entityId,
-					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Released,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
@@ -244,13 +231,11 @@ public struct ClayInteractionPlugin : IPlugin
 					Bubbles = true // Mouse events bubble
 				};
 
-				EmitEvent(upEvent, commands, events);
+				EmitEvent(upEvent, entityId, commands, events);
 
 				// Also emit click event if released over same element
 				var clickEvent = new ClayPointerEvent
 				{
-					EntityId = entityId,
-					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Click,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
@@ -259,7 +244,7 @@ public struct ClayInteractionPlugin : IPlugin
 					Bubbles = true // Click events bubble
 				};
 
-				EmitEvent(clickEvent, commands, events);
+				EmitEvent(clickEvent, entityId, commands, events);
 
 				found = true;
 			}
@@ -270,8 +255,6 @@ public struct ClayInteractionPlugin : IPlugin
 			{
 				var scrollEvent = new ClayPointerEvent
 				{
-					EntityId = entityId,
-					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Scroll,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
@@ -280,7 +263,7 @@ public struct ClayInteractionPlugin : IPlugin
 					Bubbles = true // Scroll events bubble
 				};
 
-				EmitEvent(scrollEvent, commands, events);
+				EmitEvent(scrollEvent, entityId, commands, events);
 
 				found = true;
 			}

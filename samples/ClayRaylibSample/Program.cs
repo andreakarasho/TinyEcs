@@ -150,20 +150,18 @@ public static class Program
 		var scroll1 = commands.SpawnClayElement(scroll1Node);
 		scrollContainer.AddChild(scroll1);
 
-		scroll1.Observe((On<ClayPointerTrigger> trigger) =>
+		scroll1.Observe((On<ClayPointerEvent> trigger) =>
 		{
-			// Note: trigger is received by value, but it's boxed so modifications work
-			var pointerTrigger = trigger.Event;
-			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
+			var pointerEvent = trigger.Event;
+			if (pointerEvent.EventType == ClayPointerEventType.Click)
 			{
 				Console.WriteLine("parent clicked 1");
 			}
 		})
-		.Observe((On<ClayPointerTrigger> trigger) =>
+		.Observe((On<ClayPointerEvent> trigger) =>
 		{
-			// Note: trigger is received by value, but it's boxed so modifications work
-			var pointerTrigger = trigger.Event;
-			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
+			var pointerEvent = trigger.Event;
+			if (pointerEvent.EventType == ClayPointerEventType.Click)
 			{
 				Console.WriteLine("parent clicked 2");
 			}
@@ -314,14 +312,14 @@ public static class Program
 		parent.AddChild(button);
 
 		// Add click observer
-		button.Observe((On<ClayPointerTrigger> trigger, Query<Data<ClayNode>> nodes) =>
+		button.Observe((On<ClayPointerEvent> trigger, Query<Data<ClayNode>> nodes) =>
 		{
-			var pointerTrigger = trigger.Event;
-			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
+			var pointerEvent = trigger.Event;
+			if (pointerEvent.EventType == ClayPointerEventType.Click)
 			{
 				Console.WriteLine($"Button clicked: {text}");
 				// Stop propagation so parent doesn't receive this click
-				trigger.Propagate(true);
+				trigger.Propagate(false);
 			}
 		});
 	}
