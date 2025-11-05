@@ -264,10 +264,10 @@ public struct SliderPlugin : IPlugin
 				// Re-insert to trigger change detection
 				commands.Entity(trackEntityId.Ref).Insert(s);
 
-			// Emit SliderChanged event both globally and per-entity
-			var changeEvent = new SliderChanged(s.Value, normalized);
-			commands.Entity(trackEntityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-			commands.EmitTrigger(new On<SliderChanged>(trackEntityId.Ref, changeEvent));  // Global (EventChannel)
+				// Emit SliderChanged event both globally and per-entity
+				var changeEvent = new SliderChanged(s.Value, normalized);
+				commands.Entity(trackEntityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
+				commands.EmitTrigger(changeEvent);  // Global (EventChannel)
 			}
 		}
 	}

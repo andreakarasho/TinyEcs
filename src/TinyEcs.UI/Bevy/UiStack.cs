@@ -207,10 +207,6 @@ public struct UiStackPlugin : IPlugin
 		ref var stack = ref uiStack.Value;
 		stack.Clear();
 
-		// Initialize local collections if needed
-		if (rootsList.Value == null)
-			rootsList.Value = new List<ulong>();
-
 		var roots = rootsList.Value;
 
 		// Clear and find root UI nodes using optimized query (ComputedLayout without Parent)

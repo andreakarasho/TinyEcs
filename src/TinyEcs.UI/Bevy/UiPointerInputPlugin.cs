@@ -106,9 +106,6 @@ public struct UiPointerInputPlugin : IPlugin
 		Query<Data<Parent>> parentQuery,
 		Query<Data<Scrollable, ComputedLayout>> scrollableQuery)
 	{
-		if (trackingState.Value == null)
-			trackingState.Value = new PointerTrackingState();
-
 		var tracking = trackingState.Value;
 		var input = pointerInput.Value;
 
@@ -263,7 +260,7 @@ public struct UiPointerInputPlugin : IPlugin
 			isPrimaryButton: isPrimaryButton
 		);
 
-		var trigger = new UiPointerTrigger(pointerEvent, Propagate: false);
+		var trigger = new UiPointerTrigger(pointerEvent, propagate: false);
 
 		// Emit the trigger on the entity
 		commands.Entity(entityId).EmitTrigger(trigger);
@@ -275,9 +272,9 @@ public struct UiPointerInputPlugin : IPlugin
 	private static bool IsPointInRect(Vector2 point, float x, float y, float width, float height)
 	{
 		return point.X >= x &&
-		       point.X <= x + width &&
-		       point.Y >= y &&
-		       point.Y <= y + height;
+			   point.X <= x + width &&
+			   point.Y >= y &&
+			   point.Y <= y + height;
 	}
 
 	/// <summary>

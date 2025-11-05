@@ -98,7 +98,7 @@ public struct CheckboxPlugin : IPlugin
 				// Emit CheckboxChanged event both globally and per-entity
 				var changeEvent = new CheckboxChanged(cb.Checked);
 				commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-				commands.EmitTrigger(new On<CheckboxChanged>(entityId.Ref, changeEvent));  // Global (EventChannel)
+				commands.EmitTrigger(changeEvent);  // Global (EventChannel)
 			}
 		}
 	}

@@ -44,16 +44,16 @@ public struct ClayUiPlugin : IPlugin
 			Options.LayoutDimensions,
 			errorHandlerPtr);
 
-		Clay_cs.Clay.SetLayoutDimensions(Options.LayoutDimensions);
-		Clay_cs.Clay.SetCullingEnabled(Options.EnableCulling);
-		Clay_cs.Clay.SetDebugModeEnabled(Options.EnableDebugMode);
-
 		// Set text measurement function if provided
 		if (Options.MeasureTextFunction != null)
 		{
 			var functionPtr = Marshal.GetFunctionPointerForDelegate(Options.MeasureTextFunction);
 			Clay_cs.Clay.SetMeasureTextFunction(functionPtr);
 		}
+
+		Clay_cs.Clay.SetLayoutDimensions(Options.LayoutDimensions);
+		Clay_cs.Clay.SetCullingEnabled(Options.EnableCulling);
+		Clay_cs.Clay.SetDebugModeEnabled(Options.EnableDebugMode);
 
 		// Create and insert resources
 		var uiState = new ClayUiState
@@ -62,7 +62,6 @@ public struct ClayUiPlugin : IPlugin
 			Context = context,
 			LayoutDimensions = Options.LayoutDimensions,
 			DebugModeEnabled = Options.EnableDebugMode,
-			LayoutDirty = true // Force initial layout
 		};
 
 		var pointerState = new ClayPointerState
@@ -76,7 +75,6 @@ public struct ClayUiPlugin : IPlugin
 			EnableDragScrolling = true
 		};
 
-		app.AddResource(Options);
 		app.AddResource(uiState);
 		app.AddResource(pointerState);
 
@@ -104,21 +102,10 @@ public struct ClayHierarchyPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		// System to process deferred child additions
-		// This runs after Commands are applied to sync Parent components
-		app.AddSystem((
-			Commands commands,
-			Query<Data<ClayNode>> elements
-		) =>
+		app.AddObserver((OnAdd<ClayNode> trigger, Commands commands) =>
 		{
-			// Note: Parent components would be set by custom AddChild implementation
-			// For now, this is a placeholder - the user must manually insert Parent components
-			// or we need to provide a ClayEntityCommands wrapper
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("clay:sync-hierarchy")
-		.Before("clay:track-roots")
-		.Build();
+			commands.Entity(trigger.EntityId).Insert(ClayElementId.From(trigger.EntityId));
+		});
 	}
 }
 
@@ -151,38 +138,8 @@ public static class ClayUiExtensions
 	{
 		var entity = commands.Spawn();
 		entity.Insert(node);
-		entity.Insert(ClayElementId.From(entity.Id));
+		// entity.Insert(ClayElementId.From(entity.Id));
 		entity.Insert(new ClayComputedLayout());
 		return entity;
 	}
-
-	/// <summary>
-	/// Create a Clay text element.
-	/// </summary>
-	public static EntityCommands SpawnClayText(
-		this Commands commands,
-		string text,
-		Clay_TextElementConfig? textConfig = null)
-	{
-		var node = ClayNode.Default;
-
-		if (textConfig.HasValue)
-		{
-			node.Text = textConfig.Value;
-		}
-		else
-		{
-			node.Text = new Clay_TextElementConfig
-			{
-				fontSize = 16,
-				textColor = new Clay_Color(255, 255, 255, 255)
-			};
-		}
-
-		var entity = commands.SpawnClayElement(node);
-		entity.Insert(ClayText.From(text));
-
-		return entity;
-	}
-
 }

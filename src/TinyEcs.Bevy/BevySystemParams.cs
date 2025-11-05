@@ -153,7 +153,7 @@ public class Local<T> : ISystemParam where T : new()
 {
 	private T? _value;
 
-	public ref T? Value => ref _value;
+	public ref readonly T Value => ref _value!;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -432,12 +432,12 @@ public class Commands : ISystemParam
 	/// <summary>
 	/// Trigger a custom observer event.
 	/// </summary>
-	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct, IEntityTrigger
+	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
 	{
 		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
-		if (evt.EntityId != 0)
+		if (evt is IEntityTrigger trigger && trigger.EntityId != 0)
 		{
-			_localCommands.Add(new EntityTriggerCommand<TEvent>(evt.EntityId, evt));
+			_localCommands.Add(new EntityTriggerCommand<TEvent>(trigger.EntityId, evt));
 		}
 	}
 
@@ -683,7 +683,7 @@ public ref struct EntityCommands
 	/// NOTE: The observer is attached immediately before subsequent Insert/Remove commands to ensure it sees those events.
 	/// </summary>
 	public readonly EntityCommands Observe<TTrigger>(Action<TTrigger> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 	{
 		// Insert the observer command at the front of the queue (right after Spawn if this is a spawned entity)
 		// This ensures the observer is attached BEFORE any subsequent Insert/Remove commands
@@ -695,7 +695,7 @@ public ref struct EntityCommands
 	/// Internal method for system parameter support. Use the Observe overloads with system parameters instead.
 	/// </summary>
 	internal readonly EntityCommands ObserveWithWorld<TTrigger>(Action<World, TTrigger> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 	{
 		_commands.InsertObserverCommand(new AttachObserverWithWorldCommand<TTrigger>(ToDeferredRef(), callback));
 		return this;
@@ -933,9 +933,9 @@ internal readonly struct RemoveChildCommand : IDeferredCommand
 /// <summary>
 /// Command to trigger a custom observer event
 /// </summary>
-internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : struct
+internal struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : struct
 {
-	private readonly TEvent _event;
+	private TEvent _event;
 
 	public TriggerEventCommand(TEvent evt)
 	{
@@ -994,7 +994,7 @@ internal readonly struct RemoveResourceCommand : IDeferredCommand
 /// Observers are stored as EntityObservers component on the entity.
 /// </summary>
 internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
-	where TTrigger : struct, ITrigger
+	where TTrigger : ITrigger
 {
 	private readonly DeferredEntityRef _entityRef;
 	private readonly Action<TTrigger> _callback;
@@ -1044,7 +1044,7 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 /// Used internally for system parameter support in entity observers.
 /// </summary>
 internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCommand
-	where TTrigger : struct, ITrigger
+	where TTrigger : ITrigger
 {
 	private readonly DeferredEntityRef _entityRef;
 	private readonly Action<World, TTrigger> _callback;

@@ -48,26 +48,15 @@ public class ClayPointerState
 	/// Stack of scroll deltas to accumulate this frame.
 	/// Cleared at end of frame.
 	/// </summary>
-	private readonly List<Vector2> _scrollDeltas = new();
 
 	public void AddScroll(Vector2 delta)
 	{
-		_scrollDeltas.Add(delta);
-	}
-
-	public Vector2 GetAccumulatedScroll()
-	{
-		var total = Vector2.Zero;
-		foreach (var delta in _scrollDeltas)
-		{
-			total += delta;
-		}
-		return total;
+		ScrollDelta += delta;
 	}
 
 	public void ClearScrollDeltas()
 	{
-		_scrollDeltas.Clear();
+		ScrollDelta = Vector2.Zero;
 	}
 
 	/// <summary>
@@ -130,12 +119,6 @@ public unsafe class ClayUiState : IDisposable
 	/// Layout starts from these roots.
 	/// </summary>
 	public List<ulong> RootEntities = new();
-
-	/// <summary>
-	/// Whether layout needs recalculation this frame.
-	/// Set to true when any ClayNode changes or hierarchy changes.
-	/// </summary>
-	public bool LayoutDirty;
 
 	public void Dispose()
 	{
@@ -207,8 +190,8 @@ public enum ClayPointerEventType
 	Enter,
 	Exit,
 	Move,
-	Down,
-	Up,
+	Pressed,
+	Released,
 	Click,
 	Scroll
 }
@@ -219,9 +202,14 @@ public enum ClayPointerEventType
 public struct ClayPointerEvent
 {
 	/// <summary>
-	/// Entity that was interacted with.
+	/// Entity that was interacted with (the target element).
 	/// </summary>
 	public ulong EntityId;
+
+	/// <summary>
+	/// Current entity in the bubbling chain (may differ from EntityId during bubbling).
+	/// </summary>
+	public ulong CurrentTarget;
 
 	/// <summary>
 	/// Type of pointer event.
@@ -247,14 +235,37 @@ public struct ClayPointerEvent
 	/// Scroll delta (for Scroll events).
 	/// </summary>
 	public Vector2 ScrollDelta;
+
+	/// <summary>
+	/// Whether this event should bubble up to parent elements.
+	/// Set to false to stop propagation (like event.stopPropagation() in web).
+	/// </summary>
+	public bool Bubbles;
+
+	/// <summary>
+	/// Internal flag set by observers to stop event propagation.
+	/// </summary>
+	internal bool PropagationStopped;
 }
 
 /// <summary>
 /// Trigger wrapper for ClayPointerEvent.
-/// Used with observers: app.AddObserver&lt;On&lt;ClayPointerEvent&gt;&gt;(...)
+/// Used with observers: app.AddObserver&lt;On&lt;ClayPointerTrigger&gt;&gt;(...)
+/// Implements IPropagatingTrigger to enable automatic event bubbling up parent hierarchy.
 /// </summary>
-public readonly struct ClayPointerTrigger : TinyEcs.Bevy.IEntityTrigger
+public struct ClayPointerTrigger : TinyEcs.Bevy.IEntityTrigger, TinyEcs.Bevy.IPropagatingTrigger
 {
 	public required ClayPointerEvent Event { get; init; }
 	public required ulong EntityId { get; init; }
+
+	/// <summary>
+	/// Whether this trigger should propagate up the parent hierarchy.
+	/// Controlled by the Event.Bubbles field.
+	/// </summary>
+	public readonly bool ShouldPropagate => Event.Bubbles;
+
+	public void Propagate(bool propagate = true)
+	{
+	}
 }
+

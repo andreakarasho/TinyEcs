@@ -164,7 +164,8 @@ public static class WorldExtensions
 		}
 	}
 
-	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer) where T : notnull
+	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer)
+		where T : ITrigger
 	{
 		world.RegisterObserver<T>((w, t) => observer(t));
 	}
@@ -822,7 +823,8 @@ public class App
 		return this;
 	}
 
-	public App AddObserver<T>(Action<T> observer) where T : notnull
+	public App AddObserver<T>(Action<T> observer)
+		where T : ITrigger
 	{
 		_world.RegisterObserver(observer);
 		return this;

@@ -37,7 +37,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, <#= generics #>>(this EntityCommands entity, Action<TTrigger, <#= generics #>> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		<#= whereClause #>
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters

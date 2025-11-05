@@ -8,6 +8,14 @@ public static class IDOp
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static EcsID Compose(uint entity, uint generation)
+	{
+		// Lower 32 bits: entity
+		// Upper 32 bits: generation (masked and shifted)
+		return ((EcsID)generation << 32) | entity;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID GetGeneration(EcsID id)
 	{
 		return ((id & EcsConst.ECS_GENERATION_MASK) >> 32);

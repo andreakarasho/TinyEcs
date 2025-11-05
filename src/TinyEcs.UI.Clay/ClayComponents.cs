@@ -18,7 +18,7 @@ public struct ClayNode
 	public Clay_CornerRadius? CornerRadius;
 
 	// Text configuration (optional)
-	public Clay_TextElementConfig? Text;
+	public ClayText? Text;
 
 	// Image configuration (optional)
 	public Clay_ImageElementConfig? Image;
@@ -53,14 +53,19 @@ public struct ClayNode
 /// Links an ECS entity to a Clay element ID.
 /// Used for retained mode rendering and interaction tracking.
 /// </summary>
-public readonly struct ClayElementId(uint id)
+public readonly struct ClayElementId(Clay_ElementId id)
 {
-	public readonly uint Id = id;
+	public readonly Clay_ElementId Id = id;
 
 	public static ClayElementId From(ulong entityId)
 	{
+		return new ClayElementId(new Clay_ElementId()
+		{
+			id = (uint)IDOp.RealID(entityId),
+			offset = (uint)IDOp.GetGeneration(entityId)
+		});
 		// Use entity ID directly as Clay element ID
-		return new(Clay_cs.Clay.Id(IDOp.RealID(entityId).ToString()).id);
+		// return new(Clay_cs.Clay.Id(IDOp.RealID(entityId).ToString()));
 	}
 }
 
@@ -85,8 +90,17 @@ public struct ClayComputedLayout
 public struct ClayText
 {
 	public string Text;
+	public Clay_TextElementConfig Config;
 
-	public static ClayText From(string text) => new ClayText { Text = text };
+	public static ClayText From(string text) => new ClayText
+	{
+		Text = text,
+		Config = new Clay_TextElementConfig()
+		{
+			fontSize = 16,
+			textColor = new Clay_Color(255, 255, 255, 255)
+		}
+	};
 }
 
 /// <summary>

@@ -135,7 +135,7 @@ public struct RadioButtonPlugin : IPlugin
 				// Emit RadioButtonSelected event both globally and per-entity
 				var selectEvent = new RadioButtonSelected(rb.Value, group.GroupId);
 				commands.Entity(entityId.Ref).EmitTrigger(selectEvent);  // Per-entity (BevyObservers)
-				commands.EmitTrigger(new On<RadioButtonSelected>(entityId.Ref, selectEvent));  // Global (EventChannel)
+				commands.EmitTrigger(selectEvent);  // Global (EventChannel)
 			}
 		}
 	}

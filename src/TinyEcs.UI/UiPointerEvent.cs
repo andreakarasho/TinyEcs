@@ -52,7 +52,13 @@ public readonly struct UiPointerEvent
 /// Use with On&lt;UiPointerEvent&gt; in entity observers.
 /// The entity ID is provided by the On&lt;T&gt; wrapper.
 /// </summary>
-public readonly record struct UiPointerTrigger(UiPointerEvent Event, bool Propagate = false) : IPropagatingTrigger
+public struct UiPointerTrigger(UiPointerEvent ev, bool propagate = false) : IPropagatingTrigger
 {
-	public bool ShouldPropagate => Propagate;
+	public readonly bool ShouldPropagate => propagate;
+	public UiPointerEvent Event { get; } = ev;
+
+	public readonly void Propagate(bool shouldPropagate = false)
+	{
+
+	}
 }

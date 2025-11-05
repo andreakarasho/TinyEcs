@@ -19,14 +19,6 @@ public struct ClayLayoutPlugin : IPlugin
 		// 4. Calculate layout (if dirty)
 		// 5. Read computed layout back to components
 
-		app.AddSystem((Res<ClayUiOptions> options) =>
-		{
-			Clay_cs.Clay.SetLayoutDimensions(options.Value.LayoutDimensions);
-		})
-		.InStage(Stage.First)
-		.SingleThreaded()
-		.Build();
-
 		app.AddSystem((
 			ResMut<ClayUiState> state,
 			Query<Data<ClayNode>, Filter<Without<Parent>>> rootQuery,
@@ -38,32 +30,13 @@ public struct ClayLayoutPlugin : IPlugin
 
 		app.AddSystem((
 			ResMut<ClayUiState> state,
-			Query<Data<ClayNode>, Filter<Changed<ClayNode>>> changedNodes
-		) => MarkDirtyOnNodeChange(state, changedNodes))
-			.InStage(Stage.PreUpdate)
-			.Label("clay:mark-dirty")
-			.After("clay:track-roots")
-			.Build();
-
-		app.AddSystem((
-			ResMut<ClayUiState> state,
-			Query<Data<Parent>, Filter<With<ClayNode>, Changed<Parent>>> changedParents
-		) => MarkDirtyOnHierarchyChange(state, changedParents))
-			.InStage(Stage.PreUpdate)
-			.Label("clay:mark-dirty-hierarchy")
-			.After("clay:mark-dirty")
-			.Build();
-
-		app.AddSystem((
-			ResMut<ClayUiState> state,
 			ResMut<ClayPointerState> pointer,
 			Query<Data<ClayNode, ClayElementId>> nodeQuery,
-			Query<Data<Children>> childrenQuery,
-			Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery
-		) => CalculateLayout(state, pointer, nodeQuery, childrenQuery, textQuery))
+			Query<Data<Children>> childrenQuery
+		) => CalculateLayout(state, pointer, nodeQuery, childrenQuery))
 			.InStage(Stage.PreUpdate)
 			.Label("clay:calculate-layout")
-			.After("clay:mark-dirty-hierarchy")
+			.After("clay:track-roots")
 			.Build();
 
 		app.AddSystem((
@@ -95,48 +68,6 @@ public struct ClayLayoutPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Mark layout as dirty when any ClayNode component changes.
-	/// </summary>
-	private static void MarkDirtyOnNodeChange(
-		ResMut<ClayUiState> state,
-		Query<Data<ClayNode>, Filter<Changed<ClayNode>>> changedNodes)
-	{
-		// Check if any nodes changed
-		bool hasChanges = false;
-		foreach (var _ in changedNodes)
-		{
-			hasChanges = true;
-			break;
-		}
-
-		if (hasChanges)
-		{
-			state.Value.LayoutDirty = true;
-		}
-	}
-
-	/// <summary>
-	/// Mark layout as dirty when hierarchy changes (parent/child added/removed).
-	/// </summary>
-	private static void MarkDirtyOnHierarchyChange(
-		ResMut<ClayUiState> state,
-		Query<Data<Parent>, Filter<With<ClayNode>, Changed<Parent>>> changedParents)
-	{
-		// Check if any parent relationships changed
-		bool hasChanges = false;
-		foreach (var _ in changedParents)
-		{
-			hasChanges = true;
-			break;
-		}
-
-		if (hasChanges)
-		{
-			state.Value.LayoutDirty = true;
-		}
-	}
-
-	/// <summary>
 	/// Calculate Clay layout for all elements.
 	/// Uses retained mode: only recalculates when layout is dirty.
 	/// </summary>
@@ -144,30 +75,27 @@ public struct ClayLayoutPlugin : IPlugin
 		ResMut<ClayUiState> state,
 		ResMut<ClayPointerState> pointer,
 		Query<Data<ClayNode, ClayElementId>> nodeQuery,
-		Query<Data<Children>> childrenQuery,
-		Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery)
+		Query<Data<Children>> childrenQuery)
 	{
-		if (!state.Value.LayoutDirty)
-		{
-			// Layout hasn't changed, skip calculation
-			// return;
-		}
+		Clay_cs.Clay.SetLayoutDimensions(state.Value.LayoutDimensions);
 
 		// Update Clay pointer state
 		Clay_cs.Clay.SetPointerState(pointer.Value.Position, pointer.Value.PrimaryDown);
 
 		// Update Clay scroll containers
-		var scrollDelta = pointer.Value.GetAccumulatedScroll();
+		var scrollDelta = pointer.Value.ScrollDelta;
 		Clay_cs.Clay.UpdateScrollContainers(
 			pointer.Value.EnableDragScrolling,
 			scrollDelta,
 			pointer.Value.DeltaTime);
 
 		// Begin Clay layout
-		Clay_cs.Clay.BeginLayout();        // Build layout hierarchy starting from root entities
+		Clay_cs.Clay.BeginLayout();
+
+		// Build layout hierarchy starting from root entities
 		foreach (var rootId in state.Value.RootEntities)
 		{
-			BuildLayoutRecursive(rootId, nodeQuery, childrenQuery, textQuery, state.Value);
+			BuildLayoutRecursive(rootId, nodeQuery, childrenQuery, state.Value);
 		}
 
 		// End layout and get render commands
@@ -177,9 +105,6 @@ public struct ClayLayoutPlugin : IPlugin
 		// The render command array is stored in Clay's internal arena and is valid until next BeginLayout
 		state.Value.RenderCommandsPtr = renderCommandArray.internalArray;
 		state.Value.RenderCommandsLength = renderCommandArray.length;
-
-		// Layout is now clean
-		state.Value.LayoutDirty = false;
 	}
 
 	/// <summary>
@@ -189,7 +114,6 @@ public struct ClayLayoutPlugin : IPlugin
 		ulong entityId,
 		Query<Data<ClayNode, ClayElementId>> nodeQuery,
 		Query<Data<Children>> childrenQuery,
-		Query<Data<ClayText>, Filter<With<ClayNode>>> textQuery,
 		ClayUiState state)
 	{
 		if (!nodeQuery.Contains(entityId))
@@ -200,7 +124,7 @@ public struct ClayLayoutPlugin : IPlugin
 		var (node, clayId) = nodeQuery.Get(entityId);
 
 		// Open element
-		Clay_cs.Clay.OpenElement(new Clay_ElementId() { id = clayId.Ref.Id });
+		Clay_cs.Clay.OpenElement(clayId.Ref.Id);
 
 		// Configure element
 		var decl = new Clay_ElementDeclaration
@@ -246,15 +170,10 @@ public struct ClayLayoutPlugin : IPlugin
 
 		Clay_cs.Clay.ConfigureOpenElement(decl);
 
-		if (textQuery.Contains(entityId))
+		if (node.Ref.Text.HasValue)
 		{
-			var (_, text) = textQuery.Get(entityId);
-			var clayString = Clay_cs.Clay.ClayStrings.Get(text.Ref.Text);
-			var textConfig = node.Ref.Text ?? new Clay_TextElementConfig
-			{
-				fontSize = 16,
-				textColor = new Clay_Color(255, 255, 255, 255)
-			};
+			var clayString = Clay_cs.Clay.ClayStrings.Get(node.Ref.Text.Value.Text);
+			var textConfig = node.Ref.Text.Value.Config;
 			Clay_cs.Clay.OpenTextElement(clayString, textConfig);
 		}
 
@@ -264,7 +183,7 @@ public struct ClayLayoutPlugin : IPlugin
 
 			foreach (var childId in children.Ref)
 			{
-				BuildLayoutRecursive(childId, nodeQuery, childrenQuery, textQuery, state);
+				BuildLayoutRecursive(childId, nodeQuery, childrenQuery, state);
 			}
 		}
 
@@ -283,7 +202,7 @@ public struct ClayLayoutPlugin : IPlugin
 		foreach (var (entityId, clayId) in elementQuery)
 		{
 			// Get element data from Clay
-			var elementData = Clay_cs.Clay.GetElementData(new Clay_cs.Clay_ElementId { id = clayId.Ref.Id });
+			var elementData = Clay_cs.Clay.GetElementData(clayId.Ref.Id);
 
 			// Write computed layout
 			var computed = new ClayComputedLayout

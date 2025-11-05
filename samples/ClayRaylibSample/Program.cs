@@ -82,27 +82,15 @@ public static class Program
 		{
 			backgroundColor = new Clay_Color(20, 25, 30, 255)
 		};
+		rootNode.Text = new ClayText()
+		{
+			Text = "Clay UI with Raylib",
+			Config = {
+				fontSize = 48,
+			}
+		};
 
 		var root = commands.SpawnClayElement(rootNode);
-
-		// Create title
-		var title = commands.SpawnClayText("Clay UI with Raylib", new Clay_TextElementConfig
-		{
-			fontSize = 48,
-			textColor = new Clay_Color(255, 255, 255, 255)
-		});
-		root.AddChild(title);
-
-		// Create description
-		var description = commands.SpawnClayText(
-			"Scroll the list with mouse wheel!",
-			new Clay_TextElementConfig
-			{
-				fontSize = 24,
-				textColor = new Clay_Color(200, 200, 200, 255)
-			}
-		);
-		root.AddChild(description);
 
 		// Create scrollable container with scroll configuration
 		var scrollContainerNode = ClayNode.Default;
@@ -154,17 +142,32 @@ public static class Program
 			horizontal = false,
 			vertical = true
 		};
+		scroll1Node.Text = new ClayText()
+		{
+			Text = "Scroll Container 1",
+		};
 
 		var scroll1 = commands.SpawnClayElement(scroll1Node);
 		scrollContainer.AddChild(scroll1);
 
-		// Add title for first scroll container
-		var title1 = commands.SpawnClayText("Scroll Container 1", new Clay_TextElementConfig
+		scroll1.Observe((On<ClayPointerTrigger> trigger) =>
 		{
-			fontSize = 16,
-			textColor = new Clay_Color(255, 255, 255, 255)
+			// Note: trigger is received by value, but it's boxed so modifications work
+			var pointerTrigger = trigger.Event;
+			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
+			{
+				Console.WriteLine("parent clicked 1");
+			}
+		})
+		.Observe((On<ClayPointerTrigger> trigger) =>
+		{
+			// Note: trigger is received by value, but it's boxed so modifications work
+			var pointerTrigger = trigger.Event;
+			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
+			{
+				Console.WriteLine("parent clicked 2");
+			}
 		});
-		scroll1.AddChild(title1);
 
 		// Create 20 buttons in first scrollable area
 		var colors = new[]
@@ -183,38 +186,36 @@ public static class Program
 		}
 
 		// Create second nested scrollable container
-		var scroll2Node = ClayNode.Default;
-		scroll2Node.Layout = new Clay_LayoutConfig
+		var scroll2Node = ClayNode.Default with
 		{
-			sizing = new Clay_Sizing(
-				Clay_SizingAxis.Grow(),
-				Clay_SizingAxis.Fixed(200)
-			),
-			layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-			padding = Clay_Padding.All(8),
-			childGap = 4
-		};
-		scroll2Node.Rectangle = new Clay_RectangleRenderData
-		{
-			backgroundColor = new Clay_Color(60, 65, 70, 255)
-		};
-		scroll2Node.CornerRadius = Clay_CornerRadius.All(4);
-		scroll2Node.Clip = new Clay_ClipElementConfig
-		{
-			horizontal = false,
-			vertical = true
+			Layout = new Clay_LayoutConfig
+			{
+				sizing = new Clay_Sizing(
+					Clay_SizingAxis.Grow(),
+					Clay_SizingAxis.Fixed(200)
+				),
+				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+				padding = Clay_Padding.All(8),
+				childGap = 4
+			},
+			Rectangle = new Clay_RectangleRenderData
+			{
+				backgroundColor = new Clay_Color(60, 65, 70, 255)
+			},
+			CornerRadius = Clay_CornerRadius.All(4),
+			Clip = new Clay_ClipElementConfig
+			{
+				horizontal = false,
+				vertical = true
+			},
+			Text = new ClayText()
+			{
+				Text = "Scroll Container 2",
+			}
 		};
 
 		var scroll2 = commands.SpawnClayElement(scroll2Node);
 		scrollContainer.AddChild(scroll2);
-
-		// Add title for second scroll container
-		var title2 = commands.SpawnClayText("Scroll Container 2", new Clay_TextElementConfig
-		{
-			fontSize = 16,
-			textColor = new Clay_Color(255, 255, 255, 255)
-		});
-		scroll2.AddChild(title2);
 
 		// Create 20 buttons in second scrollable area
 		for (int i = 0; i < 20; i++)
@@ -299,24 +300,28 @@ public static class Program
 		};
 		buttonNode.CornerRadius = Clay_CornerRadius.All(8);
 
+		buttonNode.Text = new ClayText
+		{
+			Text = text,
+			Config =
+			{
+				fontSize = 20,
+				textColor = new Clay_Color(255, 255, 255, 255)
+			}
+		};
+
 		var button = commands.SpawnClayElement(buttonNode);
 		parent.AddChild(button);
 
-		// Add button text
-		var buttonText = commands.SpawnClayText(text, new Clay_TextElementConfig
-		{
-			fontSize = 20,
-			textColor = new Clay_Color(255, 255, 255, 255)
-		});
-		button.AddChild(buttonText);
-
 		// Add click observer
-		button.Observe<On<ClayPointerTrigger>>(trigger =>
+		button.Observe((On<ClayPointerTrigger> trigger, Query<Data<ClayNode>> nodes) =>
 		{
-			var evt = trigger.Event.Event;
-			if (evt.EventType == ClayPointerEventType.Click)
+			var pointerTrigger = trigger.Event;
+			if (pointerTrigger.Event.EventType == ClayPointerEventType.Click)
 			{
 				Console.WriteLine($"Button clicked: {text}");
+				// Stop propagation so parent doesn't receive this click
+				trigger.Propagate(true);
 			}
 		});
 	}
@@ -329,10 +334,10 @@ public struct ClayRaylibRenderPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		app.AddSystem((Res<ClayUiOptions> options) =>
+		app.AddSystem((Res<ClayUiState> state) =>
 		{
-			options.Value.LayoutDimensions.width = Raylib.GetRenderWidth();
-			options.Value.LayoutDimensions.height = Raylib.GetRenderHeight();
+			state.Value.LayoutDimensions.width = Raylib.GetRenderWidth();
+			state.Value.LayoutDimensions.height = Raylib.GetRenderHeight();
 		})
 		.InStage(Stage.First)
 		.SingleThreaded()
@@ -394,7 +399,7 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		var mouseWheel = Raylib.GetMouseWheelMove();
 		if (mouseWheel != 0)
 		{
-			pointer.Value.AddScroll(new Vector2(0, mouseWheel * 20f));
+			pointer.Value.AddScroll(new Vector2(mouseWheel * 20f));
 		}
 
 		pointer.Value.DeltaTime = Raylib.GetFrameTime();
@@ -405,7 +410,7 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		var commands = state.Value.RenderCommands;
 
 		// Clear scissor stack at the start of each frame
-		scissorStack.Value.Clear();
+		scissorStack.Value!.Clear();
 
 		foreach (ref readonly var cmd in commands)
 		{

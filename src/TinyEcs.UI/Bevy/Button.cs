@@ -95,8 +95,8 @@ public struct ButtonPlugin : IPlugin
 		if (!isDisabled && !isPressed)
 		{
 			var pressedEv = new Pressed();
-			commands.Entity(trigger.EntityId).Insert(pressedEv);
-			commands.EmitTrigger(new On<Pressed>(trigger.EntityId, pressedEv));
+			commands.Entity(trigger.EntityId).Insert(pressedEv).EmitTrigger(pressedEv);
+			commands.EmitTrigger(pressedEv);
 		}
 	}
 
@@ -134,7 +134,7 @@ public struct ButtonPlugin : IPlugin
 			// Emit Activate event
 			var activateEv = new Activate();
 			commands.Entity(trigger.EntityId).EmitTrigger(activateEv);
-			commands.EmitTrigger(new On<Activate>(trigger.EntityId, activateEv));
+			commands.EmitTrigger(activateEv);
 		}
 	}
 }

@@ -5,6 +5,22 @@ using TinyEcs.Bevy;
 namespace TinyEcs.UI.Clay;
 
 /// <summary>
+/// Tracks interaction state between frames for Enter/Exit/Move event detection.
+/// </summary>
+public class InteractionState
+{
+	/// <summary>
+	/// Element IDs that were under the pointer in the previous frame.
+	/// </summary>
+	public HashSet<uint> PreviousHoveredIds = new();
+
+	/// <summary>
+	/// Previous pointer position for Move event detection.
+	/// </summary>
+	public Vector2 PreviousPointerPosition = Vector2.Zero;
+}
+
+/// <summary>
 /// Plugin responsible for Clay pointer interaction and event emission.
 /// Runs in PostUpdate stage after layout calculation.
 /// </summary>
@@ -17,92 +33,201 @@ public struct ClayInteractionPlugin : IPlugin
 		// 2. Emit pointer events
 
 		app.AddSystem((
-			Query<Data<ClayNode, ClayElementId>> nodes,
+			Query<Data<ClayElementId>, Filter<With<ClayNode>>> nodes,
 			Res<ClayPointerState> pointer,
 			Commands commands,
-			EventWriter<ClayPointerEvent> events
-		) => ProcessPointerInteraction(nodes, pointer, commands, events))
+			EventWriter<ClayPointerEvent> events,
+			Local<InteractionState> state,
+			Local<HashSet<uint>> currentHoveredIds
+		) => ProcessPointerInteraction(nodes, pointer, commands, events, state, currentHoveredIds))
 			.InStage(Stage.PostUpdate)
 			.Label("clay:interaction")
 			.Build();
 	}
 
 	/// <summary>
-	/// Process pointer interactions and emit events.
+	/// Emit a pointer event to the event stream and as a trigger.
+	/// If evt.Bubbles is true, TinyEcs will automatically propagate the trigger up the parent hierarchy.
 	/// </summary>
-	private static unsafe void ProcessPointerInteraction(
-		Query<Data<ClayNode, ClayElementId>> nodes,
-		Res<ClayPointerState> pointer,
+	private static void EmitEvent(
+		ClayPointerEvent evt,
 		Commands commands,
 		EventWriter<ClayPointerEvent> events)
 	{
+		// Send to event stream
+		events.Send(evt);
+
+		// Emit trigger - TinyEcs will handle bubbling automatically if evt.Bubbles is true
+		// via the IPropagatingTrigger interface implemented by ClayPointerTrigger
+		commands.EmitTrigger(new ClayPointerTrigger
+		{
+			EntityId = evt.CurrentTarget,
+			Event = evt
+		});
+	}
+
+	/// <summary>
+	/// Process pointer interactions and emit events.
+	/// </summary>
+	private static unsafe void ProcessPointerInteraction(
+		Query<Data<ClayElementId>, Filter<With<ClayNode>>> nodes,
+		Res<ClayPointerState> pointer,
+		Commands commands,
+		EventWriter<ClayPointerEvent> events,
+		Local<InteractionState> state,
+		Local<HashSet<uint>> currentHoveredIds)
+	{
 		// Get elements under pointer
 		var pointerOverIds = Clay_cs.Clay.GetPointerOverIds();
-
-		if (pointerOverIds.Length == 0)
-		{
-			// Pointer not over any element
+		if (pointerOverIds.IsEmpty)
 			return;
+
+		// Build current frame's hovered element IDs set (reuse Local to avoid allocations)
+		currentHoveredIds.Value!.Clear();
+		foreach (ref readonly var id in pointerOverIds)
+		{
+			currentHoveredIds.Value!.Add(id.id);
 		}
 
-		static bool contains(uint id, ReadOnlySpan<Clay_ElementId> ids)
-		{
-			for (int i = 0; i < ids.Length; i++)
-			{
-				if (ids[i].id == id)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
+		// Track if pointer position changed (Local<T> is never null, compiler doesn't know this)
+		var pointerMoved = state.Value!.PreviousPointerPosition != pointer.Value.Position;
 
+		var found = false;
 
-		foreach (var (entity, node, nodeId) in nodes)
+		for (var i = pointerOverIds.Length - 1; i >= 0 && !found; i--)
 		{
-			if (!contains(nodeId.Ref.Id, pointerOverIds))
+			var id = pointerOverIds[i];
+			var entId = IDOp.Compose(id.id, id.offset);
+
+			if (!nodes.Contains(entId))
 			{
-				// This node is not under the pointer
 				continue;
 			}
 
+			var (entity, nodeId) = nodes.Get(entId);
 			ref readonly var entityId = ref entity.Ref;
+			var elementId = nodeId.Ref.Id;
+			var isCurrentlyHovered = currentHoveredIds.Value!.Contains(elementId.id);
+			var wasPreviouslyHovered = state.Value!.PreviousHoveredIds.Contains(elementId.id);
+
+			// Detect Enter event (element is now hovered but wasn't before)
+			if (isCurrentlyHovered && !wasPreviouslyHovered)
+			{
+				var elementData = Clay_cs.Clay.GetElementData(elementId);
+				if (elementData.found)
+				{
+					var localPos = new Vector2(
+						pointer.Value.Position.X - elementData.boundingBox.x,
+						pointer.Value.Position.Y - elementData.boundingBox.y
+					);
+
+					var enterEvent = new ClayPointerEvent
+					{
+						EntityId = entityId,
+						CurrentTarget = entityId,
+						EventType = ClayPointerEventType.Enter,
+						Position = pointer.Value.Position,
+						LocalPosition = localPos,
+						IsPrimaryButton = pointer.Value.PrimaryDown,
+						ScrollDelta = Vector2.Zero,
+						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
+					};
+
+					EmitEvent(enterEvent, commands, events);
+				}
+			}
+
+			// Detect Exit event (element was hovered but isn't now)
+			if (!isCurrentlyHovered && wasPreviouslyHovered)
+			{
+				var elementData = Clay_cs.Clay.GetElementData(elementId);
+				if (elementData.found)
+				{
+					var localPos = new Vector2(
+						state.Value!.PreviousPointerPosition.X - elementData.boundingBox.x,
+						state.Value!.PreviousPointerPosition.Y - elementData.boundingBox.y
+					);
+
+					var exitEvent = new ClayPointerEvent
+					{
+						EntityId = entityId,
+						CurrentTarget = entityId,
+						EventType = ClayPointerEventType.Exit,
+						Position = state.Value!.PreviousPointerPosition,
+						LocalPosition = localPos,
+						IsPrimaryButton = pointer.Value.PrimaryDown,
+						ScrollDelta = Vector2.Zero,
+						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
+					};
+
+					EmitEvent(exitEvent, commands, events);
+				}
+			}
+
+			// Detect Move event (element is hovered and pointer moved)
+			if (isCurrentlyHovered && wasPreviouslyHovered && pointerMoved)
+			{
+				var elementData = Clay_cs.Clay.GetElementData(elementId);
+				if (elementData.found)
+				{
+					var localPos = new Vector2(
+						pointer.Value.Position.X - elementData.boundingBox.x,
+						pointer.Value.Position.Y - elementData.boundingBox.y
+					);
+
+					var moveEvent = new ClayPointerEvent
+					{
+						EntityId = entityId,
+						CurrentTarget = entityId,
+						EventType = ClayPointerEventType.Move,
+						Position = pointer.Value.Position,
+						LocalPosition = localPos,
+						IsPrimaryButton = pointer.Value.PrimaryDown,
+						ScrollDelta = Vector2.Zero,
+						Bubbles = false // Move events don't bubble by default
+					};
+
+					EmitEvent(moveEvent, commands, events);
+				}
+			}
+
+			// Only process button/scroll events for currently hovered elements
+			if (!isCurrentlyHovered)
+			{
+				continue;
+			}
 
 			// Get element data for local position calculation
-			var elementData = Clay_cs.Clay.GetElementData(new Clay_ElementId() { id = nodeId.Ref.Id });
+			var elementDataForEvents = Clay_cs.Clay.GetElementData(elementId);
 
-			if (!elementData.found)
+			if (!elementDataForEvents.found)
 			{
 				// Element data not found
 				continue;
 			}
 
-			var localPos = new Vector2(
-				pointer.Value.Position.X - elementData.boundingBox.x,
-				pointer.Value.Position.Y - elementData.boundingBox.y
+			var localPosForEvents = new Vector2(
+				pointer.Value.Position.X - elementDataForEvents.boundingBox.x,
+				pointer.Value.Position.Y - elementDataForEvents.boundingBox.y
 			);
 
-			// Emit pointer events
+			// Emit pointer events (these bubble by default like in web)
 			if (pointer.Value.PrimaryPressed)
 			{
 				var downEvent = new ClayPointerEvent
 				{
 					EntityId = entityId,
-					EventType = ClayPointerEventType.Down,
+					CurrentTarget = entityId,
+					EventType = ClayPointerEventType.Pressed,
 					Position = pointer.Value.Position,
-					LocalPosition = localPos,
+					LocalPosition = localPosForEvents,
 					IsPrimaryButton = true,
-					ScrollDelta = Vector2.Zero
+					ScrollDelta = Vector2.Zero,
+					Bubbles = true // Mouse events bubble
 				};
 
-				events.Send(downEvent);
-
-				// Emit trigger for observers
-				commands.EmitTrigger(new ClayPointerTrigger
-				{
-					EntityId = entityId,
-					Event = downEvent
-				});
+				EmitEvent(downEvent, commands, events);
+				found = true;
 			}
 
 			if (pointer.Value.PrimaryReleased)
@@ -110,66 +235,64 @@ public struct ClayInteractionPlugin : IPlugin
 				var upEvent = new ClayPointerEvent
 				{
 					EntityId = entityId,
-					EventType = ClayPointerEventType.Up,
+					CurrentTarget = entityId,
+					EventType = ClayPointerEventType.Released,
 					Position = pointer.Value.Position,
-					LocalPosition = localPos,
+					LocalPosition = localPosForEvents,
 					IsPrimaryButton = true,
-					ScrollDelta = Vector2.Zero
+					ScrollDelta = Vector2.Zero,
+					Bubbles = true // Mouse events bubble
 				};
 
-				events.Send(upEvent);
-
-				// Emit trigger for observers
-				commands.EmitTrigger(new ClayPointerTrigger
-				{
-					EntityId = entityId,
-					Event = upEvent
-				});
+				EmitEvent(upEvent, commands, events);
 
 				// Also emit click event if released over same element
 				var clickEvent = new ClayPointerEvent
 				{
 					EntityId = entityId,
+					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Click,
 					Position = pointer.Value.Position,
-					LocalPosition = localPos,
+					LocalPosition = localPosForEvents,
 					IsPrimaryButton = true,
-					ScrollDelta = Vector2.Zero
+					ScrollDelta = Vector2.Zero,
+					Bubbles = true // Click events bubble
 				};
 
-				events.Send(clickEvent);
+				EmitEvent(clickEvent, commands, events);
 
-				// Emit trigger for observers
-				commands.EmitTrigger(new ClayPointerTrigger
-				{
-					EntityId = entityId,
-					Event = clickEvent
-				});
+				found = true;
 			}
 
 			// Emit scroll events
-			var scrollDelta = pointer.Value.GetAccumulatedScroll();
+			var scrollDelta = pointer.Value.ScrollDelta;
 			if (scrollDelta != Vector2.Zero)
 			{
 				var scrollEvent = new ClayPointerEvent
 				{
 					EntityId = entityId,
+					CurrentTarget = entityId,
 					EventType = ClayPointerEventType.Scroll,
 					Position = pointer.Value.Position,
-					LocalPosition = localPos,
+					LocalPosition = localPosForEvents,
 					IsPrimaryButton = pointer.Value.PrimaryDown,
-					ScrollDelta = scrollDelta
+					ScrollDelta = scrollDelta,
+					Bubbles = true // Scroll events bubble
 				};
 
-				events.Send(scrollEvent);
+				EmitEvent(scrollEvent, commands, events);
 
-				// Emit trigger for observers
-				commands.EmitTrigger(new ClayPointerTrigger
-				{
-					EntityId = entityId,
-					Event = scrollEvent
-				});
+				found = true;
 			}
 		}
+
+		// Update state for next frame - swap the HashSets to avoid allocating a new one
+		// Clear previous and populate with current values
+		state.Value!.PreviousHoveredIds.Clear();
+		foreach (var id in currentHoveredIds.Value!)
+		{
+			state.Value!.PreviousHoveredIds.Add(id);
+		}
+		state.Value!.PreviousPointerPosition = pointer.Value.Position;
 	}
 }
