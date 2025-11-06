@@ -17,10 +17,6 @@ public struct ClayUiPlugin : IPlugin
 
 	public unsafe void Build(App app)
 	{
-		// Initialize Clay - IMPORTANT: Set max counts before calculating minimum size!
-		Clay_cs.Clay.SetMaxElementCount(Options.MaxElementCount);
-		Clay_cs.Clay.SetMaxMeasureTextCacheWordCount(Options.MaxMeasureTextCacheWordCount);
-
 		// Calculate minimum required memory based on max element count
 		var minSize = Clay_cs.Clay.MinMemorySize();
 		var arenaSize = Math.Max(Options.ArenaSize, minSize);
@@ -82,6 +78,7 @@ public struct ClayUiPlugin : IPlugin
 		app.AddPlugin(new ClayLayoutPlugin());
 		app.AddPlugin(new ClayInteractionPlugin());
 		app.AddPlugin(new ClayHierarchyPlugin());
+		app.AddPlugin(new Widgets.WidgetsPlugin());
 
 		// Add cleanup system to reset pointer transient state
 		app.AddSystem((ResMut<ClayPointerState> pointer) =>

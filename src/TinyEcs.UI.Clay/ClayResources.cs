@@ -146,16 +146,6 @@ public class ClayUiOptions
 	public uint ArenaSize = 1024 * 1024;
 
 	/// <summary>
-	/// Maximum number of UI elements. Default is 8192.
-	/// </summary>
-	public int MaxElementCount = 8192;
-
-	/// <summary>
-	/// Maximum number of words to cache for text measurement. Default is 16384.
-	/// </summary>
-	public int MaxMeasureTextCacheWordCount = 16384;
-
-	/// <summary>
 	/// Enable Clay debug mode (visual debugging tools).
 	/// </summary>
 	public bool EnableDebugMode = false;

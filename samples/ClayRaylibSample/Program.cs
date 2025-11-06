@@ -3,7 +3,9 @@ using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.UI.Clay;
+using TinyEcs.UI.Clay.Widgets;
 using Clay_cs;
+using System.Text;
 
 namespace ClayRaylibSample;
 
@@ -31,15 +33,64 @@ public static class Program
 		{
 			LayoutDimensions = new Clay_Dimensions(WINDOW_WIDTH, WINDOW_HEIGHT),
 			ArenaSize = 1024 * 1024,  // 1MB
-			MaxElementCount = 1024,
-			EnableDebugMode = false,
-			EnableCulling = true,
+			EnableDebugMode = true,
+			EnableCulling = false,
 			MeasureTextFunction = MeasureText,
 			ErrorHandler = HandleClayError
 		});
 
 		// Add rendering plugin
 		app.AddPlugin(new ClayRaylibRenderPlugin());
+
+		// Add Raylib-specific global slider drag system
+		// This handles mouse movement even outside slider bounds using Raylib
+		app.AddRaylibSliderDragSystem();
+
+		// Add global observer for radio button value changes
+		app.AddObserver<On<RadioValueChanged>>((world, trigger) =>
+		{
+			var evt = trigger.Event;
+			Console.WriteLine($"Radio changed - Group: {evt.GroupKey}, Value: {evt.Value}");
+		});
+
+		// Add global observer for slider value changes
+		app.AddObserver<On<SliderValueChanged>>((world, trigger) =>
+		{
+			var evt = trigger.Event;
+			Console.WriteLine($"Slider value: {evt.Value:F2}");
+		});
+
+		// Add global observer for checkbox value changes
+		app.AddObserver<On<CheckboxValueChanged>>((world, trigger) =>
+		{
+			var evt = trigger.Event;
+			Console.WriteLine($"Checkbox checked: {evt.Checked}");
+		});
+
+		// Add global observer for button clicks
+		app.AddObserver<On<ButtonClicked>>((world, trigger) =>
+		{
+			Console.WriteLine($"Button clicked: Entity {trigger.EntityId}");
+		});
+
+		// Add global observer for text input value changes
+		app.AddObserver<On<TextInputValueChanged>>((world, trigger) =>
+		{
+			var evt = trigger.Event;
+			Console.WriteLine($"Text input changed: {evt.Text}");
+		});
+
+		// Add global observer for text input focus
+		app.AddObserver<On<TextInputFocused>>((world, trigger) =>
+		{
+			Console.WriteLine($"Text input focused: Entity {trigger.EntityId}");
+		});
+
+		// Add global observer for text input blur
+		app.AddObserver<On<TextInputBlurred>>((world, trigger) =>
+		{
+			Console.WriteLine($"Text input blurred: Entity {trigger.EntityId}");
+		});
 
 		// Create UI in startup
 		app.AddSystem((Commands commands) => CreateUI(commands))
@@ -167,6 +218,29 @@ public static class Program
 			}
 		});
 
+		// Create sliders using the widget extension
+		commands.CreateSlider(scroll1, "Volume", 0.5f, 0f, 1f);
+		commands.CreateSlider(scroll1, "Brightness", 0.75f, 0f, 1f);
+		commands.CreateSlider(scroll1, "Speed", 50f, 0f, 100f, step: 5f);
+
+		// Create checkboxes
+		commands.CreateCheckbox(scroll1, "Enable Sound", defaultChecked: true);
+		commands.CreateCheckbox(scroll1, "Enable Music", defaultChecked: false);
+		commands.CreateCheckbox(scroll1, "Enable Vibration", defaultChecked: true);
+		commands.CreateCheckbox(scroll1, "Disabled Option", defaultChecked: false, disabled: true);
+
+		// Create radio buttons for difficulty selection
+		commands.CreateRadioButton(scroll1, "difficulty", "easy", "Easy", defaultSelected: true);
+		commands.CreateRadioButton(scroll1, "difficulty", "normal", "Normal");
+		commands.CreateRadioButton(scroll1, "difficulty", "hard", "Hard");
+		commands.CreateRadioButton(scroll1, "difficulty", "expert", "Expert");
+
+		// Create radio buttons for graphics quality
+		commands.CreateRadioButton(scroll1, "graphics", "low", "Low Quality");
+		commands.CreateRadioButton(scroll1, "graphics", "medium", "Medium Quality", defaultSelected: true);
+		commands.CreateRadioButton(scroll1, "graphics", "high", "High Quality");
+		commands.CreateRadioButton(scroll1, "graphics", "ultra", "Ultra Quality");
+
 		// Create 20 buttons in first scrollable area
 		var colors = new[]
 		{
@@ -180,7 +254,7 @@ public static class Program
 		for (int i = 0; i < 20; i++)
 		{
 			var color = colors[i % colors.Length];
-			CreateButton(commands, scroll1, $"S1 Button {i + 1}", color);
+			commands.CreateButton(scroll1, $"S1 Button {i + 1}", backgroundColor: color);
 		}
 
 		// Create second nested scrollable container
@@ -219,8 +293,147 @@ public static class Program
 		for (int i = 0; i < 20; i++)
 		{
 			var color = colors[i % colors.Length];
-			CreateButton(commands, scroll2, $"S2 Button {i + 1}", color);
+			commands.CreateButton(scroll2, $"S2 Button {i + 1}", backgroundColor: color);
 		}
+
+		// Create third container for new widgets demonstration
+		var scroll3Node = ClayNode.Default with
+		{
+			Layout = new Clay_LayoutConfig
+			{
+				sizing = new Clay_Sizing(
+					Clay_SizingAxis.Grow(),
+					Clay_SizingAxis.Fixed(300)
+				),
+				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+				padding = Clay_Padding.All(8),
+				childGap = 8
+			},
+			Rectangle = new Clay_RectangleRenderData
+			{
+				backgroundColor = new Clay_Color(60, 65, 70, 255)
+			},
+			CornerRadius = Clay_CornerRadius.All(4),
+			Clip = new Clay_ClipElementConfig
+			{
+				horizontal = false,
+				vertical = true
+			},
+			Text = new ClayText()
+			{
+				Text = "Widget Showcase",
+			}
+		};
+
+		var scroll3 = commands.SpawnClayElement(scroll3Node);
+		scrollContainer.AddChild(scroll3);
+
+		// Create a panel to group text input widgets
+		var inputPanel = commands.CreatePanel(
+			scroll3,
+			title: "User Input",
+			width: 550f,
+			height: 0f,
+			backgroundColor: new Clay_Color(50, 55, 60, 255),
+			padding: 12f,
+			cornerRadius: 8
+		);
+
+		// Create text input fields
+		commands.CreateTextInput(
+			inputPanel,
+			placeholder: "Username...",
+			width: 300f,
+			height: 40f
+		);
+
+		commands.CreateTextInput(
+			inputPanel,
+			placeholder: "Email address...",
+			width: 300f,
+			height: 40f
+		);
+
+		commands.CreateTextInput(
+			inputPanel,
+			placeholder: "Password (disabled)",
+			width: 300f,
+			height: 40f,
+			disabled: true
+		);
+
+		// Create a panel to group progress bars
+		var progressPanel = commands.CreatePanel(
+			scroll3,
+			title: "Progress Indicators",
+			width: 550f,
+			height: 0f,
+			backgroundColor: new Clay_Color(50, 55, 60, 255),
+			padding: 12f,
+			cornerRadius: 8
+		);
+
+		// Create progress bars with different states
+		commands.CreateProgressBar(
+			progressPanel,
+			initialValue: 25f,
+			min: 0f,
+			max: 100f,
+			width: 300f,
+			height: 28f,
+			showLabel: true,
+			fillColor: new Clay_Color(76, 175, 80, 255)
+		);
+
+		commands.CreateProgressBar(
+			progressPanel,
+			initialValue: 60f,
+			min: 0f,
+			max: 100f,
+			width: 300f,
+			height: 28f,
+			showLabel: true,
+			fillColor: new Clay_Color(33, 150, 243, 255)
+		);
+
+		commands.CreateProgressBar(
+			progressPanel,
+			initialValue: 85f,
+			min: 0f,
+			max: 100f,
+			width: 300f,
+			height: 28f,
+			showLabel: true,
+			fillColor: new Clay_Color(255, 152, 0, 255)
+		);
+
+		commands.CreateProgressBar(
+			progressPanel,
+			initialValue: 100f,
+			min: 0f,
+			max: 100f,
+			width: 300f,
+			height: 28f,
+			showLabel: true,
+			fillColor: new Clay_Color(244, 67, 54, 255)
+		);
+
+		// Create a nested panel example
+		var nestedPanel = commands.CreatePanel(
+			scroll3,
+			title: "Settings",
+			width: 550f,
+			height: 0f,
+			backgroundColor: new Clay_Color(50, 55, 60, 255),
+			padding: 12f,
+			cornerRadius: 8
+		);
+
+		// Add some controls inside the nested panel
+		commands.CreateCheckbox(nestedPanel, "Enable Notifications", defaultChecked: true);
+		commands.CreateCheckbox(nestedPanel, "Auto-save Progress", defaultChecked: true);
+		commands.CreateSlider(nestedPanel, "Music Volume", 0.7f, 0f, 1f);
+		commands.CreateButton(nestedPanel, "Save Settings", width: 150f, height: 40f);
 	}
 
 	/// <summary>
@@ -232,7 +445,39 @@ public static class Program
 		// Extract text string from Clay string slice
 		var textPtr = text.chars;
 		var textLength = text.length;
-		var textString = new string((sbyte*)textPtr, 0, textLength, System.Text.Encoding.UTF8);
+
+		var textString = Encoding.UTF8.GetString((byte*)textPtr, textLength);
+
+		// var font = Raylib.GetFontDefault();
+		// var scaleFactor = config->fontSize / (float)font.BaseSize;
+
+		// float maxTextWidth = 0.0f;
+		// float lineTextWidth = 0;
+		// int maxLineCharCount = 0;
+		// int lineCharCount = 0;
+
+		// for (int i = 0; i < text.length; ++i, lineCharCount++)
+		// {
+		// 	if (text.chars[i] == '\n')
+		// 	{
+		// 		maxTextWidth = Math.Max(maxTextWidth, lineTextWidth);
+		// 		maxLineCharCount = Math.Max(maxLineCharCount, lineCharCount);
+		// 		lineTextWidth = 0;
+		// 		lineCharCount = 0;
+		// 		continue;
+		// 	}
+		// 	int index = text.chars[i] - 32;
+		// 	if (font.Glyphs[index].AdvanceX != 0) lineTextWidth += font.Glyphs[index].AdvanceX;
+		// 	else lineTextWidth += (font.Recs[index].Width + font.Glyphs[index].OffsetX);
+		// }
+
+		// maxTextWidth = Math.Max(maxTextWidth, lineTextWidth);
+		// maxLineCharCount = Math.Max(maxLineCharCount, lineCharCount);
+
+		// var dim = new Clay_Dimensions();
+		// dim.width = maxTextWidth * scaleFactor + (lineCharCount * config->letterSpacing);
+		// dim.height = config->fontSize;
+
 
 		// Measure text using Raylib
 		var textSize = Raylib.MeasureTextEx(
@@ -277,51 +522,89 @@ public static class Program
 		Console.ResetColor();
 	}
 
-	private static void CreateButton(Commands commands, EntityCommands parent, string text, Clay_Color color)
+
+}
+
+/// <summary>
+/// Extension methods for adding Raylib-specific Clay UI systems.
+/// </summary>
+public static class RaylibClayExtensions
+{
+	/// <summary>
+	/// Adds global slider drag tracking system that uses Raylib for mouse input.
+	/// This allows sliders to continue updating even when the cursor leaves the slider bounds.
+	/// </summary>
+	public static App AddRaylibSliderDragSystem(this App app)
 	{
-		var buttonNode = ClayNode.Default;
-		buttonNode.Layout = new Clay_LayoutConfig
+		app.AddSystem((Commands commands, Query<Data<SliderState>> stateQuery, Query<Data<ClayComputedLayout>> layoutQuery) =>
 		{
-			sizing = new Clay_Sizing(
-				Clay_SizingAxis.Fixed(200),
-				Clay_SizingAxis.Fixed(60)
-			),
-			padding = Clay_Padding.All(8),
-			childAlignment = new Clay_ChildAlignment(
-				Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
-				Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-			)
-		};
-		buttonNode.Rectangle = new Clay_RectangleRenderData
-		{
-			backgroundColor = color
-		};
-		buttonNode.CornerRadius = Clay_CornerRadius.All(8);
-
-		buttonNode.Text = new ClayText
-		{
-			Text = text,
-			Config =
+			// Check if any slider is being dragged
+			foreach (var (entityId, statePtr) in stateQuery)
 			{
-				fontSize = 20,
-				textColor = new Clay_Color(255, 255, 255, 255)
-			}
-		};
+				var state = statePtr.Ref;
 
-		var button = commands.SpawnClayElement(buttonNode);
-		parent.AddChild(button);
+				if (!state.IsDragging)
+					continue;
 
-		// Add click observer
-		button.Observe((On<ClayPointerEvent> trigger, Query<Data<ClayNode>> nodes) =>
-		{
-			var pointerEvent = trigger.Event;
-			if (pointerEvent.EventType == ClayPointerEventType.Click)
-			{
-				Console.WriteLine($"Button clicked: {text}");
-				// Stop propagation so parent doesn't receive this click
-				trigger.Propagate(false);
+				// Check if mouse button is still down
+				if (!Raylib.IsMouseButtonDown(MouseButton.Left))
+				{
+					// Mouse released - stop dragging
+					state.IsDragging = false;
+					commands.Entity(entityId.Ref).Insert(state);
+					continue;
+				}
+
+				// Get global mouse position from Raylib
+				var mousePos = Raylib.GetMousePosition();
+
+				// Get layout information for the slider components
+				if (!layoutQuery.Contains(state.TrackEntityId) || !layoutQuery.Contains(state.ThumbEntityId))
+					continue;
+
+				var (_, trackLayoutPtr) = layoutQuery.Get(state.TrackEntityId);
+				var (_, thumbLayoutPtr) = layoutQuery.Get(state.ThumbEntityId);
+				var trackLayout = trackLayoutPtr.Ref;
+				var thumbLayout = thumbLayoutPtr.Ref;
+
+				// Calculate slider value using simple Lua-style calculation
+				var trackWidth = trackLayout.Width;
+				var trackLocalX = mousePos.X - trackLayout.X;
+				var normalized = Math.Clamp(trackLocalX / trackWidth, 0f, 1f);
+				var newValue = state.Min + normalized * (state.Max - state.Min);
+
+				// Apply step if specified
+				if (state.Step > 0)
+				{
+					newValue = MathF.Round(newValue / state.Step) * state.Step;
+				}
+
+				// Update value if it changed
+				var clampedValue = Math.Clamp(newValue, state.Min, state.Max);
+				if (Math.Abs(clampedValue - state.Value) > 0.0001f)
+				{
+					state.Value = clampedValue;
+					commands.Entity(entityId.Ref).Insert(state);
+
+					// Update visuals
+					var label = state.Label;
+					var value = state.Value;
+					var min = state.Min;
+					var max = state.Max;
+
+					commands.Entity(state.LabelEntityId).Insert(new SliderLabelUpdate { Text = $"{label}: {value:F2}" });
+					float normalizedFill = (value - min) / (max - min);
+					commands.Entity(state.FillEntityId).Insert(new SliderFillUpdate { NormalizedValue = normalizedFill });
+				}
 			}
-		});
+		})
+		.InStage(Stage.First)
+		.Label("raylib:slider-drag")
+		.After("clay:reset-pointer")
+		.SingleThreaded()
+		.Build();
+
+		return app;
 	}
 }
 
@@ -412,23 +695,37 @@ public struct ClayRaylibRenderPlugin : IPlugin
 
 		foreach (ref readonly var cmd in commands)
 		{
+			// Manual culling: Check if command is off-screen
+			// IMPORTANT: Only cull visual commands (RECTANGLE, BORDER, TEXT)!
+			// Always process SCISSOR_START/END to maintain Begin/End pairing and stack integrity.
+			bool isOffScreen = cmd.boundingBox.x + cmd.boundingBox.width < 0 ||
+			                   cmd.boundingBox.y + cmd.boundingBox.height < 0;
+
 			switch (cmd.commandType)
 			{
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
+					// Cull off-screen visual commands for performance
+					if (isOffScreen) break;
 					RenderRectangle(cmd);
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_BORDER:
+					// Cull off-screen visual commands for performance
+					if (isOffScreen) break;
 					RenderBorder(cmd);
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_TEXT:
+					// Cull off-screen visual commands for performance
+					if (isOffScreen) break;
 					RenderText(cmd);
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
 					// Start scissor test (clipping)
 					var scissorBox = cmd.boundingBox;
+
+					// Create scissor rectangle from Clay's bounding box
 					var newScissor = new Rectangle(
 						scissorBox.x,
 						scissorBox.y,
@@ -443,10 +740,18 @@ public struct ClayRaylibRenderPlugin : IPlugin
 						newScissor = IntersectRectangles(currentScissor, newScissor);
 					}
 
+					// Clamp scissor to screen bounds and ensure positive dimensions
+					var screenWidth = Raylib.GetScreenWidth();
+					var screenHeight = Raylib.GetScreenHeight();
+					newScissor.X = Math.Clamp(newScissor.X, 0, screenWidth);
+					newScissor.Y = Math.Clamp(newScissor.Y, 0, screenHeight);
+					newScissor.Width = Math.Max(0, Math.Min(newScissor.Width, screenWidth - newScissor.X));
+					newScissor.Height = Math.Max(0, Math.Min(newScissor.Height, screenHeight - newScissor.Y));
+
 					// Push the new scissor region onto the stack
 					scissorStack.Value.Push(newScissor);
 
-					// Apply the scissor region
+					// Always apply scissor mode (even for zero dimensions to maintain Begin/End pairing)
 					Raylib.BeginScissorMode(
 						(int)newScissor.X,
 						(int)newScissor.Y,
@@ -456,13 +761,14 @@ public struct ClayRaylibRenderPlugin : IPlugin
 					break;
 
 				case Clay_RenderCommandType.CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
+
 					// End current scissor mode
 					Raylib.EndScissorMode();
 
 					// Pop the current scissor region
 					if (scissorStack.Value.Count > 0)
 					{
-						scissorStack.Value.Pop();
+						var popped = scissorStack.Value.Pop();
 					}
 
 					// If there's a parent scissor region, restore it
@@ -552,49 +858,69 @@ public struct ClayRaylibRenderPlugin : IPlugin
 			(byte)Math.Clamp(clayColor.a, 0, 255)
 		);
 
-		// Draw border rectangles for each side
-		if (border.width.left > 0)
+		// Check if we have corner radius - use rounded lines if so
+		if (border.cornerRadius.topLeft > 0)
 		{
-			Raylib.DrawRectangle(
-				(int)bounds.x,
-				(int)bounds.y,
-				(int)border.width.left,
-				(int)bounds.height,
+			var radius = border.cornerRadius.topLeft;
+			// Use the maximum border width for the line thickness
+			var thickness = Math.Max(Math.Max(border.width.left, border.width.right),
+									  Math.Max(border.width.top, border.width.bottom));
+
+			// DrawRectangleRoundedLinesEx: Rectangle, roundness, segments, line thickness, color
+			Raylib.DrawRectangleRoundedLinesEx(
+				new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height),
+				radius / Math.Min(bounds.width, bounds.height),
+				8,  // segments
+				thickness,
 				color
 			);
 		}
-
-		if (border.width.right > 0)
+		else
 		{
-			Raylib.DrawRectangle(
-				(int)(bounds.x + bounds.width - border.width.right),
-				(int)bounds.y,
-				(int)border.width.right,
-				(int)bounds.height,
-				color
-			);
-		}
+			// Draw border rectangles for each side (non-rounded)
+			if (border.width.left > 0)
+			{
+				Raylib.DrawRectangle(
+					(int)bounds.x,
+					(int)bounds.y,
+					(int)border.width.left,
+					(int)bounds.height,
+					color
+				);
+			}
 
-		if (border.width.top > 0)
-		{
-			Raylib.DrawRectangle(
-				(int)bounds.x,
-				(int)bounds.y,
-				(int)bounds.width,
-				(int)border.width.top,
-				color
-			);
-		}
+			if (border.width.right > 0)
+			{
+				Raylib.DrawRectangle(
+					(int)(bounds.x + bounds.width - border.width.right),
+					(int)bounds.y,
+					(int)border.width.right,
+					(int)bounds.height,
+					color
+				);
+			}
 
-		if (border.width.bottom > 0)
-		{
-			Raylib.DrawRectangle(
-				(int)bounds.x,
-				(int)(bounds.y + bounds.height - border.width.bottom),
-				(int)bounds.width,
-				(int)border.width.bottom,
-				color
-			);
+			if (border.width.top > 0)
+			{
+				Raylib.DrawRectangle(
+					(int)bounds.x,
+					(int)bounds.y,
+					(int)bounds.width,
+					(int)border.width.top,
+					color
+				);
+			}
+
+			if (border.width.bottom > 0)
+			{
+				Raylib.DrawRectangle(
+					(int)bounds.x,
+					(int)(bounds.y + bounds.height - border.width.bottom),
+					(int)bounds.width,
+					(int)border.width.bottom,
+					color
+				);
+			}
 		}
 	}
 
@@ -613,14 +939,16 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		// Extract text string from Clay string slice
 		var textPtr = textData.stringContents.chars;
 		var textLength = textData.stringContents.length;
-		var text = new string((sbyte*)textPtr, 0, textLength, System.Text.Encoding.UTF8);
+		var text = Encoding.UTF8.GetString((byte*)textPtr, textLength);
 
-		// Draw text at position
-		Raylib.DrawText(
+		// Clay provides the bounding box already positioned correctly based on alignment
+		// Just draw the text at the provided position
+		Raylib.DrawTextEx(
+			Raylib.GetFontDefault(),
 			text,
-			(int)bounds.x,
-			(int)bounds.y,
+			new Vector2(bounds.x, bounds.y),
 			textData.fontSize,
+			textData.letterSpacing,
 			color
 		);
 	}

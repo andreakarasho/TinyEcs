@@ -172,9 +172,8 @@ public struct ClayLayoutPlugin : IPlugin
 
 		if (node.Ref.Text.HasValue)
 		{
-			var clayString = Clay_cs.Clay.ClayStrings.Get(node.Ref.Text.Value.Text);
 			var textConfig = node.Ref.Text.Value.Config;
-			Clay_cs.Clay.OpenTextElement(clayString, textConfig);
+			Clay_cs.Clay.OpenTextElement(node.Ref.Text.Value.Text, textConfig);
 		}
 
 		if (childrenQuery.Contains(entityId))
