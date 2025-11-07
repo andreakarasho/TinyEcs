@@ -225,3 +225,124 @@ public struct ClayPointerEvent
 	public bool Bubbles;
 }
 
+/// <summary>
+/// Platform-agnostic text input state resource.
+/// Renderer/platform updates this resource, text input widgets consume it.
+/// Similar to ClayPointerState, this allows the user to inject text input from any engine (Raylib, SDL, etc.).
+/// </summary>
+public class ClayTextInputState
+{
+	/// <summary>
+	/// Queue of characters typed this frame.
+	/// Populated by the platform/renderer, consumed by text input widgets.
+	/// </summary>
+	private readonly Queue<char> _charQueue = new();
+
+	/// <summary>
+	/// Whether backspace was pressed this frame.
+	/// </summary>
+	public bool BackspacePressed;
+
+	/// <summary>
+	/// Whether delete was pressed this frame.
+	/// </summary>
+	public bool DeletePressed;
+
+	/// <summary>
+	/// Whether enter/return was pressed this frame.
+	/// </summary>
+	public bool EnterPressed;
+
+	/// <summary>
+	/// Whether escape was pressed this frame.
+	/// </summary>
+	public bool EscapePressed;
+
+	/// <summary>
+	/// Whether left arrow was pressed this frame.
+	/// </summary>
+	public bool LeftPressed;
+
+	/// <summary>
+	/// Whether right arrow was pressed this frame.
+	/// </summary>
+	public bool RightPressed;
+
+	/// <summary>
+	/// Whether home key was pressed this frame.
+	/// </summary>
+	public bool HomePressed;
+
+	/// <summary>
+	/// Whether end key was pressed this frame.
+	/// </summary>
+	public bool EndPressed;
+
+	/// <summary>
+	/// Whether Ctrl+A (select all) was pressed this frame.
+	/// </summary>
+	public bool SelectAllPressed;
+
+	/// <summary>
+	/// Whether Ctrl+C (copy) was pressed this frame.
+	/// </summary>
+	public bool CopyPressed;
+
+	/// <summary>
+	/// Whether Ctrl+V (paste) was pressed this frame.
+	/// </summary>
+	public bool PastePressed;
+
+	/// <summary>
+	/// Whether Ctrl+X (cut) was pressed this frame.
+	/// </summary>
+	public bool CutPressed;
+
+	/// <summary>
+	/// Add a character to the input queue.
+	/// Called by platform/renderer to inject typed characters.
+	/// </summary>
+	public void AddChar(char c)
+	{
+		_charQueue.Enqueue(c);
+	}
+
+	/// <summary>
+	/// Get all characters typed this frame.
+	/// Called by text input widgets to consume input.
+	/// </summary>
+	public IEnumerable<char> GetChars()
+	{
+		while (_charQueue.Count > 0)
+		{
+			yield return _charQueue.Dequeue();
+		}
+	}
+
+	/// <summary>
+	/// Check if there are any pending characters.
+	/// </summary>
+	public bool HasChars => _charQueue.Count > 0;
+
+	/// <summary>
+	/// Reset transient state (key presses, character queue).
+	/// Called at the beginning of each frame.
+	/// </summary>
+	public void ResetTransientState()
+	{
+		_charQueue.Clear();
+		BackspacePressed = false;
+		DeletePressed = false;
+		EnterPressed = false;
+		EscapePressed = false;
+		LeftPressed = false;
+		RightPressed = false;
+		HomePressed = false;
+		EndPressed = false;
+		SelectAllPressed = false;
+		CopyPressed = false;
+		PastePressed = false;
+		CutPressed = false;
+	}
+}
+

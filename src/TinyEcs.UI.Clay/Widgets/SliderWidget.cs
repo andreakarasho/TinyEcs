@@ -194,7 +194,7 @@ public static class SliderWidget
 			{
 				sizing = new Clay_Sizing(
 					Clay_SizingAxis.Percent(normalizedValue),
-					Clay_SizingAxis.Grow()
+					Clay_SizingAxis.Fixed(6)
 				),
 				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
 				childAlignment = new Clay_ChildAlignment(
@@ -212,21 +212,21 @@ public static class SliderWidget
 		var fill = commands.SpawnClayElement(fillNode);
 		track.AddChild(fill);
 
-		// Thumb (the draggable circle) - larger than the track and centered on it
+		// Thumb (the draggable circle) - slightly larger than the track and centered on it
 		var thumbNode = ClayNode.Default with
 		{
 			Layout = new Clay_LayoutConfig
 			{
 				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(20),
-					Clay_SizingAxis.Fixed(20)
+					Clay_SizingAxis.Fixed(14),
+					Clay_SizingAxis.Fixed(14)
 				)
 			},
 			Rectangle = new Clay_RectangleRenderData
 			{
 				backgroundColor = new Clay_Color(120, 170, 255, 255)
 			},
-			CornerRadius = Clay_CornerRadius.All(10),
+			CornerRadius = Clay_CornerRadius.All(7),
 			Border = new Clay_BorderElementConfig
 			{
 				color = new Clay_Color(255, 255, 255, 50),

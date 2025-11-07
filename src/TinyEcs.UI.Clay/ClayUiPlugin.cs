@@ -71,8 +71,11 @@ public struct ClayUiPlugin : IPlugin
 			EnableDragScrolling = true
 		};
 
+		var textInputState = new ClayTextInputState();
+
 		app.AddResource(uiState);
 		app.AddResource(pointerState);
+		app.AddResource(textInputState);
 
 		// Add sub-plugins
 		app.AddPlugin(new ClayLayoutPlugin());
@@ -80,13 +83,14 @@ public struct ClayUiPlugin : IPlugin
 		app.AddPlugin(new ClayHierarchyPlugin());
 		app.AddPlugin(new Widgets.WidgetsPlugin());
 
-		// Add cleanup system to reset pointer transient state
-		app.AddSystem((ResMut<ClayPointerState> pointer) =>
+		// Add cleanup system to reset transient state
+		app.AddSystem((ResMut<ClayPointerState> pointer, ResMut<ClayTextInputState> textInput) =>
 		{
 			pointer.Value.ResetTransientState();
+			textInput.Value.ResetTransientState();
 		})
 			.InStage(Stage.First)
-			.Label("clay:reset-pointer")
+			.Label("clay:reset-input-state")
 			.Build();
 	}
 }

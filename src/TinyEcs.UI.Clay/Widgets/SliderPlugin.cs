@@ -42,10 +42,7 @@ public struct SliderPlugin : IPlugin
 				var update = updatePtr.Ref;
 				ref var node = ref nodePtr.Ref;
 
-				node.Layout.sizing = new Clay_Sizing(
-					Clay_SizingAxis.Percent(update.NormalizedValue),
-					Clay_SizingAxis.Grow()
-				);
+				node.Layout.sizing.width = Clay_SizingAxis.Percent(update.NormalizedValue);
 
 				// Re-insert to trigger change detection
 				commands.Entity(entityId.Ref).Insert(node);
