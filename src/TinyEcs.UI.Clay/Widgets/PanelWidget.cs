@@ -27,37 +27,33 @@ public static class PanelWidget
 		float width = 0f,
 		float height = 0f,
 		Clay_Color? backgroundColor = null,
-		float padding = 12f,
+		ushort padding = 12,
 		ushort cornerRadius = 8)
 	{
 		var bgColor = backgroundColor ?? new Clay_Color(45, 50, 55, 255);
 
-		var sizing = new Clay_Sizing(
-			width > 0 ? Clay_SizingAxis.Fixed(width) : Clay_SizingAxis.Grow(),
-			height > 0 ? Clay_SizingAxis.Fixed(height) : Clay_SizingAxis.Grow()
-		);
-
 		// Panel container
-		var panelNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = sizing,
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				padding = Clay_Padding.All((ushort)padding),
-				childGap = 8
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = bgColor
-			},
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(70, 75, 80, 255),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			},
-			CornerRadius = Clay_CornerRadius.All(cornerRadius)
-		};
+		var panelBuilder = ClayNode.Configure();
+
+		if (width > 0)
+			panelBuilder = panelBuilder.Width(width);
+		else
+			panelBuilder = panelBuilder.WidthGrow();
+
+		if (height > 0)
+			panelBuilder = panelBuilder.Height(height);
+		else
+			panelBuilder = panelBuilder.HeightGrow();
+
+		panelBuilder = panelBuilder
+			.Column()
+			.Padding(padding)
+			.Gap(8)
+			.Background(bgColor)
+			.Border(new Clay_Color(70, 75, 80, 255), 1)
+			.CornerRadius(cornerRadius);
+
+		var panelNode = panelBuilder.Build();
 
 		var panel = commands.SpawnClayElement(panelNode);
 		parent.AddChild(panel);
@@ -65,25 +61,11 @@ public static class PanelWidget
 		// Optional title
 		if (!string.IsNullOrEmpty(title))
 		{
-			var titleNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Grow(),
-						Clay_SizingAxis.Fit(0, 0)
-					)
-				},
-				Text = new ClayText
-				{
-					Text = title,
-					Config = new Clay_TextElementConfig
-					{
-						fontSize = 18,
-						textColor = new Clay_Color(220, 220, 230, 255)
-					}
-				}
-			};
+			var titleNode = ClayNode.Configure()
+				.WidthGrow()
+				.HeightFit(0, 0)
+				.Text(title, 18, new Clay_Color(220, 220, 230, 255))
+				.Build();
 
 			var titleElement = commands.SpawnClayElement(titleNode);
 			panel.AddChild(titleElement);

@@ -68,36 +68,20 @@ public static class ProgressBarWidget
 		var barColor = fillColor ?? new Clay_Color(76, 175, 80, 255);
 
 		// Container/Track
-		var containerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(width),
-					Clay_SizingAxis.Fixed(height)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = bgColor
-			},
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(80, 80, 90, 255),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			},
-			CornerRadius = Clay_CornerRadius.All(4)
-		};
+		var containerNode = ClayNode.Configure()
+			.Size(width, height)
+			.Row()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Background(bgColor)
+			.Border(new Clay_Color(80, 80, 90, 255), 1)
+			.CornerRadius(4)
+			.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
 		// Fill bar
+		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
 		float normalizedValue = (initialValue - min) / (max - min);
 		var fillNode = ClayNode.Default with
 		{
@@ -127,25 +111,11 @@ public static class ProgressBarWidget
 		if (showLabel)
 		{
 			var percentage = (int)((normalizedValue) * 100);
-			var labelNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fit(0, 0),
-						Clay_SizingAxis.Fit(0, 0)
-					)
-				},
-				Text = new ClayText
-				{
-					Text = $"{percentage}%",
-					Config = new Clay_TextElementConfig
-					{
-						fontSize = 14,
-						textColor = new Clay_Color(255, 255, 255, 255)
-					}
-				}
-			};
+			var labelNode = ClayNode.Configure()
+				.WidthFit(0, 0)
+				.HeightFit(0, 0)
+				.Text($"{percentage}%", 14, new Clay_Color(255, 255, 255, 255))
+				.Build();
 
 			var label = commands.SpawnClayElement(labelNode);
 			fill.AddChild(label);

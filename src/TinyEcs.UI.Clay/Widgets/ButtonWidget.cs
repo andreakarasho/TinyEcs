@@ -68,50 +68,23 @@ public static class ButtonWidget
 		}
 
 		// Button container (the colored background)
-		var buttonNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(width),
-					Clay_SizingAxis.Fixed(height)
-				),
-				padding = Clay_Padding.All(8),
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = bgColor
-			},
-			CornerRadius = Clay_CornerRadius.All(cornerRadius)
-		};
+		var buttonNode = ClayNode.Configure()
+			.Size(width, height)
+			.Padding(8)
+			.AlignCenter()
+			.Background(bgColor)
+			.CornerRadius(cornerRadius)
+			.Build();
 
 		var button = commands.SpawnClayElement(buttonNode);
 		parent.AddChild(button);
 
 		// Text label as a separate child element
-		var textNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fit(0, 0),
-					Clay_SizingAxis.Fit(0, 0)
-				)
-			},
-			Text = new ClayText
-			{
-				Text = text,
-				Config = new Clay_TextElementConfig
-				{
-					fontSize = fontSize,
-					textColor = txtColor
-				}
-			}
-		};
+		var textNode = ClayNode.Configure()
+			.WidthFit()
+			.HeightFit()
+			.Text(text, fontSize, txtColor)
+			.Build();
 
 		var textElement = commands.SpawnClayElement(textNode);
 		button.AddChild(textElement);

@@ -79,98 +79,46 @@ public static class DropdownWidget
 		var txtColor = textColor ?? new Clay_Color(220, 220, 220, 255);
 
 		// Container for the entire dropdown
-		var containerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(width),
-					Clay_SizingAxis.Fixed(height)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				childGap = 0
-			}
-		};
+		var containerNode = ClayNode.Configure()
+			.Size(width, height)
+			.Column()
+			.Gap(0)
+			.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
 		// Button that shows selected value and opens dropdown
-		var buttonNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Grow()
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				padding = Clay_Padding.All(8),
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				),
-				childGap = 8
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = bgColor
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(100, 105, 110, 255),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			}
-		};
+		var buttonNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Row()
+			.Padding(8)
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Gap(8)
+			.Background(bgColor)
+			.CornerRadius(4)
+			.Border(new Clay_Color(100, 105, 110, 255), 1)
+			.Build();
 
 		var button = commands.SpawnClayElement(buttonNode);
 		container.AddChild(button);
 
 		// Button text (selected value)
-		var buttonTextNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Grow()
-				)
-			},
-			Text = new ClayText
-			{
-				Text = $"{label}: {options[defaultIndex]}",
-				Config = new Clay_TextElementConfig
-				{
-					fontSize = 16,
-					textColor = txtColor
-				}
-			}
-		};
+		var buttonTextNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Text($"{label}: {options[defaultIndex]}", 16, txtColor)
+			.Build();
 
 		var buttonText = commands.SpawnClayElement(buttonTextNode);
 		button.AddChild(buttonText);
 
 		// Dropdown arrow indicator
-		var arrowNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(20),
-					Clay_SizingAxis.Fixed(20)
-				)
-			},
-			Text = new ClayText
-			{
-				Text = "▼",
-				Config = new Clay_TextElementConfig
-				{
-					fontSize = 12,
-					textColor = txtColor
-				}
-			}
-		};
+		var arrowNode = ClayNode.Configure()
+			.Size(20, 20)
+			.Text("▼", 12, txtColor)
+			.Build();
 
 		var arrow = commands.SpawnClayElement(arrowNode);
 		button.AddChild(arrow);
@@ -220,39 +168,20 @@ public static class DropdownWidget
 		DropdownState state)
 	{
 		// Floating menu container
-		var menuNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(state.Width),
-					Clay_SizingAxis.Fit(0, 0)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				childGap = 0
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = state.BackgroundColor
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(100, 105, 110, 255),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			},
-			Floating = new Clay_FloatingElementConfig
-			{
-				offset = new Clay_Vector2 { x = 0, y = 2 },
-				zIndex = 100,
-				attachPoints = new Clay_FloatingAttachPoints
-				{
-					element = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
-					parent = Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
-				},
-				attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT
-			}
-		};
+		var menuNode = ClayNode.Configure()
+			.Width(state.Width)
+			.HeightFit(0, 0)
+			.Column()
+			.Gap(0)
+			.Background(state.BackgroundColor)
+			.CornerRadius(4)
+			.Border(new Clay_Color(100, 105, 110, 255), 1)
+			.Floating(100)
+			.FloatingOffset(0, 2)
+			.FloatingAttachPoints(
+				Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_TOP,
+				Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM)
+			.Build();
 
 		var menu = commands.SpawnClayElement(menuNode);
 		commands.Entity(containerEntityId).AddChild(menu);
@@ -263,52 +192,26 @@ public static class DropdownWidget
 			int optionIndex = i; // Capture for closure
 			var isSelected = i == state.SelectedIndex;
 
-			var optionNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Grow(),
-						Clay_SizingAxis.Grow()
-					),
-					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-					padding = Clay_Padding.All(8),
-					childAlignment = new Clay_ChildAlignment(
-						Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-					)
-				},
-				Rectangle = new Clay_RectangleRenderData
-				{
-					backgroundColor = isSelected
-						? new Clay_Color(80, 120, 200, 255)
-						: new Clay_Color(60, 65, 70, 255)
-				}
-			};
+			var optionNode = ClayNode.Configure()
+				.WidthGrow()
+				.HeightGrow()
+				.Row()
+				.Padding(8)
+				.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+				.Background(isSelected
+					? new Clay_Color(80, 120, 200, 255)
+					: new Clay_Color(60, 65, 70, 255))
+				.Build();
 
 			var option = commands.SpawnClayElement(optionNode);
 			menu.AddChild(option);
 
 			// Option text
-			var optionTextNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Grow(),
-						Clay_SizingAxis.Grow()
-					)
-				},
-				Text = new ClayText
-				{
-					Text = state.Options[i],
-					Config = new Clay_TextElementConfig
-					{
-						fontSize = 16,
-						textColor = state.TextColor
-					}
-				}
-			};
+			var optionTextNode = ClayNode.Configure()
+				.WidthGrow()
+				.HeightGrow()
+				.Text(state.Options[i], 16, state.TextColor)
+				.Build();
 
 			var optionText = commands.SpawnClayElement(optionTextNode);
 			option.AddChild(optionText);

@@ -122,71 +122,59 @@ public static class ScrollbarWidget
 
 		// Container for the scrollbar (track + thumb)
 		// Use floating positioning to overlay on top of content
-		var containerNode = ClayNode.Default with
+		var containerBuilder = ClayNode.Configure();
+
+		if (isHorizontal)
 		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = isHorizontal
-					? new Clay_Sizing(Clay_SizingAxis.Grow(), Clay_SizingAxis.Fixed(scrollbarSize))
-					: new Clay_Sizing(Clay_SizingAxis.Fixed(scrollbarSize), Clay_SizingAxis.Grow()),
-				layoutDirection = isHorizontal
-					? Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
-					: Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP
-				)
-			},
-			Floating = new Clay_FloatingElementConfig
-			{
-				offset = new Clay_Vector2 { x = 0, y = 0 },
-				expand = new Clay_Dimensions { width = 0, height = 0 },
-				zIndex = 1,
-				attachPoints = new Clay_FloatingAttachPoints
-				{
-					element = isHorizontal
-						? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
-						: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP,
-					parent = isHorizontal
-						? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
-						: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP
-				},
-				attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
-				pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE
-			}
-		};
+			containerBuilder = containerBuilder.WidthGrow().Height(scrollbarSize).Row();
+		}
+		else
+		{
+			containerBuilder = containerBuilder.Width(scrollbarSize).HeightGrow().Column();
+		}
+
+		containerBuilder = containerBuilder
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP)
+			.Floating(1)
+			.FloatingOffset(0, 0)
+			.FloatingAttachPoints(
+				isHorizontal
+					? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
+					: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP,
+				isHorizontal
+					? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
+					: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP)
+			.FloatingCapture(Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE);
+
+		var containerNode = containerBuilder.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
 		// Track (background)
-		var trackNode = ClayNode.Default with
+		var trackBuilder = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP)
+			.Background(40, 40, 45, 200)
+			.CornerRadius(6);
+
+		if (isHorizontal)
 		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Grow()
-				),
-				layoutDirection = isHorizontal
-					? Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT
-					: Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(40, 40, 45, 200)
-			},
-			CornerRadius = Clay_CornerRadius.All(6)
-		};
+			trackBuilder.Row();
+		}
+		else
+		{
+			trackBuilder.Column();
+		}
+
+		var trackNode = trackBuilder.Build();
 
 		var track = commands.SpawnClayElement(trackNode);
 		container.AddChild(track);
 
 		// Spacer before thumb (for positioning)
+		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
 		var spacerNode = ClayNode.Default with
 		{
 			Layout = new Clay_LayoutConfig
@@ -201,6 +189,7 @@ public static class ScrollbarWidget
 		track.AddChild(spacer);
 
 		// Thumb (the draggable part)
+		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
 		var thumbNode = ClayNode.Default with
 		{
 			Layout = new Clay_LayoutConfig

@@ -90,31 +90,14 @@ public static class TextInputWidget
 			: new Clay_Color(220, 220, 220, 255);
 
 		// Input container
-		var inputNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(width),
-					Clay_SizingAxis.Fixed(height)
-				),
-				padding = Clay_Padding.All(8),
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = bgColor
-			},
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(80, 80, 90, 255),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			},
-			CornerRadius = Clay_CornerRadius.All(4)
-		};
+		var inputNode = ClayNode.Configure()
+			.Size(width, height)
+			.Padding(8)
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Background(bgColor)
+			.Border(new Clay_Color(80, 80, 90, 255), 1)
+			.CornerRadius(4)
+			.Build();
 
 		var input = commands.SpawnClayElement(inputNode);
 		parent.AddChild(input);
@@ -125,25 +108,11 @@ public static class TextInputWidget
 			? new Clay_Color(120, 120, 130, 255) // Placeholder color
 			: textColor;
 
-		var textNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fit(0, 0),
-					Clay_SizingAxis.Fit(0, 0)
-				)
-			},
-			Text = new ClayText
-			{
-				Text = displayText,
-				Config = new Clay_TextElementConfig
-				{
-					fontSize = 16,
-					textColor = displayColor
-				}
-			}
-		};
+		var textNode = ClayNode.Configure()
+			.WidthFit(0, 0)
+			.HeightFit(0, 0)
+			.Text(displayText, 16, displayColor)
+			.Build();
 
 		var textElement = commands.SpawnClayElement(textNode);
 		input.AddChild(textElement);

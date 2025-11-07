@@ -75,118 +75,65 @@ public static class SliderWidget
 		float step = 0f)
 	{
 		// Container for the slider (label + slider)
-		var containerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(300),
-					Clay_SizingAxis.Fixed(80)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				padding = Clay_Padding.All(8),
-				childGap = 8
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(50, 55, 60, 255)
-			},
-			CornerRadius = Clay_CornerRadius.All(4)
-		};
+		var containerNode = ClayNode.Configure()
+			.Size(300, 80)
+			.Column()
+			.Padding(8)
+			.Gap(8)
+			.Background(50, 55, 60, 255)
+			.CornerRadius(4)
+			.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
 		// Label
-		var labelNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Fixed(20)
-				)
-			},
-			Text = new ClayText
-			{
-				Text = $"{label}: {initialValue:F2}",
-				Config = new Clay_TextElementConfig
-				{
-					fontSize = 16,
-					textColor = new Clay_Color(255, 255, 255, 255)
-				}
-			}
-		};
+		var labelNode = ClayNode.Configure()
+			.WidthGrow()
+			.Height(20)
+			.Text($"{label}: {initialValue:F2}", 16, new Clay_Color(255, 255, 255, 255))
+			.Build();
 
 		var labelEntity = commands.SpawnClayElement(labelNode);
 		container.AddChild(labelEntity);
 
 		// Slider track container - this is the interactive area
-		var sliderContainerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Fixed(24)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			}
-		};
+		var sliderContainerNode = ClayNode.Configure()
+			.WidthGrow()
+			.Height(24)
+			.Row()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Build();
 
 		var sliderContainer = commands.SpawnClayElement(sliderContainerNode);
 		container.AddChild(sliderContainer);
 
 		// Rail container - wraps the track to center it vertically
-		var railNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Grow()
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			}
-		};
+		var railNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Row()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Build();
 
 		var rail = commands.SpawnClayElement(railNode);
 		sliderContainer.AddChild(rail);
 
 		// Track (background rail) - centered within the rail container
-		var trackNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Fixed(6)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(90, 90, 100, 140)
-			},
-			CornerRadius = Clay_CornerRadius.All(3)
-		};
+		var trackNode = ClayNode.Configure()
+			.WidthGrow()
+			.Height(6)
+			.Row()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Background(90, 90, 100, 140)
+			.CornerRadius(3)
+			.Build();
 
 		var track = commands.SpawnClayElement(trackNode);
 		rail.AddChild(track);
 
 		// Fill (the colored part showing the value)
+		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
 		float normalizedValue = (initialValue - min) / (max - min);
 		var fillNode = ClayNode.Default with
 		{
@@ -213,26 +160,12 @@ public static class SliderWidget
 		track.AddChild(fill);
 
 		// Thumb (the draggable circle) - slightly larger than the track and centered on it
-		var thumbNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(14),
-					Clay_SizingAxis.Fixed(14)
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(120, 170, 255, 255)
-			},
-			CornerRadius = Clay_CornerRadius.All(7),
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(255, 255, 255, 50),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			}
-		};
+		var thumbNode = ClayNode.Configure()
+			.Size(14, 14)
+			.Background(120, 170, 255, 255)
+			.CornerRadius(7)
+			.Border(new Clay_Color(255, 255, 255, 50), 1)
+			.Build();
 
 		var thumb = commands.SpawnClayElement(thumbNode);
 		fill.AddChild(thumb);

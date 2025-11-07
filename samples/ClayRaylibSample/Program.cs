@@ -114,52 +114,29 @@ public static class Program
 	private static void CreateUI(Commands commands)
 	{
 		// Create root container
-		var rootNode = ClayNode.Default;
-		rootNode.Layout = new Clay_LayoutConfig
-		{
-			sizing = new Clay_Sizing(
-				Clay_SizingAxis.Grow(),
-				Clay_SizingAxis.Grow()
-			),
-			layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-			padding = Clay_Padding.All(32),
-			childGap = 16,
-			childAlignment = new Clay_ChildAlignment(
-				Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
-				Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP
-			)
-		};
-		rootNode.Rectangle = new Clay_RectangleRenderData
-		{
-			backgroundColor = new Clay_Color(20, 25, 30, 255)
-		};
-		rootNode.Text = new ClayText()
-		{
-			Text = "Clay UI with Raylib",
-			Config = {
-				fontSize = 48,
-			}
-		};
+		var rootNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Column()
+			.Padding(32)
+			.Gap(16)
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP)
+			.Background(20, 25, 30, 255)
+			.Text("Clay UI with Raylib", 48, new Clay_Color(255, 255, 255, 255))
+			.Build();
 
 		var root = commands.SpawnClayElement(rootNode);
 
 		// Create scrollable container with scroll configuration
-		var scrollContainerNode = ClayNode.Default;
-		scrollContainerNode.Layout = new Clay_LayoutConfig
-		{
-			sizing = new Clay_Sizing(
-				Clay_SizingAxis.Fixed(600),
-				Clay_SizingAxis.Fixed(400)
-			),
-			layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-			padding = Clay_Padding.All(16),
-			childGap = 8
-		};
-		scrollContainerNode.Rectangle = new Clay_RectangleRenderData
-		{
-			backgroundColor = new Clay_Color(40, 45, 50, 255)
-		};
-		scrollContainerNode.CornerRadius = Clay_CornerRadius.All(8);
+		var scrollContainerNode = ClayNode.Configure()
+			.Size(600, 400)
+			.Column()
+			.Padding(16)
+			.Gap(8)
+			.Background(40, 45, 50, 255)
+			.CornerRadius(8)
+			.Build();
+
 		// Enable vertical scrolling with clip (childOffset is automatically managed by Clay)
 		scrollContainerNode.Clip = new Clay_ClipElementConfig
 		{
@@ -297,32 +274,21 @@ public static class Program
 		// }
 
 		// Create third container for new widgets demonstration
-		var scroll3Node = ClayNode.Default with
+		var scroll3Node = ClayNode.Configure()
+			.WidthGrow()
+			.Height(300)
+			.Column()
+			.Padding(8)
+			.Gap(8)
+			.Background(60, 65, 70, 255)
+			.CornerRadius(4)
+			.Text("Widget Showcase", 16, new Clay_Color(255, 255, 255, 255))
+			.Build();
+
+		scroll3Node.Clip = new Clay_ClipElementConfig
 		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Fixed(300)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				padding = Clay_Padding.All(8),
-				childGap = 8
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(60, 65, 70, 255)
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Clip = new Clay_ClipElementConfig
-			{
-				horizontal = false,
-				vertical = true
-			},
-			Text = new ClayText()
-			{
-				Text = "Widget Showcase",
-			}
+			horizontal = false,
+			vertical = true
 		};
 
 		var scroll3 = commands.SpawnClayElement(scroll3Node);
@@ -562,7 +528,7 @@ public static class Program
 			width: 550f,
 			height: 0f,
 			backgroundColor: new Clay_Color(50, 55, 60, 255),
-			padding: 12f,
+			padding: 12,
 			cornerRadius: 8
 		);
 

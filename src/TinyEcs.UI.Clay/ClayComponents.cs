@@ -47,6 +47,8 @@ public struct ClayNode
 			)
 		}
 	};
+
+	public static ClayNodeBuilder Configure() => new ClayNodeBuilder();
 }
 
 /// <summary>

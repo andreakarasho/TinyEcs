@@ -70,22 +70,13 @@ public static class CheckboxWidget
 		float size = 18f)
 	{
 		// Container for checkbox (box + label)
-		var containerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fit(0, float.MaxValue),
-					Clay_SizingAxis.Fixed(size)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				),
-				childGap = 8
-			}
-		};
+		var containerNode = ClayNode.Configure()
+			.WidthFit(0, float.MaxValue)
+			.Height(size)
+			.Row()
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
+			.Gap(8)
+			.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
@@ -95,29 +86,12 @@ public static class CheckboxWidget
 			? new Clay_Color(30, 30, 30, 100)
 			: new Clay_Color(40, 40, 40, 160);
 
-		var boxNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(size),
-					Clay_SizingAxis.Fixed(size)
-				),
-				childAlignment = new Clay_ChildAlignment(
-					Clay_LayoutAlignmentX.CLAY_ALIGN_X_CENTER,
-					Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = boxColor
-			},
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(255, 255, 255, 64),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			}
-		};
+		var boxNode = ClayNode.Configure()
+			.Size(size, size)
+			.AlignCenter()
+			.Background(boxColor)
+			.Border(new Clay_Color(255, 255, 255, 64), 1)
+			.Build();
 
 		var box = commands.SpawnClayElement(boxNode);
 		container.AddChild(box);
@@ -127,25 +101,11 @@ public static class CheckboxWidget
 		var fillSize = size - padding * 2;
 		var fillAlpha = defaultChecked ? (byte)220 : (byte)0;
 
-		var fillNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(fillSize),
-					Clay_SizingAxis.Fixed(fillSize)
-				)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(120, 190, 255, fillAlpha)
-			},
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(255, 255, 255, fillAlpha > 0 ? (byte)90 : (byte)0),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			}
-		};
+		var fillNode = ClayNode.Configure()
+			.Size(fillSize, fillSize)
+			.Background(120, 190, 255, fillAlpha)
+			.Border(new Clay_Color(255, 255, 255, fillAlpha > 0 ? (byte)90 : (byte)0), 1)
+			.Build();
 
 		var fill = commands.SpawnClayElement(fillNode);
 		box.AddChild(fill); // Always add fill to box
@@ -154,18 +114,9 @@ public static class CheckboxWidget
 		ulong labelEntityId = 0;
 		if (!string.IsNullOrEmpty(label))
 		{
-			var labelNode = ClayNode.Default with
-			{
-				Text = new ClayText
-				{
-					Text = label,
-					Config = new Clay_TextElementConfig
-					{
-						fontSize = 16,
-						textColor = new Clay_Color(230, 230, 240, 255)
-					}
-				}
-			};
+			var labelNode = ClayNode.Configure()
+				.Text(label, 16, new Clay_Color(230, 230, 240, 255))
+				.Build();
 
 			var labelEntity = commands.SpawnClayElement(labelNode);
 			container.AddChild(labelEntity);
