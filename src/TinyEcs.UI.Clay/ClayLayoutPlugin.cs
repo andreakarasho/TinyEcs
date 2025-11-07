@@ -156,11 +156,8 @@ public struct ClayLayoutPlugin : IPlugin
 		if (node.Ref.Clip.HasValue)
 		{
 			decl.clip = node.Ref.Clip.Value;
-			if (decl.clip.vertical || decl.clip.horizontal)
-			{
-				// Reset scroll offset to zero; Clay manages this internally
-				decl.clip.childOffset = Clay_cs.Clay.GetScrollOffset();
-			}
+			// Use the childOffset from the ClayNode (set by scrollbar or other systems)
+			// Don't overwrite with Clay.GetScrollOffset() as we manage scroll manually
 		}
 
 		if (node.Ref.Custom.HasValue)

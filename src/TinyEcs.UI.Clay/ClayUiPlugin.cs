@@ -68,7 +68,7 @@ public struct ClayUiPlugin : IPlugin
 			PrimaryReleased = false,
 			ScrollDelta = System.Numerics.Vector2.Zero,
 			DeltaTime = 1f / 60f,
-			EnableDragScrolling = true
+			EnableDragScrolling = false
 		};
 
 		var textInputState = new ClayTextInputState();

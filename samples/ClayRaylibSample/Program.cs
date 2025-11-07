@@ -171,130 +171,130 @@ public static class Program
 		var scrollContainer = commands.SpawnClayElement(scrollContainerNode);
 		root.AddChild(scrollContainer);
 
-		// Create first nested scrollable container
-		var scroll1Node = ClayNode.Default;
-		scroll1Node.Layout = new Clay_LayoutConfig
-		{
-			sizing = new Clay_Sizing(
-				Clay_SizingAxis.Grow(),
-				Clay_SizingAxis.Fixed(200)
-			),
-			layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-			padding = Clay_Padding.All(8),
-			childGap = 4
-		};
-		scroll1Node.Rectangle = new Clay_RectangleRenderData
-		{
-			backgroundColor = new Clay_Color(60, 65, 70, 255)
-		};
-		scroll1Node.CornerRadius = Clay_CornerRadius.All(4);
-		scroll1Node.Clip = new Clay_ClipElementConfig
-		{
-			horizontal = false,
-			vertical = true
-		};
-		scroll1Node.Text = new ClayText()
-		{
-			Text = "Scroll Container 1",
-		};
+		// // Create first nested scrollable container
+		// var scroll1Node = ClayNode.Default;
+		// scroll1Node.Layout = new Clay_LayoutConfig
+		// {
+		// 	sizing = new Clay_Sizing(
+		// 		Clay_SizingAxis.Grow(),
+		// 		Clay_SizingAxis.Fixed(200)
+		// 	),
+		// 	layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+		// 	padding = Clay_Padding.All(8),
+		// 	childGap = 4
+		// };
+		// scroll1Node.Rectangle = new Clay_RectangleRenderData
+		// {
+		// 	backgroundColor = new Clay_Color(60, 65, 70, 255)
+		// };
+		// scroll1Node.CornerRadius = Clay_CornerRadius.All(4);
+		// scroll1Node.Clip = new Clay_ClipElementConfig
+		// {
+		// 	horizontal = false,
+		// 	vertical = true
+		// };
+		// scroll1Node.Text = new ClayText()
+		// {
+		// 	Text = "Scroll Container 1",
+		// };
 
-		var scroll1 = commands.SpawnClayElement(scroll1Node);
-		scrollContainer.AddChild(scroll1);
+		// var scroll1 = commands.SpawnClayElement(scroll1Node);
+		// scrollContainer.AddChild(scroll1);
 
-		scroll1.Observe((On<ClayPointerEvent> trigger) =>
-		{
-			var pointerEvent = trigger.Event;
-			if (pointerEvent.EventType == ClayPointerEventType.Click)
-			{
-				Console.WriteLine("parent clicked 1");
-			}
-		})
-		.Observe((On<ClayPointerEvent> trigger) =>
-		{
-			var pointerEvent = trigger.Event;
-			if (pointerEvent.EventType == ClayPointerEventType.Click)
-			{
-				Console.WriteLine("parent clicked 2");
-			}
-		});
+		// scroll1.Observe((On<ClayPointerEvent> trigger) =>
+		// {
+		// 	var pointerEvent = trigger.Event;
+		// 	if (pointerEvent.EventType == ClayPointerEventType.Click)
+		// 	{
+		// 		Console.WriteLine("parent clicked 1");
+		// 	}
+		// })
+		// .Observe((On<ClayPointerEvent> trigger) =>
+		// {
+		// 	var pointerEvent = trigger.Event;
+		// 	if (pointerEvent.EventType == ClayPointerEventType.Click)
+		// 	{
+		// 		Console.WriteLine("parent clicked 2");
+		// 	}
+		// });
 
-		// Create sliders using the widget extension
-		commands.CreateSlider(scroll1, "Volume", 0.5f, 0f, 1f);
-		commands.CreateSlider(scroll1, "Brightness", 0.75f, 0f, 1f);
-		commands.CreateSlider(scroll1, "Speed", 50f, 0f, 100f, step: 5f);
+		// // Create sliders using the widget extension
+		// commands.CreateSlider(scroll1, "Volume", 0.5f, 0f, 1f);
+		// commands.CreateSlider(scroll1, "Brightness", 0.75f, 0f, 1f);
+		// commands.CreateSlider(scroll1, "Speed", 50f, 0f, 100f, step: 5f);
 
-		// Create checkboxes
-		commands.CreateCheckbox(scroll1, "Enable Sound", defaultChecked: true);
-		commands.CreateCheckbox(scroll1, "Enable Music", defaultChecked: false);
-		commands.CreateCheckbox(scroll1, "Enable Vibration", defaultChecked: true);
-		commands.CreateCheckbox(scroll1, "Disabled Option", defaultChecked: false, disabled: true);
+		// // Create checkboxes
+		// commands.CreateCheckbox(scroll1, "Enable Sound", defaultChecked: true);
+		// commands.CreateCheckbox(scroll1, "Enable Music", defaultChecked: false);
+		// commands.CreateCheckbox(scroll1, "Enable Vibration", defaultChecked: true);
+		// commands.CreateCheckbox(scroll1, "Disabled Option", defaultChecked: false, disabled: true);
 
-		// Create radio buttons for difficulty selection
-		commands.CreateRadioButton(scroll1, "difficulty", "easy", "Easy", defaultSelected: true);
-		commands.CreateRadioButton(scroll1, "difficulty", "normal", "Normal");
-		commands.CreateRadioButton(scroll1, "difficulty", "hard", "Hard");
-		commands.CreateRadioButton(scroll1, "difficulty", "expert", "Expert");
+		// // Create radio buttons for difficulty selection
+		// commands.CreateRadioButton(scroll1, "difficulty", "easy", "Easy", defaultSelected: true);
+		// commands.CreateRadioButton(scroll1, "difficulty", "normal", "Normal");
+		// commands.CreateRadioButton(scroll1, "difficulty", "hard", "Hard");
+		// commands.CreateRadioButton(scroll1, "difficulty", "expert", "Expert");
 
-		// Create radio buttons for graphics quality
-		commands.CreateRadioButton(scroll1, "graphics", "low", "Low Quality");
-		commands.CreateRadioButton(scroll1, "graphics", "medium", "Medium Quality", defaultSelected: true);
-		commands.CreateRadioButton(scroll1, "graphics", "high", "High Quality");
-		commands.CreateRadioButton(scroll1, "graphics", "ultra", "Ultra Quality");
+		// // Create radio buttons for graphics quality
+		// commands.CreateRadioButton(scroll1, "graphics", "low", "Low Quality");
+		// commands.CreateRadioButton(scroll1, "graphics", "medium", "Medium Quality", defaultSelected: true);
+		// commands.CreateRadioButton(scroll1, "graphics", "high", "High Quality");
+		// commands.CreateRadioButton(scroll1, "graphics", "ultra", "Ultra Quality");
 
-		// Create 20 buttons in first scrollable area
-		var colors = new[]
-		{
-			new Clay_Color(70, 130, 180, 255),
-			new Clay_Color(180, 70, 130, 255),
-			new Clay_Color(130, 180, 70, 255),
-			new Clay_Color(180, 130, 70, 255),
-			new Clay_Color(70, 180, 130, 255)
-		};
+		// // Create 20 buttons in first scrollable area
+		// var colors = new[]
+		// {
+		// 	new Clay_Color(70, 130, 180, 255),
+		// 	new Clay_Color(180, 70, 130, 255),
+		// 	new Clay_Color(130, 180, 70, 255),
+		// 	new Clay_Color(180, 130, 70, 255),
+		// 	new Clay_Color(70, 180, 130, 255)
+		// };
 
-		for (int i = 0; i < 20; i++)
-		{
-			var color = colors[i % colors.Length];
-			commands.CreateButton(scroll1, $"S1 Button {i + 1}", backgroundColor: color);
-		}
+		// for (int i = 0; i < 20; i++)
+		// {
+		// 	var color = colors[i % colors.Length];
+		// 	commands.CreateButton(scroll1, $"S1 Button {i + 1}", backgroundColor: color);
+		// }
 
-		// Create second nested scrollable container
-		var scroll2Node = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Fixed(200)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				padding = Clay_Padding.All(8),
-				childGap = 4
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(60, 65, 70, 255)
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Clip = new Clay_ClipElementConfig
-			{
-				horizontal = false,
-				vertical = true
-			},
-			Text = new ClayText()
-			{
-				Text = "Scroll Container 2",
-			}
-		};
+		// // Create second nested scrollable container
+		// var scroll2Node = ClayNode.Default with
+		// {
+		// 	Layout = new Clay_LayoutConfig
+		// 	{
+		// 		sizing = new Clay_Sizing(
+		// 			Clay_SizingAxis.Grow(),
+		// 			Clay_SizingAxis.Fixed(200)
+		// 		),
+		// 		layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+		// 		padding = Clay_Padding.All(8),
+		// 		childGap = 4
+		// 	},
+		// 	Rectangle = new Clay_RectangleRenderData
+		// 	{
+		// 		backgroundColor = new Clay_Color(60, 65, 70, 255)
+		// 	},
+		// 	CornerRadius = Clay_CornerRadius.All(4),
+		// 	Clip = new Clay_ClipElementConfig
+		// 	{
+		// 		horizontal = false,
+		// 		vertical = true
+		// 	},
+		// 	Text = new ClayText()
+		// 	{
+		// 		Text = "Scroll Container 2",
+		// 	}
+		// };
 
-		var scroll2 = commands.SpawnClayElement(scroll2Node);
-		scrollContainer.AddChild(scroll2);
+		// var scroll2 = commands.SpawnClayElement(scroll2Node);
+		// scrollContainer.AddChild(scroll2);
 
-		// Create 20 buttons in second scrollable area
-		for (int i = 0; i < 20; i++)
-		{
-			var color = colors[i % colors.Length];
-			commands.CreateButton(scroll2, $"S2 Button {i + 1}", backgroundColor: color);
-		}
+		// // Create 20 buttons in second scrollable area
+		// for (int i = 0; i < 20; i++)
+		// {
+		// 	var color = colors[i % colors.Length];
+		// 	commands.CreateButton(scroll2, $"S2 Button {i + 1}", backgroundColor: color);
+		// }
 
 		// Create third container for new widgets demonstration
 		var scroll3Node = ClayNode.Default with
@@ -328,10 +328,100 @@ public static class Program
 		var scroll3 = commands.SpawnClayElement(scroll3Node);
 		scrollContainer.AddChild(scroll3);
 
-		// Create a panel to group text input widgets
-		var inputPanel = commands.CreatePanel(
+		// // Create a panel to group text input widgets
+		// var inputPanel = commands.CreatePanel(
+		// 	scroll3,
+		// 	title: "User Input",
+		// 	width: 550f,
+		// 	height: 0f,
+		// 	backgroundColor: new Clay_Color(50, 55, 60, 255),
+		// 	padding: 12f,
+		// 	cornerRadius: 8
+		// );
+
+		// // Create text input fields
+		// commands.CreateTextInput(
+		// 	inputPanel,
+		// 	placeholder: "Username...",
+		// 	width: 300f,
+		// 	height: 40f
+		// );
+
+		// commands.CreateTextInput(
+		// 	inputPanel,
+		// 	placeholder: "Email address...",
+		// 	width: 300f,
+		// 	height: 40f
+		// );
+
+		// commands.CreateTextInput(
+		// 	inputPanel,
+		// 	placeholder: "Password (disabled)",
+		// 	width: 300f,
+		// 	height: 40f,
+		// 	disabled: true
+		// );
+
+		// // Create a panel to group progress bars
+		// var progressPanel = commands.CreatePanel(
+		// 	scroll3,
+		// 	title: "Progress Indicators",
+		// 	width: 550f,
+		// 	height: 0f,
+		// 	backgroundColor: new Clay_Color(50, 55, 60, 255),
+		// 	padding: 12f,
+		// 	cornerRadius: 8
+		// );
+
+		// // Create progress bars with different states
+		// commands.CreateProgressBar(
+		// 	progressPanel,
+		// 	initialValue: 25f,
+		// 	min: 0f,
+		// 	max: 100f,
+		// 	width: 300f,
+		// 	height: 28f,
+		// 	showLabel: true,
+		// 	fillColor: new Clay_Color(76, 175, 80, 255)
+		// );
+
+		// commands.CreateProgressBar(
+		// 	progressPanel,
+		// 	initialValue: 60f,
+		// 	min: 0f,
+		// 	max: 100f,
+		// 	width: 300f,
+		// 	height: 28f,
+		// 	showLabel: true,
+		// 	fillColor: new Clay_Color(33, 150, 243, 255)
+		// );
+
+		// commands.CreateProgressBar(
+		// 	progressPanel,
+		// 	initialValue: 85f,
+		// 	min: 0f,
+		// 	max: 100f,
+		// 	width: 300f,
+		// 	height: 28f,
+		// 	showLabel: true,
+		// 	fillColor: new Clay_Color(255, 152, 0, 255)
+		// );
+
+		// commands.CreateProgressBar(
+		// 	progressPanel,
+		// 	initialValue: 100f,
+		// 	min: 0f,
+		// 	max: 100f,
+		// 	width: 300f,
+		// 	height: 28f,
+		// 	showLabel: true,
+		// 	fillColor: new Clay_Color(244, 67, 54, 255)
+		// );
+
+		// Create a panel for scrollable list demonstration
+		var scrollbarPanel = commands.CreatePanel(
 			scroll3,
-			title: "User Input",
+			title: "Scrollable List Example",
 			width: 550f,
 			height: 0f,
 			backgroundColor: new Clay_Color(50, 55, 60, 255),
@@ -339,83 +429,130 @@ public static class Program
 			cornerRadius: 8
 		);
 
-		// Create text input fields
-		commands.CreateTextInput(
-			inputPanel,
-			placeholder: "Username...",
-			width: 300f,
-			height: 40f
+		// Container with scrollbar - fixed height viewport
+		var scrollableContainerNode = ClayNode.Default with
+		{
+			Layout = new Clay_LayoutConfig
+			{
+				sizing = new Clay_Sizing(
+					Clay_SizingAxis.Fixed(500),
+					Clay_SizingAxis.Fixed(250)
+				),
+				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+				childGap = 0
+			}
+		};
+
+		var scrollableContainer = commands.SpawnClayElement(scrollableContainerNode);
+		scrollbarPanel.AddChild(scrollableContainer);
+
+		// Content area (will be clipped and scrolled)
+		var contentAreaNode = ClayNode.Default with
+		{
+			Layout = new Clay_LayoutConfig
+			{
+				sizing = new Clay_Sizing(
+					Clay_SizingAxis.Grow(),
+					Clay_SizingAxis.Grow()
+				),
+				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+				childGap = 8,
+				padding = Clay_Padding.All(8)
+			},
+			Rectangle = new Clay_RectangleRenderData
+			{
+				backgroundColor = new Clay_Color(35, 38, 42, 255)
+			},
+			CornerRadius = Clay_CornerRadius.All(4),
+			Clip = new Clay_ClipElementConfig
+			{
+				horizontal = true,  // Enable horizontal clipping
+				vertical = true,
+				childOffset = new Clay_Vector2 { x = 0f, y = 0f }
+			}
+		};
+
+		var contentArea = commands.SpawnClayElement(contentAreaNode);
+		scrollableContainer.AddChild(contentArea);
+
+		// Add ClayScrollContainer component to enable scrolling
+		commands.Entity(contentArea.Id).Insert(ClayScrollContainer.Default);
+
+		// Add list items (20 items, each 40px tall = 800px total content)
+		// Make items 800px wide to exceed viewport width and trigger horizontal scrollbar
+		for (int i = 0; i < 20; i++)
+		{
+			var itemNode = ClayNode.Default with
+			{
+				Layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Fixed(800),  // Fixed width to trigger horizontal scroll
+						Clay_SizingAxis.Fixed(40)
+					),
+					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+					childAlignment = new Clay_ChildAlignment(
+						Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
+						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
+					),
+					padding = Clay_Padding.All(8)
+				},
+				Rectangle = new Clay_RectangleRenderData
+				{
+					backgroundColor = i % 2 == 0
+						? new Clay_Color(45, 50, 55, 255)
+						: new Clay_Color(40, 44, 48, 255)
+				},
+				CornerRadius = Clay_CornerRadius.All(4)
+			};
+
+			var item = commands.SpawnClayElement(itemNode);
+			contentArea.AddChild(item);
+
+			// Item text
+			var itemTextNode = ClayNode.Default with
+			{
+				Layout = new Clay_LayoutConfig
+				{
+					sizing = new Clay_Sizing(
+						Clay_SizingAxis.Grow(),
+						Clay_SizingAxis.Grow()
+					)
+				},
+				Text = new ClayText
+				{
+					Text = $"List Item #{i + 1} - This is some very long sample content that extends beyond the viewport width to demonstrate horizontal scrolling",
+					Config = new Clay_TextElementConfig
+					{
+						fontSize = 16,
+						textColor = new Clay_Color(220, 220, 220, 255)
+					}
+				}
+			};
+
+			var itemText = commands.SpawnClayElement(itemTextNode);
+			item.AddChild(itemText);
+		}
+
+		// Vertical scrollbar
+		// Content: 20 items × 40px = 800px, 19 gaps × 8px = 152px, padding 16px = 968px total
+		var verticalScrollbar = commands.CreateVerticalScrollbar(
+			scrollableContainer,
+			contentAreaEntityId: contentArea.Id,
+			contentSize: 968f,
+			visibleSize: 250f,
+			initialScroll: 0.0f
 		);
 
-		commands.CreateTextInput(
-			inputPanel,
-			placeholder: "Email address...",
-			width: 300f,
-			height: 40f
-		);
-
-		commands.CreateTextInput(
-			inputPanel,
-			placeholder: "Password (disabled)",
-			width: 300f,
-			height: 40f,
-			disabled: true
-		);
-
-		// Create a panel to group progress bars
-		var progressPanel = commands.CreatePanel(
-			scroll3,
-			title: "Progress Indicators",
-			width: 550f,
-			height: 0f,
-			backgroundColor: new Clay_Color(50, 55, 60, 255),
-			padding: 12f,
-			cornerRadius: 8
-		);
-
-		// Create progress bars with different states
-		commands.CreateProgressBar(
-			progressPanel,
-			initialValue: 25f,
-			min: 0f,
-			max: 100f,
-			width: 300f,
-			height: 28f,
-			showLabel: true,
-			fillColor: new Clay_Color(76, 175, 80, 255)
-		);
-
-		commands.CreateProgressBar(
-			progressPanel,
-			initialValue: 60f,
-			min: 0f,
-			max: 100f,
-			width: 300f,
-			height: 28f,
-			showLabel: true,
-			fillColor: new Clay_Color(33, 150, 243, 255)
-		);
-
-		commands.CreateProgressBar(
-			progressPanel,
-			initialValue: 85f,
-			min: 0f,
-			max: 100f,
-			width: 300f,
-			height: 28f,
-			showLabel: true,
-			fillColor: new Clay_Color(255, 152, 0, 255)
-		);
-
-		commands.CreateProgressBar(
-			progressPanel,
-			initialValue: 100f,
-			min: 0f,
-			max: 100f,
-			width: 300f,
-			height: 28f,
-			showLabel: true,
-			fillColor: new Clay_Color(244, 67, 54, 255)
+		// Horizontal scrollbar
+		// Content: 800px item width + 16px padding = 816px total
+		// Visible: 500px container width - 12px vertical scrollbar = 488px
+		var horizontalScrollbar = commands.CreateHorizontalScrollbar(
+			scrollableContainer,
+			contentAreaEntityId: contentArea.Id,
+			contentSize: 816f,
+			visibleSize: 488f,
+			initialScroll: 0.0f
 		);
 
 		// Create a nested panel example
@@ -687,7 +824,19 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		var mouseWheel = Raylib.GetMouseWheelMove();
 		if (mouseWheel != 0)
 		{
-			pointer.Value.AddScroll(new Vector2(mouseWheel * 20f));
+			// Check if Shift is held - if so, scroll horizontally
+			bool shiftHeld = Raylib.IsKeyDown(KeyboardKey.LeftShift) || Raylib.IsKeyDown(KeyboardKey.RightShift);
+
+			if (shiftHeld)
+			{
+				// Shift+Wheel = horizontal scroll (X component)
+				pointer.Value.AddScroll(new Vector2(mouseWheel * 20f, 0f));
+			}
+			else
+			{
+				// Normal wheel = vertical scroll (Y component)
+				pointer.Value.AddScroll(new Vector2(0f, mouseWheel * 20f));
+			}
 		}
 
 		pointer.Value.DeltaTime = Raylib.GetFrameTime();

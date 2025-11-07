@@ -17,11 +17,11 @@ public struct WidgetsPlugin : IPlugin
 		app.AddPlugin(new RadioPlugin());
 		app.AddPlugin(new TextInputPlugin());
 		app.AddPlugin(new ProgressBarPlugin());
+		app.AddPlugin(new ScrollbarPlugin());
 
 		// Panel widget doesn't need a plugin (no systems required)
 
 		// Future widgets to be added:
-		// app.AddPlugin(new ScrollbarPlugin());
 		// app.AddPlugin(new TooltipPlugin());
 		// app.AddPlugin(new DropdownPlugin());
 	}
