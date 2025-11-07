@@ -600,7 +600,7 @@ public static class RaylibClayExtensions
 		})
 		.InStage(Stage.First)
 		.Label("raylib:slider-drag")
-		.After("clay:reset-pointer")
+		.After("clay:reset-input-state")
 		.SingleThreaded()
 		.Build();
 
@@ -627,7 +627,14 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		// System to update Clay pointer state from Raylib input
 		app.AddSystem((ResMut<ClayPointerState> pointer) => UpdatePointerInput(pointer))
 			.InStage(Stage.First)
-			.Label("raylib:update-input")
+			.Label("raylib:update-pointer-input")
+			.SingleThreaded()
+			.Build();
+
+		// System to update Clay text input state from Raylib keyboard input
+		app.AddSystem((ResMut<ClayTextInputState> textInput) => UpdateTextInput(textInput))
+			.InStage(Stage.First)
+			.Label("raylib:update-text-input")
 			.SingleThreaded()
 			.Build();
 
@@ -686,6 +693,57 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		pointer.Value.DeltaTime = Raylib.GetFrameTime();
 	}
 
+	private static void UpdateTextInput(ResMut<ClayTextInputState> textInput)
+	{
+		// Inject typed characters
+		int key = Raylib.GetCharPressed();
+		while (key > 0)
+		{
+			textInput.Value.AddChar((char)key);
+			key = Raylib.GetCharPressed();
+		}
+
+		// Handle special keys
+		if (Raylib.IsKeyPressed(KeyboardKey.Backspace) || Raylib.IsKeyPressedRepeat(KeyboardKey.Backspace))
+			textInput.Value.BackspacePressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Delete))
+			textInput.Value.DeletePressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Enter) || Raylib.IsKeyPressed(KeyboardKey.KpEnter))
+			textInput.Value.EnterPressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Escape))
+			textInput.Value.EscapePressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Left))
+			textInput.Value.LeftPressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Right))
+			textInput.Value.RightPressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.Home))
+			textInput.Value.HomePressed = true;
+
+		if (Raylib.IsKeyPressed(KeyboardKey.End))
+			textInput.Value.EndPressed = true;
+
+		// Handle keyboard shortcuts (Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X)
+		bool ctrlDown = Raylib.IsKeyDown(KeyboardKey.LeftControl) || Raylib.IsKeyDown(KeyboardKey.RightControl);
+
+		if (ctrlDown && Raylib.IsKeyPressed(KeyboardKey.A))
+			textInput.Value.SelectAllPressed = true;
+
+		if (ctrlDown && Raylib.IsKeyPressed(KeyboardKey.C))
+			textInput.Value.CopyPressed = true;
+
+		if (ctrlDown && Raylib.IsKeyPressed(KeyboardKey.V))
+			textInput.Value.PastePressed = true;
+
+		if (ctrlDown && Raylib.IsKeyPressed(KeyboardKey.X))
+			textInput.Value.CutPressed = true;
+	}
+
 	private static unsafe void RenderClayUI(Res<ClayUiState> state, Local<Stack<Rectangle>> scissorStack)
 	{
 		var commands = state.Value.RenderCommands;
@@ -699,7 +757,7 @@ public struct ClayRaylibRenderPlugin : IPlugin
 			// IMPORTANT: Only cull visual commands (RECTANGLE, BORDER, TEXT)!
 			// Always process SCISSOR_START/END to maintain Begin/End pairing and stack integrity.
 			bool isOffScreen = cmd.boundingBox.x + cmd.boundingBox.width < 0 ||
-			                   cmd.boundingBox.y + cmd.boundingBox.height < 0;
+							   cmd.boundingBox.y + cmd.boundingBox.height < 0;
 
 			switch (cmd.commandType)
 			{
