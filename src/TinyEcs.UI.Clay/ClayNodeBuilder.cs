@@ -122,6 +122,24 @@ public ref struct ClayNodeBuilder
 	}
 
 	/// <summary>
+	/// Sets width as a percentage of parent (0-1 range).
+	/// </summary>
+	public ClayNodeBuilder WidthPercent(float percent)
+	{
+		_node.Layout.sizing.width = Clay_SizingAxis.Percent(percent);
+		return this;
+	}
+
+	/// <summary>
+	/// Sets height as a percentage of parent (0-1 range).
+	/// </summary>
+	public ClayNodeBuilder HeightPercent(float percent)
+	{
+		_node.Layout.sizing.height = Clay_SizingAxis.Percent(percent);
+		return this;
+	}
+
+	/// <summary>
 	/// Sets fixed width and height in pixels.
 	/// </summary>
 	public ClayNodeBuilder Size(float width, float height)

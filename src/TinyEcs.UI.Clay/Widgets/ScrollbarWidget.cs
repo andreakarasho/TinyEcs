@@ -11,6 +11,7 @@ public struct ScrollbarState
 {
 	public ulong ContainerEntityId;   // Container element (for visibility)
 	public ulong ContentAreaEntityId; // Content area to scroll
+	public ulong ViewportEntityId;    // Viewport (visible area) for mouse wheel detection
 	public ulong TrackEntityId;
 	public ulong SpacerEntityId;      // Spacer used to position the thumb
 	public ulong ThumbEntityId;
@@ -67,6 +68,7 @@ public static class ScrollbarWidget
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the scrollbar to</param>
+	/// <param name="viewportEntityId">Entity ID of the viewport (visible area) for mouse wheel detection</param>
 	/// <param name="contentAreaEntityId">Entity ID of the content area to scroll</param>
 	/// <param name="contentSize">Total size of scrollable content in pixels</param>
 	/// <param name="visibleSize">Size of visible viewport in pixels</param>
@@ -81,12 +83,13 @@ public static class ScrollbarWidget
 	public static ulong CreateVerticalScrollbar(
 		this Commands commands,
 		EntityCommands parent,
+		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
 		float visibleSize,
 		float initialScroll = 0f)
 	{
-		return CreateScrollbar(commands, parent, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: false);
+		return CreateScrollbar(commands, parent, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: false);
 	}
 
 	/// <summary>
@@ -95,17 +98,19 @@ public static class ScrollbarWidget
 	public static ulong CreateHorizontalScrollbar(
 		this Commands commands,
 		EntityCommands parent,
+		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
 		float visibleSize,
 		float initialScroll = 0f)
 	{
-		return CreateScrollbar(commands, parent, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: true);
+		return CreateScrollbar(commands, parent, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: true);
 	}
 
 	private static ulong CreateScrollbar(
 		Commands commands,
 		EntityCommands parent,
+		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
 		float visibleSize,
@@ -121,7 +126,7 @@ public static class ScrollbarWidget
 		float scrollbarSize = isVisible ? 12f : 0f;
 
 		// Container for the scrollbar (track + thumb)
-		// Use floating positioning to overlay on top of content
+		// Uses normal layout flow as a sibling to the content
 		var containerBuilder = ClayNode.Configure();
 
 		if (isHorizontal)
@@ -134,17 +139,7 @@ public static class ScrollbarWidget
 		}
 
 		containerBuilder = containerBuilder
-			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP)
-			.Floating(1)
-			.FloatingOffset(0, 0)
-			.FloatingAttachPoints(
-				isHorizontal
-					? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
-					: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP,
-				isHorizontal
-					? Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_LEFT_BOTTOM
-					: Clay_FloatingAttachPointType.CLAY_ATTACH_POINT_RIGHT_TOP)
-			.FloatingCapture(Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE);
+			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP);
 
 		var containerNode = containerBuilder.Build();
 
@@ -174,41 +169,41 @@ public static class ScrollbarWidget
 		container.AddChild(track);
 
 		// Spacer before thumb (for positioning)
-		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
-		var spacerNode = ClayNode.Default with
+		var spacerBuilder = ClayNode.Configure();
+		var spacerSize = scrollPosition * (1f - viewportSize);
+
+		if (isHorizontal)
 		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = isHorizontal
-					? new Clay_Sizing(Clay_SizingAxis.Percent(scrollPosition * (1f - viewportSize)), Clay_SizingAxis.Grow())
-					: new Clay_Sizing(Clay_SizingAxis.Grow(), Clay_SizingAxis.Percent(scrollPosition * (1f - viewportSize)))
-			}
-		};
+			spacerBuilder = spacerBuilder.WidthPercent(spacerSize).HeightGrow();
+		}
+		else
+		{
+			spacerBuilder = spacerBuilder.WidthGrow().HeightPercent(spacerSize);
+		}
+
+		var spacerNode = spacerBuilder.Build();
 
 		var spacer = commands.SpawnClayElement(spacerNode);
 		track.AddChild(spacer);
 
 		// Thumb (the draggable part)
-		// Note: Using ClayNode.Default with for percentage sizing (not supported in fluent API yet)
-		var thumbNode = ClayNode.Default with
+		var thumbBuilder = ClayNode.Configure();
+
+		if (isHorizontal)
 		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = isHorizontal
-					? new Clay_Sizing(Clay_SizingAxis.Percent(viewportSize), Clay_SizingAxis.Grow())
-					: new Clay_Sizing(Clay_SizingAxis.Grow(), Clay_SizingAxis.Percent(viewportSize))
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(120, 170, 255, 180)
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Border = new Clay_BorderElementConfig
-			{
-				color = new Clay_Color(255, 255, 255, 50),
-				width = new Clay_BorderWidth { left = 1, right = 1, top = 1, bottom = 1 }
-			}
-		};
+			thumbBuilder = thumbBuilder.WidthPercent(viewportSize).HeightGrow();
+		}
+		else
+		{
+			thumbBuilder = thumbBuilder.WidthGrow().HeightPercent(viewportSize);
+		}
+
+		thumbBuilder = thumbBuilder
+			.Background(new Clay_Color(120, 170, 255, 180))
+			.CornerRadius(4)
+			.Border(new Clay_Color(255, 255, 255, 50), 1);
+
+		var thumbNode = thumbBuilder.Build();
 
 		var thumb = commands.SpawnClayElement(thumbNode);
 		track.AddChild(thumb);
@@ -218,6 +213,7 @@ public static class ScrollbarWidget
 		{
 			ContainerEntityId = container.Id,
 			ContentAreaEntityId = contentAreaEntityId,
+			ViewportEntityId = viewportEntityId,
 			TrackEntityId = track.Id,
 			SpacerEntityId = spacer.Id,
 			ThumbEntityId = thumb.Id,

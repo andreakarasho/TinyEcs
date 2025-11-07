@@ -276,7 +276,7 @@ public static class Program
 		// Create third container for new widgets demonstration
 		var scroll3Node = ClayNode.Configure()
 			.WidthGrow()
-			.Height(300)
+			.HeightFit()
 			.Column()
 			.Padding(8)
 			.Gap(8)
@@ -521,15 +521,16 @@ public static class Program
 		// 	initialScroll: 0.0f
 		// );
 
-		// Create a nested panel example
+		// Create a nested panel example with fixed height for scrolling
 		var nestedPanel = commands.CreatePanel(
 			scroll3,
 			title: "Settings",
 			width: 550f,
-			height: 0f,
+			height: 300f,  // Fixed height required for scrolling to work
 			backgroundColor: new Clay_Color(50, 55, 60, 255),
 			padding: 12,
-			cornerRadius: 8
+			cornerRadius: 8,
+			enableVerticalScrolling: true
 		);
 
 		// Add some controls inside the nested panel
@@ -541,7 +542,8 @@ public static class Program
 		var qualityOptions = new[] { "Low", "Medium", "High", "Ultra" };
 		commands.CreateDropdown(nestedPanel, "Quality", qualityOptions, defaultIndex: 2);
 
-		commands.CreateButton(nestedPanel, "Save Settings", width: 150f, height: 40f);
+		for (var i = 0; i < 20; ++i)
+			commands.CreateButton(nestedPanel, "Save Settings", width: 150f, height: 40f);
 	}
 
 	/// <summary>
@@ -801,12 +803,12 @@ public struct ClayRaylibRenderPlugin : IPlugin
 			if (shiftHeld)
 			{
 				// Shift+Wheel = horizontal scroll (X component)
-				pointer.Value.AddScroll(new Vector2(mouseWheel * 20f, 0f));
+				pointer.Value.AddScroll(new Vector2(mouseWheel * 5f, 0f));
 			}
 			else
 			{
 				// Normal wheel = vertical scroll (Y component)
-				pointer.Value.AddScroll(new Vector2(0f, mouseWheel * 20f));
+				pointer.Value.AddScroll(new Vector2(0f, mouseWheel * 5f));
 			}
 		}
 

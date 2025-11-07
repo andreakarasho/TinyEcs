@@ -297,23 +297,23 @@ public struct ScrollbarPlugin : IPlugin
 			var mouseX = pointer.Value.Position.X;
 			var mouseY = pointer.Value.Position.Y;
 
-			// Find scrollbars whose content areas contain the mouse
+			// Find scrollbars whose viewports contain the mouse
 			foreach (var (entityId, statePtr, containerLayoutPtr) in scrollbars)
 			{
 				var state = statePtr.Ref;
 
-				// Get the content area layout to check if mouse is over it
-				if (!layouts.Contains(state.ContentAreaEntityId))
+				// Get the viewport layout to check if mouse is over it
+				if (!layouts.Contains(state.ViewportEntityId))
 					continue;
 
-				var (_, contentLayoutPtr) = layouts.Get(state.ContentAreaEntityId);
-				var contentLayout = contentLayoutPtr.Ref;
+				var (_, viewportLayoutPtr) = layouts.Get(state.ViewportEntityId);
+				var viewportLayout = viewportLayoutPtr.Ref;
 
-				// Check if mouse is over the content area
-				bool mouseOverContent = mouseX >= contentLayout.X && mouseX <= contentLayout.X + contentLayout.Width &&
-										mouseY >= contentLayout.Y && mouseY <= contentLayout.Y + contentLayout.Height;
+				// Check if mouse is over the viewport (visible area)
+				bool mouseOverViewport = mouseX >= viewportLayout.X && mouseX <= viewportLayout.X + viewportLayout.Width &&
+										 mouseY >= viewportLayout.Y && mouseY <= viewportLayout.Y + viewportLayout.Height;
 
-				if (!mouseOverContent)
+				if (!mouseOverViewport)
 					continue;
 
 				// Apply scroll delta based on orientation
