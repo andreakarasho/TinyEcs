@@ -21,8 +21,9 @@ public struct WidgetsPlugin : IPlugin
 
 		// Panel widget doesn't need a plugin (no systems required)
 
+		app.AddPlugin(new DropdownPlugin());
+
 		// Future widgets to be added:
 		// app.AddPlugin(new TooltipPlugin());
-		// app.AddPlugin(new DropdownPlugin());
 	}
 }

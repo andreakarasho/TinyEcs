@@ -419,141 +419,141 @@ public static class Program
 		// );
 
 		// Create a panel for scrollable list demonstration
-		var scrollbarPanel = commands.CreatePanel(
-			scroll3,
-			title: "Scrollable List Example",
-			width: 550f,
-			height: 0f,
-			backgroundColor: new Clay_Color(50, 55, 60, 255),
-			padding: 12f,
-			cornerRadius: 8
-		);
+		// var scrollbarPanel = commands.CreatePanel(
+		// 	scroll3,
+		// 	title: "Scrollable List Example",
+		// 	width: 550f,
+		// 	height: 0f,
+		// 	backgroundColor: new Clay_Color(50, 55, 60, 255),
+		// 	padding: 12f,
+		// 	cornerRadius: 8
+		// );
 
-		// Container with scrollbar - fixed height viewport
-		var scrollableContainerNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Fixed(500),
-					Clay_SizingAxis.Fixed(250)
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-				childGap = 0
-			}
-		};
+		// // Container with scrollbar - fixed height viewport
+		// var scrollableContainerNode = ClayNode.Default with
+		// {
+		// 	Layout = new Clay_LayoutConfig
+		// 	{
+		// 		sizing = new Clay_Sizing(
+		// 			Clay_SizingAxis.Fixed(500),
+		// 			Clay_SizingAxis.Fixed(250)
+		// 		),
+		// 		layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+		// 		childGap = 0
+		// 	}
+		// };
 
-		var scrollableContainer = commands.SpawnClayElement(scrollableContainerNode);
-		scrollbarPanel.AddChild(scrollableContainer);
+		// var scrollableContainer = commands.SpawnClayElement(scrollableContainerNode);
+		// scrollbarPanel.AddChild(scrollableContainer);
 
-		// Content area (will be clipped and scrolled)
-		var contentAreaNode = ClayNode.Default with
-		{
-			Layout = new Clay_LayoutConfig
-			{
-				sizing = new Clay_Sizing(
-					Clay_SizingAxis.Grow(),
-					Clay_SizingAxis.Grow()
-				),
-				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
-				childGap = 8,
-				padding = Clay_Padding.All(8)
-			},
-			Rectangle = new Clay_RectangleRenderData
-			{
-				backgroundColor = new Clay_Color(35, 38, 42, 255)
-			},
-			CornerRadius = Clay_CornerRadius.All(4),
-			Clip = new Clay_ClipElementConfig
-			{
-				horizontal = true,  // Enable horizontal clipping
-				vertical = true,
-				childOffset = new Clay_Vector2 { x = 0f, y = 0f }
-			}
-		};
+		// Content area(will be clipped and scrolled)
+		// var contentAreaNode = ClayNode.Default with
+		// {
+		// 	Layout = new Clay_LayoutConfig
+		// 	{
+		// 		sizing = new Clay_Sizing(
+		// 			Clay_SizingAxis.Grow(),
+		// 			Clay_SizingAxis.Grow()
+		// 		),
+		// 		layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM,
+		// 		childGap = 8,
+		// 		padding = Clay_Padding.All(8)
+		// 	},
+		// 	Rectangle = new Clay_RectangleRenderData
+		// 	{
+		// 		backgroundColor = new Clay_Color(35, 38, 42, 255)
+		// 	},
+		// 	CornerRadius = Clay_CornerRadius.All(4),
+		// 	Clip = new Clay_ClipElementConfig
+		// 	{
+		// 		horizontal = true,  // Enable horizontal clipping
+		// 		vertical = true,
+		// 		childOffset = new Clay_Vector2 { x = 0f, y = 0f }
+		// 	}
+		// };
 
-		var contentArea = commands.SpawnClayElement(contentAreaNode);
-		scrollableContainer.AddChild(contentArea);
+		// var contentArea = commands.SpawnClayElement(contentAreaNode);
+		// scrollableContainer.AddChild(contentArea);
 
-		// Add ClayScrollContainer component to enable scrolling
-		commands.Entity(contentArea.Id).Insert(ClayScrollContainer.Default);
+		// // Add ClayScrollContainer component to enable scrolling
+		// commands.Entity(contentArea.Id).Insert(ClayScrollContainer.Default);
 
-		// Add list items (20 items, each 40px tall = 800px total content)
-		// Make items 800px wide to exceed viewport width and trigger horizontal scrollbar
-		for (int i = 0; i < 20; i++)
-		{
-			var itemNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Fixed(800),  // Fixed width to trigger horizontal scroll
-						Clay_SizingAxis.Fixed(40)
-					),
-					layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
-					childAlignment = new Clay_ChildAlignment(
-						Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
-						Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
-					),
-					padding = Clay_Padding.All(8)
-				},
-				Rectangle = new Clay_RectangleRenderData
-				{
-					backgroundColor = i % 2 == 0
-						? new Clay_Color(45, 50, 55, 255)
-						: new Clay_Color(40, 44, 48, 255)
-				},
-				CornerRadius = Clay_CornerRadius.All(4)
-			};
+		// // Add list items (20 items, each 40px tall = 800px total content)
+		// // Make items 800px wide to exceed viewport width and trigger horizontal scrollbar
+		// for (int i = 0; i < 20; i++)
+		// {
+		// 	var itemNode = ClayNode.Default with
+		// 	{
+		// 		Layout = new Clay_LayoutConfig
+		// 		{
+		// 			sizing = new Clay_Sizing(
+		// 				Clay_SizingAxis.Fixed(800),  // Fixed width to trigger horizontal scroll
+		// 				Clay_SizingAxis.Fixed(40)
+		// 			),
+		// 			layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
+		// 			childAlignment = new Clay_ChildAlignment(
+		// 				Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT,
+		// 				Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER
+		// 			),
+		// 			padding = Clay_Padding.All(8)
+		// 		},
+		// 		Rectangle = new Clay_RectangleRenderData
+		// 		{
+		// 			backgroundColor = i % 2 == 0
+		// 				? new Clay_Color(45, 50, 55, 255)
+		// 				: new Clay_Color(40, 44, 48, 255)
+		// 		},
+		// 		CornerRadius = Clay_CornerRadius.All(4)
+		// 	};
 
-			var item = commands.SpawnClayElement(itemNode);
-			contentArea.AddChild(item);
+		// 	var item = commands.SpawnClayElement(itemNode);
+		// 	contentArea.AddChild(item);
 
-			// Item text
-			var itemTextNode = ClayNode.Default with
-			{
-				Layout = new Clay_LayoutConfig
-				{
-					sizing = new Clay_Sizing(
-						Clay_SizingAxis.Grow(),
-						Clay_SizingAxis.Grow()
-					)
-				},
-				Text = new ClayText
-				{
-					Text = $"List Item #{i + 1} - This is some very long sample content that extends beyond the viewport width to demonstrate horizontal scrolling",
-					Config = new Clay_TextElementConfig
-					{
-						fontSize = 16,
-						textColor = new Clay_Color(220, 220, 220, 255)
-					}
-				}
-			};
+		// 	// Item text
+		// 	var itemTextNode = ClayNode.Default with
+		// 	{
+		// 		Layout = new Clay_LayoutConfig
+		// 		{
+		// 			sizing = new Clay_Sizing(
+		// 				Clay_SizingAxis.Grow(),
+		// 				Clay_SizingAxis.Grow()
+		// 			)
+		// 		},
+		// 		Text = new ClayText
+		// 		{
+		// 			Text = $"List Item #{i + 1} - This is some very long sample content that extends beyond the viewport width to demonstrate horizontal scrolling",
+		// 			Config = new Clay_TextElementConfig
+		// 			{
+		// 				fontSize = 16,
+		// 				textColor = new Clay_Color(220, 220, 220, 255)
+		// 			}
+		// 		}
+		// 	};
 
-			var itemText = commands.SpawnClayElement(itemTextNode);
-			item.AddChild(itemText);
-		}
+		// 	var itemText = commands.SpawnClayElement(itemTextNode);
+		// 	item.AddChild(itemText);
+		// }
 
-		// Vertical scrollbar
-		// Content: 20 items × 40px = 800px, 19 gaps × 8px = 152px, padding 16px = 968px total
-		var verticalScrollbar = commands.CreateVerticalScrollbar(
-			scrollableContainer,
-			contentAreaEntityId: contentArea.Id,
-			contentSize: 968f,
-			visibleSize: 250f,
-			initialScroll: 0.0f
-		);
+		// // Vertical scrollbar
+		// // Content: 20 items × 40px = 800px, 19 gaps × 8px = 152px, padding 16px = 968px total
+		// var verticalScrollbar = commands.CreateVerticalScrollbar(
+		// 	scrollableContainer,
+		// 	contentAreaEntityId: contentArea.Id,
+		// 	contentSize: 968f,
+		// 	visibleSize: 250f,
+		// 	initialScroll: 0.0f
+		// );
 
-		// Horizontal scrollbar
-		// Content: 800px item width + 16px padding = 816px total
-		// Visible: 500px container width - 12px vertical scrollbar = 488px
-		var horizontalScrollbar = commands.CreateHorizontalScrollbar(
-			scrollableContainer,
-			contentAreaEntityId: contentArea.Id,
-			contentSize: 816f,
-			visibleSize: 488f,
-			initialScroll: 0.0f
-		);
+		// // Horizontal scrollbar
+		// // Content: 800px item width + 16px padding = 816px total
+		// // Visible: 500px container width - 12px vertical scrollbar = 488px
+		// var horizontalScrollbar = commands.CreateHorizontalScrollbar(
+		// 	scrollableContainer,
+		// 	contentAreaEntityId: contentArea.Id,
+		// 	contentSize: 816f,
+		// 	visibleSize: 488f,
+		// 	initialScroll: 0.0f
+		// );
 
 		// Create a nested panel example
 		var nestedPanel = commands.CreatePanel(
@@ -570,6 +570,11 @@ public static class Program
 		commands.CreateCheckbox(nestedPanel, "Enable Notifications", defaultChecked: true);
 		commands.CreateCheckbox(nestedPanel, "Auto-save Progress", defaultChecked: true);
 		commands.CreateSlider(nestedPanel, "Music Volume", 0.7f, 0f, 1f);
+
+		// Add dropdown widget
+		var qualityOptions = new[] { "Low", "Medium", "High", "Ultra" };
+		commands.CreateDropdown(nestedPanel, "Quality", qualityOptions, defaultIndex: 2);
+
 		commands.CreateButton(nestedPanel, "Save Settings", width: 150f, height: 40f);
 	}
 
