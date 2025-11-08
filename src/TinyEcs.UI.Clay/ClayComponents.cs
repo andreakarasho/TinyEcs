@@ -64,10 +64,9 @@ public readonly struct ClayElementId(Clay_ElementId id)
 		return new ClayElementId(new Clay_ElementId()
 		{
 			id = (uint)IDOp.RealID(entityId),
-			offset = (uint)IDOp.GetGeneration(entityId)
+			offset = (uint)IDOp.GetGeneration(entityId),
+			stringId = Clay_cs.Clay.ClayStrings.Get(entityId.ToString())
 		});
-		// Use entity ID directly as Clay element ID
-		// return new(Clay_cs.Clay.Id(IDOp.RealID(entityId).ToString()));
 	}
 }
 
