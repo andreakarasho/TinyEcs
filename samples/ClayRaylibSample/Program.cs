@@ -6,6 +6,7 @@ using TinyEcs.UI.Clay;
 using TinyEcs.UI.Clay.Widgets;
 using Clay_cs;
 using System.Text;
+using System.Buffers;
 
 namespace ClayRaylibSample;
 
@@ -17,6 +18,80 @@ public static class Program
 	private const int WINDOW_WIDTH = 1280;
 	private const int WINDOW_HEIGHT = 720;
 
+	// Static reference to FontCache for use in MeasureText callback and rendering
+	internal static FontCache? s_fontCache;
+
+
+	/// <summary>
+	/// Font cache resource for managing loaded fonts.
+	/// Fonts are loaded from disk and cached by (name, size) key.
+	/// </summary>
+	public class FontCache
+	{
+		private readonly Dictionary<ushort, Font> _fonts = new();
+		private readonly string _fontsDirectory;
+
+		public FontCache(string fontsDirectory = "fonts")
+		{
+			_fontsDirectory = fontsDirectory;
+		}
+
+		/// <summary>
+		/// Registers a font by loading it from the fonts directory and assigns it to the specified fontId.
+		/// Font size is specified by Clay at render time via the fontSize parameter in text configs.
+		/// </summary>
+		/// <param name="fontId">Font ID to assign (used by Clay text configs)</param>
+		/// <param name="fontName">Font filename without extension (e.g., "Roboto-Regular")</param>
+		public void RegisterFont(ushort fontId, string fontName)
+		{
+			// Check if already loaded
+			if (_fonts.ContainsKey(fontId))
+			{
+				Console.WriteLine($"[FontCache] Warning: Font ID {fontId} already registered, skipping");
+				return;
+			}
+
+			var fontPath = Path.Combine(_fontsDirectory, $"{fontName}.ttf");
+			if (!File.Exists(fontPath))
+			{
+				Console.WriteLine($"[FontCache] Warning: Font file not found: {fontPath}");
+				return;
+			}
+
+			// Load font at a reasonable base size (will be scaled by Clay at render time)
+			var font = Raylib.LoadFontEx(fontPath, 64, null, 0);
+			Raylib.SetTextureFilter(font.Texture, TextureFilter.Bilinear);
+			_fonts[fontId] = font;
+
+			Console.WriteLine($"[FontCache] Loaded font ID {fontId}: {fontName}");
+		}
+
+		/// <summary>
+		/// Gets a font by ID. Returns Raylib's default font if not found.
+		/// </summary>
+		public Font GetFontById(ushort fontId)
+		{
+			return _fonts.TryGetValue(fontId, out var font) ? font : Raylib.GetFontDefault();
+		}
+
+		/// <summary>
+		/// Unloads all cached fonts. Call this during cleanup.
+		/// </summary>
+		public void Dispose()
+		{
+			var defaultFont = Raylib.GetFontDefault();
+			foreach (var (fontId, font) in _fonts)
+			{
+				// Don't unload Raylib's default font
+				if (font.BaseSize != defaultFont.BaseSize)
+				{
+					Raylib.UnloadFont(font);
+				}
+			}
+			_fonts.Clear();
+		}
+	}
+
 	public static unsafe void Main()
 	{
 		// Initialize Raylib
@@ -27,6 +102,21 @@ public static class Program
 		// Create ECS world and app
 		using var world = new World();
 		var app = new App(world, ThreadingMode.Single); // Use single-threaded for Raylib
+
+		// Initialize and register FontCache resource
+		var fontCache = new FontCache("fonts");
+
+		// Register fonts with explicit fontIds (fontId 0 = default)
+		// Font size is controlled by Clay's fontSize parameter in text configs
+		fontCache.RegisterFont(0, "Roboto-Regular");
+		fontCache.RegisterFont(1, "Roboto-Bold");
+		fontCache.RegisterFont(2, "Roboto-Italic");
+
+		// Store in static field for MeasureText callback
+		s_fontCache = fontCache;
+
+		// Add as a world resource
+		app.AddResource(fontCache);
 
 		// Add Clay UI plugin
 		app.AddClayUi(new ClayUiOptions
@@ -41,10 +131,6 @@ public static class Program
 
 		// Add rendering plugin
 		app.AddPlugin(new ClayRaylibRenderPlugin());
-
-		// Add Raylib-specific global slider drag system
-		// This handles mouse movement even outside slider bounds using Raylib
-		app.AddRaylibSliderDragSystem();
 
 		// Add global observer for radio button value changes
 		app.AddObserver<On<RadioValueChanged>>((world, trigger) =>
@@ -107,6 +193,9 @@ public static class Program
 			// Update ECS (which will update Clay pointer state and run systems)
 			app.Update();
 		}
+
+		// Cleanup fonts
+		fontCache.Dispose();
 
 		Raylib.CloseWindow();
 	}
@@ -547,7 +636,8 @@ public static class Program
 	}
 
 	/// <summary>
-	/// Measure text dimensions using Raylib's text measurement.
+	/// Measure text dimensions using FontCache.
+	/// Uses config->fontId to look up the font from the cache.
 	/// This function is called by Clay during layout calculation.
 	/// </summary>
 	private static unsafe Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig* config, void* userData)
@@ -555,43 +645,23 @@ public static class Program
 		// Extract text string from Clay string slice
 		var textPtr = text.chars;
 		var textLength = text.length;
-
 		var textString = Encoding.UTF8.GetString((byte*)textPtr, textLength);
 
-		// var font = Raylib.GetFontDefault();
-		// var scaleFactor = config->fontSize / (float)font.BaseSize;
+		// Get font from cache using fontId
+		Font font;
+		if (s_fontCache != null)
+		{
+			font = s_fontCache.GetFontById(config->fontId);
+		}
+		else
+		{
+			// Fallback to Raylib default if cache not initialized
+			font = Raylib.GetFontDefault();
+		}
 
-		// float maxTextWidth = 0.0f;
-		// float lineTextWidth = 0;
-		// int maxLineCharCount = 0;
-		// int lineCharCount = 0;
-
-		// for (int i = 0; i < text.length; ++i, lineCharCount++)
-		// {
-		// 	if (text.chars[i] == '\n')
-		// 	{
-		// 		maxTextWidth = Math.Max(maxTextWidth, lineTextWidth);
-		// 		maxLineCharCount = Math.Max(maxLineCharCount, lineCharCount);
-		// 		lineTextWidth = 0;
-		// 		lineCharCount = 0;
-		// 		continue;
-		// 	}
-		// 	int index = text.chars[i] - 32;
-		// 	if (font.Glyphs[index].AdvanceX != 0) lineTextWidth += font.Glyphs[index].AdvanceX;
-		// 	else lineTextWidth += (font.Recs[index].Width + font.Glyphs[index].OffsetX);
-		// }
-
-		// maxTextWidth = Math.Max(maxTextWidth, lineTextWidth);
-		// maxLineCharCount = Math.Max(maxLineCharCount, lineCharCount);
-
-		// var dim = new Clay_Dimensions();
-		// dim.width = maxTextWidth * scaleFactor + (lineCharCount * config->letterSpacing);
-		// dim.height = config->fontSize;
-
-
-		// Measure text using Raylib
+		// Measure text using the font from cache
 		var textSize = Raylib.MeasureTextEx(
-			Raylib.GetFontDefault(),
+			font,
 			textString,
 			config->fontSize,
 			config->letterSpacing
@@ -633,89 +703,6 @@ public static class Program
 	}
 
 
-}
-
-/// <summary>
-/// Extension methods for adding Raylib-specific Clay UI systems.
-/// </summary>
-public static class RaylibClayExtensions
-{
-	/// <summary>
-	/// Adds global slider drag tracking system that uses Raylib for mouse input.
-	/// This allows sliders to continue updating even when the cursor leaves the slider bounds.
-	/// </summary>
-	public static App AddRaylibSliderDragSystem(this App app)
-	{
-		app.AddSystem((Commands commands, Query<Data<SliderState>> stateQuery, Query<Data<ClayComputedLayout>> layoutQuery) =>
-		{
-			// Check if any slider is being dragged
-			foreach (var (entityId, statePtr) in stateQuery)
-			{
-				var state = statePtr.Ref;
-
-				if (!state.IsDragging)
-					continue;
-
-				// Check if mouse button is still down
-				if (!Raylib.IsMouseButtonDown(MouseButton.Left))
-				{
-					// Mouse released - stop dragging
-					state.IsDragging = false;
-					commands.Entity(entityId.Ref).Insert(state);
-					continue;
-				}
-
-				// Get global mouse position from Raylib
-				var mousePos = Raylib.GetMousePosition();
-
-				// Get layout information for the slider components
-				if (!layoutQuery.Contains(state.TrackEntityId) || !layoutQuery.Contains(state.ThumbEntityId))
-					continue;
-
-				var (_, trackLayoutPtr) = layoutQuery.Get(state.TrackEntityId);
-				var (_, thumbLayoutPtr) = layoutQuery.Get(state.ThumbEntityId);
-				var trackLayout = trackLayoutPtr.Ref;
-				var thumbLayout = thumbLayoutPtr.Ref;
-
-				// Calculate slider value using simple Lua-style calculation
-				var trackWidth = trackLayout.Width;
-				var trackLocalX = mousePos.X - trackLayout.X;
-				var normalized = Math.Clamp(trackLocalX / trackWidth, 0f, 1f);
-				var newValue = state.Min + normalized * (state.Max - state.Min);
-
-				// Apply step if specified
-				if (state.Step > 0)
-				{
-					newValue = MathF.Round(newValue / state.Step) * state.Step;
-				}
-
-				// Update value if it changed
-				var clampedValue = Math.Clamp(newValue, state.Min, state.Max);
-				if (Math.Abs(clampedValue - state.Value) > 0.0001f)
-				{
-					state.Value = clampedValue;
-					commands.Entity(entityId.Ref).Insert(state);
-
-					// Update visuals
-					var label = state.Label;
-					var value = state.Value;
-					var min = state.Min;
-					var max = state.Max;
-
-					commands.Entity(state.LabelEntityId).Insert(new SliderLabelUpdate { Text = $"{label}: {value:F2}" });
-					float normalizedFill = (value - min) / (max - min);
-					commands.Entity(state.FillEntityId).Insert(new SliderFillUpdate { NormalizedValue = normalizedFill });
-				}
-			}
-		})
-		.InStage(Stage.First)
-		.Label("raylib:slider-drag")
-		.After("clay:reset-input-state")
-		.SingleThreaded()
-		.Build();
-
-		return app;
-	}
 }
 
 /// <summary>
@@ -879,7 +866,9 @@ public struct ClayRaylibRenderPlugin : IPlugin
 			// IMPORTANT: Only cull visual commands (RECTANGLE, BORDER, TEXT)!
 			// Always process SCISSOR_START/END to maintain Begin/End pairing and stack integrity.
 			bool isOffScreen = cmd.boundingBox.x + cmd.boundingBox.width < 0 ||
-							   cmd.boundingBox.y + cmd.boundingBox.height < 0;
+							   cmd.boundingBox.y + cmd.boundingBox.height < 0 ||
+							   cmd.boundingBox.x > state.Value.LayoutDimensions.width ||
+							   cmd.boundingBox.y > state.Value.LayoutDimensions.height;
 
 			switch (cmd.commandType)
 			{
@@ -1116,20 +1105,24 @@ public struct ClayRaylibRenderPlugin : IPlugin
 			(byte)Math.Clamp(clayColor.a, 0, 255)
 		);
 
-		// Extract text string from Clay string slice
-		var textPtr = textData.stringContents.chars;
-		var textLength = textData.stringContents.length;
-		var text = Encoding.UTF8.GetString((byte*)textPtr, textLength);
+		// Get font from cache using fontId
+		var font = Program.s_fontCache?.GetFontById(textData.fontId) ?? Raylib.GetFontDefault();
+		var strUtf8 = new ReadOnlySpan<byte>((byte*)textData.stringContents.chars, textData.stringContents.length);
+		var utf8Bytes = strUtf8.Length + 1;
+		var buf = ArrayPool<byte>.Shared.Rent(utf8Bytes);
+		try
+		{
+			strUtf8.CopyTo(buf);
+			buf[utf8Bytes - 1] = 0; // Null-terminate
 
-		// Clay provides the bounding box already positioned correctly based on alignment
-		// Just draw the text at the provided position
-		Raylib.DrawTextEx(
-			Raylib.GetFontDefault(),
-			text,
-			new Vector2(bounds.x, bounds.y),
-			textData.fontSize,
-			textData.letterSpacing,
-			color
-		);
+			fixed (byte* ptr = buf.AsSpan(0, utf8Bytes))
+			{
+				Raylib.DrawTextEx(font, (sbyte*)ptr, new Vector2(bounds.x, bounds.y), textData.fontSize, textData.letterSpacing, color);
+			}
+		}
+		finally
+		{
+			ArrayPool<byte>.Shared.Return(buf);
+		}
 	}
 }

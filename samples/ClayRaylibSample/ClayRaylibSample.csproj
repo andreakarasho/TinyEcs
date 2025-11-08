@@ -21,4 +21,8 @@
 		<ProjectReference Include="..\..\src\TinyEcs.UI.Clay\TinyEcs.UI.Clay.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<None Include="fonts\**\*" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
 </Project>
