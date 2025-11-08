@@ -19,9 +19,11 @@ public struct DropdownState
 
 	// Menu configuration
 	public float Width;
-	public float OptionHeight;
 	public Clay_Color BackgroundColor;
+	public Clay_Color BorderColor;
 	public Clay_Color TextColor;
+	public Clay_Color ItemBackgroundColor;
+	public Clay_Color ItemHoverColor;
 }
 
 /// <summary>
@@ -47,40 +49,37 @@ public struct DropdownValueChanged
 public static class DropdownWidget
 {
 	/// <summary>
-	/// Creates a dropdown/select widget.
+	/// Creates a dropdown/select widget using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the dropdown to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="label">Dropdown label</param>
 	/// <param name="options">Available options</param>
 	/// <param name="defaultIndex">Initially selected option index (default 0)</param>
-	/// <param name="width">Dropdown width in pixels (default 200)</param>
-	/// <param name="height">Dropdown button height in pixels (default 36)</param>
-	/// <param name="backgroundColor">Button background color</param>
-	/// <param name="textColor">Text color</param>
+	/// <param name="width">Dropdown width in pixels (0 = use default 200)</param>
 	/// <returns>The dropdown container entity ID</returns>
 	public static ulong CreateDropdown(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string label,
 		string[] options,
 		int defaultIndex = 0,
-		float width = 200f,
-		float height = 36f,
-		Clay_Color? backgroundColor = null,
-		Clay_Color? textColor = null)
+		float width = 0f)
 	{
 		if (options == null || options.Length == 0)
 			throw new ArgumentException("Dropdown must have at least one option", nameof(options));
 
 		defaultIndex = Math.Clamp(defaultIndex, 0, options.Length - 1);
 
-		var bgColor = backgroundColor ?? new Clay_Color(60, 65, 70, 255);
-		var txtColor = textColor ?? new Clay_Color(220, 220, 220, 255);
+		var dropdownTheme = theme.Dropdown;
+		var actualWidth = width > 0 ? width : 200f;
+		var height = dropdownTheme.Height;
 
 		// Container for the entire dropdown
 		var containerNode = ClayNode.Configure()
-			.Size(width, height)
+			.Size(actualWidth, height)
 			.Column()
 			.Gap(0)
 			.Build();
@@ -96,9 +95,9 @@ public static class DropdownWidget
 			.Padding(8)
 			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
 			.Gap(8)
-			.Background(bgColor)
-			.CornerRadius(4)
-			.Border(new Clay_Color(100, 105, 110, 255), 1)
+			.Background(dropdownTheme.ButtonBackgroundColor)
+			.CornerRadius(dropdownTheme.CornerRadius)
+			.Border(dropdownTheme.MenuBorderColor, dropdownTheme.BorderWidth)
 			.Build();
 
 		var button = commands.SpawnClayElement(buttonNode);
@@ -108,7 +107,7 @@ public static class DropdownWidget
 		var buttonTextNode = ClayNode.Configure()
 			.WidthGrow()
 			.HeightGrow()
-			.Text($"{label}: {options[defaultIndex]}", 16, txtColor)
+			.Text($"{label}: {options[defaultIndex]}", theme.Typography.DefaultFontSize, dropdownTheme.ButtonTextColor)
 			.Build();
 
 		var buttonText = commands.SpawnClayElement(buttonTextNode);
@@ -117,7 +116,7 @@ public static class DropdownWidget
 		// Dropdown arrow indicator
 		var arrowNode = ClayNode.Configure()
 			.Size(20, 20)
-			.Text("▼", 12, txtColor)
+			.Text("▼", 12, dropdownTheme.ButtonTextColor)
 			.Build();
 
 		var arrow = commands.SpawnClayElement(arrowNode);
@@ -133,10 +132,12 @@ public static class DropdownWidget
 			SelectedIndex = defaultIndex,
 			Options = options,
 			Label = label,
-			Width = width,
-			OptionHeight = 32f,
-			BackgroundColor = bgColor,
-			TextColor = txtColor
+			Width = actualWidth,
+			BackgroundColor = dropdownTheme.MenuBackgroundColor,
+			BorderColor = dropdownTheme.MenuBorderColor,
+			TextColor = dropdownTheme.ItemTextColor,
+			ItemBackgroundColor = dropdownTheme.ItemBackgroundColor,
+			ItemHoverColor = dropdownTheme.ItemHoverColor
 		});
 
 		// Capture IDs for observer closures
@@ -175,7 +176,7 @@ public static class DropdownWidget
 			.Gap(0)
 			.Background(state.BackgroundColor)
 			.CornerRadius(4)
-			.Border(new Clay_Color(100, 105, 110, 255), 1)
+			.Border(state.BorderColor, 1)
 			.Floating(100)
 			.FloatingOffset(0, 2)
 			.FloatingAttachPoints(
@@ -199,8 +200,8 @@ public static class DropdownWidget
 				.Padding(8)
 				.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
 				.Background(isSelected
-					? new Clay_Color(80, 120, 200, 255)
-					: new Clay_Color(60, 65, 70, 255))
+					? state.ItemHoverColor        // Use themed hover color for selected item
+					: state.ItemBackgroundColor)  // Use themed background color for normal items
 				.Build();
 
 			var option = commands.SpawnClayElement(optionNode);

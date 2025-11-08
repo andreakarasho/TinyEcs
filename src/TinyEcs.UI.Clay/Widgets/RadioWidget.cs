@@ -16,6 +16,8 @@ public struct RadioState
 	public string Value;
 	public bool IsPressed;
 	public bool Disabled;
+	public Clay_Color DotColor;        // Theme dot color
+	public Clay_Color DotBorderColor;  // Theme border color for dot
 }
 
 /// <summary>
@@ -36,10 +38,12 @@ public struct RadioValueChanged
 }
 
 /// <summary>
-/// Marker component to update radio button dot alpha.
+/// Marker component to update radio button dot color and alpha.
 /// </summary>
 public struct RadioDotUpdate
 {
+	public Clay_Color DotColor;
+	public Clay_Color BorderColor;
 	public byte Alpha;
 }
 
@@ -49,16 +53,16 @@ public struct RadioDotUpdate
 public static class RadioWidget
 {
 	/// <summary>
-	/// Creates a radio button widget with a ring and optional label.
+	/// Creates a radio button widget with a ring and optional label using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the radio button to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="groupKey">Key identifying the radio group</param>
 	/// <param name="value">Value this radio button represents</param>
 	/// <param name="label">Label text for the radio button (optional)</param>
 	/// <param name="defaultSelected">Whether this button should be selected by default</param>
 	/// <param name="disabled">Whether the radio button is disabled</param>
-	/// <param name="size">Size of the radio button in pixels</param>
 	/// <returns>The radio button container entity ID</returns>
 	/// <remarks>
 	/// Listen to RadioValueChanged event to be notified when selection changes:
@@ -67,13 +71,16 @@ public static class RadioWidget
 	public static ulong CreateRadioButton(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string groupKey,
 		string value,
 		string? label = null,
 		bool defaultSelected = false,
-		bool disabled = false,
-		float size = 20f)
+		bool disabled = false)
 	{
+		var radioTheme = theme.Radio;
+		var size = radioTheme.Size;
+
 		// Container for radio button (ring + label)
 		var containerNode = ClayNode.Configure()
 			.WidthFit(0, float.MaxValue)
@@ -86,31 +93,30 @@ public static class RadioWidget
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
-		// Radio ring (outer circle)
-		var ringColor = disabled
-			? new Clay_Color(30, 30, 30, 100)
-			: new Clay_Color(40, 40, 40, 160);
+		// Radio ring (outer circle) - use theme colors
+		var ringColor = disabled ? radioTheme.DisabledColor :
+		                defaultSelected ? radioTheme.SelectedColor : radioTheme.CircleColor;
 
 		var ringNode = ClayNode.Configure()
 			.Size(size, size)
 			.AlignCenter()
 			.Background(ringColor)
-			.Border(new Clay_Color(255, 255, 255, 64), 1)
-			.CornerRadius(18) // Circular
+			.Border(radioTheme.BorderColor, radioTheme.BorderWidth)
+			.CornerRadius((ushort)(size / 2)) // Circular
 			.Build();
 
 		var ring = commands.SpawnClayElement(ringNode);
 		container.AddChild(ring);
 
 		// Dot (inner circle) - always present but transparent when not selected
-		var dotSize = Math.Max(6, (int)(size * 0.55f));
-		var dotAlpha = defaultSelected ? (byte)220 : (byte)0;
+		var dotSize = radioTheme.DotSize;
+		var dotAlpha = defaultSelected ? (byte)255 : (byte)0;
 
+		var dotColor = radioTheme.DotColor;
 		var dotNode = ClayNode.Configure()
 			.Size(dotSize, dotSize)
-			.Background(120, 190, 255, dotAlpha)
-			.Border(new Clay_Color(255, 255, 255, dotAlpha > 0 ? (byte)90 : (byte)0), 1)
-			.CornerRadius(18) // Circular
+			.Background(new Clay_Color(dotColor.r, dotColor.g, dotColor.b, dotAlpha))
+			.CornerRadius((ushort)(dotSize / 2)) // Circular
 			.Build();
 
 		var dot = commands.SpawnClayElement(dotNode);
@@ -121,7 +127,7 @@ public static class RadioWidget
 		if (!string.IsNullOrEmpty(label))
 		{
 			var labelNode = ClayNode.Configure()
-				.Text(label, 16, new Clay_Color(230, 230, 240, 255))
+				.Text(label, theme.Typography.DefaultFontSize, radioTheme.LabelColor)
 				.Build();
 
 			var labelEntity = commands.SpawnClayElement(labelNode);
@@ -138,7 +144,9 @@ public static class RadioWidget
 			GroupKey = groupKey,
 			Value = value,
 			IsPressed = false,
-			Disabled = disabled
+			Disabled = disabled,
+			DotColor = radioTheme.DotColor,
+			DotBorderColor = new Clay_Color(255, 255, 255, 90) // Default border color
 		});
 
 		// Capture container ID for use in observer closure
@@ -198,11 +206,13 @@ public static class RadioWidget
 
 						// Determine if this button should be selected
 						var shouldBeSelected = otherState.Value == state.Value;
-						var newAlpha = shouldBeSelected ? (byte)220 : (byte)0;
+						var newAlpha = shouldBeSelected ? (byte)otherState.DotColor.a : (byte)0;
 
 						// Update the dot's color by fetching its ClayNode and modifying it
 						cmd.Entity(otherState.DotEntityId).Insert(new RadioDotUpdate
 						{
+							DotColor = otherState.DotColor,
+							BorderColor = otherState.DotBorderColor,
 							Alpha = newAlpha
 						});
 					}

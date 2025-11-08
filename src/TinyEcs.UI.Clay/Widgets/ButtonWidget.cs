@@ -28,18 +28,17 @@ public struct ButtonClicked
 public static class ButtonWidget
 {
 	/// <summary>
-	/// Creates a button widget with text label.
+	/// Creates a button widget with text label using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the button to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="text">Button text label</param>
-	/// <param name="width">Button width in pixels</param>
-	/// <param name="height">Button height in pixels</param>
-	/// <param name="backgroundColor">Button background color</param>
-	/// <param name="textColor">Button text color</param>
-	/// <param name="fontSize">Font size for the text</param>
+	/// <param name="width">Button width in pixels (0 = use theme default)</param>
 	/// <param name="disabled">Whether the button is disabled</param>
-	/// <param name="cornerRadius">Corner radius for rounded corners</param>
+	/// <param name="backgroundColor">Optional background color override</param>
+	/// <param name="textColor">Optional text color override</param>
+	/// <param name="fontSize">Optional font size override (0 = use theme default)</param>
 	/// <returns>The button container entity ID</returns>
 	/// <remarks>
 	/// Listen to ButtonClicked event to be notified when button is clicked:
@@ -48,32 +47,32 @@ public static class ButtonWidget
 	public static ulong CreateButton(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string text,
-		float width = 200f,
-		float height = 60f,
+		float width = 0f,
+		bool disabled = false,
 		Clay_Color? backgroundColor = null,
 		Clay_Color? textColor = null,
-		ushort fontSize = 20,
-		bool disabled = false,
-		ushort cornerRadius = 8)
+		ushort fontSize = 0)
 	{
-		// Use default colors if not provided
-		var bgColor = backgroundColor ?? new Clay_Color(70, 130, 180, 255);
-		var txtColor = textColor ?? new Clay_Color(255, 255, 255, 255);
+		var buttonTheme = theme.Button;
 
-		if (disabled)
-		{
-			bgColor = new Clay_Color(60, 60, 60, 255);
-			txtColor = new Clay_Color(150, 150, 150, 255);
-		}
+		// Use theme defaults if not overridden
+		var actualWidth = width > 0 ? width : 200f;
+		var actualHeight = buttonTheme.Height;
+		var actualFontSize = fontSize > 0 ? fontSize : (ushort)16;
+
+		// Apply theme colors based on state
+		var bgColor = backgroundColor ?? (disabled ? buttonTheme.DisabledBackgroundColor : buttonTheme.BackgroundColor);
+		var txtColor = textColor ?? (disabled ? buttonTheme.DisabledTextColor : buttonTheme.TextColor);
 
 		// Button container (the colored background)
 		var buttonNode = ClayNode.Configure()
-			.Size(width, height)
-			.Padding(8)
+			.Size(actualWidth, actualHeight)
+			.Padding((ushort)buttonTheme.Padding)
 			.AlignCenter()
 			.Background(bgColor)
-			.CornerRadius(cornerRadius)
+			.CornerRadius(buttonTheme.CornerRadius)
 			.Build();
 
 		var button = commands.SpawnClayElement(buttonNode);
@@ -83,7 +82,7 @@ public static class ButtonWidget
 		var textNode = ClayNode.Configure()
 			.WidthFit()
 			.HeightFit()
-			.Text(text, fontSize, txtColor)
+			.Text(text, actualFontSize, txtColor)
 			.Build();
 
 		var textElement = commands.SpawnClayElement(textNode);

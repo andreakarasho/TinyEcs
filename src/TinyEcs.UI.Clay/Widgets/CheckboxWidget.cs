@@ -16,6 +16,8 @@ public struct CheckboxState
 	public bool IsPressed;
 	public string Label;
 	public bool Disabled;
+	public Clay_Color FillColor;       // Theme fill color for the checkmark
+	public Clay_Color FillBorderColor; // Theme border color for the checkmark
 }
 
 /// <summary>
@@ -27,10 +29,12 @@ public struct CheckboxBoxUpdate
 }
 
 /// <summary>
-/// Marker component to update checkbox fill alpha.
+/// Marker component to update checkbox fill color and alpha.
 /// </summary>
 public struct CheckboxFillUpdate
 {
+	public Clay_Color FillColor;
+	public Clay_Color BorderColor;
 	public byte Alpha;
 }
 
@@ -48,14 +52,14 @@ public struct CheckboxValueChanged
 public static class CheckboxWidget
 {
 	/// <summary>
-	/// Creates a checkbox widget with a box and optional label.
+	/// Creates a checkbox widget with a box and optional label using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the checkbox to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="label">Label text for the checkbox (optional)</param>
 	/// <param name="defaultChecked">Initial checked state</param>
 	/// <param name="disabled">Whether the checkbox is disabled</param>
-	/// <param name="size">Size of the checkbox box in pixels</param>
 	/// <returns>The checkbox container entity ID</returns>
 	/// <remarks>
 	/// Listen to CheckboxValueChanged event to be notified when value changes:
@@ -64,11 +68,14 @@ public static class CheckboxWidget
 	public static ulong CreateCheckbox(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string? label = null,
 		bool defaultChecked = false,
-		bool disabled = false,
-		float size = 18f)
+		bool disabled = false)
 	{
+		var checkboxTheme = theme.Checkbox;
+		var size = checkboxTheme.Size;
+
 		// Container for checkbox (box + label)
 		var containerNode = ClayNode.Configure()
 			.WidthFit(0, float.MaxValue)
@@ -81,16 +88,16 @@ public static class CheckboxWidget
 		var container = commands.SpawnClayElement(containerNode);
 		parent.AddChild(container);
 
-		// Checkbox box
-		var boxColor = disabled
-			? new Clay_Color(30, 30, 30, 100)
-			: new Clay_Color(40, 40, 40, 160);
+		// Checkbox box - use theme colors
+		var boxColor = disabled ? checkboxTheme.DisabledColor :
+					   defaultChecked ? checkboxTheme.CheckedColor : checkboxTheme.BoxColor;
 
 		var boxNode = ClayNode.Configure()
 			.Size(size, size)
 			.AlignCenter()
 			.Background(boxColor)
-			.Border(new Clay_Color(255, 255, 255, 64), 1)
+			.Border(checkboxTheme.BorderColor, checkboxTheme.BorderWidth)
+			.CornerRadius(checkboxTheme.CornerRadius)
 			.Build();
 
 		var box = commands.SpawnClayElement(boxNode);
@@ -99,12 +106,12 @@ public static class CheckboxWidget
 		// Fill (checkmark) - always present but transparent when not checked
 		var padding = Math.Max(3, (int)(size * 0.2f));
 		var fillSize = size - padding * 2;
-		var fillAlpha = defaultChecked ? (byte)220 : (byte)0;
-
+		var fillColor = checkboxTheme.FillColor;
+		var fillAlpha = defaultChecked ? (byte)fillColor.a : (byte)0;
 		var fillNode = ClayNode.Configure()
 			.Size(fillSize, fillSize)
-			.Background(120, 190, 255, fillAlpha)
-			.Border(new Clay_Color(255, 255, 255, fillAlpha > 0 ? (byte)90 : (byte)0), 1)
+			.Background(new Clay_Color(fillColor.r, fillColor.g, fillColor.b, fillAlpha))
+			.CornerRadius((ushort)(checkboxTheme.CornerRadius > 0 ? checkboxTheme.CornerRadius - 1 : 0))
 			.Build();
 
 		var fill = commands.SpawnClayElement(fillNode);
@@ -115,7 +122,7 @@ public static class CheckboxWidget
 		if (!string.IsNullOrEmpty(label))
 		{
 			var labelNode = ClayNode.Configure()
-				.Text(label, 16, new Clay_Color(230, 230, 240, 255))
+				.Text(label, theme.Typography.DefaultFontSize, checkboxTheme.LabelColor)
 				.Build();
 
 			var labelEntity = commands.SpawnClayElement(labelNode);
@@ -132,14 +139,16 @@ public static class CheckboxWidget
 			Checked = defaultChecked,
 			IsPressed = false,
 			Label = label ?? string.Empty,
-			Disabled = disabled
+			Disabled = disabled,
+			FillColor = checkboxTheme.FillColor,
+			FillBorderColor = new Clay_Color(255, 255, 255, 90) // Default border color for fill
 		});
 
 		// Capture container ID for use in observer closure
 		var containerId = container.Id;
 
 		// Add pointer observers for interaction
-		container.Observe<On<ClayPointerEvent>, Commands, Query<Data<CheckboxState>>>((trigger, cmd, stateQuery) =>
+		container.Observe<On<ClayPointerEvent>, Commands, Query<Data<CheckboxState>>, Res<ClayTheme>>((trigger, cmd, stateQuery, theme) =>
 		{
 			var evt = trigger.Event;
 
@@ -174,9 +183,11 @@ public static class CheckboxWidget
 				cmd.Entity(containerId).Insert(state);
 
 				// Update fill alpha based on checked state
-				var newAlpha = state.Checked ? (byte)220 : (byte)0;
+				var newAlpha = state.Checked ? (byte)state.FillColor.a : (byte)0;
 				cmd.Entity(state.FillEntityId).Insert(new CheckboxFillUpdate
 				{
+					FillColor = state.FillColor,
+					BorderColor = state.FillBorderColor,
 					Alpha = newAlpha
 				});
 

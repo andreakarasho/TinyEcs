@@ -24,32 +24,31 @@ public struct PanelState
 public static class PanelWidget
 {
 	/// <summary>
-	/// Creates a panel/container widget with optional title and scrolling support.
+	/// Creates a panel/container widget with optional title and scrolling support using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the panel to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="title">Optional panel title</param>
 	/// <param name="width">Panel width (0 for Grow)</param>
 	/// <param name="height">Panel height (0 for Grow)</param>
-	/// <param name="backgroundColor">Panel background color</param>
-	/// <param name="padding">Panel padding</param>
-	/// <param name="cornerRadius">Corner radius for rounded corners</param>
+	/// <param name="backgroundColor">Optional background color override</param>
 	/// <param name="enableVerticalScrolling">Enable vertical scrollbar when content exceeds bounds</param>
 	/// <param name="enableHorizontalScrolling">Enable horizontal scrollbar when content exceeds bounds</param>
 	/// <returns>The panel content area entity ID for adding children</returns>
 	public static EntityCommands CreatePanel(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string? title = null,
 		float width = 0f,
 		float height = 0f,
 		Clay_Color? backgroundColor = null,
-		ushort padding = 12,
-		ushort cornerRadius = 8,
 		bool enableVerticalScrolling = false,
 		bool enableHorizontalScrolling = false)
 	{
-		var bgColor = backgroundColor ?? new Clay_Color(45, 50, 55, 255);
+		var panelTheme = theme.Panel;
+		var bgColor = backgroundColor ?? panelTheme.BackgroundColor;
 
 		// Panel container
 		var panelBuilder = ClayNode.Configure();
@@ -66,11 +65,11 @@ public static class PanelWidget
 
 		panelBuilder = panelBuilder
 			.Column()
-			.Padding(padding)
+			.Padding((ushort)panelTheme.Padding)
 			.Gap(8)
 			.Background(bgColor)
-			.Border(new Clay_Color(70, 75, 80, 255), 1)
-			.CornerRadius(cornerRadius);
+			.Border(panelTheme.BorderColor, panelTheme.BorderWidth)
+			.CornerRadius(panelTheme.CornerRadius);
 
 		var panelNode = panelBuilder.Build();
 
@@ -83,7 +82,7 @@ public static class PanelWidget
 			var titleNode = ClayNode.Configure()
 				.WidthGrow()
 				.HeightFit(0, 0)
-				.Text(title, 18, new Clay_Color(220, 220, 230, 255))
+				.Text(title, theme.Typography.HeaderFontSize, panelTheme.TitleTextColor)
 				.Build();
 
 			var titleElement = commands.SpawnClayElement(titleNode);
@@ -133,6 +132,7 @@ public static class PanelWidget
 				.WidthFit()
 				.HeightFit()
 				.Column()
+				.Padding(4)
 				.Gap(4)
 				.Build();
 
@@ -154,6 +154,7 @@ public static class PanelWidget
 				// Vertical scrollbar as sibling to content wrapper (on the right)
 				verticalScrollbarId = commands.CreateVerticalScrollbar(
 					scrollableRow,
+					theme,
 					contentWrapper.Id,  // Viewport for mouse wheel detection
 					contentArea.Id,     // Content area to scroll
 					contentSize: 1000,  // Large initial value to ensure visibility
@@ -167,6 +168,7 @@ public static class PanelWidget
 				// Horizontal scrollbar below the row (full width)
 				horizontalScrollbarId = commands.CreateHorizontalScrollbar(
 					panel,
+					theme,
 					contentWrapper.Id,  // Viewport for mouse wheel detection
 					contentArea.Id,     // Content area to scroll
 					contentSize: 1000,  // Large initial value to ensure visibility

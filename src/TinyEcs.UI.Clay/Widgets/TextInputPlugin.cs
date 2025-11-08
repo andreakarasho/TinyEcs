@@ -147,13 +147,13 @@ public struct TextInputPlugin : IPlugin
 				var state = statePtr.Ref;
 				ref var node = ref nodePtr.Ref;
 
-				// Update border color based on focus
+				// Update border color based on focus using themed colors
 				if (node.Border.HasValue)
 				{
 					var border = node.Border.Value;
 					border.color = state.IsFocused
-						? new Clay_Color(120, 170, 255, 255) // Blue when focused
-						: new Clay_Color(80, 80, 90, 255);     // Gray when not focused
+						? state.FocusBorderColor  // Themed focus color
+						: state.BorderColor;      // Themed normal color
 
 					node.Border = border;
 					commands.Entity(entityId.Ref).Insert(node);

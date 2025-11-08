@@ -51,10 +51,11 @@ public struct SliderValueChanged
 public static class SliderWidget
 {
 	/// <summary>
-	/// Creates a slider widget with label, track, fill, and draggable thumb.
+	/// Creates a slider widget with label, track, fill, and draggable thumb using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the slider to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="label">Label text for the slider</param>
 	/// <param name="initialValue">Initial slider value</param>
 	/// <param name="min">Minimum value</param>
@@ -68,12 +69,15 @@ public static class SliderWidget
 	public static ulong CreateSlider(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string label,
 		float initialValue,
 		float min = 0f,
 		float max = 1f,
 		float step = 0f)
 	{
+		var sliderTheme = theme.Slider;
+
 		// Container for the slider (label + slider)
 		var containerNode = ClayNode.Configure()
 			.Size(300, 80)
@@ -91,7 +95,7 @@ public static class SliderWidget
 		var labelNode = ClayNode.Configure()
 			.WidthGrow()
 			.Height(20)
-			.Text($"{label}: {initialValue:F2}", 16, new Clay_Color(255, 255, 255, 255))
+			.Text($"{label}: {initialValue:F2}", theme.Typography.DefaultFontSize, sliderTheme.LabelColor)
 			.Build();
 
 		var labelEntity = commands.SpawnClayElement(labelNode);
@@ -120,13 +124,14 @@ public static class SliderWidget
 		sliderContainer.AddChild(rail);
 
 		// Track (background rail) - centered within the rail container
+		var trackHeight = sliderTheme.TrackHeight;
 		var trackNode = ClayNode.Configure()
 			.WidthGrow()
-			.Height(6)
+			.Height(trackHeight)
 			.Row()
 			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
-			.Background(90, 90, 100, 140)
-			.CornerRadius(3)
+			.Background(sliderTheme.TrackColor)
+			.CornerRadius(sliderTheme.CornerRadius)
 			.Build();
 
 		var track = commands.SpawnClayElement(trackNode);
@@ -141,7 +146,7 @@ public static class SliderWidget
 			{
 				sizing = new Clay_Sizing(
 					Clay_SizingAxis.Percent(normalizedValue),
-					Clay_SizingAxis.Fixed(6)
+					Clay_SizingAxis.Fixed(trackHeight)
 				),
 				layoutDirection = Clay_LayoutDirection.CLAY_LEFT_TO_RIGHT,
 				childAlignment = new Clay_ChildAlignment(
@@ -151,19 +156,20 @@ public static class SliderWidget
 			},
 			Rectangle = new Clay_RectangleRenderData
 			{
-				backgroundColor = new Clay_Color(120, 170, 255, 180)
+				backgroundColor = sliderTheme.FillColor
 			},
-			CornerRadius = Clay_CornerRadius.All(3)
+			CornerRadius = Clay_CornerRadius.All(sliderTheme.CornerRadius)
 		};
 
 		var fill = commands.SpawnClayElement(fillNode);
 		track.AddChild(fill);
 
 		// Thumb (the draggable circle) - slightly larger than the track and centered on it
+		var thumbSize = sliderTheme.ThumbSize;
 		var thumbNode = ClayNode.Configure()
-			.Size(14, 14)
-			.Background(120, 170, 255, 255)
-			.CornerRadius(7)
+			.Size(thumbSize, thumbSize)
+			.Background(sliderTheme.ThumbColor)
+			.CornerRadius((ushort)(thumbSize / 2))
 			.Border(new Clay_Color(255, 255, 255, 50), 1)
 			.Build();
 

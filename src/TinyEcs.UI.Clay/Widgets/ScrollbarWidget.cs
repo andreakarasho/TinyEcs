@@ -64,10 +64,11 @@ public struct ScrollbarScrolled
 public static class ScrollbarWidget
 {
 	/// <summary>
-	/// Creates a vertical scrollbar widget with track and draggable thumb.
+	/// Creates a vertical scrollbar widget with track and draggable thumb using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the scrollbar to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="viewportEntityId">Entity ID of the viewport (visible area) for mouse wheel detection</param>
 	/// <param name="contentAreaEntityId">Entity ID of the content area to scroll</param>
 	/// <param name="contentSize">Total size of scrollable content in pixels</param>
@@ -83,33 +84,36 @@ public static class ScrollbarWidget
 	public static ulong CreateVerticalScrollbar(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
 		float visibleSize,
 		float initialScroll = 0f)
 	{
-		return CreateScrollbar(commands, parent, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: false);
+		return CreateScrollbar(commands, parent, theme, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: false);
 	}
 
 	/// <summary>
-	/// Creates a horizontal scrollbar widget with track and draggable thumb.
+	/// Creates a horizontal scrollbar widget with track and draggable thumb using theme colors.
 	/// </summary>
 	public static ulong CreateHorizontalScrollbar(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
 		float visibleSize,
 		float initialScroll = 0f)
 	{
-		return CreateScrollbar(commands, parent, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: true);
+		return CreateScrollbar(commands, parent, theme, viewportEntityId, contentAreaEntityId, contentSize, visibleSize, initialScroll, isHorizontal: true);
 	}
 
 	private static ulong CreateScrollbar(
 		Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		ulong viewportEntityId,
 		ulong contentAreaEntityId,
 		float contentSize,
@@ -117,13 +121,15 @@ public static class ScrollbarWidget
 		float initialScroll,
 		bool isHorizontal)
 	{
+		var scrollbarTheme = theme.Scrollbar;
+
 		// Calculate viewport size as percentage of content
 		float viewportSize = Math.Clamp(visibleSize / Math.Max(contentSize, 1f), 0.01f, 1f);
 		float scrollPosition = Math.Clamp(initialScroll, 0f, 1f);
 
 		// Check if scrollbar should be visible (content larger than viewport)
 		bool isVisible = contentSize > visibleSize;
-		float scrollbarSize = isVisible ? 12f : 0f;
+		float scrollbarSize = isVisible ? scrollbarTheme.Size : 0f;
 
 		// Container for the scrollbar (track + thumb)
 		// Uses normal layout flow as a sibling to the content
@@ -151,8 +157,8 @@ public static class ScrollbarWidget
 			.WidthGrow()
 			.HeightGrow()
 			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_TOP)
-			.Background(40, 40, 45, 200)
-			.CornerRadius(6);
+			.Background(scrollbarTheme.TrackColor)
+			.CornerRadius(scrollbarTheme.CornerRadius);
 
 		if (isHorizontal)
 		{
@@ -199,9 +205,8 @@ public static class ScrollbarWidget
 		}
 
 		thumbBuilder = thumbBuilder
-			.Background(new Clay_Color(120, 170, 255, 180))
-			.CornerRadius(4)
-			.Border(new Clay_Color(255, 255, 255, 50), 1);
+			.Background(scrollbarTheme.ThumbColor)
+			.CornerRadius((ushort)(scrollbarTheme.CornerRadius > 2 ? scrollbarTheme.CornerRadius - 2 : 0));
 
 		var thumbNode = thumbBuilder.Build();
 

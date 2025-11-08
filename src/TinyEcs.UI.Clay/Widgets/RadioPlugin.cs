@@ -24,7 +24,13 @@ public struct RadioPlugin : IPlugin
 				if (node.Rectangle.HasValue)
 				{
 					var rect = node.Rectangle.Value;
-					rect.backgroundColor = new Clay_Color(120, 190, 255, update.Alpha);
+					// Use themed dot color with dynamic alpha
+					rect.backgroundColor = new Clay_Color(
+						update.DotColor.r,
+						update.DotColor.g,
+						update.DotColor.b,
+						update.Alpha
+					);
 					node.Rectangle = rect;
 
 					// Re-insert to trigger change detection
@@ -34,7 +40,13 @@ public struct RadioPlugin : IPlugin
 				if (node.Border.HasValue)
 				{
 					var border = node.Border.Value;
-					border.color = new Clay_Color(255, 255, 255, update.Alpha > 0 ? (byte)90 : (byte)0);
+					// Use themed border color with dynamic alpha
+					border.color = new Clay_Color(
+						update.BorderColor.r,
+						update.BorderColor.g,
+						update.BorderColor.b,
+						update.Alpha > 0 ? update.BorderColor.a : (byte)0
+					);
 					node.Border = border;
 
 					// Re-insert to trigger change detection

@@ -118,6 +118,10 @@ public static class Program
 		// Add as a world resource
 		app.AddResource(fontCache);
 
+		// Initialize and register theme
+		var theme = ClayTheme.Dark();
+		app.AddResource(theme);
+
 		// Add Clay UI plugin
 		app.AddClayUi(new ClayUiOptions
 		{
@@ -179,7 +183,7 @@ public static class Program
 		});
 
 		// Create UI in startup
-		app.AddSystem((Commands commands) => CreateUI(commands))
+		app.AddSystem((Commands commands, Res<ClayTheme> themeRes) => CreateUI(commands, themeRes.Value))
 			.InStage(Stage.Startup)
 			.Label("app:create-ui")
 			.Build();
@@ -200,7 +204,7 @@ public static class Program
 		Raylib.CloseWindow();
 	}
 
-	private static void CreateUI(Commands commands)
+	private static void CreateUI(Commands commands, ClayTheme theme)
 	{
 		// Create root container
 		var rootNode = ClayNode.Configure()
@@ -613,26 +617,25 @@ public static class Program
 		// Create a nested panel example with fixed height for scrolling
 		var nestedPanel = commands.CreatePanel(
 			scroll3,
+			theme,
 			title: "Settings",
 			width: 550f,
 			height: 300f,  // Fixed height required for scrolling to work
 			backgroundColor: new Clay_Color(50, 55, 60, 255),
-			padding: 12,
-			cornerRadius: 8,
 			enableVerticalScrolling: true
 		);
 
 		// Add some controls inside the nested panel
-		commands.CreateCheckbox(nestedPanel, "Enable Notifications", defaultChecked: true);
-		commands.CreateCheckbox(nestedPanel, "Auto-save Progress", defaultChecked: true);
-		commands.CreateSlider(nestedPanel, "Music Volume", 0.7f, 0f, 1f);
+		commands.CreateCheckbox(nestedPanel, theme, "Enable Notifications", defaultChecked: true);
+		commands.CreateCheckbox(nestedPanel, theme, "Auto-save Progress", defaultChecked: true);
+		commands.CreateSlider(nestedPanel, theme, "Music Volume", 0.7f, 0f, 1f);
 
 		// Add dropdown widget
 		var qualityOptions = new[] { "Low", "Medium", "High", "Ultra" };
-		commands.CreateDropdown(nestedPanel, "Quality", qualityOptions, defaultIndex: 2);
+		commands.CreateDropdown(nestedPanel, theme, "Quality", qualityOptions, defaultIndex: 2);
 
 		for (var i = 0; i < 20; ++i)
-			commands.CreateButton(nestedPanel, "Save Settings", width: 150f, height: 40f);
+			commands.CreateButton(nestedPanel, theme, "Save Settings", width: 150f);
 	}
 
 	/// <summary>

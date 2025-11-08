@@ -16,6 +16,8 @@ public struct TextInputState
 	public bool IsPressed;
 	public bool Disabled;
 	public int MaxLength;
+	public Clay_Color BorderColor;       // Theme border color when not focused
+	public Clay_Color FocusBorderColor;  // Theme border color when focused
 }
 
 /// <summary>
@@ -56,14 +58,14 @@ public struct TextInputBlurred
 public static class TextInputWidget
 {
 	/// <summary>
-	/// Creates a text input widget.
+	/// Creates a text input widget using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the text input to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="placeholder">Placeholder text when empty</param>
 	/// <param name="initialText">Initial text value</param>
-	/// <param name="width">Input width in pixels</param>
-	/// <param name="height">Input height in pixels</param>
+	/// <param name="width">Input width in pixels (0 = use default 200)</param>
 	/// <param name="maxLength">Maximum text length (0 for unlimited)</param>
 	/// <param name="disabled">Whether the input is disabled</param>
 	/// <returns>The text input container entity ID</returns>
@@ -74,29 +76,28 @@ public static class TextInputWidget
 	public static ulong CreateTextInput(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		string placeholder = "Enter text...",
 		string initialText = "",
-		float width = 200f,
-		float height = 40f,
+		float width = 0f,
 		int maxLength = 0,
 		bool disabled = false)
 	{
-		var bgColor = disabled
-			? new Clay_Color(30, 30, 30, 255)
-			: new Clay_Color(40, 40, 40, 255);
+		var textInputTheme = theme.TextInput;
+		var actualWidth = width > 0 ? width : 200f;
+		var height = textInputTheme.Height;
 
-		var textColor = disabled
-			? new Clay_Color(100, 100, 100, 255)
-			: new Clay_Color(220, 220, 220, 255);
+		var bgColor = disabled ? textInputTheme.DisabledBackgroundColor : textInputTheme.BackgroundColor;
+		var textColor = textInputTheme.TextColor;
 
 		// Input container
 		var inputNode = ClayNode.Configure()
-			.Size(width, height)
-			.Padding(8)
+			.Size(actualWidth, height)
+			.Padding((ushort)textInputTheme.Padding)
 			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
 			.Background(bgColor)
-			.Border(new Clay_Color(80, 80, 90, 255), 1)
-			.CornerRadius(4)
+			.Border(textInputTheme.BorderColor, textInputTheme.BorderWidth)
+			.CornerRadius(textInputTheme.CornerRadius)
 			.Build();
 
 		var input = commands.SpawnClayElement(inputNode);
@@ -105,13 +106,13 @@ public static class TextInputWidget
 		// Text display
 		var displayText = string.IsNullOrEmpty(initialText) ? placeholder : initialText;
 		var displayColor = string.IsNullOrEmpty(initialText)
-			? new Clay_Color(120, 120, 130, 255) // Placeholder color
+			? textInputTheme.PlaceholderColor
 			: textColor;
 
 		var textNode = ClayNode.Configure()
 			.WidthFit(0, 0)
 			.HeightFit(0, 0)
-			.Text(displayText, 16, displayColor)
+			.Text(displayText, theme.Typography.DefaultFontSize, displayColor)
 			.Build();
 
 		var textElement = commands.SpawnClayElement(textNode);
@@ -126,7 +127,9 @@ public static class TextInputWidget
 			IsFocused = false,
 			IsPressed = false,
 			Disabled = disabled,
-			MaxLength = maxLength
+			MaxLength = maxLength,
+			BorderColor = textInputTheme.BorderColor,
+			FocusBorderColor = textInputTheme.FocusBorderColor
 		});
 
 		var inputId = input.Id;

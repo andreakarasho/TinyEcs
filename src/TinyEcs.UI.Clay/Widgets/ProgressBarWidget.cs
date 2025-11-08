@@ -39,42 +39,46 @@ public struct ProgressBarLabelUpdate
 public static class ProgressBarWidget
 {
 	/// <summary>
-	/// Creates a progress bar widget.
+	/// Creates a progress bar widget using theme colors.
 	/// </summary>
 	/// <param name="commands">Commands for entity creation</param>
 	/// <param name="parent">Parent entity to attach the progress bar to</param>
+	/// <param name="theme">Theme resource for styling</param>
 	/// <param name="initialValue">Initial progress value</param>
 	/// <param name="min">Minimum value</param>
 	/// <param name="max">Maximum value</param>
-	/// <param name="width">Progress bar width in pixels</param>
-	/// <param name="height">Progress bar height in pixels</param>
+	/// <param name="width">Progress bar width in pixels (0 = use default 200)</param>
 	/// <param name="showLabel">Whether to show percentage label</param>
-	/// <param name="fillColor">Color of the fill bar</param>
-	/// <param name="backgroundColor">Color of the background track</param>
+	/// <param name="fillColor">Optional fill color override</param>
+	/// <param name="backgroundColor">Optional background color override</param>
 	/// <returns>The progress bar container entity ID</returns>
 	public static ulong CreateProgressBar(
 		this Commands commands,
 		EntityCommands parent,
+		ClayTheme theme,
 		float initialValue = 0f,
 		float min = 0f,
 		float max = 100f,
-		float width = 200f,
-		float height = 24f,
+		float width = 0f,
 		bool showLabel = true,
 		Clay_Color? fillColor = null,
 		Clay_Color? backgroundColor = null)
 	{
-		var bgColor = backgroundColor ?? new Clay_Color(40, 40, 45, 255);
-		var barColor = fillColor ?? new Clay_Color(76, 175, 80, 255);
+		var progressBarTheme = theme.ProgressBar;
+		var actualWidth = width > 0 ? width : 200f;
+		var height = progressBarTheme.Height;
+
+		var bgColor = backgroundColor ?? progressBarTheme.BackgroundColor;
+		var barColor = fillColor ?? progressBarTheme.FillColor;
 
 		// Container/Track
 		var containerNode = ClayNode.Configure()
-			.Size(width, height)
+			.Size(actualWidth, height)
 			.Row()
 			.Align(Clay_LayoutAlignmentX.CLAY_ALIGN_X_LEFT, Clay_LayoutAlignmentY.CLAY_ALIGN_Y_CENTER)
 			.Background(bgColor)
-			.Border(new Clay_Color(80, 80, 90, 255), 1)
-			.CornerRadius(4)
+			.Border(progressBarTheme.BorderColor, progressBarTheme.BorderWidth)
+			.CornerRadius(progressBarTheme.CornerRadius)
 			.Build();
 
 		var container = commands.SpawnClayElement(containerNode);
@@ -100,7 +104,7 @@ public static class ProgressBarWidget
 			{
 				backgroundColor = barColor
 			},
-			CornerRadius = Clay_CornerRadius.All(3)
+			CornerRadius = Clay_CornerRadius.All((ushort)(progressBarTheme.CornerRadius > 0 ? progressBarTheme.CornerRadius - 1 : 0))
 		};
 
 		var fill = commands.SpawnClayElement(fillNode);
@@ -114,7 +118,7 @@ public static class ProgressBarWidget
 			var labelNode = ClayNode.Configure()
 				.WidthFit(0, 0)
 				.HeightFit(0, 0)
-				.Text($"{percentage}%", 14, new Clay_Color(255, 255, 255, 255))
+				.Text($"{percentage}%", theme.Typography.DefaultFontSize, progressBarTheme.TextColor)
 				.Build();
 
 			var label = commands.SpawnClayElement(labelNode);
