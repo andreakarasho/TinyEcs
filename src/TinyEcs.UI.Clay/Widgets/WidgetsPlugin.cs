@@ -20,6 +20,7 @@ public struct WidgetsPlugin : IPlugin
 		app.AddPlugin(new ScrollbarPlugin());
 		app.AddPlugin(new PanelPlugin());
 		app.AddPlugin(new DropdownPlugin());
+		app.AddPlugin(new FloatingWindowPlugin());
 
 		// Future widgets to be added:
 		// app.AddPlugin(new TooltipPlugin());

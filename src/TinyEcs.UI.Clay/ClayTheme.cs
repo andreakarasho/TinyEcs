@@ -35,6 +35,9 @@ public class ClayTheme
 	// === Progress Bar Theme ===
 	public ProgressBarTheme ProgressBar { get; set; } = new();
 
+	// === Floating Window Theme ===
+	public FloatingWindowTheme FloatingWindow { get; set; } = new();
+
 	// === Typography ===
 	public TypographyTheme Typography { get; set; } = new();
 
@@ -155,6 +158,21 @@ public class ClayTheme
 				Height = 24,
 				CornerRadius = 4,
 				BorderWidth = 1
+			},
+			FloatingWindow = new FloatingWindowTheme
+			{
+				TitleBarColor = new Clay_Color(50, 50, 50, 255),
+				TitleTextColor = new Clay_Color(220, 220, 220, 255),
+				BackgroundColor = new Clay_Color(35, 35, 35, 255),
+				BorderColor = new Clay_Color(70, 70, 70, 255),
+				CloseButtonColor = new Clay_Color(70, 70, 70, 255),
+				CloseButtonHoverColor = new Clay_Color(180, 60, 60, 255),
+				ResizeHandleColor = new Clay_Color(80, 80, 80, 255),
+				TitleBarHeight = 32,
+				TitleBarPadding = 8,
+				ContentPadding = 12,
+				BorderWidth = 1,
+				CornerRadius = 8
 			},
 			Typography = new TypographyTheme
 			{
@@ -287,6 +305,21 @@ public class ClayTheme
 				Height = 24,
 				CornerRadius = 4,
 				BorderWidth = 1
+			},
+			FloatingWindow = new FloatingWindowTheme
+			{
+				TitleBarColor = new Clay_Color(245, 245, 245, 255),
+				TitleTextColor = new Clay_Color(40, 40, 40, 255),
+				BackgroundColor = new Clay_Color(255, 255, 255, 255),
+				BorderColor = new Clay_Color(200, 200, 200, 255),
+				CloseButtonColor = new Clay_Color(220, 220, 220, 255),
+				CloseButtonHoverColor = new Clay_Color(220, 100, 100, 255),
+				ResizeHandleColor = new Clay_Color(200, 200, 200, 255),
+				TitleBarHeight = 32,
+				TitleBarPadding = 8,
+				ContentPadding = 12,
+				BorderWidth = 1,
+				CornerRadius = 8
 			},
 			Typography = new TypographyTheme
 			{
@@ -423,6 +456,22 @@ public class ProgressBarTheme
 	public float Height { get; set; }
 	public ushort CornerRadius { get; set; }
 	public ushort BorderWidth { get; set; }
+}
+
+public class FloatingWindowTheme
+{
+	public Clay_Color TitleBarColor { get; set; }
+	public Clay_Color TitleTextColor { get; set; }
+	public Clay_Color BackgroundColor { get; set; }
+	public Clay_Color BorderColor { get; set; }
+	public Clay_Color CloseButtonColor { get; set; }
+	public Clay_Color CloseButtonHoverColor { get; set; }
+	public Clay_Color ResizeHandleColor { get; set; }
+	public float TitleBarHeight { get; set; }
+	public float TitleBarPadding { get; set; }
+	public float ContentPadding { get; set; }
+	public ushort BorderWidth { get; set; }
+	public ushort CornerRadius { get; set; }
 }
 
 public class TypographyTheme

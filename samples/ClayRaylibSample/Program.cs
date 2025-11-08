@@ -101,7 +101,7 @@ public static class Program
 
 		// Create ECS world and app
 		using var world = new World();
-		var app = new App(world, ThreadingMode.Single); // Use single-threaded for Raylib
+		var app = new App(world, ThreadingMode.Auto); // Use single-threaded for Raylib
 
 		// Initialize and register FontCache resource
 		var fontCache = new FontCache("fonts");
@@ -636,6 +636,50 @@ public static class Program
 
 		for (var i = 0; i < 20; ++i)
 			commands.CreateButton(nestedPanel, theme, "Save Settings", width: 150f);
+
+		// Create a floating window
+		var window1Content = commands.CreateFloatingWindow(
+			root,
+			theme,
+			title: "Demo Window",
+			x: 800f,
+			y: 100f,
+			width: 400f,
+			height: 300f,
+			minWidth: 200f,
+			minHeight: 150f
+		);
+
+		// Add content to the floating window
+		var titleNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightFit()
+			.Text("This is a floating, draggable, and resizable window!", theme.Typography.DefaultFontSize, theme.Typography.DefaultTextColor)
+			.Build();
+		var titleElement = commands.SpawnClayElement(titleNode);
+		window1Content.AddChild(titleElement);
+
+		// Add a button inside the window
+		commands.CreateButton(window1Content, theme, "Click Me!", width: 150f);
+
+		// Add a slider inside the window
+		commands.CreateSlider(window1Content, theme, "Opacity", 1.0f, 0f, 1f);
+
+		// Create a second floating window
+		var window2Content = commands.CreateFloatingWindow(
+			root,
+			theme,
+			title: "Another Window",
+			x: 200f,
+			y: 200f,
+			width: 350f,
+			height: 250f
+		);
+
+		// Add content to the second window
+		commands.CreateCheckbox(window2Content, theme, "Option A", defaultChecked: true);
+		commands.CreateCheckbox(window2Content, theme, "Option B", defaultChecked: false);
+		commands.CreateTextInput(window2Content, theme, placeholder: "Type here...");
 	}
 
 	/// <summary>
