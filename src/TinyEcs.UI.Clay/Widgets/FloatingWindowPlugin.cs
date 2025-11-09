@@ -158,16 +158,34 @@ public struct FloatingWindowPlugin : IPlugin
 				{
 					// Stop resizing
 					state.IsResizing = false;
+					state.ResizingEdge = ResizeEdge.None;
 					commands.Entity(windowId).Insert(state);
 					continue;
 				}
 
-				// Update window size based on current pointer position
+				// Update window size based on current pointer position and resize edge
 				var deltaX = pointer.Value.Position.X - state.DragStartX;
 				var deltaY = pointer.Value.Position.Y - state.DragStartY;
 
-				var newWidth = System.Math.Max(state.MinWidth, state.InitialWidth + deltaX);
-				var newHeight = System.Math.Max(state.MinHeight, state.InitialHeight + deltaY);
+				var newWidth = state.InitialWidth;
+				var newHeight = state.InitialHeight;
+
+				// Apply delta based on which edge is being resized
+				switch (state.ResizingEdge)
+				{
+					case ResizeEdge.Right:
+						newWidth = System.Math.Max(state.MinWidth, state.InitialWidth + deltaX);
+						newHeight = state.InitialHeight; // Height doesn't change
+						break;
+					case ResizeEdge.Bottom:
+						newWidth = state.InitialWidth; // Width doesn't change
+						newHeight = System.Math.Max(state.MinHeight, state.InitialHeight + deltaY);
+						break;
+					case ResizeEdge.BottomRight:
+						newWidth = System.Math.Max(state.MinWidth, state.InitialWidth + deltaX);
+						newHeight = System.Math.Max(state.MinHeight, state.InitialHeight + deltaY);
+						break;
+				}
 
 				if (nodeQuery.Contains(windowId))
 				{
@@ -185,24 +203,8 @@ public struct FloatingWindowPlugin : IPlugin
 					commands.Entity(windowId).Insert(windowNode);
 				}
 
-				// Update resize handle position to stay at bottom-right corner
-				if (nodeQuery.Contains(state.ResizeHandleEntityId))
-				{
-					var (_, handleNodePtr) = nodeQuery.Get(state.ResizeHandleEntityId);
-					ref var handleNode = ref handleNodePtr.Ref;
-
-					if (handleNode.Floating.HasValue)
-					{
-						var floating = handleNode.Floating.Value;
-						var resizeHandleSize = 16f; // Match the size from FloatingWindowWidget
-						floating.offset.x = newWidth - resizeHandleSize;
-						floating.offset.y = newHeight - resizeHandleSize;
-						handleNode.Floating = floating;
-
-						// Re-insert to trigger change detection
-						commands.Entity(state.ResizeHandleEntityId).Insert(handleNode);
-					}
-				}
+				// Note: All resize borders (right, bottom, corner) now auto-resize via layout system
+				// No manual position/size updates needed anymore
 			}
 		})
 		.InStage(Stage.Update)

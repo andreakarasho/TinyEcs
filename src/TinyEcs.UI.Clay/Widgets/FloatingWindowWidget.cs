@@ -5,6 +5,17 @@ using Clay_cs;
 namespace TinyEcs.UI.Clay.Widgets;
 
 /// <summary>
+/// Resize edge for floating window.
+/// </summary>
+public enum ResizeEdge
+{
+	None,
+	Right,
+	Bottom,
+	BottomRight
+}
+
+/// <summary>
 /// Component to track floating window state for dragging, resizing, and z-ordering.
 /// </summary>
 public struct FloatingWindowState
@@ -12,10 +23,13 @@ public struct FloatingWindowState
 	public ulong TitleBarEntityId;
 	public ulong CloseButtonEntityId;
 	public ulong ContentAreaEntityId;
-	public ulong ResizeHandleEntityId;
+	public ulong ResizeRightEntityId;
+	public ulong ResizeBottomEntityId;
+	public ulong ResizeCornerEntityId;
 	public string Title;
 	public bool IsDragging;
 	public bool IsResizing;
+	public ResizeEdge ResizingEdge;
 	public float DragStartX;
 	public float DragStartY;
 	public float InitialX;
@@ -134,8 +148,32 @@ public static class FloatingWindowWidget
 		var closeButton = commands.SpawnClayElement(closeButtonNode);
 		titleBar.AddChild(closeButton);
 
-		// Content area
-		var contentNode = ClayNode.Configure()
+		// Content + resize borders layout structure:
+		// Root (column): title bar, middle row, bottom border container
+		//   Middle row (row): content area, right border
+		//     Content area: user content
+		//     Right border: vertical resize handle
+		//   Bottom border container (row): bottom border, corner
+		//     Bottom border: horizontal resize handle
+		//     Corner: bottom-right diagonal resize handle
+
+		var resizeBorderWidth = 8f;
+		var resizeBorderColor = windowTheme.BackgroundColor;
+
+		// Middle row container (content + right border)
+		var middleRowNode = ClayNode.Configure()
+			.WidthGrow()
+			.HeightGrow()
+			.Row()
+			.Gap(0)
+			.Padding((ushort)resizeBorderWidth, 0, 0, (ushort)resizeBorderWidth) // Left and top margins
+			.Build();
+
+		var middleRow = commands.SpawnClayElement(middleRowNode);
+		window.AddChild(middleRow);
+
+		// Content area (now inside middle row)
+		var contentNode2 = ClayNode.Configure()
 			.WidthGrow()
 			.HeightGrow()
 			.Column()
@@ -143,22 +181,49 @@ public static class FloatingWindowWidget
 			.Gap(8)
 			.Build();
 
-		var contentArea = commands.SpawnClayElement(contentNode);
-		window.AddChild(contentArea);
+		var contentArea = commands.SpawnClayElement(contentNode2);
+		middleRow.AddChild(contentArea);
 
-		// Resize handle (bottom-right corner)
-		// Using a floating element positioned at the bottom-right corner of the window
-		var resizeHandleSize = 16f;
-		var resizeHandleNode = ClayNode.Configure()
-			.Size(resizeHandleSize, resizeHandleSize)
-			.Background(windowTheme.ResizeHandleColor)
-			.CornerRadius(0, 0, windowTheme.CornerRadius, 0)
-			.Floating(101) // z-index 1 relative to parent window (stays above window content)
-			.FloatingOffset(width - resizeHandleSize, height - resizeHandleSize)
+		// Right border (vertical resize)
+		var resizeRightNode = ClayNode.Configure()
+			.Width(resizeBorderWidth)
+			.HeightGrow()
+			.Background(resizeBorderColor)
 			.Build();
 
-		var resizeHandle = commands.SpawnClayElement(resizeHandleNode);
-		window.AddChild(resizeHandle);
+		var resizeRight = commands.SpawnClayElement(resizeRightNode);
+		middleRow.AddChild(resizeRight);
+
+		// Bottom border container (row layout: bottom border + corner)
+		var bottomBorderContainerNode = ClayNode.Configure()
+			.WidthGrow()
+			.Height(resizeBorderWidth)
+			.Row()
+			.Gap(0)
+			.Padding((ushort)resizeBorderWidth, 0, 0, 0) // Left margin
+			.Build();
+
+		var bottomBorderContainer = commands.SpawnClayElement(bottomBorderContainerNode);
+		window.AddChild(bottomBorderContainer);
+
+		// Bottom border left part (horizontal resize)
+		var resizeBottomNode = ClayNode.Configure()
+			.WidthGrow()
+			.Height(resizeBorderWidth)
+			.Background(resizeBorderColor)
+			.Build();
+
+		var resizeBottom = commands.SpawnClayElement(resizeBottomNode);
+		bottomBorderContainer.AddChild(resizeBottom);
+
+		// Bottom-right corner (diagonal resize)
+		var resizeCornerNode = ClayNode.Configure()
+			.Size(resizeBorderWidth, resizeBorderWidth)
+			.Background(resizeBorderColor)
+			.Build();
+
+		var resizeCorner = commands.SpawnClayElement(resizeCornerNode);
+		bottomBorderContainer.AddChild(resizeCorner);
 
 		// Add window state component
 		commands.Entity(window.Id).Insert(new FloatingWindowState
@@ -166,10 +231,13 @@ public static class FloatingWindowWidget
 			TitleBarEntityId = titleBar.Id,
 			CloseButtonEntityId = closeButton.Id,
 			ContentAreaEntityId = contentArea.Id,
-			ResizeHandleEntityId = resizeHandle.Id,
+			ResizeRightEntityId = resizeRight.Id,
+			ResizeBottomEntityId = resizeBottom.Id,
+			ResizeCornerEntityId = resizeCorner.Id,
 			Title = title,
 			IsDragging = false,
 			IsResizing = false,
+			ResizingEdge = ResizeEdge.None,
 			DragStartX = 0,
 			DragStartY = 0,
 			InitialX = x,
@@ -191,7 +259,9 @@ public static class FloatingWindowWidget
 		var windowId = window.Id;
 		var titleBarId = titleBar.Id;
 		var closeButtonId = closeButton.Id;
-		var resizeHandleId = resizeHandle.Id;
+		var resizeRightId = resizeRight.Id;
+		var resizeBottomId = resizeBottom.Id;
+		var resizeCornerId = resizeCorner.Id;
 
 		// Add pointer observer for title bar (dragging)
 		// Only handles initial press - continuous dragging handled by FloatingWindowPlugin system
@@ -269,49 +339,57 @@ public static class FloatingWindowWidget
 			}
 		});
 
-		// Add pointer observer for resize handle
-		// Only handles initial press - continuous resizing handled by FloatingWindowPlugin system
-		resizeHandle.Observe<On<ClayPointerEvent>, Commands, Query<Data<FloatingWindowState>>, Query<Data<ClayComputedLayout>>>((trigger, cmd, stateQuery, layoutQuery) =>
+		// Helper lambda to create resize observer
+		void AddResizeObserver(EntityCommands resizeArea, ResizeEdge edge)
 		{
-			var evt = trigger.Event;
-
-			// Only handle press events
-			if (evt.EventType != ClayPointerEventType.Pressed)
+			resizeArea.Observe<On<ClayPointerEvent>, Commands, Query<Data<FloatingWindowState>>, Query<Data<ClayComputedLayout>>>((trigger, cmd, stateQuery, layoutQuery) =>
 			{
-				return;
-			}
+				var evt = trigger.Event;
 
-			// Stop propagation - we're handling this event
-			trigger.Propagate(false);
+				// Only handle press events
+				if (evt.EventType != ClayPointerEventType.Pressed)
+				{
+					return;
+				}
 
-			if (!stateQuery.Contains(windowId))
-			{
-				return;
-			}
+				// Stop propagation - we're handling this event
+				trigger.Propagate(false);
 
-			var (_, statePtr) = stateQuery.Get(windowId);
-			var state = statePtr.Ref;
+				if (!stateQuery.Contains(windowId))
+				{
+					return;
+				}
 
-			// Start resizing
-			state.IsResizing = true;
-			state.DragStartX = evt.Position.X;
-			state.DragStartY = evt.Position.Y;
+				var (_, statePtr) = stateQuery.Get(windowId);
+				var state = statePtr.Ref;
 
-			// Get current window size from computed layout
-			if (layoutQuery.Contains(windowId))
-			{
-				var (_, layoutPtr) = layoutQuery.Get(windowId);
-				var layout = layoutPtr.Ref;
+				// Start resizing
+				state.IsResizing = true;
+				state.ResizingEdge = edge;
+				state.DragStartX = evt.Position.X;
+				state.DragStartY = evt.Position.Y;
 
-				state.InitialWidth = layout.Width;
-				state.InitialHeight = layout.Height;
-			}
+				// Get current window size from computed layout
+				if (layoutQuery.Contains(windowId))
+				{
+					var (_, layoutPtr) = layoutQuery.Get(windowId);
+					var layout = layoutPtr.Ref;
 
-			cmd.Entity(windowId).Insert(state);
+					state.InitialWidth = layout.Width;
+					state.InitialHeight = layout.Height;
+				}
 
-			// Emit click event to bring window to front
-			cmd.Entity(windowId).EmitTrigger(new WindowClicked());
-		});
+				cmd.Entity(windowId).Insert(state);
+
+				// Emit click event to bring window to front
+				cmd.Entity(windowId).EmitTrigger(new WindowClicked());
+			});
+		}
+
+		// Add observers for all three resize areas
+		AddResizeObserver(resizeRight, ResizeEdge.Right);
+		AddResizeObserver(resizeBottom, ResizeEdge.Bottom);
+		AddResizeObserver(resizeCorner, ResizeEdge.BottomRight);
 
 		return contentArea;
 	}

@@ -119,8 +119,7 @@ public static class Program
 		app.AddResource(fontCache);
 
 		// Initialize and register theme
-		var theme = ClayTheme.Dark();
-		app.AddResource(theme);
+		app.AddResource(ClayTheme.Dark());
 
 		// Add Clay UI plugin
 		app.AddClayUi(new ClayUiOptions
