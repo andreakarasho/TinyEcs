@@ -153,6 +153,11 @@ public struct ClayLayoutPlugin : IPlugin
 			decl.floating = node.Ref.Floating.Value;
 		}
 
+		if (node.Ref.Image.HasValue)
+		{
+			decl.image = node.Ref.Image.Value;
+		}
+
 		if (node.Ref.Clip.HasValue)
 		{
 			decl.clip = node.Ref.Clip.Value;
