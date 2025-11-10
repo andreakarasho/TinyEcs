@@ -153,7 +153,7 @@ public class Local<T> : ISystemParam where T : new()
 {
 	private T? _value;
 
-	public ref readonly T Value => ref _value!;
+	public ref T Value => ref _value!;
 
 	public void Initialize(TinyEcs.World world)
 	{
