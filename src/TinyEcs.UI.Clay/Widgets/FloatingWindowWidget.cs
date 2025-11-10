@@ -22,7 +22,9 @@ public struct FloatingWindowState
 {
 	public ulong TitleBarEntityId;
 	public ulong CloseButtonEntityId;
-	public ulong ContentAreaEntityId;
+	public ulong ContentWrapperEntityId;  // Viewport for scrolling
+	public ulong ContentAreaEntityId;     // Actual scrollable content
+	public ulong VerticalScrollbarId;
 	public ulong ResizeRightEntityId;
 	public ulong ResizeBottomEntityId;
 	public ulong ResizeCornerEntityId;
@@ -38,6 +40,8 @@ public struct FloatingWindowState
 	public float InitialHeight;
 	public float MinWidth;
 	public float MinHeight;
+	public float ContentWidth;   // Track content size for scrollbar updates
+	public float ContentHeight;
 	public Clay_Color TitleBarColor;
 	public Clay_Color TitleTextColor;
 	public Clay_Color BackgroundColor;
@@ -172,17 +176,54 @@ public static class FloatingWindowWidget
 		var middleRow = commands.SpawnClayElement(middleRowNode);
 		window.AddChild(middleRow);
 
-		// Content area (now inside middle row)
+		// Content area - scrollable panel structure
+		// Create content wrapper (viewport - visible area)
+		var contentWrapperNode = ClayNode.Default with
+		{
+			Layout = new Clay_LayoutConfig
+			{
+				sizing = new Clay_Sizing(Clay_SizingAxis.Grow(), Clay_SizingAxis.Grow()),
+				layoutDirection = Clay_LayoutDirection.CLAY_TOP_TO_BOTTOM
+			},
+			Clip = new Clay_ClipElementConfig
+			{
+				horizontal = false,
+				vertical = true,
+				childOffset = new Clay_Vector2 { x = 0, y = 0 }
+			}
+		};
+
+		var contentWrapper = commands.SpawnClayElement(contentWrapperNode);
+		middleRow.AddChild(contentWrapper);
+
+		// Create the actual scrollable content area
 		var contentNode2 = ClayNode.Configure()
-			.WidthGrow()
-			.HeightGrow()
+			.WidthFit()
+			.HeightFit()
 			.Column()
 			.Padding((ushort)windowTheme.ContentPadding)
 			.Gap(8)
 			.Build();
 
 		var contentArea = commands.SpawnClayElement(contentNode2);
-		middleRow.AddChild(contentArea);
+		contentWrapper.AddChild(contentArea);
+
+		// Add scroll container component
+		commands.Entity(contentArea.Id).Insert(new ClayScrollContainer
+		{
+			ScrollOffset = System.Numerics.Vector2.Zero
+		});
+
+		// Add vertical scrollbar
+		var verticalScrollbarId = commands.CreateVerticalScrollbar(
+			middleRow,
+			theme,
+			contentWrapper.Id,  // Viewport for mouse wheel detection
+			contentArea.Id,     // Content area to scroll
+			contentSize: 1000,  // Large initial value to ensure visibility
+			visibleSize: 100,   // Small viewport to ensure scrollbar shows
+			initialScroll: 0f
+		);
 
 		// Right border (vertical resize)
 		var resizeRightNode = ClayNode.Configure()
@@ -230,7 +271,9 @@ public static class FloatingWindowWidget
 		{
 			TitleBarEntityId = titleBar.Id,
 			CloseButtonEntityId = closeButton.Id,
+			ContentWrapperEntityId = contentWrapper.Id,
 			ContentAreaEntityId = contentArea.Id,
+			VerticalScrollbarId = verticalScrollbarId,
 			ResizeRightEntityId = resizeRight.Id,
 			ResizeBottomEntityId = resizeBottom.Id,
 			ResizeCornerEntityId = resizeCorner.Id,
@@ -246,6 +289,8 @@ public static class FloatingWindowWidget
 			InitialHeight = height,
 			MinWidth = minWidth,
 			MinHeight = minHeight,
+			ContentWidth = 0,
+			ContentHeight = 0,
 			TitleBarColor = windowTheme.TitleBarColor,
 			TitleTextColor = windowTheme.TitleTextColor,
 			BackgroundColor = windowTheme.BackgroundColor,

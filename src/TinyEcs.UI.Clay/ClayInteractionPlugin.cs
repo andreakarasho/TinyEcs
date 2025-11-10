@@ -123,7 +123,7 @@ public struct ClayInteractionPlugin : IPlugin
 						EventType = ClayPointerEventType.Enter,
 						Position = pointer.Value.Position,
 						LocalPosition = localPos,
-						IsPrimaryButton = pointer.Value.PrimaryDown,
+						Button = pointer.Value.ButtonsDown,
 						ScrollDelta = Vector2.Zero,
 						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 					};
@@ -148,7 +148,7 @@ public struct ClayInteractionPlugin : IPlugin
 						EventType = ClayPointerEventType.Exit,
 						Position = state.Value!.PreviousPointerPosition,
 						LocalPosition = localPos,
-						IsPrimaryButton = pointer.Value.PrimaryDown,
+						Button = pointer.Value.ButtonsDown,
 						ScrollDelta = Vector2.Zero,
 						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 					};
@@ -173,7 +173,7 @@ public struct ClayInteractionPlugin : IPlugin
 						EventType = ClayPointerEventType.Move,
 						Position = pointer.Value.Position,
 						LocalPosition = localPos,
-						IsPrimaryButton = pointer.Value.PrimaryDown,
+						Button = pointer.Value.ButtonsDown,
 						ScrollDelta = Vector2.Zero,
 						Bubbles = false // Move events don't bubble by default
 					};
@@ -202,15 +202,15 @@ public struct ClayInteractionPlugin : IPlugin
 				pointer.Value.Position.Y - elementDataForEvents.boundingBox.y
 			);
 
-			// Emit pointer events (these bubble by default like in web)
-			if (pointer.Value.PrimaryPressed)
+			// Emit pointer events for pressed buttons (these bubble by default like in web)
+			if (pointer.Value.ButtonsPressed != ClayMouseButton.None)
 			{
 				var downEvent = new ClayPointerEvent
 				{
 					EventType = ClayPointerEventType.Pressed,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
-					IsPrimaryButton = true,
+					Button = pointer.Value.ButtonsPressed,
 					ScrollDelta = Vector2.Zero,
 					Bubbles = true // Mouse events bubble
 				};
@@ -219,14 +219,15 @@ public struct ClayInteractionPlugin : IPlugin
 				found = true;
 			}
 
-			if (pointer.Value.PrimaryReleased)
+			// Emit pointer events for released buttons
+			if (pointer.Value.ButtonsReleased != ClayMouseButton.None)
 			{
 				var upEvent = new ClayPointerEvent
 				{
 					EventType = ClayPointerEventType.Released,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
-					IsPrimaryButton = true,
+					Button = pointer.Value.ButtonsReleased,
 					ScrollDelta = Vector2.Zero,
 					Bubbles = true // Mouse events bubble
 				};
@@ -239,7 +240,7 @@ public struct ClayInteractionPlugin : IPlugin
 					EventType = ClayPointerEventType.Click,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
-					IsPrimaryButton = true,
+					Button = pointer.Value.ButtonsReleased,
 					ScrollDelta = Vector2.Zero,
 					Bubbles = true // Click events bubble
 				};
@@ -258,7 +259,7 @@ public struct ClayInteractionPlugin : IPlugin
 					EventType = ClayPointerEventType.Scroll,
 					Position = pointer.Value.Position,
 					LocalPosition = localPosForEvents,
-					IsPrimaryButton = pointer.Value.PrimaryDown,
+					Button = pointer.Value.ButtonsDown,
 					ScrollDelta = scrollDelta,
 					Bubbles = true // Scroll events bubble
 				};

@@ -210,5 +210,53 @@ public struct FloatingWindowPlugin : IPlugin
 		.InStage(Stage.Update)
 		.Label("floatingwindow:resize")
 		.Build();
+
+		// System to monitor content area size and update scrollbars
+		app.AddSystem((Commands commands, Query<Data<FloatingWindowState>> windows, Query<Data<ClayComputedLayout>> layouts) =>
+		{
+			foreach (var (windowEntityId, statePtr) in windows)
+			{
+				var state = statePtr.Ref;
+
+				// Get the content wrapper layout (viewport - visible area)
+				if (!layouts.Contains(state.ContentWrapperEntityId))
+					continue;
+
+				// Get the content area layout (actual content size)
+				if (!layouts.Contains(state.ContentAreaEntityId))
+					continue;
+
+				var (_, wrapperLayoutPtr) = layouts.Get(state.ContentWrapperEntityId);
+				var (_, contentLayoutPtr) = layouts.Get(state.ContentAreaEntityId);
+
+				var wrapperLayout = wrapperLayoutPtr.Ref;
+				var contentLayout = contentLayoutPtr.Ref;
+
+				// Visible size is the wrapper (viewport) size
+				// Content size is the actual content area size (which fits its children)
+				float visibleHeight = wrapperLayout.Height;
+				float contentHeight = contentLayout.Height;
+
+				// Check if we need to update the scrollbar
+				bool heightChanged = System.Math.Abs(state.ContentHeight - contentHeight) > 0.1f;
+
+				if (heightChanged && state.VerticalScrollbarId != 0)
+				{
+					// Update window state
+					state.ContentHeight = contentHeight;
+					commands.Entity(windowEntityId.Ref).Insert(state);
+
+					// Update vertical scrollbar
+					commands.Entity(state.VerticalScrollbarId).Insert(new ScrollbarContentUpdate
+					{
+						ContentSize = contentHeight,
+						VisibleSize = visibleHeight
+					});
+				}
+			}
+		})
+		.InStage(Stage.PostUpdate)
+		.Label("floatingwindow:update-scrollbars")
+		.Build();
 	}
 }

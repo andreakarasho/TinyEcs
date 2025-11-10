@@ -4,6 +4,21 @@ using Clay_cs;
 namespace TinyEcs.UI.Clay;
 
 /// <summary>
+/// Mouse button flags for compact multi-button support.
+/// Can be combined with bitwise OR.
+/// </summary>
+[Flags]
+public enum ClayMouseButton
+{
+	None = 0,
+	Left = 1 << 0,
+	Right = 1 << 1,
+	Middle = 1 << 2,
+	Button4 = 1 << 3,
+	Button5 = 1 << 4
+}
+
+/// <summary>
 /// Platform-agnostic pointer input state resource.
 /// Renderer/platform updates this resource, Clay systems consume it.
 /// </summary>
@@ -15,19 +30,22 @@ public class ClayPointerState
 	public Vector2 Position;
 
 	/// <summary>
-	/// Whether the primary button (left mouse / touch) is currently down.
+	/// Mouse buttons currently held down (bitwise flags).
+	/// Internal use only - use IsLeftDown, IsRightDown, etc. properties instead.
 	/// </summary>
-	public bool PrimaryDown;
+	public ClayMouseButton ButtonsDown;
 
 	/// <summary>
-	/// Whether the primary button was pressed this frame.
+	/// Mouse buttons pressed this frame (bitwise flags).
+	/// Internal use only - use IsLeftPressed, IsRightPressed, etc. properties instead.
 	/// </summary>
-	public bool PrimaryPressed;
+	public ClayMouseButton ButtonsPressed;
 
 	/// <summary>
-	/// Whether the primary button was released this frame.
+	/// Mouse buttons released this frame (bitwise flags).
+	/// Internal use only - use IsLeftReleased, IsRightReleased, etc. properties instead.
 	/// </summary>
-	public bool PrimaryReleased;
+	public ClayMouseButton ButtonsReleased;
 
 	/// <summary>
 	/// Scroll delta for this frame (mouse wheel / trackpad).
@@ -44,10 +62,202 @@ public class ClayPointerState
 	/// </summary>
 	public bool EnableDragScrolling;
 
+	// Button state properties for easy access
+	/// <summary>Whether the left mouse button is currently down.</summary>
+	public bool IsLeftDown
+	{
+		get => ButtonsDown.HasFlag(ClayMouseButton.Left);
+		set
+		{
+			if (value) ButtonsDown |= ClayMouseButton.Left;
+			else ButtonsDown &= ~ClayMouseButton.Left;
+		}
+	}
+
+	/// <summary>Whether the right mouse button is currently down.</summary>
+	public bool IsRightDown
+	{
+		get => ButtonsDown.HasFlag(ClayMouseButton.Right);
+		set
+		{
+			if (value) ButtonsDown |= ClayMouseButton.Right;
+			else ButtonsDown &= ~ClayMouseButton.Right;
+		}
+	}
+
+	/// <summary>Whether the middle mouse button is currently down.</summary>
+	public bool IsMiddleDown
+	{
+		get => ButtonsDown.HasFlag(ClayMouseButton.Middle);
+		set
+		{
+			if (value) ButtonsDown |= ClayMouseButton.Middle;
+			else ButtonsDown &= ~ClayMouseButton.Middle;
+		}
+	}
+
+	/// <summary>Whether mouse button 4 is currently down.</summary>
+	public bool IsButton4Down
+	{
+		get => ButtonsDown.HasFlag(ClayMouseButton.Button4);
+		set
+		{
+			if (value) ButtonsDown |= ClayMouseButton.Button4;
+			else ButtonsDown &= ~ClayMouseButton.Button4;
+		}
+	}
+
+	/// <summary>Whether mouse button 5 is currently down.</summary>
+	public bool IsButton5Down
+	{
+		get => ButtonsDown.HasFlag(ClayMouseButton.Button5);
+		set
+		{
+			if (value) ButtonsDown |= ClayMouseButton.Button5;
+			else ButtonsDown &= ~ClayMouseButton.Button5;
+		}
+	}
+
+	/// <summary>Whether the left mouse button was pressed this frame.</summary>
+	public bool IsLeftPressed
+	{
+		get => ButtonsPressed.HasFlag(ClayMouseButton.Left);
+		set
+		{
+			if (value) ButtonsPressed |= ClayMouseButton.Left;
+			else ButtonsPressed &= ~ClayMouseButton.Left;
+		}
+	}
+
+	/// <summary>Whether the right mouse button was pressed this frame.</summary>
+	public bool IsRightPressed
+	{
+		get => ButtonsPressed.HasFlag(ClayMouseButton.Right);
+		set
+		{
+			if (value) ButtonsPressed |= ClayMouseButton.Right;
+			else ButtonsPressed &= ~ClayMouseButton.Right;
+		}
+	}
+
+	/// <summary>Whether the middle mouse button was pressed this frame.</summary>
+	public bool IsMiddlePressed
+	{
+		get => ButtonsPressed.HasFlag(ClayMouseButton.Middle);
+		set
+		{
+			if (value) ButtonsPressed |= ClayMouseButton.Middle;
+			else ButtonsPressed &= ~ClayMouseButton.Middle;
+		}
+	}
+
+	/// <summary>Whether mouse button 4 was pressed this frame.</summary>
+	public bool IsButton4Pressed
+	{
+		get => ButtonsPressed.HasFlag(ClayMouseButton.Button4);
+		set
+		{
+			if (value) ButtonsPressed |= ClayMouseButton.Button4;
+			else ButtonsPressed &= ~ClayMouseButton.Button4;
+		}
+	}
+
+	/// <summary>Whether mouse button 5 was pressed this frame.</summary>
+	public bool IsButton5Pressed
+	{
+		get => ButtonsPressed.HasFlag(ClayMouseButton.Button5);
+		set
+		{
+			if (value) ButtonsPressed |= ClayMouseButton.Button5;
+			else ButtonsPressed &= ~ClayMouseButton.Button5;
+		}
+	}
+
+	/// <summary>Whether the left mouse button was released this frame.</summary>
+	public bool IsLeftReleased
+	{
+		get => ButtonsReleased.HasFlag(ClayMouseButton.Left);
+		set
+		{
+			if (value) ButtonsReleased |= ClayMouseButton.Left;
+			else ButtonsReleased &= ~ClayMouseButton.Left;
+		}
+	}
+
+	/// <summary>Whether the right mouse button was released this frame.</summary>
+	public bool IsRightReleased
+	{
+		get => ButtonsReleased.HasFlag(ClayMouseButton.Right);
+		set
+		{
+			if (value) ButtonsReleased |= ClayMouseButton.Right;
+			else ButtonsReleased &= ~ClayMouseButton.Right;
+		}
+	}
+
+	/// <summary>Whether the middle mouse button was released this frame.</summary>
+	public bool IsMiddleReleased
+	{
+		get => ButtonsReleased.HasFlag(ClayMouseButton.Middle);
+		set
+		{
+			if (value) ButtonsReleased |= ClayMouseButton.Middle;
+			else ButtonsReleased &= ~ClayMouseButton.Middle;
+		}
+	}
+
+	/// <summary>Whether mouse button 4 was released this frame.</summary>
+	public bool IsButton4Released
+	{
+		get => ButtonsReleased.HasFlag(ClayMouseButton.Button4);
+		set
+		{
+			if (value) ButtonsReleased |= ClayMouseButton.Button4;
+			else ButtonsReleased &= ~ClayMouseButton.Button4;
+		}
+	}
+
+	/// <summary>Whether mouse button 5 was released this frame.</summary>
+	public bool IsButton5Released
+	{
+		get => ButtonsReleased.HasFlag(ClayMouseButton.Button5);
+		set
+		{
+			if (value) ButtonsReleased |= ClayMouseButton.Button5;
+			else ButtonsReleased &= ~ClayMouseButton.Button5;
+		}
+	}
+
+	// Backwards compatibility properties (deprecated but kept for existing code)
 	/// <summary>
-	/// Stack of scroll deltas to accumulate this frame.
-	/// Cleared at end of frame.
+	/// Whether the primary button (left mouse) is currently down.
+	/// [Obsolete] Use IsLeftDown instead.
 	/// </summary>
+	public bool PrimaryDown
+	{
+		get => IsLeftDown;
+		set => IsLeftDown = value;
+	}
+
+	/// <summary>
+	/// Whether the primary button was pressed this frame.
+	/// [Obsolete] Use IsLeftPressed instead.
+	/// </summary>
+	public bool PrimaryPressed
+	{
+		get => IsLeftPressed;
+		set => IsLeftPressed = value;
+	}
+
+	/// <summary>
+	/// Whether the primary button was released this frame.
+	/// [Obsolete] Use IsLeftReleased instead.
+	/// </summary>
+	public bool PrimaryReleased
+	{
+		get => IsLeftReleased;
+		set => IsLeftReleased = value;
+	}
 
 	public void AddScroll(Vector2 delta)
 	{
@@ -65,8 +275,8 @@ public class ClayPointerState
 	/// </summary>
 	public void ResetTransientState()
 	{
-		PrimaryPressed = false;
-		PrimaryReleased = false;
+		ButtonsPressed = ClayMouseButton.None;
+		ButtonsReleased = ClayMouseButton.None;
 		ClearScrollDeltas();
 		ScrollDelta = Vector2.Zero;
 	}
@@ -191,38 +401,64 @@ public enum ClayPointerEventType
 /// This is wrapped with On&lt;ClayPointerEvent&gt; when emitted as a trigger.
 /// Use app.AddObserver&lt;On&lt;ClayPointerEvent&gt;&gt;(...) to observe pointer events.
 /// </summary>
-public struct ClayPointerEvent
+public readonly struct ClayPointerEvent
 {
 	/// <summary>
 	/// Type of pointer event.
 	/// </summary>
-	public ClayPointerEventType EventType;
+	public required ClayPointerEventType EventType { get; init; }
 
 	/// <summary>
 	/// Pointer position in screen coordinates.
 	/// </summary>
-	public Vector2 Position;
+	public required Vector2 Position { get; init; }
 
 	/// <summary>
 	/// Pointer position in local element coordinates.
 	/// </summary>
-	public Vector2 LocalPosition;
+	public required Vector2 LocalPosition { get; init; }
 
 	/// <summary>
-	/// Whether primary button is down.
+	/// Mouse button(s) involved in this event (bitwise flags).
+	/// For Pressed/Released/Click events, this is the button that triggered the event.
+	/// For Move/Enter/Exit events, this is the buttons currently held down.
+	/// Internal use only - use IsLeftButton, IsRightButton, etc. properties instead.
 	/// </summary>
-	public bool IsPrimaryButton;
+	public required ClayMouseButton Button { get; init; }
 
 	/// <summary>
 	/// Scroll delta (for Scroll events).
 	/// </summary>
-	public Vector2 ScrollDelta;
+	public required Vector2 ScrollDelta { get; init; }
 
 	/// <summary>
 	/// Whether this event should bubble up to parent elements.
 	/// Controls propagation behavior when wrapped with On&lt;ClayPointerEvent&gt;.
 	/// </summary>
-	public bool Bubbles;
+	public required bool Bubbles { get; init; }
+
+	// Button convenience properties
+	/// <summary>Whether the left mouse button is involved in this event.</summary>
+	public bool IsLeftButton => Button.HasFlag(ClayMouseButton.Left);
+
+	/// <summary>Whether the right mouse button is involved in this event.</summary>
+	public bool IsRightButton => Button.HasFlag(ClayMouseButton.Right);
+
+	/// <summary>Whether the middle mouse button is involved in this event.</summary>
+	public bool IsMiddleButton => Button.HasFlag(ClayMouseButton.Middle);
+
+	/// <summary>Whether mouse button 4 is involved in this event.</summary>
+	public bool IsButton4 => Button.HasFlag(ClayMouseButton.Button4);
+
+	/// <summary>Whether mouse button 5 is involved in this event.</summary>
+	public bool IsButton5 => Button.HasFlag(ClayMouseButton.Button5);
+
+	// Backwards compatibility property (deprecated but kept for existing code)
+	/// <summary>
+	/// Whether primary button (left mouse) is involved.
+	/// [Obsolete] Use IsLeftButton instead.
+	/// </summary>
+	public bool IsPrimaryButton => IsLeftButton;
 }
 
 /// <summary>
