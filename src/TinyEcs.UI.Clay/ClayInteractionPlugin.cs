@@ -46,8 +46,9 @@ public struct ClayInteractionPlugin : IPlugin
 			Commands commands,
 			EventWriter<ClayPointerEvent> events,
 			Local<InteractionState> state,
-			Local<HashSet<Clay_ElementId>> currentHoveredIds
-		) => ProcessPointerInteraction(nodes, pointer, commands, events, state, currentHoveredIds))
+			Local<HashSet<Clay_ElementId>> currentHoveredIds,
+			Query<Data<ClayInteraction>> interactions
+		) => ProcessPointerInteraction(nodes, pointer, commands, events, state, currentHoveredIds, interactions))
 			.InStage(Stage.PostUpdate)
 			.Label("clay:interaction")
 			.Build();
@@ -72,6 +73,61 @@ public struct ClayInteractionPlugin : IPlugin
 	}
 
 	/// <summary>
+	/// Update ClayInteraction component state based on pointer event.
+	/// </summary>
+	private static void UpdateInteractionState(
+		ulong entityId,
+		ClayPointerEventType eventType,
+		ClayMouseButton button,
+		Commands commands,
+		Query<Data<ClayInteraction>> interactions)
+	{
+		// Only update if the entity has ClayInteraction component
+		if (!interactions.Contains(entityId))
+			return;
+
+		var (_, interaction) = interactions.Get(entityId);
+		var state = interaction.Ref;
+
+		switch (eventType)
+		{
+			case ClayPointerEventType.Enter:
+				// Entering element - set to Hovered if not pressed
+				if (state.PressedButtons == ClayMouseButton.None)
+					state.State = ClayInteractionState.Hovered;
+				break;
+
+			case ClayPointerEventType.Exit:
+				// Exiting element - set to None if not pressed, stay Pressed if buttons are down
+				if (state.PressedButtons == ClayMouseButton.None)
+					state.State = ClayInteractionState.None;
+				break;
+
+			case ClayPointerEventType.Pressed:
+				// Button pressed on element - set to Pressed and track buttons
+				state.State = ClayInteractionState.Pressed;
+				state.PressedButtons |= button;
+				break;
+
+			case ClayPointerEventType.Released:
+				// Button released - remove from pressed buttons
+				state.PressedButtons &= ~button;
+				// Update state based on remaining pressed buttons
+				if (state.PressedButtons == ClayMouseButton.None)
+				{
+					// No more buttons pressed - check if still hovered
+					// We can't easily tell if hovered here, so default to None
+					// The next Enter event will set it to Hovered if needed
+					state.State = ClayInteractionState.None;
+				}
+				break;
+		}
+
+		// Re-insert the modified component to trigger change detection
+		commands.Entity(entityId).Insert(state);
+	}
+
+	/// <summary>
 	/// Process pointer interactions and emit events.
 	/// </summary>
 	private static unsafe void ProcessPointerInteraction(
@@ -80,7 +136,8 @@ public struct ClayInteractionPlugin : IPlugin
 		Commands commands,
 		EventWriter<ClayPointerEvent> events,
 		Local<InteractionState> state,
-		Local<HashSet<Clay_ElementId>> currentHoveredIds)
+		Local<HashSet<Clay_ElementId>> currentHoveredIds,
+		Query<Data<ClayInteraction>> interactions)
 	{
 		// Get elements under pointer
 		var pointerOverIds = Clay_cs.Clay.GetPointerOverIds();
@@ -137,6 +194,7 @@ public struct ClayInteractionPlugin : IPlugin
 					};
 
 					EmitEvent(enterEvent, entityId, commands, events);
+				UpdateInteractionState(entityId, ClayPointerEventType.Enter, ClayMouseButton.None, commands, interactions);
 				}
 			}
 
@@ -199,6 +257,7 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(downEvent, entityId, commands, events);
+				UpdateInteractionState(entityId, ClayPointerEventType.Pressed, pointer.Value.ButtonsPressed, commands, interactions);
 
 				// Track each pressed button separately for this element
 				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
@@ -214,41 +273,53 @@ public struct ClayInteractionPlugin : IPlugin
 			// Emit pointer events for released buttons
 			if (pointer.Value.ButtonsReleased != ClayMouseButton.None)
 			{
-				var upEvent = new ClayPointerEvent
-				{
-					EventType = ClayPointerEventType.Released,
-					Position = pointer.Value.Position,
-					LocalPosition = localPosForEvents,
-					Button = pointer.Value.ButtonsReleased,
-					ScrollDelta = Vector2.Zero,
-					Bubbles = true // Mouse events bubble
-				};
-
-				EmitEvent(upEvent, entityId, commands, events);
-
-				// Remove from pressed elements tracking (event handled)
+				// Check which buttons were actually pressed on THIS element
+				var buttonsReleasedOnThisElement = ClayMouseButton.None;
 				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
 				{
 					if (button != ClayMouseButton.None && pointer.Value.ButtonsReleased.HasFlag(button))
 					{
-						state.Value!.PressedElements.Remove(button);
+						// Only emit Released/Click if this element is where the button was originally pressed
+						if (state.Value!.PressedElements.TryGetValue(button, out var pressedElementId) &&
+						    pressedElementId.id == elementId.id && pressedElementId.offset == elementId.offset)
+						{
+							buttonsReleasedOnThisElement |= button;
+							state.Value!.PressedElements.Remove(button);
+						}
 					}
 				}
 
-				// Also emit click event if released over same element
-				var clickEvent = new ClayPointerEvent
+				// Only emit Released/Click events if at least one button was pressed on this element
+				if (buttonsReleasedOnThisElement != ClayMouseButton.None)
 				{
-					EventType = ClayPointerEventType.Click,
-					Position = pointer.Value.Position,
-					LocalPosition = localPosForEvents,
-					Button = pointer.Value.ButtonsReleased,
-					ScrollDelta = Vector2.Zero,
-					Bubbles = true // Click events bubble
-				};
+					var upEvent = new ClayPointerEvent
+					{
+						EventType = ClayPointerEventType.Released,
+						Position = pointer.Value.Position,
+						LocalPosition = localPosForEvents,
+						Button = buttonsReleasedOnThisElement,
+						ScrollDelta = Vector2.Zero,
+						Bubbles = true // Mouse events bubble
+					};
 
-				EmitEvent(clickEvent, entityId, commands, events);
+					EmitEvent(upEvent, entityId, commands, events);
+					UpdateInteractionState(entityId, ClayPointerEventType.Released, buttonsReleasedOnThisElement, commands, interactions);
 
-				found = true;
+					// Also emit click event if released over same element where it was pressed
+					var clickEvent = new ClayPointerEvent
+					{
+						EventType = ClayPointerEventType.Click,
+						Position = pointer.Value.Position,
+						LocalPosition = localPosForEvents,
+						Button = buttonsReleasedOnThisElement,
+						ScrollDelta = Vector2.Zero,
+						Bubbles = true // Click events bubble
+					};
+
+					EmitEvent(clickEvent, entityId, commands, events);
+
+					found = true;
+				}
 			}
 
 			// Emit scroll events
@@ -306,6 +377,7 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(exitEvent, entityId, commands, events);
+				UpdateInteractionState(entityId, ClayPointerEventType.Exit, ClayMouseButton.None, commands, interactions);
 			}
 		}
 
@@ -346,6 +418,7 @@ public struct ClayInteractionPlugin : IPlugin
 								};
 
 								EmitEvent(releaseEvent, entityId, commands, events);
+								UpdateInteractionState(entityId, ClayPointerEventType.Released, button, commands, interactions);
 							}
 						}
 

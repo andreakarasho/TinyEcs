@@ -252,6 +252,47 @@ public class ClayPointerState
 }
 
 /// <summary>
+/// Interaction state for a Clay UI element.
+/// Automatically maintained by ClayInteractionPlugin.
+/// </summary>
+public enum ClayInteractionState
+{
+	/// <summary>
+	/// No interaction - pointer is not over the element and no buttons are pressed.
+	/// </summary>
+	None,
+
+	/// <summary>
+	/// Pointer is over the element (hovering) but no buttons are pressed on it.
+	/// </summary>
+	Hovered,
+
+	/// <summary>
+	/// At least one button is pressed on this element (may or may not be currently hovered).
+	/// </summary>
+	Pressed
+}
+
+/// <summary>
+/// Tracks the current interaction state of a Clay UI element.
+/// Automatically maintained by ClayInteractionPlugin.
+/// Add this component to elements that need to track hover/press state.
+/// </summary>
+public struct ClayInteraction
+{
+	/// <summary>
+	/// Current interaction state of the element.
+	/// </summary>
+	public ClayInteractionState State;
+
+	/// <summary>
+	/// Which mouse buttons are currently pressed on this element.
+	/// Buttons remain tracked even if pointer moves outside during drag.
+	/// </summary>
+	public ClayMouseButton PressedButtons;
+}
+
+/// <summary>
 /// Global Clay UI state resource.
 /// Contains Clay context, arena, and render commands.
 /// </summary>
