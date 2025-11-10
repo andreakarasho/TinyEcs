@@ -10,4 +10,29 @@
         <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     </PropertyGroup>
 
+    <!-- Copy native Clay DLL to output directory for all platforms -->
+    <ItemGroup>
+        <!-- Windows x64 -->
+        <None Include="..\Clay-builder\zig-out\bin\Clay.dll" Condition="Exists('..\Clay-builder\zig-out\bin\Clay.dll')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>Clay.dll</Link>
+        </None>
+        <None Include="..\Clay-builder\zig-out\bin\Clay.pdb" Condition="Exists('..\Clay-builder\zig-out\bin\Clay.pdb')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>Clay.pdb</Link>
+        </None>
+
+        <!-- Linux x64 (if built) -->
+        <None Include="..\Clay-builder\zig-out\lib\libClay.so" Condition="Exists('..\Clay-builder\zig-out\lib\libClay.so')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>libClay.so</Link>
+        </None>
+
+        <!-- macOS (if built) -->
+        <None Include="..\Clay-builder\zig-out\lib\libClay.dylib" Condition="Exists('..\Clay-builder\zig-out\lib\libClay.dylib')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Link>libClay.dylib</Link>
+        </None>
+    </ItemGroup>
+
 </Project>
