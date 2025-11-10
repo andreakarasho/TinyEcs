@@ -111,7 +111,7 @@ public struct DropdownPlugin : IPlugin
 		app.AddSystem((Commands commands, Res<ClayPointerState> pointer, Query<Data<DropdownState, ClayComputedLayout>> dropdowns, Query<Data<ClayComputedLayout>> layouts) =>
 		{
 			// Only process on click
-			if (!pointer.Value.PrimaryPressed)
+			if (!pointer.Value.IsLeftPressed)
 				return;
 
 			var mouseX = pointer.Value.Position.X;

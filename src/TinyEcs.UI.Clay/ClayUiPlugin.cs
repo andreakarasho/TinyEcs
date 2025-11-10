@@ -63,9 +63,9 @@ public struct ClayUiPlugin : IPlugin
 		var pointerState = new ClayPointerState
 		{
 			Position = System.Numerics.Vector2.Zero,
-			PrimaryDown = false,
-			PrimaryPressed = false,
-			PrimaryReleased = false,
+			ButtonsDown = ClayMouseButton.None,
+			ButtonsPressed = ClayMouseButton.None,
+			ButtonsReleased = ClayMouseButton.None,
 			ScrollDelta = System.Numerics.Vector2.Zero,
 			DeltaTime = 1f / 60f,
 			EnableDragScrolling = false

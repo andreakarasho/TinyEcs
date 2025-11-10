@@ -228,37 +228,6 @@ public class ClayPointerState
 		}
 	}
 
-	// Backwards compatibility properties (deprecated but kept for existing code)
-	/// <summary>
-	/// Whether the primary button (left mouse) is currently down.
-	/// [Obsolete] Use IsLeftDown instead.
-	/// </summary>
-	public bool PrimaryDown
-	{
-		get => IsLeftDown;
-		set => IsLeftDown = value;
-	}
-
-	/// <summary>
-	/// Whether the primary button was pressed this frame.
-	/// [Obsolete] Use IsLeftPressed instead.
-	/// </summary>
-	public bool PrimaryPressed
-	{
-		get => IsLeftPressed;
-		set => IsLeftPressed = value;
-	}
-
-	/// <summary>
-	/// Whether the primary button was released this frame.
-	/// [Obsolete] Use IsLeftReleased instead.
-	/// </summary>
-	public bool PrimaryReleased
-	{
-		get => IsLeftReleased;
-		set => IsLeftReleased = value;
-	}
-
 	public void AddScroll(Vector2 delta)
 	{
 		ScrollDelta += delta;
@@ -452,13 +421,6 @@ public readonly struct ClayPointerEvent
 
 	/// <summary>Whether mouse button 5 is involved in this event.</summary>
 	public bool IsButton5 => Button.HasFlag(ClayMouseButton.Button5);
-
-	// Backwards compatibility property (deprecated but kept for existing code)
-	/// <summary>
-	/// Whether primary button (left mouse) is involved.
-	/// [Obsolete] Use IsLeftButton instead.
-	/// </summary>
-	public bool IsPrimaryButton => IsLeftButton;
 }
 
 /// <summary>

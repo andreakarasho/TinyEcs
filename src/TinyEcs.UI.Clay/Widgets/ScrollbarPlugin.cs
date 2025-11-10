@@ -212,7 +212,7 @@ public struct ScrollbarPlugin : IPlugin
 					continue;
 
 				// Check if mouse button was released - stop dragging
-				if (pointer.Value.PrimaryReleased)
+				if (pointer.Value.IsLeftReleased)
 				{
 					state.IsDragging = false;
 					commands.Entity(entityId.Ref).Insert(state);

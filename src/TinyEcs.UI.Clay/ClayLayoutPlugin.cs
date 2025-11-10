@@ -80,7 +80,7 @@ public struct ClayLayoutPlugin : IPlugin
 		Clay_cs.Clay.SetLayoutDimensions(state.Value.LayoutDimensions);
 
 		// Update Clay pointer state
-		Clay_cs.Clay.SetPointerState(pointer.Value.Position, pointer.Value.PrimaryDown);
+		Clay_cs.Clay.SetPointerState(pointer.Value.Position, pointer.Value.IsLeftDown);
 
 		// Update Clay scroll containers
 		var scrollDelta = pointer.Value.ScrollDelta;

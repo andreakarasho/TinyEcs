@@ -105,7 +105,7 @@ public struct FloatingWindowPlugin : IPlugin
 				}
 
 				// Check if button is still pressed
-				if (!pointer.Value.PrimaryDown)
+				if (!pointer.Value.IsLeftDown)
 				{
 					// Stop dragging
 					state.IsDragging = false;
@@ -154,7 +154,7 @@ public struct FloatingWindowPlugin : IPlugin
 				}
 
 				// Check if button is still pressed
-				if (!pointer.Value.PrimaryDown)
+				if (!pointer.Value.IsLeftDown)
 				{
 					// Stop resizing
 					state.IsResizing = false;

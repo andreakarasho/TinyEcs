@@ -65,7 +65,7 @@ public struct SliderPlugin : IPlugin
 					continue;
 
 				// Check if mouse button is still down
-				if (!pointer.Value.PrimaryDown)
+				if (!pointer.Value.IsLeftDown)
 				{
 					// Mouse released - stop dragging
 					state.IsDragging = false;

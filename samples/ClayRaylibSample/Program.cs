@@ -820,12 +820,12 @@ public struct ClayRaylibRenderPlugin : IPlugin
 		var mousePos = Raylib.GetMousePosition();
 		pointer.Value.Position = new Vector2(mousePos.X, mousePos.Y);
 
-		var wasDown = pointer.Value.PrimaryDown;
+		var wasDown = pointer.Value.IsLeftDown;
 		var isDown = Raylib.IsMouseButtonDown(MouseButton.Left);
 
-		pointer.Value.PrimaryDown = isDown;
-		pointer.Value.PrimaryPressed = isDown && !wasDown;
-		pointer.Value.PrimaryReleased = !isDown && wasDown;
+		pointer.Value.IsLeftDown = isDown;
+		pointer.Value.IsLeftPressed = isDown && !wasDown;
+		pointer.Value.IsLeftReleased = !isDown && wasDown;
 
 		var mouseWheel = Raylib.GetMouseWheelMove();
 		if (mouseWheel != 0)
