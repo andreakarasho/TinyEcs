@@ -447,13 +447,16 @@ public ref struct ClayNodeBuilder
 	/// Makes this element a floating element (positioned above normal flow) with specified z-index.
 	/// Defaults to attaching to parent and capturing pointer events.
 	/// </summary>
-	public ClayNodeBuilder Floating(short zIndex = 100)
+	public ClayNodeBuilder Floating(
+		short zIndex = 100,
+		Clay_FloatingAttachToElement attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
+		Clay_PointerCaptureMode pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE)
 	{
 		_node.Floating = new Clay_FloatingElementConfig
 		{
 			zIndex = zIndex,
-			attachTo = Clay_FloatingAttachToElement.CLAY_ATTACH_TO_PARENT,
-			pointerCaptureMode = Clay_PointerCaptureMode.CLAY_POINTER_CAPTURE_MODE_CAPTURE
+			attachTo = attachTo,
+			pointerCaptureMode = pointerCaptureMode
 		};
 		return this;
 	}
@@ -494,6 +497,20 @@ public ref struct ClayNodeBuilder
 	}
 
 	/// <summary>
+	/// Sets which element this floating element attaches to (only applies if Floating was already set).
+	/// </summary>
+	public ClayNodeBuilder FloatingAttachTo(Clay_FloatingAttachToElement attachTo)
+	{
+		if (_node.Floating.HasValue)
+		{
+			var floating = _node.Floating.Value;
+			floating.attachTo = attachTo;
+			_node.Floating = floating;
+		}
+		return this;
+	}
+
+	/// <summary>
 	/// Sets the pointer capture mode for a floating element (only applies if Floating was already set).
 	/// </summary>
 	public ClayNodeBuilder FloatingCapture(Clay_PointerCaptureMode mode)
@@ -504,6 +521,21 @@ public ref struct ClayNodeBuilder
 			floating.pointerCaptureMode = mode;
 			_node.Floating = floating;
 		}
+		return this;
+	}
+
+	// Custom element methods
+
+	/// <summary>
+	/// Sets custom element configuration with custom data pointer.
+	/// Used for elements that need custom rendering logic.
+	/// </summary>
+	public unsafe ClayNodeBuilder Custom(nint customData)
+	{
+		_node.Custom = new Clay_CustomElementConfig
+		{
+			customData = (void*)customData
+		};
 		return this;
 	}
 
