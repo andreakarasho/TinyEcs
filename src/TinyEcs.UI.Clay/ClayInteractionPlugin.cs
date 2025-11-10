@@ -78,6 +78,7 @@ public struct ClayInteractionPlugin : IPlugin
 		ulong entityId,
 		ClayPointerEventType eventType,
 		ClayMouseButton button,
+		bool isCurrentlyHovered,
 		Commands commands,
 		Query<Data<ClayInteraction>> interactions)
 	{
@@ -114,16 +115,15 @@ public struct ClayInteractionPlugin : IPlugin
 				// Update state based on remaining pressed buttons
 				if (state.PressedButtons == ClayMouseButton.None)
 				{
-					// No more buttons pressed - check if still hovered
-					// We can't easily tell if hovered here, so default to None
-					// The next Enter event will set it to Hovered if needed
-					state.State = ClayInteractionState.None;
+					// No more buttons pressed - set to Hovered if pointer is still over element, otherwise None
+					state.State = isCurrentlyHovered ? ClayInteractionState.Hovered : ClayInteractionState.None;
 				}
 				break;
 		}
 
 		// Re-insert the modified component to trigger change detection
-		commands.Entity(entityId).Insert(state);
+		if (interaction.Ref.State != state.State || interaction.Ref.PressedButtons != state.PressedButtons)
+			commands.Entity(entityId).Insert(state);
 	}
 
 	/// <summary>
@@ -192,7 +192,7 @@ public struct ClayInteractionPlugin : IPlugin
 					};
 
 					EmitEvent(enterEvent, entityId, commands, events);
-					UpdateInteractionState(entityId, ClayPointerEventType.Enter, ClayMouseButton.None, commands, interactions);
+					UpdateInteractionState(entityId, ClayPointerEventType.Enter, ClayMouseButton.None, true, commands, interactions);
 				}
 			}
 
@@ -253,6 +253,7 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(downEvent, entityId, commands, events);
+				UpdateInteractionState(entityId, ClayPointerEventType.Pressed, pointer.Value.ButtonsPressed, true, commands, interactions);
 
 				// Track each pressed button separately for this element
 				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
@@ -297,6 +298,7 @@ public struct ClayInteractionPlugin : IPlugin
 					};
 
 					EmitEvent(upEvent, entityId, commands, events);
+					UpdateInteractionState(entityId, ClayPointerEventType.Released, buttonsReleasedOnThisElement, true, commands, interactions);
 
 					// Also emit click event if released over same element where it was pressed
 					var clickEvent = new ClayPointerEvent
@@ -367,6 +369,7 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(exitEvent, entityId, commands, events);
+				UpdateInteractionState(entityId, ClayPointerEventType.Exit, ClayMouseButton.None, false, commands, interactions);
 			}
 		}
 
@@ -406,6 +409,7 @@ public struct ClayInteractionPlugin : IPlugin
 								};
 
 								EmitEvent(releaseEvent, entityId, commands, events);
+								UpdateInteractionState(entityId, ClayPointerEventType.Released, button, false, commands, interactions);
 							}
 						}
 
