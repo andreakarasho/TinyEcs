@@ -105,7 +105,16 @@ public struct ClayHierarchyPlugin : IPlugin
 	{
 		app.AddObserver((OnAdd<ClayNode> trigger, Commands commands) =>
 		{
-			commands.Entity(trigger.EntityId).Insert(ClayElementId.From(trigger.EntityId));
+			commands.Entity(trigger.EntityId)
+				.Insert(ClayElementId.From(trigger.EntityId))
+				.Insert(new ClayInteraction() { PressedButtons = ClayMouseButton.None, State = ClayInteractionState.None });
+		});
+
+		app.AddObserver((OnRemove<ClayNode> trigger, Commands commands) =>
+		{
+			commands.Entity(trigger.EntityId)
+				.Remove<ClayElementId>()
+				.Remove<ClayInteraction>();
 		});
 	}
 }

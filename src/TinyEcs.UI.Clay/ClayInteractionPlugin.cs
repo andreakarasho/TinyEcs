@@ -56,7 +56,6 @@ public struct ClayInteractionPlugin : IPlugin
 
 	/// <summary>
 	/// Emit a pointer event to the event stream and as a trigger.
-	/// If evt.Bubbles is true, TinyEcs will automatically propagate the trigger up the parent hierarchy.
 	/// </summary>
 	private static void EmitEvent(
 		ClayPointerEvent evt,
@@ -68,7 +67,7 @@ public struct ClayInteractionPlugin : IPlugin
 		events.Send(evt);
 
 		// Emit trigger - EntityCommands.EmitTrigger automatically wraps with On<ClayPointerEvent>
-		// and injects the entity ID. Propagation is controlled by evt.Bubbles.
+		// and injects the entity ID.
 		commands.Entity(entityId).EmitTrigger(evt);
 	}
 
@@ -190,11 +189,10 @@ public struct ClayInteractionPlugin : IPlugin
 						LocalPosition = localPos,
 						Button = pointer.Value.ButtonsDown,
 						ScrollDelta = Vector2.Zero,
-						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 					};
 
 					EmitEvent(enterEvent, entityId, commands, events);
-				UpdateInteractionState(entityId, ClayPointerEventType.Enter, ClayMouseButton.None, commands, interactions);
+					UpdateInteractionState(entityId, ClayPointerEventType.Enter, ClayMouseButton.None, commands, interactions);
 				}
 			}
 
@@ -216,7 +214,6 @@ public struct ClayInteractionPlugin : IPlugin
 						LocalPosition = localPos,
 						Button = pointer.Value.ButtonsDown,
 						ScrollDelta = Vector2.Zero,
-						Bubbles = false // Move events don't bubble by default
 					};
 
 					EmitEvent(moveEvent, entityId, commands, events);
@@ -253,11 +250,9 @@ public struct ClayInteractionPlugin : IPlugin
 					LocalPosition = localPosForEvents,
 					Button = pointer.Value.ButtonsPressed,
 					ScrollDelta = Vector2.Zero,
-					Bubbles = true // Mouse events bubble
 				};
 
 				EmitEvent(downEvent, entityId, commands, events);
-				UpdateInteractionState(entityId, ClayPointerEventType.Pressed, pointer.Value.ButtonsPressed, commands, interactions);
 
 				// Track each pressed button separately for this element
 				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
@@ -281,7 +276,7 @@ public struct ClayInteractionPlugin : IPlugin
 					{
 						// Only emit Released/Click if this element is where the button was originally pressed
 						if (state.Value!.PressedElements.TryGetValue(button, out var pressedElementId) &&
-						    pressedElementId.id == elementId.id && pressedElementId.offset == elementId.offset)
+							pressedElementId.id == elementId.id && pressedElementId.offset == elementId.offset)
 						{
 							buttonsReleasedOnThisElement |= button;
 							state.Value!.PressedElements.Remove(button);
@@ -299,11 +294,9 @@ public struct ClayInteractionPlugin : IPlugin
 						LocalPosition = localPosForEvents,
 						Button = buttonsReleasedOnThisElement,
 						ScrollDelta = Vector2.Zero,
-						Bubbles = true // Mouse events bubble
 					};
 
 					EmitEvent(upEvent, entityId, commands, events);
-					UpdateInteractionState(entityId, ClayPointerEventType.Released, buttonsReleasedOnThisElement, commands, interactions);
 
 					// Also emit click event if released over same element where it was pressed
 					var clickEvent = new ClayPointerEvent
@@ -313,7 +306,6 @@ public struct ClayInteractionPlugin : IPlugin
 						LocalPosition = localPosForEvents,
 						Button = buttonsReleasedOnThisElement,
 						ScrollDelta = Vector2.Zero,
-						Bubbles = true // Click events bubble
 					};
 
 					EmitEvent(clickEvent, entityId, commands, events);
@@ -333,7 +325,6 @@ public struct ClayInteractionPlugin : IPlugin
 					LocalPosition = localPosForEvents,
 					Button = pointer.Value.ButtonsDown,
 					ScrollDelta = scrollDelta,
-					Bubbles = true // Scroll events bubble
 				};
 
 				EmitEvent(scrollEvent, entityId, commands, events);
@@ -373,11 +364,9 @@ public struct ClayInteractionPlugin : IPlugin
 					LocalPosition = localPos,
 					Button = pointer.Value.ButtonsDown,
 					ScrollDelta = Vector2.Zero,
-					Bubbles = false // Enter/Exit events don't bubble by default (like in web)
 				};
 
 				EmitEvent(exitEvent, entityId, commands, events);
-				UpdateInteractionState(entityId, ClayPointerEventType.Exit, ClayMouseButton.None, commands, interactions);
 			}
 		}
 
@@ -414,11 +403,9 @@ public struct ClayInteractionPlugin : IPlugin
 									LocalPosition = localPos,
 									Button = button,
 									ScrollDelta = Vector2.Zero,
-									Bubbles = true // Mouse events bubble
 								};
 
 								EmitEvent(releaseEvent, entityId, commands, events);
-								UpdateInteractionState(entityId, ClayPointerEventType.Released, button, commands, interactions);
 							}
 						}
 

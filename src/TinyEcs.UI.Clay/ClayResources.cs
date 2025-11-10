@@ -441,12 +441,6 @@ public readonly struct ClayPointerEvent
 	/// </summary>
 	public required Vector2 ScrollDelta { get; init; }
 
-	/// <summary>
-	/// Whether this event should bubble up to parent elements.
-	/// Controls propagation behavior when wrapped with On&lt;ClayPointerEvent&gt;.
-	/// </summary>
-	public required bool Bubbles { get; init; }
-
 	// Button convenience properties
 	/// <summary>Whether the left mouse button is involved in this event.</summary>
 	public bool IsLeftButton => Button.HasFlag(ClayMouseButton.Left);
