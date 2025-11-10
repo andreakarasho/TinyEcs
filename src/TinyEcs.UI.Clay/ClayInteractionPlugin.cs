@@ -19,6 +19,13 @@ public class InteractionState
 	/// Previous pointer position for Move event detection.
 	/// </summary>
 	public Vector2 PreviousPointerPosition = Vector2.Zero;
+
+	/// <summary>
+	/// Tracks which element received a Pressed event for each button.
+	/// Used to emit Released events to the same element even if pointer moves outside.
+	/// Key: ClayMouseButton flag, Value: Clay_ElementId of the element that was pressed.
+	/// </summary>
+	public Dictionary<ClayMouseButton, Clay_ElementId> PressedElements = new();
 }
 
 /// <summary>
@@ -192,6 +199,15 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(downEvent, entityId, commands, events);
+
+				// Track each pressed button separately for this element
+				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
+				{
+					if (button != ClayMouseButton.None && pointer.Value.ButtonsPressed.HasFlag(button))
+					{
+						state.Value!.PressedElements[button] = elementId;
+					}
+				}
 				found = true;
 			}
 
@@ -209,6 +225,15 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(upEvent, entityId, commands, events);
+
+				// Remove from pressed elements tracking (event handled)
+				foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
+				{
+					if (button != ClayMouseButton.None && pointer.Value.ButtonsReleased.HasFlag(button))
+					{
+						state.Value!.PressedElements.Remove(button);
+					}
+				}
 
 				// Also emit click event if released over same element
 				var clickEvent = new ClayPointerEvent
@@ -281,6 +306,53 @@ public struct ClayInteractionPlugin : IPlugin
 				};
 
 				EmitEvent(exitEvent, entityId, commands, events);
+			}
+		}
+
+		// Emit Released events for elements that were pressed but are no longer under the pointer
+		// This handles drag scenarios where the pointer moves outside the element bounds
+		if (pointer.Value.ButtonsReleased != ClayMouseButton.None)
+		{
+			foreach (ClayMouseButton button in Enum.GetValues<ClayMouseButton>())
+			{
+				if (button != ClayMouseButton.None && pointer.Value.ButtonsReleased.HasFlag(button))
+				{
+					// Check if we tracked a pressed element for this button
+					if (state.Value!.PressedElements.TryGetValue(button, out var pressedElementId))
+					{
+						// Compose entity ID
+						var entityId = IDOp.Compose(pressedElementId.id, pressedElementId.offset);
+
+						// Verify the entity still exists
+						if (nodes.Contains(entityId))
+						{
+							// Get element data for local position calculation
+							var elementData = Clay_cs.Clay.GetElementData(pressedElementId);
+							if (elementData.found)
+							{
+								var localPos = new Vector2(
+									pointer.Value.Position.X - elementData.boundingBox.x,
+									pointer.Value.Position.Y - elementData.boundingBox.y
+								);
+
+								var releaseEvent = new ClayPointerEvent
+								{
+									EventType = ClayPointerEventType.Released,
+									Position = pointer.Value.Position,
+									LocalPosition = localPos,
+									Button = button,
+									ScrollDelta = Vector2.Zero,
+									Bubbles = true // Mouse events bubble
+								};
+
+								EmitEvent(releaseEvent, entityId, commands, events);
+							}
+						}
+
+						// Remove from tracking
+						state.Value!.PressedElements.Remove(button);
+					}
+				}
 			}
 		}
 
