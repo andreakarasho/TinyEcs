@@ -11,8 +11,9 @@ public class InteractionState
 {
 	/// <summary>
 	/// Element IDs that were under the pointer in the previous frame.
+	/// Stores full Clay_ElementId to allow direct entity ID composition.
 	/// </summary>
-	public HashSet<uint> PreviousHoveredIds = new();
+	public HashSet<Clay_ElementId> PreviousHoveredIds = new();
 
 	/// <summary>
 	/// Previous pointer position for Move event detection.
@@ -38,7 +39,7 @@ public struct ClayInteractionPlugin : IPlugin
 			Commands commands,
 			EventWriter<ClayPointerEvent> events,
 			Local<InteractionState> state,
-			Local<HashSet<uint>> currentHoveredIds
+			Local<HashSet<Clay_ElementId>> currentHoveredIds
 		) => ProcessPointerInteraction(nodes, pointer, commands, events, state, currentHoveredIds))
 			.InStage(Stage.PostUpdate)
 			.Label("clay:interaction")
@@ -72,7 +73,7 @@ public struct ClayInteractionPlugin : IPlugin
 		Commands commands,
 		EventWriter<ClayPointerEvent> events,
 		Local<InteractionState> state,
-		Local<HashSet<uint>> currentHoveredIds)
+		Local<HashSet<Clay_ElementId>> currentHoveredIds)
 	{
 		// Get elements under pointer
 		var pointerOverIds = Clay_cs.Clay.GetPointerOverIds();
@@ -83,7 +84,7 @@ public struct ClayInteractionPlugin : IPlugin
 		currentHoveredIds.Value!.Clear();
 		foreach (ref readonly var id in pointerOverIds)
 		{
-			currentHoveredIds.Value!.Add(id.id);
+			currentHoveredIds.Value!.Add(id);
 		}
 
 		// Track if pointer position changed (Local<T> is never null, compiler doesn't know this)
@@ -104,8 +105,8 @@ public struct ClayInteractionPlugin : IPlugin
 			var (entity, nodeId) = nodes.Get(entId);
 			ref readonly var entityId = ref entity.Ref;
 			var elementId = nodeId.Ref.Id;
-			var isCurrentlyHovered = currentHoveredIds.Value!.Contains(elementId.id);
-			var wasPreviouslyHovered = state.Value!.PreviousHoveredIds.Contains(elementId.id);
+			var isCurrentlyHovered = currentHoveredIds.Value!.Contains(elementId);
+			var wasPreviouslyHovered = state.Value!.PreviousHoveredIds.Contains(elementId);
 
 			// Detect Enter event (element is now hovered but wasn't before)
 			if (isCurrentlyHovered && !wasPreviouslyHovered)
@@ -129,31 +130,6 @@ public struct ClayInteractionPlugin : IPlugin
 					};
 
 					EmitEvent(enterEvent, entityId, commands, events);
-				}
-			}
-
-			// Detect Exit event (element was hovered but isn't now)
-			if (!isCurrentlyHovered && wasPreviouslyHovered)
-			{
-				var elementData = Clay_cs.Clay.GetElementData(elementId);
-				if (elementData.found)
-				{
-					var localPos = new Vector2(
-						state.Value!.PreviousPointerPosition.X - elementData.boundingBox.x,
-						state.Value!.PreviousPointerPosition.Y - elementData.boundingBox.y
-					);
-
-					var exitEvent = new ClayPointerEvent
-					{
-						EventType = ClayPointerEventType.Exit,
-						Position = state.Value!.PreviousPointerPosition,
-						LocalPosition = localPos,
-						Button = pointer.Value.ButtonsDown,
-						ScrollDelta = Vector2.Zero,
-						Bubbles = false // Enter/Exit events don't bubble by default (like in web)
-					};
-
-					EmitEvent(exitEvent, entityId, commands, events);
 				}
 			}
 
@@ -267,6 +243,44 @@ public struct ClayInteractionPlugin : IPlugin
 				EmitEvent(scrollEvent, entityId, commands, events);
 
 				found = true;
+			}
+		}
+
+		// Detect Exit events for elements that were previously hovered but are no longer hovered
+		// Use IDOp.Compose to directly build entity IDs instead of searching through all nodes
+		foreach (var prevElementId in state.Value!.PreviousHoveredIds)
+		{
+			// Skip if still hovered
+			if (currentHoveredIds.Value!.Contains(prevElementId))
+				continue;
+
+			// Compose entity ID directly from Clay element ID
+			var entityId = IDOp.Compose(prevElementId.id, prevElementId.offset);
+
+			// Verify the entity still exists and has a ClayNode
+			if (!nodes.Contains(entityId))
+				continue;
+
+			// This element was hovered but isn't now - emit Exit event
+			var elementData = Clay_cs.Clay.GetElementData(prevElementId);
+			if (elementData.found)
+			{
+				var localPos = new Vector2(
+					state.Value!.PreviousPointerPosition.X - elementData.boundingBox.x,
+					state.Value!.PreviousPointerPosition.Y - elementData.boundingBox.y
+				);
+
+				var exitEvent = new ClayPointerEvent
+				{
+					EventType = ClayPointerEventType.Exit,
+					Position = state.Value!.PreviousPointerPosition,
+					LocalPosition = localPos,
+					Button = pointer.Value.ButtonsDown,
+					ScrollDelta = Vector2.Zero,
+					Bubbles = false // Enter/Exit events don't bubble by default (like in web)
+				};
+
+				EmitEvent(exitEvent, entityId, commands, events);
 			}
 		}
 
