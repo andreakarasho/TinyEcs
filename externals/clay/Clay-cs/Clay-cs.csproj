@@ -10,6 +10,43 @@
         <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     </PropertyGroup>
 
+    <!-- Build Clay native library with Zig if it doesn't exist -->
+    <Target Name="BuildClayNativeLib" BeforeTargets="BeforeBuild">
+        <PropertyGroup>
+            <ClayBuilderDir>..\Clay-builder</ClayBuilderDir>
+
+            <!-- Platform-specific library paths -->
+            <ClayDllPathWindows>$(ClayBuilderDir)\zig-out\bin\Clay.dll</ClayDllPathWindows>
+            <ClayDllPathLinux>$(ClayBuilderDir)/zig-out/lib/libClay.so</ClayDllPathLinux>
+            <ClayDllPathMacOS>$(ClayBuilderDir)/zig-out/lib/libClay.dylib</ClayDllPathMacOS>
+
+            <!-- Detect current OS and set appropriate paths -->
+            <IsWindows Condition="'$(OS)' == 'Windows_NT'">true</IsWindows>
+            <IsLinux Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">true</IsLinux>
+            <IsMacOS Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">true</IsMacOS>
+
+            <ClayLibPath Condition="'$(IsWindows)' == 'true'">$(ClayDllPathWindows)</ClayLibPath>
+            <ClayLibPath Condition="'$(IsLinux)' == 'true'">$(ClayDllPathLinux)</ClayLibPath>
+            <ClayLibPath Condition="'$(IsMacOS)' == 'true'">$(ClayDllPathMacOS)</ClayLibPath>
+
+            <!-- Zig build command based on configuration -->
+            <ZigBuildCommand Condition="'$(Configuration)' == 'Debug'">zig build</ZigBuildCommand>
+            <ZigBuildCommand Condition="'$(Configuration)' != 'Debug'">zig build --release=safe</ZigBuildCommand>
+        </PropertyGroup>
+
+        <!-- Check if Clay native library exists, if not build it -->
+        <Message Text="Checking for Clay native library at $(ClayLibPath)..." Importance="high" />
+        <Exec Command="$(ZigBuildCommand)"
+              WorkingDirectory="$(ClayBuilderDir)"
+              Condition="!Exists('$(ClayLibPath)')"
+              ConsoleToMSBuild="true"
+              IgnoreExitCode="false">
+            <Output TaskParameter="ConsoleOutput" PropertyName="ZigBuildOutput" />
+        </Exec>
+        <Message Text="Clay native library found or built successfully" Importance="high" Condition="Exists('$(ClayLibPath)')" />
+        <Warning Text="Clay native library not found at $(ClayLibPath). Zig build may have failed. Make sure Zig is installed and in PATH." Condition="!Exists('$(ClayLibPath)')" />
+    </Target>
+
     <!-- Copy native Clay DLL to output directory for all platforms -->
     <ItemGroup>
         <!-- Windows x64 -->
