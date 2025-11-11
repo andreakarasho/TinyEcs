@@ -172,21 +172,6 @@ public interface IObserver
 	Type TriggerType { get; }
 }
 
-/// <summary>
-/// Component that stores entity-specific observers.
-/// This component is automatically added to entities that have observers attached.
-/// Note: The List is a reference type, so it persists correctly even though this is a struct.
-/// </summary>
-internal struct EntityObservers
-{
-	public List<IObserver>? Observers;
-
-	public EntityObservers()
-	{
-		Observers = new List<IObserver>();
-	}
-}
-
 public delegate void ExecuteObserverDel<T>(TinyEcs.World world, ref T trigger) where T : struct;
 
 /// <summary>
@@ -207,7 +192,9 @@ public class Observer<TTrigger> : IObserver
 
 	public void Execute(TinyEcs.World world, ITrigger trigger)
 	{
+		world.BeginDeferred();
 		_callback(world, (TTrigger)trigger);
+		world.EndDeferred();
 	}
 }
 
@@ -276,7 +263,7 @@ public static class ObserverExtensions
 {
 	private static readonly Dictionary<TinyEcs.World, ObserverState> _observerStates = new();
 
-	private static ObserverState GetObserverState(this TinyEcs.World world)
+	internal static ObserverState GetObserverState(this TinyEcs.World world)
 	{
 		if (!_observerStates.TryGetValue(world, out var state))
 		{
@@ -313,6 +300,11 @@ public static class ObserverExtensions
 
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
+
+			if (state.EntityObservers.Remove(entityId))
+			{
+
+			}
 
 			w.EmitTriggerInner(new OnDespawn(entityId));
 		};
@@ -360,8 +352,8 @@ public static class ObserverExtensions
 			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Direct typed call - no reflection!
-				handler.HandleUnset(w, entityId);
-				// state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
+				// handler.HandleUnset(w, entityId);
+				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
 			}
 		};
 	}
@@ -470,18 +462,13 @@ public static class ObserverExtensions
 				if (!world.Exists(currentEntityId))
 					break;
 
-				// Fire entity-specific observers on current entity
-				if (world.Has<EntityObservers>(currentEntityId))
+				if (state.EntityObservers.TryGetValue(currentEntityId, out var entityObserversList))
 				{
-					ref var entityObservers = ref world.Get<EntityObservers>(currentEntityId);
-					if (entityObservers.Observers != null)
+					foreach (var observer in entityObserversList)
 					{
-						foreach (var observer in entityObservers.Observers)
+						if (observer.TriggerType == triggerType)
 						{
-							if (observer.TriggerType == triggerType)
-							{
-								observer.Execute(world, trigger);
-							}
+							observer.Execute(world, trigger);
 						}
 					}
 				}
@@ -552,6 +539,7 @@ internal enum PendingComponentActionType
 internal class ObserverState
 {
 	public Dictionary<Type, List<IObserver>> Observers { get; } = new();
+	public Dictionary<ulong, List<IObserver>> EntityObservers { get; } = new();
 	public Dictionary<ulong, IComponentHandler> ComponentHandlers { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler, PendingComponentActionType Action)> PendingComponentActions { get; } = new();
 	public bool HooksRegistered { get; set; }

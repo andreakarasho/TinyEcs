@@ -1026,6 +1026,7 @@ public class App
 			if (!_sortedStageSystems.TryGetValue(stage, out var systems))
 				return;
 
+			_world.BeginDeferred();
 			foreach (var descriptor in systems)
 			{
 				if (descriptor.ShouldRun(_world))
@@ -1033,6 +1034,7 @@ public class App
 					descriptor.System.Run(_world);
 				}
 			}
+			_world.EndDeferred();
 			return;
 		}
 
@@ -1041,6 +1043,7 @@ public class App
 			return;
 
 		// Execute each batch (systems within a batch run in parallel)
+		_world.BeginDeferred();
 		foreach (var batch in batches)
 		{
 			if (batch.Count == 1)
@@ -1064,6 +1067,7 @@ public class App
 				});
 			}
 		}
+		_world.EndDeferred();
 	}
 
 	/// <summary>

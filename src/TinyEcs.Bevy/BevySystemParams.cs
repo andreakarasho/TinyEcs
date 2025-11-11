@@ -1017,26 +1017,18 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 		default(TTrigger).Register(world);
 #endif
 
-		// Get or create EntityObservers component
-		if (!world.Has<EntityObservers>(entityId))
-		{
-			world.Set(entityId, new EntityObservers
-			{
-				Observers = new List<IObserver>()
-			});
-		}
+		var state = world.GetObserverState();
 
-		// Add the observer to the entity's observer list
-		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Observers == null)
+		if (!state.EntityObservers.TryGetValue(entityId, out var observers))
 		{
-			entityObservers.Observers = new List<IObserver>();
+			observers = new List<IObserver>();
+			state.EntityObservers[entityId] = observers;
 		}
 
 		// Copy callback to local variable (required for struct lambda capture)
 		var callback = _callback;
 		// Wrap callback to ignore World parameter
-		entityObservers.Observers.Add(new Observer<TTrigger>((w, trigger) => callback(trigger)));
+		observers.Add(new Observer<TTrigger>((w, trigger) => callback(trigger)));
 	}
 }
 
@@ -1067,24 +1059,16 @@ internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCom
 		default(TTrigger).Register(world);
 #endif
 
-		// Get or create EntityObservers component
-		if (!world.Has<EntityObservers>(entityId))
-		{
-			world.Set(entityId, new EntityObservers
-			{
-				Observers = new List<IObserver>()
-			});
-		}
+		var state = world.GetObserverState();
 
-		// Add the observer to the entity's observer list
-		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Observers == null)
+		if (!state.EntityObservers.TryGetValue(entityId, out var observers))
 		{
-			entityObservers.Observers = new List<IObserver>();
+			observers = new List<IObserver>();
+			state.EntityObservers[entityId] = observers;
 		}
 
 		// Directly use the callback with World parameter
-		entityObservers.Observers.Add(new Observer<TTrigger>(_callback));
+		observers.Add(new Observer<TTrigger>(_callback));
 	}
 }
 
