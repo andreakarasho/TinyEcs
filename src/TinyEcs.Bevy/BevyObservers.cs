@@ -253,6 +253,9 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
 	{
+		if (!world.Has<T>(entityId))
+			return;
+
 		ref var component = ref world.Get<T>(entityId);
 		world.EmitTrigger(new OnRemove<T>(entityId, component));
 	}
@@ -326,7 +329,7 @@ public static class ObserverExtensions
 			if (componentInfo.Size > 0 && state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Queue for processing after Set() completes - this fires OnInsert
-				state.PendingComponentSets.Enqueue((entityId, handler));
+				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Set));
 			}
 		};
 
@@ -342,7 +345,7 @@ public static class ObserverExtensions
 			if (componentInfo.Size > 0 && state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Queue for processing after Set() completes - this fires OnAdd
-				state.PendingComponentAdds.Enqueue((entityId, handler));
+				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Add));
 			}
 		};
 
@@ -357,7 +360,8 @@ public static class ObserverExtensions
 			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Direct typed call - no reflection!
-				handler.HandleUnset(w, entityId);
+				//handler.HandleUnset(w, entityId);
+				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
 			}
 		};
 	}
@@ -501,30 +505,47 @@ public static class ObserverExtensions
 	{
 		var state = world.GetObserverState();
 
-		// Process OnInsert triggers (fires for both add and update)
-		while (state.PendingComponentSets.TryDequeue(out var pending))
+		while (state.PendingComponentActions.TryDequeue(out var pending))
 		{
-			var (entityId, handler) = pending;
-			// Now the component value has been written - safe to read!
-			handler.HandleSet(world, entityId);
-		}
+			var (entityId, handler, action) = pending;
 
-		// Process OnAdd triggers (fires only for first-time additions)
-		while (state.PendingComponentAdds.TryDequeue(out var pending))
-		{
-			var (entityId, handler) = pending;
-			// Now the component value has been written - safe to read!
-			handler.HandleAdd(world, entityId);
+			switch (action)
+			{
+				case PendingComponentActionType.Set:
+					// Now the component value has been written - safe to read!
+					handler.HandleSet(world, entityId);
+					break;
+				case PendingComponentActionType.Add:
+					// Now the component value has been written - safe to read!
+					handler.HandleAdd(world, entityId);
+					break;
+				case PendingComponentActionType.Remove:
+					if (!world.Exists(entityId))
+					{
+						// Entity was deleted - skip
+						continue;
+					}
+					// Now the component value has been written - safe to read!
+					handler.HandleUnset(world, entityId);
+					break;
+			}
+
 		}
 	}
+}
+
+internal enum PendingComponentActionType
+{
+	Set,
+	Add,
+	Remove
 }
 
 internal class ObserverState
 {
 	public Dictionary<Type, List<IObserver>> Observers { get; } = new();
 	public Dictionary<ulong, IComponentHandler> ComponentHandlers { get; } = new();
-	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentSets { get; } = new();
-	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentAdds { get; } = new();
+	public Queue<(ulong EntityId, IComponentHandler Handler, PendingComponentActionType Action)> PendingComponentActions { get; } = new();
 	public bool HooksRegistered { get; set; }
 	public bool HooksEnabled { get; set; } = true;
 	public ulong MaxComponentEntityId { get; set; } // Component entities have IDs <= this value
