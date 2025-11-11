@@ -45,7 +45,7 @@ public interface IPropagatingTrigger
 /// <summary>
 /// Trigger when a component is added to an entity
 /// </summary>
-public record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
+public record struct OnAdd<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -59,7 +59,7 @@ public record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate 
 /// <summary>
 /// Trigger when a component is inserted/updated on an entity
 /// </summary>
-public record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
+public record struct OnInsert<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -73,7 +73,7 @@ public record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropaga
 /// <summary>
 /// Trigger when a component is removed from an entity
 /// </summary>
-public record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
+public record struct OnRemove<T>(ulong EntityId, T Component) : ITrigger, IEntityTrigger
 	where T : struct
 {
 #if NET9_0_OR_GREATER
@@ -87,7 +87,7 @@ public record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropaga
 /// <summary>
 /// Trigger when an entity is spawned
 /// </summary>
-public record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
+public record struct OnSpawn(ulong EntityId) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -101,7 +101,7 @@ public record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITr
 /// <summary>
 /// Trigger when an entity is despawned
 /// </summary>
-public record struct OnDespawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger
+public record struct OnDespawn(ulong EntityId) : ITrigger, IEntityTrigger
 {
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
@@ -239,7 +239,7 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 			return;
 
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnInsert<T>(entityId, component));
+		world.EmitTriggerInner(new OnInsert<T>(entityId, component));
 	}
 
 	public void HandleAdd(TinyEcs.World world, ulong entityId)
@@ -248,7 +248,7 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 			return;
 
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnAdd<T>(entityId, component));
+		world.EmitTriggerInner(new OnAdd<T>(entityId, component));
 	}
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
@@ -257,7 +257,7 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 			return;
 
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnRemove<T>(entityId, component));
+		world.EmitTriggerInner(new OnRemove<T>(entityId, component));
 	}
 
 	public static void SetComponentId(ulong id)
@@ -303,7 +303,7 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			w.EmitTrigger(new OnSpawn(entityId));
+			w.EmitTriggerInner(new OnSpawn(entityId));
 		};
 
 		// Hook into entity deletion - automatically emit OnDespawn
@@ -314,7 +314,7 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			w.EmitTrigger(new OnDespawn(entityId));
+			w.EmitTriggerInner(new OnDespawn(entityId));
 		};
 
 		// Hook into component set - queue for deferred processing
@@ -360,8 +360,8 @@ public static class ObserverExtensions
 			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Direct typed call - no reflection!
-				//handler.HandleUnset(w, entityId);
-				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
+				handler.HandleUnset(w, entityId);
+				// state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
 			}
 		};
 	}
@@ -431,11 +431,19 @@ public static class ObserverExtensions
 		observers.Add(new Observer<TTrigger>(callback));
 	}
 
+	public static void EmitTrigger<T>(this TinyEcs.World world, ulong entityId, T ev)
+		where T : struct
+	{
+		var propagate = true;
+		var trigger = new On<T>(entityId, ev, ref propagate);
+		world.EmitTriggerInner(trigger);
+	}
+
 	/// <summary>
 	/// Emit a trigger to all observers (both global and entity-specific).
 	/// For propagating triggers, observers are executed synchronously so they can stop propagation mid-chain.
 	/// </summary>
-	public static void EmitTrigger<TTrigger>(this TinyEcs.World world, TTrigger trigger)
+	public static void EmitTriggerInner<TTrigger>(this TinyEcs.World world, TTrigger trigger)
 		where TTrigger : ITrigger
 	{
 		var state = world.GetObserverState();
@@ -479,7 +487,7 @@ public static class ObserverExtensions
 				}
 
 				// Check if propagation was stopped by any observer
-				if (trigger is IPropagatingTrigger propTrigger && !propTrigger.ShouldPropagate)
+				if (trigger is not IPropagatingTrigger propTrigger || !propTrigger.ShouldPropagate)
 				{
 					break;
 				}

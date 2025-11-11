@@ -32,6 +32,11 @@ namespace TinyEcs.Tests
 			public int Value;
 		}
 
+		private struct HealthChanged
+		{
+			public int Value;
+		}
+
 		private sealed class ScoreTracker
 		{
 			public int Baseline;
@@ -1174,57 +1179,49 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void ObserverPropagation_BubblesUpParentHierarchy()
 		{
-			// Test that triggers with .Propagate(true) fire on parent entities
+			// Test that triggers propagate up parent hierarchy
 			using var world = new World();
-			world.EnableObservers<Health>();
 
 			var triggerLog = new List<(ulong EntityId, int Value, string Source)>();
 
 			// Create entities and set up hierarchy
-			var grandparentId = world.Entity().ID;
-			var parentId = world.Entity().ID;
-			var childId = world.Entity().ID;
+			var grandparent = world.Entity();
+			var parent = world.Entity();
+			var child = world.Entity();
 
-			world.Set(parentId, new Parent { Id = grandparentId });
-			world.Set(childId, new Parent { Id = parentId });
+			grandparent.AddChild(parent);
+			parent.AddChild(child);
+
+			var grandparentId = grandparent.ID;
+			var parentId = parent.ID;
+			var childId = child.ID;
 
 			// Create Commands to register observers
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(childId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "child observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "child observer"));
 				});
 
-				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(parentId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "parent observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "parent observer"));
 				});
 
-				commands.Entity(grandparentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(grandparentId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "grandparent observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "grandparent observer"));
 				});
 			});
 
 			app.AddSystem(system).InStage(Stage.Update).Build();
 			app.Run();
 
-			// Test 1: Non-propagating trigger (default) - should only fire on child
-			world.Set(childId, new Health { Value = 100 });
-			world.FlushObservers();
-
-			// Only child observer should fire
-			Assert.Single(triggerLog);
-			Assert.Equal(childId, triggerLog[0].EntityId);
-			Assert.Equal(100, triggerLog[0].Value);
-			Assert.Equal("child observer", triggerLog[0].Source);
-
-			triggerLog.Clear();
-
-			// Test 2: Propagating trigger - should fire on child, parent, and grandparent
-			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 200 }).Propagate(true));
+			// Propagating trigger (propagation is true by default) - should fire on child, parent, and grandparent
+			world.EmitTrigger(childId, new HealthChanged { Value = 200 });
+			app.Update(); // Apply deferred commands
 
 			// All three observers should fire
 			Assert.Equal(3, triggerLog.Count);
@@ -1235,12 +1232,12 @@ namespace TinyEcs.Tests
 			Assert.Equal("child observer", triggerLog[0].Source);
 
 			// Second: parent observer (propagated)
-			Assert.Equal(childId, triggerLog[1].EntityId); // EntityId stays the same
+			Assert.Equal(childId, triggerLog[1].EntityId); // EntityId stays the same (child's ID)
 			Assert.Equal(200, triggerLog[1].Value);
 			Assert.Equal("parent observer", triggerLog[1].Source);
 
 			// Third: grandparent observer (propagated)
-			Assert.Equal(childId, triggerLog[2].EntityId); // EntityId stays the same
+			Assert.Equal(childId, triggerLog[2].EntityId); // EntityId stays the same (child's ID)
 			Assert.Equal(200, triggerLog[2].Value);
 			Assert.Equal("grandparent observer", triggerLog[2].Source);
 		}
@@ -1250,24 +1247,26 @@ namespace TinyEcs.Tests
 		{
 			// Test that propagation stops when reaching an entity without a parent
 			using var world = new World();
-			world.EnableObservers<Health>();
 
 			var triggerLog = new List<string>();
 
 			// Create parent-child (no grandparent)
-			var parentId = world.Entity().ID;
-			var childId = world.Entity().ID;
-			world.Set(childId, new Parent { Id = parentId });
+			var parent = world.Entity();
+			var child = world.Entity();
+			parent.AddChild(child);
+
+			var parentId = parent.ID;
+			var childId = child.ID;
 
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(parentId).Observe<On<HealthChanged>>((trigger) =>
 				{
 					triggerLog.Add("parent");
 				});
 
-				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(childId).Observe<On<HealthChanged>>((trigger) =>
 				{
 					triggerLog.Add("child");
 				});
@@ -1276,8 +1275,9 @@ namespace TinyEcs.Tests
 			app.AddSystem(system).InStage(Stage.Update).Build();
 			app.Run();
 
-			// Propagating trigger should fire on child and parent, then stop
-			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 100 }).Propagate(true));
+			// Propagating trigger should fire on child and parent, then stop (propagation is true by default)
+			world.EmitTrigger(childId, new HealthChanged { Value = 100 });
+			app.Update(); // Apply deferred commands
 
 			Assert.Equal(2, triggerLog.Count);
 			Assert.Equal("child", triggerLog[0]);

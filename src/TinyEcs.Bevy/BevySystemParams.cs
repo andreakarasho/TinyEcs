@@ -944,7 +944,7 @@ internal struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : st
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.EmitTrigger(new On<TEvent>(_event));
+		world.EmitTriggerInner(new On<TEvent>(_event));
 	}
 }
 
@@ -968,7 +968,7 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 	{
 		var propagate = true;
 		// Wrap the event with On<TEvent> and inject the entity ID
-		world.EmitTrigger(new On<TEvent>(_entityId, _event, ref propagate));
+		world.EmitTriggerInner(new On<TEvent>(_entityId, _event, ref propagate));
 	}
 }
 
