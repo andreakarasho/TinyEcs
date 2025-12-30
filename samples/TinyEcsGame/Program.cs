@@ -104,17 +104,17 @@ app.AddSystem((ResMut<UiTheme> theme, Commands commands, Local<ulong> themedPane
 .Label("ui:theme:switch")
 .Build();
 
-// Hierarchical UI demo with root panel and child buttons
-app.AddSystem((Commands commands) => CreateButtonPanel(commands))
-	.InStage(Stage.Startup)
-	.Label("ui:button-panel:spawn")
-	.Build();
+// // Hierarchical UI demo with root panel and child buttons
+// app.AddSystem((Commands commands) => CreateButtonPanel(commands))
+// 	.InStage(Stage.Startup)
+// 	.Label("ui:button-panel:spawn")
+// 	.Build();
 
-// Rounded Corners showcase (demonstrates individual corner radius support)
-app.AddSystem((Commands commands, Res<UiTheme> theme) => CreateRoundedCornersShowcase(commands, theme.Value))
-	.InStage(Stage.Startup)
-	.Label("ui:rounded-corners:spawn")
-	.Build();
+// // Rounded Corners showcase (demonstrates individual corner radius support)
+// app.AddSystem((Commands commands, Res<UiTheme> theme) => CreateRoundedCornersShowcase(commands, theme.Value))
+// 	.InStage(Stage.Startup)
+// 	.Label("ui:rounded-corners:spawn")
+// 	.Build();
 
 // Phase 2 Demo: Animated button color transitions using AnimatedInteractionState
 // Simplified: Lerp directly from base color to target based on progress
@@ -130,22 +130,16 @@ app.AddSystem((
 		// Calculate target color based on current interaction state
 		var targetColor = anim.CurrentState switch
 		{
-			FluxInteractionState.PointerEnter => new Vector4(
+			Interaction.Hovered => new Vector4(
 				Math.Min(originalColor.Color.X * 1.3f, 1f),
 				Math.Min(originalColor.Color.Y * 1.3f, 1f),
 				Math.Min(originalColor.Color.Z * 1.3f, 1f),
 				1f
 			),
-			FluxInteractionState.Pressed => new Vector4(
+			Interaction.Pressed => new Vector4(
 				originalColor.Color.X * 0.7f,
 				originalColor.Color.Y * 0.7f,
 				originalColor.Color.Z * 0.7f,
-				1f
-			),
-			FluxInteractionState.Released => new Vector4(
-				Math.Min(originalColor.Color.X * 1.5f, 1f),
-				Math.Min(originalColor.Color.Y * 1.5f, 1f),
-				Math.Min(originalColor.Color.Z * 1.5f, 1f),
 				1f
 			),
 			_ => originalColor.Color
@@ -165,17 +159,17 @@ app.AddSystem((
 // .After("animated-interaction:update-progress")
 .Build();
 
-// Nested scroll container demo
-app.AddSystem((Commands commands) => CreateNestedScrollPanel(commands))
-	.InStage(Stage.Startup)
-	.Label("ui:nested-scroll:spawn")
-	.Build();
+// // Nested scroll container demo
+// app.AddSystem((Commands commands) => CreateNestedScrollPanel(commands))
+// 	.InStage(Stage.Startup)
+// 	.Label("ui:nested-scroll:spawn")
+// 	.Build();
 
-// Checkbox demo
-app.AddSystem((Commands commands) => CreateCheckboxDemo(commands))
-	.InStage(Stage.Startup)
-	.Label("ui:checkbox:spawn")
-	.Build();
+// // Checkbox demo
+// app.AddSystem((Commands commands) => CreateCheckboxDemo(commands))
+// 	.InStage(Stage.Startup)
+// 	.Label("ui:checkbox:spawn")
+// 	.Build();
 
 // Widget showcase demo
 app.AddSystem((Commands commands) => CreateWidgetShowcase(commands))
@@ -193,9 +187,13 @@ app.AddSystem((Commands commands, Res<UiTheme> theme, Local<ulong> themedPanelId
 	.Label("ui:themed-showcase:spawn")
 	.Build();
 
-// Handle checkbox changes
+// Handle checkbox changes (skip global triggers where EntityId = 0)
 app.AddObserver((On<CheckboxChanged> trigger, Commands commands, Query<Data<UiText>> qTexts) =>
 {
+	// Skip global triggers (EntityId = 0 means it's a global event, not entity-specific)
+	if (trigger.EntityId == 0)
+		return;
+
 	Console.WriteLine($"[Checkbox] Checkbox {trigger.EntityId} changed to: {trigger.Event.Checked}");
 
 	// Update text label if there's one associated
@@ -280,10 +278,12 @@ static void CreateButtonPanel(Commands commands)
 	);
 
 	// Style the scroll view root
+	// NOTE: ScrollView uses FlexDirection.Row for vertical scrollbar layout (viewport | scrollbar)
+	// Don't override with Column or content will break!
 	commands.Entity(scrollViewId)
 		.Insert(new UiNode
 		{
-			FlexDirection = FlexDirection.Column,
+			FlexDirection = FlexDirection.Row, // MUST be Row for vertical scrollbar layout
 			Width = FlexValue.Points(400f),
 			Height = FlexValue.Points(500f),
 			MarginTop = FlexValue.Auto(),
@@ -351,12 +351,9 @@ static void CreateButtonPanel(Commands commands)
 			.Insert(new TextStyle(fontSize: 24, horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
 			.Insert(new Button())
 			.Insert(new Interactive(focusable: true))
-			// Phase 1: Add FluxInteraction components for state tracking
+			// Add interaction and animation components
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
-			// Phase 2: Add animation components for smooth color transitions
+			// Add animation components for smooth color transitions
 			.Insert(new AnimatedInteractionState()
 				.WithBase(0.15f, Ease.OutQuad)       // Default: 150ms OutQuad
 				.WithHover(0.2f, Ease.OutCubic)      // Hover: 200ms OutCubic
@@ -366,7 +363,7 @@ static void CreateButtonPanel(Commands commands)
 			{
 				StartColor = color,
 				TargetColor = color,
-				LastState = FluxInteractionState.None
+				LastState = Interaction.None
 			}); // Track color transitions
 
 		var buttonId = button.Id;
@@ -394,10 +391,12 @@ static void CreateNestedScrollPanel(Commands commands)
 	);
 
 	// Style the outer scroll view root
+	// NOTE: ScrollView uses FlexDirection.Row for vertical scrollbar layout (viewport | scrollbar)
+	// Don't override with Column or content will break!
 	commands.Entity(outerScrollViewId)
 		.Insert(new UiNode
 		{
-			FlexDirection = FlexDirection.Column,
+			FlexDirection = FlexDirection.Row, // MUST be Row for vertical scrollbar layout
 			Width = FlexValue.Points(450f),
 			Height = FlexValue.Points(400f),
 			MarginTop = FlexValue.Auto(),
@@ -459,10 +458,11 @@ static void CreateNestedScrollPanel(Commands commands)
 		);
 
 		// Style the inner scroll view root
+		// NOTE: ScrollView uses FlexDirection.Column for horizontal scrollbar layout (viewport / scrollbar)
 		commands.Entity(innerScrollViewId)
 			.Insert(new UiNode
 			{
-				FlexDirection = FlexDirection.Row,
+				FlexDirection = FlexDirection.Column, // MUST be Column for horizontal scrollbar layout
 				Width = FlexValue.Points(380f),
 				Height = FlexValue.Points(120f),
 				MarginLeft = FlexValue.Auto(),
@@ -618,14 +618,12 @@ static void CreateCheckboxDemo(Commands commands)
 			.Insert(BorderColor.FromRgba(100, 100, 100, 255))
 			.Insert(new BorderRadius(4f))
 			.Insert(new Interactive(focusable: true))
-			// Add FluxInteraction components for checkbox interaction
+			// Add interaction component for checkbox
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Id;
 
 		// Create checkmark visual (green check)
+		// Uses Checkmark marker component so CheckboxPlugin can find it
 		var checkmarkId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -635,17 +633,14 @@ static void CreateCheckboxDemo(Commands commands)
 			})
 			.Insert(BackgroundColor.FromRgba(0, 200, 0, 255)) // Green checkmark
 			.Insert(new BorderRadius(2f))
+			.Insert(new Checkmark())  // Marker for CheckboxPlugin to find
 			.Id;
 
 		// Add checkmark as child of checkbox
 		commands.Entity(checkboxId).AddChild(checkmarkId);
 
-		// Link checkmark to checkbox and set initial state
-		commands.Entity(checkboxId).Insert(new Checkbox
-		{
-			Checked = false,
-			CheckmarkEntity = checkmarkId
-		});
+		// Add Checkbox component
+		commands.Entity(checkboxId).Insert(new Checkbox(false));
 
 		// Create label text with automatic text measurement
 		var labelId = commands.Spawn()
@@ -690,11 +685,12 @@ static void CreateWidgetShowcase(Commands commands)
 	);
 
 	// Style the scroll view root
+	// NOTE: ScrollView uses FlexDirection.Row for vertical scrollbar layout (viewport | scrollbar)
 	commands.Entity(scrollViewId)
 		.Insert(new UiNode
 		{
 			PositionType = PositionType.Absolute,
-			FlexDirection = FlexDirection.Column,
+			FlexDirection = FlexDirection.Row, // MUST be Row for vertical scrollbar layout
 			Width = FlexValue.Points(500f),
 			Height = FlexValue.Points(600f),
 			Top = FlexValue.Points(50f),
@@ -752,9 +748,6 @@ static void CreateWidgetShowcase(Commands commands)
 		.Insert(new BorderRadius(5f))
 		.Insert(new Interactive(focusable: false))
 		.Insert(new InteractionState())
-		.Insert(new FluxInteraction())
-		.Insert(new PrevInteraction())
-		.Insert(new FluxInteractionStopwatch())
 		.Id;
 
 	var sliderFillId = commands.Spawn()
@@ -766,6 +759,7 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(BackgroundColor.FromRgba(100, 150, 255, 255))
 		.Insert(new BorderRadius(5f))
+		.Insert(new SliderFill())  // Marker for SliderPlugin to find
 		.Id;
 
 	var sliderThumbId = commands.Spawn()
@@ -782,19 +776,11 @@ static void CreateWidgetShowcase(Commands commands)
 		.Insert(new SliderThumb()) // Marker component to identify slider thumbs
 		.Insert(new Interactive(focusable: false))
 		.Insert(new InteractionState())
-		.Insert(new FluxInteraction())
-		.Insert(new PrevInteraction())
-		.Insert(new FluxInteractionStopwatch())
 		.Id;
 
 	commands.Entity(sliderTrackId).AddChild(sliderFillId);
 	commands.Entity(sliderTrackId).AddChild(sliderThumbId);
-	commands.Entity(sliderTrackId).Insert(new Slider(0f, 100f, 50f, SliderDirection.Horizontal)
-	{
-		ThumbEntity = sliderThumbId,
-		TrackEntity = sliderTrackId,
-		FillEntity = sliderFillId
-	});
+	commands.Entity(sliderTrackId).Insert(new Slider(0f, 100f, 50f, SliderDirection.Horizontal));
 
 	commands.Entity(sliderContainerId).AddChild(sliderTrackId);
 
@@ -815,10 +801,7 @@ static void CreateWidgetShowcase(Commands commands)
 			.Insert(BackgroundColor.FromRgba(158, 158, 158, 255)) // Gray when off
 			.Insert(new BorderRadius(15f))
 			.Insert(new Interactive(focusable: false))
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
-			.Id;
+						.Id;
 
 		var toggleThumbId = commands.Spawn()
 			.Insert(new UiNode
@@ -831,14 +814,11 @@ static void CreateWidgetShowcase(Commands commands)
 			})
 			.Insert(BackgroundColor.FromRgba(255, 255, 255, 255))
 			.Insert(new BorderRadius(12f))
+			.Insert(new ToggleThumb())  // Marker for TogglePlugin to find
 			.Id;
 
 		commands.Entity(toggleTrackId).AddChild(toggleThumbId);
-		commands.Entity(toggleTrackId).Insert(new Toggle(i == 0)
-		{
-			ThumbEntity = toggleThumbId,
-			TrackEntity = toggleTrackId
-		});
+		commands.Entity(toggleTrackId).Insert(new Toggle(i == 0));
 
 		commands.Entity(toggleContainerId).AddChild(toggleTrackId);
 	}
@@ -868,6 +848,7 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(BackgroundColor.FromRgba(76, 175, 80, 255)) // Green
 		.Insert(new BorderRadius(5f))
+		.Insert(new ProgressBarFill())  // Marker for ProgressBarPlugin to find
 		.Id;
 
 	var progressLabelId = commands.Spawn()
@@ -881,16 +862,12 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(new UiText("75%"))
 		.Insert(new TextStyle(fontSize: 14f, color: new Vector4(1f, 1f, 1f, 1f), horizontalAlign: TextAlign.Center, verticalAlign: TextVerticalAlign.Middle))
+		.Insert(new ProgressBarLabel())  // Marker for ProgressBarPlugin to find
 		.Id;
 
 	commands.Entity(progressTrackId).AddChild(progressFillId);
 	commands.Entity(progressTrackId).AddChild(progressLabelId);
-	commands.Entity(progressTrackId).Insert(new ProgressBar(0.75f, ProgressBarDirection.LeftToRight, showPercentage: true)
-	{
-		FillEntity = progressFillId,
-		TrackEntity = progressTrackId,
-		LabelEntity = progressLabelId
-	});
+	commands.Entity(progressTrackId).Insert(new ProgressBar(0.75f, ProgressBarDirection.LeftToRight, showPercentage: true));
 
 	commands.Entity(progressContainerId).AddChild(progressTrackId);
 
@@ -925,11 +902,9 @@ static void CreateWidgetShowcase(Commands commands)
 			.Insert(BorderColor.FromRgba(100, 100, 120, 255))
 			.Insert(new BorderRadius(10f))
 			.Insert(new Interactive(focusable: false))
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
-			.Id;
+						.Id;
 
+		// Create radio indicator with RadioIndicator marker component
 		var radioIndicatorId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -939,13 +914,11 @@ static void CreateWidgetShowcase(Commands commands)
 			})
 			.Insert(BackgroundColor.FromRgba(100, 150, 255, 255))
 			.Insert(new BorderRadius(6f))
+			.Insert(new RadioIndicator())  // Marker for RadioButtonPlugin to find
 			.Id;
 
 		commands.Entity(radioButtonId).AddChild(radioIndicatorId);
-		commands.Entity(radioButtonId).Insert(new RadioButton(i, i == 0)
-		{
-			IndicatorEntity = radioIndicatorId
-		});
+		commands.Entity(radioButtonId).Insert(new RadioButton(i, i == 0));
 		commands.Entity(radioButtonId).Insert(new RadioGroup(1));
 
 		var radioLabel = commands.Spawn()
@@ -983,9 +956,6 @@ static void CreateWidgetShowcase(Commands commands)
 		.Insert(BorderColor.FromRgba(80, 80, 100, 255))
 		.Insert(new BorderRadius(5f))
 		.Insert(new Interactive(focusable: true))
-		.Insert(new FluxInteraction())
-		.Insert(new PrevInteraction())
-		.Insert(new FluxInteractionStopwatch())
 		.Id;
 
 	var inputTextId = commands.Spawn()
@@ -996,6 +966,7 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(new UiText("Type here..."))
 		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(0.7f, 0.7f, 0.7f, 1f)))
+		.Insert(new TextInputText())  // Marker for TextInputPlugin to find
 		.Id;
 
 	var inputPlaceholderId = commands.Spawn()
@@ -1007,6 +978,7 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(new UiText("Enter your name..."))
 		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(0.5f, 0.5f, 0.5f, 1f)))
+		.Insert(new TextInputPlaceholder())  // Marker for TextInputPlugin to find
 		.Id;
 
 	var inputCursorId = commands.Spawn()
@@ -1018,17 +990,13 @@ static void CreateWidgetShowcase(Commands commands)
 			Display = Flexbox.Display.None,
 		})
 		.Insert(BackgroundColor.FromRgba(255, 255, 255, 255))
+		.Insert(new TextInputCursor())  // Marker for TextInputPlugin to find
 		.Id;
 
 	commands.Entity(textInputId).AddChild(inputPlaceholderId);
 	commands.Entity(textInputId).AddChild(inputTextId);
 	commands.Entity(textInputId).AddChild(inputCursorId);
-	commands.Entity(textInputId).Insert(new TextInput("Enter your name...")
-	{
-		TextEntity = inputTextId,
-		PlaceholderEntity = inputPlaceholderId,
-		CursorEntity = inputCursorId
-	});
+	commands.Entity(textInputId).Insert(new TextInput("Enter your name..."));
 
 	commands.Entity(inputContainerId).AddChild(textInputId);
 
@@ -1058,9 +1026,6 @@ static void CreateWidgetShowcase(Commands commands)
 		.Insert(new BorderRadius(5f))
 		.Insert(new Interactive(focusable: false))
 		.Insert(new InteractionState())
-		.Insert(new FluxInteraction())
-		.Insert(new PrevInteraction())
-		.Insert(new FluxInteractionStopwatch())
 		.Insert(new DropdownOptions(dropdownOptions))
 		.Id;
 
@@ -1073,6 +1038,7 @@ static void CreateWidgetShowcase(Commands commands)
 		})
 		.Insert(new UiText("---"))
 		.Insert(new TextStyle(fontSize: 16f, color: new Vector4(1f, 1f, 1f, 1f)))
+		.Insert(new DropdownLabel())  // Marker for DropdownPlugin to find
 		.Id;
 
 	// Create dropdown panel as a floating panel (hidden by default)
@@ -1203,10 +1169,7 @@ static void CreateWidgetShowcase(Commands commands)
 			.Insert(new TextStyle(fontSize: 14f, color: new Vector4(1f, 1f, 1f, 1f)))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
-			.Insert(new DropdownOption(dropdownId, i))
+						.Insert(new DropdownOption(dropdownId, i))
 			.Id;
 
 		commands.Entity(dropdownContentId).AddChild(optionId);
@@ -1229,11 +1192,8 @@ static void CreateWidgetShowcase(Commands commands)
 	// Build hierarchy (panel is NOT a child - it's a floating panel)
 	commands.Entity(dropdownId).AddChild(dropdownLabelId);
 
-	// Add Dropdown component
-	commands.Entity(dropdownId).Insert(new Dropdown(dropdownPanelId, dropdownLabelId)
-	{
-		Value = null
-	});
+	// Add Dropdown component (child entities found via marker components)
+	commands.Entity(dropdownId).Insert(new Dropdown(null));
 
 	commands.Entity(dropdownContainerId).AddChild(dropdownId);
 
@@ -1870,7 +1830,7 @@ struct Rotation
 }
 
 /// <summary>
-/// Component that stores the original base color of a button for FluxInteraction color changes.
+/// Component that stores the original base color of a button for FlexInteraction color changes.
 /// Phase 1 demo component.
 /// </summary>
 struct ButtonBaseColor
@@ -1886,7 +1846,7 @@ struct ButtonColorTransition
 {
 	public Vector4 StartColor;
 	public Vector4 TargetColor;
-	public FluxInteractionState LastState;
+	public Interaction LastState;
 }
 
 /// <summary>
