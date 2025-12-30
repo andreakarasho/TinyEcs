@@ -47,9 +47,6 @@ public static class ThemedWidgetBuilders
 			.Insert(new Button())
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new UiText(label))
 			.Insert(new TextStyle(fontSize: theme.ButtonFontSize, color: theme.Text))
 			.Id;
@@ -84,9 +81,6 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.SliderTrackSize / 2f))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new Slider
 			{
 				Value = initialValue,
@@ -97,6 +91,7 @@ public static class ThemedWidgetBuilders
 			.Id;
 
 		// Create slider fill (active portion)
+		// Uses SliderFill marker component so SliderPlugin can find it
 		var fillId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -108,6 +103,7 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(theme.SliderFillColor.ToBackgroundColor())
 			.Insert(new BorderRadius(theme.SliderTrackSize / 2f))
+			.Insert(new SliderFill())  // Marker for SliderPlugin to find
 			.Id;
 
 		// Create slider thumb (draggable handle)
@@ -125,26 +121,14 @@ public static class ThemedWidgetBuilders
 			.Insert(new SliderThumb())
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Id;
 
 		// Add children to track
 		commands.Entity(trackId).AddChild(fillId);
 		commands.Entity(trackId).AddChild(thumbId);
 
-		// Update slider component with child entity IDs
-		commands.Entity(trackId).Insert(new Slider
-		{
-			Value = initialValue,
-			Min = min,
-			Max = max,
-			Direction = direction,
-			TrackEntity = trackId,
-			FillEntity = fillId,
-			ThumbEntity = thumbId,
-		});
+		// Insert slider component (child entities found via marker components)
+		commands.Entity(trackId).Insert(new Slider(min, max, initialValue, direction));
 
 		return trackId;
 	}
@@ -173,13 +157,11 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.BorderRadiusSmall))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new Checkbox(initiallyChecked))
 			.Id;
 
 		// Create checkmark (initially hidden if not checked)
+		// Uses Checkmark marker component so CheckboxPlugin can find it
 		var checkmarkId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -189,16 +171,11 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(theme.Primary.ToBackgroundColor())
 			.Insert(new BorderRadius(2f))
+			.Insert(new Checkmark())  // Marker for CheckboxPlugin to find
 			.Id;
 
-		// Add checkmark as child
+		// Add checkmark as child of checkbox
 		commands.Entity(checkboxId).AddChild(checkmarkId);
-
-		// Update checkbox with checkmark entity
-		commands.Entity(checkboxId).Insert(new Checkbox(initiallyChecked)
-		{
-			CheckmarkEntity = checkmarkId
-		});
 
 		return checkboxId;
 	}
@@ -227,13 +204,11 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.ToggleHeight / 2f))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new Toggle(initialValue))
 			.Id;
 
 		// Create toggle thumb (draggable circle)
+		// Uses ToggleThumb marker component so TogglePlugin can find it
 		var thumbId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -245,17 +220,11 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(theme.Surface.ToBackgroundColor())
 			.Insert(new BorderRadius(theme.ToggleThumbSize / 2f))
+			.Insert(new ToggleThumb())  // Marker for TogglePlugin to find
 			.Id;
 
 		// Add thumb as child
 		commands.Entity(trackId).AddChild(thumbId);
-
-		// Update toggle with child entity IDs
-		commands.Entity(trackId).Insert(new Toggle(initialValue)
-		{
-			ThumbEntity = thumbId,
-			TrackEntity = trackId,
-		});
 
 		return trackId;
 	}
@@ -284,14 +253,12 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.RadioSize / 2f))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new RadioButton(value, initiallySelected))
 			.Insert(new RadioGroup(groupId))
 			.Id;
 
 		// Create radio indicator (inner circle, initially hidden if not selected)
+		// Uses RadioIndicator marker component so RadioButtonPlugin can find it
 		var indicatorId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -301,16 +268,11 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(theme.Primary.ToBackgroundColor())
 			.Insert(new BorderRadius(theme.RadioIndicatorSize / 2f))
+			.Insert(new RadioIndicator())  // Marker for RadioButtonPlugin to find
 			.Id;
 
-		// Add indicator as child
+		// Add indicator as child of radio button
 		commands.Entity(radioId).AddChild(indicatorId);
-
-		// Update radio button with indicator entity
-		commands.Entity(radioId).Insert(new RadioButton(value, initiallySelected)
-		{
-			IndicatorEntity = indicatorId
-		});
 
 		return radioId;
 	}
@@ -342,13 +304,11 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.BorderRadius))
 			.Insert(new Interactive(focusable: true))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new TextInput(placeholder, maxLength))
 			.Id;
 
 		// Create text display element
+		// Uses TextInputText marker component so TextInputPlugin can find it
 		var textId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -357,9 +317,11 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(new UiText(""))
 			.Insert(new TextStyle(fontSize: theme.TextInputFontSize, color: theme.Text))
+			.Insert(new TextInputText())  // Marker for TextInputPlugin to find
 			.Id;
 
 		// Create placeholder text element
+		// Uses TextInputPlaceholder marker component so TextInputPlugin can find it
 		var placeholderId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -370,9 +332,11 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(new UiText(placeholder))
 			.Insert(new TextStyle(fontSize: theme.TextInputFontSize, color: theme.PlaceholderColor))
+			.Insert(new TextInputPlaceholder())  // Marker for TextInputPlugin to find
 			.Id;
 
 		// Create cursor element
+		// Uses TextInputCursor marker component so TextInputPlugin can find it
 		var cursorId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -381,20 +345,13 @@ public static class ThemedWidgetBuilders
 				Display = Display.None, // Hidden until focused
 			})
 			.Insert(theme.Text.ToBackgroundColor())
+			.Insert(new TextInputCursor())  // Marker for TextInputPlugin to find
 			.Id;
 
 		// Add children to input container
 		commands.Entity(inputId).AddChild(textId);
 		commands.Entity(inputId).AddChild(placeholderId);
 		commands.Entity(inputId).AddChild(cursorId);
-
-		// Update text input with child entity IDs
-		commands.Entity(inputId).Insert(new TextInput(placeholder, maxLength)
-		{
-			TextEntity = textId,
-			PlaceholderEntity = placeholderId,
-			CursorEntity = cursorId,
-		});
 
 		return inputId;
 	}
@@ -468,13 +425,11 @@ public static class ThemedWidgetBuilders
 			.Insert(new BorderRadius(theme.BorderRadius))
 			.Insert(new Interactive(focusable: false))
 			.Insert(new InteractionState())
-			.Insert(new FluxInteraction())
-			.Insert(new PrevInteraction())
-			.Insert(new FluxInteractionStopwatch())
 			.Insert(new DropdownOptions(options))
 			.Id;
 
 		// Create label for selected value
+		// Uses DropdownLabel marker component so DropdownPlugin can find it
 		var labelId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -485,17 +440,20 @@ public static class ThemedWidgetBuilders
 			})
 			.Insert(new UiText(selectedIndex.HasValue && selectedIndex.Value < options.Count ? options[selectedIndex.Value] : "---"))
 			.Insert(new TextStyle(fontSize: theme.ButtonFontSize, color: theme.Text))
+			.Insert(new DropdownLabel())  // Marker for DropdownPlugin to find
 			.Id;
 
 		// Create dropdown panel as floating panel (hidden by default)
-		// The panel is a ScrollView container with viewport and content
+		// Uses proper flex layout: Row with [Viewport (flex-grow), Scrollbar (fixed width)]
+		// This ensures content width = panel width - scrollbar width
+		var scrollbarWidth = 8f;
 		var panelId = commands.Spawn()
 			.Insert(new UiNode
 			{
 				Width = FlexValue.Points(150f),
 				Height = FlexValue.Points(200f),
 				Display = Display.None, // Hidden initially
-				FlexDirection = FlexDirection.Column,
+				FlexDirection = FlexDirection.Row, // Row layout: viewport | scrollbar
 			})
 			.Insert(theme.Surface.ToBackgroundColor())
 			.Insert(theme.Border.ToBorderColor())
@@ -511,12 +469,14 @@ public static class ThemedWidgetBuilders
 			.Id;
 
 		// Create viewport (clips content and handles scrolling)
+		// Uses flex-grow to take remaining horizontal space, Height = 100% for cross-axis
 		var viewportId = commands.Spawn()
 			.Insert(new UiNode
 			{
-				Width = FlexValue.Percent(100f),
-				Height = FlexValue.Percent(100f),
-				PositionType = PositionType.Absolute,
+				Width = FlexValue.Auto(),
+				Height = FlexValue.Percent(100f), // Fill parent height (cross-axis in Row)
+				FlexGrow = 1f, // Take remaining horizontal space after scrollbar
+				FlexShrink = 1f,
 				Overflow = Overflow.Scroll, // Enable clipping
 				AlignItems = Align.FlexStart,
 				JustifyContent = Justify.FlexStart,
@@ -531,12 +491,14 @@ public static class ThemedWidgetBuilders
 			.Id;
 
 		// Create content container (holds options)
-		var scrollbarWidth = 8f;
+		// No padding adjustment needed - scrollbar is part of flex layout
 		var contentId = commands.Spawn()
 			.Insert(new UiNode
 			{
-				Width = FlexValue.Percent(100f),
+				Width = FlexValue.Auto(),
 				Height = FlexValue.Auto(),
+				MinWidth = FlexValue.Percent(100f),
+				MinHeight = FlexValue.Percent(100f),
 				Display = Display.Flex,
 				FlexDirection = FlexDirection.Column,
 				AlignSelf = Align.FlexStart,
@@ -548,30 +510,22 @@ public static class ThemedWidgetBuilders
 			.Insert(new ScrollViewContent(panelId))
 			.Id;
 
-		// Create scrollbar container (absolute positioned overlay)
-		var scrollbarContainerId = commands.Spawn()
-			.Insert(new UiNode
-			{
-				Width = FlexValue.Percent(100f),
-				Height = FlexValue.Percent(100f),
-				PositionType = PositionType.Absolute,
-				Display = Display.Flex,
-				JustifyContent = Justify.FlexEnd
-			})
-			.Id;
-
-		// Create vertical scrollbar (scrollbarWidth already defined above)
+		// Create vertical scrollbar (fixed width, part of flex layout - not overlay)
+		// Height = 100% to fill parent height in Row layout
 		var verticalBarId = commands.Spawn()
 			.Insert(new UiNode
 			{
 				Width = FlexValue.Points(scrollbarWidth),
-				Height = FlexValue.Percent(100f),
-				PositionType = PositionType.Absolute,
-				Right = FlexValue.Points(0f),
+				Height = FlexValue.Percent(100f), // Fill parent height
+				FlexGrow = 0f,
+				FlexShrink = 0f,
 				Display = Display.Flex,
-				FlexDirection = FlexDirection.Column
+				FlexDirection = FlexDirection.Column,
+				PositionType = PositionType.Relative // Part of flex layout, not absolute
 			})
 			.Insert(new BackgroundColor(new Vector4(theme.Border.X, theme.Border.Y, theme.Border.Z, 0.5f)))
+			.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded track
+			.Insert(new Interactive()) // Track is interactive for page scroll on click
 			.Id;
 
 		// Create scrollbar handle/thumb (draggable)
@@ -580,9 +534,10 @@ public static class ThemedWidgetBuilders
 			{
 				Width = FlexValue.Percent(100f),
 				Height = FlexValue.Points(40f),
-				PositionType = PositionType.Absolute
+				PositionType = PositionType.Absolute // Thumb is absolute within the rail
 			})
 			.Insert(new BackgroundColor(new Vector4(theme.Text.X * 0.7f, theme.Text.Y * 0.7f, theme.Text.Z * 0.7f, 0.8f)))
+			.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded thumb
 			.Insert(new ScrollbarThumb())
 			.Insert(new ScrollBarHandle(ControlOrientation.Vertical, panelId))
 			.Insert(new Draggable())
@@ -594,7 +549,6 @@ public static class ThemedWidgetBuilders
 
 		// Set up scrollbar hierarchy
 		commands.Entity(verticalBarId).AddChild(verticalHandleId);
-		commands.Entity(scrollbarContainerId).AddChild(verticalBarId);
 
 		// Create options
 		for (int i = 0; i < options.Count; i++)
@@ -612,9 +566,6 @@ public static class ThemedWidgetBuilders
 				.Insert(new TextStyle(fontSize: theme.ButtonFontSize, color: theme.Text))
 				.Insert(new Interactive(focusable: false))
 				.Insert(new InteractionState())
-				.Insert(new FluxInteraction())
-				.Insert(new PrevInteraction())
-				.Insert(new FluxInteractionStopwatch())
 				.Insert(new DropdownOption(dropdownId, i))
 				.Id;
 
@@ -631,19 +582,16 @@ public static class ThemedWidgetBuilders
 			HorizontalScrollBarHandle = null
 		});
 
-		// Set up hierarchy: panel -> [viewport -> content -> options, scrollbarContainer -> scrollbar -> handle]
+		// Set up hierarchy: panel (Row) -> [viewport (flex-grow) -> content -> options, scrollbar (fixed)]
 		commands.Entity(viewportId).AddChild(contentId);
 		commands.Entity(panelId).AddChild(viewportId);
-		commands.Entity(panelId).AddChild(scrollbarContainerId);
+		commands.Entity(panelId).AddChild(verticalBarId);
 
 		// Set up hierarchy (panel is NOT a child - it's a floating panel)
 		commands.Entity(dropdownId).AddChild(labelId);
 
-		// Add Dropdown component to button
-		commands.Entity(dropdownId).Insert(new Dropdown(panelId, labelId)
-		{
-			Value = selectedIndex
-		});
+		// Add Dropdown component to button (child entities found via marker components)
+		commands.Entity(dropdownId).Insert(new Dropdown(selectedIndex));
 
 		return dropdownId;
 	}

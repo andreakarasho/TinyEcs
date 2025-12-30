@@ -97,7 +97,7 @@ public class UiThemedWidgetTests
 
 		// Verify button was created
 		Assert.True(world.Has<Button>(buttonId));
-		Assert.True(world.Has<FluxInteraction>(buttonId));
+		Assert.True(world.Has<InteractionState>(buttonId));
 		Assert.True(world.Has<Interactive>(buttonId));
 
 		// Run layout calculation
@@ -184,7 +184,6 @@ public class UiThemedWidgetTests
 		ulong checkboxId = 0;
 		bool? checkedState = null;
 		bool interactionStateChanged = false;
-		bool fluxInteractionChanged = false;
 
 		// Create checkbox (initially unchecked)
 		app.AddSystem((Commands commands, Res<UiTheme> theme) =>
@@ -214,59 +213,27 @@ public class UiThemedWidgetTests
 			}
 		});
 
-		// Debug observer for InteractionState changes AFTER flux update
-		app.AddSystem((Query<Data<PrevInteraction, InteractionState, FluxInteraction>> entities) =>
+		// Debug observer for InteractionState changes
+		app.AddSystem((Query<Data<InteractionState>, Filter<Changed<InteractionState>>> changed) =>
 		{
-			foreach (var (entityId, prev, state, flux) in entities)
+			foreach (var (entityId, state) in changed)
 			{
 				if (entityId.Ref == checkboxId)
 				{
-					Console.WriteLine($"[TEST-AFTER-FLUX] Prev={prev.Ref.State}, Curr={state.Ref.State}, Flux={flux.Ref.State}");
+					interactionStateChanged = true;
+					Console.WriteLine($"[TEST] InteractionState changed to: {state.Ref.State}");
 				}
 			}
 		})
 		.InStage(Stage.PreUpdate)
-		.Label("test:debug-after-flux")
-		.After("flux:update-interaction")
-		.Build();
-
-		// Debug observer AFTER prev update
-		app.AddSystem((Query<Data<PrevInteraction, InteractionState, FluxInteraction>> entities) =>
-		{
-			foreach (var (entityId, prev, state, flux) in entities)
-			{
-				if (entityId.Ref == checkboxId)
-				{
-					Console.WriteLine($"[TEST-AFTER-PREV] Prev={prev.Ref.State}, Curr={state.Ref.State}, Flux={flux.Ref.State}");
-				}
-			}
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("test:debug-after-prev")
-		.After("flux:update-prev")
-		.Build();
-
-		// Debug observer for FluxInteraction changes
-		app.AddSystem((Query<Data<FluxInteraction>, Filter<Changed<FluxInteraction>>> changed) =>
-		{
-			foreach (var (entityId, flux) in changed)
-			{
-				if (entityId.Ref == checkboxId)
-				{
-					fluxInteractionChanged = true;
-					Console.WriteLine($"[TEST] FluxInteraction changed to: {flux.Ref.State}");
-				}
-			}
-		})
-		.InStage(Stage.PreUpdate)
-		.Label("test:debug-flux")
-		.After("flux:update-interaction")
+		.Label("test:debug-interaction")
+		.After("interaction:add-to-interactive")
 		.Build();
 
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -282,10 +249,10 @@ public class UiThemedWidgetTests
 		var center = GetWidgetCenter(world, checkboxId);
 		SimulatePointerClick(app, center);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify checkbox toggled to checked
@@ -296,10 +263,10 @@ public class UiThemedWidgetTests
 		checkedState = null;
 		SimulatePointerClick(app, center);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify checkbox toggled back to unchecked
@@ -348,7 +315,7 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -364,10 +331,10 @@ public class UiThemedWidgetTests
 		var center = GetWidgetCenter(world, toggleId);
 		SimulatePointerClick(app, center);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify toggle switched on
@@ -378,10 +345,10 @@ public class UiThemedWidgetTests
 		toggleState = null;
 		SimulatePointerClick(app, center);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify toggle switched off
@@ -452,7 +419,7 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -468,10 +435,10 @@ public class UiThemedWidgetTests
 		var center2 = GetWidgetCenter(world, radio2Id);
 		SimulatePointerClick(app, center2);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify radio2 was selected
@@ -492,10 +459,10 @@ public class UiThemedWidgetTests
 		var center3 = GetWidgetCenter(world, radio3Id);
 		SimulatePointerClick(app, center3);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Verify radio3 was selected
@@ -553,7 +520,7 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -606,7 +573,7 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -625,10 +592,10 @@ public class UiThemedWidgetTests
 		var center = GetWidgetCenter(world, dropdownId);
 		SimulatePointerClick(app, center);
 
-		// Run update to process the pointer events and trigger FluxInteraction transition
+		// Run update to process the pointer events and trigger InteractionState transition
 		app.Update();
 
-		// Run one more update to process deferred commands and let Changed<FluxInteraction> systems run
+		// Run one more update to process deferred commands and let Changed<InteractionState> systems run
 		app.Update();
 
 		// Run additional updates to ensure all systems process (dropdowns need more cycles)
@@ -683,7 +650,7 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Set up delta time for flux interaction
+		// Set up delta time for interaction
 		var deltaTime = world.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
@@ -760,23 +727,31 @@ public class UiThemedWidgetTests
 		app.RunStartup();
 		var world = app.GetWorld();
 
-		// Get the label entity
-		var dropdown = world.Get<Dropdown>(dropdownId);
-		var labelId = dropdown.ButtonLabel;
-
 		// Run update to trigger label update system
 		app.Update();
 
+		// Find the label entity by querying for DropdownLabel marker with Parent matching dropdown
+		ulong labelId = 0;
+		var labelQuery = app.GetWorld().Query<Data<Parent, UiText>, Filter<With<DropdownLabel>>>();
+		foreach (var (entityId, parent, text) in labelQuery)
+		{
+			if (parent.Ref.Id == dropdownId)
+			{
+				labelId = entityId.Ref;
+				break;
+			}
+		}
+		Assert.NotEqual(0ul, labelId);
+
 		// Verify label shows first option
-		var labelText = world.Get<UiText>(labelId);
+		var labelText = app.GetWorld().Get<UiText>(labelId);
 		Assert.Equal("First", labelText.Value);
 
 		// Change selection via commands
 		app.AddSystem((Commands commands) =>
 		{
-			commands.Entity(dropdownId).Insert(new Dropdown(dropdown.PanelEntity, dropdown.ButtonLabel)
+			commands.Entity(dropdownId).Insert(new Dropdown(2)
 			{
-				Value = 2,
 				IsOpen = false
 			});
 		})
@@ -787,7 +762,7 @@ public class UiThemedWidgetTests
 		app.Update();
 
 		// Verify label updated to third option
-		labelText = world.Get<UiText>(labelId);
+		labelText = app.GetWorld().Get<UiText>(labelId);
 		Assert.Equal("Third", labelText.Value);
 	}
 
@@ -831,12 +806,6 @@ public class UiThemedWidgetTests
 				$"{widgetName} should have Interactive component");
 			Assert.True(world.Has<InteractionState>(widgetId),
 				$"{widgetName} should have InteractionState component");
-			Assert.True(world.Has<FluxInteraction>(widgetId),
-				$"{widgetName} should have FluxInteraction component");
-			Assert.True(world.Has<PrevInteraction>(widgetId),
-				$"{widgetName} should have PrevInteraction component");
-			Assert.True(world.Has<FluxInteractionStopwatch>(widgetId),
-				$"{widgetName} should have FluxInteractionStopwatch component");
 		}
 	}
 }

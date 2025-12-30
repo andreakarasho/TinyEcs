@@ -112,6 +112,10 @@ public struct ScrollbarPlugin : IPlugin
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<Parent>, Filter<With<ScrollbarThumb>>>, Query<Data<Scrollbar>>, Commands>(ScrollbarOnPointerDown);
 		app.AddObserver<On<UiPointerTrigger>, Query<Data<ScrollbarDragState>>, Commands>(ScrollbarOnPointerUp);
 
+		// Track click observer - clicking on the scrollbar track (not thumb) scrolls by a page
+		// This matches Bevy's scrollbar behavior
+		app.AddObserver<On<UiPointerTrigger>, Query<Data<Scrollbar, ComputedLayout>>, Query<Data<Scrollable, ComputedLayout>>, Query<Data<ComputedLayout>, Filter<With<ScrollbarThumb>>>, Commands>(ScrollbarOnTrackClick);
+
 		// System to handle drag updates every frame (runs even when pointer is outside thumb bounds)
 		app.AddSystem((
 			Res<PointerInputState> pointerInput,
@@ -420,5 +424,110 @@ public struct ScrollbarPlugin : IPlugin
 				}
 			}
 		}
+	}
+
+	/// <summary>
+	/// Handles clicks on the scrollbar track (not the thumb) to scroll by a page.
+	/// Clicking above/left of the thumb scrolls up/left, below/right scrolls down/right.
+	/// This matches Bevy's scrollbar behavior.
+	/// </summary>
+	private static void ScrollbarOnTrackClick(
+		On<UiPointerTrigger> trigger,
+		Query<Data<Scrollbar, ComputedLayout>> scrollbars,
+		Query<Data<Scrollable, ComputedLayout>> scrollables,
+		Query<Data<ComputedLayout>, Filter<With<ScrollbarThumb>>> thumbLayouts,
+		Commands commands)
+	{
+		var evt = trigger.Event.Event;
+		if (evt.Type != UiPointerEventType.PointerDown)
+			return;
+
+		// Check if this is a scrollbar entity (not a thumb)
+		if (!scrollbars.Contains(trigger.EntityId))
+			return;
+
+		var (_, scrollbar, barLayout) = scrollbars.Get(trigger.EntityId);
+		var targetId = scrollbar.Ref.Target;
+
+		// Get target scrollable
+		if (!scrollables.Contains(targetId))
+			return;
+
+		var (_, scrollable, targetLayout) = scrollables.Get(targetId);
+		ref var scroll = ref scrollable.Ref;
+		ref var containerLayout = ref targetLayout.Ref;
+
+		// Find the thumb to get its position (we need to know where it is to determine direction)
+		float thumbPos = 0f;
+		float thumbSize = 0f;
+		foreach (var (thumbId, thumbLayout) in thumbLayouts)
+		{
+			// Check if this thumb's parent is our scrollbar
+			// We use the computed layout to get thumb position
+			ref var tLayout = ref thumbLayout.Ref;
+			thumbPos = scrollbar.Ref.Orientation == ControlOrientation.Vertical ? tLayout.Y : tLayout.X;
+			thumbSize = scrollbar.Ref.Orientation == ControlOrientation.Vertical ? tLayout.Height : tLayout.Width;
+			break; // For now, take first thumb found (assumes one scrollbar per click)
+		}
+
+		// Determine click position relative to scrollbar
+		float clickPos = scrollbar.Ref.Orientation == ControlOrientation.Vertical
+			? evt.Position.Y - barLayout.Ref.Y
+			: evt.Position.X - barLayout.Ref.X;
+
+		// Calculate page scroll amount (one viewport's worth)
+		float pageSize;
+		float overflow;
+		float currentOffset;
+
+		if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)
+		{
+			pageSize = containerLayout.Height;
+			overflow = scroll.ContentSize.Y - containerLayout.Height;
+			currentOffset = scroll.ScrollOffset.Y;
+		}
+		else
+		{
+			pageSize = containerLayout.Width;
+			overflow = scroll.ContentSize.X - containerLayout.Width;
+			currentOffset = scroll.ScrollOffset.X;
+		}
+
+		if (overflow <= 0f)
+			return;
+
+		// Determine scroll direction based on click position relative to thumb
+		// thumbPos is relative to the scrollbar, clickPos is also relative to scrollbar
+		float thumbRelativePos = thumbPos - (scrollbar.Ref.Orientation == ControlOrientation.Vertical ? barLayout.Ref.Y : barLayout.Ref.X);
+
+		float newOffset;
+		if (clickPos < thumbRelativePos)
+		{
+			// Clicked above/left of thumb - scroll up/left by a page
+			newOffset = Math.Max(0f, currentOffset - pageSize);
+		}
+		else if (clickPos > thumbRelativePos + thumbSize)
+		{
+			// Clicked below/right of thumb - scroll down/right by a page
+			newOffset = Math.Min(overflow, currentOffset + pageSize);
+		}
+		else
+		{
+			// Clicked on thumb - don't do page scroll (let thumb drag handle it)
+			return;
+		}
+
+		// Update scroll offset
+		if (scrollbar.Ref.Orientation == ControlOrientation.Vertical)
+		{
+			scroll.ScrollOffset.Y = newOffset;
+		}
+		else
+		{
+			scroll.ScrollOffset.X = newOffset;
+		}
+
+		// Re-insert to trigger change detection
+		commands.Entity(targetId).Insert(scroll);
 	}
 }

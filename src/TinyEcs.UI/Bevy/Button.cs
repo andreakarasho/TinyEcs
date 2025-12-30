@@ -64,8 +64,10 @@ public struct ButtonPlugin : IPlugin
 	public readonly void Build(App app)
 	{
 		// Register all button event observers
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<Button>>, Query<Empty, With<Pressed>>, Query<Empty, With<InteractionDisabled>>, Commands>(ButtonOnPointerDown);
-		app.AddObserver<On<UiPointerTrigger>, Query<Data<Button>>, Query<Empty, With<Pressed>>, Query<Empty, With<InteractionDisabled>>, Commands>(ButtonOnPointerUp);
+		// Note: Button is an empty marker struct, so we use Filter<With<Button>> instead of Data<Button>
+		// to avoid memory corruption in archetype columnar storage (see CLAUDE.md)
+		app.AddObserver<On<UiPointerTrigger>, Query<Empty, Filter<With<Button>>>, Query<Empty, Filter<With<Pressed>>>, Query<Empty, Filter<With<InteractionDisabled>>>, Commands>(ButtonOnPointerDown);
+		app.AddObserver<On<UiPointerTrigger>, Query<Empty, Filter<With<Button>>>, Query<Empty, Filter<With<Pressed>>>, Query<Empty, Filter<With<InteractionDisabled>>>, Commands>(ButtonOnPointerUp);
 	}
 
 	/// <summary>
@@ -74,9 +76,9 @@ public struct ButtonPlugin : IPlugin
 	/// </summary>
 	private static void ButtonOnPointerDown(
 		On<UiPointerTrigger> trigger,
-		Query<Data<Button>> buttons,
-		Query<Empty, With<Pressed>> pressed,
-		Query<Empty, With<InteractionDisabled>> disabled,
+		Query<Empty, Filter<With<Button>>> buttons,
+		Query<Empty, Filter<With<Pressed>>> pressed,
+		Query<Empty, Filter<With<InteractionDisabled>>> disabled,
 		Commands commands)
 	{
 		var evt = trigger.Event.Event;
@@ -106,9 +108,9 @@ public struct ButtonPlugin : IPlugin
 	/// </summary>
 	private static void ButtonOnPointerUp(
 		On<UiPointerTrigger> trigger,
-		Query<Data<Button>> buttons,
-		Query<Empty, With<Pressed>> pressed,
-		Query<Empty, With<InteractionDisabled>> disabled,
+		Query<Empty, Filter<With<Button>>> buttons,
+		Query<Empty, Filter<With<Pressed>>> pressed,
+		Query<Empty, Filter<With<InteractionDisabled>>> disabled,
 		Commands commands)
 	{
 		var evt = trigger.Event.Event;

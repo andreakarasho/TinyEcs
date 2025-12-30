@@ -4,11 +4,10 @@ namespace TinyEcs.UI.Bevy;
 
 /// <summary>
 /// Plugin that updates InteractionState based on UiPointerEvent triggers.
-/// This bridges the pointer event system with the FluxInteraction state machine.
+/// This bridges the pointer event system with widget interaction handling.
 ///
-/// InteractionState is the low-level state (None, Hovered, Pressed) that directly
-/// reflects pointer events. FluxInteractionPlugin then converts these into higher-level
-/// interaction states (PointerEnter, Released, etc.).
+/// InteractionState tracks current state (None, Hovered, Pressed) directly.
+/// Widgets react to changes via Changed&lt;InteractionState&gt;.
 /// </summary>
 public struct InteractionStatePlugin : IPlugin
 {
@@ -16,50 +15,44 @@ public struct InteractionStatePlugin : IPlugin
 	{
 		// Add observer to update InteractionState based on pointer events
 		// This runs whenever a UiPointerTrigger is emitted on an entity
-		// Uses Commands and Query to properly trigger change detection
-		app.AddObserver<On<UiPointerTrigger>, Commands, Query<Data<InteractionState>, Optional<InteractionState>>>(
+		app.AddObserver<On<UiPointerTrigger>, Commands, Query<Data<InteractionState>>>(
 			(trigger, commands, interactionQuery) =>
 		{
 			var entityId = trigger.EntityId;
 			var pointerEvent = trigger.Event.Event;
 
-			// Get or create InteractionState using Optional
-			InteractionState state;
-			if (interactionQuery.Contains(entityId))
-			{
-				var (_, maybeState) = interactionQuery.Get(entityId);
-				state = maybeState.IsValid() ? maybeState.Ref : new InteractionState();
-			}
-			else
-			{
-				state = new InteractionState();
-			}
+			// Only process entities that already have InteractionState
+			// (InteractionPlugin adds InteractionState to Interactive entities)
+			if (!interactionQuery.Contains(entityId))
+				return;
+
+			var (_, existingState) = interactionQuery.Get(entityId);
+			var state = existingState.Ref;
 
 			// Update state based on pointer event type
 			var newState = pointerEvent.Type switch
 			{
 				UiPointerEventType.PointerEnter =>
 					// Only transition to Hovered if not already pressed
-					state.State != InteractionStateEnum.Pressed
-						? InteractionStateEnum.Hovered
+					state.State != Interaction.Pressed
+						? Interaction.Hovered
 						: state.State,
 
 				UiPointerEventType.PointerExit =>
 					// Only transition to None if not pressed
 					// If pressed and we exit, we stay pressed (drag outside scenario)
-					state.State != InteractionStateEnum.Pressed
-						? InteractionStateEnum.None
+					state.State != Interaction.Pressed
+						? Interaction.None
 						: state.State,
 
 				UiPointerEventType.PointerDown =>
 					pointerEvent.IsPrimaryButton
-						? InteractionStateEnum.Pressed
+						? Interaction.Pressed
 						: state.State,
 
 				UiPointerEventType.PointerUp =>
 					// Released over the element = transition to Hovered
-					// (FluxInteraction will detect this as "Released")
-					InteractionStateEnum.Hovered,
+					Interaction.Hovered,
 
 				// No state change on move or scroll
 				_ => state.State
@@ -72,39 +65,29 @@ public struct InteractionStatePlugin : IPlugin
 			}
 		});
 
-		// Add a system to detect when pointer is released outside of any element
-		// This handles the "press canceled" scenario
+		// System to handle pointer release outside of elements
+		// When primary button is released and entity is still Pressed,
+		// it means the release happened outside - transition to None
 		app.AddSystem((
 			Res<PointerInputState> pointerInput,
+			Commands commands,
 			Query<Data<InteractionState>> interactionQuery) =>
 		{
-			// If primary button was just released and no entity is hovered,
-			// reset all pressed entities to None
 			if (pointerInput.Value.IsPrimaryButtonReleased)
 			{
 				foreach (var (entityId, state) in interactionQuery)
 				{
-					ref var stateRef = ref state.Ref;
-
-					if (stateRef.State == InteractionStateEnum.Pressed)
+					if (state.Ref.State == Interaction.Pressed)
 					{
-						// Check if pointer is still over this element
-						// If not, transition to None (canceled)
-						// Note: This is a simplified approach - ideally we'd track which
-						// entity is currently hovered, but for now we rely on PointerExit
-						// events to handle this.
-
-						// For now, we don't automatically cancel here - we let PointerExit
-						// handle the transition. If PointerUp fires on an element, it will
-						// transition to Hovered. If the pointer exits first, it stays Pressed
-						// until release, then FluxInteraction will detect PressCanceled.
+						// Still pressed after release event = released outside
+						// Transition to None
+						commands.Entity(entityId.Ref).Insert(new InteractionState { State = Interaction.None });
 					}
 				}
 			}
 		})
 		.InStage(Stage.PreUpdate)
-		.Label("interaction:update-pressed-state")
-		.Before("flux:tick-stopwatch")
+		.Label("interaction:handle-release-outside")
 		.Build();
 	}
 }

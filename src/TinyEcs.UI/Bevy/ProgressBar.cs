@@ -16,6 +16,9 @@ public enum ProgressBarDirection
 /// <summary>
 /// Component that represents a progress bar widget.
 /// Shows visual progress from 0% to 100%.
+/// The progress bar entity itself is the track - child elements are identified by marker components:
+/// - ProgressBarFill: the fill element
+/// - ProgressBarLabel: the text label element (optional, shows percentage)
 /// </summary>
 public struct ProgressBar
 {
@@ -25,15 +28,6 @@ public struct ProgressBar
 	/// <summary>Direction of the progress bar fill</summary>
 	public ProgressBarDirection Direction;
 
-	/// <summary>Entity ID of the fill element</summary>
-	public ulong FillEntity;
-
-	/// <summary>Entity ID of the track/background element</summary>
-	public ulong TrackEntity;
-
-	/// <summary>Entity ID of the text label element (optional, shows percentage)</summary>
-	public ulong LabelEntity;
-
 	/// <summary>Whether to show percentage text</summary>
 	public bool ShowPercentage;
 
@@ -41,9 +35,6 @@ public struct ProgressBar
 	{
 		Progress = Math.Clamp(initialProgress, 0f, 1f);
 		Direction = direction;
-		FillEntity = 0;
-		TrackEntity = 0;
-		LabelEntity = 0;
 		ShowPercentage = showPercentage;
 	}
 
@@ -63,6 +54,16 @@ public struct ProgressBar
 		return (int)(Progress * 100f);
 	}
 }
+
+/// <summary>
+/// Marker component for the fill element inside a progress bar.
+/// </summary>
+public struct ProgressBarFill { }
+
+/// <summary>
+/// Marker component for the text label element inside a progress bar.
+/// </summary>
+public struct ProgressBarLabel { }
 
 /// <summary>
 /// Event triggered when progress bar value changes.
@@ -97,10 +98,10 @@ public struct ProgressBarPlugin : IPlugin
 		app.AddSystem((
 			Commands commands,
 			Query<Data<ProgressBar>, Filter<Changed<ProgressBar>>> changedProgressBars,
-			Query<Data<UiNode>> allNodes,
-			Query<Data<UiText>> textElements) =>
+			Query<Data<Parent, UiNode>, Filter<With<ProgressBarFill>>> fills,
+			Query<Data<Parent, UiText>, Filter<With<ProgressBarLabel>>> labels) =>
 		{
-			UpdateProgressBarVisuals(commands, changedProgressBars, allNodes, textElements);
+			UpdateProgressBarVisuals(commands, changedProgressBars, fills, labels);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("progressbar:update-visuals")
@@ -109,21 +110,25 @@ public struct ProgressBarPlugin : IPlugin
 
 	/// <summary>
 	/// Updates the fill size and text label based on progress value.
+	/// Finds child elements by looking for entities with marker components.
 	/// </summary>
 	private static void UpdateProgressBarVisuals(
 		Commands commands,
 		Query<Data<ProgressBar>, Filter<Changed<ProgressBar>>> changedProgressBars,
-		Query<Data<UiNode>> allNodes,
-		Query<Data<UiText>> textElements)
+		Query<Data<Parent, UiNode>, Filter<With<ProgressBarFill>>> fills,
+		Query<Data<Parent, UiText>, Filter<With<ProgressBarLabel>>> labels)
 	{
-		foreach (var (entityId, progressBar) in changedProgressBars)
+		foreach (var (progressBarEntityId, progressBar) in changedProgressBars)
 		{
 			ref readonly var pb = ref progressBar.Ref;
+			var pbId = progressBarEntityId.Ref;
 
-			// Update fill size based on direction
-			if (pb.FillEntity != 0 && allNodes.Contains(pb.FillEntity))
+			// Find and update fill size based on direction
+			foreach (var (fillEntityId, parent, fillNode) in fills)
 			{
-				var (_, fillNode) = allNodes.Get(pb.FillEntity);
+				if (parent.Ref.Id != pbId)
+					continue;
+
 				ref var fill = ref fillNode.Ref;
 
 				switch (pb.Direction)
@@ -162,16 +167,23 @@ public struct ProgressBarPlugin : IPlugin
 				}
 
 				fill.PositionType = Flexbox.PositionType.Absolute;
-				commands.Entity(pb.FillEntity).Insert(fill);
+				commands.Entity(fillEntityId.Ref).Insert(fill);
+				break;
 			}
 
-			// Update text label if ShowPercentage is enabled
-			if (pb.ShowPercentage && pb.LabelEntity != 0 && textElements.Contains(pb.LabelEntity))
+			// Find and update text label if ShowPercentage is enabled
+			if (pb.ShowPercentage)
 			{
-				var (_, textElement) = textElements.Get(pb.LabelEntity);
-				ref var text = ref textElement.Ref;
-				text.Value = $"{pb.GetPercentage()}%";
-				commands.Entity(pb.LabelEntity).Insert(text);
+				foreach (var (labelEntityId, parent, textElement) in labels)
+				{
+					if (parent.Ref.Id != pbId)
+						continue;
+
+					ref var text = ref textElement.Ref;
+					text.Value = $"{pb.GetPercentage()}%";
+					commands.Entity(labelEntityId.Ref).Insert(text);
+					break;
+				}
 			}
 		}
 	}

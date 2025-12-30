@@ -162,6 +162,20 @@ public struct FlexboxUiPlugin : IPlugin
 			.Label("flexbox:calc_layout")
 			.Build();
 
+		// Calculate content size for scrollable containers BEFORE applying scroll transforms
+		// This reads directly from Flexbox nodes (natural positions) to avoid circular dependency
+		// where content size depends on scroll offset which depends on content size
+		app.AddSystem((
+			Query<Data<Scrollable, FlexboxNodeRef, UiNode>> scrollables,
+			Commands commands) =>
+		{
+			CalculateScrollableContentSize(scrollables, commands);
+		})
+			.InStage(Stage.PostUpdate)
+			.Label("flexbox:calc_content_size")
+			.After("flexbox:calc_layout")
+			.Build();
+
 		app.AddSystem((
 			Query<Data<FlexboxNodeRef>> nodeRefs,
 			Query<Data<Parent>> parents,
@@ -173,13 +187,12 @@ public struct FlexboxUiPlugin : IPlugin
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("flexbox:read_layout")
-			.After("flexbox:calc_layout")
+			.After("flexbox:calc_content_size")
 			.Build();
 
 		// Add Phase 1 interaction plugins (from sickle_ui port)
 		// These must be added AFTER flexbox systems are registered (they reference flexbox labels)
-		// Order matters: FluxInteraction must be added before InteractionState (InteractionState references FluxInteraction labels)
-		app.AddPlugin(new FluxInteractionPlugin());
+		app.AddPlugin(new InteractionPlugin());
 		app.AddPlugin(new InteractionStatePlugin());
 		app.AddPlugin(new DragPlugin());
 		app.AddPlugin(new ScrollPlugin());
@@ -216,20 +229,27 @@ public struct FlexboxUiPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Observer: Called when UiNode component is removed from an entity.
-	/// Destroys the associated Flexbox node.
+	/// Observer: Called when FlexboxNodeRef component is removed from an entity.
+	/// Cleans up the associated Flexbox node to prevent memory leaks.
 	/// </summary>
 	private static void OnUiNodeRemoved(
 		OnRemove<FlexboxNodeRef> trigger,
 		ResMut<FlexboxUiState> state)
 	{
-		if (trigger.Component.Node != null)
+		var node = trigger.Component.Node;
+		if (node != null)
 		{
 			// Remove from parent if attached
-			if (trigger.Component.Node.Parent != null)
-			{
-				trigger.Component.Node.Parent.RemoveChild(trigger.Component.Node);
-			}
+			node.Parent?.RemoveChild(node);
+
+			// Clear children (they should be removed via their own OnRemove observers)
+			node.Children.Clear();
+
+			// Clear context reference to prevent memory leaks (holds entity ID and measure context)
+			node.Context = null;
+
+			// Clear measure function
+			node.SetMeasureFunc(null);
 		}
 	}
 
@@ -583,5 +603,126 @@ public struct FlexboxUiPlugin : IPlugin
 		}
 
 		return total;
+	}
+
+	/// <summary>
+	/// Calculates content size for scrollable containers directly from Flexbox nodes.
+	/// This runs AFTER layout calculation but BEFORE scroll transforms are applied,
+	/// avoiding the circular dependency where content size depends on scroll offset.
+	///
+	/// Reads child bounds using Flexbox's LayoutGetLeft/Top (relative positions within parent),
+	/// which are stable regardless of scroll offset.
+	/// </summary>
+	private static void CalculateScrollableContentSize(
+		Query<Data<Scrollable, FlexboxNodeRef, UiNode>> scrollables,
+		Commands commands)
+	{
+		foreach (var (entityId, scrollable, nodeRef, uiNode) in scrollables)
+		{
+			ref var scroll = ref scrollable.Ref;
+			var node = nodeRef.Ref.Node;
+
+			if (node == null)
+				continue;
+
+			// Get padding from UiNode (these affect content area)
+			float paddingLeft = uiNode.Ref.PaddingLeft.IsDefined ? uiNode.Ref.PaddingLeft.Value : 0f;
+			float paddingRight = uiNode.Ref.PaddingRight.IsDefined ? uiNode.Ref.PaddingRight.Value : 0f;
+			float paddingTop = uiNode.Ref.PaddingTop.IsDefined ? uiNode.Ref.PaddingTop.Value : 0f;
+			float paddingBottom = uiNode.Ref.PaddingBottom.IsDefined ? uiNode.Ref.PaddingBottom.Value : 0f;
+
+			// Get border from UiNode
+			float borderLeft = uiNode.Ref.BorderLeft.IsDefined ? uiNode.Ref.BorderLeft.Value : 0f;
+			float borderRight = uiNode.Ref.BorderRight.IsDefined ? uiNode.Ref.BorderRight.Value : 0f;
+			float borderTop = uiNode.Ref.BorderTop.IsDefined ? uiNode.Ref.BorderTop.Value : 0f;
+			float borderBottom = uiNode.Ref.BorderBottom.IsDefined ? uiNode.Ref.BorderBottom.Value : 0f;
+
+			// Calculate bounding box of all children using Flexbox layout data
+			float minX = float.MaxValue, minY = float.MaxValue;
+			float maxX = float.MinValue, maxY = float.MinValue;
+			bool hasChildren = false;
+
+			// Iterate Flexbox children directly (these have natural/unscrolled positions)
+			foreach (var child in node.Children)
+			{
+				// LayoutGetLeft/Top return relative position within parent (not affected by scroll)
+				var childX = child.LayoutGetLeft();
+				var childY = child.LayoutGetTop();
+				var childW = child.LayoutGetWidth();
+				var childH = child.LayoutGetHeight();
+
+				// Skip children with invalid layout
+				if (float.IsNaN(childW) || float.IsNaN(childH))
+					continue;
+
+				hasChildren = true;
+
+				// Get child margins from Flexbox style
+				var childStyle = child.nodeStyle;
+				float marginLeft = GetResolvedValue(childStyle.Margin[(int)Edge.Left]);
+				float marginRight = GetResolvedValue(childStyle.Margin[(int)Edge.Right]);
+				float marginTop = GetResolvedValue(childStyle.Margin[(int)Edge.Top]);
+				float marginBottom = GetResolvedValue(childStyle.Margin[(int)Edge.Bottom]);
+
+				// Update bounds including margins
+				minX = Math.Min(minX, childX - marginLeft);
+				minY = Math.Min(minY, childY - marginTop);
+				maxX = Math.Max(maxX, childX + childW + marginRight);
+				maxY = Math.Max(maxY, childY + childH + marginBottom);
+
+				// Also measure grandchildren if this child has any (for ScrollView content containers)
+				foreach (var grandChild in child.Children)
+				{
+					var gcX = child.LayoutGetLeft() + grandChild.LayoutGetLeft();
+					var gcY = child.LayoutGetTop() + grandChild.LayoutGetTop();
+					var gcW = grandChild.LayoutGetWidth();
+					var gcH = grandChild.LayoutGetHeight();
+
+					if (float.IsNaN(gcW) || float.IsNaN(gcH))
+						continue;
+
+					var gcStyle = grandChild.nodeStyle;
+					float gcMarginLeft = GetResolvedValue(gcStyle.Margin[(int)Edge.Left]);
+					float gcMarginRight = GetResolvedValue(gcStyle.Margin[(int)Edge.Right]);
+					float gcMarginTop = GetResolvedValue(gcStyle.Margin[(int)Edge.Top]);
+					float gcMarginBottom = GetResolvedValue(gcStyle.Margin[(int)Edge.Bottom]);
+
+					minX = Math.Min(minX, gcX - gcMarginLeft);
+					minY = Math.Min(minY, gcY - gcMarginTop);
+					maxX = Math.Max(maxX, gcX + gcW + gcMarginRight);
+					maxY = Math.Max(maxY, gcY + gcH + gcMarginBottom);
+				}
+			}
+
+			if (hasChildren)
+			{
+				// Content size includes padding and border
+				scroll.ContentSize = new System.Numerics.Vector2(
+					Math.Max(0f, maxX - minX + paddingLeft + paddingRight + borderLeft + borderRight),
+					Math.Max(0f, maxY - minY + paddingTop + paddingBottom + borderTop + borderBottom)
+				);
+
+				// Always update ContentOrigin (fixes issue #3 - ContentOrigin not recalculated)
+				scroll.ContentOrigin = new System.Numerics.Vector2(minX, minY);
+			}
+			else
+			{
+				scroll.ContentSize = System.Numerics.Vector2.Zero;
+				scroll.ContentOrigin = System.Numerics.Vector2.Zero;
+			}
+
+			// Re-insert to trigger change detection
+			commands.Entity(entityId.Ref).Insert(scroll);
+		}
+	}
+
+	/// <summary>
+	/// Gets the resolved float value from a Flexbox Value, returning 0 for undefined/auto values.
+	/// </summary>
+	private static float GetResolvedValue(Value? value)
+	{
+		if (value == null || value.unit == Unit.Undefined || value.unit == Unit.Auto || float.IsNaN(value.value))
+			return 0f;
+		return value.value;
 	}
 }

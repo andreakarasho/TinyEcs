@@ -7,50 +7,85 @@ namespace TinyEcs.UI.Bevy;
 /// <summary>
 /// Plugin that provides animated interaction states for UI elements.
 /// Ported from sickle_ui's animated_interaction module.
-/// Works with FluxInteraction to provide smooth transitions between interaction states.
+/// Works with InteractionState to provide smooth transitions between interaction states.
 /// </summary>
 public struct AnimatedInteractionPlugin : IPlugin
 {
 	public readonly void Build(App app)
 	{
-		// System to update animation progress based on FluxInteraction state and elapsed time
-		// Runs EVERY FRAME to allow progress to increment over time
+		// System to reset animation on interaction state changes
+		app.AddSystem((
+			Commands commands,
+			Query<Data<AnimatedInteractionState, InteractionState>, Filter<Changed<InteractionState>>> changedQuery) =>
+		{
+			ResetAnimationOnStateChange(commands, changedQuery);
+		})
+		.InStage(Stage.Update)
+		.Label("animated-interaction:reset-on-change")
+		.Build();
+
+		// System to update animation progress over time
 		app.AddSystem((
 			Commands commands,
 			Res<DeltaTime> deltaTime,
-			Query<Data<AnimatedInteractionState, FluxInteraction, FluxInteractionStopwatch>> animatedQuery) =>
+			Query<Data<AnimatedInteractionState, InteractionState>> animatedQuery) =>
 		{
 			UpdateAnimationProgress(commands, deltaTime, animatedQuery);
 		})
 		.InStage(Stage.Update)
 		.Label("animated-interaction:update-progress")
+		.After("animated-interaction:reset-on-change")
 		.Build();
 	}
 
 	/// <summary>
-	/// Updates animation progress for all animated interactions based on current state and elapsed time.
+	/// Resets animation elapsed time when interaction state changes.
+	/// </summary>
+	private static void ResetAnimationOnStateChange(
+		Commands commands,
+		Query<Data<AnimatedInteractionState, InteractionState>, Filter<Changed<InteractionState>>> changedQuery)
+	{
+		foreach (var (entityId, animState, interaction) in changedQuery)
+		{
+			ref var state = ref animState.Ref;
+			ref readonly var interactionState = ref interaction.Ref;
+
+			// Reset elapsed time and update current state
+			state.ElapsedSeconds = 0f;
+			state.CurrentState = interactionState.State;
+			state.Progress = AnimationProgress.Start;
+			commands.Entity(entityId.Ref).Insert(state);
+		}
+	}
+
+	/// <summary>
+	/// Updates animation progress for all animated interactions based on elapsed time.
 	/// </summary>
 	private static void UpdateAnimationProgress(
 		Commands commands,
 		Res<DeltaTime> deltaTime,
-		Query<Data<AnimatedInteractionState, FluxInteraction, FluxInteractionStopwatch>> animatedQuery)
+		Query<Data<AnimatedInteractionState, InteractionState>> animatedQuery)
 	{
-		foreach (var (entityId, animState, flux, stopwatch) in animatedQuery)
+		foreach (var (entityId, animState, interaction) in animatedQuery)
 		{
 			ref var state = ref animState.Ref;
-			ref readonly var interaction = ref flux.Ref;
-			ref readonly var timer = ref stopwatch.Ref;
+			ref readonly var interactionState = ref interaction.Ref;
+
+			// Skip if animation is already complete
+			if (state.Progress.IsEnd)
+				continue;
+
+			// Increment elapsed time
+			state.ElapsedSeconds += deltaTime.Value.Seconds;
 
 			// Get animation config for current state
-			var config = state.GetConfigForState(interaction.State);
+			var config = state.GetConfigForState(interactionState.State);
 
 			// Calculate progress based on elapsed time
-			var elapsed = timer.ElapsedSeconds;
-			var progress = CalculateProgress(interaction.State, config, elapsed);
+			var progress = CalculateProgress(interactionState.State, config, state.ElapsedSeconds);
 
 			// Update state using Commands to trigger change detection
 			state.Progress = progress;
-			state.CurrentState = interaction.State;
 			commands.Entity(entityId.Ref).Insert(state);
 		}
 	}
@@ -59,14 +94,12 @@ public struct AnimatedInteractionPlugin : IPlugin
 	/// Calculates animation progress (0-1) based on state, config, and elapsed time.
 	/// </summary>
 	private static AnimationProgress CalculateProgress(
-		FluxInteractionState state,
+		Interaction state,
 		AnimationConfig config,
 		float elapsed)
 	{
-		// Determine if this is an "in" or "out" transition
-		var isOut = state == FluxInteractionState.PointerLeave ||
-		            state == FluxInteractionState.Released ||
-		            state == FluxInteractionState.PressCanceled;
+		// Determine if this is an "out" transition (leaving a state)
+		var isOut = state == Interaction.None;
 
 		var duration = isOut
 			? (config.OutDuration ?? config.Duration)
@@ -228,7 +261,12 @@ public struct AnimatedInteractionState
 	/// <summary>
 	/// Current interaction state being animated.
 	/// </summary>
-	public FluxInteractionState CurrentState;
+	public Interaction CurrentState;
+
+	/// <summary>
+	/// Elapsed time since last state change, in seconds.
+	/// </summary>
+	public float ElapsedSeconds;
 
 	/// <summary>
 	/// Current animation progress.
@@ -241,42 +279,34 @@ public struct AnimatedInteractionState
 	public AnimationConfig BaseConfig;
 
 	/// <summary>
-	/// Optional animation config for hover state (PointerEnter/PointerLeave).
+	/// Optional animation config for hover state.
 	/// </summary>
 	public AnimationConfig? HoverConfig;
 
 	/// <summary>
-	/// Optional animation config for press state (Pressed/Released).
+	/// Optional animation config for press state.
 	/// </summary>
 	public AnimationConfig? PressConfig;
 
-	/// <summary>
-	/// Optional animation config for cancel state (PressCanceled).
-	/// </summary>
-	public AnimationConfig? CancelConfig;
-
 	public AnimatedInteractionState()
 	{
-		CurrentState = FluxInteractionState.None;
+		CurrentState = Interaction.None;
+		ElapsedSeconds = 0f;
 		Progress = AnimationProgress.End;
 		BaseConfig = new AnimationConfig(); // 100ms linear
 		HoverConfig = null;
 		PressConfig = null;
-		CancelConfig = null;
 	}
 
 	/// <summary>
 	/// Gets the appropriate animation config for a given interaction state.
 	/// </summary>
-	public readonly AnimationConfig GetConfigForState(FluxInteractionState state)
+	public readonly AnimationConfig GetConfigForState(Interaction state)
 	{
 		return state switch
 		{
-			FluxInteractionState.PointerEnter => HoverConfig ?? BaseConfig,
-			FluxInteractionState.PointerLeave => HoverConfig ?? BaseConfig,
-			FluxInteractionState.Pressed => PressConfig ?? BaseConfig,
-			FluxInteractionState.Released => PressConfig ?? BaseConfig,
-			FluxInteractionState.PressCanceled => CancelConfig ?? BaseConfig,
+			Interaction.Hovered => HoverConfig ?? BaseConfig,
+			Interaction.Pressed => PressConfig ?? BaseConfig,
 			_ => BaseConfig
 		};
 	}
@@ -314,15 +344,6 @@ public struct AnimatedInteractionState
 	public AnimatedInteractionState WithPress(float duration, Ease easing, float outDuration, Ease outEasing)
 	{
 		PressConfig = new AnimationConfig(duration, easing, outDuration, outEasing);
-		return this;
-	}
-
-	/// <summary>
-	/// Builder pattern: Sets cancel animation config.
-	/// </summary>
-	public AnimatedInteractionState WithCancel(float duration, Ease easing = Ease.Linear)
-	{
-		CancelConfig = new AnimationConfig(duration, easing);
 		return this;
 	}
 }

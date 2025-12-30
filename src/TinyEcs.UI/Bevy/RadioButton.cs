@@ -30,16 +30,18 @@ public struct RadioButton
 	/// <summary>Value associated with this radio button</summary>
 	public int Value;
 
-	/// <summary>Entity ID of the indicator visual element</summary>
-	public ulong IndicatorEntity;
-
 	public RadioButton(int value, bool initiallySelected = false)
 	{
 		Selected = initiallySelected;
 		Value = value;
-		IndicatorEntity = 0;
 	}
 }
+
+/// <summary>
+/// Marker component for the indicator visual element inside a radio button.
+/// Used by RadioButtonPlugin to find and update the indicator's visibility.
+/// </summary>
+public struct RadioIndicator { }
 
 /// <summary>
 /// Event triggered when a radio button is selected.
@@ -73,23 +75,23 @@ public struct RadioButtonPlugin : IPlugin
 		// System to handle radio button selection
 		app.AddSystem((
 			Commands commands,
-			Query<Data<RadioButton, RadioGroup, FluxInteraction>, Filter<Changed<FluxInteraction>>> radioButtons,
+			Query<Data<RadioButton, RadioGroup, InteractionState>, Filter<Changed<InteractionState>>> radioButtons,
 			Query<Data<RadioButton, RadioGroup>> allRadioButtons) =>
 		{
 			HandleRadioButtonClick(commands, radioButtons, allRadioButtons);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("radio:handle-click")
-		.After("flux:update-interaction")
+		.After("interaction:add-to-interactive")
 		.Build();
 
 		// System to update visual state when radio button selection changes
 		app.AddSystem((
 			Commands commands,
 			Query<Data<RadioButton>, Filter<Changed<RadioButton>>> changedRadioButtons,
-			Query<Data<UiNode>> allNodes) =>
+			Query<Data<Parent, UiNode>, Filter<With<RadioIndicator>>> indicators) =>
 		{
-			UpdateRadioButtonVisuals(commands, changedRadioButtons, allNodes);
+			UpdateRadioButtonVisuals(commands, changedRadioButtons, indicators);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("radio:update-visuals")
@@ -102,17 +104,17 @@ public struct RadioButtonPlugin : IPlugin
 	/// </summary>
 	private static void HandleRadioButtonClick(
 		Commands commands,
-		Query<Data<RadioButton, RadioGroup, FluxInteraction>, Filter<Changed<FluxInteraction>>> radioButtons,
+		Query<Data<RadioButton, RadioGroup, InteractionState>, Filter<Changed<InteractionState>>> radioButtons,
 		Query<Data<RadioButton, RadioGroup>> allRadioButtons)
 	{
-		foreach (var (entityId, radioButton, radioGroup, flux) in radioButtons)
+		foreach (var (entityId, radioButton, radioGroup, interaction) in radioButtons)
 		{
 			ref var rb = ref radioButton.Ref;
 			ref readonly var group = ref radioGroup.Ref;
-			ref readonly var interaction = ref flux.Ref;
+			ref readonly var state = ref interaction.Ref;
 
-			// Select on release (click)
-			if (interaction.State == FluxInteractionState.Released && !rb.Selected)
+			// Select on press
+			if (state.State == Interaction.Pressed && !rb.Selected)
 			{
 				// Deselect all other radio buttons in the same group
 				foreach (var (otherEntityId, otherRadio, otherGroup) in allRadioButtons)
@@ -132,10 +134,9 @@ public struct RadioButtonPlugin : IPlugin
 				rb.Selected = true;
 				commands.Entity(entityId.Ref).Insert(rb);
 
-				// Emit RadioButtonSelected event both globally and per-entity
+				// Emit RadioButtonSelected event on the entity
 				var selectEvent = new RadioButtonSelected(rb.Value, group.GroupId);
-				commands.Entity(entityId.Ref).EmitTrigger(selectEvent);  // Per-entity (BevyObservers)
-				commands.EmitTrigger(selectEvent);  // Global (EventChannel)
+				commands.Entity(entityId.Ref).EmitTrigger(selectEvent);
 			}
 		}
 	}
@@ -143,27 +144,31 @@ public struct RadioButtonPlugin : IPlugin
 	/// <summary>
 	/// Updates the indicator visibility based on radio button selection state.
 	/// Shows indicator when selected, hides when unselected.
+	/// Finds indicator by looking for child entities with RadioIndicator marker.
 	/// </summary>
 	private static void UpdateRadioButtonVisuals(
 		Commands commands,
 		Query<Data<RadioButton>, Filter<Changed<RadioButton>>> changedRadioButtons,
-		Query<Data<UiNode>> allNodes)
+		Query<Data<Parent, UiNode>, Filter<With<RadioIndicator>>> indicators)
 	{
 		foreach (var (entityId, radioButton) in changedRadioButtons)
 		{
 			ref readonly var rb = ref radioButton.Ref;
+			var radioId = entityId.Ref;
 
-			if (rb.IndicatorEntity != 0 && allNodes.Contains(rb.IndicatorEntity))
+			// Find the indicator entity that is a child of this radio button
+			foreach (var (indicatorId, parent, node) in indicators)
 			{
-				// Read existing node, update only Display property
-				var (_, existingNode) = allNodes.Get(rb.IndicatorEntity);
-				ref var node = ref existingNode.Ref;
+				if (parent.Ref.Id != radioId)
+					continue;
 
-				// Update display property
-				node.Display = rb.Selected ? Flexbox.Display.Flex : Flexbox.Display.None;
+				// Found the indicator for this radio button
+				ref var n = ref node.Ref;
+				n.Display = rb.Selected ? Flexbox.Display.Flex : Flexbox.Display.None;
 
 				// Re-insert to trigger change detection and layout update
-				commands.Entity(rb.IndicatorEntity).Insert(node);
+				commands.Entity(indicatorId.Ref).Insert(n);
+				break;
 			}
 		}
 	}

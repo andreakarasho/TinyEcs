@@ -16,9 +16,9 @@ public struct DropdownPlugin : IPlugin
 		app.AddSystem((
 			Commands commands,
 			Query<Data<Dropdown, DropdownOptions>, Filter<Changed<Dropdown>>> dropdowns,
-			Query<Data<UiText>> texts) =>
+			Query<Data<Parent, UiText>, Filter<With<DropdownLabel>>> labels) =>
 		{
-			UpdateDropdownLabel(commands, dropdowns, texts);
+			UpdateDropdownLabel(commands, dropdowns, labels);
 		})
 		.InStage(Stage.Update)
 		.Label("ui:dropdown:update_label")
@@ -26,7 +26,7 @@ public struct DropdownPlugin : IPlugin
 
 		app.AddSystem((
 			Commands commands,
-			Query<Data<Dropdown, FluxInteraction>, Filter<Changed<FluxInteraction>>> dropdowns) =>
+			Query<Data<Dropdown, InteractionState>, Filter<Changed<InteractionState>>> dropdowns) =>
 		{
 			HandleDropdownClick(commands, dropdowns);
 		})
@@ -37,7 +37,7 @@ public struct DropdownPlugin : IPlugin
 
 		app.AddSystem((
 			Commands commands,
-			Query<Data<DropdownOption, FluxInteraction>, Filter<Changed<FluxInteraction>>> options,
+			Query<Data<DropdownOption, InteractionState>, Filter<Changed<InteractionState>>> options,
 			Query<Data<Dropdown>> dropdowns) =>
 		{
 			HandleOptionClick(commands, options, dropdowns);
@@ -91,35 +91,41 @@ public struct DropdownPlugin : IPlugin
 
 	/// <summary>
 	/// Updates the dropdown button label when the selected value changes.
+	/// Finds label by looking for child entities with DropdownLabel marker.
 	/// </summary>
 	private static void UpdateDropdownLabel(
 		Commands commands,
 		Query<Data<Dropdown, DropdownOptions>, Filter<Changed<Dropdown>>> dropdowns,
-		Query<Data<UiText>> texts)
+		Query<Data<Parent, UiText>, Filter<With<DropdownLabel>>> labels)
 	{
-		foreach (var (entityId, dropdown, options) in dropdowns)
+		foreach (var (dropdownEntityId, dropdown, options) in dropdowns)
 		{
-			if (!texts.Contains(dropdown.Ref.ButtonLabel))
-				continue;
-
-			var (_, text) = texts.Get(dropdown.Ref.ButtonLabel);
-			ref var t = ref text.Ref;
+			ref var d = ref dropdown.Ref;
+			var dropdownId = dropdownEntityId.Ref;
 
 			// Validate selected value
-			ref var d = ref dropdown.Ref;
 			if (d.Value.HasValue && d.Value.Value >= options.Ref.Options.Count)
 			{
 				d.Value = null;
 			}
 
-			// Update label text
-			t.Value = d.Value.HasValue
-				? options.Ref.Options[d.Value.Value]
-				: "---";
+			// Find and update the label
+			foreach (var (labelEntityId, parent, text) in labels)
+			{
+				if (parent.Ref.Id != dropdownId)
+					continue;
 
-			// Re-insert to trigger change detection
-			commands.Entity(dropdown.Ref.ButtonLabel).Insert(t);
-			// commands.Entity(entityId.Ref).Insert(d);
+				ref var t = ref text.Ref;
+
+				// Update label text
+				t.Value = d.Value.HasValue
+					? options.Ref.Options[d.Value.Value]
+					: "---";
+
+				// Re-insert to trigger change detection
+				commands.Entity(labelEntityId.Ref).Insert(t);
+				break;
+			}
 		}
 	}
 
@@ -128,14 +134,14 @@ public struct DropdownPlugin : IPlugin
 	/// </summary>
 	private static void HandleDropdownClick(
 		Commands commands,
-		Query<Data<Dropdown, FluxInteraction>, Filter<Changed<FluxInteraction>>> dropdowns)
+		Query<Data<Dropdown, InteractionState>, Filter<Changed<InteractionState>>> dropdowns)
 	{
 		ulong? openDropdownId = null;
 
-		// Find which dropdown was clicked (state changed to Released)
+		// Find which dropdown was pressed
 		foreach (var (entityId, dropdown, interaction) in dropdowns)
 		{
-			if (interaction.Ref.State == FluxInteractionState.Released)
+			if (interaction.Ref.State == Interaction.Pressed)
 			{
 				openDropdownId = entityId.Ref;
 				break;
@@ -167,16 +173,16 @@ public struct DropdownPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Handles option selection when an option is clicked.
+	/// Handles option selection when an option is pressed.
 	/// </summary>
 	private static void HandleOptionClick(
 		Commands commands,
-		Query<Data<DropdownOption, FluxInteraction>, Filter<Changed<FluxInteraction>>> options,
+		Query<Data<DropdownOption, InteractionState>, Filter<Changed<InteractionState>>> options,
 		Query<Data<Dropdown>> dropdowns)
 	{
 		foreach (var (optionEntityId, option, interaction) in options)
 		{
-			if (interaction.Ref.State != FluxInteractionState.Released)
+			if (interaction.Ref.State != Interaction.Pressed)
 				continue;
 
 			if (!dropdowns.Contains(option.Ref.DropdownEntity))
@@ -431,27 +437,28 @@ public struct DropdownPanel
 
 /// <summary>
 /// Component that represents a dropdown widget.
-/// Contains the selected value and references to child entities.
+/// Contains the selected value and open state.
+/// Child elements are identified by marker components:
+/// - DropdownLabel: the label text showing the selected value
+/// Panel and options use back-references via DropdownPanel.DropdownEntity and DropdownOption.DropdownEntity
 /// </summary>
 public struct Dropdown
 {
 	/// <summary>Selected option index (null if no selection)</summary>
 	public int? Value;
 
-	/// <summary>Entity ID of the dropdown panel</summary>
-	public ulong PanelEntity;
-
-	/// <summary>Entity ID of the button label</summary>
-	public ulong ButtonLabel;
-
 	/// <summary>Whether the dropdown is currently open</summary>
 	public bool IsOpen;
 
-	public Dropdown(ulong panelEntity, ulong buttonLabel)
+	public Dropdown(int? initialValue = null)
 	{
-		Value = null;
-		PanelEntity = panelEntity;
-		ButtonLabel = buttonLabel;
+		Value = initialValue;
 		IsOpen = false;
 	}
 }
+
+/// <summary>
+/// Marker component for the dropdown button label.
+/// Used to identify the text element that shows the selected value.
+/// </summary>
+public struct DropdownLabel { }

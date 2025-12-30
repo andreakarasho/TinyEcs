@@ -6,25 +6,25 @@ namespace TinyEcs.UI.Bevy;
 /// Component that represents a toggle/switch widget.
 /// Similar to a checkbox but with a sliding animation (when supported).
 /// Represents an on/off binary state.
+/// The toggle entity itself is the track - child elements are identified by marker components:
+/// - ToggleThumb: the sliding thumb/handle element
 /// </summary>
 public struct Toggle
 {
 	/// <summary>Whether the toggle is currently on (true) or off (false)</summary>
 	public bool IsOn;
 
-	/// <summary>Entity ID of the thumb/handle element</summary>
-	public ulong ThumbEntity;
-
-	/// <summary>Entity ID of the track/background element</summary>
-	public ulong TrackEntity;
-
 	public Toggle(bool initialValue = false)
 	{
 		IsOn = initialValue;
-		ThumbEntity = 0;
-		TrackEntity = 0;
 	}
 }
+
+/// <summary>
+/// Marker component for toggle thumb elements.
+/// Used to identify the sliding thumb/handle inside a toggle.
+/// </summary>
+public struct ToggleThumb { }
 
 /// <summary>
 /// Event triggered when a toggle state changes.
@@ -53,26 +53,25 @@ public struct TogglePlugin : IPlugin
 {
 	public readonly void Build(App app)
 	{
-		// System to toggle state when clicked
+		// System to toggle state when pressed
 		app.AddSystem((
 			Commands commands,
-			Query<Data<Toggle, FluxInteraction>, Filter<Changed<FluxInteraction>>> toggles) =>
+			Query<Data<Toggle, InteractionState>, Filter<Changed<InteractionState>>> toggles) =>
 		{
 			HandleToggleClick(commands, toggles);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("toggle:handle-click")
-		.After("flux:update-interaction")
+		.After("interaction:add-to-interactive")
 		.Build();
 
 		// System to update visual state when toggle changes
 		app.AddSystem((
 			Commands commands,
-			Query<Data<Toggle>, Filter<Changed<Toggle>>> changedToggles,
-			Query<Data<UiNode>> allNodes,
-			Query<Data<BackgroundColor>> backgroundColors) =>
+			Query<Data<Toggle, BackgroundColor>, Filter<Changed<Toggle>>> changedToggles,
+			Query<Data<Parent, UiNode>, Filter<With<ToggleThumb>>> thumbs) =>
 		{
-			UpdateToggleVisuals(commands, changedToggles, allNodes, backgroundColors);
+			UpdateToggleVisuals(commands, changedToggles, thumbs);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("toggle:update-visuals")
@@ -81,57 +80,58 @@ public struct TogglePlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Toggles state when FluxInteraction.Released is detected.
+	/// Toggles state when Interaction.Pressed is detected.
 	/// </summary>
 	private static void HandleToggleClick(
 		Commands commands,
-		Query<Data<Toggle, FluxInteraction>, Filter<Changed<FluxInteraction>>> toggles)
+		Query<Data<Toggle, InteractionState>, Filter<Changed<InteractionState>>> toggles)
 	{
-		foreach (var (entityId, toggle, flux) in toggles)
+		foreach (var (entityId, toggle, interaction) in toggles)
 		{
 			ref var t = ref toggle.Ref;
-			ref readonly var interaction = ref flux.Ref;
+			ref readonly var state = ref interaction.Ref;
 
-			// Toggle on release (click)
-			if (interaction.State == FluxInteractionState.Released)
+			// Toggle on press
+			if (state.State == Interaction.Pressed)
 			{
 				t.IsOn = !t.IsOn;
 
 				// Re-insert to trigger change detection
 				commands.Entity(entityId.Ref).Insert(t);
 
-				// Emit ToggleChanged event both globally and per-entity
+				// Emit ToggleChanged event on the entity
 				var changeEvent = new ToggleChanged(t.IsOn);
-				commands.Entity(entityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-				commands.EmitTrigger(changeEvent);  // Global (EventChannel)
+				commands.Entity(entityId.Ref).EmitTrigger(changeEvent);
 			}
 		}
 	}
 
 	/// <summary>
 	/// Updates the thumb position and track color based on toggle state.
+	/// Finds thumb by looking for child entities with ToggleThumb marker.
+	/// The track color is updated on the toggle entity itself.
 	/// </summary>
 	private static void UpdateToggleVisuals(
 		Commands commands,
-		Query<Data<Toggle>, Filter<Changed<Toggle>>> changedToggles,
-		Query<Data<UiNode>> allNodes,
-		Query<Data<BackgroundColor>> backgroundColors)
+		Query<Data<Toggle, BackgroundColor>, Filter<Changed<Toggle>>> changedToggles,
+		Query<Data<Parent, UiNode>, Filter<With<ToggleThumb>>> thumbs)
 	{
-		foreach (var (entityId, toggle) in changedToggles)
+		foreach (var (toggleEntityId, toggle, bgColor) in changedToggles)
 		{
 			ref readonly var t = ref toggle.Ref;
+			var toggleId = toggleEntityId.Ref;
 
-			// Update thumb position (slide to right when on, left when off)
-			if (t.ThumbEntity != 0 && allNodes.Contains(t.ThumbEntity))
+			// Find and update thumb position (slide to right when on, left when off)
+			foreach (var (thumbEntityId, parent, thumbNode) in thumbs)
 			{
-				var (_, thumbNode) = allNodes.Get(t.ThumbEntity);
+				if (parent.Ref.Id != toggleId)
+					continue;
+
 				ref var thumb = ref thumbNode.Ref;
 
 				// Position thumb
-				// When off: align to left (JustifyContent.FlexStart)
-				// When on: align to right (JustifyContent.FlexEnd)
-				// This is typically done via parent container's JustifyContent
-				// For absolute positioning:
+				// When off: align to left
+				// When on: align to right
 				if (t.IsOn)
 				{
 					// Move to right side
@@ -146,29 +146,26 @@ public struct TogglePlugin : IPlugin
 				}
 
 				thumb.PositionType = Flexbox.PositionType.Absolute;
-				commands.Entity(t.ThumbEntity).Insert(thumb);
+				commands.Entity(thumbEntityId.Ref).Insert(thumb);
+				break;
 			}
 
-			// Update track color (optional - can change background when on/off)
-			if (t.TrackEntity != 0 && backgroundColors.Contains(t.TrackEntity))
+			// Update track color on the toggle entity itself
+			ref var color = ref bgColor.Ref;
+
+			// Change track color based on state
+			// On: Green/Accent color (e.g., #4CAF50)
+			// Off: Gray/Neutral color (e.g., #9E9E9E)
+			if (t.IsOn)
 			{
-				var (_, bgColor) = backgroundColors.Get(t.TrackEntity);
-				ref var color = ref bgColor.Ref;
-
-				// Change track color based on state
-				// On: Green/Accent color (e.g., #4CAF50)
-				// Off: Gray/Neutral color (e.g., #9E9E9E)
-				if (t.IsOn)
-				{
-					color.Color = new System.Numerics.Vector4(0.3f, 0.69f, 0.31f, 1f); // Green
-				}
-				else
-				{
-					color.Color = new System.Numerics.Vector4(0.62f, 0.62f, 0.62f, 1f); // Gray
-				}
-
-				commands.Entity(t.TrackEntity).Insert(color);
+				color.Color = new System.Numerics.Vector4(0.3f, 0.69f, 0.31f, 1f); // Green
 			}
+			else
+			{
+				color.Color = new System.Numerics.Vector4(0.62f, 0.62f, 0.62f, 1f); // Gray
+			}
+
+			commands.Entity(toggleId).Insert(color);
 		}
 	}
 }

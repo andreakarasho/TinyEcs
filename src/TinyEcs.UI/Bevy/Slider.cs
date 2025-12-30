@@ -18,6 +18,12 @@ public enum SliderDirection
 public struct SliderThumb { }
 
 /// <summary>
+/// Marker component for slider fill elements.
+/// Used to identify the fill bar that shows the filled portion.
+/// </summary>
+public struct SliderFill { }
+
+/// <summary>
 /// Component used to manage the state of a slider during dragging.
 /// Automatically added/removed when dragging starts/stops.
 /// </summary>
@@ -32,6 +38,9 @@ public struct SliderDragState
 /// <summary>
 /// Component that represents a slider widget with a draggable thumb.
 /// The slider allows selecting a value between min and max by dragging the thumb or clicking the track.
+/// Child elements are identified by marker components:
+/// - SliderThumb: the draggable thumb
+/// - SliderFill: the fill bar showing the filled portion (optional)
 /// </summary>
 public struct Slider
 {
@@ -47,24 +56,12 @@ public struct Slider
 	/// <summary>Direction of the slider</summary>
 	public SliderDirection Direction;
 
-	/// <summary>Entity ID of the thumb element</summary>
-	public ulong ThumbEntity;
-
-	/// <summary>Entity ID of the track/rail element</summary>
-	public ulong TrackEntity;
-
-	/// <summary>Entity ID of the fill element (optional, shows filled portion)</summary>
-	public ulong FillEntity;
-
 	public Slider(float min, float max, float initialValue, SliderDirection direction = SliderDirection.Horizontal)
 	{
 		Min = min;
 		Max = max;
 		Value = Math.Clamp(initialValue, min, max);
 		Direction = direction;
-		ThumbEntity = 0;
-		TrackEntity = 0;
-		FillEntity = 0;
 	}
 
 	/// <summary>
@@ -128,25 +125,24 @@ public struct SliderPlugin : IPlugin
 		app.AddSystem((
 			Commands commands,
 			Res<PointerInputState> pointerInput,
-			Query<Data<Slider, SliderDragState>> activeDrags,
-			Query<Data<ComputedLayout>> layouts) =>
+			Query<Data<Slider, SliderDragState, ComputedLayout>> activeDrags) =>
 		{
-			UpdateSliderValue(commands, pointerInput, activeDrags, layouts);
+			UpdateSliderValue(commands, pointerInput, activeDrags);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("slider:update-value")
-		.After("flux:update-interaction")
+		.After("interaction:add-to-interactive")
 		.Build();
 
 		// System to update thumb and fill positions when slider value changes
 		// Runs every frame to handle layout changes
 		app.AddSystem((
 			Commands commands,
-			Query<Data<Slider>> allSliders,
-			Query<Data<UiNode>> allNodes,
-			Query<Data<ComputedLayout>> layouts) =>
+			Query<Data<Slider, ComputedLayout>> allSliders,
+			Query<Data<Parent, UiNode, ComputedLayout>, Filter<With<SliderThumb>>> thumbs,
+			Query<Data<Parent, UiNode>, Filter<With<SliderFill>>> fills) =>
 		{
-			UpdateSliderVisuals(commands, allSliders, allNodes, layouts);
+			UpdateSliderVisuals(commands, allSliders, thumbs, fills);
 		})
 		.InStage(Stage.PostUpdate)
 		.Label("slider:update-visuals")
@@ -215,30 +211,29 @@ public struct SliderPlugin : IPlugin
 	private static void UpdateSliderValue(
 		Commands commands,
 		Res<PointerInputState> pointerInput,
-		Query<Data<Slider, SliderDragState>> activeDrags,
-		Query<Data<ComputedLayout>> layouts)
+		Query<Data<Slider, SliderDragState, ComputedLayout>> activeDrags)
 	{
 		var mousePos = pointerInput.Value.Position;
 		var isPointerDown = pointerInput.Value.IsPrimaryButtonDown;
 
 		// Process all sliders that are actively being dragged
-		foreach (var (trackEntityId, slider, dragState) in activeDrags)
+		foreach (var (sliderEntityId, slider, dragState, layout) in activeDrags)
 		{
 			ref var s = ref slider.Ref;
 
 			// Stop dragging if pointer button was released
 			if (!isPointerDown)
 			{
-				commands.Entity(trackEntityId.Ref).Remove<SliderDragState>();
+				commands.Entity(sliderEntityId.Ref).Remove<SliderDragState>();
 				continue;
 			}
 
-			// Get track layout
-			if (s.TrackEntity == 0 || !layouts.Contains(s.TrackEntity))
-				continue;
+			// Use the slider entity's own layout (the track)
+			ref readonly var track = ref layout.Ref;
 
-			var (_, trackLayout) = layouts.Get(s.TrackEntity);
-			ref readonly var track = ref trackLayout.Ref;
+			// Skip if layout not calculated yet
+			if (track.Width <= 0.01f && track.Height <= 0.01f)
+				continue;
 
 			// Calculate normalized position based on direction
 			float normalized;
@@ -262,36 +257,33 @@ public struct SliderPlugin : IPlugin
 			if (Math.Abs(s.Value - oldValue) > 0.0001f)
 			{
 				// Re-insert to trigger change detection
-				commands.Entity(trackEntityId.Ref).Insert(s);
+				commands.Entity(sliderEntityId.Ref).Insert(s);
 
-				// Emit SliderChanged event both globally and per-entity
+				// Emit SliderChanged event on the entity
 				var changeEvent = new SliderChanged(s.Value, normalized);
-				commands.Entity(trackEntityId.Ref).EmitTrigger(changeEvent);  // Per-entity (BevyObservers)
-				commands.EmitTrigger(changeEvent);  // Global (EventChannel)
+				commands.Entity(sliderEntityId.Ref).EmitTrigger(changeEvent);
 			}
 		}
 	}
 
 	/// <summary>
 	/// Updates the thumb and fill positions based on slider value.
+	/// Finds thumb and fill by looking for child entities with marker components.
 	/// </summary>
 	private static void UpdateSliderVisuals(
 		Commands commands,
-		Query<Data<Slider>> allSliders,
-		Query<Data<UiNode>> allNodes,
-		Query<Data<ComputedLayout>> layouts)
+		Query<Data<Slider, ComputedLayout>> allSliders,
+		Query<Data<Parent, UiNode, ComputedLayout>, Filter<With<SliderThumb>>> thumbs,
+		Query<Data<Parent, UiNode>, Filter<With<SliderFill>>> fills)
 	{
-		foreach (var (entityId, slider) in allSliders)
+		foreach (var (sliderEntityId, slider, layout) in allSliders)
 		{
 			ref readonly var s = ref slider.Ref;
 			var normalized = s.GetNormalizedValue();
+			var sliderId = sliderEntityId.Ref;
 
-			// Get track layout
-			if (s.TrackEntity == 0 || !layouts.Contains(s.TrackEntity))
-				continue;
-
-			var (_, trackLayout) = layouts.Get(s.TrackEntity);
-			ref readonly var track = ref trackLayout.Ref;
+			// Use the slider entity's own layout (the track)
+			ref readonly var track = ref layout.Ref;
 
 			// Skip if layout not calculated yet (width/height would be 0)
 			if (s.Direction == SliderDirection.Horizontal && track.Width <= 0.01f)
@@ -299,21 +291,16 @@ public struct SliderPlugin : IPlugin
 			if (s.Direction == SliderDirection.Vertical && track.Height <= 0.01f)
 				continue;
 
-			// Update thumb position
-			if (s.ThumbEntity != 0 && allNodes.Contains(s.ThumbEntity))
+			// Find and update thumb position
+			foreach (var (thumbEntityId, parent, thumbNode, thumbLayout) in thumbs)
 			{
-				var (_, thumbNode) = allNodes.Get(s.ThumbEntity);
-				ref var thumb = ref thumbNode.Ref;
+				if (parent.Ref.Id != sliderId)
+					continue;
 
-				// Get thumb size for centering
-				float thumbSize = 20f; // Default thumb size
-				if (layouts.Contains(s.ThumbEntity))
-				{
-					var (_, thumbLayout) = layouts.Get(s.ThumbEntity);
-					thumbSize = s.Direction == SliderDirection.Horizontal
-						? thumbLayout.Ref.Width
-						: thumbLayout.Ref.Height;
-				}
+				ref var thumb = ref thumbNode.Ref;
+				var thumbSize = s.Direction == SliderDirection.Horizontal
+					? thumbLayout.Ref.Width
+					: thumbLayout.Ref.Height;
 
 				if (s.Direction == SliderDirection.Horizontal)
 				{
@@ -331,13 +318,16 @@ public struct SliderPlugin : IPlugin
 				}
 
 				thumb.PositionType = Flexbox.PositionType.Absolute;
-				commands.Entity(s.ThumbEntity).Insert(thumb);
+				commands.Entity(thumbEntityId.Ref).Insert(thumb);
+				break;
 			}
 
-			// Update fill size
-			if (s.FillEntity != 0 && allNodes.Contains(s.FillEntity))
+			// Find and update fill size
+			foreach (var (fillEntityId, parent, fillNode) in fills)
 			{
-				var (_, fillNode) = allNodes.Get(s.FillEntity);
+				if (parent.Ref.Id != sliderId)
+					continue;
+
 				ref var fill = ref fillNode.Ref;
 
 				if (s.Direction == SliderDirection.Horizontal)
@@ -351,7 +341,8 @@ public struct SliderPlugin : IPlugin
 					fill.Height = FlexValue.Percent(normalized * 100f);
 				}
 
-				commands.Entity(s.FillEntity).Insert(fill);
+				commands.Entity(fillEntityId.Ref).Insert(fill);
+				break;
 			}
 		}
 	}

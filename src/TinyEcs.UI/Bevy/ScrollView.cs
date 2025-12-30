@@ -378,6 +378,27 @@ public static class ScrollViewHelpers
 {
 	/// <summary>
 	/// Creates a complete scroll view with optional horizontal and vertical scrollbars.
+	/// Uses default colors. For themed scrollbars, use the overload that accepts a UiTheme.
+	///
+	/// Layout structure (for vertical scrollbar):
+	/// <code>
+	/// ScrollView (root, Row layout, 100x200)
+	/// ├── ViewportContainer (Column, flex-grow:1, width = 100 - scrollbarWidth)
+	/// │   └── Viewport (100% of container, clips content)
+	/// │       └── Content (holds user children, width matches viewport)
+	/// └── VerticalScrollbar (fixed width: scrollbarWidth)
+	///     └── Handle (draggable thumb)
+	/// </code>
+	///
+	/// For both scrollbars:
+	/// <code>
+	/// ScrollView (root, Column layout)
+	/// ├── TopRow (Row, flex-grow:1)
+	/// │   ├── ViewportContainer (flex-grow:1)
+	/// │   │   └── Viewport → Content
+	/// │   └── VerticalScrollbar (fixed width)
+	/// └── HorizontalScrollbar (fixed height)
+	/// </code>
 	/// </summary>
 	/// <param name="commands">Entity commands for spawning entities</param>
 	/// <param name="enableVertical">Enable vertical scrolling and scrollbar</param>
@@ -394,8 +415,68 @@ public static class ScrollViewHelpers
 		FlexValue? height = null,
 		float scrollbarWidth = 12f)
 	{
+		// Default colors (gray)
+		var trackColor = BackgroundColor.FromRgba(100, 100, 100, 180);
+		var thumbColor = BackgroundColor.FromRgba(180, 180, 180, 220);
+
+		return CreateScrollViewInternal(commands, enableVertical, enableHorizontal,
+			width, height, scrollbarWidth, trackColor, thumbColor);
+	}
+
+	/// <summary>
+	/// Creates a complete scroll view with theme-based colors for scrollbars.
+	/// Uses ScrollbarTrackColor and ScrollbarThumbColor from the theme.
+	/// </summary>
+	/// <param name="commands">Entity commands for spawning entities</param>
+	/// <param name="theme">UI theme for colors and dimensions</param>
+	/// <param name="enableVertical">Enable vertical scrolling and scrollbar</param>
+	/// <param name="enableHorizontal">Enable horizontal scrolling and scrollbar</param>
+	/// <param name="width">Width of the scroll view</param>
+	/// <param name="height">Height of the scroll view</param>
+	/// <param name="scrollbarWidth">Width of scrollbars in pixels (if null, uses theme.ScrollbarSize)</param>
+	/// <returns>Tuple of (scrollViewId, contentId) - use contentId as parent for user content</returns>
+	public static (ulong scrollViewId, ulong contentId) CreateScrollView(
+		Commands commands,
+		UiTheme theme,
+		bool enableVertical = true,
+		bool enableHorizontal = false,
+		FlexValue? width = null,
+		FlexValue? height = null,
+		float? scrollbarWidth = null)
+	{
+		var trackColor = new BackgroundColor(theme.ScrollbarTrackColor);
+		var thumbColor = new BackgroundColor(theme.ScrollbarThumbColor);
+		var barWidth = scrollbarWidth ?? theme.ScrollbarSize;
+
+		return CreateScrollViewInternal(commands, enableVertical, enableHorizontal,
+			width, height, barWidth, trackColor, thumbColor);
+	}
+
+	/// <summary>
+	/// Internal implementation for creating scroll views with specified colors.
+	/// </summary>
+	private static (ulong scrollViewId, ulong contentId) CreateScrollViewInternal(
+		Commands commands,
+		bool enableVertical,
+		bool enableHorizontal,
+		FlexValue? width,
+		FlexValue? height,
+		float scrollbarWidth,
+		BackgroundColor trackColor,
+		BackgroundColor thumbColor)
+	{
 		width ??= FlexValue.Percent(100f);
 		height ??= FlexValue.Percent(100f);
+
+		ulong? verticalBarId = null;
+		ulong? verticalHandleId = null;
+		ulong? horizontalBarId = null;
+		ulong? horizontalHandleId = null;
+
+		// Determine root layout direction based on scrollbar configuration
+		// - Vertical only: Row (viewport | scrollbar)
+		// - Horizontal only: Column (viewport / scrollbar)
+		// - Both: Column with nested Row
 
 		// Create root scroll view container
 		var scrollViewId = commands.Spawn()
@@ -404,17 +485,40 @@ public static class ScrollViewHelpers
 				Width = width.Value,
 				Height = height.Value,
 				Display = Display.Flex,
-				FlexDirection = FlexDirection.Column
+				// Use Column for both scrollbars (need nested structure), Row for vertical only
+				FlexDirection = enableHorizontal ? FlexDirection.Column : FlexDirection.Row
 			})
 			.Id;
 
-		// Create viewport (clips content)
+		// For both scrollbars, we need an intermediate row container
+		ulong topRowId = 0;
+		if (enableVertical && enableHorizontal)
+		{
+			topRowId = commands.Spawn()
+				.Insert(new UiNode
+				{
+					Width = FlexValue.Percent(100f),
+					Height = FlexValue.Auto(),
+					FlexGrow = 1f, // Take remaining vertical space after horizontal scrollbar
+					Display = Display.Flex,
+					FlexDirection = FlexDirection.Row
+				})
+				.Id;
+			commands.Entity(scrollViewId).AddChild(topRowId);
+		}
+
+		// The parent for viewport (either scrollView directly or topRow if both scrollbars)
+		var viewportParent = (enableVertical && enableHorizontal) ? topRowId : scrollViewId;
+
+		// Create viewport (clips content) - uses flex-grow to take remaining space on main axis
+		// Height = 100% ensures it fills parent height (cross-axis in Row layout)
 		var viewportId = commands.Spawn()
 			.Insert(new UiNode
 			{
-				Width = FlexValue.Percent(100f),
-				Height = FlexValue.Percent(100f),
-				PositionType = PositionType.Absolute,
+				Width = FlexValue.Auto(),
+				Height = FlexValue.Percent(100f), // Fill parent height
+				FlexGrow = 1f, // Take remaining horizontal space after scrollbar
+				FlexShrink = 1f,
 				Overflow = Overflow.Scroll, // Use Scroll to indicate scrollable behavior
 				AlignItems = Align.FlexStart, // Left-align content container (don't center it)
 				JustifyContent = Justify.FlexStart // Top-align content container
@@ -429,6 +533,7 @@ public static class ScrollViewHelpers
 			.Id;
 
 		// Create content container (holds user children)
+		// Content width/height should be auto to wrap children, with min-size matching viewport
 		var contentId = commands.Spawn()
 			.Insert(new UiNode
 			{
@@ -438,44 +543,30 @@ public static class ScrollViewHelpers
 				MinHeight = FlexValue.Percent(100f),
 				Display = Display.Flex,
 				FlexDirection = FlexDirection.Column,
-				AlignSelf = Align.FlexStart, // Ensure content starts at top-left, not centered
-				PaddingRight = enableVertical ? FlexValue.Points(scrollbarWidth) : FlexValue.Points(0f),
-				PaddingBottom = enableHorizontal ? FlexValue.Points(scrollbarWidth) : FlexValue.Points(0f)
+				AlignSelf = Align.FlexStart // Ensure content starts at top-left, not centered
+				// No padding needed - scrollbar is part of flex layout, not overlaid
 			})
 			.Insert(new ScrollViewContent(scrollViewId))
 			.Id;
 
-		// Create scrollbar container (absolute positioned overlay)
-		var scrollbarContainerId = commands.Spawn()
-			.Insert(new UiNode
-			{
-				Width = FlexValue.Percent(100f),
-				Height = FlexValue.Percent(100f),
-				PositionType = PositionType.Absolute,
-				Display = Display.Flex,
-				JustifyContent = Justify.FlexEnd
-			})
-			.Id;
-
-		ulong? verticalBarId = null;
-		ulong? verticalHandleId = null;
-		ulong? horizontalBarId = null;
-		ulong? horizontalHandleId = null;
-
-		// Create vertical scrollbar
+		// Create vertical scrollbar (fixed width, part of flex layout)
 		if (enableVertical)
 		{
+			// Vertical scrollbar needs to stretch to fill parent height (cross-axis in Row layout)
 			verticalBarId = commands.Spawn()
 				.Insert(new UiNode
 				{
 					Width = FlexValue.Points(scrollbarWidth),
-					Height = FlexValue.Percent(100f),
-					PositionType = PositionType.Absolute,
-					Right = FlexValue.Points(0f),
+					Height = FlexValue.Percent(100f), // Fill parent height
+					FlexGrow = 0f,
+					FlexShrink = 0f,
 					Display = Display.Flex,
-					FlexDirection = FlexDirection.Column
+					FlexDirection = FlexDirection.Column,
+					PositionType = PositionType.Relative // Part of flex layout, not absolute
 				})
-				.Insert(BackgroundColor.FromRgba(100, 100, 100, 180))
+				.Insert(trackColor)
+				.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded track
+				.Insert(new Interactive()) // Track is interactive for page scroll on click
 				.Id;
 
 			verticalHandleId = commands.Spawn()
@@ -483,9 +574,10 @@ public static class ScrollViewHelpers
 				{
 					Width = FlexValue.Percent(100f),
 					Height = FlexValue.Points(40f),
-					PositionType = PositionType.Absolute
+					PositionType = PositionType.Absolute // Thumb is absolute within the rail
 				})
-				.Insert(BackgroundColor.FromRgba(180, 180, 180, 220))
+				.Insert(thumbColor)
+				.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded thumb
 				.Insert(new ScrollbarThumb())
 				.Insert(new ScrollBarHandle(ControlOrientation.Vertical, scrollViewId))
 				.Insert(new Draggable())
@@ -497,23 +589,26 @@ public static class ScrollViewHelpers
 
 			// Set up hierarchy
 			commands.Entity(verticalBarId.Value).AddChild(verticalHandleId.Value);
-			commands.Entity(scrollbarContainerId).AddChild(verticalBarId.Value);
 		}
 
-		// Create horizontal scrollbar
+		// Create horizontal scrollbar (fixed height, part of flex layout)
 		if (enableHorizontal)
 		{
+			// Horizontal scrollbar needs to stretch to fill parent width
 			horizontalBarId = commands.Spawn()
 				.Insert(new UiNode
 				{
-					Width = FlexValue.Percent(100f),
+					Width = FlexValue.Percent(100f), // Fill parent width
 					Height = FlexValue.Points(scrollbarWidth),
-					PositionType = PositionType.Absolute,
-					Bottom = FlexValue.Points(0f),
+					FlexGrow = 0f,
+					FlexShrink = 0f,
 					Display = Display.Flex,
-					FlexDirection = FlexDirection.Row
+					FlexDirection = FlexDirection.Row,
+					PositionType = PositionType.Relative // Part of flex layout, not absolute
 				})
-				.Insert(BackgroundColor.FromRgba(100, 100, 100, 180))
+				.Insert(trackColor)
+				.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded track
+				.Insert(new Interactive()) // Track is interactive for page scroll on click
 				.Id;
 
 			horizontalHandleId = commands.Spawn()
@@ -521,9 +616,10 @@ public static class ScrollViewHelpers
 				{
 					Width = FlexValue.Points(40f),
 					Height = FlexValue.Percent(100f),
-					PositionType = PositionType.Absolute
+					PositionType = PositionType.Absolute // Thumb is absolute within the rail
 				})
-				.Insert(BackgroundColor.FromRgba(180, 180, 180, 220))
+				.Insert(thumbColor)
+				.Insert(new BorderRadius(scrollbarWidth / 2f)) // Rounded thumb
 				.Insert(new ScrollbarThumb())
 				.Insert(new ScrollBarHandle(ControlOrientation.Horizontal, scrollViewId))
 				.Insert(new Draggable())
@@ -535,7 +631,6 @@ public static class ScrollViewHelpers
 
 			// Set up hierarchy
 			commands.Entity(horizontalBarId.Value).AddChild(horizontalHandleId.Value);
-			commands.Entity(scrollbarContainerId).AddChild(horizontalBarId.Value);
 		}
 
 		// Set up ScrollView component
@@ -547,9 +642,35 @@ public static class ScrollViewHelpers
 			HorizontalScrollBarHandle = horizontalHandleId
 		});
 
-		// Set up main hierarchy
-		commands.Entity(scrollViewId).AddChild(viewportId);
-		commands.Entity(scrollViewId).AddChild(scrollbarContainerId);
+		// Set up main hierarchy based on scrollbar configuration
+		if (enableVertical && enableHorizontal)
+		{
+			// Both scrollbars: TopRow contains [Viewport, VerticalBar], HorizontalBar below
+			commands.Entity(topRowId).AddChild(viewportId);
+			if (verticalBarId.HasValue)
+				commands.Entity(topRowId).AddChild(verticalBarId.Value);
+			if (horizontalBarId.HasValue)
+				commands.Entity(scrollViewId).AddChild(horizontalBarId.Value);
+		}
+		else if (enableVertical)
+		{
+			// Vertical only: Row layout [Viewport, VerticalBar]
+			commands.Entity(scrollViewId).AddChild(viewportId);
+			commands.Entity(scrollViewId).AddChild(verticalBarId!.Value);
+		}
+		else if (enableHorizontal)
+		{
+			// Horizontal only: Column layout [Viewport, HorizontalBar]
+			commands.Entity(scrollViewId).AddChild(viewportId);
+			commands.Entity(scrollViewId).AddChild(horizontalBarId!.Value);
+		}
+		else
+		{
+			// No scrollbars: just viewport
+			commands.Entity(scrollViewId).AddChild(viewportId);
+		}
+
+		// Content is always child of viewport
 		commands.Entity(viewportId).AddChild(contentId);
 
 		return (scrollViewId, contentId);

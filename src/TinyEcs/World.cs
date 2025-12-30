@@ -64,28 +64,28 @@ public sealed partial class World : IDisposable
 		EcsAssert.Panic(lookup.ID < _maxCmpId,
 			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
-		if (!exists)
-		{
-			idx = Entity(lookup.ID).Set(lookup).ID;
+		// 		ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
+		// 		if (!exists)
+		// 		{
+		// 			idx = Entity(lookup.ID).Set(lookup).ID;
 
-			NamingEntityMapper.SetName(idx, Lookup.Component<T>.Name);
+		// 			NamingEntityMapper.SetName(idx, Lookup.Component<T>.Name);
 
-#if USE_PAIR
-			if (!lookup.ID.IsPair())
-			{
-				ref var record = ref GetRecord(lookup.ID);
+		// #if USE_PAIR
+		// 			if (!lookup.ID.IsPair())
+		// 			{
+		// 				ref var record = ref GetRecord(lookup.ID);
 
-				if ((record.Flags & EntityFlags.HasName) == 0)
-				{
-					record.Flags |= EntityFlags.HasName;
-					var name = Lookup.Component<T>.Name;
-					_names[name] = lookup.ID;
-					Set<Identifier>(lookup.ID, new (name), Defaults.Name.ID);
-				}
-			}
-#endif
-		}
+		// 				if ((record.Flags & EntityFlags.HasName) == 0)
+		// 				{
+		// 					record.Flags |= EntityFlags.HasName;
+		// 					var name = Lookup.Component<T>.Name;
+		// 					_names[name] = lookup.ID;
+		// 					Set<Identifier>(lookup.ID, new (name), Defaults.Name.ID);
+		// 				}
+		// 			}
+		// #endif
+		// 		}
 
 		return ref lookup;
 	}

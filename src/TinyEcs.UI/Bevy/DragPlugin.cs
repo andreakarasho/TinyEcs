@@ -7,7 +7,7 @@ namespace TinyEcs.UI.Bevy;
 /// <summary>
 /// Plugin that handles dragging for UI elements with the Draggable component.
 /// Enhanced version with state machine from sickle_ui.
-/// Integrates with FluxInteraction for proper interaction lifecycle tracking.
+/// Uses InteractionState for interaction tracking.
 /// </summary>
 public struct DragPlugin : IPlugin
 {
@@ -17,13 +17,12 @@ public struct DragPlugin : IPlugin
 		app.AddSystem((
 			Commands commands,
 			Query<Data<ZIndex>> zIndexQuery,
-			Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux) =>
+			Query<Data<Draggable, InteractionState>, Filter<Changed<InteractionState>>> changedInteraction) =>
 		{
-			BringToFrontOnPress(commands, zIndexQuery, changedFlux);
+			BringToFrontOnPress(commands, zIndexQuery, changedInteraction);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("drag:bring-to-front")
-		.After("flux:update-prev")
 		.Build();
 
 		// System 1: Initialize drag origin when drag starts
@@ -39,10 +38,9 @@ public struct DragPlugin : IPlugin
 		.Build();
 
 		// System 2: Update drag progress (tracks position changes during drag)
-		// Runs after FluxInteraction update to get latest interaction state
 		app.AddSystem((
 			Res<PointerInputState> pointerInput,
-			Query<Data<Draggable, FluxInteraction>> draggables) =>
+			Query<Data<Draggable, InteractionState>> draggables) =>
 		{
 			UpdateDragProgress(pointerInput, draggables);
 		})
@@ -51,18 +49,18 @@ public struct DragPlugin : IPlugin
 		.After("drag:init-origin")
 		.Build();
 
-		// System 3: Update drag state based on FluxInteraction changes
+		// System 3: Update drag state based on InteractionState changes
 		app.AddSystem((
-			Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux) =>
+			Query<Data<Draggable, InteractionState>, Filter<Changed<InteractionState>>> changedInteraction) =>
 		{
-			UpdateDragState(changedFlux);
+			UpdateDragState(changedInteraction);
 		})
 		.InStage(Stage.PreUpdate)
 		.Label("drag:update-state")
 		.After("drag:update-progress")
 		.Build();
 
-		// System 3: Apply drag positions (override Flexbox layout)
+		// System 4: Apply drag positions (override Flexbox layout)
 		// Runs AFTER flexbox:read_layout to override positions
 		app.AddSystem((
 			Commands commands,
@@ -84,14 +82,14 @@ public struct DragPlugin : IPlugin
 	private static void BringToFrontOnPress(
 		Commands commands,
 		Query<Data<ZIndex>> zIndexQuery,
-		Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux)
+		Query<Data<Draggable, InteractionState>, Filter<Changed<InteractionState>>> changedInteraction)
 	{
-		foreach (var (entityId, _, fluxInteraction) in changedFlux)
+		foreach (var (entityId, _, interaction) in changedInteraction)
 		{
-			ref readonly var flux = ref fluxInteraction.Ref;
+			ref readonly var state = ref interaction.Ref;
 
 			// When element is pressed, bring it to front
-			if (flux.State == FluxInteractionState.Pressed)
+			if (state.State == Interaction.Pressed)
 			{
 				// Find the highest ZIndex among all entities
 				int maxZIndex = 0;
@@ -109,19 +107,19 @@ public struct DragPlugin : IPlugin
 
 	/// <summary>
 	/// Updates drag progress by tracking position changes during active drags.
-	/// Handles the MaybeDragged → DragStart → Dragging state transitions.
+	/// Handles the MaybeDragged -> DragStart -> Dragging state transitions.
 	/// Ported from sickle_ui's update_drag_progress.
 	/// </summary>
 	private static void UpdateDragProgress(
 		Res<PointerInputState> pointerInput,
-		Query<Data<Draggable, FluxInteraction>> draggables)
+		Query<Data<Draggable, InteractionState>> draggables)
 	{
 		var mousePos = pointerInput.Value.Position;
 
-		foreach (var (entityId, draggable, fluxInteraction) in draggables)
+		foreach (var (entityId, draggable, interaction) in draggables)
 		{
 			ref var drag = ref draggable.Ref;
-			ref readonly var flux = ref fluxInteraction.Ref;
+			ref readonly var state = ref interaction.Ref;
 
 			// Transition from DragEnd to Inactive (cleanup)
 			if (drag.State == DragState.DragEnd)
@@ -138,20 +136,12 @@ public struct DragPlugin : IPlugin
 				continue;
 			}
 
-			// Only update if FluxInteraction is Pressed and we're in a drag state
-			if (flux.State == FluxInteractionState.Pressed &&
+			// Only update if currently Pressed and we're in a drag state
+			if (state.State == Interaction.Pressed &&
 			    (drag.State == DragState.MaybeDragged ||
 			     drag.State == DragState.DragStart ||
 			     drag.State == DragState.Dragging))
 			{
-				// TODO: ESC key cancellation (requires keyboard input system)
-				// if (drag.State is DragStart or Dragging && escKeyPressed)
-				// {
-				//     drag.State = DragCanceled;
-				//     drag.Clear();
-				//     continue;
-				// }
-
 				// DragStart only lasts one frame, then transitions to Dragging
 				if (drag.State == DragState.DragStart)
 				{
@@ -167,7 +157,7 @@ public struct DragPlugin : IPlugin
 					var prevPos = drag.Position.Value;
 					var delta = currentPosition - prevPos;
 
-					// Check if actually moved (no tolerance threshold in sickle_ui)
+					// Check if actually moved
 					if (delta.LengthSquared() > 0f)
 					{
 						// Transition from MaybeDragged to DragStart on first movement
@@ -186,33 +176,30 @@ public struct DragPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Updates drag state based on FluxInteraction changes.
-	/// Handles starting drag (Pressed) and ending drag (Released/PressCanceled).
-	/// Ported from sickle_ui's update_drag_state.
+	/// Updates drag state based on InteractionState changes.
+	/// Handles starting drag (Pressed) and ending drag (not Pressed).
 	/// </summary>
 	private static void UpdateDragState(
-		Query<Data<Draggable, FluxInteraction>, Filter<Changed<FluxInteraction>>> changedFlux)
+		Query<Data<Draggable, InteractionState>, Filter<Changed<InteractionState>>> changedInteraction)
 	{
-		foreach (var (entityId, draggable, fluxInteraction) in changedFlux)
+		foreach (var (entityId, draggable, interaction) in changedInteraction)
 		{
 			ref var drag = ref draggable.Ref;
-			ref readonly var flux = ref fluxInteraction.Ref;
+			ref readonly var state = ref interaction.Ref;
 
 			// Start drag on Pressed
-			if (flux.State == FluxInteractionState.Pressed &&
+			if (state.State == Interaction.Pressed &&
 			    drag.State != DragState.MaybeDragged)
 			{
-				// Note: We don't have access to PointerInputState here to get the position
-				// So we'll set origin/position in the next UpdateDragProgress call
 				drag.State = DragState.MaybeDragged;
 				drag.Source = DragSource.Mouse;
-				drag.Origin = null; // Will be set when we get pointer position
+				drag.Origin = null;
 				drag.Position = null;
 				drag.Diff = Vector2.Zero;
 			}
-			// End drag on Released or PressCanceled
-			else if (flux.State == FluxInteractionState.Released ||
-			         flux.State == FluxInteractionState.PressCanceled)
+			// End drag when no longer Pressed
+			else if (state.State != Interaction.Pressed &&
+			         drag.State != DragState.Inactive)
 			{
 				if (drag.State == DragState.DragStart || drag.State == DragState.Dragging)
 				{
@@ -229,7 +216,7 @@ public struct DragPlugin : IPlugin
 	}
 
 	/// <summary>
-	/// Initializes drag origin and position when FluxInteraction.Pressed is detected.
+	/// Initializes drag origin and position when Pressed is detected.
 	/// This is a helper system that runs early to capture the initial pointer position.
 	/// Also calculates the drag offset from the element's top-left to the mouse position.
 	/// </summary>
@@ -280,7 +267,6 @@ public struct DragPlugin : IPlugin
 				var mousePos = drag.Position.Value;
 
 				// Calculate element position by subtracting the drag offset from mouse position
-				// This keeps the element at the same relative position to the cursor
 				var elementPos = new Vector2(
 					mousePos.X - drag.DragOffset.X,
 					mousePos.Y - drag.DragOffset.Y
@@ -293,8 +279,7 @@ public struct DragPlugin : IPlugin
 				node.Right = FlexValue.Auto();
 				node.Bottom = FlexValue.Auto();
 
-				// Clear margins - they still apply to absolutely positioned elements in Flexbox
-				// This prevents the margin from being added on top of our absolute position
+				// Clear margins
 				node.MarginLeft = FlexValue.Points(0);
 				node.MarginTop = FlexValue.Points(0);
 				node.MarginRight = FlexValue.Points(0);
@@ -303,8 +288,6 @@ public struct DragPlugin : IPlugin
 				// Re-insert UiNode to trigger Flexbox sync
 				commands.Entity(entityId.Ref).Insert(node);
 			}
-			// When drag ends, element stays absolutely positioned at its dropped location
-			// No restoration needed - element becomes floating
 		}
 	}
 }
