@@ -4,6 +4,16 @@ using Flexbox;
 namespace TinyEcs.UI.Bevy;
 
 /// <summary>
+/// Resource that stores the available size for Flexbox layout calculation.
+/// Update this resource to change the layout size (e.g., when window resizes).
+/// </summary>
+public class FlexboxLayoutSize
+{
+	public float Width { get; set; } = 1920f;
+	public float Height { get; set; } = 1080f;
+}
+
+/// <summary>
 /// Resource that manages the Flexbox layout state.
 /// Stores the root container node.
 /// </summary>
@@ -21,6 +31,9 @@ public class FlexboxUiState
 		Root.nodeStyle.FlexDirection = FlexDirection.Column;
 		Root.nodeStyle.Dimensions[(int)Dimension.Width] = new Value(100f, Unit.Percent);
 		Root.nodeStyle.Dimensions[(int)Dimension.Height] = new Value(100f, Unit.Percent);
+		// Enable centering support: AlignItems for cross-axis, JustifyContent for main-axis
+		Root.nodeStyle.AlignItems = Align.Center;
+		Root.nodeStyle.JustifyContent = Justify.Center;
 	}
 
 	/// <summary>
@@ -106,6 +119,9 @@ public struct FlexboxUiPlugin : IPlugin
 		// Register the FlexboxUiState resource
 		app.AddResource(new FlexboxUiState());
 
+		// Register the FlexboxLayoutSize resource with plugin-configured defaults
+		app.AddResource(new FlexboxLayoutSize { Width = AvailableWidth, Height = AvailableHeight });
+
 		// Register the TextMeasureContext resource (renderer will populate it)
 		var textMeasureContext = new TextMeasureContext();
 		app.AddResource(textMeasureContext);
@@ -153,10 +169,12 @@ public struct FlexboxUiPlugin : IPlugin
 
 		app.AddObserver<OnAdd<Parent>, Query<Data<FlexboxNodeRef>>, ResMut<FlexboxUiState>>(SyncHierarchyToFlexbox2);
 
-		// Calculate layout after syncing nodes and hierarchy, before reading ComputedLayout
-		app.AddSystem((ResMut<FlexboxUiState> state) =>
+		// Calculate layout using the FlexboxLayoutSize resource.
+		// To use a custom size (e.g., actual window size), update the FlexboxLayoutSize resource
+		// in an earlier stage (e.g., Stage.PreUpdate or Stage.First).
+		app.AddSystem((ResMut<FlexboxUiState> state, Res<FlexboxLayoutSize> layoutSize) =>
 		{
-			state.Value.CalculateLayout(width, height);
+			state.Value.CalculateLayout(layoutSize.Value.Width, layoutSize.Value.Height);
 		})
 			.InStage(Stage.PostUpdate)
 			.Label("flexbox:calc_layout")
