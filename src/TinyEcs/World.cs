@@ -266,9 +266,11 @@ public sealed partial class World : IDisposable
 
 			return a.IsValid() && b.IsValid();
 		}
-#endif
 
 		return id == Defaults.Wildcard.ID;
+#else
+		return false;
+#endif
 	}
 
 #if USE_PAIR

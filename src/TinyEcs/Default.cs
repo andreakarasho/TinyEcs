@@ -2,12 +2,12 @@ namespace TinyEcs;
 
 public static class Defaults
 {
+#if USE_PAIR
 	/// <summary>
 	/// Wildcard is used to specify "any component/tag".<br/>It's mostly used for queries.
 	/// </summary>
 	public readonly struct Wildcard { public static readonly EcsID ID = Lookup.Component<Wildcard>.Value.ID; }
 
-#if USE_PAIR
 	/// <summary>
 	/// Built-in tag.<br/>Shortcut for child.Add{ChildOf}(parent);
 	/// </summary>
