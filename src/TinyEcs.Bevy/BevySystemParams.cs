@@ -1240,6 +1240,10 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool MoveNext()
 	{
+		// JIT constant per specialization — dead-code-eliminates the filter call when no filter is used.
+		if (typeof(TQueryFilter) == typeof(Empty))
+			return _dataIterator.MoveNext();
+
 		while (true)
 		{
 			if (!_dataIterator.MoveNext())
