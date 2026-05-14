@@ -16,15 +16,83 @@ public readonly ref struct PtrRO<T> where T : struct
 	public readonly ref readonly T Ref;
 }
 
-[SkipLocalsInit]
-public ref struct DataRow<T> where T : struct
+
+#if NET9_0_OR_GREATER
+public interface IDataRow<out TSelf, T>
+	where TSelf : IDataRow<TSelf, T>, allows ref struct
+	where T : struct
 {
-	public Ptr<T> Value;
-	public nint Size;
+	static abstract TSelf CreateFrom(ref T baseRef);
+	static abstract TSelf CreateAbsent();
+
+	Ptr<T> Value { get; }
+	void Next();
+}
+#endif
+
+[SkipLocalsInit]
+public ref struct DataRow<T>
+#if NET9_0_OR_GREATER
+	: IDataRow<DataRow<T>, T>
+#endif
+	where T : struct
+{
+	private Ptr<T> _value;
+	private static readonly nint SizeOf = Unsafe.SizeOf<T>();
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public DataRow(ref T value)
+	{
+		_value.Ref = ref value;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static DataRow<T> CreateFrom(ref T baseRef) => new(ref baseRef);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static DataRow<T> CreateAbsent()
+	{
+		DataRow<T> row = default;
+		row._value.Ref = ref Unsafe.NullRef<T>();
+		return row;
+	}
+
+	public Ptr<T> Value { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _value; }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Next()
 	{
-		Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
+		// _value.Ref = ref Unsafe.AddByteOffset(ref _value.Ref, SizeOf);
+		_value.Ref = ref Unsafe.Add(ref _value.Ref, 1);
+	}
+}
+
+[SkipLocalsInit]
+public ref struct DataRowNullRef<T>
+#if NET9_0_OR_GREATER
+	: IDataRow<DataRowNullRef<T>, T>
+#endif
+	where T : struct
+{
+	private Ptr<T> _value;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public DataRowNullRef()
+	{
+		_value.Ref = ref Unsafe.NullRef<T>();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static DataRowNullRef<T> CreateFrom(ref T baseRef) => new();
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static DataRowNullRef<T> CreateAbsent() => new();
+
+	public Ptr<T> Value { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _value; }
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Next()
+	{
+		// nop
 	}
 }

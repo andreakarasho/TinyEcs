@@ -15,6 +15,8 @@ public sealed partial class World
 	public World(ulong maxComponentId = 256)
 	{
 		_comparer = new ComponentComparer(this);
+		_maxCmpId = maxComponentId;
+		_componentBitsetWords = (int)((maxComponentId >> 6) + 1);
 		_archRoot = new Archetype(
 			this,
 			[],
@@ -23,7 +25,6 @@ public sealed partial class World
 		_typeIndex.Add(_archRoot.Id, _archRoot);
 		LastArchetypeId = _archRoot.Id;
 
-		_maxCmpId = maxComponentId;
 		_entities.MaxID = maxComponentId;
 
 #if USE_PAIR

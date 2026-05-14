@@ -10,11 +10,19 @@ public interface IQueryTerm : IComparable<IQueryTerm>
 
 	int IComparable<IQueryTerm>.CompareTo([NotNull] IQueryTerm? other)
 	{
-		var res = Id.CompareTo(other!.Id);
-		if (res != 0)
-			return res;
-		return Op.CompareTo(other.Op);
+		var ap = OpPriority(Op);
+		var bp = OpPriority(other!.Op);
+		if (ap != bp) return ap - bp;
+		return Id.CompareTo(other.Id);
 	}
+
+	private static int OpPriority(TermOp op) => op switch
+	{
+		TermOp.Without => 0,
+		TermOp.With => 1,
+		TermOp.Optional => 2,
+		_ => 3,
+	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	ArchetypeSearchResult Match(Archetype archetype);

@@ -185,6 +185,7 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
 	// }
 
     private const int COMPONENT_MAX_ID = 1024;
+    private const int BITSET_LEN = COMPONENT_MAX_ID / 64;
 
 #if NET
     private readonly Dictionary<ulong, TValue> _slowLookup = new();
@@ -192,20 +193,32 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     private readonly DictionarySlim<ulong, TValue> _slowLookup = new();
 #endif
     private readonly TValue[] _fastLookup = new TValue[COMPONENT_MAX_ID];
-    private readonly bool[] _fastLookupAdded = new bool[COMPONENT_MAX_ID];
+    private readonly ulong[] _addedBits = new ulong[BITSET_LEN];
     private int _fastLookupCount = 0;
 
     public int Count => _slowLookup.Count + _fastLookupCount;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsAdded(ulong id)
+        => (_addedBits[id >> 6] & (1ul << (int)(id & 63))) != 0;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TrySetAdded(ulong id)
+    {
+        ref var word = ref _addedBits[id >> 6];
+        var mask = 1ul << (int)(id & 63);
+        if ((word & mask) != 0)
+            return false;
+        word |= mask;
+        return true;
+    }
 
     public void Add(ulong id, TValue value)
     {
         if (id < (ulong)COMPONENT_MAX_ID)
         {
-            if (!_fastLookupAdded[id])
-            {
+            if (TrySetAdded(id))
                 _fastLookupCount++;
-                _fastLookupAdded[id] = true;
-            }
             _fastLookup[id] = value;
         }
         else
@@ -222,14 +235,16 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     {
         if (id < (ulong)COMPONENT_MAX_ID)
         {
-            if (_fastLookupAdded[id])
+            if (TrySetAdded(id))
+            {
+                _fastLookupCount++;
+                exists = false;
+            }
+            else
             {
                 exists = true;
-                return ref _fastLookup[id];
             }
-
-            exists = false;
-            return ref AddToFast(id);
+            return ref _fastLookup[id];
         }
 
 #if NET
@@ -246,7 +261,7 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     {
         if (id < (ulong)COMPONENT_MAX_ID)
         {
-            if (_fastLookupAdded[id])
+            if (IsAdded(id))
             {
                 exists = true;
                 return ref _fastLookup[id];
@@ -268,21 +283,9 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
     public void Clear()
     {
         Array.Clear(_fastLookup, 0, _fastLookup.Length);
-        Array.Fill(_fastLookupAdded, false);
+        Array.Clear(_addedBits, 0, _addedBits.Length);
         _fastLookupCount = 0;
         _slowLookup.Clear();
-    }
-
-
-    private ref TValue AddToFast(ulong id)
-    {
-        ref var value = ref _fastLookup[id];
-        if (!_fastLookupAdded[id])
-        {
-            _fastLookupCount++;
-            _fastLookupAdded[id] = true;
-        }
-        return ref value;
     }
 
     public IEnumerator<KeyValuePair<ulong, TValue>> GetEnumerator()
@@ -290,10 +293,16 @@ internal sealed class FastIdLookup<TValue> where TValue : notnull
         foreach (var pair in _slowLookup)
             yield return pair;
 
-        for (ulong i = 0; i < (ulong)COMPONENT_MAX_ID; i++)
+        for (var w = 0; w < BITSET_LEN; w++)
         {
-            if (_fastLookupAdded[i])
-                yield return new KeyValuePair<ulong, TValue>(i, _fastLookup[i]);
+            var bits = _addedBits[w];
+            while (bits != 0)
+            {
+                var bit = System.Numerics.BitOperations.TrailingZeroCount(bits);
+                var id = (ulong)((w << 6) + bit);
+                yield return new KeyValuePair<ulong, TValue>(id, _fastLookup[id]);
+                bits &= bits - 1;
+            }
         }
     }
 }
