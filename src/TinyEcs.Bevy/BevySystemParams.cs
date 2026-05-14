@@ -961,21 +961,21 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 		{
 			world.Set(entityId, new EntityObservers
 			{
-				Observers = new List<IObserver>()
+				Lists = new List<ITypedObserverList>()
 			});
 		}
 
-		// Add the observer to the entity's observer list
 		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Observers == null)
+		if (entityObservers.Lists == null)
 		{
-			entityObservers.Observers = new List<IObserver>();
+			entityObservers.Lists = new List<ITypedObserverList>();
 		}
 
-		// Copy callback to local variable (required for struct lambda capture)
+		// Add the callback to this entity's typed list for TTrigger.
+		// Wrap to ignore the World parameter to match the typed list signature.
 		var callback = _callback;
-		// Wrap callback to ignore World parameter
-		entityObservers.Observers.Add(new Observer<TTrigger>((w, trigger) => callback(trigger)));
+		var list = ObserverExtensions.GetOrCreateEntityList<TTrigger>(entityObservers.Lists);
+		list.Callbacks.Add((w, trigger) => callback(trigger));
 	}
 }
 
@@ -1011,19 +1011,18 @@ internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCom
 		{
 			world.Set(entityId, new EntityObservers
 			{
-				Observers = new List<IObserver>()
+				Lists = new List<ITypedObserverList>()
 			});
 		}
 
-		// Add the observer to the entity's observer list
 		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Observers == null)
+		if (entityObservers.Lists == null)
 		{
-			entityObservers.Observers = new List<IObserver>();
+			entityObservers.Lists = new List<ITypedObserverList>();
 		}
 
-		// Directly use the callback with World parameter
-		entityObservers.Observers.Add(new Observer<TTrigger>(_callback));
+		var list = ObserverExtensions.GetOrCreateEntityList<TTrigger>(entityObservers.Lists);
+		list.Callbacks.Add(_callback);
 	}
 }
 

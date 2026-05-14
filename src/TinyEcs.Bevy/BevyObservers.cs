@@ -9,7 +9,7 @@ namespace TinyEcs.Bevy;
 // Observer Triggers - Events that observers can react to
 // ============================================================================
 
-public interface ITrigger
+public interface ITrigger : IEntityTrigger, IPropagatingTrigger
 {
 #if NET9_0_OR_GREATER
 	static abstract void Register(TinyEcs.World world);
@@ -439,46 +439,53 @@ public unsafe struct On<TEvent> : ITrigger, IEntityTrigger, IPropagatingTrigger
 // ============================================================================
 
 /// <summary>
-/// Observer that reacts to triggers
+/// Type-erased entry point for a per-TTrigger observer pool.
+/// Lets ObserverState and EntityObservers hold heterogeneous lists without forcing
+/// boxing of trigger values on dispatch (the concrete <see cref="TypedObserverList{TTrigger}"/>
+/// invokes its delegates with TTrigger by value).
 /// </summary>
-public interface IObserver
+public interface ITypedObserverList
 {
-	void Execute(TinyEcs.World world, object trigger);
 	Type TriggerType { get; }
 }
 
 /// <summary>
-/// Component that stores entity-specific observers.
-/// This component is automatically added to entities that have observers attached.
-/// Note: The List is a reference type, so it persists correctly even though this is a struct.
+/// Holds callbacks for a specific TTrigger. Dispatch invokes each callback with the
+/// trigger passed by value, which preserves any pointer fields the trigger struct
+/// carries (used by On&lt;T&gt; / OnInsert&lt;T&gt; etc. for dynamic propagation)
+/// without allocating boxes.
 /// </summary>
-internal struct EntityObservers
+public sealed class TypedObserverList<TTrigger> : ITypedObserverList
+	where TTrigger : struct, ITrigger
 {
-	public List<IObserver>? Observers;
+	public Type TriggerType => typeof(TTrigger);
 
-	public EntityObservers()
+	public readonly List<Action<TinyEcs.World, TTrigger>> Callbacks = new();
+
+	public void Dispatch(TinyEcs.World world, TTrigger trigger)
 	{
-		Observers = new List<IObserver>();
+		// Iterate by index so callbacks added during dispatch are skipped (would be
+		// processed by the outer flush loop in FlushObservers).
+		var snapshot = Callbacks.Count;
+		for (var i = 0; i < snapshot; i++)
+		{
+			Callbacks[i](world, trigger);
+		}
 	}
 }
 
 /// <summary>
-/// Typed observer for specific trigger
+/// Component that stores entity-specific observers grouped by trigger type.
+/// Each list is typed (no <c>object</c> dispatch) so emit hits a direct delegate
+/// invocation with the trigger by value.
 /// </summary>
-public class Observer<TTrigger> : IObserver
+internal struct EntityObservers
 {
-	private readonly Action<TinyEcs.World, TTrigger> _callback;
+	public List<ITypedObserverList>? Lists;
 
-	public Type TriggerType => typeof(TTrigger);
-
-	public Observer(Action<TinyEcs.World, TTrigger> callback)
+	public EntityObservers()
 	{
-		_callback = callback;
-	}
-
-	public void Execute(TinyEcs.World world, object trigger)
-	{
-		_callback(world, (TTrigger)trigger);
+		Lists = new List<ITypedObserverList>();
 	}
 }
 
@@ -697,90 +704,112 @@ public static class ObserverExtensions
 	}
 
 	/// <summary>
-	/// Register an observer for a specific trigger
+	/// Register a global observer for a specific trigger. Stored in a typed pool so
+	/// dispatch invokes the callback with the trigger by value (no boxing).
 	/// </summary>
 	public static void RegisterObserver<TTrigger>(this TinyEcs.World world, Action<TinyEcs.World, TTrigger> callback)
+		where TTrigger : struct, ITrigger
 	{
 		var state = world.GetObserverState();
+		var list = GetOrCreateGlobalList<TTrigger>(state);
+		list.Callbacks.Add(callback);
+	}
+
+	internal static TypedObserverList<TTrigger> GetOrCreateGlobalList<TTrigger>(ObserverState state)
+		where TTrigger : struct, ITrigger
+	{
 		var triggerType = typeof(TTrigger);
-
-		if (!state.Observers.TryGetValue(triggerType, out var observers))
+		if (!state.Observers.TryGetValue(triggerType, out var typedList))
 		{
-			observers = new List<IObserver>();
-			state.Observers[triggerType] = observers;
+			typedList = new TypedObserverList<TTrigger>();
+			state.Observers[triggerType] = typedList;
 		}
+		return (TypedObserverList<TTrigger>)typedList;
+	}
 
-		observers.Add(new Observer<TTrigger>(callback));
+	internal static TypedObserverList<TTrigger>? FindEntityList<TTrigger>(List<ITypedObserverList> lists)
+		where TTrigger : struct, ITrigger
+	{
+		// Few entries per entity; linear scan is faster than a per-entity dictionary.
+		for (var i = 0; i < lists.Count; i++)
+		{
+			if (lists[i] is TypedObserverList<TTrigger> typed)
+				return typed;
+		}
+		return null;
+	}
+
+	internal static TypedObserverList<TTrigger> GetOrCreateEntityList<TTrigger>(List<ITypedObserverList> lists)
+		where TTrigger : struct, ITrigger
+	{
+		var existing = FindEntityList<TTrigger>(lists);
+		if (existing != null)
+			return existing;
+
+		var created = new TypedObserverList<TTrigger>();
+		lists.Add(created);
+		return created;
 	}
 
 	/// <summary>
-	/// Emit a trigger to all observers (both global and entity-specific)
+	/// Emit a trigger to all observers (both global and entity-specific). Uses the
+	/// constrained generic path: trigger.EntityId / .ShouldPropagate / .SetCurrent
+	/// are invoked via constrained calls on a value-type TTrigger - no boxing.
 	/// </summary>
 	public static void EmitTrigger<TTrigger>(this TinyEcs.World world, TTrigger trigger)
+		where TTrigger : struct, ITrigger
 	{
 		var state = world.GetObserverState();
-		var triggerType = typeof(TTrigger);
 
-		// Fire global observers
-		if (state.Observers.TryGetValue(triggerType, out var observers))
+		// Fire global observers via the typed list - delegate invocation with value-typed trigger
+		if (state.Observers.TryGetValue(typeof(TTrigger), out var globalList))
 		{
-			foreach (var observer in observers)
-			{
-				observer.Execute(world, trigger!);
-			}
+			((TypedObserverList<TTrigger>)globalList).Dispatch(world, trigger);
 		}
 
-		// Fire entity-specific observers if this trigger has an entity ID
-		if (trigger is IEntityTrigger entityTrigger)
+		var currentEntityId = trigger.EntityId;
+		if (currentEntityId == 0)
+			return;
+
+		// Process entity hierarchy (current entity + parents if propagating)
+		while (currentEntityId != 0)
 		{
-			var currentEntityId = entityTrigger.EntityId;
-			var propagatingTrigger = trigger as IPropagatingTrigger;
+			// Skip dead entities. OnDespawn/OnRemove fire post-merge so the original
+			// target may already be gone; walk simply stops there.
+			if (!world.Exists(currentEntityId))
+				break;
 
-			// Process entity hierarchy (current entity + parents if propagating)
-			while (currentEntityId != 0)
+			// Notify dynamic-propagation triggers which ancestor is now dispatching
+			// so handlers can read CurrentEntityId during the bubble walk.
+			trigger.SetCurrent(currentEntityId);
+
+			// Fire entity-specific observers on current entity
+			if (world.Has<EntityObservers>(currentEntityId))
 			{
-				// Skip dead entities. OnDespawn/OnRemove fire post-merge so the original
-				// target may already be gone; walk simply stops there.
-				if (!world.Exists(currentEntityId))
-					break;
-
-				// Notify dynamic-propagation triggers which ancestor is now dispatching
-				// so handlers can read CurrentEntityId during the bubble walk.
-				propagatingTrigger?.SetCurrent(currentEntityId);
-
-				// Fire entity-specific observers on current entity
-				if (world.Has<EntityObservers>(currentEntityId))
+				ref var entityObservers = ref world.Get<EntityObservers>(currentEntityId);
+				if (entityObservers.Lists != null)
 				{
-					ref var entityObservers = ref world.Get<EntityObservers>(currentEntityId);
-					if (entityObservers.Observers != null)
-					{
-						foreach (var observer in entityObservers.Observers)
-						{
-							if (observer.TriggerType == triggerType)
-							{
-								observer.Execute(world, trigger!);
-							}
-						}
-					}
+					var typed = FindEntityList<TTrigger>(entityObservers.Lists);
+					typed?.Dispatch(world, trigger);
 				}
-
-				// Re-check propagation each iteration: triggers that expose a mutable
-				// flag (e.g. On<T>) may have been stopped by an observer just above.
-				if (propagatingTrigger == null || !propagatingTrigger.ShouldPropagate)
-					break;
-
-				// Walk to parent via the Parent component. Bubble dispatch is queued via
-				// FlushObservers, which runs after world.EndDeferred drains pending ops,
-				// so Has/Get reflect the merged state set by AddChild this same frame.
-				if (!world.Has<Parent>(currentEntityId))
-					break;
-
-				var parentId = world.Get<Parent>(currentEntityId).Id;
-				if (parentId == 0)
-					break;
-
-				currentEntityId = parentId;
 			}
+
+			// Re-check propagation each iteration: triggers that expose a mutable
+			// flag may have been stopped by an observer just above.
+			if (!trigger.ShouldPropagate)
+				break;
+
+			// Walk to parent via the Parent component. Bubble dispatch is queued via
+			// FlushObservers, which runs after world.EndDeferred drains pending ops,
+			// so Has/Get reflect the merged state set by AddChild this same frame.
+			if (!world.Has<Parent>(currentEntityId))
+				break;
+
+			var parentId = world.Get<Parent>(currentEntityId).Id;
+			if (parentId == 0)
+				break;
+
+			currentEntityId = parentId;
 		}
 	}
 
@@ -895,7 +924,7 @@ public static class ObserverExtensions
 
 internal class ObserverState
 {
-	public Dictionary<Type, List<IObserver>> Observers { get; } = new();
+	public Dictionary<Type, ITypedObserverList> Observers { get; } = new();
 	public Dictionary<ulong, IComponentHandler> ComponentHandlers { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentSets { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentAdds { get; } = new();
