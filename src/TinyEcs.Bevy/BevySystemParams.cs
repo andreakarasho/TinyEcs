@@ -685,12 +685,15 @@ public ref struct EntityCommands
 	/// <summary>
 	/// Emit a trigger for this specific entity.
 	/// The entity ID is automatically injected - just provide the event data.
+	/// Set <paramref name="propagate"/> to <c>true</c> to enable bubble walk up
+	/// the parent hierarchy. Default is <c>false</c> (target-only) to match
+	/// Bevy's opt-in propagation semantics.
 	/// </summary>
-	public readonly void EmitTrigger<TEvent>(TEvent evt)
+	public readonly void EmitTrigger<TEvent>(TEvent evt, bool propagate = false)
 		where TEvent : struct
 	{
 		// Automatically wrap the event with On<TEvent> and inject the entity ID
-		_commands.QueueCommand(new EntityTriggerCommand<TEvent>(_entityId, evt));
+		_commands.QueueCommand(new EntityTriggerCommand<TEvent>(_entityId, evt, propagate));
 	}
 
 }
@@ -881,8 +884,9 @@ internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TE
 	{
 		// Queue the emission until FlushObservers so observers see fully-merged world
 		// state (component writes, parent links, etc. applied during the current scope).
-		// Allocation-free: queued by value into a typed per-event-type queue.
-		world.QueueCustomTrigger(entityId: 0, _event, isGlobal: true);
+		// Allocation-free: queued by value into a typed per-event-type queue. Global
+		// emissions don't bubble (no entity to walk from) so propagate is unused.
+		world.QueueCustomTrigger(entityId: 0, _event, propagate: false, isGlobal: true);
 	}
 }
 
@@ -895,11 +899,13 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 {
 	private readonly ulong _entityId;
 	private readonly TEvent _event;
+	private readonly bool _propagate;
 
-	public EntityTriggerCommand(ulong entityId, TEvent evt)
+	public EntityTriggerCommand(ulong entityId, TEvent evt, bool propagate)
 	{
 		_entityId = entityId;
 		_event = evt;
+		_propagate = propagate;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
@@ -907,7 +913,7 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 		// Queue the emission until FlushObservers so the bubble walk sees fully-merged
 		// world state. Allocation-free: the typed queue holds the entry by value;
 		// stack cells for propagate/current are allocated inside the queue's Flush loop.
-		world.QueueCustomTrigger(_entityId, _event, isGlobal: false);
+		world.QueueCustomTrigger(_entityId, _event, _propagate, isGlobal: false);
 	}
 }
 

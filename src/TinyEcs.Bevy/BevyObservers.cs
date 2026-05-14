@@ -884,7 +884,7 @@ public static class ObserverExtensions
 	/// Allocation-free on the hot path: dispatches into a per-type struct queue and
 	/// enqueues by value.
 	/// </summary>
-	internal static void QueueCustomTrigger<TEvent>(this TinyEcs.World world, ulong entityId, TEvent evt, bool isGlobal)
+	internal static void QueueCustomTrigger<TEvent>(this TinyEcs.World world, ulong entityId, TEvent evt, bool propagate, bool isGlobal)
 		where TEvent : struct
 	{
 		var state = world.GetObserverState();
@@ -898,6 +898,7 @@ public static class ObserverExtensions
 		{
 			EntityId = entityId,
 			Event = evt,
+			Propagate = propagate,
 			IsGlobal = isGlobal
 		});
 	}
@@ -991,6 +992,7 @@ internal sealed class PendingTriggerQueue<TEvent> : IPendingTriggerQueue
 	{
 		public ulong EntityId;
 		public TEvent Event;
+		public bool Propagate;
 		public bool IsGlobal;
 	}
 
@@ -1012,8 +1014,9 @@ internal sealed class PendingTriggerQueue<TEvent> : IPendingTriggerQueue
 			else
 			{
 				// Stack cells live for the duration of this iteration; the trigger's
-				// pointer fields are valid until EmitTrigger returns.
-				var propagate = true;
+				// pointer fields are valid until EmitTrigger returns. Propagation is
+				// opt-in: callers pass true via EmitTrigger(evt, propagate: true).
+				var propagate = entry.Propagate;
 				var current = entry.EntityId;
 				world.EmitTrigger(new On<TEvent>(entry.EntityId, entry.Event, ref propagate, ref current));
 			}

@@ -30,6 +30,38 @@ public class BubblingTests
 	}
 
 	[Fact]
+	public void Emit_DefaultsToNoBubble_OnlyTargetFires()
+	{
+		var app = new App();
+		var order = new List<ulong>();
+		ulong leafId = 0;
+
+		app.AddSystem((Commands cmd) =>
+		{
+			var root = cmd.Spawn();
+			var mid = cmd.Spawn();
+			var leaf = cmd.Spawn();
+			root.AddChild(mid);
+			mid.AddChild(leaf);
+			leafId = leaf.Id;
+
+			root.Observe<On<BubbleEvent>>(t => order.Add(t.CurrentEntityId));
+			mid.Observe<On<BubbleEvent>>(t => order.Add(t.CurrentEntityId));
+			leaf.Observe<On<BubbleEvent>>(t => order.Add(t.CurrentEntityId));
+		}).InStage(Stage.Startup).Label("setup").Build();
+
+		app.AddSystem((Commands cmd) =>
+		{
+			// Default opts out of propagation; only the target observer fires.
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+		}).InStage(Stage.Startup).After("setup").Build();
+
+		app.Run();
+
+		Assert.Equal(new[] { leafId }, order);
+	}
+
+	[Fact]
 	public void Emit_FiresOnTargetFirst_ThenWalksParentsLeafToRoot()
 	{
 		var app = new App();
@@ -55,7 +87,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent { Payload = 42 });
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent { Payload = 42 }, propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -91,7 +123,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -134,7 +166,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -164,7 +196,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -188,7 +220,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(eId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(eId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -220,7 +252,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(ids[4]).EmitTrigger(new BubbleEvent());
+			cmd.Entity(ids[4]).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -251,7 +283,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -276,7 +308,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(rootId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(rootId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
@@ -304,7 +336,7 @@ public class BubblingTests
 
 		app.AddSystem((Commands cmd) =>
 		{
-			cmd.Entity(leafId).EmitTrigger(new BubbleEvent());
+			cmd.Entity(leafId).EmitTrigger(new BubbleEvent(), propagate: true);
 		}).InStage(Stage.Startup).After("setup").Build();
 
 		app.Run();
