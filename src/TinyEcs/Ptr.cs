@@ -19,12 +19,24 @@ public readonly ref struct PtrRO<T> where T : struct
 [SkipLocalsInit]
 public ref struct DataRow<T> where T : struct
 {
-	public Ptr<T> Value;
+	public ref T Base;
+	public int Index;
 	public nint Size;
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void Next()
+	public Ptr<T> Value
 	{
-		Value.Ref = ref Unsafe.AddByteOffset(ref Value.Ref, Size);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get
+		{
+			Ptr<T> p = default;
+			if (Size == 0)
+				p.Ref = ref Unsafe.NullRef<T>();
+			else
+				p.Ref = ref Unsafe.Add(ref Base, Index);
+			return p;
+		}
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Next() => ++Index;
 }
