@@ -81,6 +81,11 @@ public sealed class QueryBuilder
 public sealed class Query
 {
 	private readonly IQueryTerm[] _terms;
+	private readonly ulong[] _termIds;
+	private readonly TermOp[] _termOps;
+	private readonly ulong[]? _withMask;
+	private readonly ulong[]? _withoutMask;
+	private readonly bool _fastPath;
 	private readonly List<Archetype> _matchedArchetypes;
 	private EcsID _lastArchetypeIdMatched;
 	private ulong _lastStructuralVersion;
@@ -95,6 +100,44 @@ public sealed class Query
 		terms.CopyTo(_terms, 0);
 		Array.Sort(_terms);
 
+		_termIds = new ulong[_terms.Length];
+		_termOps = new TermOp[_terms.Length];
+		for (var i = 0; i < _terms.Length; i++)
+		{
+			_termIds[i] = _terms[i].Id;
+			_termOps[i] = _terms[i].Op;
+		}
+
+		var words = world.ComponentBitsetWords;
+		var maxBit = (ulong)(words << 6);
+		var fast = words > 0;
+		ulong[]? withMask = null;
+		ulong[]? withoutMask = null;
+		if (fast)
+		{
+			withMask = new ulong[words];
+			withoutMask = new ulong[words];
+			for (var i = 0; i < _terms.Length; i++)
+			{
+				var id = _termIds[i];
+#if USE_PAIR
+				if (id.IsPair()) { fast = false; break; }
+#endif
+				if (id >= maxBit) { fast = false; break; }
+				var w = (int)(id >> 6);
+				var bit = 1ul << (int)(id & 63);
+				switch (_termOps[i])
+				{
+					case TermOp.With: withMask[w] |= bit; break;
+					case TermOp.Without: withoutMask[w] |= bit; break;
+					case TermOp.Optional: break;
+				}
+			}
+		}
+		_fastPath = fast;
+		_withMask = fast ? withMask : null;
+		_withoutMask = fast ? withoutMask : null;
+
 		TermsAccess = terms
 			.Where(s => Lookup.GetComponent(s.Id).Size > 0)
 			.ToArray();
@@ -105,6 +148,11 @@ public sealed class Query
 
 	internal World World { get; }
 	internal IQueryTerm[] TermsAccess { get; }
+	internal ulong[] TermIds => _termIds;
+	internal TermOp[] TermOps => _termOps;
+	internal ulong[]? WithMask => _withMask;
+	internal ulong[]? WithoutMask => _withoutMask;
+	internal bool FastPath => _fastPath;
 
 
 
@@ -119,7 +167,7 @@ public sealed class Query
 		_lastStructuralVersion = World.StructuralChangeVersion;
 
 		_matchedArchetypes.Clear();
-		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
+		World.Root.GetSuperSets(this, _matchedArchetypes);
 	}
 
 	public int Count()

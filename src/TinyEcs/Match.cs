@@ -23,4 +23,39 @@ public static class FilterMatch
 
 		return ArchetypeSearchResult.Found;
 	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal static ArchetypeSearchResult MatchBits(Archetype archetype, ulong[] with, ulong[] without)
+	{
+		var bits = archetype.ComponentBits;
+		var len = bits.Length;
+		for (var i = 0; i < len; i++)
+		{
+			var b = bits[i];
+			if ((b & without[i]) != 0) return ArchetypeSearchResult.Stop;
+			if ((b & with[i]) != with[i]) return ArchetypeSearchResult.Continue;
+		}
+		return ArchetypeSearchResult.Found;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal static ArchetypeSearchResult MatchSwitch(Archetype archetype, ulong[] ids, TermOp[] ops)
+	{
+		for (var i = 0; i < ids.Length; i++)
+		{
+			var has = archetype.HasIndex(ids[i]);
+			switch (ops[i])
+			{
+				case TermOp.Without:
+					if (has) return ArchetypeSearchResult.Stop;
+					break;
+				case TermOp.With:
+					if (!has) return ArchetypeSearchResult.Continue;
+					break;
+				case TermOp.Optional:
+					break;
+			}
+		}
+		return ArchetypeSearchResult.Found;
+	}
 }
