@@ -46,70 +46,254 @@ public interface IPropagatingTrigger
 }
 
 /// <summary>
-/// Trigger when a component is added to an entity
+/// Trigger when a component is added to an entity. Bubbles when emitted with a
+/// non-zero entity id and <see cref="ShouldPropagate"/> set. Supports dynamic
+/// mid-bubble cancel and <see cref="CurrentEntityId"/> when emitted via the
+/// internal ref-based ctor (used by the observer system's component hooks).
 /// </summary>
-public readonly record struct OnAdd<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct OnAdd<T> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	where T : struct
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	public ulong EntityId { get; }
+	public T Component { get; }
+
+	/// <summary>
+	/// Static propagation value baked at construction. Used when the trigger was
+	/// created without dynamic pointer cells (e.g. user code calling Propagate(true)).
+	/// </summary>
+	public bool DefaultPropagate { get; }
+
+	public OnAdd(ulong entityId, T component, bool propagate = false)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	internal OnAdd(ulong entityId, T component, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate =>
+		_propagate != null ? *_propagate : DefaultPropagate;
+
+	/// <summary>
+	/// Returns a trigger with propagation enabled. When called on a dynamic trigger
+	/// (one set up by the dispatcher with pointer cells) the change is visible to
+	/// the in-flight bubble walk; otherwise a new struct copy is returned and the
+	/// caller passes it on to EmitTrigger.
+	/// </summary>
+	public OnAdd<T> Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+		{
+			*_propagate = propagate;
+			return this;
+		}
+		return new OnAdd<T>(EntityId, Component, propagate);
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public OnAdd<T> Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
 }
 
 /// <summary>
-/// Trigger when a component is inserted/updated on an entity
+/// Trigger when a component is inserted/updated on an entity. Same dynamic-vs-static
+/// propagation semantics as <see cref="OnAdd{T}"/>.
 /// </summary>
-public readonly record struct OnInsert<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct OnInsert<T> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	where T : struct
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	public ulong EntityId { get; }
+	public T Component { get; }
+	public bool DefaultPropagate { get; }
+
+	public OnInsert(ulong entityId, T component, bool propagate = false)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	internal OnInsert(ulong entityId, T component, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate =>
+		_propagate != null ? *_propagate : DefaultPropagate;
+
+	public OnInsert<T> Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+		{
+			*_propagate = propagate;
+			return this;
+		}
+		return new OnInsert<T>(EntityId, Component, propagate);
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public OnInsert<T> Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
 }
 
 /// <summary>
-/// Trigger when a component is removed from an entity
+/// Trigger when a component is removed from an entity. Same dynamic-vs-static
+/// propagation semantics as <see cref="OnAdd{T}"/>.
 /// </summary>
-public readonly record struct OnRemove<T>(ulong EntityId, T Component, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct OnRemove<T> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	where T : struct
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	public ulong EntityId { get; }
+	public T Component { get; }
+	public bool DefaultPropagate { get; }
+
+	public OnRemove(ulong entityId, T component, bool propagate = false)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	internal OnRemove(ulong entityId, T component, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entityId;
+		Component = component;
+		DefaultPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate =>
+		_propagate != null ? *_propagate : DefaultPropagate;
+
+	public OnRemove<T> Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+		{
+			*_propagate = propagate;
+			return this;
+		}
+		return new OnRemove<T>(EntityId, Component, propagate);
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
 	public readonly void Register(TinyEcs.World world)
 #endif
 		=> world.EnableObservers<T>();
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public OnRemove<T> Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
 }
 
 /// <summary>
-/// Trigger when an entity is spawned
+/// Trigger when an entity is spawned. Same dynamic-vs-static propagation
+/// semantics as the component triggers.
 /// </summary>
-public readonly record struct OnSpawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct OnSpawn : ITrigger, IEntityTrigger, IPropagatingTrigger
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	public ulong EntityId { get; }
+	public bool DefaultPropagate { get; }
+
+	public OnSpawn(ulong entityId, bool propagate = false)
+	{
+		EntityId = entityId;
+		DefaultPropagate = propagate;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	internal OnSpawn(ulong entityId, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entityId;
+		DefaultPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate =>
+		_propagate != null ? *_propagate : DefaultPropagate;
+
+	public OnSpawn Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+		{
+			*_propagate = propagate;
+			return this;
+		}
+		return new OnSpawn(EntityId, propagate);
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
@@ -117,19 +301,58 @@ public readonly record struct OnSpawn(ulong EntityId, bool ShouldPropagate = fal
 #endif
 	{
 	}
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public OnSpawn Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
 }
 
 /// <summary>
-/// Trigger when an entity is despawned
+/// Trigger when an entity is despawned. Same dynamic-vs-static propagation
+/// semantics as the other lifecycle triggers.
 /// </summary>
-public readonly record struct OnDespawn(ulong EntityId, bool ShouldPropagate = false) : ITrigger, IEntityTrigger, IPropagatingTrigger
+public unsafe struct OnDespawn : ITrigger, IEntityTrigger, IPropagatingTrigger
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	public ulong EntityId { get; }
+	public bool DefaultPropagate { get; }
+
+	public OnDespawn(ulong entityId, bool propagate = false)
+	{
+		EntityId = entityId;
+		DefaultPropagate = propagate;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	internal OnDespawn(ulong entityId, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entityId;
+		DefaultPropagate = propagate;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate =>
+		_propagate != null ? *_propagate : DefaultPropagate;
+
+	public OnDespawn Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+		{
+			*_propagate = propagate;
+			return this;
+		}
+		return new OnDespawn(EntityId, propagate);
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
@@ -137,12 +360,6 @@ public readonly record struct OnDespawn(ulong EntityId, bool ShouldPropagate = f
 #endif
 	{
 	}
-
-	/// <summary>
-	/// Returns a new trigger with propagation enabled.
-	/// When propagating, the trigger will also fire on all parent entities up the hierarchy.
-	/// </summary>
-	public OnDespawn Propagate(bool propagate = true) => this with { ShouldPropagate = propagate };
 }
 
 /// <summary>
@@ -293,7 +510,11 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 			return;
 
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnInsert<T>(entityId, component));
+		// Dynamic emit: stack cells let observers call trigger.Propagate(false)
+		// mid-bubble and read CurrentEntityId as the walk progresses.
+		var propagate = false;
+		var current = entityId;
+		world.EmitTrigger(new OnInsert<T>(entityId, component, ref propagate, ref current));
 	}
 
 	public void HandleAdd(TinyEcs.World world, ulong entityId)
@@ -302,7 +523,9 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 			return;
 
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnAdd<T>(entityId, component));
+		var propagate = false;
+		var current = entityId;
+		world.EmitTrigger(new OnAdd<T>(entityId, component, ref propagate, ref current));
 	}
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
@@ -312,7 +535,9 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 		// entity must run before the archetype row is freed (which would also clear
 		// the EntityObservers component).
 		ref var component = ref world.Get<T>(entityId);
-		world.EmitTrigger(new OnRemove<T>(entityId, component));
+		var propagate = false;
+		var current = entityId;
+		world.EmitTrigger(new OnRemove<T>(entityId, component, ref propagate, ref current));
 	}
 
 	public static void SetComponentId(ulong id)
@@ -361,11 +586,9 @@ public static class ObserverExtensions
 			w.QueueDirectTrigger(new OnSpawn(entityId));
 		};
 
-		// Hook into entity deletion - emit OnDespawn synchronously. The entity is
-		// still alive at hook fire time (archetype.Remove happens after), so
-		// entity-specific observers stored on the entity can still receive the
-		// trigger before the entity is torn down. Deferring to FlushObservers would
-		// lose them because EntityObservers is cleared when the archetype row is freed.
+		// Hook into entity deletion - emit OnDespawn synchronously with dynamic
+		// propagation cells so observers can stop the bubble and read CurrentEntityId.
+		// Entity is still alive at hook fire time (archetype.Remove happens after).
 		world.OnEntityDeleted += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
@@ -373,7 +596,9 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			w.EmitTrigger(new OnDespawn(entityId));
+			var propagate = false;
+			var current = entityId;
+			w.EmitTrigger(new OnDespawn(entityId, ref propagate, ref current));
 		};
 
 		// Hook into component set - queue for deferred processing
