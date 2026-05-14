@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using TinyEcs;
 
 namespace TinyEcs.Bevy;
@@ -28,10 +29,20 @@ public interface IEntityTrigger
 
 /// <summary>
 /// Marker interface for triggers that can propagate up the parent hierarchy.
+/// Triggers that support dynamic stop-propagation (mutable mid-bubble cancel) should
+/// override <see cref="SetCurrent"/> to receive the entity being dispatched and allow
+/// observers to call back into the trigger to stop the walk.
 /// </summary>
 public interface IPropagatingTrigger
 {
 	bool ShouldPropagate { get; }
+
+	/// <summary>
+	/// Hook invoked by the dispatcher before firing observers at each ancestor.
+	/// Default implementation is a no-op; only triggers that expose CurrentEntityId
+	/// (such as <see cref="On{TEvent}"/>) need to override this.
+	/// </summary>
+	void SetCurrent(ulong entityId) { }
 }
 
 /// <summary>
@@ -137,10 +148,49 @@ public readonly record struct OnDespawn(ulong EntityId, bool ShouldPropagate = f
 /// <summary>
 /// Trigger when a custom event is fired via Commands.Trigger.
 /// Can be used for both global events (EntityId = 0) and entity-specific events.
+/// Supports DOM-style bubble walking: <see cref="EntityId"/> is the original target,
+/// <see cref="CurrentEntityId"/> is the ancestor currently dispatching, and observers
+/// may call <see cref="Propagate"/> to stop the walk mid-bubble.
 /// </summary>
-public readonly record struct On<TEvent>(ulong EntityId, TEvent Event) : ITrigger, IEntityTrigger
+public unsafe struct On<TEvent> : ITrigger, IEntityTrigger, IPropagatingTrigger
 	where TEvent : struct
 {
+	private readonly bool* _propagate;
+	private readonly ulong* _currentEntity;
+
+	internal On(ulong entity, TEvent ev, ref bool propagate, ref ulong currentEntity)
+	{
+		EntityId = entity;
+		Event = ev;
+		_propagate = (bool*)Unsafe.AsPointer(ref propagate);
+		_currentEntity = (ulong*)Unsafe.AsPointer(ref currentEntity);
+	}
+
+	/// <summary>
+	/// Create a global event (not tied to a specific entity).
+	/// Global emissions do not bubble.
+	/// </summary>
+	internal On(TEvent evt)
+	{
+		EntityId = 0;
+		Event = evt;
+		_propagate = null;
+		_currentEntity = null;
+	}
+
+	public ulong EntityId { get; }
+	public TEvent Event { get; }
+
+	/// <summary>
+	/// Entity currently dispatching this trigger during the bubble walk.
+	/// Equals <see cref="EntityId"/> on the target dispatch; equals an ancestor entity ID
+	/// when bubbling up the parent hierarchy.
+	/// </summary>
+	public readonly ulong CurrentEntityId =>
+		_currentEntity != null ? *_currentEntity : EntityId;
+
+	public readonly bool ShouldPropagate => _propagate != null && *_propagate;
+
 #if NET9_0_OR_GREATER
 	public static void Register(TinyEcs.World world)
 #else
@@ -151,9 +201,20 @@ public readonly record struct On<TEvent>(ulong EntityId, TEvent Event) : ITrigge
 	}
 
 	/// <summary>
-	/// Create a global event (not tied to a specific entity)
+	/// Enable/disable bubble propagation. Defaults to enabled for entity-targeted emissions.
+	/// Call with <c>false</c> from an observer to stop the bubble walk at the current entity.
 	/// </summary>
-	public On(TEvent evt) : this(0, evt) { }
+	public readonly void Propagate(bool propagate = true)
+	{
+		if (_propagate != null)
+			*_propagate = propagate;
+	}
+
+	void IPropagatingTrigger.SetCurrent(ulong entityId)
+	{
+		if (_currentEntity != null)
+			*_currentEntity = entityId;
+	}
 }
 
 // ============================================================================
@@ -246,6 +307,10 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
 	{
+		// Emit synchronously. The hook fires before archetype.Remove so the component
+		// is still readable, and entity-specific OnRemove observers stored on the
+		// entity must run before the archetype row is freed (which would also clear
+		// the EntityObservers component).
 		ref var component = ref world.Get<T>(entityId);
 		world.EmitTrigger(new OnRemove<T>(entityId, component));
 	}
@@ -285,7 +350,7 @@ public static class ObserverExtensions
 
 		state.HooksRegistered = true;
 
-		// Hook into entity creation - automatically emit OnSpawn
+		// Hook into entity creation - queue OnSpawn for post-merge dispatch
 		world.OnEntityCreated += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
@@ -293,10 +358,14 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			w.EmitTrigger(new OnSpawn(entityId));
+			w.QueueDirectTrigger(new OnSpawn(entityId));
 		};
 
-		// Hook into entity deletion - automatically emit OnDespawn
+		// Hook into entity deletion - emit OnDespawn synchronously. The entity is
+		// still alive at hook fire time (archetype.Remove happens after), so
+		// entity-specific observers stored on the entity can still receive the
+		// trigger before the entity is torn down. Deferring to FlushObservers would
+		// lose them because EntityObservers is cleared when the archetype row is freed.
 		world.OnEntityDeleted += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
@@ -440,11 +509,20 @@ public static class ObserverExtensions
 		if (trigger is IEntityTrigger entityTrigger)
 		{
 			var currentEntityId = entityTrigger.EntityId;
-			var shouldPropagate = trigger is IPropagatingTrigger propagatingTrigger && propagatingTrigger.ShouldPropagate;
+			var propagatingTrigger = trigger as IPropagatingTrigger;
 
 			// Process entity hierarchy (current entity + parents if propagating)
 			while (currentEntityId != 0)
 			{
+				// Skip dead entities. OnDespawn/OnRemove fire post-merge so the original
+				// target may already be gone; walk simply stops there.
+				if (!world.Exists(currentEntityId))
+					break;
+
+				// Notify dynamic-propagation triggers which ancestor is now dispatching
+				// so handlers can read CurrentEntityId during the bubble walk.
+				propagatingTrigger?.SetCurrent(currentEntityId);
+
 				// Fire entity-specific observers on current entity
 				if (world.Has<EntityObservers>(currentEntityId))
 				{
@@ -461,20 +539,22 @@ public static class ObserverExtensions
 					}
 				}
 
-				// Stop if not propagating
-				if (!shouldPropagate)
+				// Re-check propagation each iteration: triggers that expose a mutable
+				// flag (e.g. On<T>) may have been stopped by an observer just above.
+				if (propagatingTrigger == null || !propagatingTrigger.ShouldPropagate)
 					break;
 
-				// Move to parent entity
-				if (world.Has<Parent>(currentEntityId))
-				{
-					ref var parent = ref world.Get<Parent>(currentEntityId);
-					currentEntityId = parent.Id;
-				}
-				else
-				{
+				// Walk to parent via the Parent component. Bubble dispatch is queued via
+				// FlushObservers, which runs after world.EndDeferred drains pending ops,
+				// so Has/Get reflect the merged state set by AddChild this same frame.
+				if (!world.Has<Parent>(currentEntityId))
 					break;
-				}
+
+				var parentId = world.Get<Parent>(currentEntityId).Id;
+				if (parentId == 0)
+					break;
+
+				currentEntityId = parentId;
 			}
 		}
 	}
@@ -486,6 +566,25 @@ public static class ObserverExtensions
 	{
 		var state = world.GetObserverState();
 
+		// Re-entrant call (e.g. observer wrapper calling FlushObservers after its
+		// Commands.Apply): bail. The outer flush loop already drains any items added
+		// during nested execution.
+		if (state.IsFlushing)
+			return;
+
+		state.IsFlushing = true;
+		try
+		{
+			FlushObserversInner(world, state);
+		}
+		finally
+		{
+			state.IsFlushing = false;
+		}
+	}
+
+	private static void FlushObserversInner(TinyEcs.World world, ObserverState state)
+	{
 		// Process OnInsert triggers (fires for both add and update)
 		while (state.PendingComponentSets.TryDequeue(out var pending))
 		{
@@ -501,6 +600,71 @@ public static class ObserverExtensions
 			// Now the component value has been written - safe to read!
 			handler.HandleAdd(world, entityId);
 		}
+
+		// Process custom On<TEvent> triggers queued by Commands. They run here so the
+		// world's deferred operations (entity spawns, parent links, component writes)
+		// are already merged and any observer reading state via Has/Get sees a
+		// consistent snapshot. An observer may emit further triggers (including of new
+		// event types) which mutate PendingTriggerQueues, so snapshot into a reusable
+		// buffer and loop until no queue has work left.
+		while (true)
+		{
+			state.FlushBuffer.Clear();
+			foreach (var queue in state.PendingTriggerQueues.Values)
+				state.FlushBuffer.Add(queue);
+
+			var drainedAny = false;
+			foreach (var queue in state.FlushBuffer)
+			{
+				if (queue.Flush(world))
+					drainedAny = true;
+			}
+
+			if (!drainedAny)
+				break;
+		}
+	}
+
+	/// <summary>
+	/// Queue an On&lt;TEvent&gt; emission to fire during the next <see cref="FlushObservers"/>.
+	/// Allocation-free on the hot path: dispatches into a per-type struct queue and
+	/// enqueues by value.
+	/// </summary>
+	internal static void QueueCustomTrigger<TEvent>(this TinyEcs.World world, ulong entityId, TEvent evt, bool isGlobal)
+		where TEvent : struct
+	{
+		var state = world.GetObserverState();
+		if (!state.PendingTriggerQueues.TryGetValue(typeof(TEvent), out var queue))
+		{
+			queue = new PendingTriggerQueue<TEvent>();
+			state.PendingTriggerQueues[typeof(TEvent)] = queue;
+		}
+
+		((PendingTriggerQueue<TEvent>)queue).Items.Enqueue(new PendingTriggerQueue<TEvent>.Entry
+		{
+			EntityId = entityId,
+			Event = evt,
+			IsGlobal = isGlobal
+		});
+	}
+
+	/// <summary>
+	/// Queue a trigger by value to fire during the next <see cref="FlushObservers"/>.
+	/// Used by world hooks (entity create/delete, component unset) so dispatch happens
+	/// after the surrounding deferred scope has merged.
+	/// </summary>
+	internal static void QueueDirectTrigger<TTrigger>(this TinyEcs.World world, TTrigger trigger)
+		where TTrigger : struct, ITrigger
+	{
+		var state = world.GetObserverState();
+		var key = typeof(TTrigger);
+		if (!state.PendingTriggerQueues.TryGetValue(key, out var queue))
+		{
+			queue = new PendingDirectQueue<TTrigger>();
+			state.PendingTriggerQueues[key] = queue;
+		}
+
+		((PendingDirectQueue<TTrigger>)queue).Items.Enqueue(trigger);
 	}
 }
 
@@ -510,9 +674,98 @@ internal class ObserverState
 	public Dictionary<ulong, IComponentHandler> ComponentHandlers { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentSets { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler)> PendingComponentAdds { get; } = new();
+	public Dictionary<Type, IPendingTriggerQueue> PendingTriggerQueues { get; } = new();
+
+	/// <summary>
+	/// Reusable buffer for iterating <see cref="PendingTriggerQueues"/> during a flush
+	/// pass. Snapshotting into this list avoids "collection modified during enumeration"
+	/// when an observer callback emits a trigger of a new event type (which inserts a
+	/// new entry into the dictionary).
+	/// </summary>
+	public List<IPendingTriggerQueue> FlushBuffer { get; } = new();
 	public bool HooksRegistered { get; set; }
 	public bool HooksEnabled { get; set; } = true;
+	public bool IsFlushing { get; set; }
 	public ulong MaxComponentEntityId { get; set; } // Component entities have IDs <= this value
+}
+
+/// <summary>
+/// Type-erased entry point for per-event-type pending-trigger queues.
+/// Concrete queues hold struct entries to avoid allocations on the emit path.
+/// </summary>
+internal interface IPendingTriggerQueue
+{
+	bool HasItems { get; }
+	bool Flush(TinyEcs.World world);
+}
+
+/// <summary>
+/// Generic queue holding any trigger by value. Used for OnSpawn/OnDespawn/OnRemove&lt;T&gt;
+/// so their dispatch happens at <see cref="ObserverExtensions.FlushObservers"/> time
+/// (post-merge) instead of from inside the world hook (potentially mid-deferred-scope).
+/// Zero-allocation on enqueue.
+/// </summary>
+internal sealed class PendingDirectQueue<TTrigger> : IPendingTriggerQueue
+	where TTrigger : struct, ITrigger
+{
+	public readonly Queue<TTrigger> Items = new();
+
+	public bool HasItems => Items.Count > 0;
+
+	public bool Flush(TinyEcs.World world)
+	{
+		if (Items.Count == 0)
+			return false;
+
+		while (Items.TryDequeue(out var trigger))
+		{
+			world.EmitTrigger(trigger);
+		}
+		return true;
+	}
+}
+
+/// <summary>
+/// Typed queue of pending On&lt;TEvent&gt; emissions. Created lazily per event type
+/// the first time something queues a trigger of that type. Holds struct entries
+/// so EmitTrigger calls do not allocate closures or delegates.
+/// </summary>
+internal sealed class PendingTriggerQueue<TEvent> : IPendingTriggerQueue
+	where TEvent : struct
+{
+	internal struct Entry
+	{
+		public ulong EntityId;
+		public TEvent Event;
+		public bool IsGlobal;
+	}
+
+	public readonly Queue<Entry> Items = new();
+
+	public bool HasItems => Items.Count > 0;
+
+	public bool Flush(TinyEcs.World world)
+	{
+		if (Items.Count == 0)
+			return false;
+
+		while (Items.TryDequeue(out var entry))
+		{
+			if (entry.IsGlobal)
+			{
+				world.EmitTrigger(new On<TEvent>(entry.Event));
+			}
+			else
+			{
+				// Stack cells live for the duration of this iteration; the trigger's
+				// pointer fields are valid until EmitTrigger returns.
+				var propagate = true;
+				var current = entry.EntityId;
+				world.EmitTrigger(new On<TEvent>(entry.EntityId, entry.Event, ref propagate, ref current));
+			}
+		}
+		return true;
+	}
 }
 
 // ============================================================================

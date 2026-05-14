@@ -310,7 +310,11 @@ public class Commands : ISystemParam
 		if (_localCommands.Count == 0)
 			return;
 
-		// Apply all commands in order
+		// Apply all commands in order. World writes are deferred — they apply when the
+		// outer stage scope calls EndDeferred. Commands that need to read state set by
+		// earlier commands in the same batch should rely on synchronously-updated
+		// sources (e.g. RelationshipEntityMapper for parent lookups), not on archetype
+		// component storage which lags until EndDeferred drains.
 		foreach (var cmd in _localCommands)
 		{
 			cmd.Execute(_world!, this);
@@ -875,7 +879,10 @@ internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TE
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.EmitTrigger(new On<TEvent>(_event));
+		// Queue the emission until FlushObservers so observers see fully-merged world
+		// state (component writes, parent links, etc. applied during the current scope).
+		// Allocation-free: queued by value into a typed per-event-type queue.
+		world.QueueCustomTrigger(entityId: 0, _event, isGlobal: true);
 	}
 }
 
@@ -897,8 +904,10 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		// Wrap the event with On<TEvent> and inject the entity ID
-		world.EmitTrigger(new On<TEvent>(_entityId, _event));
+		// Queue the emission until FlushObservers so the bubble walk sees fully-merged
+		// world state. Allocation-free: the typed queue holds the entry by value;
+		// stack cells for propagate/current are allocated inside the queue's Flush loop.
+		world.QueueCustomTrigger(_entityId, _event, isGlobal: false);
 	}
 }
 

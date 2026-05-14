@@ -203,12 +203,32 @@ public static class EntityMapperEx
 {
 	public static void AddChild(this World world, EcsID parent, EcsID child, int index = -1)
 	{
-		world.RelationshipEntityMapper.Add(parent, child, index);
+		// Defer parent-child wiring while the world is in a deferred scope so the
+		// mapper dict, Parent component, and Children component all become visible
+		// together at merge time. Immediate writes mid-scope would let observers
+		// (or other commands) see an inconsistent intermediate state.
+		if (world.IsDeferred)
+			world.AddChildDeferred(parent, child, index);
+		else
+			world.RelationshipEntityMapper.Add(parent, child, index);
 	}
 
 	public static void RemoveChild(this World world, EcsID child)
 	{
-		world.RelationshipEntityMapper.Remove(child);
+		if (world.IsDeferred)
+			world.RemoveChildDeferred(child);
+		else
+			world.RelationshipEntityMapper.Remove(child);
+	}
+
+	/// <summary>
+	/// Get the parent entity of <paramref name="child"/> via the relationship mapper.
+	/// Returns 0 when the entity has no parent (or the mapper hasn't applied the
+	/// pending AddChild yet — that only happens during a deferred scope).
+	/// </summary>
+	public static EcsID GetParent(this World world, EcsID child)
+	{
+		return world.RelationshipEntityMapper.GetParent(child);
 	}
 
 	public static EntityView AddChild(this EntityView entity, EcsID childId, int index = -1)
