@@ -11,6 +11,7 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EcsID, Archetype> _typeIndex = new();
 	private readonly ComponentComparer _comparer;
 	private readonly EcsID _maxCmpId;
+	private readonly int _componentBitsetWords;
 	private readonly FastIdLookup<EcsID> _cachedComponents = new();
 	private readonly object _newEntLock = new();
 	private uint _ticks;
@@ -28,6 +29,7 @@ public sealed partial class World : IDisposable
 	internal Archetype Root => _archRoot;
 	internal EcsID LastArchetypeId { get; set; }
 	internal ulong StructuralChangeVersion => _structuralChangeVersion;
+	internal int ComponentBitsetWords => _componentBitsetWords;
 	internal RelationshipEntityMapper RelationshipEntityMapper { get; }
 	internal NamingEntityMapper NamingEntityMapper { get; }
 
@@ -376,13 +378,13 @@ struct EcsRecord
 [Flags]
 enum EntityFlags
 {
-	None = 1 << 0,
-	IsAction = 1 << 1,
-	IsTarget = 1 << 2,
-	IsUnique = 1 << 3,
-	IsSymmetric = 1 << 4,
-	HasName = 1 << 5,
+	None = 0,
+	IsAction = 1 << 0,
+	IsTarget = 1 << 1,
+	IsUnique = 1 << 2,
+	IsSymmetric = 1 << 3,
+	HasName = 1 << 4,
 
-	HasRules = 1 << 6,
+	HasRules = 1 << 5,
 }
 #endif

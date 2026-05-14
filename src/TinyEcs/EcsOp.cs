@@ -16,13 +16,15 @@ public static class IDOp
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID IncreaseGeneration(EcsID id)
 	{
-		return ((id & ~EcsConst.ECS_GENERATION_MASK) | ((0xFFFF & (GetGeneration(id) + 1)) << 32));
+		const ulong GEN_INC = 1ul << 32;
+		return (id & ~EcsConst.ECS_GENERATION_MASK)
+			| ((id + GEN_INC) & EcsConst.ECS_GENERATION_MASK);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID RealID(EcsID id)
 	{
-		return id &= EcsConst.ECS_ENTITY_MASK;
+		return id & EcsConst.ECS_ENTITY_MASK;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -40,14 +42,14 @@ public static class IDOp
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID SetAsComponent(EcsID id)
 	{
-		return id |= EcsConst.ECS_ID_FLAGS_MASK;
+		return id | EcsConst.ECS_ID_FLAGS_MASK;
 	}
 
 #if USE_PAIR
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static EcsID Pair(EcsID first, EcsID second)
 	{
-		return EcsConst.ECS_PAIR | ((first << 32) + (uint)second);
+		return EcsConst.ECS_PAIR | (first << 32) | (uint)second;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
