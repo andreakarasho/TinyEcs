@@ -40,7 +40,6 @@ public sealed partial class World
 		}
 	}
 
-
 	internal void AddDeferred<T>(EcsID entity) where T : struct
 	{
 		ref readonly var cmp = ref Component<T>();
@@ -159,6 +158,26 @@ public sealed partial class World
 		_operations.Enqueue(cmd);
 	}
 
+	internal void AddChildDeferred(EcsID parent, EcsID child, int index)
+	{
+		_operations.Enqueue(new DeferredOp()
+		{
+			Op = DeferredOpTypes.AddChild,
+			Entity = parent,
+			TargetEntity = child,
+			Index = index
+		});
+	}
+
+	internal void RemoveChildDeferred(EcsID child)
+	{
+		_operations.Enqueue(new DeferredOp()
+		{
+			Op = DeferredOpTypes.RemoveChild,
+			Entity = child
+		});
+	}
+
 
 	private void Merge()
 	{
@@ -197,6 +216,18 @@ public sealed partial class World
 							SetChanged(op.Entity, op.ComponentInfo.ID);
 						break;
 					}
+				case DeferredOpTypes.AddChild:
+					{
+						if (Exists(op.Entity) && Exists(op.TargetEntity))
+							RelationshipEntityMapper.Add(op.Entity, op.TargetEntity, op.Index);
+						break;
+					}
+				case DeferredOpTypes.RemoveChild:
+					{
+						if (Exists(op.Entity))
+							RelationshipEntityMapper.Remove(op.Entity);
+						break;
+					}
 			}
 		}
 
@@ -217,6 +248,8 @@ public sealed partial class World
 	{
 		public DeferredOpTypes Op;
 		public EcsID Entity;
+		public EcsID TargetEntity;
+		public int Index;
 		public ComponentInfo ComponentInfo;
 		public object? Data;
 	}
@@ -226,6 +259,8 @@ public sealed partial class World
 		DestroyEntity,
 		SetComponent,
 		UnsetComponent,
-		SetChanged
+		SetChanged,
+		AddChild,
+		RemoveChild
 	}
 }
