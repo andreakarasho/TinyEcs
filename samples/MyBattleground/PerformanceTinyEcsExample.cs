@@ -30,23 +30,31 @@ public static class PerformanceTinyEcsExample
 				}
 			});
 
+		const int RUNS = 3;
+		const int FRAMES_PER_RUN = 3600;
+		var samples = new long[RUNS];
 
-		var sw = Stopwatch.StartNew();
-		var start = 0f;
-		var last = 0f;
+		// Warmup pass to let JIT tier up + PGO collect data
+		for (int i = 0; i < FRAMES_PER_RUN; ++i)
+			app.Update();
 
-		while (true)
+		for (int r = 0; r < RUNS; r++)
 		{
-			for (int i = 0; i < 3600; ++i)
-			{
+			GC.Collect();
+			GC.WaitForPendingFinalizers();
+			GC.Collect();
+
+			var sw = Stopwatch.StartNew();
+			for (int i = 0; i < FRAMES_PER_RUN; ++i)
 				app.Update();
-			}
-
-			last = start;
-			start = sw.ElapsedMilliseconds;
-
-			Console.WriteLine("query done in {0} ms", start - last);
+			sw.Stop();
+			samples[r] = sw.ElapsedMilliseconds;
 		}
+
+		Array.Sort(samples);
+		var median = samples[RUNS / 2];
+		Console.WriteLine($"runs: [{string.Join(", ", samples)}] ms");
+		Console.WriteLine($"median: {median} ms over {FRAMES_PER_RUN} frames ({(double)median / FRAMES_PER_RUN:F4} ms/frame)");
 	}
 
 	struct Position
