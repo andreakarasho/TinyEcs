@@ -65,7 +65,7 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -145,8 +145,8 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -231,9 +231,9 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -323,10 +323,10 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -421,11 +421,11 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -525,12 +525,12 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -635,13 +635,13 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -751,14 +751,14 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -873,15 +873,15 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1001,16 +1001,16 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1135,17 +1135,17 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1275,18 +1275,18 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
-				_current11 = _iterator.GetColumn<T11>(11);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
+				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1421,19 +1421,19 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
-				_current11 = _iterator.GetColumn<T11>(11);
-				_current12 = _iterator.GetColumn<T12>(12);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
+				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
+				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1573,20 +1573,20 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
-				_current11 = _iterator.GetColumn<T11>(11);
-				_current12 = _iterator.GetColumn<T12>(12);
-				_current13 = _iterator.GetColumn<T13>(13);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
+				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
+				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
+				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1731,21 +1731,21 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
-				_current11 = _iterator.GetColumn<T11>(11);
-				_current12 = _iterator.GetColumn<T12>(12);
-				_current13 = _iterator.GetColumn<T13>(13);
-				_current14 = _iterator.GetColumn<T14>(14);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
+				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
+				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
+				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
+				_current14 = _iterator.GetColumn<T14, DataRow<T14>>(14);
                 _entities = _iterator.Entities();
 
                 _index = 0;
@@ -1895,22 +1895,22 @@ namespace TinyEcs.Bevy
                 if (!_iterator.Next())
                     return false;
 
-                _current0 = _iterator.GetColumn<T0>(0);
-				_current1 = _iterator.GetColumn<T1>(1);
-				_current2 = _iterator.GetColumn<T2>(2);
-				_current3 = _iterator.GetColumn<T3>(3);
-				_current4 = _iterator.GetColumn<T4>(4);
-				_current5 = _iterator.GetColumn<T5>(5);
-				_current6 = _iterator.GetColumn<T6>(6);
-				_current7 = _iterator.GetColumn<T7>(7);
-				_current8 = _iterator.GetColumn<T8>(8);
-				_current9 = _iterator.GetColumn<T9>(9);
-				_current10 = _iterator.GetColumn<T10>(10);
-				_current11 = _iterator.GetColumn<T11>(11);
-				_current12 = _iterator.GetColumn<T12>(12);
-				_current13 = _iterator.GetColumn<T13>(13);
-				_current14 = _iterator.GetColumn<T14>(14);
-				_current15 = _iterator.GetColumn<T15>(15);
+                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
+				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
+				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
+				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
+				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
+				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
+				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
+				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
+				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
+				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
+				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
+				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
+				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
+				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
+				_current14 = _iterator.GetColumn<T14, DataRow<T14>>(14);
+				_current15 = _iterator.GetColumn<T15, DataRow<T15>>(15);
                 _entities = _iterator.Entities();
 
                 _index = 0;

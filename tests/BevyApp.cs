@@ -476,6 +476,46 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void OptionalFilterAllowsAbsentDataComponent()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			app.AddSystem(w =>
+			{
+				var posOnly = w.Entity();
+				posOnly.Set(new Position { X = 1 });
+
+				var posAndVel = w.Entity();
+				posAndVel.Set(new Position { X = 2 });
+				posAndVel.Set(new Velocity { Value = 20 });
+
+				var velOnly = w.Entity();
+				velOnly.Set(new Velocity { Value = 99 });
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			var captured = new List<(int posX, int velValue)>();
+
+			app.AddSystem((Query<Data<Position, Velocity>, Filter<Optional<Velocity>>> query) =>
+			{
+				foreach (var row in query)
+				{
+					row.Deconstruct(out var pos, out var vel);
+					captured.Add((pos.Ref.X, vel.IsValid() ? vel.Ref.Value : -1));
+				}
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			captured.Sort();
+			Assert.Equal(new[] { (1, -1), (2, 20) }, captured);
+		}
+
+		[Fact]
 		public void SingleSystemParamRetrievesMatchingEntity()
 		{
 			using var world = new World();

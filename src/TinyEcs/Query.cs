@@ -246,39 +246,45 @@ public ref struct QueryIterator
 		return _indices.IndexOf(_archetypeIterator.Current.GetComponentIndex<T>());
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
-	{
 #if NET9_0_OR_GREATER
-		Unsafe.SkipInit(out DataRow<T> data);
-#else
-		var data = new DataRow<T>();
-#endif
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly TRow GetColumn<T, TRow>(int index)
+		where T : struct
+		where TRow : IDataRow<TRow, T>, allows ref struct
+	{
 		if (index < 0 || index >= _indices.Length)
-		{
-			data.Value.Ref = ref Unsafe.NullRef<T>();
-			data.Size = 0;
-			return data;
-		}
+			return TRow.CreateAbsent();
 
 		var i = _indices[index];
 		if (i < 0)
-		{
-			data.Value.Ref = ref Unsafe.NullRef<T>();
-			data.Size = 0;
-			return data;
-		}
+			return TRow.CreateAbsent();
 
 		ref readonly var chunk = ref _chunkIterator.Current;
 		ref var column = ref chunk.GetColumn(i);
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
 
-		data.Size = Unsafe.SizeOf<T>();
-		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
-
-		return data;
+		return TRow.CreateFrom(ref Unsafe.Add(ref reference, _startSafe));
 	}
+#else
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
+	{
+		var data = new DataRow<T>();
+
+		if (index < 0 || index >= _indices.Length)
+			return data;
+
+		var i = _indices[index];
+		if (i < 0)
+			return data;
+
+		ref readonly var chunk = ref _chunkIterator.Current;
+		ref var column = ref chunk.GetColumn(i);
+		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
+
+		return new DataRow<T>(ref Unsafe.Add(ref reference, _startSafe));
+	}
+#endif
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<uint> GetChangedTicks(int index)
