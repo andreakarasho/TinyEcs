@@ -369,6 +369,12 @@ public class Commands : ISystemParam
 	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
+	// Per-Commands pool of boxed command wrappers, keyed by wrapper concrete type.
+	// Reuses wrapper class instances across frames to eliminate the per-command boxing
+	// allocation that would otherwise occur when adding a struct command to a
+	// List<IDeferredCommand>. Single-threaded by design: Commands has exclusive
+	// access in GetAccess(), so concurrent boxing is impossible.
+	private readonly Dictionary<Type, Stack<IPoolableBox>> _boxPool = new();
 
 	internal App? App => _app;
 
@@ -386,6 +392,56 @@ public class Commands : ISystemParam
 		_app = app;
 		_localCommands.Clear();
 		_spawnedEntityIds.Clear();
+	}
+
+	/// <summary>
+	/// Rent a pooled boxed wrapper for the given command struct.
+	/// </summary>
+	internal BoxedCommand<T> RentBox<T>(in T cmd) where T : struct, IDeferredCommand
+	{
+		BoxedCommand<T> box;
+		if (_boxPool.TryGetValue(typeof(BoxedCommand<T>), out var stack) && stack.Count > 0)
+		{
+			box = (BoxedCommand<T>)stack.Pop();
+		}
+		else
+		{
+			box = new BoxedCommand<T>();
+		}
+		box.Value = cmd;
+		return box;
+	}
+
+	/// <summary>
+	/// Rent a pooled boxed wrapper for a component-related command struct.
+	/// </summary>
+	internal BoxedComponentCommand<T> RentComponentBox<T>(in T cmd) where T : struct, IComponentCommand
+	{
+		BoxedComponentCommand<T> box;
+		if (_boxPool.TryGetValue(typeof(BoxedComponentCommand<T>), out var stack) && stack.Count > 0)
+		{
+			box = (BoxedComponentCommand<T>)stack.Pop();
+		}
+		else
+		{
+			box = new BoxedComponentCommand<T>();
+		}
+		box.Value = cmd;
+		return box;
+	}
+
+	/// <summary>
+	/// Return a boxed wrapper to the pool for reuse.
+	/// </summary>
+	internal void ReturnBox(IPoolableBox box)
+	{
+		var key = box.GetType();
+		if (!_boxPool.TryGetValue(key, out var stack))
+		{
+			stack = new Stack<IPoolableBox>();
+			_boxPool[key] = stack;
+		}
+		stack.Push(box);
 	}
 
 	public SystemParamAccess GetAccess()
@@ -413,6 +469,9 @@ public class Commands : ISystemParam
 		foreach (var cmd in _localCommands)
 		{
 			cmd.Execute(world, this);
+			// Return pooled wrappers so the next frame doesn't allocate fresh ones.
+			if (cmd is IPoolableBox box)
+				ReturnBox(box);
 		}
 
 		_localCommands.Clear();
@@ -505,7 +564,7 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void InsertResource<T>(T resource) where T : notnull
 	{
-		_localCommands.Add(new InsertResourceCommand<T>(resource));
+		_localCommands.Add(RentBox(new InsertResourceCommand<T>(resource)));
 	}
 
 	/// <summary>
@@ -513,7 +572,7 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void RemoveResource<T>() where T : notnull
 	{
-		_localCommands.Add(new RemoveResourceCommand(typeof(T)));
+		_localCommands.Add(RentBox(new RemoveResourceCommand(typeof(T))));
 	}
 
 	/// <summary>
@@ -533,29 +592,29 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
 	{
-		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
+		_localCommands.Add(RentBox(new TriggerEventCommand<TEvent>(evt)));
 	}
 
 	public void AddChild(ulong parentId, ulong childId)
 	{
-		_localCommands.Add(new AddChildCommand(
+		_localCommands.Add(RentBox(new AddChildCommand(
 			new DeferredEntityRef(-1, parentId),
-			new DeferredEntityRef(-1, childId)));
+			new DeferredEntityRef(-1, childId))));
 	}
 
 	public void AddChild(EntityCommands parent, EntityCommands child)
 	{
-		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), child.ToDeferredRef()));
+		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), child.ToDeferredRef())));
 	}
 
 	public void AddChild(EntityCommands parent, ulong childId)
 	{
-		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId)));
+		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId))));
 	}
 
 	public void AddChild(ulong parentId, EntityCommands child)
 	{
-		_localCommands.Add(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef()));
+		_localCommands.Add(RentBox(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef())));
 	}
 
 	public void AddChildren(EntityCommands parent, ReadOnlySpan<ulong> childIds)
@@ -580,22 +639,35 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Internal method to queue a deferred command
+	/// Internal method to queue a non-component deferred command. The struct is
+	/// wrapped in a pooled <see cref="BoxedCommand{T}"/> so the per-frame
+	/// allocation amortizes to zero after warmup.
 	/// </summary>
-	internal void QueueCommand(IDeferredCommand command)
+	internal void QueueCommand<T>(in T command) where T : struct, IDeferredCommand
 	{
-		_localCommands.Add(command);
+		_localCommands.Add(RentBox(command));
 	}
 
 	/// <summary>
-	/// Reflection-free check if a command is a component insertion or removal command.
-	/// Uses interface marker pattern instead of reflection.
+	/// Internal method to queue a component-related deferred command. Uses a
+	/// dedicated <see cref="BoxedComponentCommand{T}"/> so observer-ordering
+	/// logic can identify component commands via the
+	/// <see cref="IBoxedComponentCommand"/> marker without reflection.
+	/// </summary>
+	internal void QueueComponentCommand<T>(in T command) where T : struct, IComponentCommand
+	{
+		_localCommands.Add(RentComponentBox(command));
+	}
+
+	/// <summary>
+	/// Reflection-free check if a queued entry wraps a component insertion or removal command.
 	/// </summary>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool IsComponentCommand(IDeferredCommand command)
 	{
-		// Use interface marker to identify component commands without reflection
-		return command is IComponentCommand;
+		// BoxedComponentCommand<T> implements IBoxedComponentCommand;
+		// BoxedCommand<T> does not. No reflection involved — direct interface check.
+		return command is IBoxedComponentCommand;
 	}
 
 	/// <summary>
@@ -604,13 +676,18 @@ public class Commands : ISystemParam
 	/// For existing entities: Insert at the current position (before pending commands)
 	/// This ensures observers are attached before subsequent Insert/Remove commands execute.
 	/// </summary>
-	internal void InsertObserverCommand(IDeferredCommand command)
+	internal void InsertObserverCommand<T>(in T command) where T : struct, IDeferredCommand
 	{
-		// Find the last SpawnEntityCommand and insert right after it
+		var boxed = RentBox(command);
+
+		// Find the last SpawnEntityCommand and insert right after it.
+		// SpawnEntityCommand isn't currently queued via Commands.Spawn() (entities are
+		// allocated eagerly), so this loop is defensive — kept for parity with the
+		// original ordering policy in case SpawnEntityCommand starts being queued later.
 		int insertIndex = -1;
 		for (int i = _localCommands.Count - 1; i >= 0; i--)
 		{
-			if (_localCommands[i] is SpawnEntityCommand)
+			if (_localCommands[i] is BoxedCommand<SpawnEntityCommand>)
 			{
 				insertIndex = i + 1;
 				break;
@@ -622,11 +699,9 @@ public class Commands : ISystemParam
 		if (insertIndex == -1)
 		{
 			// Find the first component command from the end and insert before it
-			// Use pattern matching to avoid reflection
 			for (int i = _localCommands.Count - 1; i >= 0; i--)
 			{
 				var cmd = _localCommands[i];
-				// Check if this is a component insertion or removal command using pattern matching
 				if (IsComponentCommand(cmd))
 				{
 					insertIndex = i;
@@ -639,7 +714,7 @@ public class Commands : ISystemParam
 				insertIndex = _localCommands.Count;
 		}
 
-		_localCommands.Insert(insertIndex, command);
+		_localCommands.Insert(insertIndex, boxed);
 	}
 }
 
@@ -684,7 +759,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Insert<T>(T component) where T : struct
 	{
-		_commands.QueueCommand(new InsertComponentCommand<T>(ToDeferredRef(), component));
+		_commands.QueueComponentCommand(new InsertComponentCommand<T>(ToDeferredRef(), component));
 		return this;
 	}
 
@@ -693,7 +768,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Insert<T>() where T : struct
 	{
-		_commands.QueueCommand(new InsertComponentCommand<T>(ToDeferredRef(), default));
+		_commands.QueueComponentCommand(new InsertComponentCommand<T>(ToDeferredRef(), default));
 		return this;
 	}
 
@@ -702,7 +777,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Remove<T>() where T : struct
 	{
-		_commands.QueueCommand(new RemoveComponentCommand<T>(ToDeferredRef()));
+		_commands.QueueComponentCommand(new RemoveComponentCommand<T>(ToDeferredRef()));
 		return this;
 	}
 
@@ -805,6 +880,50 @@ internal interface IDeferredCommand
 /// </summary>
 internal interface IComponentCommand : IDeferredCommand
 {
+}
+
+/// <summary>
+/// Marker for boxed wrappers that can be returned to a <see cref="Commands"/> pool.
+/// </summary>
+internal interface IPoolableBox
+{
+}
+
+/// <summary>
+/// Marker for boxed wrappers around component commands (Insert/Remove). Used by
+/// observer-ordering logic to identify component commands in O(1) without
+/// reflection or pattern-matching on every concrete generic type.
+/// </summary>
+internal interface IBoxedComponentCommand
+{
+}
+
+/// <summary>
+/// Sealed class wrapper that holds a struct command by value. Pooled per-Commands
+/// instance so the per-frame "box a struct on List&lt;IDeferredCommand&gt;.Add" path
+/// allocates once per concrete generic type and then reuses the wrapper across
+/// frames. Mutable Value field lets the same wrapper carry different payloads
+/// over its lifetime.
+/// </summary>
+internal sealed class BoxedCommand<T> : IDeferredCommand, IPoolableBox where T : struct, IDeferredCommand
+{
+	public T Value;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Execute(TinyEcs.World world, Commands commands) => Value.Execute(world, commands);
+}
+
+/// <summary>
+/// Like <see cref="BoxedCommand{T}"/> but also marks the wrapper as a component
+/// command (Insert/Remove) so observer ordering can identify it cheaply.
+/// </summary>
+internal sealed class BoxedComponentCommand<T> : IDeferredCommand, IPoolableBox, IBoxedComponentCommand
+	where T : struct, IComponentCommand
+{
+	public T Value;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Execute(TinyEcs.World world, Commands commands) => Value.Execute(world, commands);
 }
 
 /// <summary>
