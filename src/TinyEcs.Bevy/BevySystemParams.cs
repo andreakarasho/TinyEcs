@@ -11,12 +11,16 @@ namespace TinyEcs.Bevy;
 // ============================================================================
 
 /// <summary>
-/// Base interface for all system parameters that can be injected into systems
+/// Base interface for all system parameters that can be injected into systems.
+/// Lifecycle: <see cref="Initialize"/> is called once when the system is first
+/// run; <see cref="Fetch"/> is called before every system run. Both receive the
+/// owning <see cref="App"/>, from which the parameter can obtain the World,
+/// resources, event channels, or any other App-bound state.
 /// </summary>
 public interface ISystemParam
 {
-	void Initialize(TinyEcs.World world);
-	void Fetch(TinyEcs.World world);
+	void Initialize(App app);
+	void Fetch(App app);
 
 	/// <summary>
 	/// Gets the access information for this parameter (for parallel execution analysis)
@@ -51,6 +55,78 @@ public class SystemParamAccess
 	}
 }
 
+/// <summary>
+/// Base class for composite system parameters that group multiple inner
+/// <see cref="ISystemParam"/> instances. Derived classes register their inner
+/// params in the constructor via <see cref="Add{T}(T)"/>; the base class then
+/// forwards <see cref="Initialize"/>, <see cref="Fetch"/>, and
+/// <see cref="GetAccess"/> to every registered param.
+///
+/// Example:
+/// <code>
+/// public class CombatParams : CompositeSystemParam
+/// {
+///     public readonly Query&lt;Data&lt;Health, Damage&gt;&gt; Targets;
+///     public readonly Res&lt;DifficultyConfig&gt; Difficulty;
+///     public readonly Commands Commands;
+///
+///     public CombatParams()
+///     {
+///         Targets    = Add(new Query&lt;Data&lt;Health, Damage&gt;&gt;());
+///         Difficulty = Add(new Res&lt;DifficultyConfig&gt;());
+///         Commands   = Add(new Commands());
+///     }
+/// }
+/// </code>
+///
+/// Note: <see cref="GetAccess"/> caches the merged access set on first call.
+/// If params are added after construction, the cache becomes stale — register
+/// all params in the constructor only.
+/// </summary>
+public abstract class CompositeSystemParam : ISystemParam
+{
+	private readonly List<ISystemParam> _params = new();
+	private SystemParamAccess? _cachedAccess;
+
+	/// <summary>
+	/// Register an inner system parameter. Returns the param so it can be
+	/// assigned to a field on the same line: <c>Field = Add(new Param());</c>.
+	/// </summary>
+	protected T Add<T>(T param) where T : ISystemParam
+	{
+		_params.Add(param);
+		return param;
+	}
+
+	public virtual void Initialize(App app)
+	{
+		foreach (var p in _params)
+			p.Initialize(app);
+	}
+
+	public virtual void Fetch(App app)
+	{
+		foreach (var p in _params)
+			p.Fetch(app);
+	}
+
+	public virtual SystemParamAccess GetAccess()
+	{
+		if (_cachedAccess != null)
+			return _cachedAccess;
+
+		var combined = new SystemParamAccess();
+		foreach (var p in _params)
+		{
+			var a = p.GetAccess();
+			foreach (var r in a.ReadResources) combined.ReadResources.Add(r);
+			foreach (var w in a.WriteResources) combined.WriteResources.Add(w);
+		}
+		_cachedAccess = combined;
+		return combined;
+	}
+}
+
 internal readonly struct DeferredEntityRef
 {
 	public readonly int SpawnIndex;
@@ -74,14 +150,14 @@ public class Res<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		_box = null;
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		_box = world.GetResourceBox<T>();
+		_box = app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -113,14 +189,14 @@ public class ResMut<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		_box = null;
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		_box = world.GetResourceBox<T>();
+		_box = app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -155,13 +231,13 @@ public class Local<T> : ISystemParam where T : new()
 
 	public ref T? Value => ref _value;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		// Local state is initialized once and persists
 		_value = new T();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
 		// Local state doesn't need to fetch - it's already there
 	}
@@ -188,25 +264,36 @@ public class EventReader<T> : ISystemParam where T : notnull
 	private ulong _lastEpoch = ulong.MaxValue;
 	private int _lastReadIndex;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
-		_channel = world.GetEventChannel<T>();
+		_channel = app.GetOrCreateEventChannel<T>();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
 		_events.Clear();
-		_channel ??= world.GetEventChannel<T>();
+		if (_channel is null)
+			_channel = app.GetOrCreateEventChannel<T>();
 		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
 	/// <summary>
-	/// Iterate over all events of type T that occurred since the last fetch
+	/// Iterate over all events of type T that occurred since the last fetch.
+	/// Allocates a heap enumerator on foreach — prefer <see cref="AsSpan"/> or
+	/// <see cref="GetEnumerator"/> for hot paths.
 	/// </summary>
-	public IEnumerable<T> Read()
-	{
-		return _events;
-	}
+	public IEnumerable<T> Read() => _events;
+
+	/// <summary>
+	/// Zero-allocation span view over current events. Lifetime: valid until next Fetch.
+	/// </summary>
+	public ReadOnlySpan<T> AsSpan() =>
+		System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_events);
+
+	/// <summary>
+	/// Non-allocating enumerator. Use directly in foreach: <c>foreach (var e in reader)</c>.
+	/// </summary>
+	public List<T>.Enumerator GetEnumerator() => _events.GetEnumerator();
 
 	/// <summary>
 	/// Check if any events of this type were sent
@@ -238,14 +325,15 @@ public class EventWriter<T> : ISystemParam where T : notnull
 {
 	private EventChannel<T>? _channel;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
-		_channel = world.GetEventChannel<T>();
+		_channel = app.GetOrCreateEventChannel<T>();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		_channel ??= world.GetEventChannel<T>();
+		if (_channel is null)
+			_channel = app.GetOrCreateEventChannel<T>();
 	}
 
 	/// <summary>
@@ -278,20 +366,82 @@ public class EventWriter<T> : ISystemParam where T : notnull
 /// </summary>
 public class Commands : ISystemParam
 {
-	private TinyEcs.World? _world;
+	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
+	// Per-Commands pool of boxed command wrappers, keyed by wrapper concrete type.
+	// Reuses wrapper class instances across frames to eliminate the per-command boxing
+	// allocation that would otherwise occur when adding a struct command to a
+	// List<IDeferredCommand>. Single-threaded by design: Commands has exclusive
+	// access in GetAccess(), so concurrent boxing is impossible.
+	private readonly Dictionary<Type, Stack<IPoolableBox>> _boxPool = new();
 
-	public void Initialize(TinyEcs.World world)
+	internal App? App => _app;
+
+	// One indirection per use — acceptable because these are user-driven calls,
+	// not per-frame hot loops.
+	private TinyEcs.World World => _app!.GetWorld();
+
+	public void Initialize(App app)
 	{
-		_world = world;
+		_app = app;
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		_world = world;
+		_app = app;
 		_localCommands.Clear();
 		_spawnedEntityIds.Clear();
+	}
+
+	/// <summary>
+	/// Rent a pooled boxed wrapper for the given command struct.
+	/// </summary>
+	internal BoxedCommand<T> RentBox<T>(in T cmd) where T : struct, IDeferredCommand
+	{
+		BoxedCommand<T> box;
+		if (_boxPool.TryGetValue(typeof(BoxedCommand<T>), out var stack) && stack.Count > 0)
+		{
+			box = (BoxedCommand<T>)stack.Pop();
+		}
+		else
+		{
+			box = new BoxedCommand<T>();
+		}
+		box.Value = cmd;
+		return box;
+	}
+
+	/// <summary>
+	/// Rent a pooled boxed wrapper for a component-related command struct.
+	/// </summary>
+	internal BoxedComponentCommand<T> RentComponentBox<T>(in T cmd) where T : struct, IComponentCommand
+	{
+		BoxedComponentCommand<T> box;
+		if (_boxPool.TryGetValue(typeof(BoxedComponentCommand<T>), out var stack) && stack.Count > 0)
+		{
+			box = (BoxedComponentCommand<T>)stack.Pop();
+		}
+		else
+		{
+			box = new BoxedComponentCommand<T>();
+		}
+		box.Value = cmd;
+		return box;
+	}
+
+	/// <summary>
+	/// Return a boxed wrapper to the pool for reuse.
+	/// </summary>
+	internal void ReturnBox(IPoolableBox box)
+	{
+		var key = box.GetType();
+		if (!_boxPool.TryGetValue(key, out var stack))
+		{
+			stack = new Stack<IPoolableBox>();
+			_boxPool[key] = stack;
+		}
+		stack.Push(box);
 	}
 
 	public SystemParamAccess GetAccess()
@@ -315,9 +465,13 @@ public class Commands : ISystemParam
 		// earlier commands in the same batch should rely on synchronously-updated
 		// sources (e.g. RelationshipEntityMapper for parent lookups), not on archetype
 		// component storage which lags until EndDeferred drains.
+		var world = World;
 		foreach (var cmd in _localCommands)
 		{
-			cmd.Execute(_world!, this);
+			cmd.Execute(world, this);
+			// Return pooled wrappers so the next frame doesn't allocate fresh ones.
+			if (cmd is IPoolableBox box)
+				ReturnBox(box);
 		}
 
 		_localCommands.Clear();
@@ -334,12 +488,12 @@ public class Commands : ISystemParam
 	/// </summary>
 	public EntityCommands Spawn()
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
 		// Spawn the entity immediately to get the real ID
 		// This is safe because systems with Commands never run in parallel
-		var entity = _world.Entity();
+		var entity = World.Entity();
 		ulong entityId = entity.ID;
 
 		// Component insertions are still deferred for thread-safety
@@ -380,10 +534,10 @@ public class Commands : ISystemParam
 	/// </summary>
 	public bool TryEntity(ulong entityId, out EntityCommands entityCommands)
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
-		if (_world.Exists(entityId))
+		if (World.Exists(entityId))
 		{
 			entityCommands = new EntityCommands(this, entityId);
 			return true;
@@ -399,10 +553,10 @@ public class Commands : ISystemParam
 	/// </summary>
 	public bool Exists(ulong entityId)
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
-		return _world.Exists(entityId);
+		return World.Exists(entityId);
 	}
 
 	/// <summary>
@@ -410,7 +564,7 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void InsertResource<T>(T resource) where T : notnull
 	{
-		_localCommands.Add(new InsertResourceCommand<T>(resource));
+		_localCommands.Add(RentBox(new InsertResourceCommand<T>(resource)));
 	}
 
 	/// <summary>
@@ -418,19 +572,19 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void RemoveResource<T>() where T : notnull
 	{
-		_localCommands.Add(new RemoveResourceCommand(typeof(T)));
+		_localCommands.Add(RentBox(new RemoveResourceCommand(typeof(T))));
 	}
 
 	/// <summary>
-	/// Check if a resource exists in the world (at the time this method is called).
+	/// Check if a resource exists in the App (at the time this method is called).
 	/// Note: Since commands are deferred, the resource state may change before execution.
 	/// </summary>
 	public bool HasResource<T>() where T : notnull
 	{
-		if (_world == null)
-			throw new InvalidOperationException("Commands has not been initialized.");
+		if (_app == null)
+			throw new InvalidOperationException("Commands has not been wired to an App.");
 
-		return _world.HasResource<T>();
+		return _app.HasResource<T>();
 	}
 
 	/// <summary>
@@ -438,29 +592,29 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
 	{
-		_localCommands.Add(new TriggerEventCommand<TEvent>(evt));
+		_localCommands.Add(RentBox(new TriggerEventCommand<TEvent>(evt)));
 	}
 
 	public void AddChild(ulong parentId, ulong childId)
 	{
-		_localCommands.Add(new AddChildCommand(
+		_localCommands.Add(RentBox(new AddChildCommand(
 			new DeferredEntityRef(-1, parentId),
-			new DeferredEntityRef(-1, childId)));
+			new DeferredEntityRef(-1, childId))));
 	}
 
 	public void AddChild(EntityCommands parent, EntityCommands child)
 	{
-		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), child.ToDeferredRef()));
+		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), child.ToDeferredRef())));
 	}
 
 	public void AddChild(EntityCommands parent, ulong childId)
 	{
-		_localCommands.Add(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId)));
+		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId))));
 	}
 
 	public void AddChild(ulong parentId, EntityCommands child)
 	{
-		_localCommands.Add(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef()));
+		_localCommands.Add(RentBox(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef())));
 	}
 
 	public void AddChildren(EntityCommands parent, ReadOnlySpan<ulong> childIds)
@@ -485,22 +639,35 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Internal method to queue a deferred command
+	/// Internal method to queue a non-component deferred command. The struct is
+	/// wrapped in a pooled <see cref="BoxedCommand{T}"/> so the per-frame
+	/// allocation amortizes to zero after warmup.
 	/// </summary>
-	internal void QueueCommand(IDeferredCommand command)
+	internal void QueueCommand<T>(in T command) where T : struct, IDeferredCommand
 	{
-		_localCommands.Add(command);
+		_localCommands.Add(RentBox(command));
 	}
 
 	/// <summary>
-	/// Reflection-free check if a command is a component insertion or removal command.
-	/// Uses interface marker pattern instead of reflection.
+	/// Internal method to queue a component-related deferred command. Uses a
+	/// dedicated <see cref="BoxedComponentCommand{T}"/> so observer-ordering
+	/// logic can identify component commands via the
+	/// <see cref="IBoxedComponentCommand"/> marker without reflection.
+	/// </summary>
+	internal void QueueComponentCommand<T>(in T command) where T : struct, IComponentCommand
+	{
+		_localCommands.Add(RentComponentBox(command));
+	}
+
+	/// <summary>
+	/// Reflection-free check if a queued entry wraps a component insertion or removal command.
 	/// </summary>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static bool IsComponentCommand(IDeferredCommand command)
 	{
-		// Use interface marker to identify component commands without reflection
-		return command is IComponentCommand;
+		// BoxedComponentCommand<T> implements IBoxedComponentCommand;
+		// BoxedCommand<T> does not. No reflection involved — direct interface check.
+		return command is IBoxedComponentCommand;
 	}
 
 	/// <summary>
@@ -509,13 +676,18 @@ public class Commands : ISystemParam
 	/// For existing entities: Insert at the current position (before pending commands)
 	/// This ensures observers are attached before subsequent Insert/Remove commands execute.
 	/// </summary>
-	internal void InsertObserverCommand(IDeferredCommand command)
+	internal void InsertObserverCommand<T>(in T command) where T : struct, IDeferredCommand
 	{
-		// Find the last SpawnEntityCommand and insert right after it
+		var boxed = RentBox(command);
+
+		// Find the last SpawnEntityCommand and insert right after it.
+		// SpawnEntityCommand isn't currently queued via Commands.Spawn() (entities are
+		// allocated eagerly), so this loop is defensive — kept for parity with the
+		// original ordering policy in case SpawnEntityCommand starts being queued later.
 		int insertIndex = -1;
 		for (int i = _localCommands.Count - 1; i >= 0; i--)
 		{
-			if (_localCommands[i] is SpawnEntityCommand)
+			if (_localCommands[i] is BoxedCommand<SpawnEntityCommand>)
 			{
 				insertIndex = i + 1;
 				break;
@@ -527,11 +699,9 @@ public class Commands : ISystemParam
 		if (insertIndex == -1)
 		{
 			// Find the first component command from the end and insert before it
-			// Use pattern matching to avoid reflection
 			for (int i = _localCommands.Count - 1; i >= 0; i--)
 			{
 				var cmd = _localCommands[i];
-				// Check if this is a component insertion or removal command using pattern matching
 				if (IsComponentCommand(cmd))
 				{
 					insertIndex = i;
@@ -544,7 +714,7 @@ public class Commands : ISystemParam
 				insertIndex = _localCommands.Count;
 		}
 
-		_localCommands.Insert(insertIndex, command);
+		_localCommands.Insert(insertIndex, boxed);
 	}
 }
 
@@ -579,14 +749,17 @@ public ref struct EntityCommands
 	public ulong Id => _spawnIndex >= 0 ? _commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
 
 	/// <summary>
+	/// The owning App associated with this entity's Commands. May be null if Commands
+	/// has not been wired to an App (e.g. used outside the Bevy scheduler).
+	/// </summary>
+	internal readonly App? OwningApp => _commands.App;
+
+	/// <summary>
 	/// Add a component to the entity
 	/// </summary>
 	public readonly EntityCommands Insert<T>(T component) where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, component));
-		else
-			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, component));
+		_commands.QueueComponentCommand(new InsertComponentCommand<T>(ToDeferredRef(), component));
 		return this;
 	}
 
@@ -595,10 +768,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Insert<T>() where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, default));
-		else
-			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, default));
+		_commands.QueueComponentCommand(new InsertComponentCommand<T>(ToDeferredRef(), default));
 		return this;
 	}
 
@@ -607,10 +777,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Remove<T>() where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new RemoveComponentCommand<T>(_commands, _spawnIndex));
-		else
-			_commands.QueueCommand(new RemoveComponentCommand<T>(_entityId));
+		_commands.QueueComponentCommand(new RemoveComponentCommand<T>(ToDeferredRef()));
 		return this;
 	}
 
@@ -652,10 +819,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly void Despawn()
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new DespawnEntityCommand(_commands, _spawnIndex));
-		else
-			_commands.QueueCommand(new DespawnEntityCommand(_entityId));
+		_commands.QueueCommand(new DespawnEntityCommand(ToDeferredRef()));
 	}
 
 	/// <summary>
@@ -719,6 +883,50 @@ internal interface IComponentCommand : IDeferredCommand
 }
 
 /// <summary>
+/// Marker for boxed wrappers that can be returned to a <see cref="Commands"/> pool.
+/// </summary>
+internal interface IPoolableBox
+{
+}
+
+/// <summary>
+/// Marker for boxed wrappers around component commands (Insert/Remove). Used by
+/// observer-ordering logic to identify component commands in O(1) without
+/// reflection or pattern-matching on every concrete generic type.
+/// </summary>
+internal interface IBoxedComponentCommand
+{
+}
+
+/// <summary>
+/// Sealed class wrapper that holds a struct command by value. Pooled per-Commands
+/// instance so the per-frame "box a struct on List&lt;IDeferredCommand&gt;.Add" path
+/// allocates once per concrete generic type and then reuses the wrapper across
+/// frames. Mutable Value field lets the same wrapper carry different payloads
+/// over its lifetime.
+/// </summary>
+internal sealed class BoxedCommand<T> : IDeferredCommand, IPoolableBox where T : struct, IDeferredCommand
+{
+	public T Value;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Execute(TinyEcs.World world, Commands commands) => Value.Execute(world, commands);
+}
+
+/// <summary>
+/// Like <see cref="BoxedCommand{T}"/> but also marks the wrapper as a component
+/// command (Insert/Remove) so observer ordering can identify it cheaply.
+/// </summary>
+internal sealed class BoxedComponentCommand<T> : IDeferredCommand, IPoolableBox, IBoxedComponentCommand
+	where T : struct, IComponentCommand
+{
+	public T Value;
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void Execute(TinyEcs.World world, Commands commands) => Value.Execute(world, commands);
+}
+
+/// <summary>
 /// Command to spawn a new entity
 /// </summary>
 internal readonly struct SpawnEntityCommand : IDeferredCommand
@@ -742,29 +950,18 @@ internal readonly struct SpawnEntityCommand : IDeferredCommand
 /// </summary>
 internal readonly struct InsertComponentCommand<T> : IComponentCommand where T : struct
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 	private readonly T _component;
 
-	// Constructor for spawned entities (uses index)
-	public InsertComponentCommand(Commands commands, int spawnIndex, T component)
+	public InsertComponentCommand(DeferredEntityRef entityRef, T component)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-		_component = component;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public InsertComponentCommand(ulong entityId, T component)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 		_component = component;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		world.Set(entityId, _component);
 	}
 }
@@ -774,26 +971,16 @@ internal readonly struct InsertComponentCommand<T> : IComponentCommand where T :
 /// </summary>
 internal readonly struct RemoveComponentCommand<T> : IComponentCommand where T : struct
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 
-	// Constructor for spawned entities (uses index)
-	public RemoveComponentCommand(Commands commands, int spawnIndex)
+	public RemoveComponentCommand(DeferredEntityRef entityRef)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public RemoveComponentCommand(ulong entityId)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		world.Unset<T>(entityId);
 	}
 }
@@ -803,26 +990,16 @@ internal readonly struct RemoveComponentCommand<T> : IComponentCommand where T :
 /// </summary>
 internal readonly struct DespawnEntityCommand : IDeferredCommand
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 
-	// Constructor for spawned entities (uses index)
-	public DespawnEntityCommand(Commands commands, int spawnIndex)
+	public DespawnEntityCommand(DeferredEntityRef entityRef)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public DespawnEntityCommand(ulong entityId)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		if (world.Exists(entityId))
 			world.Delete(entityId);
 	}
@@ -842,7 +1019,9 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.AddResource(_resource);
+		var app = commands.App
+			?? throw new InvalidOperationException("Commands.InsertResource requires Commands to be wired to an App.");
+		app.AddResource(_resource);
 	}
 }
 
@@ -931,7 +1110,9 @@ internal readonly struct RemoveResourceCommand : IDeferredCommand
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.GetState().Resources.Remove(_resourceType);
+		var app = commands.App
+			?? throw new InvalidOperationException("Commands.RemoveResource requires Commands to be wired to an App.");
+		app.RemoveResourceByType(_resourceType);
 	}
 }
 
@@ -1077,13 +1258,14 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 		return access;
 	}
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		// Initialization handled in Fetch
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
+		var world = app.GetWorld();
 		_world = world;
 		if (_lowLevelQuery == null)
 		{
@@ -1270,6 +1452,7 @@ public class ParameterizedSystem : ISystem
 	private readonly ISystemParam[] _parameters;
 	private bool _initialized = false;
 	private SystemParamAccess? _cachedAccess;
+	private App? _app;
 
 	public ParameterizedSystem(Action<TinyEcs.World> systemFn, params ISystemParam[] parameters)
 	{
@@ -1277,14 +1460,28 @@ public class ParameterizedSystem : ISystem
 		_parameters = parameters;
 	}
 
+	/// <summary>
+	/// Attach the owning <see cref="App"/> to this system. The app reference is
+	/// passed to each parameter on <see cref="ISystemParam.Initialize"/> and
+	/// <see cref="ISystemParam.Fetch"/>. Safe to call once during system
+	/// registration; subsequent calls overwrite the previous app.
+	/// </summary>
+	internal void SetApp(App app)
+	{
+		_app = app;
+	}
+
 	public void Run(TinyEcs.World world)
 	{
+		if (_app is null)
+			throw new InvalidOperationException("ParameterizedSystem has not been wired to an App. Use App.AddSystem to register it.");
+
 		if (!_initialized)
 		{
 			// Initialize all parameters once
 			foreach (var param in _parameters)
 			{
-				param.Initialize(world);
+				param.Initialize(_app);
 			}
 			_initialized = true;
 		}
@@ -1292,7 +1489,7 @@ public class ParameterizedSystem : ISystem
 		// Fetch latest data for all parameters
 		foreach (var param in _parameters)
 		{
-			param.Fetch(world);
+			param.Fetch(_app);
 		}
 
 		// Run the system

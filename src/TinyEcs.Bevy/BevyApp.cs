@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Runtime.CompilerServices;
+using TinyEcs.Collections;
 
 namespace TinyEcs.Bevy;
 
@@ -46,6 +47,14 @@ public interface ISystem
 // Stage System
 // ============================================================================
 
+/// <summary>
+/// Schedule stage marker.
+/// </summary>
+/// <remarks>
+/// Stages use reference equality. Use the static instances (<see cref="Startup"/>, <see cref="Update"/>, etc.)
+/// or cache a <see cref="Custom(string)"/> result in a static field — calling <c>Stage.Custom("foo")</c>
+/// twice creates two distinct stages.
+/// </remarks>
 public class Stage
 {
 	public string Name { get; }
@@ -84,212 +93,11 @@ public class StageDescriptor
 }
 
 // ============================================================================
-// World Extensions (Partial class to extend TinyEcs.World)
+// World Extensions (Query helpers only — Bevy state lives on App)
 // ============================================================================
 
 public static class WorldExtensions
 {
-	private static readonly ConditionalWeakTable<TinyEcs.World, WorldState> _worldStates = new();
-
-	internal static WorldState GetState(this TinyEcs.World world)
-	{
-		return _worldStates.GetValue(world, static _ => new WorldState());
-	}
-
-	public static void AddResource<T>(this TinyEcs.World world, T resource) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			state.Resources[typeof(T)] = new ResourceBox<T>(resource);
-		}
-	}
-
-	public static T GetResource<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
-
-			return ((ResourceBox<T>)boxed).Value;
-		}
-	}
-
-	public static bool HasResource<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			return state.Resources.ContainsKey(typeof(T));
-		}
-	}
-
-	public static ref T GetResourceRef<T>(this TinyEcs.World world) where T : notnull
-	{
-		return ref world.GetResourceBox<T>().Value;
-	}
-
-	internal static ResourceBox<T> GetResourceBox<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
-
-			return (ResourceBox<T>)boxed;
-		}
-	}
-
-	public static void SendEvent<T>(this TinyEcs.World world, T evt) where T : notnull
-	{
-		world.GetEventChannel<T>().Enqueue(evt);
-	}
-
-	internal static EventChannel<T> GetEventChannel<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.EventChannels.TryGetValue(typeof(T), out var channelObj))
-			{
-				var channel = new EventChannel<T>();
-				state.EventChannels[typeof(T)] = channel;
-				return channel;
-			}
-
-			return (EventChannel<T>)channelObj;
-		}
-	}
-
-	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer) where T : notnull
-	{
-		world.GetEventChannel<T>().RegisterObserver(observer);
-	}
-
-	internal static void ProcessEvents(this TinyEcs.World world)
-	{
-		var state = world.GetState();
-		List<IEventChannel> channels;
-		var currentTick = world.CurrentTick;
-		lock (state.SyncRoot)
-		{
-			channels = state.EventChannels.Values.ToList();
-		}
-		foreach (var channel in channels)
-		{
-			channel.Flush(currentTick);
-		}
-	}
-
-	// State management
-	public static void SetState<TState>(this TinyEcs.World world, TState state) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		var type = typeof(TState);
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var current))
-			{
-				worldState.PreviousStates[type] = current;
-			}
-			worldState.States[type] = state;
-			worldState.PendingStateChanges.Remove(type);
-			worldState.StatesProcessedThisFrame.Remove(type); // Mark for reprocessing
-		}
-	}
-
-	public static TState GetState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
-		}
-		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
-	}
-
-	public static bool HasState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			return worldState.States.ContainsKey(typeof(TState));
-		}
-	}
-
-	public static void QueueState<TState>(this TinyEcs.World world, TState nextState) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var current) &&
-				EqualityComparer<TState>.Default.Equals((TState)current, nextState))
-			{
-				worldState.PendingStateChanges.Remove(type);
-				return;
-			}
-
-			worldState.PendingStateChanges[type] = new QueuedStateTransition<TState>(nextState);
-			worldState.StatesProcessedThisFrame.Remove(type);
-		}
-	}
-
-	internal static bool HasQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			return worldState.PendingStateChanges.ContainsKey(typeof(TState));
-		}
-	}
-
-	internal static void ClearQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			worldState.PendingStateChanges.Remove(typeof(TState));
-		}
-	}
-
-	internal static TState? GetPreviousState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.PreviousStates.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
-		}
-		return null;
-	}
-
-	internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var state = world.GetState();
-		var type = typeof(TState);
-		lock (state.SyncRoot)
-		{
-			if (!state.States.TryGetValue(type, out var current))
-				return false;
-
-			if (!state.PreviousStates.TryGetValue(type, out var previous))
-				return true;
-
-			return !current.Equals(previous);
-		}
-	}
-
 	// Query helpers - create cached queries
 	/// <summary>
 	/// Create a query with automatic tick tracking for Changed/Added filters
@@ -334,15 +142,29 @@ public static class WorldExtensions
 	}
 }
 
-internal class WorldState
+internal interface IStateChangeDetector
 {
+	Type StateType { get; }
+	void Detect();
+}
+
+internal class AppState
+{
+	// SyncRoot is retained for multi-step atomic operations only:
+	// - SetState (write Previous + write Current as a pair)
+	// - QueueState (read current state then conditionally write pending)
+	// - ProcessStateTransitions (snapshot pending+detectors then clear)
+	// - StateChangeDetector.Detect (atomic processed-set Contains/Add)
+	//
+	// Single-key dictionary reads/writes on the ConcurrentDictionary fields below
+	// no longer need this lock — those collections are independently thread-safe.
 	public object SyncRoot { get; } = new object();
-	public Dictionary<Type, object> Resources { get; } = new();
-	public Dictionary<Type, IEventChannel> EventChannels { get; } = new();
-	public Dictionary<Type, object> States { get; } = new();
-	public Dictionary<Type, object> PreviousStates { get; } = new();
+	public ConcurrentDictionary<Type, object> Resources { get; } = new();
+	public ConcurrentDictionary<Type, IEventChannel> EventChannels { get; } = new();
+	public ConcurrentDictionary<Type, object> States { get; } = new();
+	public ConcurrentDictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
-	public List<Action> StateChangeDetectors { get; } = new();
+	public List<IStateChangeDetector> StateChangeDetectors { get; } = new();
 	public Dictionary<Type, IQueuedStateTransition> PendingStateChanges { get; } = new();
 }
 
@@ -358,36 +180,39 @@ internal sealed class ResourceBox<T> where T : notnull
 
 public sealed class State<TState> where TState : struct, Enum
 {
-	private readonly TinyEcs.World _world;
+	// State/NextState always route through the owning App; the World-side path
+	// has been removed now that the Bevy layer owns its own per-app state.
+	private readonly App _app;
 
-	internal State(TinyEcs.World world)
+	internal State(App app)
 	{
-		_world = world;
+		_app = app;
 	}
 
-	public TState Current => _world.GetState<TState>();
-	public TState Previous => _world.GetPreviousState<TState>() ?? _world.GetState<TState>();
-	public bool IsChanged => _world.StateChanged<TState>();
-	public bool IsQueued => _world.HasQueuedState<TState>();
+	public TState Current => _app.GetState<TState>();
+	public TState Previous => _app.GetPreviousState<TState>() ?? _app.GetState<TState>();
+	public bool IsChanged => _app.StateChanged<TState>();
+	public bool IsQueued => _app.HasQueuedState<TState>();
 }
 
 public sealed class NextState<TState> where TState : struct, Enum
 {
-	private readonly TinyEcs.World _world;
+	private readonly App _app;
 
-	internal NextState(TinyEcs.World world)
+	internal NextState(App app)
 	{
-		_world = world;
+		_app = app;
 	}
 
-	public void Set(TState nextState) => _world.QueueState(nextState);
-	public bool IsQueued => _world.HasQueuedState<TState>();
-	public void Clear() => _world.ClearQueuedState<TState>();
+	public void Set(TState nextState) => _app.QueueState(nextState);
+
+	public bool IsQueued => _app.HasQueuedState<TState>();
+	public void Clear() => _app.ClearQueuedState<TState>();
 }
 
 internal interface IQueuedStateTransition
 {
-	void Apply(TinyEcs.World world);
+	void Apply(App app);
 	Type StateType { get; }
 }
 
@@ -400,7 +225,7 @@ internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition 
 		_next = next;
 	}
 
-	public void Apply(TinyEcs.World world) => world.SetState(_next);
+	public void Apply(App app) => app.SetState(_next);
 
 	public Type StateType => typeof(TState);
 }
@@ -462,96 +287,69 @@ internal sealed class EventChannel<T> : IEventChannel
 
 	public void Flush(uint currentTick)
 	{
-		List<T>? snapshot = null;
-		List<Action<T>>? observers = null;
+		using var toNotify = new PooledList<T>(8);
+		using var observersSnapshot = new PooledList<Action<T>>(4);
+		bool haveWork = false;
 
 		lock (_lock)
 		{
 			var newFrame = _activeTick != currentTick;
+
 			if (newFrame)
 			{
 				_activeTick = currentTick;
+
+				// Drop last frame's events; observers already saw them via _observerCursor.
+				if (_readBuffer.Count > 0)
+				{
+					_readBuffer.Clear();
+					_epoch++;
+				}
+
 				_observerCursor = 0;
 
+				// Promote the write buffer so readers can see this frame's events next frame.
 				if (_writeBuffer.Count > 0)
 				{
 					(_readBuffer, _writeBuffer) = (_writeBuffer, _readBuffer);
 					_writeBuffer.Clear();
 					_epoch++;
-
-					if (_observers.Count > 0 && _readBuffer.Count > 0)
-					{
-						snapshot = new List<T>(_readBuffer);
-						observers = new List<Action<T>>(_observers);
-					}
-				}
-				else if (_readBuffer.Count > 0)
-				{
-					_readBuffer.Clear();
-					_epoch++;
 				}
 			}
-
-			if (!newFrame && _writeBuffer.Count > 0)
+			else if (_writeBuffer.Count > 0)
 			{
-				var startIndex = _readBuffer.Count;
-				if (_writeBuffer.Count == 1)
-				{
-					_readBuffer.Add(_writeBuffer[0]);
-				}
-				else
-				{
-					_readBuffer.AddRange(_writeBuffer);
-				}
+				// Mid-frame append: drain pending writes into the readable buffer.
+				// No _epoch bump — readers stay attached to the same epoch and resume
+				// from their last index, picking up the newly appended items.
+				_readBuffer.AddRange(_writeBuffer);
 				_writeBuffer.Clear();
+			}
 
-				if (_observers.Count > 0 && startIndex < _readBuffer.Count)
+			// Snapshot un-notified events for observers (each event delivered exactly once).
+			if (_observers.Count > 0 && _observerCursor < _readBuffer.Count)
+			{
+				for (var i = _observerCursor; i < _readBuffer.Count; i++)
 				{
-					var count = _readBuffer.Count - startIndex;
-					snapshot = new List<T>(count);
-					for (var i = startIndex; i < _readBuffer.Count; i++)
-					{
-						snapshot.Add(_readBuffer[i]);
-					}
-					observers = new List<Action<T>>(_observers);
+					toNotify.Add(_readBuffer[i]);
 				}
-
-				_observerCursor = _readBuffer.Count;
-			}
-			else if (snapshot == null && _observers.Count > 0 && _observerCursor < _readBuffer.Count)
-			{
-				var count = _readBuffer.Count - _observerCursor;
-				if (count > 0)
+				foreach (var obs in _observers)
 				{
-					snapshot = new List<T>(count);
-					for (var i = _observerCursor; i < _readBuffer.Count; i++)
-					{
-						snapshot.Add(_readBuffer[i]);
-					}
-					observers = new List<Action<T>>(_observers);
+					observersSnapshot.Add(obs);
 				}
-
-				_observerCursor = _readBuffer.Count;
-			}
-			else
-			{
-				_observerCursor = _readBuffer.Count;
+				haveWork = true;
 			}
 
-			if (snapshot != null)
-			{
-				_observerCursor = _readBuffer.Count;
-			}
+			_observerCursor = _readBuffer.Count;
 		}
 
-		if (snapshot == null || observers == null)
+		if (!haveWork)
 		{
 			return;
 		}
 
-		foreach (var evt in snapshot)
+		foreach (var evt in toNotify.AsSpan)
 		{
-			foreach (var observer in observers)
+			foreach (var observer in observersSnapshot.AsSpan)
 			{
 				observer(evt);
 			}
@@ -567,8 +365,8 @@ public class SystemDescriptor
 {
 	public ISystem System { get; }
 	public List<Func<TinyEcs.World, bool>> RunConditions { get; } = new();
-	public List<SystemDescriptor> BeforeSystems { get; } = new();
-	public List<SystemDescriptor> AfterSystems { get; } = new();
+	public HashSet<SystemDescriptor> BeforeSystems { get; } = new();
+	public HashSet<SystemDescriptor> AfterSystems { get; } = new();
 	public string? Label { get; set; }
 	public Stage? Stage { get; set; }
 
@@ -608,7 +406,7 @@ public class FunctionalSystem : ISystem
 // Fluent Configuration Interfaces
 // ============================================================================
 
-// Step 1: Must choose stage or state transition
+// Step 1: Must choose stage or state transition before configuring further.
 public interface ISystemStageSelector
 {
 	ISystemConfigurator InStage(Stage stage);
@@ -616,7 +414,13 @@ public interface ISystemStageSelector
 	ISystemConfigurator OnExit<TState>(TState state) where TState : struct, Enum;
 }
 
-// Step 2: Configure system (optional) and build
+// Step 2: Configure the system. All configuration methods return the same
+// interface, so they can be called in any order and any number of times.
+//
+// Semantics:
+//   - Label("a").Label("b"): "last label wins" - only "b" resolves; "a" is removed.
+//   - After/Before/Chain are additive - multiple calls add multiple dependencies.
+//   - RunIf calls are additive - all conditions must pass for the system to run.
 public interface ISystemConfigurator
 {
 	ISystemConfigurator RunIf(Func<TinyEcs.World, bool> condition);
@@ -625,37 +429,10 @@ public interface ISystemConfigurator
 	ISystemConfigurator RunIfState<TState>(TState state) where TState : struct, Enum;
 	ISystemConfigurator SingleThreaded();
 	ISystemConfigurator WithThreadingMode(ThreadingMode mode);
-	ISystemConfiguratorOrdered After(string label);
-	ISystemConfiguratorOrdered Before(string label);
-	ISystemConfiguratorLabeled Label(string label);
-	ISystemConfiguratorOrdered Chain();
-	App Build();
-}
-
-// Step 3: After labeling, cannot label again
-public interface ISystemConfiguratorLabeled
-{
-	ISystemConfiguratorLabeled RunIf(Func<TinyEcs.World, bool> condition);
-	ISystemConfiguratorLabeled RunIfResourceExists<T>() where T : notnull;
-	ISystemConfiguratorLabeled RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
-	ISystemConfiguratorLabeled RunIfState<TState>(TState state) where TState : struct, Enum;
-	ISystemConfiguratorLabeled SingleThreaded();
-	ISystemConfiguratorLabeled WithThreadingMode(ThreadingMode mode);
-	ISystemConfiguratorOrdered After(string label);
-	ISystemConfiguratorOrdered Before(string label);
-	ISystemConfiguratorOrdered Chain();
-	App Build();
-}
-
-// Step 4: After ordering (After/Before/Chain), cannot order again
-public interface ISystemConfiguratorOrdered
-{
-	ISystemConfiguratorOrdered RunIf(Func<TinyEcs.World, bool> condition);
-	ISystemConfiguratorOrdered RunIfResourceExists<T>() where T : notnull;
-	ISystemConfiguratorOrdered RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
-	ISystemConfiguratorOrdered RunIfState<TState>(TState state) where TState : struct, Enum;
-	ISystemConfiguratorOrdered SingleThreaded();
-	ISystemConfiguratorOrdered WithThreadingMode(ThreadingMode mode);
+	ISystemConfigurator After(string label);
+	ISystemConfigurator Before(string label);
+	ISystemConfigurator Label(string label);
+	ISystemConfigurator Chain();
 	App Build();
 }
 
@@ -665,17 +442,33 @@ public interface ISystemConfiguratorOrdered
 
 public class App
 {
-	private readonly TinyEcs.World _world;
+	/// <summary>
+	/// Per-stage runtime state: raw system list, topologically sorted view,
+	/// and the cached parallel-batch plan. Consolidates what used to be three
+	/// parallel dictionaries (raw systems, sorted, cached batches) all keyed
+	/// on <see cref="Stage"/>.
+	/// </summary>
+	internal sealed class StageRuntime
+	{
+		public readonly List<SystemDescriptor> Systems = new();
+		public List<SystemDescriptor>? Sorted;
+		public List<List<SystemDescriptor>>? Batches;
+	}
+
+	internal readonly TinyEcs.World _world;
+	private readonly AppState _appState = new();
 	private readonly ThreadingMode _threadingMode;
-	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
+	private readonly bool _multipleProcessors;
+	internal readonly Dictionary<Stage, StageRuntime> _stageRuntimes = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
+	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
-	private SystemDescriptor? _lastAddedSystem = null;
+	private SystemDescriptor? _previousSystem = null;
 	private readonly HashSet<Type> _installedPlugins = new();
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
-	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
-	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onExitSystems = new();
+	internal readonly Dictionary<(Type StateType, object StateValue), List<SystemDescriptor>> _onEnterSystems = new();
+	internal readonly Dictionary<(Type StateType, object StateValue), List<SystemDescriptor>> _onExitSystems = new();
 	private readonly HashSet<Type> _registeredStateTypes = new();
 
 	// Startup tracking
@@ -683,14 +476,13 @@ public class App
 
 	// Cached sorted results - computed once after app is built
 	private List<StageDescriptor>? _sortedStages = null;
-	private readonly Dictionary<Stage, List<SystemDescriptor>> _sortedStageSystems = new();
-	private readonly Dictionary<Stage, List<List<SystemDescriptor>>> _cachedBatches = new();
 	private bool _executionOrderDirty = false;
 
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
 		_threadingMode = threadingMode;
+		_multipleProcessors = Environment.ProcessorCount > 1;
 
 		// Initialize Startup stage (runs once)
 		AddStage(Stage.Startup);
@@ -719,8 +511,11 @@ public class App
 		// Clear caches if rebuilding
 		if (_executionOrderDirty)
 		{
-			_sortedStageSystems.Clear();
-			_cachedBatches.Clear();
+			foreach (var runtime in _stageRuntimes.Values)
+			{
+				runtime.Sorted = null;
+				runtime.Batches = null;
+			}
 			_executionOrderDirty = false;
 		}
 
@@ -728,35 +523,285 @@ public class App
 		_sortedStages = TopologicalSortStages();
 
 		// Sort systems for each stage once and build parallel batches
-		foreach (var (stage, systems) in _stageSystems)
+		foreach (var (_, runtime) in _stageRuntimes)
 		{
-			if (systems.Count > 0)
+			if (runtime.Systems.Count > 0)
 			{
-				var sortedSystems = TopologicalSortSystems(systems);
-				_sortedStageSystems[stage] = sortedSystems;
-				_cachedBatches[stage] = BuildParallelBatches(sortedSystems);
+				var sortedSystems = TopologicalSortSystems(runtime.Systems);
+				runtime.Sorted = sortedSystems;
+				runtime.Batches = BuildParallelBatches(sortedSystems);
 			}
 		}
 	}
 
 	public App AddResource<T>(T resource) where T : notnull
 	{
-		_world.AddResource(resource);
+		// ConcurrentDictionary indexer is thread-safe.
+		_appState.Resources[typeof(T)] = new ResourceBox<T>(resource);
 		return this;
+	}
+
+	// ------------------------------------------------------------------
+	// App-side Bevy state API
+	//
+	// These methods read/write the App's own AppState instance directly.
+	// The World no longer carries any Bevy state slot — all resources,
+	// events, and state machines live on the App.
+	// ------------------------------------------------------------------
+
+	/// <summary>
+	/// Retrieve a previously-added resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public T GetResource<T>() where T : notnull
+	{
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+		return ((ResourceBox<T>)boxed).Value;
+	}
+
+	/// <summary>
+	/// Returns true if a resource of type <typeparamref name="T"/> has been registered.
+	/// </summary>
+	public bool HasResource<T>() where T : notnull
+	{
+		// ConcurrentDictionary.ContainsKey is lock-free.
+		return _appState.Resources.ContainsKey(typeof(T));
+	}
+
+	/// <summary>
+	/// Get a mutable reference to a resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public ref T GetResourceRef<T>() where T : notnull
+	{
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+		return ref ((ResourceBox<T>)boxed).Value;
+	}
+
+	/// <summary>
+	/// Internal accessor used by App-aware system parameters to obtain the
+	/// resource box directly from <see cref="_appState"/> without going through
+	/// the world-extension shim.
+	/// </summary>
+	internal ResourceBox<T> GetResourceBoxInternal<T>() where T : notnull
+	{
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+		return (ResourceBox<T>)boxed;
+	}
+
+	/// <summary>
+	/// Remove a previously-added resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public void RemoveResource<T>() where T : notnull
+	{
+		RemoveResourceCore(typeof(T));
+	}
+
+	/// <summary>
+	/// Remove a resource by runtime type. Used by the deferred RemoveResource command
+	/// where the type is only known as <see cref="Type"/>.
+	/// </summary>
+	internal void RemoveResourceByType(Type resourceType)
+	{
+		RemoveResourceCore(resourceType);
+	}
+
+	private bool RemoveResourceCore(Type type)
+	{
+		// ConcurrentDictionary.TryRemove is lock-free.
+		return _appState.Resources.TryRemove(type, out _);
+	}
+
+	/// <summary>
+	/// Enqueue an event of type <typeparamref name="T"/> onto its channel.
+	/// </summary>
+	public void SendEvent<T>(T evt) where T : notnull
+	{
+		GetOrCreateEventChannel<T>().Enqueue(evt);
+	}
+
+	/// <summary>
+	/// Register a global observer that fires for every event of type <typeparamref name="T"/>.
+	/// </summary>
+	public void RegisterGlobalObserver<T>(Action<T> observer) where T : notnull
+	{
+		GetOrCreateEventChannel<T>().RegisterObserver(observer);
+	}
+
+	/// <summary>
+	/// Lazily fetch (or create) the event channel for <typeparamref name="T"/>.
+	/// Used by both App-level event send/observer registration and by App-aware
+	/// system parameters (EventReader/EventWriter).
+	/// </summary>
+	internal EventChannel<T> GetOrCreateEventChannel<T>() where T : notnull
+	{
+		// ConcurrentDictionary.GetOrAdd is lock-free. Under heavy contention the factory
+		// may run more than once (one unused instance becomes garbage), but the returned
+		// reference is always the single canonical channel in the dictionary.
+		var channelObj = _appState.EventChannels.GetOrAdd(typeof(T), _ => new EventChannel<T>());
+		return (EventChannel<T>)channelObj;
+	}
+
+	/// <summary>
+	/// Immediately set the current state of <typeparamref name="TState"/>.
+	/// </summary>
+	public void SetState<TState>(TState state) where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		// Lock kept: the (Previous, Current) pair must be updated atomically so
+		// readers never observe a new Current with a stale Previous. The lock
+		// also guards the PendingStateChanges Dictionary and the
+		// StatesProcessedThisFrame HashSet (both non-concurrent collections).
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.States.TryGetValue(type, out var current))
+			{
+				_appState.PreviousStates[type] = current;
+			}
+			_appState.States[type] = state;
+			_appState.PendingStateChanges.Remove(type);
+			_appState.StatesProcessedThisFrame.Remove(type);
+		}
+	}
+
+	/// <summary>
+	/// Get the current value of state <typeparamref name="TState"/>.
+	/// </summary>
+	public TState GetState<TState>() where TState : struct, Enum
+	{
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (_appState.States.TryGetValue(typeof(TState), out var state))
+		{
+			return (TState)state;
+		}
+		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
+	}
+
+	/// <summary>
+	/// Returns true if a state of type <typeparamref name="TState"/> has been registered.
+	/// </summary>
+	public bool HasState<TState>() where TState : struct, Enum
+	{
+		// ConcurrentDictionary.ContainsKey is lock-free.
+		return _appState.States.ContainsKey(typeof(TState));
+	}
+
+	/// <summary>
+	/// Queue a state transition that will be applied after the current frame.
+	/// </summary>
+	public void QueueState<TState>(TState next) where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		// Lock kept: this is a multi-step operation that reads the current state and
+		// conditionally writes to PendingStateChanges. It also guards the non-concurrent
+		// PendingStateChanges Dictionary and StatesProcessedThisFrame HashSet.
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.States.TryGetValue(type, out var current) &&
+				EqualityComparer<TState>.Default.Equals((TState)current, next))
+			{
+				_appState.PendingStateChanges.Remove(type);
+				return;
+			}
+
+			_appState.PendingStateChanges[type] = new QueuedStateTransition<TState>(next);
+			_appState.StatesProcessedThisFrame.Remove(type);
+		}
+	}
+
+	/// <summary>
+	/// Returns true if there is a pending state transition for <typeparamref name="TState"/>.
+	/// </summary>
+	internal bool HasQueuedState<TState>() where TState : struct, Enum
+	{
+		// Lock kept: PendingStateChanges is a non-concurrent Dictionary.
+		lock (_appState.SyncRoot)
+		{
+			return _appState.PendingStateChanges.ContainsKey(typeof(TState));
+		}
+	}
+
+	/// <summary>
+	/// Clear any pending state transition for <typeparamref name="TState"/>.
+	/// </summary>
+	internal void ClearQueuedState<TState>() where TState : struct, Enum
+	{
+		// Lock kept: PendingStateChanges is a non-concurrent Dictionary.
+		lock (_appState.SyncRoot)
+		{
+			_appState.PendingStateChanges.Remove(typeof(TState));
+		}
+	}
+
+	/// <summary>
+	/// Get the previously-recorded value of <typeparamref name="TState"/>, or null if none.
+	/// </summary>
+	internal TState? GetPreviousState<TState>() where TState : struct, Enum
+	{
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (_appState.PreviousStates.TryGetValue(typeof(TState), out var state))
+		{
+			return (TState)state;
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Returns true if the current <typeparamref name="TState"/> differs from the previously recorded one.
+	/// </summary>
+	internal bool StateChanged<TState>() where TState : struct, Enum
+	{
+		// ConcurrentDictionary reads are lock-free. There's a small window where
+		// Current and Previous could be observed mid-update relative to SetState,
+		// but SetState's lock ensures readers in that path see a coherent pair —
+		// here we only need the most recent committed values.
+		var type = typeof(TState);
+		if (!_appState.States.TryGetValue(type, out var current))
+			return false;
+
+		if (!_appState.PreviousStates.TryGetValue(type, out var previous))
+			return true;
+
+		return !current.Equals(previous);
+	}
+
+	/// <summary>
+	/// Flush all event channels for this frame. Called by <see cref="RunFrame"/>.
+	/// </summary>
+	internal void ProcessEvents()
+	{
+		// ConcurrentDictionary.Values returns a moment-in-time snapshot; no lock needed.
+		var currentTick = _world.CurrentTick;
+		using var channels = new PooledList<IEventChannel>(_appState.EventChannels.Count);
+		foreach (var channel in _appState.EventChannels.Values)
+		{
+			channels.Add(channel);
+		}
+		foreach (var channel in channels.AsSpan)
+		{
+			channel.Flush(currentTick);
+		}
 	}
 
 	public App AddState<TState>(TState initialState) where TState : struct, Enum
 	{
-		_world.SetState(initialState);
+		SetState(initialState);
 
-		if (!_world.HasResource<State<TState>>())
+		if (!HasResource<State<TState>>())
 		{
-			_world.AddResource(new State<TState>(_world));
+			AddResource(new State<TState>(this));
 		}
 
-		if (!_world.HasResource<NextState<TState>>())
+		if (!HasResource<NextState<TState>>())
 		{
-			_world.AddResource(new NextState<TState>(_world));
+			AddResource(new NextState<TState>(this));
 		}
 
 		return this;
@@ -764,15 +809,14 @@ public class App
 
 	internal StageDescriptor GetOrCreateStageDescriptor(Stage stage)
 	{
-		if (!_stageSystems.ContainsKey(stage))
-		{
-			_stageSystems[stage] = new List<SystemDescriptor>();
-			var descriptor = new StageDescriptor(stage);
-			_stageDescriptors.Add(descriptor);
-			return descriptor;
-		}
+		if (_stageDescriptorByStage.TryGetValue(stage, out var existing))
+			return existing;
 
-		return _stageDescriptors.First(d => d.Stage == stage);
+		_stageRuntimes[stage] = new StageRuntime();
+		var descriptor = new StageDescriptor(stage);
+		_stageDescriptors.Add(descriptor);
+		_stageDescriptorByStage[stage] = descriptor;
+		return descriptor;
 	}
 
 	public StageConfigurator AddStage(Stage stage)
@@ -787,7 +831,7 @@ public class App
 
 		if (_installedPlugins.Contains(pluginType))
 		{
-			Console.WriteLine($"Warning: Plugin {pluginType.Name} already installed. Skipping.");
+			// Silently skip duplicate plugin installs to avoid library Console output.
 			return this;
 		}
 
@@ -806,9 +850,8 @@ public class App
 	/// </summary>
 	public ISystemStageSelector AddSystem(ISystem system)
 	{
-		var descriptor = new SystemDescriptor(system);
-		_lastAddedSystem = descriptor;
-		return new SystemConfigurator(this, descriptor);
+		var (descriptor, previous) = RegisterSystem(system);
+		return new SystemConfigurator(this, descriptor, previous);
 	}
 
 	/// <summary>
@@ -816,26 +859,42 @@ public class App
 	/// </summary>
 	public App AddSystem(Stage stage, ISystem system)
 	{
-		var descriptor = new SystemDescriptor(system);
-		_lastAddedSystem = descriptor;
+		var (descriptor, _) = RegisterSystem(system);
 		AddSystemToStage(stage, descriptor);
 		return this;
 	}
 
+	/// <summary>
+	/// Common path for both AddSystem overloads: wire ParameterizedSystem to this App,
+	/// create a fresh descriptor, advance the _previousSystem chain (used by .Chain()),
+	/// and return both the new descriptor and the prior one.
+	/// </summary>
+	private (SystemDescriptor Descriptor, SystemDescriptor? Previous) RegisterSystem(ISystem system)
+	{
+		// Wire ParameterizedSystem to this App so its params can fetch from AppState directly.
+		if (system is ParameterizedSystem ps)
+			ps.SetApp(this);
+
+		var descriptor = new SystemDescriptor(system);
+		var previous = _previousSystem;
+		_previousSystem = descriptor;
+		return (descriptor, previous);
+	}
+
 	public App AddObserver<T>(Action<T> observer) where T : notnull
 	{
-		_world.RegisterObserver(observer);
+		RegisterGlobalObserver(observer);
 		return this;
 	}
 
 	internal void AddSystemToStage(Stage stage, SystemDescriptor descriptor)
 	{
-		if (!_stageSystems.ContainsKey(stage))
+		if (!_stageRuntimes.ContainsKey(stage))
 		{
 			AddStage(stage);
 		}
 		descriptor.Stage = stage; // Set the stage on the descriptor
-		_stageSystems[stage].Add(descriptor);
+		_stageRuntimes[stage].Systems.Add(descriptor);
 
 		// Mark execution order as dirty if systems are added after initial build
 		if (_sortedStages != null)
@@ -846,6 +905,16 @@ public class App
 
 	internal void RegisterLabel(string label, SystemDescriptor descriptor)
 	{
+		// "Last label wins": if this descriptor previously claimed another label,
+		// remove that mapping so the old label no longer resolves to this system.
+		if (!string.IsNullOrEmpty(descriptor.Label) && descriptor.Label != label)
+		{
+			if (_labeledSystems.TryGetValue(descriptor.Label!, out var existing) && existing == descriptor)
+			{
+				_labeledSystems.Remove(descriptor.Label!);
+			}
+		}
+
 		_labeledSystems[label] = descriptor;
 		descriptor.Label = label;
 	}
@@ -855,38 +924,30 @@ public class App
 		return _labeledSystems.GetValueOrDefault(label);
 	}
 
-	internal SystemDescriptor? GetLastAddedSystem() => _lastAddedSystem;
-
 	internal void RegisterOnEnterSystem<TState>(TState state, SystemDescriptor descriptor) where TState : struct, Enum
 	{
-		var type = typeof(TState);
 		// Use boxed enum directly as key - no ToString() allocation
-		object stateKey = state;
-
-		if (!_onEnterSystems.ContainsKey(type))
-			_onEnterSystems[type] = new Dictionary<object, List<SystemDescriptor>>();
-
-		if (!_onEnterSystems[type].ContainsKey(stateKey))
-			_onEnterSystems[type][stateKey] = new List<SystemDescriptor>();
-
-		_onEnterSystems[type][stateKey].Add(descriptor);
+		var key = (typeof(TState), (object)state);
+		if (!_onEnterSystems.TryGetValue(key, out var list))
+		{
+			list = new List<SystemDescriptor>();
+			_onEnterSystems[key] = list;
+		}
+		list.Add(descriptor);
 
 		RegisterStateChangeDetector<TState>();
 	}
 
 	internal void RegisterOnExitSystem<TState>(TState state, SystemDescriptor descriptor) where TState : struct, Enum
 	{
-		var type = typeof(TState);
 		// Use boxed enum directly as key - no ToString() allocation
-		object stateKey = state;
-
-		if (!_onExitSystems.ContainsKey(type))
-			_onExitSystems[type] = new Dictionary<object, List<SystemDescriptor>>();
-
-		if (!_onExitSystems[type].ContainsKey(stateKey))
-			_onExitSystems[type][stateKey] = new List<SystemDescriptor>();
-
-		_onExitSystems[type][stateKey].Add(descriptor);
+		var key = (typeof(TState), (object)state);
+		if (!_onExitSystems.TryGetValue(key, out var list))
+		{
+			list = new List<SystemDescriptor>();
+			_onExitSystems[key] = list;
+		}
+		list.Add(descriptor);
 
 		RegisterStateChangeDetector<TState>();
 	}
@@ -900,55 +961,86 @@ public class App
 
 		_registeredStateTypes.Add(type);
 
-		var worldState = _world.GetState();
-		Action detector = () =>
+		var detector = new StateChangeDetector<TState>(this);
+
+		lock (_appState.SyncRoot)
 		{
-			TState? previousState = null;
-			TState? currentState = null;
+			_appState.StateChangeDetectors.Add(detector);
+		}
+	}
 
-			lock (worldState.SyncRoot)
+	// Typed state change detector avoids the closure allocation that would otherwise
+	// capture the App instance + per-state-type fields. Using Nullable<TState> locals
+	// keeps the previous/current state values as value types instead of boxing them.
+	private sealed class StateChangeDetector<TState> : IStateChangeDetector
+		where TState : struct, Enum
+	{
+		private readonly App _app;
+
+		public StateChangeDetector(App app)
+		{
+			_app = app;
+		}
+
+		public Type StateType => typeof(TState);
+
+		public void Detect()
+		{
+			var appState = _app._appState;
+			var world = _app._world;
+			var type = typeof(TState);
+
+			TState? previousState;
+			TState? currentState;
+
+			// Lock kept: StatesProcessedThisFrame is a non-concurrent HashSet whose
+			// Contains/Add must be atomic so each state runs OnEnter/OnExit at most
+			// once per frame. The States/PreviousStates reads inside are on
+			// ConcurrentDictionary, so they're independently safe — the lock is only
+			// here for the processed-set and to snapshot the (current, previous) pair
+			// coherently relative to SetState.
+			lock (appState.SyncRoot)
 			{
-				if (worldState.StatesProcessedThisFrame.Contains(type))
+				if (appState.StatesProcessedThisFrame.Contains(type))
 					return;
 
-				if (!_world.StateChanged<TState>())
+				if (!appState.States.TryGetValue(type, out var currentObj))
+					return;
+				if (appState.PreviousStates.TryGetValue(type, out var previousObj) && currentObj.Equals(previousObj))
 					return;
 
-				worldState.StatesProcessedThisFrame.Add(type);
-				previousState = _world.GetPreviousState<TState>();
-				currentState = _world.HasState<TState>() ? _world.GetState<TState>() : (TState?)null;
+				appState.StatesProcessedThisFrame.Add(type);
+
+				// Unbox while holding the lock. previousObj may be null when no prior state exists.
+				previousState = previousObj is TState p ? p : (TState?)null;
+				currentState = (TState)currentObj;
 			}
 
-			if (previousState != null && _onExitSystems.TryGetValue(type, out var exitDict))
+			if (previousState.HasValue)
 			{
-				object prevStateKey = previousState.Value;
-				if (exitDict.TryGetValue(prevStateKey, out var exitSystems))
+				var exitKey = (type, (object)previousState.Value);
+				if (_app._onExitSystems.TryGetValue(exitKey, out var exitSystems))
 				{
 					foreach (var descriptor in exitSystems)
 					{
-						if (descriptor.ShouldRun(_world))
-							descriptor.System.Run(_world);
+						if (descriptor.ShouldRun(world))
+							descriptor.System.Run(world);
 					}
 				}
 			}
 
-			if (currentState != null && _onEnterSystems.TryGetValue(type, out var enterDict))
+			if (currentState.HasValue)
 			{
-				object currStateKey = currentState.Value;
-				if (enterDict.TryGetValue(currStateKey, out var enterSystems))
+				var enterKey = (type, (object)currentState.Value);
+				if (_app._onEnterSystems.TryGetValue(enterKey, out var enterSystems))
 				{
 					foreach (var descriptor in enterSystems)
 					{
-						if (descriptor.ShouldRun(_world))
-							descriptor.System.Run(_world);
+						if (descriptor.ShouldRun(world))
+							descriptor.System.Run(world);
 					}
 				}
 			}
-		};
-
-		lock (worldState.SyncRoot)
-		{
-			worldState.StateChangeDetectors.Add(detector);
 		}
 	}
 
@@ -962,41 +1054,55 @@ public class App
 
 		_startupHasRun = true;
 
-		// Increment world tick for change detection
-		// This marks all modifications in Startup with tick 1
-		_world.Update();
-
-		ExecuteSystemsParallel(Stage.Startup);
-
-		// Auto-flush observers after startup stage
-		_world.FlushObservers();
-
-		ProcessStateTransitions();
-		_world.ProcessEvents();
+		RunFrame(startup: true);
 	}
 
 	public void Run()
 	{
 		RunStartup();
 
+		RunFrame(startup: false);
+	}
+
+	/// <summary>
+	/// Shared frame execution helper used by both <see cref="RunStartup"/> and <see cref="Run"/>.
+	/// Increments the world tick, executes the appropriate stages (with observer flushes between
+	/// each), then processes pending state transitions and events.
+	/// </summary>
+	/// <param name="startup">
+	/// When <c>true</c>, only <see cref="Stage.Startup"/> is executed. When <c>false</c>, every
+	/// non-startup stage in <see cref="_sortedStages"/> is executed in order.
+	/// </param>
+	private void RunFrame(bool startup)
+	{
 		// Increment world tick for change detection
 		// This marks all modifications in this frame with the new tick
 		_world.Update();
 
-		// Use cached sorted stages (already built in RunStartup)
-		foreach (var stageDesc in _sortedStages!)
+		if (startup)
 		{
-			if (stageDesc.Stage == Stage.Startup)
-				continue;
+			ExecuteSystemsParallel(Stage.Startup);
 
-			ExecuteSystemsParallel(stageDesc.Stage);
-
-			// Auto-flush observers after each stage (like Bevy's apply_deferred)
+			// Auto-flush observers after startup stage
 			_world.FlushObservers();
+		}
+		else
+		{
+			// Use cached sorted stages (already built in RunStartup)
+			foreach (var stageDesc in _sortedStages!)
+			{
+				if (stageDesc.Stage == Stage.Startup)
+					continue;
+
+				ExecuteSystemsParallel(stageDesc.Stage);
+
+				// Auto-flush observers after each stage (like Bevy's apply_deferred)
+				_world.FlushObservers();
+			}
 		}
 
 		ProcessStateTransitions();
-		_world.ProcessEvents();
+		ProcessEvents();
 	}
 
 	/// <summary>
@@ -1013,15 +1119,19 @@ public class App
 		{
 			ThreadingMode.Single => false,
 			ThreadingMode.Multi => true,
-			ThreadingMode.Auto => Environment.ProcessorCount > 1,
+			ThreadingMode.Auto => _multipleProcessors,
 			_ => false
 		};
+
+		if (!_stageRuntimes.TryGetValue(stage, out var runtime))
+			return;
 
 		// In single-threaded mode, skip batching and just run systems in topological order
 		// This preserves declaration order and respects explicit dependencies
 		if (!useParallel)
 		{
-			if (!_sortedStageSystems.TryGetValue(stage, out var systems))
+			var systems = runtime.Sorted;
+			if (systems == null)
 				return;
 
 			foreach (var descriptor in systems)
@@ -1035,7 +1145,8 @@ public class App
 		}
 
 		// Parallel mode: use cached batches (already computed during BuildExecutionOrder)
-		if (!_cachedBatches.TryGetValue(stage, out var batches))
+		var batches = runtime.Batches;
+		if (batches == null)
 			return;
 
 		// Execute each batch (systems within a batch run in parallel)
@@ -1076,125 +1187,131 @@ public class App
 
 		while (remaining.Count > 0)
 		{
-			var batch = new List<SystemDescriptor>();
-			var batchAccess = new SystemParamAccess();
-			bool batchCanBeParallel = true;
-
-			// Process systems in forward order to preserve topological sort order
-			for (int i = 0; i < remaining.Count;)
-			{
-				var descriptor = remaining[i];
-
-				// Check if this system has a threading override
-				bool systemRequiresSingleThread = descriptor.ThreadingMode == ThreadingMode.Single;
-
-				// If the current batch already has systems and this one requires single-threading,
-				// or if the batch requires single-threading and already has a system, skip it for this batch
-				if (systemRequiresSingleThread)
-				{
-					if (batch.Count > 0)
-					{
-						// Can't add to an existing batch - will be processed in next iteration
-						i++; // Move to next system
-						continue;
-					}
-					else
-					{
-						// Start a new single-threaded batch with just this system
-						batch.Add(descriptor);
-						remaining.RemoveAt(i);
-						batchCanBeParallel = false;
-						break; // This batch is done - only one system allowed
-					}
-				}
-
-				// If batch is already marked single-threaded, skip all other systems
-				if (!batchCanBeParallel)
-				{
-					i++; // Move to next system
-					continue;
-				}
-
-				// Get access pattern if it's a parameterized system
-				var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
-				if (access == null)
-				{
-					// Non-parameterized systems have unknown access - run them sequentially
-					access = new SystemParamAccess();
-					// Treat as exclusive by adding a unique type marker
-					access.WriteResources.Add(descriptor.System.GetType());
-				}
-
-				// Check if this system has explicit ordering dependencies with systems already in the batch
-				bool hasOrderingConflict = false;
-				foreach (var batchedSystem in batch)
-				{
-					// If this system must run before/after a system already in the batch, they can't be parallel
-					if (descriptor.BeforeSystems.Contains(batchedSystem) ||
-						descriptor.AfterSystems.Contains(batchedSystem) ||
-						batchedSystem.BeforeSystems.Contains(descriptor) ||
-						batchedSystem.AfterSystems.Contains(descriptor))
-					{
-						hasOrderingConflict = true;
-						break;
-					}
-				}
-
-				// Check if this system conflicts with the current batch
-				if (!hasOrderingConflict && !batchAccess.ConflictsWith(access))
-				{
-					// No conflict - add to batch
-					batch.Add(descriptor);
-					remaining.RemoveAt(i);
-					// Don't increment i - next item shifted into current position
-
-					// Merge access patterns
-					foreach (var read in access.ReadResources)
-						batchAccess.ReadResources.Add(read);
-					foreach (var write in access.WriteResources)
-						batchAccess.WriteResources.Add(write);
-				}
-				else
-				{
-					// Conflict - skip this system for now
-					i++;
-				}
-			}
-
-			batches.Add(batch);
+			batches.Add(BuildOneBatch(remaining));
 		}
 
 		return batches;
 	}
 
+	/// <summary>
+	/// Pulls one batch of compatible systems out of <paramref name="remaining"/>.
+	/// Removes the chosen systems from the list and returns the batch.
+	/// </summary>
+	private static List<SystemDescriptor> BuildOneBatch(List<SystemDescriptor> remaining)
+	{
+		var batch = new List<SystemDescriptor>();
+		var batchAccess = new SystemParamAccess();
+
+		// Process systems in forward order to preserve topological sort order
+		for (int i = 0; i < remaining.Count;)
+		{
+			var descriptor = remaining[i];
+
+			if (TryAddToBatch(descriptor, batch, batchAccess))
+			{
+				remaining.RemoveAt(i);
+				// Next item shifted into current position — single-threaded batches return immediately
+				if (descriptor.ThreadingMode == ThreadingMode.Single)
+					break;
+			}
+			else
+			{
+				i++;
+			}
+		}
+
+		return batch;
+	}
+
+	/// <summary>
+	/// Decides whether <paramref name="descriptor"/> can join <paramref name="batch"/>.
+	/// On success, mutates <paramref name="batchAccess"/> to include the descriptor's access pattern.
+	/// </summary>
+	private static bool TryAddToBatch(SystemDescriptor descriptor, List<SystemDescriptor> batch, SystemParamAccess batchAccess)
+	{
+		bool systemRequiresSingleThread = descriptor.ThreadingMode == ThreadingMode.Single;
+
+		// Single-threaded systems must occupy their own batch
+		if (systemRequiresSingleThread)
+		{
+			if (batch.Count > 0)
+				return false;
+			batch.Add(descriptor);
+			return true;
+		}
+
+		// If batch already contains a single-threaded system, nothing else may join
+		if (batch.Count == 1 && batch[0].ThreadingMode == ThreadingMode.Single)
+			return false;
+
+		// Get access pattern if it's a parameterized system
+		var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
+		if (access == null)
+		{
+			// Non-parameterized systems have unknown access - run them sequentially
+			access = new SystemParamAccess();
+			// Treat as exclusive by adding a unique type marker
+			access.WriteResources.Add(descriptor.System.GetType());
+		}
+
+		// Check if this system has explicit ordering dependencies with systems already in the batch
+		foreach (var batchedSystem in batch)
+		{
+			if (descriptor.BeforeSystems.Contains(batchedSystem) ||
+				descriptor.AfterSystems.Contains(batchedSystem) ||
+				batchedSystem.BeforeSystems.Contains(descriptor) ||
+				batchedSystem.AfterSystems.Contains(descriptor))
+			{
+				return false;
+			}
+		}
+
+		// Check resource conflicts
+		if (batchAccess.ConflictsWith(access))
+			return false;
+
+		// No conflict - add to batch and merge access patterns
+		batch.Add(descriptor);
+		foreach (var read in access.ReadResources)
+			batchAccess.ReadResources.Add(read);
+		foreach (var write in access.WriteResources)
+			batchAccess.WriteResources.Add(write);
+		return true;
+	}
+
 	private void ProcessStateTransitions()
 	{
-		var worldState = _world.GetState();
-		List<IQueuedStateTransition> transitions;
-		List<Action> detectors;
-		lock (worldState.SyncRoot)
+		using var transitions = new PooledList<IQueuedStateTransition>(_appState.PendingStateChanges.Count);
+		using var detectors = new PooledList<IStateChangeDetector>(_appState.StateChangeDetectors.Count);
+		lock (_appState.SyncRoot)
 		{
-			transitions = worldState.PendingStateChanges.Values.ToList();
-			worldState.PendingStateChanges.Clear();
-			detectors = worldState.StateChangeDetectors.ToList();
-			worldState.StatesProcessedThisFrame.Clear();
+			foreach (var t in _appState.PendingStateChanges.Values)
+			{
+				transitions.Add(t);
+			}
+			_appState.PendingStateChanges.Clear();
+			foreach (var d in _appState.StateChangeDetectors)
+			{
+				detectors.Add(d);
+			}
+			_appState.StatesProcessedThisFrame.Clear();
 		}
-		foreach (var transition in transitions)
+		foreach (var transition in transitions.AsSpan)
 		{
-			transition.Apply(_world);
+			transition.Apply(this);
 		}
-		foreach (var detector in detectors)
+		foreach (var detector in detectors.AsSpan)
 		{
-			detector();
+			detector.Detect();
 		}
 
 		// After processing all state transitions and running OnEnter/OnExit systems,
 		// update PreviousStates to match current States so StateChanged returns false next frame
-		lock (worldState.SyncRoot)
+		lock (_appState.SyncRoot)
 		{
-			foreach (var kvp in worldState.States)
+			foreach (var kvp in _appState.States)
 			{
-				worldState.PreviousStates[kvp.Key] = kvp.Value;
+				_appState.PreviousStates[kvp.Key] = kvp.Value;
 			}
 		}
 	}
@@ -1248,6 +1365,11 @@ public class App
 		var visited = new HashSet<SystemDescriptor>(systems.Count);
 		var visiting = new HashSet<SystemDescriptor>(systems.Count);
 
+		// O(1) declaration-order lookup, avoids O(n) IndexOf per BeforeSystems entry.
+		var declarationIndex = new Dictionary<SystemDescriptor, int>(systems.Count);
+		for (int i = 0; i < systems.Count; i++)
+			declarationIndex[systems[i]] = i;
+
 		void Visit(SystemDescriptor node)
 		{
 			if (visited.Contains(node)) return;
@@ -1256,10 +1378,10 @@ public class App
 
 			visiting.Add(node);
 
-			// Visit dependencies in their original declaration order
-			// Sort BeforeSystems by their position in the original systems list to preserve declaration order
+			// Visit dependencies in their original declaration order.
+			// Preserves List.IndexOf semantics: cross-stage refs not in this list return -1 and sort first.
 			var orderedBefore = node.BeforeSystems
-				.OrderBy(s => systems.IndexOf(s))
+				.OrderBy(s => declarationIndex.GetValueOrDefault(s, -1))
 				.ToList();
 
 			foreach (var before in orderedBefore)
@@ -1342,24 +1464,34 @@ public class StageConfigurator
 	public App Build() => _app;
 }
 
-public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISystemConfiguratorLabeled, ISystemConfiguratorOrdered
+public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 {
 	private readonly App _app;
 	private readonly SystemDescriptor _descriptor;
+	private readonly SystemDescriptor? _previousSystem;
 	private bool _stageAssigned = false;
 
-	internal SystemConfigurator(App app, SystemDescriptor descriptor)
+	internal SystemConfigurator(App app, SystemDescriptor descriptor, SystemDescriptor? previousSystem)
 	{
 		_app = app;
 		_descriptor = descriptor;
+		_previousSystem = previousSystem;
 	}
+
+	/// <summary>
+	/// Owning <see cref="App"/> for this configurator. Internal helper used by the
+	/// generated <see cref="SystemExtensions"/> <c>RunIf</c> overloads to obtain
+	/// the App reference required by <see cref="ISystemParam.Initialize"/> and
+	/// <see cref="ISystemParam.Fetch"/>.
+	/// </summary>
+	internal App App => _app;
 
 	// ISystemStageSelector
 	public ISystemConfigurator InStage(Stage stage)
 	{
 		if (_stageAssigned && _descriptor.Stage != null)
 		{
-			_app._stageSystems[_descriptor.Stage].Remove(_descriptor);
+			_app._stageRuntimes[_descriptor.Stage].Systems.Remove(_descriptor);
 		}
 
 		_descriptor.Stage = stage;
@@ -1391,21 +1523,24 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 
 	public ISystemConfigurator RunIfResourceExists<T>() where T : notnull
 	{
-		return RunIf(world => world.HasResource<T>());
+		var app = _app;
+		return RunIf(_ => app.HasResource<T>());
 	}
 
 	public ISystemConfigurator RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>
 	{
-		return RunIf(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
+		var app = _app;
+		return RunIf(_ =>
+			app.HasResource<T>() && app.GetResource<T>().Equals(value));
 	}
 
 	public ISystemConfigurator RunIfState<TState>(TState state) where TState : struct, Enum
 	{
-		return RunIf(world =>
+		var app = _app;
+		return RunIf(_ =>
 		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
+			if (!app.HasState<TState>()) return false;
+			return app.GetState<TState>().Equals(state);
 		});
 	}
 
@@ -1421,7 +1556,7 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered After(string label)
+	public ISystemConfigurator After(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
 		if (target == null)
@@ -1433,16 +1568,13 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 
 		if (target != _descriptor)
 		{
-			if (!_descriptor.BeforeSystems.Contains(target))
-				_descriptor.BeforeSystems.Add(target);
-
-			if (!target.AfterSystems.Contains(_descriptor))
-				target.AfterSystems.Add(_descriptor);
+			_descriptor.BeforeSystems.Add(target);
+			target.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered Before(string label)
+	public ISystemConfigurator Before(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
 		if (target == null)
@@ -1454,116 +1586,25 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 
 		if (target != _descriptor)
 		{
-			if (!target.BeforeSystems.Contains(_descriptor))
-				target.BeforeSystems.Add(_descriptor);
-
-			if (!_descriptor.AfterSystems.Contains(target))
-				_descriptor.AfterSystems.Add(target);
+			target.BeforeSystems.Add(_descriptor);
+			_descriptor.AfterSystems.Add(target);
 		}
 		return this;
 	}
 
-	public ISystemConfiguratorLabeled Label(string label)
+	public ISystemConfigurator Label(string label)
 	{
 		_app.RegisterLabel(label, _descriptor);
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered Chain()
+	public ISystemConfigurator Chain()
 	{
-		var previousSystem = _app.GetLastAddedSystem();
-		if (previousSystem != null && previousSystem != _descriptor)
+		if (_previousSystem != null && _previousSystem != _descriptor)
 		{
-			if (!_descriptor.BeforeSystems.Contains(previousSystem))
-				_descriptor.BeforeSystems.Add(previousSystem);
-
-			if (!previousSystem.AfterSystems.Contains(_descriptor))
-				previousSystem.AfterSystems.Add(_descriptor);
+			_descriptor.BeforeSystems.Add(_previousSystem);
+			_previousSystem.AfterSystems.Add(_descriptor);
 		}
-		return this;
-	}
-
-	// ISystemConfiguratorLabeled implementations
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIf(Func<TinyEcs.World, bool> condition)
-	{
-		_descriptor.RunConditions.Add(condition);
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfResourceExists<T>()
-	{
-		_descriptor.RunConditions.Add(world => world.HasResource<T>());
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfResourceEquals<T>(T value)
-	{
-		_descriptor.RunConditions.Add(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfState<TState>(TState state)
-	{
-		_descriptor.RunConditions.Add(world =>
-		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
-		});
-		return this;
-	}
-
-	// ISystemConfiguratorOrdered implementations
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIf(Func<TinyEcs.World, bool> condition)
-	{
-		_descriptor.RunConditions.Add(condition);
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfResourceExists<T>()
-	{
-		_descriptor.RunConditions.Add(world => world.HasResource<T>());
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfResourceEquals<T>(T value)
-	{
-		_descriptor.RunConditions.Add(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfState<TState>(TState state)
-	{
-		_descriptor.RunConditions.Add(world =>
-		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
-		});
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.SingleThreaded()
-	{
-		_descriptor.ThreadingMode = ThreadingMode.Single;
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.WithThreadingMode(ThreadingMode mode)
-	{
-		_descriptor.ThreadingMode = mode;
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.SingleThreaded()
-	{
-		_descriptor.ThreadingMode = ThreadingMode.Single;
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.WithThreadingMode(ThreadingMode mode)
-	{
-		_descriptor.ThreadingMode = mode;
 		return this;
 	}
 

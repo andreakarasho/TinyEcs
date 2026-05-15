@@ -218,7 +218,7 @@ public static class SystemParamsExample
 		app.Update();
 
 		// Final stats
-		var finalStats = world.GetResource<GameStats>();
+		var finalStats = app.GetResource<GameStats>();
 		Console.WriteLine($"\n📊 Final Stats:");
 		Console.WriteLine($"   Enemies Killed: {finalStats.EnemiesKilled}");
 		Console.WriteLine($"   Total Damage Dealt: {finalStats.TotalDamageDealt}");

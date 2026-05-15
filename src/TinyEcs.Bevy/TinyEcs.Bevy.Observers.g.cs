@@ -24,9 +24,10 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
+			p1.Fetch(app);
 			callback(trigger, p1);
 		});
 
@@ -50,11 +51,13 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
 			callback(trigger, p1, p2);
 		});
 
@@ -78,13 +81,16 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
 			callback(trigger, p1, p2, p3);
 		});
 
@@ -108,15 +114,19 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
 			callback(trigger, p1, p2, p3, p4);
 		});
 
@@ -140,17 +150,22 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5);
 		});
 
@@ -174,19 +189,25 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6);
 		});
 
@@ -210,21 +231,28 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7);
 		});
 
@@ -248,23 +276,31 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8);
 		});
 
@@ -288,25 +324,34 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9);
 		});
 
@@ -330,27 +375,37 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10);
 		});
 
@@ -374,29 +429,40 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		var p11 = new T11();
+		p11.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
+			p11.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
 		});
 
@@ -420,31 +486,43 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		var p11 = new T11();
+		p11.Initialize(app);
 		var p12 = new T12();
+		p12.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
+			p11.Fetch(app);
+			p12.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12);
 		});
 
@@ -468,33 +546,46 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		var p11 = new T11();
+		p11.Initialize(app);
 		var p12 = new T12();
+		p12.Initialize(app);
 		var p13 = new T13();
+		p13.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
+			p11.Fetch(app);
+			p12.Fetch(app);
+			p13.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13);
 		});
 
@@ -518,35 +609,49 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		var p11 = new T11();
+		p11.Initialize(app);
 		var p12 = new T12();
+		p12.Initialize(app);
 		var p13 = new T13();
+		p13.Initialize(app);
 		var p14 = new T14();
+		p14.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
-			p14.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
+			p11.Fetch(app);
+			p12.Fetch(app);
+			p13.Fetch(app);
+			p14.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14);
 		});
 
@@ -570,37 +675,52 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		p1.Initialize(app);
 		var p2 = new T2();
+		p2.Initialize(app);
 		var p3 = new T3();
+		p3.Initialize(app);
 		var p4 = new T4();
+		p4.Initialize(app);
 		var p5 = new T5();
+		p5.Initialize(app);
 		var p6 = new T6();
+		p6.Initialize(app);
 		var p7 = new T7();
+		p7.Initialize(app);
 		var p8 = new T8();
+		p8.Initialize(app);
 		var p9 = new T9();
+		p9.Initialize(app);
 		var p10 = new T10();
+		p10.Initialize(app);
 		var p11 = new T11();
+		p11.Initialize(app);
 		var p12 = new T12();
+		p12.Initialize(app);
 		var p13 = new T13();
+		p13.Initialize(app);
 		var p14 = new T14();
+		p14.Initialize(app);
 		var p15 = new T15();
+		p15.Initialize(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
-			p14.Fetch(w);
-			p15.Fetch(w);
+			p1.Fetch(app);
+			p2.Fetch(app);
+			p3.Fetch(app);
+			p4.Fetch(app);
+			p5.Fetch(app);
+			p6.Fetch(app);
+			p7.Fetch(app);
+			p8.Fetch(app);
+			p9.Fetch(app);
+			p10.Fetch(app);
+			p11.Fetch(app);
+			p12.Fetch(app);
+			p13.Fetch(app);
+			p14.Fetch(app);
+			p15.Fetch(app);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15);
 		});
 

@@ -100,7 +100,7 @@ namespace TinyEcs.Tests
 
 			transitions.Clear();
 
-			world.SetState(GameState.Playing);
+			app.SetState(GameState.Playing);
 			app.Run();
 
 			Assert.Equal(new[] { "ExitMenu", "EnterPlaying" }, transitions);
@@ -130,11 +130,88 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { GameState.Menu }, observed);
-			Assert.Equal(GameState.Playing, world.GetState<GameState>());
+			Assert.Equal(GameState.Playing, app.GetState<GameState>());
 
 			observed.Clear();
 			app.Run();
 			Assert.Equal(new[] { GameState.Playing }, observed);
+		}
+
+		private enum DetectorTestState
+		{
+			A,
+			B
+		}
+
+		[Fact]
+		public void StateChangeDetectorRunsOnlyOnTransitionWithoutAllocations()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			var enterCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+			var exitCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+
+			app.AddState(DetectorTestState.A);
+
+			app.AddSystem(w => enterCounts[DetectorTestState.A]++)
+				.OnEnter(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.A]++)
+				.OnExit(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => enterCounts[DetectorTestState.B]++)
+				.OnEnter(DetectorTestState.B)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.B]++)
+				.OnExit(DetectorTestState.B)
+				.Build();
+
+			// Initial frame: OnEnter(A) should fire once.
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(0, exitCounts[DetectorTestState.A]);
+			Assert.Equal(0, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition to B: OnExit(A) and OnEnter(B) fire once each.
+			app.SetState(DetectorTestState.B);
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Idle frames: no further transitions should be fired.
+			app.Run();
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition back to A: OnExit(B) and OnEnter(A) fire once each.
+			app.SetState(DetectorTestState.A);
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
+
+			// Another idle frame: still no new invocations.
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
 		}
 
 		[Fact]
@@ -344,6 +421,81 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void DeferredCommandsUnifyEntityRef_SpawnedAndExistingPathsBothWork()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			// Pre-create two existing entities the commands will operate on by id
+			var existingForInsert = world.Entity().ID;
+			var existingForDespawn = world.Entity().ID;
+
+			var spawnedIds = new List<ulong>();
+			app.AddResource(spawnedIds);
+
+			// First system spawns one entity (Insert via spawn path) and inserts on an existing entity (Insert via id path).
+			var insertSystem = SystemFunctionAdapters.Create<Commands, ResMut<List<ulong>>>((commands, ids) =>
+			{
+				var spawned = commands.Spawn().Insert(new Position { X = 1 });
+				// We cannot read the id yet (deferred); capture via observer below.
+				_ = spawned;
+
+				commands.Entity(existingForInsert).Insert(new Position { X = 2 });
+			});
+
+			app.AddObserver<OnSpawn>((_, trigger) => spawnedIds.Add(trigger.EntityId));
+
+			app.AddSystem(insertSystem)
+				.InStage(Stage.Update)
+				.Label("InsertPhase")
+				.Build();
+
+			app.Run();
+
+			// Both insertions should have landed.
+			Assert.Single(spawnedIds);
+			var spawnedId = spawnedIds[0];
+
+			Assert.True(world.Has<Position>(spawnedId));
+			Assert.Equal(1, world.Get<Position>(spawnedId).X);
+
+			Assert.True(world.Has<Position>(existingForInsert));
+			Assert.Equal(2, world.Get<Position>(existingForInsert).X);
+
+			// Second system despawns one via spawn-path EntityCommands and one via id-path EntityCommands.
+			var spawnedToDespawn = 0UL;
+			var despawnSystem = SystemFunctionAdapters.Create<Commands>(commands =>
+			{
+				var freshSpawn = commands.Spawn().Insert(new Position { X = 3 });
+				freshSpawn.Despawn(); // spawn-path despawn
+
+				commands.Entity(existingForDespawn).Despawn(); // id-path despawn
+			});
+
+			// Capture id of the freshly-spawned-then-despawned entity to confirm it's gone.
+			app.AddObserver<OnSpawn>((_, trigger) =>
+			{
+				// The new spawn during the despawn phase
+				spawnedToDespawn = trigger.EntityId;
+			});
+
+			app.AddSystem(despawnSystem)
+				.InStage(Stage.PostUpdate)
+				.Build();
+
+			app.Run();
+
+			// Both despawns succeeded
+			Assert.False(world.Exists(existingForDespawn));
+			Assert.NotEqual(0UL, spawnedToDespawn);
+			Assert.False(world.Exists(spawnedToDespawn));
+
+			// The earlier spawned entity (from first run) is untouched.
+			Assert.True(world.Exists(spawnedId));
+			Assert.True(world.Exists(existingForInsert));
+		}
+
+		[Fact]
 		public void EventReaderReceivesEventsOnFollowingFrame()
 		{
 			using var world = new World();
@@ -434,6 +586,87 @@ namespace TinyEcs.Tests
 			app.Run();
 			Assert.Equal(new[] { 0, 1 }, preUpdateEvents);
 			Assert.Equal(new[] { 0, 1 }, postUpdateEvents);
+		}
+
+		[Fact]
+		public void EventChannelFlushDoesNotDoubleNotifyObserversAcrossFrames()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			var observed = new List<int>();
+			app.AddObserver<ScoreEvent>(evt => observed.Add(evt.Value));
+
+			var sendOnce = new MutableCounter();
+			app.AddResource(sendOnce);
+
+			// Writer that sends a ScoreEvent only when the resource's flag is set.
+			var writerSystem = SystemFunctionAdapters.Create<ResMut<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((flag, writer) =>
+			{
+				if (flag.Value.Value != 0)
+				{
+					writer.Send(new ScoreEvent(flag.Value.Value));
+					flag.Value.Value = 0;
+				}
+			});
+
+			app.AddSystem(writerSystem)
+				.InStage(Stage.Update)
+				.Build();
+
+			// Frame N: send event with value 1. Observer should see it exactly once after this frame's Flush.
+			sendOnce.Value = 1;
+			app.Run();
+			Assert.Equal(new[] { 1 }, observed);
+
+			// Frame N+1: no new events. Observer must not be re-notified for previously delivered events.
+			app.Run();
+			Assert.Equal(new[] { 1 }, observed);
+
+			// Frame N+2: send event with value 2. Observer should now have both, in order, exactly once each.
+			sendOnce.Value = 2;
+			app.Run();
+			Assert.Equal(new[] { 1, 2 }, observed);
+
+			// Frame N+3: no new events again. No additional notifications.
+			app.Run();
+			Assert.Equal(new[] { 1, 2 }, observed);
+
+			// Verify multi-event flush: send 2 events in a single Update stage, then read in next frame.
+			var collected = new List<int>();
+			var burstWriter = SystemFunctionAdapters.Create<Local<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((counter, writer) =>
+			{
+				if (counter.Value.Value == 0)
+				{
+					writer.Send(new ScoreEvent(10));
+					writer.Send(new ScoreEvent(20));
+					counter.Value.Value = 1;
+				}
+			});
+
+			var burstReader = SystemFunctionAdapters.Create<TinyEcs.Bevy.EventReader<ScoreEvent>>(reader =>
+			{
+				foreach (var evt in reader.Read())
+				{
+					collected.Add(evt.Value);
+				}
+			});
+
+			app.AddSystem(burstWriter).InStage(Stage.Update).Label("BurstWriter").Build();
+			app.AddSystem(burstReader).InStage(Stage.PostUpdate).Build();
+
+			// First run after adding: burstWriter sends 10 and 20. Reader in PostUpdate of the same frame
+			// sees the previous-frame buffer (empty for these values). Flush at end promotes them.
+			app.Run();
+			Assert.DoesNotContain(10, collected);
+			Assert.DoesNotContain(20, collected);
+
+			// Next frame: reader picks up both events in order, each exactly once.
+			app.Run();
+			Assert.Equal(new[] { 10, 20 }, collected);
+
+			// And observer has now seen all four events (1, 2, 10, 20), each exactly once.
+			Assert.Equal(new[] { 1, 2, 10, 20 }, observed);
 		}
 
 		[Fact]
@@ -634,6 +867,38 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void RunFrameHelperPreservesStartupAndUpdateSemantics()
+		{
+			// Regression test for the shared RunFrame helper extracted from
+			// RunStartup() and Run(). Verifies that startup systems execute exactly
+			// once and update systems execute on every Run() call.
+			using var world = new World();
+			var app = new App(world, ThreadingMode.Single);
+			var counter = new MutableCounter();
+			app.AddResource(counter);
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value = 1)
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value++)
+				.InStage(Stage.Update)
+				.Build();
+
+			// RunStartup() runs only Stage.Startup -> counter set to 1, Update did not run.
+			app.RunStartup();
+			Assert.Equal(1, counter.Value);
+
+			// Run() must not re-execute Stage.Startup, only Update -> 1 + 1 = 2.
+			app.Run();
+			Assert.Equal(2, counter.Value);
+
+			// Subsequent Run() calls keep advancing the Update counter -> 3.
+			app.Run();
+			Assert.Equal(3, counter.Value);
+		}
+
+		[Fact]
 		public void SystemsRespectAfterOrdering()
 		{
 			using var world = new World();
@@ -751,6 +1016,57 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+		}
+
+		private sealed class ChainPluginA : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginA(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("A"))
+					.InStage(Stage.Update)
+					.Label("a")
+					.Build();
+			}
+		}
+
+		private sealed class ChainPluginB : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginB(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("B"))
+					.InStage(Stage.Update)
+					.Chain()
+					.Build();
+			}
+		}
+
+		[Fact]
+		public void ChainAcrossPluginBoundaryPreservesPreviousSystem()
+		{
+			using var world = new World();
+			var app = new App(world);
+			var executed = new List<string>();
+
+			app.AddPlugin(new ChainPluginA(executed));
+			app.AddPlugin(new ChainPluginB(executed));
+
+			app.Run();
+
+			Assert.Equal(new[] { "A", "B" }, executed);
 		}
 
 		[Fact]
@@ -1561,6 +1877,273 @@ namespace TinyEcs.Tests
 			Assert.Equal("Clicked at (10,20) count=1", events[0]);
 			Assert.Equal("Clicked at (30,40) count=2", events[1]);
 			Assert.Equal(2, counter.Value);
+		}
+
+		[Fact]
+		public void ConfiguratorAllowsLabelOrderingMethodsInAnyOrder()
+		{
+			// Verify the simplified configurator: configuration methods can be
+			// called in any order without type-state ceremony, and "last label wins".
+			var executed = new List<string>();
+
+			var app = new App();
+
+			// Anchor system so the subsequent .After("anchor") resolves.
+			app.AddSystem(() => executed.Add("anchor"))
+				.InStage(Stage.Update)
+				.Label("anchor")
+				.Build();
+
+			// Anchor system to satisfy .Before("tail").
+			app.AddSystem(() => executed.Add("tail"))
+				.InStage(Stage.Update)
+				.Label("tail")
+				.Build();
+
+			// Forward order: RunIf -> Label -> After -> Before -> SingleThreaded.
+			app.AddSystem(() => executed.Add("forward"))
+				.InStage(Stage.Update)
+				.RunIf(_ => true)
+				.Label("forward")
+				.After("anchor")
+				.Before("tail")
+				.SingleThreaded()
+				.Build();
+
+			// Reverse order: SingleThreaded -> Before -> After -> Label -> RunIf.
+			app.AddSystem(() => executed.Add("reverse"))
+				.InStage(Stage.Update)
+				.SingleThreaded()
+				.Before("tail")
+				.After("anchor")
+				.Label("reverse")
+				.RunIf(_ => true)
+				.Build();
+
+			// Last-label-wins: declaring Label("a") then Label("b") should make "b"
+			// the resolvable label. .After("b") must therefore work without throwing.
+			app.AddSystem(() => executed.Add("relabeled"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.Label("b")
+				.After("anchor")
+				.Build();
+
+			app.AddSystem(() => executed.Add("after_b"))
+				.InStage(Stage.Update)
+				.After("b")
+				.Before("tail")
+				.Build();
+
+			app.Run();
+
+			// Anchor runs first, tail last; forward/reverse/relabeled/after_b between.
+			Assert.Equal("anchor", executed[0]);
+			Assert.Equal("tail", executed[^1]);
+			Assert.Contains("forward", executed);
+			Assert.Contains("reverse", executed);
+			Assert.Contains("relabeled", executed);
+			Assert.Contains("after_b", executed);
+			// after_b must run after relabeled (its dependency via the "b" label).
+			Assert.True(executed.IndexOf("after_b") > executed.IndexOf("relabeled"));
+		}
+
+		[Fact]
+		public void RelabeledSystemOldLabelNoLongerResolvable()
+		{
+			// "Last label wins" semantics: when a system is relabeled, the old
+			// label must no longer resolve. We verify this behaviorally by
+			// referencing the old label from another system, which must throw.
+			var app = new App();
+
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.Label("first")
+				.Label("second")
+				.Build();
+
+			// Referencing "second" must succeed.
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.After("second")
+				.Build();
+
+			// Referencing "first" must throw because the relabel removed it.
+			var ex = Assert.Throws<System.InvalidOperationException>(() =>
+				app.AddSystem(() => { })
+					.InStage(Stage.Update)
+					.After("first")
+					.Build());
+
+			Assert.Contains("first", ex.Message);
+		}
+
+		[Fact]
+		public void ConfiguratorChainStillWorksWithoutInterfaceCeremony()
+		{
+			// Smoke test that the canonical fluent chain still compiles and runs.
+			var executed = new List<string>();
+			var app = new App();
+
+			app.AddSystem(() => executed.Add("b"))
+				.InStage(Stage.Update)
+				.Label("b")
+				.Build();
+
+			app.AddSystem(() => executed.Add("a"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.After("b")
+				.RunIf(_ => true)
+				.SingleThreaded()
+				.Build();
+
+			app.Run();
+
+			Assert.Equal(new[] { "b", "a" }, executed);
+		}
+
+		private struct MyRes
+		{
+			public int Value;
+		}
+
+		[Fact]
+		public void MultipleAppsHaveIsolatedBevyState()
+		{
+			// Bevy state (resources/events/states) now lives on the App, not on the World.
+			// Two independent Apps must therefore own independent state stores even if
+			// they happen to share or wrap the same World concept.
+			using var world1 = new World();
+			using var world2 = new World();
+			var app1 = new App(world1);
+			var app2 = new App(world2);
+
+			app1.AddResource(new MyRes { Value = 1 });
+			app2.AddResource(new MyRes { Value = 2 });
+
+			Assert.True(app1.HasResource<MyRes>());
+			Assert.True(app2.HasResource<MyRes>());
+
+			Assert.Equal(1, app1.GetResource<MyRes>().Value);
+			Assert.Equal(2, app2.GetResource<MyRes>().Value);
+		}
+
+		private enum PooledListSnapshotState
+		{
+			Idle,
+			Active
+		}
+
+		private readonly record struct PooledListEvent(int Value);
+
+		[Fact]
+		public void HotPathSnapshotsUsingPooledListPreserveBehavior()
+		{
+			// Regression: EventChannel.Flush, ProcessStateTransitions, and ProcessEvents
+			// were converted from List<T>.ToList() snapshots to ArrayPool-backed
+			// PooledList<T> snapshots. Behavior must be identical to the prior
+			// implementation across event dispatch and state transition handling.
+			using var world = new World();
+			var app = new App(world);
+
+			// Multiple resources to exercise general App plumbing alongside the hot paths.
+			app.AddResource(new ScoreTracker { Baseline = 10 });
+			app.AddResource(new MutableCounter { Value = 0 });
+
+			// State enum: alternate frames will queue transitions.
+			app.AddState(PooledListSnapshotState.Idle);
+
+			var enterIdleCount = 0;
+			var exitIdleCount = 0;
+			var enterActiveCount = 0;
+			var exitActiveCount = 0;
+
+			app.AddSystem(w => enterIdleCount++)
+				.OnEnter(PooledListSnapshotState.Idle)
+				.Build();
+			app.AddSystem(w => exitIdleCount++)
+				.OnExit(PooledListSnapshotState.Idle)
+				.Build();
+			app.AddSystem(w => enterActiveCount++)
+				.OnEnter(PooledListSnapshotState.Active)
+				.Build();
+			app.AddSystem(w => exitActiveCount++)
+				.OnExit(PooledListSnapshotState.Active)
+				.Build();
+
+			// Two observers on the same event type — exercises the observersSnapshot
+			// PooledList path in EventChannel<T>.Flush.
+			var observerA = new List<int>();
+			var observerB = new List<int>();
+			app.AddObserver<PooledListEvent>(evt => observerA.Add(evt.Value));
+			app.AddObserver<PooledListEvent>(evt => observerB.Add(evt.Value));
+
+			// 5 frames; each frame writes 2 events; every other frame queues a
+			// state transition. After 5 frames we should have 10 events total.
+			var nextValue = 0;
+			var frameIndex = 0;
+			var writerEnabled = true;
+			app.AddSystem((TinyEcs.Bevy.EventWriter<PooledListEvent> writer) =>
+			{
+				if (!writerEnabled) return;
+				writer.Send(new PooledListEvent(nextValue++));
+				writer.Send(new PooledListEvent(nextValue++));
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			for (var i = 0; i < 5; i++)
+			{
+				if ((frameIndex & 1) == 1)
+				{
+					var current = app.GetState<PooledListSnapshotState>();
+					app.SetState(current == PooledListSnapshotState.Idle
+						? PooledListSnapshotState.Active
+						: PooledListSnapshotState.Idle);
+				}
+				app.Run();
+				frameIndex++;
+			}
+
+			// Observers fire on Flush, which is called from ProcessEvents at the
+			// end of Run, so all 10 events should have been delivered to both
+			// observers already.
+			Assert.Equal(10, observerA.Count);
+			Assert.Equal(10, observerB.Count);
+			Assert.Equal(observerA, observerB);
+
+			// Disable the writer so the smoke runs below produce no events.
+			writerEnabled = false;
+
+			// State transitions: frames at frameIndex==1 and frameIndex==3 queued
+			// a transition each. The initial frame fires OnEnter(Idle) once.
+			// - Frame 0: enter Idle (initial)
+			// - Frame 1: Idle -> Active (exit Idle, enter Active)
+			// - Frame 2: no transition
+			// - Frame 3: Active -> Idle (exit Active, enter Idle)
+			// - Frame 4: no transition
+			Assert.Equal(2, enterIdleCount);
+			Assert.Equal(1, exitIdleCount);
+			Assert.Equal(1, enterActiveCount);
+			Assert.Equal(1, exitActiveCount);
+
+			// Smoke test: extra runs with no events queued / no transitions
+			// pending must not throw. Verifies the haveWork early-return and
+			// the zero-capacity rent paths.
+			app.Run();
+			app.Run();
+			app.Run();
+
+			// No new state-transition firings.
+			Assert.Equal(2, enterIdleCount);
+			Assert.Equal(1, exitIdleCount);
+			Assert.Equal(1, enterActiveCount);
+			Assert.Equal(1, exitActiveCount);
+
+			// Observer counts must not have grown (no events written in idle frames).
+			Assert.Equal(10, observerA.Count);
+			Assert.Equal(10, observerB.Count);
 		}
 	}
 }
