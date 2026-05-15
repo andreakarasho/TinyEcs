@@ -1368,6 +1368,11 @@ public class App
 		var visited = new HashSet<SystemDescriptor>(systems.Count);
 		var visiting = new HashSet<SystemDescriptor>(systems.Count);
 
+		// O(1) declaration-order lookup, avoids O(n) IndexOf per BeforeSystems entry.
+		var declarationIndex = new Dictionary<SystemDescriptor, int>(systems.Count);
+		for (int i = 0; i < systems.Count; i++)
+			declarationIndex[systems[i]] = i;
+
 		void Visit(SystemDescriptor node)
 		{
 			if (visited.Contains(node)) return;
@@ -1376,10 +1381,10 @@ public class App
 
 			visiting.Add(node);
 
-			// Visit dependencies in their original declaration order
-			// Sort BeforeSystems by their position in the original systems list to preserve declaration order
+			// Visit dependencies in their original declaration order.
+			// Preserves List.IndexOf semantics: cross-stage refs not in this list return -1 and sort first.
 			var orderedBefore = node.BeforeSystems
-				.OrderBy(s => systems.IndexOf(s))
+				.OrderBy(s => declarationIndex.GetValueOrDefault(s, -1))
 				.ToList();
 
 			foreach (var before in orderedBefore)
