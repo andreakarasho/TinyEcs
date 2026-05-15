@@ -11,8 +11,8 @@ TinyEcs is a high-performance, reflection-free entity component system (ECS) fra
 - **Thread-safe**: Deferred command system for safe multi-threaded execution
 
 ## Repository Layout
-- `src/TinyEcs/` — Core ECS runtime (world, entity views, archetype storage, queries)
-- `src/TinyEcs.Bevy/` — Bevy-inspired extensions (App, stages, plugins, observers, system parameters, bundles)
+- `src/TinyEcs/` — Core ECS runtime (world, entity views, archetype storage, queries, entity-tied observers)
+- `src/TinyEcs.Bevy/` — Bevy-inspired extensions (App, stages, plugins, global observers, system parameters, bundles, resources, events, states)
 - `samples/` — Example programs (TinyEcsGame with Raylib, MyBattleground)
 - `tests/` — xUnit test suites (115+ tests covering all features)
 - `benchmarks/` — Performance evaluation scenarios
@@ -20,7 +20,7 @@ TinyEcs is a high-performance, reflection-free entity component system (ECS) fra
 ## Core ECS (src/TinyEcs/)
 
 ### World & Entities
-- `World` - Main ECS container, manages entities and components
+- `World` - Pure ECS storage. Manages entities, components, archetypes, and entity-tied observers. Does NOT own resources, events, or states (those live on `App`).
 - `EntityView` - Lightweight handle to an entity with `.Set()`, `.Get()`, `.Has()`, `.Unset()`, `.Delete()`
 - Entities are 64-bit IDs with recycling support
 
@@ -81,7 +81,7 @@ app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 .Label("movement")
 .After("input")
 .SingleThreaded() // Force single-threaded execution
-.RunIf(world => !world.GetResource<GameState>().Paused)
+.RunIf(_ => !app.GetResource<GameState>().Paused)
 .Build();
 ```
 
@@ -116,6 +116,8 @@ Query<Data<Sprite>, Filter<Changed<Position>>> filtered
 Res<TimeResource> time        // Immutable resource
 ResMut<ScoreTracker> score    // Mutable resource
 ```
+- Resources are owned by `App`, not `World`. Register with `app.AddResource(new T())` and inspect with `app.GetResource<T>()` / `app.HasResource<T>()`.
+- Inside systems, always prefer the `Res<T>` / `ResMut<T>` system params over reaching for `App` directly.
 - `Res<T>.Value` returns `ref readonly T`, ensuring read-only borrowing
 - `ResMut<T>.Value` returns `ref T` for exclusive write access
 
@@ -135,6 +137,7 @@ writer.Send(new ScoreEvent(100));
 EventReader<ScoreEvent> reader
 foreach (var evt in reader.Read()) { }
 ```
+- Event queues live on `App`. Outside systems use `app.SendEvent(new ScoreEvent(100))`. Inside systems prefer the `EventReader<T>` / `EventWriter<T>` params.
 
 **Local State**:
 ```csharp
@@ -230,8 +233,12 @@ entity.InsertBundle(bundle);
 ```
 
 ### Observers
+Global observers are registered on `App` (they fan out to all entities). Entity-tied observers are registered through `commands.Spawn().Observe<T>()` / `commands.Entity(id).Observe<T>()` and stored as components on the entity in `World`.
+
 ```csharp
 // Global observers - react to events on any entity
+// app.AddObserver<T>(...) is the public entry point; internally it calls
+// app.RegisterGlobalObserver<T>(...).
 app.AddObserver<OnSpawn>((world, trigger) =>
     Console.WriteLine($"Entity {trigger.EntityId} spawned"));
 
@@ -289,7 +296,7 @@ commands.Entity(entityId)
 - Observers inserted before Insert/Remove commands in queue
 
 **Known Limitations** (edge cases, 3/125 tests fail):
-- Observers may not fire on `world.Set()` calls made directly after app.Run() completes
+- Observers may not fire on direct `entity.Set()` calls made after `app.Run()` completes
 - OnDespawn observers may not fire (timing issue with component removal)
 - For these cases, use global observers with entity ID filtering instead
 
@@ -309,12 +316,12 @@ app.AddSystem(StopMusic)
    .OnExit(GameState.Playing)
    .Build();
 
-// In a system
-world.SetState(GameState.Paused);
-var current = world.GetState<GameState>();
+// Outside systems (setup/teardown), go through the App
+app.SetState(GameState.Paused);
+var current = app.GetState<GameState>();
 ```
-- `Res<State<GameState>>` exposes the current/previous values (`state.Value.Current`)
-- `ResMut<NextState<GameState>>` queues transitions (`next.Value.Set(GameState.Playing)`) that apply after the frame
+- States are owned by `App`. Use `app.AddState<T>()`, `app.SetState<T>()`, `app.GetState<T>()`, `app.HasState<T>()` for direct access.
+- Inside systems, prefer the typed system params: `Res<State<GameState>>` exposes the current/previous values (`state.Value.Current`), and `ResMut<NextState<GameState>>` queues transitions (`next.Value.Set(GameState.Playing)`) that apply after the frame.
 
 ### Plugins
 ```csharp
@@ -552,6 +559,12 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 - All existing tests pass (31/31)
 - See [StateTransitionExample.cs](samples/MyBattleground/StateTransitionExample.cs) for verification test
 
+### Resource/Event/State migration to App (2026-05-15)
+- Resources, events, and states now live on `App`, not `World`.
+- `World` is pure ECS storage (entities, components, archetypes, entity-tied observers).
+- Old `world.GetResource<T>()` etc. removed. Use `app.GetResource<T>()` or `Res<T>` system params.
+- Old `<InternalsVisibleTo>` from core to Bevy removed — clean assembly boundary.
+
 ## Migration Notes
 
 If updating from older TinyEcs versions:
@@ -560,6 +573,7 @@ If updating from older TinyEcs versions:
 3. `Data<T>` and `Filter<T>` now in `TinyEcs.Bevy` namespace
 4. System ordering now preserves declaration order (breaking if you relied on undefined behavior)
 5. `.After(label)` and `.Before(label)` now throw if label doesn't exist
+6. Resources, events, and states moved from `World` to `App` (2026-05-15). Replace `world.AddResource` / `world.GetResource` / `world.HasResource` with `app.AddResource` / `app.GetResource` / `app.HasResource`. Replace `world.SendEvent` with `app.SendEvent`. Replace `world.SetState` / `world.GetState` with `app.SetState` / `app.GetState`. Inside systems, prefer `Res<T>` / `ResMut<T>` / `EventReader<T>` / `EventWriter<T>` / `Res<State<T>>` / `ResMut<NextState<T>>` system params.
 
 ## Contributing Guidelines
 
