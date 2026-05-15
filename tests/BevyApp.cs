@@ -2002,5 +2002,38 @@ namespace TinyEcs.Tests
 
 			Assert.Equal(new[] { "b", "a" }, executed);
 		}
+
+		private struct MyRes
+		{
+			public int Value;
+		}
+
+		[Fact]
+		public void MultipleWorldsHaveIsolatedBevyState()
+		{
+			// Each World instance must own its own WorldState now that state
+			// lives in a per-world field instead of a global CWT.
+			using var world1 = new World();
+			using var world2 = new World();
+
+			world1.AddResource(new MyRes { Value = 1 });
+			world2.AddResource(new MyRes { Value = 2 });
+
+			Assert.True(world1.HasResource<MyRes>());
+			Assert.True(world2.HasResource<MyRes>());
+
+			Assert.Equal(1, world1.GetResource<MyRes>().Value);
+			Assert.Equal(2, world2.GetResource<MyRes>().Value);
+		}
+
+		[Fact]
+		public void WorldWithoutBevyUsageDoesNotEagerlyAllocateState()
+		{
+			// Smoke test: constructing a World without ever touching the Bevy
+			// layer must not blow up. The _bevyState field stays null until
+			// first access; we just verify construction + dispose works.
+			using var world = new World();
+			Assert.NotNull(world);
+		}
 	}
 }

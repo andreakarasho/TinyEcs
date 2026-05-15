@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Runtime.CompilerServices;
 
 namespace TinyEcs.Bevy;
 
@@ -89,11 +88,18 @@ public class StageDescriptor
 
 public static class WorldExtensions
 {
-	private static readonly ConditionalWeakTable<TinyEcs.World, WorldState> _worldStates = new();
-
+	// Per-world Bevy state now lives directly on the World instance via the
+	// internal object? slot defined in TinyEcs/World.BevyState.cs. We keep
+	// this thin accessor so every existing call site (AddResource, GetResource,
+	// SetState, etc.) stays valid without churn — it just reads the field and
+	// lazily constructs a WorldState on first touch.
+	//
+	// The slot is typed as object? in the core assembly to avoid pulling a
+	// Bevy type name into TinyEcs.dll; we cast here on the Bevy side. The
+	// lazy init has a benign race (see comment in World.BevyState.cs).
 	internal static WorldState GetState(this TinyEcs.World world)
 	{
-		return _worldStates.GetValue(world, static _ => new WorldState());
+		return (WorldState)(world.BevyStateSlot ??= new WorldState());
 	}
 
 	public static void AddResource<T>(this TinyEcs.World world, T resource) where T : notnull
