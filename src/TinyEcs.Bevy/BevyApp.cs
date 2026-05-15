@@ -634,12 +634,15 @@ public interface ISystemConfigurator
 public class App
 {
 	internal readonly TinyEcs.World _world;
+	private readonly WorldState _appState = new();
 	private readonly ThreadingMode _threadingMode;
 	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
 	private SystemDescriptor? _previousSystem = null;
 	private readonly HashSet<Type> _installedPlugins = new();
+
+	internal WorldState AppState => _appState;
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
 	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
@@ -658,6 +661,10 @@ public class App
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
+		// Attach this App's WorldState to the World so the existing
+		// world-side Bevy extensions (AddResource, GetResource, SetState, etc.)
+		// share the same underlying instance as the new App-side API.
+		_world.BevyStateSlot = _appState;
 		_threadingMode = threadingMode;
 
 		// Initialize Startup stage (runs once)
@@ -711,6 +718,165 @@ public class App
 	{
 		_world.AddResource(resource);
 		return this;
+	}
+
+	// ------------------------------------------------------------------
+	// App-side Bevy state API
+	//
+	// These methods mirror the existing WorldExtensions (AddResource,
+	// GetResource, SendEvent, SetState, etc.) but read/write the App's
+	// own WorldState instance directly — bypassing the world-extension
+	// indirection. Since the constructor attaches `_appState` to the
+	// World via BevyStateSlot, both APIs share the same backing store,
+	// so callers can mix-and-match during migration.
+	// ------------------------------------------------------------------
+
+	/// <summary>
+	/// Retrieve a previously-added resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public T GetResource<T>() where T : notnull
+	{
+		lock (_appState.SyncRoot)
+		{
+			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+			return ((ResourceBox<T>)boxed).Value;
+		}
+	}
+
+	/// <summary>
+	/// Returns true if a resource of type <typeparamref name="T"/> has been registered.
+	/// </summary>
+	public bool HasResource<T>() where T : notnull
+	{
+		lock (_appState.SyncRoot)
+		{
+			return _appState.Resources.ContainsKey(typeof(T));
+		}
+	}
+
+	/// <summary>
+	/// Get a mutable reference to a resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public ref T GetResourceRef<T>() where T : notnull
+	{
+		ResourceBox<T> box;
+		lock (_appState.SyncRoot)
+		{
+			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+			box = (ResourceBox<T>)boxed;
+		}
+		return ref box.Value;
+	}
+
+	/// <summary>
+	/// Remove a previously-added resource of type <typeparamref name="T"/>.
+	/// </summary>
+	public void RemoveResource<T>() where T : notnull
+	{
+		lock (_appState.SyncRoot)
+		{
+			_appState.Resources.Remove(typeof(T));
+		}
+	}
+
+	/// <summary>
+	/// Enqueue an event of type <typeparamref name="T"/> onto its channel.
+	/// </summary>
+	public void SendEvent<T>(T evt) where T : notnull
+	{
+		GetOrCreateEventChannel<T>().Enqueue(evt);
+	}
+
+	/// <summary>
+	/// Register a global observer that fires for every event of type <typeparamref name="T"/>.
+	/// </summary>
+	public void RegisterGlobalObserver<T>(Action<T> observer) where T : notnull
+	{
+		GetOrCreateEventChannel<T>().RegisterObserver(observer);
+	}
+
+	private EventChannel<T> GetOrCreateEventChannel<T>() where T : notnull
+	{
+		lock (_appState.SyncRoot)
+		{
+			if (!_appState.EventChannels.TryGetValue(typeof(T), out var channelObj))
+			{
+				var channel = new EventChannel<T>();
+				_appState.EventChannels[typeof(T)] = channel;
+				return channel;
+			}
+
+			return (EventChannel<T>)channelObj;
+		}
+	}
+
+	/// <summary>
+	/// Immediately set the current state of <typeparamref name="TState"/>.
+	/// </summary>
+	public void SetState<TState>(TState state) where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.States.TryGetValue(type, out var current))
+			{
+				_appState.PreviousStates[type] = current;
+			}
+			_appState.States[type] = state;
+			_appState.PendingStateChanges.Remove(type);
+			_appState.StatesProcessedThisFrame.Remove(type);
+		}
+	}
+
+	/// <summary>
+	/// Get the current value of state <typeparamref name="TState"/>.
+	/// </summary>
+	public TState GetState<TState>() where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.States.TryGetValue(type, out var state))
+			{
+				return (TState)state;
+			}
+		}
+		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
+	}
+
+	/// <summary>
+	/// Returns true if a state of type <typeparamref name="TState"/> has been registered.
+	/// </summary>
+	public bool HasState<TState>() where TState : struct, Enum
+	{
+		lock (_appState.SyncRoot)
+		{
+			return _appState.States.ContainsKey(typeof(TState));
+		}
+	}
+
+	/// <summary>
+	/// Queue a state transition that will be applied after the current frame.
+	/// </summary>
+	public void QueueState<TState>(TState next) where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.States.TryGetValue(type, out var current) &&
+				EqualityComparer<TState>.Default.Equals((TState)current, next))
+			{
+				_appState.PendingStateChanges.Remove(type);
+				return;
+			}
+
+			_appState.PendingStateChanges[type] = new QueuedStateTransition<TState>(next);
+			_appState.StatesProcessedThisFrame.Remove(type);
+		}
 	}
 
 	public App AddState<TState>(TState initialState) where TState : struct, Enum
