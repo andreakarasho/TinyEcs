@@ -512,6 +512,87 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void EventChannelFlushDoesNotDoubleNotifyObserversAcrossFrames()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			var observed = new List<int>();
+			app.AddObserver<ScoreEvent>(evt => observed.Add(evt.Value));
+
+			var sendOnce = new MutableCounter();
+			app.AddResource(sendOnce);
+
+			// Writer that sends a ScoreEvent only when the resource's flag is set.
+			var writerSystem = SystemFunctionAdapters.Create<ResMut<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((flag, writer) =>
+			{
+				if (flag.Value.Value != 0)
+				{
+					writer.Send(new ScoreEvent(flag.Value.Value));
+					flag.Value.Value = 0;
+				}
+			});
+
+			app.AddSystem(writerSystem)
+				.InStage(Stage.Update)
+				.Build();
+
+			// Frame N: send event with value 1. Observer should see it exactly once after this frame's Flush.
+			sendOnce.Value = 1;
+			app.Run();
+			Assert.Equal(new[] { 1 }, observed);
+
+			// Frame N+1: no new events. Observer must not be re-notified for previously delivered events.
+			app.Run();
+			Assert.Equal(new[] { 1 }, observed);
+
+			// Frame N+2: send event with value 2. Observer should now have both, in order, exactly once each.
+			sendOnce.Value = 2;
+			app.Run();
+			Assert.Equal(new[] { 1, 2 }, observed);
+
+			// Frame N+3: no new events again. No additional notifications.
+			app.Run();
+			Assert.Equal(new[] { 1, 2 }, observed);
+
+			// Verify multi-event flush: send 2 events in a single Update stage, then read in next frame.
+			var collected = new List<int>();
+			var burstWriter = SystemFunctionAdapters.Create<Local<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((counter, writer) =>
+			{
+				if (counter.Value.Value == 0)
+				{
+					writer.Send(new ScoreEvent(10));
+					writer.Send(new ScoreEvent(20));
+					counter.Value.Value = 1;
+				}
+			});
+
+			var burstReader = SystemFunctionAdapters.Create<TinyEcs.Bevy.EventReader<ScoreEvent>>(reader =>
+			{
+				foreach (var evt in reader.Read())
+				{
+					collected.Add(evt.Value);
+				}
+			});
+
+			app.AddSystem(burstWriter).InStage(Stage.Update).Label("BurstWriter").Build();
+			app.AddSystem(burstReader).InStage(Stage.PostUpdate).Build();
+
+			// First run after adding: burstWriter sends 10 and 20. Reader in PostUpdate of the same frame
+			// sees the previous-frame buffer (empty for these values). Flush at end promotes them.
+			app.Run();
+			Assert.DoesNotContain(10, collected);
+			Assert.DoesNotContain(20, collected);
+
+			// Next frame: reader picks up both events in order, each exactly once.
+			app.Run();
+			Assert.Equal(new[] { 10, 20 }, collected);
+
+			// And observer has now seen all four events (1, 2, 10, 20), each exactly once.
+			Assert.Equal(new[] { 1, 2, 10, 20 }, observed);
+		}
+
+		[Fact]
 		public void FilterCombinatorSelectsEntitiesMatchingAllPredicates()
 		{
 			using var world = new World();

@@ -462,96 +462,66 @@ internal sealed class EventChannel<T> : IEventChannel
 
 	public void Flush(uint currentTick)
 	{
-		List<T>? snapshot = null;
-		List<Action<T>>? observers = null;
+		List<T>? toNotify = null;
+		List<Action<T>>? observersSnapshot = null;
 
 		lock (_lock)
 		{
 			var newFrame = _activeTick != currentTick;
+
 			if (newFrame)
 			{
 				_activeTick = currentTick;
+
+				// Drop last frame's events; observers already saw them via _observerCursor.
+				if (_readBuffer.Count > 0)
+				{
+					_readBuffer.Clear();
+					_epoch++;
+				}
+
 				_observerCursor = 0;
 
+				// Promote the write buffer so readers can see this frame's events next frame.
 				if (_writeBuffer.Count > 0)
 				{
 					(_readBuffer, _writeBuffer) = (_writeBuffer, _readBuffer);
 					_writeBuffer.Clear();
 					_epoch++;
-
-					if (_observers.Count > 0 && _readBuffer.Count > 0)
-					{
-						snapshot = new List<T>(_readBuffer);
-						observers = new List<Action<T>>(_observers);
-					}
-				}
-				else if (_readBuffer.Count > 0)
-				{
-					_readBuffer.Clear();
-					_epoch++;
 				}
 			}
-
-			if (!newFrame && _writeBuffer.Count > 0)
+			else if (_writeBuffer.Count > 0)
 			{
-				var startIndex = _readBuffer.Count;
-				if (_writeBuffer.Count == 1)
-				{
-					_readBuffer.Add(_writeBuffer[0]);
-				}
-				else
-				{
-					_readBuffer.AddRange(_writeBuffer);
-				}
+				// Mid-frame append: drain pending writes into the readable buffer.
+				// No _epoch bump — readers stay attached to the same epoch and resume
+				// from their last index, picking up the newly appended items.
+				_readBuffer.AddRange(_writeBuffer);
 				_writeBuffer.Clear();
-
-				if (_observers.Count > 0 && startIndex < _readBuffer.Count)
-				{
-					var count = _readBuffer.Count - startIndex;
-					snapshot = new List<T>(count);
-					for (var i = startIndex; i < _readBuffer.Count; i++)
-					{
-						snapshot.Add(_readBuffer[i]);
-					}
-					observers = new List<Action<T>>(_observers);
-				}
-
-				_observerCursor = _readBuffer.Count;
 			}
-			else if (snapshot == null && _observers.Count > 0 && _observerCursor < _readBuffer.Count)
+
+			// Snapshot un-notified events for observers (each event delivered exactly once).
+			if (_observers.Count > 0 && _observerCursor < _readBuffer.Count)
 			{
 				var count = _readBuffer.Count - _observerCursor;
-				if (count > 0)
+				toNotify = new List<T>(count);
+				for (var i = _observerCursor; i < _readBuffer.Count; i++)
 				{
-					snapshot = new List<T>(count);
-					for (var i = _observerCursor; i < _readBuffer.Count; i++)
-					{
-						snapshot.Add(_readBuffer[i]);
-					}
-					observers = new List<Action<T>>(_observers);
+					toNotify.Add(_readBuffer[i]);
 				}
-
-				_observerCursor = _readBuffer.Count;
-			}
-			else
-			{
-				_observerCursor = _readBuffer.Count;
+				observersSnapshot = new List<Action<T>>(_observers);
 			}
 
-			if (snapshot != null)
-			{
-				_observerCursor = _readBuffer.Count;
-			}
+			_observerCursor = _readBuffer.Count;
 		}
 
-		if (snapshot == null || observers == null)
+		if (toNotify == null || observersSnapshot == null)
 		{
 			return;
 		}
 
-		foreach (var evt in snapshot)
+		foreach (var evt in toNotify)
 		{
-			foreach (var observer in observers)
+			foreach (var observer in observersSnapshot)
 			{
 				observer(evt);
 			}
