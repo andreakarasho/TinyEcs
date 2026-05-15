@@ -860,6 +860,57 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { "First", "Second", "Third" }, executed);
 		}
 
+		private sealed class ChainPluginA : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginA(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("A"))
+					.InStage(Stage.Update)
+					.Label("a")
+					.Build();
+			}
+		}
+
+		private sealed class ChainPluginB : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginB(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("B"))
+					.InStage(Stage.Update)
+					.Chain()
+					.Build();
+			}
+		}
+
+		[Fact]
+		public void ChainAcrossPluginBoundaryPreservesPreviousSystem()
+		{
+			using var world = new World();
+			var app = new App(world);
+			var executed = new List<string>();
+
+			app.AddPlugin(new ChainPluginA(executed));
+			app.AddPlugin(new ChainPluginB(executed));
+
+			app.Run();
+
+			Assert.Equal(new[] { "A", "B" }, executed);
+		}
+
 		[Fact]
 		public void ComplexDependencyGraphRespectsAllConstraints()
 		{

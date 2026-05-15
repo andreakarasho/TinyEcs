@@ -670,7 +670,7 @@ public class App
 	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
-	private SystemDescriptor? _lastAddedSystem = null;
+	private SystemDescriptor? _previousSystem = null;
 	private readonly HashSet<Type> _installedPlugins = new();
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
@@ -807,8 +807,9 @@ public class App
 	public ISystemStageSelector AddSystem(ISystem system)
 	{
 		var descriptor = new SystemDescriptor(system);
-		_lastAddedSystem = descriptor;
-		return new SystemConfigurator(this, descriptor);
+		var previous = _previousSystem;
+		_previousSystem = descriptor;
+		return new SystemConfigurator(this, descriptor, previous);
 	}
 
 	/// <summary>
@@ -817,8 +818,8 @@ public class App
 	public App AddSystem(Stage stage, ISystem system)
 	{
 		var descriptor = new SystemDescriptor(system);
-		_lastAddedSystem = descriptor;
 		AddSystemToStage(stage, descriptor);
+		_previousSystem = descriptor;
 		return this;
 	}
 
@@ -854,8 +855,6 @@ public class App
 	{
 		return _labeledSystems.GetValueOrDefault(label);
 	}
-
-	internal SystemDescriptor? GetLastAddedSystem() => _lastAddedSystem;
 
 	internal void RegisterOnEnterSystem<TState>(TState state, SystemDescriptor descriptor) where TState : struct, Enum
 	{
@@ -1360,12 +1359,14 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 {
 	private readonly App _app;
 	private readonly SystemDescriptor _descriptor;
+	private readonly SystemDescriptor? _previousSystem;
 	private bool _stageAssigned = false;
 
-	internal SystemConfigurator(App app, SystemDescriptor descriptor)
+	internal SystemConfigurator(App app, SystemDescriptor descriptor, SystemDescriptor? previousSystem)
 	{
 		_app = app;
 		_descriptor = descriptor;
+		_previousSystem = previousSystem;
 	}
 
 	// ISystemStageSelector
@@ -1485,14 +1486,13 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 
 	public ISystemConfiguratorOrdered Chain()
 	{
-		var previousSystem = _app.GetLastAddedSystem();
-		if (previousSystem != null && previousSystem != _descriptor)
+		if (_previousSystem != null && _previousSystem != _descriptor)
 		{
-			if (!_descriptor.BeforeSystems.Contains(previousSystem))
-				_descriptor.BeforeSystems.Add(previousSystem);
+			if (!_descriptor.BeforeSystems.Contains(_previousSystem))
+				_descriptor.BeforeSystems.Add(_previousSystem);
 
-			if (!previousSystem.AfterSystems.Contains(_descriptor))
-				previousSystem.AfterSystems.Add(_descriptor);
+			if (!_previousSystem.AfterSystems.Contains(_descriptor))
+				_previousSystem.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
