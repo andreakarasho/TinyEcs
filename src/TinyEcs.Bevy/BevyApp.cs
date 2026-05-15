@@ -348,8 +348,8 @@ public class SystemDescriptor
 {
 	public ISystem System { get; }
 	public List<Func<TinyEcs.World, bool>> RunConditions { get; } = new();
-	public List<SystemDescriptor> BeforeSystems { get; } = new();
-	public List<SystemDescriptor> AfterSystems { get; } = new();
+	public HashSet<SystemDescriptor> BeforeSystems { get; } = new();
+	public HashSet<SystemDescriptor> AfterSystems { get; } = new();
 	public string? Label { get; set; }
 	public Stage? Stage { get; set; }
 
@@ -1566,11 +1566,8 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 
 		if (target != _descriptor)
 		{
-			if (!_descriptor.BeforeSystems.Contains(target))
-				_descriptor.BeforeSystems.Add(target);
-
-			if (!target.AfterSystems.Contains(_descriptor))
-				target.AfterSystems.Add(_descriptor);
+			_descriptor.BeforeSystems.Add(target);
+			target.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
@@ -1587,11 +1584,8 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 
 		if (target != _descriptor)
 		{
-			if (!target.BeforeSystems.Contains(_descriptor))
-				target.BeforeSystems.Add(_descriptor);
-
-			if (!_descriptor.AfterSystems.Contains(target))
-				_descriptor.AfterSystems.Add(target);
+			target.BeforeSystems.Add(_descriptor);
+			_descriptor.AfterSystems.Add(target);
 		}
 		return this;
 	}
@@ -1606,11 +1600,8 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 	{
 		if (_previousSystem != null && _previousSystem != _descriptor)
 		{
-			if (!_descriptor.BeforeSystems.Contains(_previousSystem))
-				_descriptor.BeforeSystems.Add(_previousSystem);
-
-			if (!_previousSystem.AfterSystems.Contains(_descriptor))
-				_previousSystem.AfterSystems.Add(_descriptor);
+			_descriptor.BeforeSystems.Add(_previousSystem);
+			_previousSystem.AfterSystems.Add(_descriptor);
 		}
 		return this;
 	}
