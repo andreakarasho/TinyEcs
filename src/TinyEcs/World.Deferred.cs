@@ -32,7 +32,7 @@ public sealed partial class World
 		var locks = _worldState.End();
 		EcsAssert.Assert(locks >= 0, "");
 
-		if (locks == 0 && _operations.Count > 0)
+		if (locks == 0 && (_operations.Count > 0 || _deferredTypedRelationships.Count > 0))
 		{
 			_worldState.Lock();
 			Merge();
@@ -178,6 +178,53 @@ public sealed partial class World
 		});
 	}
 
+	private interface IDeferredTypedRelationship
+	{
+		void Apply(World world);
+	}
+
+	private readonly struct AddChildTypedOp<TKind> : IDeferredTypedRelationship
+		where TKind : struct
+	{
+		private readonly EcsID _parent;
+		private readonly EcsID _child;
+		private readonly int _index;
+
+		public AddChildTypedOp(EcsID parent, EcsID child, int index)
+		{
+			_parent = parent;
+			_child = child;
+			_index = index;
+		}
+
+		public void Apply(World world)
+			=> world.GetTypedRelationshipMapper<TKind>().Add(_parent, _child, _index);
+	}
+
+	private readonly struct RemoveChildTypedOp<TKind> : IDeferredTypedRelationship
+		where TKind : struct
+	{
+		private readonly EcsID _child;
+
+		public RemoveChildTypedOp(EcsID child) { _child = child; }
+
+		public void Apply(World world)
+			=> world.GetTypedRelationshipMapper<TKind>().Remove(_child);
+	}
+
+	private readonly List<IDeferredTypedRelationship> _deferredTypedRelationships = new();
+
+	internal void AddChildTypedDeferred<TKind>(EcsID parent, EcsID child, int index)
+		where TKind : struct
+	{
+		_deferredTypedRelationships.Add(new AddChildTypedOp<TKind>(parent, child, index));
+	}
+
+	internal void RemoveChildTypedDeferred<TKind>(EcsID child) where TKind : struct
+	{
+		_deferredTypedRelationships.Add(new RemoveChildTypedOp<TKind>(child));
+	}
+
 
 	private void Merge()
 	{
@@ -231,6 +278,12 @@ public sealed partial class World
 			}
 		}
 
+		if (_deferredTypedRelationships.Count > 0)
+		{
+			foreach (var op in _deferredTypedRelationships)
+				op.Apply(this);
+			_deferredTypedRelationships.Clear();
+		}
 	}
 
 
