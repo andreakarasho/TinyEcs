@@ -14,8 +14,8 @@ TinyEcs: a high-performance, reflection-free entity component system (ECS) frame
 -   **State management**: Enum-based state transitions with OnEnter/OnExit systems
 
 ## Requirements
--   .NET 8.0+ for core ECS
--   .NET 9.0+ recommended for full Bevy layer support
+-   Core ECS (`TinyEcs`): .NET 8.0 / 9.0 / 10.0
+-   Bevy layer (`TinyEcs.Bevy`): .NET 9.0 / 10.0
 
 ## Status
 
@@ -129,18 +129,22 @@ using TinyEcs.Bevy;
 var world = new World();
 var app = new App(world, ThreadingMode.Auto); // Auto, Single, or Multi
 
-// Add systems to stages
+app.AddResource(new Time { Delta = 1f / 60f });
+
 app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 {
     foreach (var (pos, vel) in query)
-        pos.Ref.Value += vel.Ref.Value * time.Value.Delta;
+    {
+        pos.Ref.X += vel.Ref.X * time.Value.Delta;
+        pos.Ref.Y += vel.Ref.Y * time.Value.Delta;
+    }
 })
 .InStage(Stage.Update)
 .Build();
 
-// Game loop (startup runs automatically on first call)
+// Startup runs automatically on the first call.
 while (running)
-    app.Run();
+    app.Update();
 ```
 
 ### Stages
@@ -220,18 +224,21 @@ app.AddSystem((Commands commands) => commands.Spawn())
 ```
 ---
 #### `Query<TData>`
-`TData` constraint is a `Data<T0...TN>` type which is used to express the set of components that contains data (no tags).
-Queries are one of the most used types in systems. They allow you to pick entities and manipulate the data associated with them.
+`TData` is a `Data<T0...TN>` tuple naming the components a system reads or writes (no tags).
+Queries are the workhorse system parameter: they pick the entities to operate on and expose their data via `Ptr<T>`.
 ```csharp
-app.AddSystem((Query<Data<Position, Velocity>> query) => {
-    // Access component data
-    foreach ((Ptr<Position> pos, Ptr<Velocity> vel) in query) {
+app.AddSystem((Query<Data<Position, Velocity>> query) =>
+{
+    // Component data via deconstruction
+    foreach (var (pos, vel) in query)
+    {
         pos.Ref.X += vel.Ref.X;
         pos.Ref.Y += vel.Ref.Y;
     }
 
-    // Access entity ID along with components
-    foreach ((PtrRO<ulong> entityId, Ptr<Position> pos, Ptr<Velocity> vel) in query) {
+    // Entity ID alongside components
+    foreach (var (entityId, pos, vel) in query)
+    {
         Console.WriteLine($"Entity {entityId.Ref}: pos=({pos.Ref.X}, {pos.Ref.Y})");
     }
 })
@@ -317,21 +324,22 @@ Query<
 #### Resources
 
 ##### `Res<T>` and `ResMut<T>`
-Resources are global singletons accessible across systems with proper borrowing semantics:
+Resources are app-owned singletons that systems can borrow read-only or mutably.
 
 ```csharp
-// Add resource
+// Resources live on the App.
 app.AddResource(new Time { Delta = 0.016f });
+app.AddResource(new Score());
 
 // Read-only access
-app.AddSystem((Res<Time> time) => {
-    Console.WriteLine($"Delta: {time.Value.Delta}");
-}).InStage(Stage.Update).Build();
+app.AddSystem((Res<Time> time) =>
+    Console.WriteLine($"Delta: {time.Value.Delta}"))
+.InStage(Stage.Update).Build();
 
 // Mutable access
-app.AddSystem((ResMut<Score> score) => {
-    score.Value.Points += 10;
-}).InStage(Stage.Update).Build();
+app.AddSystem((ResMut<Score> score) =>
+    score.Value.Points += 10)
+.InStage(Stage.Update).Build();
 ```
 
 - `Res<T>.Value` returns `ref readonly T` (read-only borrowing)
@@ -381,42 +389,47 @@ enum GameState { Menu, Playing, Paused }
 
 app.AddState(GameState.Menu);
 
-// Run on state entry
-app.AddSystem((Commands cmd) => {
-    cmd.Spawn().Insert(new Player());
-})
-.OnEnter(GameState.Playing)
-.Build();
+// Run when entering a state
+app.AddSystem((Commands cmd) => cmd.Spawn().Insert(new Player()))
+   .OnEnter(GameState.Playing)
+   .Build();
 
-// Run on state exit
-app.AddSystem((Query<Data<Player>> query, Commands cmd) => {
-    foreach (var player in query)
-        cmd.Entity(player.EntityId).Delete();
+// Run when leaving a state
+app.AddSystem((Query<Data<Player>> query, Commands cmd) =>
+{
+    foreach (var (entityId, _) in query)
+        cmd.Entity(entityId.Ref).Despawn();
 })
 .OnExit(GameState.Playing)
 .Build();
 
-// Trigger transition
-app.AddSystem((ResMut<NextState<GameState>> next) => {
-    next.Value.Set(GameState.Playing);
-})
+// Queue a transition (applied after the frame)
+app.AddSystem((ResMut<NextState<GameState>> next) =>
+    next.Value.Set(GameState.Playing))
 .InStage(Stage.Update)
 .Build();
 ```
+
+- `Res<State<TState>>` exposes `.Current` and `.Previous`.
+- `ResMut<NextState<TState>>` queues the next transition; it runs after the frame.
 ---
 #### System conditions
-Often you need to run a system only when a condition is met.
+Use `RunIf` to gate a system on any system parameter. Conditions stack — all must hold for the system to run.
 ```csharp
-app.AddSystem((ResMut<int> val) => val.Value++)
+class Counter { public int Value; }
+
+app.AddResource(new Counter());
+
+app.AddSystem((ResMut<Counter> c) => c.Value.Value++)
    .InStage(Stage.Update)
    .Build();
 
-app.AddSystem((Res<int> val) => Console.WriteLine($"val: {val.Value}"))
+app.AddSystem((Res<Counter> c) => Console.WriteLine($"tick: {c.Value.Value}"))
    .InStage(Stage.Update)
-   // Run only when val is even
-   .RunIf((Res<int> val) => val.Value % 2 == 0)
-   // And when entities with [Position + Velocity] exist
-   .RunIf((Query<Data<Position, Velocity>> query) => query.Count() > 0)
+   // Run only when the counter is even
+   .RunIf((Res<Counter> c) => c.Value.Value % 2 == 0)
+   // And when there is at least one entity with Position + Velocity
+   .RunIf((Query<Data<Position, Velocity>> q) => q.Count() > 0)
    .Build();
 ```
 ---
@@ -501,11 +514,15 @@ commands.Spawn()
     .Insert(new Health { Value = 100 });
 
 // Custom events with On<T>
-app.AddObserver<On<CustomEvent>>((world, trigger) => {
+app.AddObserver<On<CustomEvent>>((world, trigger) =>
+{
     Console.WriteLine($"Custom event: {trigger.Event.Message}");
 });
-// Trigger custom event
-world.EmitTrigger(new On<CustomEvent>(new CustomEvent { Message = "Hello" }));
+
+// Emit a custom event from a system - Commands wraps it in On<CustomEvent>.
+app.AddSystem((Commands commands) =>
+    commands.EmitTrigger(new CustomEvent { Message = "Hello" }))
+.InStage(Stage.Update).Build();
 ```
 
 **Available Observer Events:**
@@ -539,7 +556,7 @@ app.AddPlugin(new PhysicsPlugin { Gravity = 9.81f });
 
 ## Complete Example
 
-A simple but complete example using the modern App API:
+A small but complete program that wires entities, a resource, and two ordered systems.
 
 ```csharp
 using TinyEcs;
@@ -548,10 +565,10 @@ using TinyEcs.Bevy;
 var world = new World();
 var app = new App(world, ThreadingMode.Auto);
 
-// Add resources
+// Resources live on the App.
 app.AddResource(new Time { Delta = 1.0f / 60.0f });
 
-// Spawn entities in startup
+// Spawn entities in startup using deferred Commands.
 app.AddSystem((Commands commands) =>
 {
     for (int i = 0; i < 1000; i++)
@@ -564,7 +581,7 @@ app.AddSystem((Commands commands) =>
 .InStage(Stage.Startup)
 .Build();
 
-// Move entities
+// Move entities.
 app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 {
     foreach (var (pos, vel) in query)
@@ -577,24 +594,24 @@ app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 .Label("movement")
 .Build();
 
-// Check bounds (runs after movement)
+// Bounce off the screen edges, after movement.
 app.AddSystem((Query<Data<Position, Velocity>> query) =>
 {
     foreach (var (pos, vel) in query)
     {
         if (pos.Ref.X > 800) vel.Ref.X = -Math.Abs(vel.Ref.X);
-        if (pos.Ref.X < 0) vel.Ref.X = Math.Abs(vel.Ref.X);
+        if (pos.Ref.X < 0)   vel.Ref.X =  Math.Abs(vel.Ref.X);
         if (pos.Ref.Y > 600) vel.Ref.Y = -Math.Abs(vel.Ref.Y);
-        if (pos.Ref.Y < 0) vel.Ref.Y = Math.Abs(vel.Ref.Y);
+        if (pos.Ref.Y < 0)   vel.Ref.Y =  Math.Abs(vel.Ref.Y);
     }
 })
 .InStage(Stage.Update)
 .After("movement")
 .Build();
 
-// Game loop (Run() automatically runs startup systems on first call)
+// Startup runs automatically on the first call.
 while (running)
-    app.Run();
+    app.Update();
 
 
 struct Position { public float X, Y; }
