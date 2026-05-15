@@ -1878,5 +1878,129 @@ namespace TinyEcs.Tests
 			Assert.Equal("Clicked at (30,40) count=2", events[1]);
 			Assert.Equal(2, counter.Value);
 		}
+
+		[Fact]
+		public void ConfiguratorAllowsLabelOrderingMethodsInAnyOrder()
+		{
+			// Verify the simplified configurator: configuration methods can be
+			// called in any order without type-state ceremony, and "last label wins".
+			var executed = new List<string>();
+
+			var app = new App();
+
+			// Anchor system so the subsequent .After("anchor") resolves.
+			app.AddSystem(() => executed.Add("anchor"))
+				.InStage(Stage.Update)
+				.Label("anchor")
+				.Build();
+
+			// Anchor system to satisfy .Before("tail").
+			app.AddSystem(() => executed.Add("tail"))
+				.InStage(Stage.Update)
+				.Label("tail")
+				.Build();
+
+			// Forward order: RunIf -> Label -> After -> Before -> SingleThreaded.
+			app.AddSystem(() => executed.Add("forward"))
+				.InStage(Stage.Update)
+				.RunIf(_ => true)
+				.Label("forward")
+				.After("anchor")
+				.Before("tail")
+				.SingleThreaded()
+				.Build();
+
+			// Reverse order: SingleThreaded -> Before -> After -> Label -> RunIf.
+			app.AddSystem(() => executed.Add("reverse"))
+				.InStage(Stage.Update)
+				.SingleThreaded()
+				.Before("tail")
+				.After("anchor")
+				.Label("reverse")
+				.RunIf(_ => true)
+				.Build();
+
+			// Last-label-wins: declaring Label("a") then Label("b") should make "b"
+			// the resolvable label. .After("b") must therefore work without throwing.
+			app.AddSystem(() => executed.Add("relabeled"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.Label("b")
+				.After("anchor")
+				.Build();
+
+			app.AddSystem(() => executed.Add("after_b"))
+				.InStage(Stage.Update)
+				.After("b")
+				.Before("tail")
+				.Build();
+
+			app.Run();
+
+			// Anchor runs first, tail last; forward/reverse/relabeled/after_b between.
+			Assert.Equal("anchor", executed[0]);
+			Assert.Equal("tail", executed[^1]);
+			Assert.Contains("forward", executed);
+			Assert.Contains("reverse", executed);
+			Assert.Contains("relabeled", executed);
+			Assert.Contains("after_b", executed);
+			// after_b must run after relabeled (its dependency via the "b" label).
+			Assert.True(executed.IndexOf("after_b") > executed.IndexOf("relabeled"));
+		}
+
+		[Fact]
+		public void RelabeledSystemOldLabelNoLongerResolvable()
+		{
+			// "Last label wins" semantics: when a system is relabeled, the old
+			// label must no longer resolve. We verify this behaviorally by
+			// referencing the old label from another system, which must throw.
+			var app = new App();
+
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.Label("first")
+				.Label("second")
+				.Build();
+
+			// Referencing "second" must succeed.
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.After("second")
+				.Build();
+
+			// Referencing "first" must throw because the relabel removed it.
+			var ex = Assert.Throws<System.InvalidOperationException>(() =>
+				app.AddSystem(() => { })
+					.InStage(Stage.Update)
+					.After("first")
+					.Build());
+
+			Assert.Contains("first", ex.Message);
+		}
+
+		[Fact]
+		public void ConfiguratorChainStillWorksWithoutInterfaceCeremony()
+		{
+			// Smoke test that the canonical fluent chain still compiles and runs.
+			var executed = new List<string>();
+			var app = new App();
+
+			app.AddSystem(() => executed.Add("b"))
+				.InStage(Stage.Update)
+				.Label("b")
+				.Build();
+
+			app.AddSystem(() => executed.Add("a"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.After("b")
+				.RunIf(_ => true)
+				.SingleThreaded()
+				.Build();
+
+			app.Run();
+
+			Assert.Equal(new[] { "b", "a" }, executed);
+		}
 	}
 }

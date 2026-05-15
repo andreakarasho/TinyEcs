@@ -584,7 +584,7 @@ public class FunctionalSystem : ISystem
 // Fluent Configuration Interfaces
 // ============================================================================
 
-// Step 1: Must choose stage or state transition
+// Step 1: Must choose stage or state transition before configuring further.
 public interface ISystemStageSelector
 {
 	ISystemConfigurator InStage(Stage stage);
@@ -592,7 +592,13 @@ public interface ISystemStageSelector
 	ISystemConfigurator OnExit<TState>(TState state) where TState : struct, Enum;
 }
 
-// Step 2: Configure system (optional) and build
+// Step 2: Configure the system. All configuration methods return the same
+// interface, so they can be called in any order and any number of times.
+//
+// Semantics:
+//   - Label("a").Label("b"): "last label wins" - only "b" resolves; "a" is removed.
+//   - After/Before/Chain are additive - multiple calls add multiple dependencies.
+//   - RunIf calls are additive - all conditions must pass for the system to run.
 public interface ISystemConfigurator
 {
 	ISystemConfigurator RunIf(Func<TinyEcs.World, bool> condition);
@@ -601,37 +607,10 @@ public interface ISystemConfigurator
 	ISystemConfigurator RunIfState<TState>(TState state) where TState : struct, Enum;
 	ISystemConfigurator SingleThreaded();
 	ISystemConfigurator WithThreadingMode(ThreadingMode mode);
-	ISystemConfiguratorOrdered After(string label);
-	ISystemConfiguratorOrdered Before(string label);
-	ISystemConfiguratorLabeled Label(string label);
-	ISystemConfiguratorOrdered Chain();
-	App Build();
-}
-
-// Step 3: After labeling, cannot label again
-public interface ISystemConfiguratorLabeled
-{
-	ISystemConfiguratorLabeled RunIf(Func<TinyEcs.World, bool> condition);
-	ISystemConfiguratorLabeled RunIfResourceExists<T>() where T : notnull;
-	ISystemConfiguratorLabeled RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
-	ISystemConfiguratorLabeled RunIfState<TState>(TState state) where TState : struct, Enum;
-	ISystemConfiguratorLabeled SingleThreaded();
-	ISystemConfiguratorLabeled WithThreadingMode(ThreadingMode mode);
-	ISystemConfiguratorOrdered After(string label);
-	ISystemConfiguratorOrdered Before(string label);
-	ISystemConfiguratorOrdered Chain();
-	App Build();
-}
-
-// Step 4: After ordering (After/Before/Chain), cannot order again
-public interface ISystemConfiguratorOrdered
-{
-	ISystemConfiguratorOrdered RunIf(Func<TinyEcs.World, bool> condition);
-	ISystemConfiguratorOrdered RunIfResourceExists<T>() where T : notnull;
-	ISystemConfiguratorOrdered RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>;
-	ISystemConfiguratorOrdered RunIfState<TState>(TState state) where TState : struct, Enum;
-	ISystemConfiguratorOrdered SingleThreaded();
-	ISystemConfiguratorOrdered WithThreadingMode(ThreadingMode mode);
+	ISystemConfigurator After(string label);
+	ISystemConfigurator Before(string label);
+	ISystemConfigurator Label(string label);
+	ISystemConfigurator Chain();
 	App Build();
 }
 
@@ -823,6 +802,16 @@ public class App
 
 	internal void RegisterLabel(string label, SystemDescriptor descriptor)
 	{
+		// "Last label wins": if this descriptor previously claimed another label,
+		// remove that mapping so the old label no longer resolves to this system.
+		if (!string.IsNullOrEmpty(descriptor.Label) && descriptor.Label != label)
+		{
+			if (_labeledSystems.TryGetValue(descriptor.Label!, out var existing) && existing == descriptor)
+			{
+				_labeledSystems.Remove(descriptor.Label!);
+			}
+		}
+
 		_labeledSystems[label] = descriptor;
 		descriptor.Label = label;
 	}
@@ -1353,7 +1342,7 @@ public class StageConfigurator
 	public App Build() => _app;
 }
 
-public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISystemConfiguratorLabeled, ISystemConfiguratorOrdered
+public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 {
 	private readonly App _app;
 	private readonly SystemDescriptor _descriptor;
@@ -1434,7 +1423,7 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered After(string label)
+	public ISystemConfigurator After(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
 		if (target == null)
@@ -1455,7 +1444,7 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered Before(string label)
+	public ISystemConfigurator Before(string label)
 	{
 		var target = _app.GetSystemByLabel(label);
 		if (target == null)
@@ -1476,13 +1465,13 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 		return this;
 	}
 
-	public ISystemConfiguratorLabeled Label(string label)
+	public ISystemConfigurator Label(string label)
 	{
 		_app.RegisterLabel(label, _descriptor);
 		return this;
 	}
 
-	public ISystemConfiguratorOrdered Chain()
+	public ISystemConfigurator Chain()
 	{
 		if (_previousSystem != null && _previousSystem != _descriptor)
 		{
@@ -1492,90 +1481,6 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator, ISy
 			if (!_previousSystem.AfterSystems.Contains(_descriptor))
 				_previousSystem.AfterSystems.Add(_descriptor);
 		}
-		return this;
-	}
-
-	// ISystemConfiguratorLabeled implementations
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIf(Func<TinyEcs.World, bool> condition)
-	{
-		_descriptor.RunConditions.Add(condition);
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfResourceExists<T>()
-	{
-		_descriptor.RunConditions.Add(world => world.HasResource<T>());
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfResourceEquals<T>(T value)
-	{
-		_descriptor.RunConditions.Add(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.RunIfState<TState>(TState state)
-	{
-		_descriptor.RunConditions.Add(world =>
-		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
-		});
-		return this;
-	}
-
-	// ISystemConfiguratorOrdered implementations
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIf(Func<TinyEcs.World, bool> condition)
-	{
-		_descriptor.RunConditions.Add(condition);
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfResourceExists<T>()
-	{
-		_descriptor.RunConditions.Add(world => world.HasResource<T>());
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfResourceEquals<T>(T value)
-	{
-		_descriptor.RunConditions.Add(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.RunIfState<TState>(TState state)
-	{
-		_descriptor.RunConditions.Add(world =>
-		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
-		});
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.SingleThreaded()
-	{
-		_descriptor.ThreadingMode = ThreadingMode.Single;
-		return this;
-	}
-
-	ISystemConfiguratorLabeled ISystemConfiguratorLabeled.WithThreadingMode(ThreadingMode mode)
-	{
-		_descriptor.ThreadingMode = mode;
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.SingleThreaded()
-	{
-		_descriptor.ThreadingMode = ThreadingMode.Single;
-		return this;
-	}
-
-	ISystemConfiguratorOrdered ISystemConfiguratorOrdered.WithThreadingMode(ThreadingMode mode)
-	{
-		_descriptor.ThreadingMode = mode;
 		return this;
 	}
 
