@@ -450,8 +450,8 @@ public class App
 	private readonly HashSet<Type> _installedPlugins = new();
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
-	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
-	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onExitSystems = new();
+	internal readonly Dictionary<(Type StateType, object StateValue), List<SystemDescriptor>> _onEnterSystems = new();
+	internal readonly Dictionary<(Type StateType, object StateValue), List<SystemDescriptor>> _onExitSystems = new();
 	private readonly HashSet<Type> _registeredStateTypes = new();
 
 	// Startup tracking
@@ -929,34 +929,28 @@ public class App
 
 	internal void RegisterOnEnterSystem<TState>(TState state, SystemDescriptor descriptor) where TState : struct, Enum
 	{
-		var type = typeof(TState);
 		// Use boxed enum directly as key - no ToString() allocation
-		object stateKey = state;
-
-		if (!_onEnterSystems.ContainsKey(type))
-			_onEnterSystems[type] = new Dictionary<object, List<SystemDescriptor>>();
-
-		if (!_onEnterSystems[type].ContainsKey(stateKey))
-			_onEnterSystems[type][stateKey] = new List<SystemDescriptor>();
-
-		_onEnterSystems[type][stateKey].Add(descriptor);
+		var key = (typeof(TState), (object)state);
+		if (!_onEnterSystems.TryGetValue(key, out var list))
+		{
+			list = new List<SystemDescriptor>();
+			_onEnterSystems[key] = list;
+		}
+		list.Add(descriptor);
 
 		RegisterStateChangeDetector<TState>();
 	}
 
 	internal void RegisterOnExitSystem<TState>(TState state, SystemDescriptor descriptor) where TState : struct, Enum
 	{
-		var type = typeof(TState);
 		// Use boxed enum directly as key - no ToString() allocation
-		object stateKey = state;
-
-		if (!_onExitSystems.ContainsKey(type))
-			_onExitSystems[type] = new Dictionary<object, List<SystemDescriptor>>();
-
-		if (!_onExitSystems[type].ContainsKey(stateKey))
-			_onExitSystems[type][stateKey] = new List<SystemDescriptor>();
-
-		_onExitSystems[type][stateKey].Add(descriptor);
+		var key = (typeof(TState), (object)state);
+		if (!_onExitSystems.TryGetValue(key, out var list))
+		{
+			list = new List<SystemDescriptor>();
+			_onExitSystems[key] = list;
+		}
+		list.Add(descriptor);
 
 		RegisterStateChangeDetector<TState>();
 	}
@@ -1020,10 +1014,10 @@ public class App
 				currentState = (TState)currentObj;
 			}
 
-			if (previousState.HasValue && _app._onExitSystems.TryGetValue(type, out var exitDict))
+			if (previousState.HasValue)
 			{
-				object prevStateKey = previousState.Value;
-				if (exitDict.TryGetValue(prevStateKey, out var exitSystems))
+				var exitKey = (type, (object)previousState.Value);
+				if (_app._onExitSystems.TryGetValue(exitKey, out var exitSystems))
 				{
 					foreach (var descriptor in exitSystems)
 					{
@@ -1033,10 +1027,10 @@ public class App
 				}
 			}
 
-			if (currentState.HasValue && _app._onEnterSystems.TryGetValue(type, out var enterDict))
+			if (currentState.HasValue)
 			{
-				object currStateKey = currentState.Value;
-				if (enterDict.TryGetValue(currStateKey, out var enterSystems))
+				var enterKey = (type, (object)currentState.Value);
+				if (_app._onEnterSystems.TryGetValue(enterKey, out var enterSystems))
 				{
 					foreach (var descriptor in enterSystems)
 					{
