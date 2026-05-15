@@ -84,222 +84,11 @@ public class StageDescriptor
 }
 
 // ============================================================================
-// World Extensions (Partial class to extend TinyEcs.World)
+// World Extensions (Query helpers only — Bevy state lives on App)
 // ============================================================================
 
 public static class WorldExtensions
 {
-	// Per-world Bevy state now lives directly on the World instance via the
-	// internal object? slot defined in TinyEcs/World.BevyState.cs. We keep
-	// this thin accessor so every existing call site (AddResource, GetResource,
-	// SetState, etc.) stays valid without churn — it just reads the field and
-	// lazily constructs a WorldState on first touch.
-	//
-	// The slot is typed as object? in the core assembly to avoid pulling a
-	// Bevy type name into TinyEcs.dll; we cast here on the Bevy side. The
-	// lazy init has a benign race (see comment in World.BevyState.cs).
-	internal static WorldState GetState(this TinyEcs.World world)
-	{
-		return (WorldState)(world.BevyStateSlot ??= new WorldState());
-	}
-
-	public static void AddResource<T>(this TinyEcs.World world, T resource) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			state.Resources[typeof(T)] = new ResourceBox<T>(resource);
-		}
-	}
-
-	public static T GetResource<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
-
-			return ((ResourceBox<T>)boxed).Value;
-		}
-	}
-
-	public static bool HasResource<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			return state.Resources.ContainsKey(typeof(T));
-		}
-	}
-
-	public static ref T GetResourceRef<T>(this TinyEcs.World world) where T : notnull
-	{
-		return ref world.GetResourceBox<T>().Value;
-	}
-
-	internal static ResourceBox<T> GetResourceBox<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
-
-			return (ResourceBox<T>)boxed;
-		}
-	}
-
-	public static void SendEvent<T>(this TinyEcs.World world, T evt) where T : notnull
-	{
-		world.GetEventChannel<T>().Enqueue(evt);
-	}
-
-	internal static EventChannel<T> GetEventChannel<T>(this TinyEcs.World world) where T : notnull
-	{
-		var state = world.GetState();
-		lock (state.SyncRoot)
-		{
-			if (!state.EventChannels.TryGetValue(typeof(T), out var channelObj))
-			{
-				var channel = new EventChannel<T>();
-				state.EventChannels[typeof(T)] = channel;
-				return channel;
-			}
-
-			return (EventChannel<T>)channelObj;
-		}
-	}
-
-	public static void RegisterObserver<T>(this TinyEcs.World world, Action<T> observer) where T : notnull
-	{
-		world.GetEventChannel<T>().RegisterObserver(observer);
-	}
-
-	internal static void ProcessEvents(this TinyEcs.World world)
-	{
-		var state = world.GetState();
-		var currentTick = world.CurrentTick;
-		using var channels = new PooledList<IEventChannel>(state.EventChannels.Count);
-		lock (state.SyncRoot)
-		{
-			foreach (var channel in state.EventChannels.Values)
-			{
-				channels.Add(channel);
-			}
-		}
-		foreach (var channel in channels.AsSpan)
-		{
-			channel.Flush(currentTick);
-		}
-	}
-
-	// State management
-	public static void SetState<TState>(this TinyEcs.World world, TState state) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		var type = typeof(TState);
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var current))
-			{
-				worldState.PreviousStates[type] = current;
-			}
-			worldState.States[type] = state;
-			worldState.PendingStateChanges.Remove(type);
-			worldState.StatesProcessedThisFrame.Remove(type); // Mark for reprocessing
-		}
-	}
-
-	public static TState GetState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
-		}
-		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
-	}
-
-	public static bool HasState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			return worldState.States.ContainsKey(typeof(TState));
-		}
-	}
-
-	public static void QueueState<TState>(this TinyEcs.World world, TState nextState) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.States.TryGetValue(type, out var current) &&
-				EqualityComparer<TState>.Default.Equals((TState)current, nextState))
-			{
-				worldState.PendingStateChanges.Remove(type);
-				return;
-			}
-
-			worldState.PendingStateChanges[type] = new QueuedStateTransition<TState>(nextState);
-			worldState.StatesProcessedThisFrame.Remove(type);
-		}
-	}
-
-	internal static bool HasQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			return worldState.PendingStateChanges.ContainsKey(typeof(TState));
-		}
-	}
-
-	internal static void ClearQueuedState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			worldState.PendingStateChanges.Remove(typeof(TState));
-		}
-	}
-
-	internal static TState? GetPreviousState<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var type = typeof(TState);
-		var worldState = world.GetState();
-		lock (worldState.SyncRoot)
-		{
-			if (worldState.PreviousStates.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
-		}
-		return null;
-	}
-
-	internal static bool StateChanged<TState>(this TinyEcs.World world) where TState : struct, Enum
-	{
-		var state = world.GetState();
-		var type = typeof(TState);
-		lock (state.SyncRoot)
-		{
-			if (!state.States.TryGetValue(type, out var current))
-				return false;
-
-			if (!state.PreviousStates.TryGetValue(type, out var previous))
-				return true;
-
-			return !current.Equals(previous);
-		}
-	}
-
 	// Query helpers - create cached queries
 	/// <summary>
 	/// Create a query with automatic tick tracking for Changed/Added filters
@@ -374,73 +163,39 @@ internal sealed class ResourceBox<T> where T : notnull
 
 public sealed class State<TState> where TState : struct, Enum
 {
-	// State/NextState can be constructed against either a World (legacy path used
-	// when AddState runs before the App exists, e.g. via WorldExtensions) or an
-	// App (preferred during Bevy registration). When _app is set, all accessors
-	// route through App.AppState directly; otherwise the World extensions are used.
-	private readonly TinyEcs.World? _world;
-	private readonly App? _app;
-
-	internal State(TinyEcs.World world)
-	{
-		_world = world;
-	}
+	// State/NextState always route through the owning App; the World-side path
+	// has been removed now that the Bevy layer owns its own per-app state.
+	private readonly App _app;
 
 	internal State(App app)
 	{
 		_app = app;
-		_world = app._world;
 	}
 
-	public TState Current => _app != null ? _app.GetState<TState>() : _world!.GetState<TState>();
-	public TState Previous
-	{
-		get
-		{
-			if (_app != null)
-			{
-				// Prefer App-side previous-state lookup; falls back to current when no previous recorded.
-				return _app._world.GetPreviousState<TState>() ?? _app.GetState<TState>();
-			}
-			var w = _world!;
-			return w.GetPreviousState<TState>() ?? w.GetState<TState>();
-		}
-	}
-	public bool IsChanged => (_app?._world ?? _world!).StateChanged<TState>();
-	public bool IsQueued => (_app?._world ?? _world!).HasQueuedState<TState>();
+	public TState Current => _app.GetState<TState>();
+	public TState Previous => _app.GetPreviousState<TState>() ?? _app.GetState<TState>();
+	public bool IsChanged => _app.StateChanged<TState>();
+	public bool IsQueued => _app.HasQueuedState<TState>();
 }
 
 public sealed class NextState<TState> where TState : struct, Enum
 {
-	private readonly TinyEcs.World? _world;
-	private readonly App? _app;
-
-	internal NextState(TinyEcs.World world)
-	{
-		_world = world;
-	}
+	private readonly App _app;
 
 	internal NextState(App app)
 	{
 		_app = app;
-		_world = app._world;
 	}
 
-	public void Set(TState nextState)
-	{
-		if (_app != null)
-			_app.QueueState(nextState);
-		else
-			_world!.QueueState(nextState);
-	}
+	public void Set(TState nextState) => _app.QueueState(nextState);
 
-	public bool IsQueued => (_app?._world ?? _world!).HasQueuedState<TState>();
-	public void Clear() => (_app?._world ?? _world!).ClearQueuedState<TState>();
+	public bool IsQueued => _app.HasQueuedState<TState>();
+	public void Clear() => _app.ClearQueuedState<TState>();
 }
 
 internal interface IQueuedStateTransition
 {
-	void Apply(TinyEcs.World world);
+	void Apply(App app);
 	Type StateType { get; }
 }
 
@@ -453,7 +208,7 @@ internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition 
 		_next = next;
 	}
 
-	public void Apply(TinyEcs.World world) => world.SetState(_next);
+	public void Apply(App app) => app.SetState(_next);
 
 	public Type StateType => typeof(TState);
 }
@@ -698,10 +453,6 @@ public class App
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
 	{
 		_world = world;
-		// Attach this App's WorldState to the World so the existing
-		// world-side Bevy extensions (AddResource, GetResource, SetState, etc.)
-		// share the same underlying instance as the new App-side API.
-		_world.BevyStateSlot = _appState;
 		_threadingMode = threadingMode;
 
 		// Initialize Startup stage (runs once)
@@ -753,19 +504,19 @@ public class App
 
 	public App AddResource<T>(T resource) where T : notnull
 	{
-		_world.AddResource(resource);
+		lock (_appState.SyncRoot)
+		{
+			_appState.Resources[typeof(T)] = new ResourceBox<T>(resource);
+		}
 		return this;
 	}
 
 	// ------------------------------------------------------------------
 	// App-side Bevy state API
 	//
-	// These methods mirror the existing WorldExtensions (AddResource,
-	// GetResource, SendEvent, SetState, etc.) but read/write the App's
-	// own WorldState instance directly — bypassing the world-extension
-	// indirection. Since the constructor attaches `_appState` to the
-	// World via BevyStateSlot, both APIs share the same backing store,
-	// so callers can mix-and-match during migration.
+	// These methods read/write the App's own WorldState instance directly.
+	// The World no longer carries any Bevy state slot — all resources,
+	// events, and state machines live on the App.
 	// ------------------------------------------------------------------
 
 	/// <summary>
@@ -833,6 +584,18 @@ public class App
 		lock (_appState.SyncRoot)
 		{
 			_appState.Resources.Remove(typeof(T));
+		}
+	}
+
+	/// <summary>
+	/// Remove a resource by runtime type. Used by the deferred RemoveResource command
+	/// where the type is only known as <see cref="Type"/>.
+	/// </summary>
+	internal void RemoveResourceByType(Type resourceType)
+	{
+		lock (_appState.SyncRoot)
+		{
+			_appState.Resources.Remove(resourceType);
 		}
 	}
 
@@ -939,21 +702,94 @@ public class App
 		}
 	}
 
+	/// <summary>
+	/// Returns true if there is a pending state transition for <typeparamref name="TState"/>.
+	/// </summary>
+	internal bool HasQueuedState<TState>() where TState : struct, Enum
+	{
+		lock (_appState.SyncRoot)
+		{
+			return _appState.PendingStateChanges.ContainsKey(typeof(TState));
+		}
+	}
+
+	/// <summary>
+	/// Clear any pending state transition for <typeparamref name="TState"/>.
+	/// </summary>
+	internal void ClearQueuedState<TState>() where TState : struct, Enum
+	{
+		lock (_appState.SyncRoot)
+		{
+			_appState.PendingStateChanges.Remove(typeof(TState));
+		}
+	}
+
+	/// <summary>
+	/// Get the previously-recorded value of <typeparamref name="TState"/>, or null if none.
+	/// </summary>
+	internal TState? GetPreviousState<TState>() where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		lock (_appState.SyncRoot)
+		{
+			if (_appState.PreviousStates.TryGetValue(type, out var state))
+			{
+				return (TState)state;
+			}
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Returns true if the current <typeparamref name="TState"/> differs from the previously recorded one.
+	/// </summary>
+	internal bool StateChanged<TState>() where TState : struct, Enum
+	{
+		var type = typeof(TState);
+		lock (_appState.SyncRoot)
+		{
+			if (!_appState.States.TryGetValue(type, out var current))
+				return false;
+
+			if (!_appState.PreviousStates.TryGetValue(type, out var previous))
+				return true;
+
+			return !current.Equals(previous);
+		}
+	}
+
+	/// <summary>
+	/// Flush all event channels for this frame. Called by <see cref="RunFrame"/>.
+	/// </summary>
+	internal void ProcessEvents()
+	{
+		var currentTick = _world.CurrentTick;
+		using var channels = new PooledList<IEventChannel>(_appState.EventChannels.Count);
+		lock (_appState.SyncRoot)
+		{
+			foreach (var channel in _appState.EventChannels.Values)
+			{
+				channels.Add(channel);
+			}
+		}
+		foreach (var channel in channels.AsSpan)
+		{
+			channel.Flush(currentTick);
+		}
+	}
+
 	public App AddState<TState>(TState initialState) where TState : struct, Enum
 	{
-		_world.SetState(initialState);
+		SetState(initialState);
 
-		if (!_world.HasResource<State<TState>>())
+		if (!HasResource<State<TState>>())
 		{
-			// Use the App-based constructor so State<T> reads from this App's AppState
-			// directly (the shared _appState is still attached to the World, so World-side
-			// state reads remain consistent).
-			_world.AddResource(new State<TState>(this));
+			AddResource(new State<TState>(this));
 		}
 
-		if (!_world.HasResource<NextState<TState>>())
+		if (!HasResource<NextState<TState>>())
 		{
-			_world.AddResource(new NextState<TState>(this));
+			AddResource(new NextState<TState>(this));
 		}
 
 		return this;
@@ -1030,7 +866,7 @@ public class App
 
 	public App AddObserver<T>(Action<T> observer) where T : notnull
 	{
-		_world.RegisterObserver(observer);
+		RegisterGlobalObserver(observer);
 		return this;
 	}
 
@@ -1114,12 +950,11 @@ public class App
 
 		_registeredStateTypes.Add(type);
 
-		var worldState = _world.GetState();
 		var detector = new StateChangeDetector<TState>(this);
 
-		lock (worldState.SyncRoot)
+		lock (_appState.SyncRoot)
 		{
-			worldState.StateChangeDetectors.Add(detector);
+			_appState.StateChangeDetectors.Add(detector);
 		}
 	}
 
@@ -1140,24 +975,24 @@ public class App
 
 		public void Detect()
 		{
+			var appState = _app._appState;
 			var world = _app._world;
-			var worldState = world.GetState();
 			var type = typeof(TState);
 
 			TState? previousState;
 			TState? currentState;
 
-			lock (worldState.SyncRoot)
+			lock (appState.SyncRoot)
 			{
-				if (worldState.StatesProcessedThisFrame.Contains(type))
+				if (appState.StatesProcessedThisFrame.Contains(type))
 					return;
 
-				if (!world.StateChanged<TState>())
+				if (!_app.StateChanged<TState>())
 					return;
 
-				worldState.StatesProcessedThisFrame.Add(type);
-				previousState = world.GetPreviousState<TState>();
-				currentState = world.HasState<TState>() ? world.GetState<TState>() : (TState?)null;
+				appState.StatesProcessedThisFrame.Add(type);
+				previousState = _app.GetPreviousState<TState>();
+				currentState = _app.HasState<TState>() ? _app.GetState<TState>() : (TState?)null;
 			}
 
 			if (previousState.HasValue && _app._onExitSystems.TryGetValue(type, out var exitDict))
@@ -1246,7 +1081,7 @@ public class App
 		}
 
 		ProcessStateTransitions();
-		_world.ProcessEvents();
+		ProcessEvents();
 	}
 
 	/// <summary>
@@ -1419,25 +1254,24 @@ public class App
 
 	private void ProcessStateTransitions()
 	{
-		var worldState = _world.GetState();
-		using var transitions = new PooledList<IQueuedStateTransition>(worldState.PendingStateChanges.Count);
-		using var detectors = new PooledList<IStateChangeDetector>(worldState.StateChangeDetectors.Count);
-		lock (worldState.SyncRoot)
+		using var transitions = new PooledList<IQueuedStateTransition>(_appState.PendingStateChanges.Count);
+		using var detectors = new PooledList<IStateChangeDetector>(_appState.StateChangeDetectors.Count);
+		lock (_appState.SyncRoot)
 		{
-			foreach (var t in worldState.PendingStateChanges.Values)
+			foreach (var t in _appState.PendingStateChanges.Values)
 			{
 				transitions.Add(t);
 			}
-			worldState.PendingStateChanges.Clear();
-			foreach (var d in worldState.StateChangeDetectors)
+			_appState.PendingStateChanges.Clear();
+			foreach (var d in _appState.StateChangeDetectors)
 			{
 				detectors.Add(d);
 			}
-			worldState.StatesProcessedThisFrame.Clear();
+			_appState.StatesProcessedThisFrame.Clear();
 		}
 		foreach (var transition in transitions.AsSpan)
 		{
-			transition.Apply(_world);
+			transition.Apply(this);
 		}
 		foreach (var detector in detectors.AsSpan)
 		{
@@ -1446,11 +1280,11 @@ public class App
 
 		// After processing all state transitions and running OnEnter/OnExit systems,
 		// update PreviousStates to match current States so StateChanged returns false next frame
-		lock (worldState.SyncRoot)
+		lock (_appState.SyncRoot)
 		{
-			foreach (var kvp in worldState.States)
+			foreach (var kvp in _appState.States)
 			{
-				worldState.PreviousStates[kvp.Key] = kvp.Value;
+				_appState.PreviousStates[kvp.Key] = kvp.Value;
 			}
 		}
 	}
@@ -1649,21 +1483,24 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 
 	public ISystemConfigurator RunIfResourceExists<T>() where T : notnull
 	{
-		return RunIf(world => world.HasResource<T>());
+		var app = _app;
+		return RunIf(_ => app.HasResource<T>());
 	}
 
 	public ISystemConfigurator RunIfResourceEquals<T>(T value) where T : notnull, IEquatable<T>
 	{
-		return RunIf(world =>
-			world.HasResource<T>() && world.GetResource<T>().Equals(value));
+		var app = _app;
+		return RunIf(_ =>
+			app.HasResource<T>() && app.GetResource<T>().Equals(value));
 	}
 
 	public ISystemConfigurator RunIfState<TState>(TState state) where TState : struct, Enum
 	{
-		return RunIf(world =>
+		var app = _app;
+		return RunIf(_ =>
 		{
-			if (!world.HasState<TState>()) return false;
-			return world.GetState<TState>().Equals(state);
+			if (!app.HasState<TState>()) return false;
+			return app.GetState<TState>().Equals(state);
 		});
 	}
 

@@ -24,6 +24,7 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -50,7 +51,9 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -78,8 +81,11 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -108,9 +114,13 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -140,10 +150,15 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -174,11 +189,17 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -210,12 +231,19 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -248,13 +276,21 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -288,14 +324,23 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -330,15 +375,25 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -374,16 +429,27 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		var p11 = new T11();
+		if (p11 is IAppAwareParam awareP11) awareP11.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -420,17 +486,29 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		var p11 = new T11();
+		if (p11 is IAppAwareParam awareP11) awareP11.SetApp(app);
 		var p12 = new T12();
+		if (p12 is IAppAwareParam awareP12) awareP12.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -468,18 +546,31 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		var p11 = new T11();
+		if (p11 is IAppAwareParam awareP11) awareP11.SetApp(app);
 		var p12 = new T12();
+		if (p12 is IAppAwareParam awareP12) awareP12.SetApp(app);
 		var p13 = new T13();
+		if (p13 is IAppAwareParam awareP13) awareP13.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -518,19 +609,33 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		var p11 = new T11();
+		if (p11 is IAppAwareParam awareP11) awareP11.SetApp(app);
 		var p12 = new T12();
+		if (p12 is IAppAwareParam awareP12) awareP12.SetApp(app);
 		var p13 = new T13();
+		if (p13 is IAppAwareParam awareP13) awareP13.SetApp(app);
 		var p14 = new T14();
+		if (p14 is IAppAwareParam awareP14) awareP14.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -570,20 +675,35 @@ public static partial class AppObserverExtensions
 #endif
 
 		var p1 = new T1();
+		if (p1 is IAppAwareParam awareP1) awareP1.SetApp(app);
 		var p2 = new T2();
+		if (p2 is IAppAwareParam awareP2) awareP2.SetApp(app);
 		var p3 = new T3();
+		if (p3 is IAppAwareParam awareP3) awareP3.SetApp(app);
 		var p4 = new T4();
+		if (p4 is IAppAwareParam awareP4) awareP4.SetApp(app);
 		var p5 = new T5();
+		if (p5 is IAppAwareParam awareP5) awareP5.SetApp(app);
 		var p6 = new T6();
+		if (p6 is IAppAwareParam awareP6) awareP6.SetApp(app);
 		var p7 = new T7();
+		if (p7 is IAppAwareParam awareP7) awareP7.SetApp(app);
 		var p8 = new T8();
+		if (p8 is IAppAwareParam awareP8) awareP8.SetApp(app);
 		var p9 = new T9();
+		if (p9 is IAppAwareParam awareP9) awareP9.SetApp(app);
 		var p10 = new T10();
+		if (p10 is IAppAwareParam awareP10) awareP10.SetApp(app);
 		var p11 = new T11();
+		if (p11 is IAppAwareParam awareP11) awareP11.SetApp(app);
 		var p12 = new T12();
+		if (p12 is IAppAwareParam awareP12) awareP12.SetApp(app);
 		var p13 = new T13();
+		if (p13 is IAppAwareParam awareP13) awareP13.SetApp(app);
 		var p14 = new T14();
+		if (p14 is IAppAwareParam awareP14) awareP14.SetApp(app);
 		var p15 = new T15();
+		if (p15 is IAppAwareParam awareP15) awareP15.SetApp(app);
 		world.RegisterObserver<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);

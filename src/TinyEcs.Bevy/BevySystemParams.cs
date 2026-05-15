@@ -25,11 +25,9 @@ public interface ISystemParam
 }
 
 /// <summary>
-/// Optional marker for system parameters that can receive the owning <see cref="App"/>.
-/// When set, the parameter is expected to read/write from <c>app.AppState</c> directly
-/// instead of going through <c>WorldExtensions.GetState()</c>. The <c>World</c> path
-/// remains as a fallback when <see cref="SetApp(App)"/> has not been called (e.g. when
-/// the parameter is used outside of the Bevy scheduler).
+/// Optional marker for system parameters that need a reference to the owning <see cref="App"/>.
+/// Bevy state (resources, events, state machines) lives on the App, so system parameters that
+/// access that state must be wired to their App during registration via <see cref="SetApp(App)"/>.
 /// </summary>
 internal interface IAppAwareParam
 {
@@ -96,9 +94,9 @@ public class Res<T> : ISystemParam, IAppAwareParam where T : notnull
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_box = _app != null
-			? _app.GetResourceBoxInternal<T>()
-			: world.GetResourceBox<T>();
+		if (_app is null)
+			throw new InvalidOperationException("Res<T> requires an App. Use it inside systems registered via App.AddSystem.");
+		_box = _app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -140,9 +138,9 @@ public class ResMut<T> : ISystemParam, IAppAwareParam where T : notnull
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_box = _app != null
-			? _app.GetResourceBoxInternal<T>()
-			: world.GetResourceBox<T>();
+		if (_app is null)
+			throw new InvalidOperationException("ResMut<T> requires an App. Use it inside systems registered via App.AddSystem.");
+		_box = _app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -215,13 +213,20 @@ public class EventReader<T> : ISystemParam, IAppAwareParam where T : notnull
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_channel = _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
+		if (_app is null)
+			throw new InvalidOperationException("EventReader<T> requires an App. Use it inside systems registered via App.AddSystem.");
+		_channel = _app.GetOrCreateEventChannelInternal<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
 		_events.Clear();
-		_channel ??= _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
+		if (_channel is null)
+		{
+			if (_app is null)
+				throw new InvalidOperationException("EventReader<T> requires an App. Use it inside systems registered via App.AddSystem.");
+			_channel = _app.GetOrCreateEventChannelInternal<T>();
+		}
 		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
@@ -268,12 +273,19 @@ public class EventWriter<T> : ISystemParam, IAppAwareParam where T : notnull
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_channel = _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
+		if (_app is null)
+			throw new InvalidOperationException("EventWriter<T> requires an App. Use it inside systems registered via App.AddSystem.");
+		_channel = _app.GetOrCreateEventChannelInternal<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_channel ??= _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
+		if (_channel is null)
+		{
+			if (_app is null)
+				throw new InvalidOperationException("EventWriter<T> requires an App. Use it inside systems registered via App.AddSystem.");
+			_channel = _app.GetOrCreateEventChannelInternal<T>();
+		}
 	}
 
 	/// <summary>
@@ -304,11 +316,16 @@ public class EventWriter<T> : ISystemParam, IAppAwareParam where T : notnull
 /// Operations are queued locally per-system and applied at the end of the system.
 /// Thread-safe for parallel system execution.
 /// </summary>
-public class Commands : ISystemParam
+public class Commands : ISystemParam, IAppAwareParam
 {
 	private TinyEcs.World? _world;
+	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
+
+	void IAppAwareParam.SetApp(App app) => _app = app;
+
+	internal App? App => _app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -450,15 +467,15 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Check if a resource exists in the world (at the time this method is called).
+	/// Check if a resource exists in the App (at the time this method is called).
 	/// Note: Since commands are deferred, the resource state may change before execution.
 	/// </summary>
 	public bool HasResource<T>() where T : notnull
 	{
-		if (_world == null)
-			throw new InvalidOperationException("Commands has not been initialized.");
+		if (_app == null)
+			throw new InvalidOperationException("Commands has not been wired to an App.");
 
-		return _world.HasResource<T>();
+		return _app.HasResource<T>();
 	}
 
 	/// <summary>
@@ -605,6 +622,12 @@ public ref struct EntityCommands
 	/// The entity ID (returns 0 if entity hasn't been spawned yet)
 	/// </summary>
 	public ulong Id => _spawnIndex >= 0 ? _commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+
+	/// <summary>
+	/// The owning App associated with this entity's Commands. May be null if Commands
+	/// has not been wired to an App (e.g. used outside the Bevy scheduler).
+	/// </summary>
+	internal readonly App? OwningApp => _commands.App;
 
 	/// <summary>
 	/// Add a component to the entity
@@ -827,7 +850,9 @@ internal readonly struct InsertResourceCommand<T> : IDeferredCommand where T : n
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.AddResource(_resource);
+		var app = commands.App
+			?? throw new InvalidOperationException("Commands.InsertResource requires Commands to be wired to an App.");
+		app.AddResource(_resource);
 	}
 }
 
@@ -916,7 +941,9 @@ internal readonly struct RemoveResourceCommand : IDeferredCommand
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		world.GetState().Resources.Remove(_resourceType);
+		var app = commands.App
+			?? throw new InvalidOperationException("Commands.RemoveResource requires Commands to be wired to an App.");
+		app.RemoveResourceByType(_resourceType);
 	}
 }
 

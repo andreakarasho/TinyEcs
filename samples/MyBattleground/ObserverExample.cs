@@ -22,8 +22,8 @@ public static class ObserverExample
 	public struct Player { }
 
 	// Resources to store entity references
-	public class PlayerEntity { public TinyEcs.EntityView Id; }
-	public class EnemyEntity { public TinyEcs.EntityView Id; }
+	public class PlayerEntity { public ulong Id; }
+	public class EnemyEntity { public ulong Id; }
 
 	public static void Run()
 	{
@@ -67,32 +67,29 @@ public static class ObserverExample
 			}
 		});
 
-		// Add a startup system to create entities
-		app.AddSystem((TinyEcs.World world) =>
+		// Add a startup system to create entities. Use Commands so resources
+		// land on the owning App instead of the World.
+		app.AddSystem((Commands commands) =>
 		{
 			Console.WriteLine("--- Creating entities ---\n");
 
 			// Spawn player - OnSpawn automatically triggered
-			var player = world.Entity();
-
-			// Add components to player - OnInsert automatically triggered
-			player.Set<Player>();
-			world.Set(player, new Health { Value = 100 });
-			world.Set(player, new Position { X = 0, Y = 0 });
+			var player = commands.Spawn()
+				.Insert<Player>()
+				.Insert(new Health { Value = 100 })
+				.Insert(new Position { X = 0, Y = 0 });
 
 			Console.WriteLine();
 
 			// Spawn enemy - OnSpawn automatically triggered
-			var enemy = world.Entity();
+			var enemy = commands.Spawn()
+				.Insert<Enemy>()
+				.Insert(new Health { Value = 50 })
+				.Insert(new Position { X = 10, Y = 5 });
 
-			// Add components to enemy - OnInsert automatically triggered
-			world.Set<Enemy>(enemy);
-			world.Set(enemy, new Health { Value = 50 });
-			world.Set(enemy, new Position { X = 10, Y = 5 });
-
-			// Store entities as resources for later systems
-			world.AddResource(new PlayerEntity { Id = player });
-			world.AddResource(new EnemyEntity { Id = enemy });
+			// Store entities as resources for later systems.
+			commands.InsertResource(new PlayerEntity { Id = player.Id });
+			commands.InsertResource(new EnemyEntity { Id = enemy.Id });
 		}).InStage(TinyEcs.Bevy.Stage.Startup);
 
 		// Add an update system to move player
