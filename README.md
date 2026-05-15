@@ -115,6 +115,24 @@ root.RemoveChild(anotherchild);
 // This will delete all children too
 root.Delete();
 ```
+---
+### Typed relationships
+Use `Parent<TKind>` / `Children<TKind>` for multiple relation kinds. `TKind` is any tag struct.
+
+```csharp
+struct Owns;
+struct LikesEntity;
+
+world.AddChild<Owns>(player, sword);
+world.AddChild<LikesEntity>(player, npc);
+
+EcsID owner   = world.GetParent<Owns>(sword);
+var inventory = world.GetChildren<Owns>(player);
+
+world.RemoveChild<Owns>(sword);
+```
+
+Non-generic `Parent`/`Children` unchanged. Default cleanup: `UnlinkDescendants` (non-generic uses `DeleteDescendants`).
 
 ## Bevy-Inspired App & Scheduling
 

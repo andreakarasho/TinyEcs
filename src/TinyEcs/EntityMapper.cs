@@ -248,6 +248,53 @@ public static class EntityMapperEx
 		=> entity.World.Name(entity.ID);
 }
 
+public static class TypedRelationshipEx
+{
+	public static void AddChild<TKind>(this World world, EcsID parent, EcsID child, int index = -1)
+		where TKind : struct
+	{
+		if (world.IsDeferred)
+			world.AddChildTypedDeferred<TKind>(parent, child, index);
+		else
+			world.GetTypedRelationshipMapper<TKind>().Add(parent, child, index);
+	}
+
+	public static void RemoveChild<TKind>(this World world, EcsID child)
+		where TKind : struct
+	{
+		if (world.IsDeferred)
+			world.RemoveChildTypedDeferred<TKind>(child);
+		else
+			world.GetTypedRelationshipMapper<TKind>().Remove(child);
+	}
+
+	public static EcsID GetParent<TKind>(this World world, EcsID child)
+		where TKind : struct
+		=> world.GetTypedRelationshipMapper<TKind>().GetParent(child);
+
+	public static List<EcsID>? GetChildren<TKind>(this World world, EcsID parent)
+		where TKind : struct
+		=> world.GetTypedRelationshipMapper<TKind>().GetChildren(parent);
+
+	public static EntityView AddChild<TKind>(this EntityView entity, EcsID childId, int index = -1)
+		where TKind : struct
+	{
+		entity.World.AddChild<TKind>(entity.ID, childId, index);
+		return entity;
+	}
+
+	public static EntityView RemoveChild<TKind>(this EntityView entity, EcsID childId)
+		where TKind : struct
+	{
+		entity.World.RemoveChild<TKind>(childId);
+		return entity;
+	}
+
+	public static EcsID GetParent<TKind>(this EntityView entity)
+		where TKind : struct
+		=> entity.World.GetParent<TKind>(entity.ID);
+}
+
 public partial interface IParentComponent
 {
 	EcsID Id { get; init; }
@@ -281,6 +328,38 @@ public struct Children : IChildrenComponent
 
 	public readonly List<EcsID>.Enumerator GetEnumerator()
 		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
+}
+
+
+public partial struct Parent<TKind> : IParentComponent where TKind : struct
+{
+	public EcsID Id { get; init; }
+}
+
+public struct Children<TKind> : IChildrenComponent where TKind : struct
+{
+	private static readonly List<EcsID> _empty = [];
+
+	private List<EcsID> _value;
+
+	List<EcsID> IChildrenComponent.Value
+	{
+		readonly get => _value;
+		set => _value = value;
+	}
+
+	public int Count => _value?.Count ?? 0;
+
+	public readonly List<EcsID>.Enumerator GetEnumerator()
+		=> _value?.GetEnumerator() ?? _empty.GetEnumerator();
+}
+
+public sealed class TypedRelationshipMapper<TKind>
+	: EntityMapper<Parent<TKind>, Children<TKind>>
+	where TKind : struct
+{
+	internal TypedRelationshipMapper(World world, CleanupPolicy policy)
+		: base(world, policy) { }
 }
 
 
