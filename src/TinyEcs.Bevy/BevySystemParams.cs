@@ -22,16 +22,14 @@ public interface ISystemParam
 	/// Gets the access information for this parameter (for parallel execution analysis)
 	/// </summary>
 	SystemParamAccess GetAccess();
-}
 
-/// <summary>
-/// Optional marker for system parameters that need a reference to the owning <see cref="App"/>.
-/// Bevy state (resources, events, state machines) lives on the App, so system parameters that
-/// access that state must be wired to their App during registration via <see cref="SetApp(App)"/>.
-/// </summary>
-internal interface IAppAwareParam
-{
-	void SetApp(App app);
+	/// <summary>
+	/// Called once by the scheduler when this parameter is bound to a system.
+	/// Override to receive the owning <see cref="App"/> — necessary for params that
+	/// fetch resources, events, or states (all of which live on App).
+	/// Default implementation is a no-op.
+	/// </summary>
+	void SetApp(App app) { }
 }
 
 /// <summary>
@@ -61,6 +59,84 @@ public class SystemParamAccess
 	}
 }
 
+/// <summary>
+/// Base class for composite system parameters that group multiple inner
+/// <see cref="ISystemParam"/> instances. Derived classes register their inner
+/// params in the constructor via <see cref="Add{T}(T)"/>; the base class then
+/// forwards <see cref="Initialize"/>, <see cref="Fetch"/>, <see cref="SetApp"/>
+/// and <see cref="GetAccess"/> to every registered param.
+///
+/// Example:
+/// <code>
+/// public class CombatParams : CompositeSystemParam
+/// {
+///     public readonly Query&lt;Data&lt;Health, Damage&gt;&gt; Targets;
+///     public readonly Res&lt;DifficultyConfig&gt; Difficulty;
+///     public readonly Commands Commands;
+///
+///     public CombatParams()
+///     {
+///         Targets    = Add(new Query&lt;Data&lt;Health, Damage&gt;&gt;());
+///         Difficulty = Add(new Res&lt;DifficultyConfig&gt;());
+///         Commands   = Add(new Commands());
+///     }
+/// }
+/// </code>
+///
+/// Note: <see cref="GetAccess"/> caches the merged access set on first call.
+/// If params are added after construction, the cache becomes stale — register
+/// all params in the constructor only.
+/// </summary>
+public abstract class CompositeSystemParam : ISystemParam
+{
+	private readonly List<ISystemParam> _params = new();
+	private SystemParamAccess? _cachedAccess;
+
+	/// <summary>
+	/// Register an inner system parameter. Returns the param so it can be
+	/// assigned to a field on the same line: <c>Field = Add(new Param());</c>.
+	/// </summary>
+	protected T Add<T>(T param) where T : ISystemParam
+	{
+		_params.Add(param);
+		return param;
+	}
+
+	public virtual void Initialize(World world)
+	{
+		foreach (var p in _params)
+			p.Initialize(world);
+	}
+
+	public virtual void Fetch(World world)
+	{
+		foreach (var p in _params)
+			p.Fetch(world);
+	}
+
+	public virtual void SetApp(App app)
+	{
+		foreach (var p in _params)
+			p.SetApp(app);
+	}
+
+	public virtual SystemParamAccess GetAccess()
+	{
+		if (_cachedAccess != null)
+			return _cachedAccess;
+
+		var combined = new SystemParamAccess();
+		foreach (var p in _params)
+		{
+			var a = p.GetAccess();
+			foreach (var r in a.ReadResources) combined.ReadResources.Add(r);
+			foreach (var w in a.WriteResources) combined.WriteResources.Add(w);
+		}
+		_cachedAccess = combined;
+		return combined;
+	}
+}
+
 internal readonly struct DeferredEntityRef
 {
 	public readonly int SpawnIndex;
@@ -80,12 +156,12 @@ internal readonly struct DeferredEntityRef
 /// <summary>
 /// Immutable reference to a resource. Use for read-only access.
 /// </summary>
-public class Res<T> : ISystemParam, IAppAwareParam where T : notnull
+public class Res<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
 	private App? _app;
 
-	void IAppAwareParam.SetApp(App app) => _app = app;
+	public void SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -124,12 +200,12 @@ public class Res<T> : ISystemParam, IAppAwareParam where T : notnull
 /// <summary>
 /// Mutable reference to a resource. Use when you need to modify it.
 /// </summary>
-public class ResMut<T> : ISystemParam, IAppAwareParam where T : notnull
+public class ResMut<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
 	private App? _app;
 
-	void IAppAwareParam.SetApp(App app) => _app = app;
+	public void SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -201,7 +277,7 @@ public class Local<T> : ISystemParam where T : new()
 /// Reads events of type T from the event queue.
 /// Events are consumed after being read.
 /// </summary>
-public class EventReader<T> : ISystemParam, IAppAwareParam where T : notnull
+public class EventReader<T> : ISystemParam where T : notnull
 {
 	private EventChannel<T>? _channel;
 	private App? _app;
@@ -209,7 +285,7 @@ public class EventReader<T> : ISystemParam, IAppAwareParam where T : notnull
 	private ulong _lastEpoch = ulong.MaxValue;
 	private int _lastReadIndex;
 
-	void IAppAwareParam.SetApp(App app) => _app = app;
+	public void SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -264,12 +340,12 @@ public class EventReader<T> : ISystemParam, IAppAwareParam where T : notnull
 /// Writes events of type T to the event queue.
 /// Events will be processed at the end of the current stage.
 /// </summary>
-public class EventWriter<T> : ISystemParam, IAppAwareParam where T : notnull
+public class EventWriter<T> : ISystemParam where T : notnull
 {
 	private EventChannel<T>? _channel;
 	private App? _app;
 
-	void IAppAwareParam.SetApp(App app) => _app = app;
+	public void SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -316,14 +392,14 @@ public class EventWriter<T> : ISystemParam, IAppAwareParam where T : notnull
 /// Operations are queued locally per-system and applied at the end of the system.
 /// Thread-safe for parallel system execution.
 /// </summary>
-public class Commands : ISystemParam, IAppAwareParam
+public class Commands : ISystemParam
 {
 	private TinyEcs.World? _world;
 	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
 
-	void IAppAwareParam.SetApp(App app) => _app = app;
+	public void SetApp(App app) => _app = app;
 
 	internal App? App => _app;
 
@@ -1291,17 +1367,17 @@ public class ParameterizedSystem : ISystem
 	}
 
 	/// <summary>
-	/// Attach the owning <see cref="App"/> to this system and propagate it to any
-	/// parameters that opt-in via <see cref="IAppAwareParam"/>. Safe to call once
-	/// during system registration; subsequent calls overwrite the previous app.
+	/// Attach the owning <see cref="App"/> to this system and propagate it to every
+	/// parameter via <see cref="ISystemParam.SetApp"/>. Params that don't need it
+	/// rely on the default no-op implementation. Safe to call once during system
+	/// registration; subsequent calls overwrite the previous app.
 	/// </summary>
 	internal void SetApp(App app)
 	{
 		_app = app;
 		foreach (var param in _parameters)
 		{
-			if (param is IAppAwareParam aware)
-				aware.SetApp(app);
+			param.SetApp(app);
 		}
 	}
 

@@ -19,7 +19,7 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -49,9 +49,9 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -83,11 +83,11 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -121,13 +121,13 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -163,15 +163,15 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -209,17 +209,17 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -259,19 +259,19 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -313,21 +313,21 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -371,23 +371,23 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -433,25 +433,25 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -499,27 +499,27 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		var p11 = new T11();
-		if (p11 is IAppAwareParam awareP11 && entityApp is not null) awareP11.SetApp(entityApp);
+		if (entityApp is not null) p11.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -569,29 +569,29 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		var p11 = new T11();
-		if (p11 is IAppAwareParam awareP11 && entityApp is not null) awareP11.SetApp(entityApp);
+		if (entityApp is not null) p11.SetApp(entityApp);
 		var p12 = new T12();
-		if (p12 is IAppAwareParam awareP12 && entityApp is not null) awareP12.SetApp(entityApp);
+		if (entityApp is not null) p12.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -643,31 +643,31 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		var p11 = new T11();
-		if (p11 is IAppAwareParam awareP11 && entityApp is not null) awareP11.SetApp(entityApp);
+		if (entityApp is not null) p11.SetApp(entityApp);
 		var p12 = new T12();
-		if (p12 is IAppAwareParam awareP12 && entityApp is not null) awareP12.SetApp(entityApp);
+		if (entityApp is not null) p12.SetApp(entityApp);
 		var p13 = new T13();
-		if (p13 is IAppAwareParam awareP13 && entityApp is not null) awareP13.SetApp(entityApp);
+		if (entityApp is not null) p13.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -721,33 +721,33 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		var p11 = new T11();
-		if (p11 is IAppAwareParam awareP11 && entityApp is not null) awareP11.SetApp(entityApp);
+		if (entityApp is not null) p11.SetApp(entityApp);
 		var p12 = new T12();
-		if (p12 is IAppAwareParam awareP12 && entityApp is not null) awareP12.SetApp(entityApp);
+		if (entityApp is not null) p12.SetApp(entityApp);
 		var p13 = new T13();
-		if (p13 is IAppAwareParam awareP13 && entityApp is not null) awareP13.SetApp(entityApp);
+		if (entityApp is not null) p13.SetApp(entityApp);
 		var p14 = new T14();
-		if (p14 is IAppAwareParam awareP14 && entityApp is not null) awareP14.SetApp(entityApp);
+		if (entityApp is not null) p14.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);
@@ -803,35 +803,35 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (p1 is IAppAwareParam awareP1 && entityApp is not null) awareP1.SetApp(entityApp);
+		if (entityApp is not null) p1.SetApp(entityApp);
 		var p2 = new T2();
-		if (p2 is IAppAwareParam awareP2 && entityApp is not null) awareP2.SetApp(entityApp);
+		if (entityApp is not null) p2.SetApp(entityApp);
 		var p3 = new T3();
-		if (p3 is IAppAwareParam awareP3 && entityApp is not null) awareP3.SetApp(entityApp);
+		if (entityApp is not null) p3.SetApp(entityApp);
 		var p4 = new T4();
-		if (p4 is IAppAwareParam awareP4 && entityApp is not null) awareP4.SetApp(entityApp);
+		if (entityApp is not null) p4.SetApp(entityApp);
 		var p5 = new T5();
-		if (p5 is IAppAwareParam awareP5 && entityApp is not null) awareP5.SetApp(entityApp);
+		if (entityApp is not null) p5.SetApp(entityApp);
 		var p6 = new T6();
-		if (p6 is IAppAwareParam awareP6 && entityApp is not null) awareP6.SetApp(entityApp);
+		if (entityApp is not null) p6.SetApp(entityApp);
 		var p7 = new T7();
-		if (p7 is IAppAwareParam awareP7 && entityApp is not null) awareP7.SetApp(entityApp);
+		if (entityApp is not null) p7.SetApp(entityApp);
 		var p8 = new T8();
-		if (p8 is IAppAwareParam awareP8 && entityApp is not null) awareP8.SetApp(entityApp);
+		if (entityApp is not null) p8.SetApp(entityApp);
 		var p9 = new T9();
-		if (p9 is IAppAwareParam awareP9 && entityApp is not null) awareP9.SetApp(entityApp);
+		if (entityApp is not null) p9.SetApp(entityApp);
 		var p10 = new T10();
-		if (p10 is IAppAwareParam awareP10 && entityApp is not null) awareP10.SetApp(entityApp);
+		if (entityApp is not null) p10.SetApp(entityApp);
 		var p11 = new T11();
-		if (p11 is IAppAwareParam awareP11 && entityApp is not null) awareP11.SetApp(entityApp);
+		if (entityApp is not null) p11.SetApp(entityApp);
 		var p12 = new T12();
-		if (p12 is IAppAwareParam awareP12 && entityApp is not null) awareP12.SetApp(entityApp);
+		if (entityApp is not null) p12.SetApp(entityApp);
 		var p13 = new T13();
-		if (p13 is IAppAwareParam awareP13 && entityApp is not null) awareP13.SetApp(entityApp);
+		if (entityApp is not null) p13.SetApp(entityApp);
 		var p14 = new T14();
-		if (p14 is IAppAwareParam awareP14 && entityApp is not null) awareP14.SetApp(entityApp);
+		if (entityApp is not null) p14.SetApp(entityApp);
 		var p15 = new T15();
-		if (p15 is IAppAwareParam awareP15 && entityApp is not null) awareP15.SetApp(entityApp);
+		if (entityApp is not null) p15.SetApp(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
 			p1.Fetch(w);

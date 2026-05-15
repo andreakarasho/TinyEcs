@@ -10,7 +10,7 @@
     string GenericParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
     string WhereConstraints(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : ISystemParam, new()"));
     string ParamDecls(int count) => string.Join("\n\t\t", Enumerable.Range(1, count).Select(i =>
-        $"var p{i} = new T{i}();\n\t\tif (p{i} is IAppAwareParam awareP{i} && entityApp is not null) awareP{i}.SetApp(entityApp);"));
+        $"var p{i} = new T{i}();\n\t\tif (entityApp is not null) p{i}.SetApp(entityApp);"));
     string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(w);"));
     string CallbackParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
 #>
