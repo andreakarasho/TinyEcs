@@ -444,13 +444,6 @@ struct PlayerBundle : IBundle
     public Health Health;
     public Sprite Sprite;
 
-    public readonly void Insert(EntityView entity)
-    {
-        entity.Set(Position);
-        entity.Set(Health);
-        entity.Set(Sprite);
-    }
-
     public readonly void Insert(EntityCommands entity)
     {
         entity.Insert(Position);
