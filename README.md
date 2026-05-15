@@ -117,42 +117,22 @@ root.Delete();
 ```
 ---
 ### Typed relationships
-Need more than one kind of relation? Use `Parent<TKind>` / `Children<TKind>` where `TKind` is any tag struct. Each kind has its own independent parent/children mapping — an entity can simultaneously be `ChildOf` one entity, `Owns` several items, and `LikesEntity` another, without any interference.
+Use `Parent<TKind>` / `Children<TKind>` for multiple relation kinds. `TKind` is any tag struct.
 
 ```csharp
-// Define relation kinds as tag structs
 struct Owns;
 struct LikesEntity;
 
-var player = world.Entity();
-var sword  = world.Entity();
-var npc    = world.Entity();
-
-// Ownership relation
 world.AddChild<Owns>(player, sword);
-
-// Social relation — same entity, different kind, no conflict
 world.AddChild<LikesEntity>(player, npc);
 
-// Query
-EcsID owner   = world.GetParent<Owns>(sword);            // == player
-EcsID liked   = world.GetParent<LikesEntity>(npc);       // == player
-var inventory = world.GetChildren<Owns>(player);         // [sword]
-var crushes   = world.GetChildren<LikesEntity>(player);  // [npc]
+EcsID owner   = world.GetParent<Owns>(sword);
+var inventory = world.GetChildren<Owns>(player);
 
-// Entity-extension form
-player.AddChild<Owns>(sword.ID);
-sword.GetParent<Owns>(); // == player.ID
-
-// Remove
 world.RemoveChild<Owns>(sword);
 ```
 
-**Notes:**
-- Each `TKind` gets its own backing components: `Parent<TKind>` on the child, `Children<TKind>` on the parent. Both are real components — query and observe them like any other.
-- Default cleanup is `UnlinkDescendants` (deleting a parent leaves children orphaned but alive). The non-generic `Parent`/`Children` uses `DeleteDescendants` for back-compat.
-- Mirrored deferred semantics: typed relationships queued inside a deferred scope apply at merge.
-- The non-generic `Parent`/`Children` API is unchanged and still works alongside.
+Non-generic `Parent`/`Children` unchanged. Default cleanup: `UnlinkDescendants` (non-generic uses `DeleteDescendants`).
 
 ## Bevy-Inspired App & Scheduling
 
