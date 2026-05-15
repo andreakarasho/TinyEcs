@@ -19,10 +19,10 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
 			callback(trigger, p1);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -49,13 +49,13 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
 			callback(trigger, p1, p2);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -83,16 +83,16 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
 			callback(trigger, p1, p2, p3);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -121,19 +121,19 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -163,22 +163,22 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -209,25 +209,25 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -259,28 +259,28 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -313,31 +313,31 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -371,34 +371,34 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -433,37 +433,37 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -499,40 +499,40 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		var p11 = new T11();
-		if (entityApp is not null) p11.SetApp(entityApp);
+		if (entityApp is not null) p11.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
+			if (entityApp is not null) p11.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -569,43 +569,43 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		var p11 = new T11();
-		if (entityApp is not null) p11.SetApp(entityApp);
+		if (entityApp is not null) p11.Initialize(entityApp);
 		var p12 = new T12();
-		if (entityApp is not null) p12.SetApp(entityApp);
+		if (entityApp is not null) p12.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
+			if (entityApp is not null) p11.Fetch(entityApp);
+			if (entityApp is not null) p12.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -643,46 +643,46 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		var p11 = new T11();
-		if (entityApp is not null) p11.SetApp(entityApp);
+		if (entityApp is not null) p11.Initialize(entityApp);
 		var p12 = new T12();
-		if (entityApp is not null) p12.SetApp(entityApp);
+		if (entityApp is not null) p12.Initialize(entityApp);
 		var p13 = new T13();
-		if (entityApp is not null) p13.SetApp(entityApp);
+		if (entityApp is not null) p13.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
+			if (entityApp is not null) p11.Fetch(entityApp);
+			if (entityApp is not null) p12.Fetch(entityApp);
+			if (entityApp is not null) p13.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -721,49 +721,49 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		var p11 = new T11();
-		if (entityApp is not null) p11.SetApp(entityApp);
+		if (entityApp is not null) p11.Initialize(entityApp);
 		var p12 = new T12();
-		if (entityApp is not null) p12.SetApp(entityApp);
+		if (entityApp is not null) p12.Initialize(entityApp);
 		var p13 = new T13();
-		if (entityApp is not null) p13.SetApp(entityApp);
+		if (entityApp is not null) p13.Initialize(entityApp);
 		var p14 = new T14();
-		if (entityApp is not null) p14.SetApp(entityApp);
+		if (entityApp is not null) p14.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
-			p14.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
+			if (entityApp is not null) p11.Fetch(entityApp);
+			if (entityApp is not null) p12.Fetch(entityApp);
+			if (entityApp is not null) p13.Fetch(entityApp);
+			if (entityApp is not null) p14.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14);
 
 			// Auto-apply Commands if any parameter is Commands type
@@ -803,52 +803,52 @@ public static partial class EntityCommandsObserverExtensions
 		// Use ObserveWithWorld to get World access, then fetch system parameters
 		var entityApp = entity.OwningApp;
 		var p1 = new T1();
-		if (entityApp is not null) p1.SetApp(entityApp);
+		if (entityApp is not null) p1.Initialize(entityApp);
 		var p2 = new T2();
-		if (entityApp is not null) p2.SetApp(entityApp);
+		if (entityApp is not null) p2.Initialize(entityApp);
 		var p3 = new T3();
-		if (entityApp is not null) p3.SetApp(entityApp);
+		if (entityApp is not null) p3.Initialize(entityApp);
 		var p4 = new T4();
-		if (entityApp is not null) p4.SetApp(entityApp);
+		if (entityApp is not null) p4.Initialize(entityApp);
 		var p5 = new T5();
-		if (entityApp is not null) p5.SetApp(entityApp);
+		if (entityApp is not null) p5.Initialize(entityApp);
 		var p6 = new T6();
-		if (entityApp is not null) p6.SetApp(entityApp);
+		if (entityApp is not null) p6.Initialize(entityApp);
 		var p7 = new T7();
-		if (entityApp is not null) p7.SetApp(entityApp);
+		if (entityApp is not null) p7.Initialize(entityApp);
 		var p8 = new T8();
-		if (entityApp is not null) p8.SetApp(entityApp);
+		if (entityApp is not null) p8.Initialize(entityApp);
 		var p9 = new T9();
-		if (entityApp is not null) p9.SetApp(entityApp);
+		if (entityApp is not null) p9.Initialize(entityApp);
 		var p10 = new T10();
-		if (entityApp is not null) p10.SetApp(entityApp);
+		if (entityApp is not null) p10.Initialize(entityApp);
 		var p11 = new T11();
-		if (entityApp is not null) p11.SetApp(entityApp);
+		if (entityApp is not null) p11.Initialize(entityApp);
 		var p12 = new T12();
-		if (entityApp is not null) p12.SetApp(entityApp);
+		if (entityApp is not null) p12.Initialize(entityApp);
 		var p13 = new T13();
-		if (entityApp is not null) p13.SetApp(entityApp);
+		if (entityApp is not null) p13.Initialize(entityApp);
 		var p14 = new T14();
-		if (entityApp is not null) p14.SetApp(entityApp);
+		if (entityApp is not null) p14.Initialize(entityApp);
 		var p15 = new T15();
-		if (entityApp is not null) p15.SetApp(entityApp);
+		if (entityApp is not null) p15.Initialize(entityApp);
 		return entity.ObserveWithWorld<TTrigger>((w, trigger) =>
 		{
-			p1.Fetch(w);
-			p2.Fetch(w);
-			p3.Fetch(w);
-			p4.Fetch(w);
-			p5.Fetch(w);
-			p6.Fetch(w);
-			p7.Fetch(w);
-			p8.Fetch(w);
-			p9.Fetch(w);
-			p10.Fetch(w);
-			p11.Fetch(w);
-			p12.Fetch(w);
-			p13.Fetch(w);
-			p14.Fetch(w);
-			p15.Fetch(w);
+			if (entityApp is not null) p1.Fetch(entityApp);
+			if (entityApp is not null) p2.Fetch(entityApp);
+			if (entityApp is not null) p3.Fetch(entityApp);
+			if (entityApp is not null) p4.Fetch(entityApp);
+			if (entityApp is not null) p5.Fetch(entityApp);
+			if (entityApp is not null) p6.Fetch(entityApp);
+			if (entityApp is not null) p7.Fetch(entityApp);
+			if (entityApp is not null) p8.Fetch(entityApp);
+			if (entityApp is not null) p9.Fetch(entityApp);
+			if (entityApp is not null) p10.Fetch(entityApp);
+			if (entityApp is not null) p11.Fetch(entityApp);
+			if (entityApp is not null) p12.Fetch(entityApp);
+			if (entityApp is not null) p13.Fetch(entityApp);
+			if (entityApp is not null) p14.Fetch(entityApp);
+			if (entityApp is not null) p15.Fetch(entityApp);
 			callback(trigger, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15);
 
 			// Auto-apply Commands if any parameter is Commands type

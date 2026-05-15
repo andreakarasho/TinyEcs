@@ -1446,6 +1446,14 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 		_previousSystem = previousSystem;
 	}
 
+	/// <summary>
+	/// Owning <see cref="App"/> for this configurator. Internal helper used by the
+	/// generated <see cref="SystemExtensions"/> <c>RunIf</c> overloads to obtain
+	/// the App reference required by <see cref="ISystemParam.Initialize"/> and
+	/// <see cref="ISystemParam.Fetch"/>.
+	/// </summary>
+	internal App App => _app;
+
 	// ISystemStageSelector
 	public ISystemConfigurator InStage(Stage stage)
 	{

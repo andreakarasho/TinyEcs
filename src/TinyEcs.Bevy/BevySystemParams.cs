@@ -11,25 +11,21 @@ namespace TinyEcs.Bevy;
 // ============================================================================
 
 /// <summary>
-/// Base interface for all system parameters that can be injected into systems
+/// Base interface for all system parameters that can be injected into systems.
+/// Lifecycle: <see cref="Initialize"/> is called once when the system is first
+/// run; <see cref="Fetch"/> is called before every system run. Both receive the
+/// owning <see cref="App"/>, from which the parameter can obtain the World,
+/// resources, event channels, or any other App-bound state.
 /// </summary>
 public interface ISystemParam
 {
-	void Initialize(TinyEcs.World world);
-	void Fetch(TinyEcs.World world);
+	void Initialize(App app);
+	void Fetch(App app);
 
 	/// <summary>
 	/// Gets the access information for this parameter (for parallel execution analysis)
 	/// </summary>
 	SystemParamAccess GetAccess();
-
-	/// <summary>
-	/// Called once by the scheduler when this parameter is bound to a system.
-	/// Override to receive the owning <see cref="App"/> — necessary for params that
-	/// fetch resources, events, or states (all of which live on App).
-	/// Default implementation is a no-op.
-	/// </summary>
-	void SetApp(App app) { }
 }
 
 /// <summary>
@@ -63,8 +59,8 @@ public class SystemParamAccess
 /// Base class for composite system parameters that group multiple inner
 /// <see cref="ISystemParam"/> instances. Derived classes register their inner
 /// params in the constructor via <see cref="Add{T}(T)"/>; the base class then
-/// forwards <see cref="Initialize"/>, <see cref="Fetch"/>, <see cref="SetApp"/>
-/// and <see cref="GetAccess"/> to every registered param.
+/// forwards <see cref="Initialize"/>, <see cref="Fetch"/>, and
+/// <see cref="GetAccess"/> to every registered param.
 ///
 /// Example:
 /// <code>
@@ -102,22 +98,16 @@ public abstract class CompositeSystemParam : ISystemParam
 		return param;
 	}
 
-	public virtual void Initialize(World world)
+	public virtual void Initialize(App app)
 	{
 		foreach (var p in _params)
-			p.Initialize(world);
+			p.Initialize(app);
 	}
 
-	public virtual void Fetch(World world)
+	public virtual void Fetch(App app)
 	{
 		foreach (var p in _params)
-			p.Fetch(world);
-	}
-
-	public virtual void SetApp(App app)
-	{
-		foreach (var p in _params)
-			p.SetApp(app);
+			p.Fetch(app);
 	}
 
 	public virtual SystemParamAccess GetAccess()
@@ -159,20 +149,15 @@ internal readonly struct DeferredEntityRef
 public class Res<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
-	private App? _app;
 
-	public void SetApp(App app) => _app = app;
-
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		_box = null;
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		if (_app is null)
-			throw new InvalidOperationException("Res<T> requires an App. Use it inside systems registered via App.AddSystem.");
-		_box = _app.GetResourceBoxInternal<T>();
+		_box = app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -203,20 +188,15 @@ public class Res<T> : ISystemParam where T : notnull
 public class ResMut<T> : ISystemParam where T : notnull
 {
 	private ResourceBox<T>? _box;
-	private App? _app;
 
-	public void SetApp(App app) => _app = app;
-
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		_box = null;
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		if (_app is null)
-			throw new InvalidOperationException("ResMut<T> requires an App. Use it inside systems registered via App.AddSystem.");
-		_box = _app.GetResourceBoxInternal<T>();
+		_box = app.GetResourceBoxInternal<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -251,13 +231,13 @@ public class Local<T> : ISystemParam where T : new()
 
 	public ref T? Value => ref _value;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		// Local state is initialized once and persists
 		_value = new T();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
 		// Local state doesn't need to fetch - it's already there
 	}
@@ -280,29 +260,20 @@ public class Local<T> : ISystemParam where T : new()
 public class EventReader<T> : ISystemParam where T : notnull
 {
 	private EventChannel<T>? _channel;
-	private App? _app;
 	private readonly List<T> _events = new();
 	private ulong _lastEpoch = ulong.MaxValue;
 	private int _lastReadIndex;
 
-	public void SetApp(App app) => _app = app;
-
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
-		if (_app is null)
-			throw new InvalidOperationException("EventReader<T> requires an App. Use it inside systems registered via App.AddSystem.");
-		_channel = _app.GetOrCreateEventChannelInternal<T>();
+		_channel = app.GetOrCreateEventChannelInternal<T>();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
 		_events.Clear();
 		if (_channel is null)
-		{
-			if (_app is null)
-				throw new InvalidOperationException("EventReader<T> requires an App. Use it inside systems registered via App.AddSystem.");
-			_channel = _app.GetOrCreateEventChannelInternal<T>();
-		}
+			_channel = app.GetOrCreateEventChannelInternal<T>();
 		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
@@ -343,25 +314,16 @@ public class EventReader<T> : ISystemParam where T : notnull
 public class EventWriter<T> : ISystemParam where T : notnull
 {
 	private EventChannel<T>? _channel;
-	private App? _app;
 
-	public void SetApp(App app) => _app = app;
-
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
-		if (_app is null)
-			throw new InvalidOperationException("EventWriter<T> requires an App. Use it inside systems registered via App.AddSystem.");
-		_channel = _app.GetOrCreateEventChannelInternal<T>();
+		_channel = app.GetOrCreateEventChannelInternal<T>();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
 		if (_channel is null)
-		{
-			if (_app is null)
-				throw new InvalidOperationException("EventWriter<T> requires an App. Use it inside systems registered via App.AddSystem.");
-			_channel = _app.GetOrCreateEventChannelInternal<T>();
-		}
+			_channel = app.GetOrCreateEventChannelInternal<T>();
 	}
 
 	/// <summary>
@@ -399,18 +361,18 @@ public class Commands : ISystemParam
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
 
-	public void SetApp(App app) => _app = app;
-
 	internal App? App => _app;
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
-		_world = world;
+		_app = app;
+		_world = app.GetWorld();
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
-		_world = world;
+		_app = app;
+		_world = app.GetWorld();
 		_localCommands.Clear();
 		_spawnedEntityIds.Clear();
 	}
@@ -1165,13 +1127,14 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 		return access;
 	}
 
-	public void Initialize(TinyEcs.World world)
+	public void Initialize(App app)
 	{
 		// Initialization handled in Fetch
 	}
 
-	public void Fetch(TinyEcs.World world)
+	public void Fetch(App app)
 	{
+		var world = app.GetWorld();
 		_world = world;
 		if (_lowLevelQuery == null)
 		{
@@ -1367,28 +1330,27 @@ public class ParameterizedSystem : ISystem
 	}
 
 	/// <summary>
-	/// Attach the owning <see cref="App"/> to this system and propagate it to every
-	/// parameter via <see cref="ISystemParam.SetApp"/>. Params that don't need it
-	/// rely on the default no-op implementation. Safe to call once during system
+	/// Attach the owning <see cref="App"/> to this system. The app reference is
+	/// passed to each parameter on <see cref="ISystemParam.Initialize"/> and
+	/// <see cref="ISystemParam.Fetch"/>. Safe to call once during system
 	/// registration; subsequent calls overwrite the previous app.
 	/// </summary>
 	internal void SetApp(App app)
 	{
 		_app = app;
-		foreach (var param in _parameters)
-		{
-			param.SetApp(app);
-		}
 	}
 
 	public void Run(TinyEcs.World world)
 	{
+		if (_app is null)
+			throw new InvalidOperationException("ParameterizedSystem has not been wired to an App. Use App.AddSystem to register it.");
+
 		if (!_initialized)
 		{
 			// Initialize all parameters once
 			foreach (var param in _parameters)
 			{
-				param.Initialize(world);
+				param.Initialize(_app);
 			}
 			_initialized = true;
 		}
@@ -1396,7 +1358,7 @@ public class ParameterizedSystem : ISystem
 		// Fetch latest data for all parameters
 		foreach (var param in _parameters)
 		{
-			param.Fetch(world);
+			param.Fetch(_app);
 		}
 
 		// Run the system

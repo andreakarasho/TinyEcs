@@ -10,8 +10,8 @@
     string GenericParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
     string WhereConstraints(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : ISystemParam, new()"));
     string ParamDecls(int count) => string.Join("\n\t\t", Enumerable.Range(1, count).Select(i =>
-        $"var p{i} = new T{i}();\n\t\tif (entityApp is not null) p{i}.SetApp(entityApp);"));
-    string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(w);"));
+        $"var p{i} = new T{i}();\n\t\tif (entityApp is not null) p{i}.Initialize(entityApp);"));
+    string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"if (entityApp is not null) p{i}.Fetch(entityApp);"));
     string CallbackParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
 #>
 #pragma warning disable 1591
