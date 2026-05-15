@@ -100,7 +100,7 @@ namespace TinyEcs.Tests
 
 			transitions.Clear();
 
-			world.SetState(GameState.Playing);
+			app.SetState(GameState.Playing);
 			app.Run();
 
 			Assert.Equal(new[] { "ExitMenu", "EnterPlaying" }, transitions);
@@ -130,7 +130,7 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { GameState.Menu }, observed);
-			Assert.Equal(GameState.Playing, world.GetState<GameState>());
+			Assert.Equal(GameState.Playing, app.GetState<GameState>());
 
 			observed.Clear();
 			app.Run();
@@ -183,7 +183,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(0, exitCounts[DetectorTestState.B]);
 
 			// Transition to B: OnExit(A) and OnEnter(B) fire once each.
-			world.SetState(DetectorTestState.B);
+			app.SetState(DetectorTestState.B);
 			app.Run();
 			Assert.Equal(1, enterCounts[DetectorTestState.A]);
 			Assert.Equal(1, exitCounts[DetectorTestState.A]);
@@ -199,7 +199,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(0, exitCounts[DetectorTestState.B]);
 
 			// Transition back to A: OnExit(B) and OnEnter(A) fire once each.
-			world.SetState(DetectorTestState.A);
+			app.SetState(DetectorTestState.A);
 			app.Run();
 			Assert.Equal(2, enterCounts[DetectorTestState.A]);
 			Assert.Equal(1, exitCounts[DetectorTestState.A]);
@@ -2104,8 +2104,8 @@ namespace TinyEcs.Tests
 			{
 				if ((frameIndex & 1) == 1)
 				{
-					var current = world.GetState<PooledListSnapshotState>();
-					world.SetState(current == PooledListSnapshotState.Idle
+					var current = app.GetState<PooledListSnapshotState>();
+					app.SetState(current == PooledListSnapshotState.Idle
 						? PooledListSnapshotState.Active
 						: PooledListSnapshotState.Idle);
 				}
