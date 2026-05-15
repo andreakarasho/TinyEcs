@@ -46,6 +46,14 @@ public interface ISystem
 // Stage System
 // ============================================================================
 
+/// <summary>
+/// Schedule stage marker.
+/// </summary>
+/// <remarks>
+/// Stages use reference equality. Use the static instances (<see cref="Startup"/>, <see cref="Update"/>, etc.)
+/// or cache a <see cref="Custom(string)"/> result in a static field — calling <c>Stage.Custom("foo")</c>
+/// twice creates two distinct stages.
+/// </remarks>
 public class Stage
 {
 	public string Name { get; }
@@ -1185,95 +1193,96 @@ public class App
 
 		while (remaining.Count > 0)
 		{
-			var batch = new List<SystemDescriptor>();
-			var batchAccess = new SystemParamAccess();
-			bool batchCanBeParallel = true;
-
-			// Process systems in forward order to preserve topological sort order
-			for (int i = 0; i < remaining.Count;)
-			{
-				var descriptor = remaining[i];
-
-				// Check if this system has a threading override
-				bool systemRequiresSingleThread = descriptor.ThreadingMode == ThreadingMode.Single;
-
-				// If the current batch already has systems and this one requires single-threading,
-				// or if the batch requires single-threading and already has a system, skip it for this batch
-				if (systemRequiresSingleThread)
-				{
-					if (batch.Count > 0)
-					{
-						// Can't add to an existing batch - will be processed in next iteration
-						i++; // Move to next system
-						continue;
-					}
-					else
-					{
-						// Start a new single-threaded batch with just this system
-						batch.Add(descriptor);
-						remaining.RemoveAt(i);
-						batchCanBeParallel = false;
-						break; // This batch is done - only one system allowed
-					}
-				}
-
-				// If batch is already marked single-threaded, skip all other systems
-				if (!batchCanBeParallel)
-				{
-					i++; // Move to next system
-					continue;
-				}
-
-				// Get access pattern if it's a parameterized system
-				var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
-				if (access == null)
-				{
-					// Non-parameterized systems have unknown access - run them sequentially
-					access = new SystemParamAccess();
-					// Treat as exclusive by adding a unique type marker
-					access.WriteResources.Add(descriptor.System.GetType());
-				}
-
-				// Check if this system has explicit ordering dependencies with systems already in the batch
-				bool hasOrderingConflict = false;
-				foreach (var batchedSystem in batch)
-				{
-					// If this system must run before/after a system already in the batch, they can't be parallel
-					if (descriptor.BeforeSystems.Contains(batchedSystem) ||
-						descriptor.AfterSystems.Contains(batchedSystem) ||
-						batchedSystem.BeforeSystems.Contains(descriptor) ||
-						batchedSystem.AfterSystems.Contains(descriptor))
-					{
-						hasOrderingConflict = true;
-						break;
-					}
-				}
-
-				// Check if this system conflicts with the current batch
-				if (!hasOrderingConflict && !batchAccess.ConflictsWith(access))
-				{
-					// No conflict - add to batch
-					batch.Add(descriptor);
-					remaining.RemoveAt(i);
-					// Don't increment i - next item shifted into current position
-
-					// Merge access patterns
-					foreach (var read in access.ReadResources)
-						batchAccess.ReadResources.Add(read);
-					foreach (var write in access.WriteResources)
-						batchAccess.WriteResources.Add(write);
-				}
-				else
-				{
-					// Conflict - skip this system for now
-					i++;
-				}
-			}
-
-			batches.Add(batch);
+			batches.Add(BuildOneBatch(remaining));
 		}
 
 		return batches;
+	}
+
+	/// <summary>
+	/// Pulls one batch of compatible systems out of <paramref name="remaining"/>.
+	/// Removes the chosen systems from the list and returns the batch.
+	/// </summary>
+	private static List<SystemDescriptor> BuildOneBatch(List<SystemDescriptor> remaining)
+	{
+		var batch = new List<SystemDescriptor>();
+		var batchAccess = new SystemParamAccess();
+
+		// Process systems in forward order to preserve topological sort order
+		for (int i = 0; i < remaining.Count;)
+		{
+			var descriptor = remaining[i];
+
+			if (TryAddToBatch(descriptor, batch, batchAccess))
+			{
+				remaining.RemoveAt(i);
+				// Next item shifted into current position — single-threaded batches return immediately
+				if (descriptor.ThreadingMode == ThreadingMode.Single)
+					break;
+			}
+			else
+			{
+				i++;
+			}
+		}
+
+		return batch;
+	}
+
+	/// <summary>
+	/// Decides whether <paramref name="descriptor"/> can join <paramref name="batch"/>.
+	/// On success, mutates <paramref name="batchAccess"/> to include the descriptor's access pattern.
+	/// </summary>
+	private static bool TryAddToBatch(SystemDescriptor descriptor, List<SystemDescriptor> batch, SystemParamAccess batchAccess)
+	{
+		bool systemRequiresSingleThread = descriptor.ThreadingMode == ThreadingMode.Single;
+
+		// Single-threaded systems must occupy their own batch
+		if (systemRequiresSingleThread)
+		{
+			if (batch.Count > 0)
+				return false;
+			batch.Add(descriptor);
+			return true;
+		}
+
+		// If batch already contains a single-threaded system, nothing else may join
+		if (batch.Count == 1 && batch[0].ThreadingMode == ThreadingMode.Single)
+			return false;
+
+		// Get access pattern if it's a parameterized system
+		var access = (descriptor.System as ParameterizedSystem)?.GetAccess();
+		if (access == null)
+		{
+			// Non-parameterized systems have unknown access - run them sequentially
+			access = new SystemParamAccess();
+			// Treat as exclusive by adding a unique type marker
+			access.WriteResources.Add(descriptor.System.GetType());
+		}
+
+		// Check if this system has explicit ordering dependencies with systems already in the batch
+		foreach (var batchedSystem in batch)
+		{
+			if (descriptor.BeforeSystems.Contains(batchedSystem) ||
+				descriptor.AfterSystems.Contains(batchedSystem) ||
+				batchedSystem.BeforeSystems.Contains(descriptor) ||
+				batchedSystem.AfterSystems.Contains(descriptor))
+			{
+				return false;
+			}
+		}
+
+		// Check resource conflicts
+		if (batchAccess.ConflictsWith(access))
+			return false;
+
+		// No conflict - add to batch and merge access patterns
+		batch.Add(descriptor);
+		foreach (var read in access.ReadResources)
+			batchAccess.ReadResources.Add(read);
+		foreach (var write in access.WriteResources)
+			batchAccess.WriteResources.Add(write);
+		return true;
 	}
 
 	private void ProcessStateTransitions()
