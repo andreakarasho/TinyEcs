@@ -334,6 +334,12 @@ public static class WorldExtensions
 	}
 }
 
+internal interface IStateChangeDetector
+{
+	Type StateType { get; }
+	void Detect();
+}
+
 internal class WorldState
 {
 	public object SyncRoot { get; } = new object();
@@ -342,7 +348,7 @@ internal class WorldState
 	public Dictionary<Type, object> States { get; } = new();
 	public Dictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
-	public List<Action> StateChangeDetectors { get; } = new();
+	public List<IStateChangeDetector> StateChangeDetectors { get; } = new();
 	public Dictionary<Type, IQueuedStateTransition> PendingStateChanges { get; } = new();
 }
 
@@ -635,7 +641,7 @@ public interface ISystemConfiguratorOrdered
 
 public class App
 {
-	private readonly TinyEcs.World _world;
+	internal readonly TinyEcs.World _world;
 	private readonly ThreadingMode _threadingMode;
 	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
@@ -644,8 +650,8 @@ public class App
 	private readonly HashSet<Type> _installedPlugins = new();
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
-	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
-	private readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onExitSystems = new();
+	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
+	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onExitSystems = new();
 	private readonly HashSet<Type> _registeredStateTypes = new();
 
 	// Startup tracking
@@ -870,54 +876,76 @@ public class App
 		_registeredStateTypes.Add(type);
 
 		var worldState = _world.GetState();
-		Action detector = () =>
+		var detector = new StateChangeDetector<TState>(this);
+
+		lock (worldState.SyncRoot)
 		{
-			TState? previousState = null;
-			TState? currentState = null;
+			worldState.StateChangeDetectors.Add(detector);
+		}
+	}
+
+	// Typed state change detector avoids the closure allocation that would otherwise
+	// capture the App instance + per-state-type fields. Using Nullable<TState> locals
+	// keeps the previous/current state values as value types instead of boxing them.
+	private sealed class StateChangeDetector<TState> : IStateChangeDetector
+		where TState : struct, Enum
+	{
+		private readonly App _app;
+
+		public StateChangeDetector(App app)
+		{
+			_app = app;
+		}
+
+		public Type StateType => typeof(TState);
+
+		public void Detect()
+		{
+			var world = _app._world;
+			var worldState = world.GetState();
+			var type = typeof(TState);
+
+			TState? previousState;
+			TState? currentState;
 
 			lock (worldState.SyncRoot)
 			{
 				if (worldState.StatesProcessedThisFrame.Contains(type))
 					return;
 
-				if (!_world.StateChanged<TState>())
+				if (!world.StateChanged<TState>())
 					return;
 
 				worldState.StatesProcessedThisFrame.Add(type);
-				previousState = _world.GetPreviousState<TState>();
-				currentState = _world.HasState<TState>() ? _world.GetState<TState>() : (TState?)null;
+				previousState = world.GetPreviousState<TState>();
+				currentState = world.HasState<TState>() ? world.GetState<TState>() : (TState?)null;
 			}
 
-			if (previousState != null && _onExitSystems.TryGetValue(type, out var exitDict))
+			if (previousState.HasValue && _app._onExitSystems.TryGetValue(type, out var exitDict))
 			{
 				object prevStateKey = previousState.Value;
 				if (exitDict.TryGetValue(prevStateKey, out var exitSystems))
 				{
 					foreach (var descriptor in exitSystems)
 					{
-						if (descriptor.ShouldRun(_world))
-							descriptor.System.Run(_world);
+						if (descriptor.ShouldRun(world))
+							descriptor.System.Run(world);
 					}
 				}
 			}
 
-			if (currentState != null && _onEnterSystems.TryGetValue(type, out var enterDict))
+			if (currentState.HasValue && _app._onEnterSystems.TryGetValue(type, out var enterDict))
 			{
 				object currStateKey = currentState.Value;
 				if (enterDict.TryGetValue(currStateKey, out var enterSystems))
 				{
 					foreach (var descriptor in enterSystems)
 					{
-						if (descriptor.ShouldRun(_world))
-							descriptor.System.Run(_world);
+						if (descriptor.ShouldRun(world))
+							descriptor.System.Run(world);
 					}
 				}
 			}
-		};
-
-		lock (worldState.SyncRoot)
-		{
-			worldState.StateChangeDetectors.Add(detector);
 		}
 	}
 
@@ -1154,7 +1182,7 @@ public class App
 	{
 		var worldState = _world.GetState();
 		List<IQueuedStateTransition> transitions;
-		List<Action> detectors;
+		List<IStateChangeDetector> detectors;
 		lock (worldState.SyncRoot)
 		{
 			transitions = worldState.PendingStateChanges.Values.ToList();
@@ -1168,7 +1196,7 @@ public class App
 		}
 		foreach (var detector in detectors)
 		{
-			detector();
+			detector.Detect();
 		}
 
 		// After processing all state transitions and running OnEnter/OnExit systems,

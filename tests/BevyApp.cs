@@ -137,6 +137,83 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { GameState.Playing }, observed);
 		}
 
+		private enum DetectorTestState
+		{
+			A,
+			B
+		}
+
+		[Fact]
+		public void StateChangeDetectorRunsOnlyOnTransitionWithoutAllocations()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			var enterCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+			var exitCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+
+			app.AddState(DetectorTestState.A);
+
+			app.AddSystem(w => enterCounts[DetectorTestState.A]++)
+				.OnEnter(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.A]++)
+				.OnExit(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => enterCounts[DetectorTestState.B]++)
+				.OnEnter(DetectorTestState.B)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.B]++)
+				.OnExit(DetectorTestState.B)
+				.Build();
+
+			// Initial frame: OnEnter(A) should fire once.
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(0, exitCounts[DetectorTestState.A]);
+			Assert.Equal(0, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition to B: OnExit(A) and OnEnter(B) fire once each.
+			world.SetState(DetectorTestState.B);
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Idle frames: no further transitions should be fired.
+			app.Run();
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition back to A: OnExit(B) and OnEnter(A) fire once each.
+			world.SetState(DetectorTestState.A);
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
+
+			// Another idle frame: still no new invocations.
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
+		}
+
 		[Fact]
 		public void AppFiresSpawnAndDespawnTriggers()
 		{
