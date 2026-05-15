@@ -9,11 +9,6 @@ namespace TinyEcs.Bevy;
 public interface IBundle
 {
 	/// <summary>
-	/// Insert all components in this bundle into the entity (immediate mode).
-	/// </summary>
-	void Insert(EntityView entity);
-
-	/// <summary>
 	/// Insert all components in this bundle into the entity (deferred mode).
 	/// </summary>
 	void Insert(EntityCommands entity);
@@ -24,16 +19,6 @@ public interface IBundle
 /// </summary>
 public static class BundleExtensions
 {
-	/// <summary>
-	/// Insert a bundle of components into this entity
-	/// </summary>
-	public static EntityView InsertBundle<TBundle>(this EntityView entity, TBundle bundle)
-		where TBundle : struct, IBundle
-	{
-		bundle.Insert(entity);
-		return entity;
-	}
-
 	/// <summary>
 	/// Insert a bundle of components into this entity (deferred)
 	/// </summary>

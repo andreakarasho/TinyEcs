@@ -212,13 +212,6 @@ struct SpriteBundle : IBundle
     public Sprite Sprite;
     public Velocity Velocity;
 
-    public readonly void Insert(EntityView entity)
-    {
-        entity.Set(Position);
-        entity.Set(Sprite);
-        entity.Set(Velocity);
-    }
-
     public readonly void Insert(EntityCommands entity)
     {
         entity.Insert(Position);
@@ -227,9 +220,9 @@ struct SpriteBundle : IBundle
     }
 }
 
-// Use bundles
+// Use bundles via Commands
 commands.SpawnBundle(new SpriteBundle { /* ... */ });
-entity.InsertBundle(bundle);
+commands.Entity(id).InsertBundle(bundle);
 ```
 
 ### Observers

@@ -1176,12 +1176,6 @@ namespace TinyEcs.Tests
 			public Transform Transform;
 			public Sprite2 Sprite;
 
-			public readonly void Insert(EntityView entity)
-			{
-				entity.Set(Transform);
-				entity.Set(Sprite);
-			}
-
 			public readonly void Insert(EntityCommands entity)
 			{
 				entity.Insert(Transform);
@@ -1193,21 +1187,33 @@ namespace TinyEcs.Tests
 		public void BundleCanBeInsertedIntoEntity()
 		{
 			using var world = new World();
-			var entity = world.Entity();
+			var app = new App(world);
 
-			var bundle = new SpriteBundle
+			var existingEntity = world.Entity();
+			var entityId = existingEntity.ID;
+
+			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				Transform = new Transform { X = 10, Y = 20 },
-				Sprite = new Sprite2 { TextureId = 42 }
-			};
+				var bundle = new SpriteBundle
+				{
+					Transform = new Transform { X = 10, Y = 20 },
+					Sprite = new Sprite2 { TextureId = 42 }
+				};
 
-			entity.InsertBundle(bundle);
+				commands.Entity(entityId).InsertBundle(bundle);
+			});
 
-			Assert.True(entity.Has<Transform>());
-			Assert.True(entity.Has<Sprite2>());
-			Assert.Equal(10, entity.Get<Transform>().X);
-			Assert.Equal(20, entity.Get<Transform>().Y);
-			Assert.Equal(42, entity.Get<Sprite2>().TextureId);
+			app.AddSystem(system)
+				.InStage(Stage.Update)
+				.Build();
+
+			app.Run();
+
+			Assert.True(existingEntity.Has<Transform>());
+			Assert.True(existingEntity.Has<Sprite2>());
+			Assert.Equal(10, existingEntity.Get<Transform>().X);
+			Assert.Equal(20, existingEntity.Get<Transform>().Y);
+			Assert.Equal(42, existingEntity.Get<Sprite2>().TextureId);
 		}
 
 		[Fact]
