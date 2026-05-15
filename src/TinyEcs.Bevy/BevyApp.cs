@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using TinyEcs.Collections;
 
 namespace TinyEcs.Bevy;
 
@@ -178,13 +179,16 @@ public static class WorldExtensions
 	internal static void ProcessEvents(this TinyEcs.World world)
 	{
 		var state = world.GetState();
-		List<IEventChannel> channels;
 		var currentTick = world.CurrentTick;
+		using var channels = new PooledList<IEventChannel>(state.EventChannels.Count);
 		lock (state.SyncRoot)
 		{
-			channels = state.EventChannels.Values.ToList();
+			foreach (var channel in state.EventChannels.Values)
+			{
+				channels.Add(channel);
+			}
 		}
-		foreach (var channel in channels)
+		foreach (var channel in channels.AsSpan)
 		{
 			channel.Flush(currentTick);
 		}
@@ -474,8 +478,9 @@ internal sealed class EventChannel<T> : IEventChannel
 
 	public void Flush(uint currentTick)
 	{
-		List<T>? toNotify = null;
-		List<Action<T>>? observersSnapshot = null;
+		using var toNotify = new PooledList<T>(8);
+		using var observersSnapshot = new PooledList<Action<T>>(4);
+		bool haveWork = false;
 
 		lock (_lock)
 		{
@@ -514,26 +519,28 @@ internal sealed class EventChannel<T> : IEventChannel
 			// Snapshot un-notified events for observers (each event delivered exactly once).
 			if (_observers.Count > 0 && _observerCursor < _readBuffer.Count)
 			{
-				var count = _readBuffer.Count - _observerCursor;
-				toNotify = new List<T>(count);
 				for (var i = _observerCursor; i < _readBuffer.Count; i++)
 				{
 					toNotify.Add(_readBuffer[i]);
 				}
-				observersSnapshot = new List<Action<T>>(_observers);
+				foreach (var obs in _observers)
+				{
+					observersSnapshot.Add(obs);
+				}
+				haveWork = true;
 			}
 
 			_observerCursor = _readBuffer.Count;
 		}
 
-		if (toNotify == null || observersSnapshot == null)
+		if (!haveWork)
 		{
 			return;
 		}
 
-		foreach (var evt in toNotify)
+		foreach (var evt in toNotify.AsSpan)
 		{
-			foreach (var observer in observersSnapshot)
+			foreach (var observer in observersSnapshot.AsSpan)
 			{
 				observer(evt);
 			}
@@ -1176,20 +1183,26 @@ public class App
 	private void ProcessStateTransitions()
 	{
 		var worldState = _world.GetState();
-		List<IQueuedStateTransition> transitions;
-		List<IStateChangeDetector> detectors;
+		using var transitions = new PooledList<IQueuedStateTransition>(worldState.PendingStateChanges.Count);
+		using var detectors = new PooledList<IStateChangeDetector>(worldState.StateChangeDetectors.Count);
 		lock (worldState.SyncRoot)
 		{
-			transitions = worldState.PendingStateChanges.Values.ToList();
+			foreach (var t in worldState.PendingStateChanges.Values)
+			{
+				transitions.Add(t);
+			}
 			worldState.PendingStateChanges.Clear();
-			detectors = worldState.StateChangeDetectors.ToList();
+			foreach (var d in worldState.StateChangeDetectors)
+			{
+				detectors.Add(d);
+			}
 			worldState.StatesProcessedThisFrame.Clear();
 		}
-		foreach (var transition in transitions)
+		foreach (var transition in transitions.AsSpan)
 		{
 			transition.Apply(_world);
 		}
-		foreach (var detector in detectors)
+		foreach (var detector in detectors.AsSpan)
 		{
 			detector.Detect();
 		}

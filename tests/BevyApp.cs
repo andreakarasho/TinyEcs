@@ -2035,5 +2035,122 @@ namespace TinyEcs.Tests
 			using var world = new World();
 			Assert.NotNull(world);
 		}
+
+		private enum PooledListSnapshotState
+		{
+			Idle,
+			Active
+		}
+
+		private readonly record struct PooledListEvent(int Value);
+
+		[Fact]
+		public void HotPathSnapshotsUsingPooledListPreserveBehavior()
+		{
+			// Regression: EventChannel.Flush, ProcessStateTransitions, and ProcessEvents
+			// were converted from List<T>.ToList() snapshots to ArrayPool-backed
+			// PooledList<T> snapshots. Behavior must be identical to the prior
+			// implementation across event dispatch and state transition handling.
+			using var world = new World();
+			var app = new App(world);
+
+			// Multiple resources to exercise general App plumbing alongside the hot paths.
+			app.AddResource(new ScoreTracker { Baseline = 10 });
+			app.AddResource(new MutableCounter { Value = 0 });
+
+			// State enum: alternate frames will queue transitions.
+			app.AddState(PooledListSnapshotState.Idle);
+
+			var enterIdleCount = 0;
+			var exitIdleCount = 0;
+			var enterActiveCount = 0;
+			var exitActiveCount = 0;
+
+			app.AddSystem(w => enterIdleCount++)
+				.OnEnter(PooledListSnapshotState.Idle)
+				.Build();
+			app.AddSystem(w => exitIdleCount++)
+				.OnExit(PooledListSnapshotState.Idle)
+				.Build();
+			app.AddSystem(w => enterActiveCount++)
+				.OnEnter(PooledListSnapshotState.Active)
+				.Build();
+			app.AddSystem(w => exitActiveCount++)
+				.OnExit(PooledListSnapshotState.Active)
+				.Build();
+
+			// Two observers on the same event type — exercises the observersSnapshot
+			// PooledList path in EventChannel<T>.Flush.
+			var observerA = new List<int>();
+			var observerB = new List<int>();
+			app.AddObserver<PooledListEvent>(evt => observerA.Add(evt.Value));
+			app.AddObserver<PooledListEvent>(evt => observerB.Add(evt.Value));
+
+			// 5 frames; each frame writes 2 events; every other frame queues a
+			// state transition. After 5 frames we should have 10 events total.
+			var nextValue = 0;
+			var frameIndex = 0;
+			var writerEnabled = true;
+			app.AddSystem((TinyEcs.Bevy.EventWriter<PooledListEvent> writer) =>
+			{
+				if (!writerEnabled) return;
+				writer.Send(new PooledListEvent(nextValue++));
+				writer.Send(new PooledListEvent(nextValue++));
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			for (var i = 0; i < 5; i++)
+			{
+				if ((frameIndex & 1) == 1)
+				{
+					var current = world.GetState<PooledListSnapshotState>();
+					world.SetState(current == PooledListSnapshotState.Idle
+						? PooledListSnapshotState.Active
+						: PooledListSnapshotState.Idle);
+				}
+				app.Run();
+				frameIndex++;
+			}
+
+			// Observers fire on Flush, which is called from ProcessEvents at the
+			// end of Run, so all 10 events should have been delivered to both
+			// observers already.
+			Assert.Equal(10, observerA.Count);
+			Assert.Equal(10, observerB.Count);
+			Assert.Equal(observerA, observerB);
+
+			// Disable the writer so the smoke runs below produce no events.
+			writerEnabled = false;
+
+			// State transitions: frames at frameIndex==1 and frameIndex==3 queued
+			// a transition each. The initial frame fires OnEnter(Idle) once.
+			// - Frame 0: enter Idle (initial)
+			// - Frame 1: Idle -> Active (exit Idle, enter Active)
+			// - Frame 2: no transition
+			// - Frame 3: Active -> Idle (exit Active, enter Idle)
+			// - Frame 4: no transition
+			Assert.Equal(2, enterIdleCount);
+			Assert.Equal(1, exitIdleCount);
+			Assert.Equal(1, enterActiveCount);
+			Assert.Equal(1, exitActiveCount);
+
+			// Smoke test: extra runs with no events queued / no transitions
+			// pending must not throw. Verifies the haveWork early-return and
+			// the zero-capacity rent paths.
+			app.Run();
+			app.Run();
+			app.Run();
+
+			// No new state-transition firings.
+			Assert.Equal(2, enterIdleCount);
+			Assert.Equal(1, exitIdleCount);
+			Assert.Equal(1, enterActiveCount);
+			Assert.Equal(1, exitActiveCount);
+
+			// Observer counts must not have grown (no events written in idle frames).
+			Assert.Equal(10, observerA.Count);
+			Assert.Equal(10, observerB.Count);
+		}
 	}
 }
