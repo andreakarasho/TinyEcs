@@ -278,12 +278,22 @@ public class EventReader<T> : ISystemParam where T : notnull
 	}
 
 	/// <summary>
-	/// Iterate over all events of type T that occurred since the last fetch
+	/// Iterate over all events of type T that occurred since the last fetch.
+	/// Allocates a heap enumerator on foreach — prefer <see cref="AsSpan"/> or
+	/// <see cref="GetEnumerator"/> for hot paths.
 	/// </summary>
-	public IEnumerable<T> Read()
-	{
-		return _events;
-	}
+	public IEnumerable<T> Read() => _events;
+
+	/// <summary>
+	/// Zero-allocation span view over current events. Lifetime: valid until next Fetch.
+	/// </summary>
+	public ReadOnlySpan<T> AsSpan() =>
+		System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_events);
+
+	/// <summary>
+	/// Non-allocating enumerator. Use directly in foreach: <c>foreach (var e in reader)</c>.
+	/// </summary>
+	public List<T>.Enumerator GetEnumerator() => _events.GetEnumerator();
 
 	/// <summary>
 	/// Check if any events of this type were sent
