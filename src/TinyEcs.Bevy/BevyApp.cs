@@ -441,6 +441,7 @@ public class App
 	internal readonly TinyEcs.World _world;
 	private readonly AppState _appState = new();
 	private readonly ThreadingMode _threadingMode;
+	private readonly bool _multipleProcessors;
 	internal readonly Dictionary<Stage, StageRuntime> _stageRuntimes = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
@@ -464,6 +465,7 @@ public class App
 	{
 		_world = world;
 		_threadingMode = threadingMode;
+		_multipleProcessors = Environment.ProcessorCount > 1;
 
 		// Initialize Startup stage (runs once)
 		AddStage(Stage.Startup);
@@ -1005,12 +1007,17 @@ public class App
 				if (appState.StatesProcessedThisFrame.Contains(type))
 					return;
 
-				if (!_app.StateChanged<TState>())
+				// Manual StateChanged check — avoid re-entering the lock.
+				if (!appState.States.TryGetValue(type, out var currentObj))
+					return;
+				if (appState.PreviousStates.TryGetValue(type, out var previousObj) && currentObj.Equals(previousObj))
 					return;
 
 				appState.StatesProcessedThisFrame.Add(type);
-				previousState = _app.GetPreviousState<TState>();
-				currentState = _app.HasState<TState>() ? _app.GetState<TState>() : (TState?)null;
+
+				// Unbox while holding the lock. previousObj may be null when no prior state exists.
+				previousState = previousObj is TState p ? p : (TState?)null;
+				currentState = (TState)currentObj;
 			}
 
 			if (previousState.HasValue && _app._onExitSystems.TryGetValue(type, out var exitDict))
@@ -1116,7 +1123,7 @@ public class App
 		{
 			ThreadingMode.Single => false,
 			ThreadingMode.Multi => true,
-			ThreadingMode.Auto => Environment.ProcessorCount > 1,
+			ThreadingMode.Auto => _multipleProcessors,
 			_ => false
 		};
 
