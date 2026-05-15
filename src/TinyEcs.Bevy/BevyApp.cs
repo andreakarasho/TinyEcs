@@ -139,7 +139,7 @@ internal interface IStateChangeDetector
 	void Detect();
 }
 
-internal class WorldState
+internal class AppState
 {
 	public object SyncRoot { get; } = new object();
 	public Dictionary<Type, object> Resources { get; } = new();
@@ -426,15 +426,14 @@ public interface ISystemConfigurator
 public class App
 {
 	internal readonly TinyEcs.World _world;
-	private readonly WorldState _appState = new();
+	private readonly AppState _appState = new();
 	private readonly ThreadingMode _threadingMode;
 	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
+	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
 	private SystemDescriptor? _previousSystem = null;
 	private readonly HashSet<Type> _installedPlugins = new();
-
-	internal WorldState AppState => _appState;
 
 	// State transition systems - use object as key to store boxed enum values (no toString() allocation)
 	internal readonly Dictionary<Type, Dictionary<object, List<SystemDescriptor>>> _onEnterSystems = new();
@@ -514,7 +513,7 @@ public class App
 	// ------------------------------------------------------------------
 	// App-side Bevy state API
 	//
-	// These methods read/write the App's own WorldState instance directly.
+	// These methods read/write the App's own AppState instance directly.
 	// The World no longer carries any Bevy state slot — all resources,
 	// events, and state machines live on the App.
 	// ------------------------------------------------------------------
@@ -581,10 +580,7 @@ public class App
 	/// </summary>
 	public void RemoveResource<T>() where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			_appState.Resources.Remove(typeof(T));
-		}
+		RemoveResourceCore(typeof(T));
 	}
 
 	/// <summary>
@@ -593,9 +589,14 @@ public class App
 	/// </summary>
 	internal void RemoveResourceByType(Type resourceType)
 	{
+		RemoveResourceCore(resourceType);
+	}
+
+	private bool RemoveResourceCore(Type type)
+	{
 		lock (_appState.SyncRoot)
 		{
-			_appState.Resources.Remove(resourceType);
+			return _appState.Resources.Remove(type);
 		}
 	}
 
@@ -615,7 +616,12 @@ public class App
 		GetOrCreateEventChannel<T>().RegisterObserver(observer);
 	}
 
-	private EventChannel<T> GetOrCreateEventChannel<T>() where T : notnull
+	/// <summary>
+	/// Lazily fetch (or create) the event channel for <typeparamref name="T"/>.
+	/// Used by both App-level event send/observer registration and by App-aware
+	/// system parameters (EventReader/EventWriter).
+	/// </summary>
+	internal EventChannel<T> GetOrCreateEventChannel<T>() where T : notnull
 	{
 		lock (_appState.SyncRoot)
 		{
@@ -629,13 +635,6 @@ public class App
 			return (EventChannel<T>)channelObj;
 		}
 	}
-
-	/// <summary>
-	/// Internal accessor used by App-aware system parameters (EventReader/EventWriter)
-	/// to obtain or lazily create the event channel directly from <see cref="_appState"/>.
-	/// </summary>
-	internal EventChannel<T> GetOrCreateEventChannelInternal<T>() where T : notnull
-		=> GetOrCreateEventChannel<T>();
 
 	/// <summary>
 	/// Immediately set the current state of <typeparamref name="TState"/>.
@@ -797,15 +796,14 @@ public class App
 
 	internal StageDescriptor GetOrCreateStageDescriptor(Stage stage)
 	{
-		if (!_stageSystems.ContainsKey(stage))
-		{
-			_stageSystems[stage] = new List<SystemDescriptor>();
-			var descriptor = new StageDescriptor(stage);
-			_stageDescriptors.Add(descriptor);
-			return descriptor;
-		}
+		if (_stageDescriptorByStage.TryGetValue(stage, out var existing))
+			return existing;
 
-		return _stageDescriptors.First(d => d.Stage == stage);
+		_stageSystems[stage] = new List<SystemDescriptor>();
+		var descriptor = new StageDescriptor(stage);
+		_stageDescriptors.Add(descriptor);
+		_stageDescriptorByStage[stage] = descriptor;
+		return descriptor;
 	}
 
 	public StageConfigurator AddStage(Stage stage)
@@ -820,7 +818,7 @@ public class App
 
 		if (_installedPlugins.Contains(pluginType))
 		{
-			Console.WriteLine($"Warning: Plugin {pluginType.Name} already installed. Skipping.");
+			// Silently skip duplicate plugin installs to avoid library Console output.
 			return this;
 		}
 
@@ -839,13 +837,7 @@ public class App
 	/// </summary>
 	public ISystemStageSelector AddSystem(ISystem system)
 	{
-		// Wire ParameterizedSystem to this App so its params can fetch from AppState directly.
-		if (system is ParameterizedSystem ps)
-			ps.SetApp(this);
-
-		var descriptor = new SystemDescriptor(system);
-		var previous = _previousSystem;
-		_previousSystem = descriptor;
+		var (descriptor, previous) = RegisterSystem(system);
 		return new SystemConfigurator(this, descriptor, previous);
 	}
 
@@ -854,14 +846,26 @@ public class App
 	/// </summary>
 	public App AddSystem(Stage stage, ISystem system)
 	{
+		var (descriptor, _) = RegisterSystem(system);
+		AddSystemToStage(stage, descriptor);
+		return this;
+	}
+
+	/// <summary>
+	/// Common path for both AddSystem overloads: wire ParameterizedSystem to this App,
+	/// create a fresh descriptor, advance the _previousSystem chain (used by .Chain()),
+	/// and return both the new descriptor and the prior one.
+	/// </summary>
+	private (SystemDescriptor Descriptor, SystemDescriptor? Previous) RegisterSystem(ISystem system)
+	{
 		// Wire ParameterizedSystem to this App so its params can fetch from AppState directly.
 		if (system is ParameterizedSystem ps)
 			ps.SetApp(this);
 
 		var descriptor = new SystemDescriptor(system);
-		AddSystemToStage(stage, descriptor);
+		var previous = _previousSystem;
 		_previousSystem = descriptor;
-		return this;
+		return (descriptor, previous);
 	}
 
 	public App AddObserver<T>(Action<T> observer) where T : notnull

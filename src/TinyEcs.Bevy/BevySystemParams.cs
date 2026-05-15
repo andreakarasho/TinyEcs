@@ -266,14 +266,14 @@ public class EventReader<T> : ISystemParam where T : notnull
 
 	public void Initialize(App app)
 	{
-		_channel = app.GetOrCreateEventChannelInternal<T>();
+		_channel = app.GetOrCreateEventChannel<T>();
 	}
 
 	public void Fetch(App app)
 	{
 		_events.Clear();
 		if (_channel is null)
-			_channel = app.GetOrCreateEventChannelInternal<T>();
+			_channel = app.GetOrCreateEventChannel<T>();
 		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
@@ -317,13 +317,13 @@ public class EventWriter<T> : ISystemParam where T : notnull
 
 	public void Initialize(App app)
 	{
-		_channel = app.GetOrCreateEventChannelInternal<T>();
+		_channel = app.GetOrCreateEventChannel<T>();
 	}
 
 	public void Fetch(App app)
 	{
 		if (_channel is null)
-			_channel = app.GetOrCreateEventChannelInternal<T>();
+			_channel = app.GetOrCreateEventChannel<T>();
 	}
 
 	/// <summary>
@@ -356,23 +356,24 @@ public class EventWriter<T> : ISystemParam where T : notnull
 /// </summary>
 public class Commands : ISystemParam
 {
-	private TinyEcs.World? _world;
 	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
 	private readonly List<ulong> _spawnedEntityIds = new();
 
 	internal App? App => _app;
 
+	// One indirection per use — acceptable because these are user-driven calls,
+	// not per-frame hot loops.
+	private TinyEcs.World World => _app!.GetWorld();
+
 	public void Initialize(App app)
 	{
 		_app = app;
-		_world = app.GetWorld();
 	}
 
 	public void Fetch(App app)
 	{
 		_app = app;
-		_world = app.GetWorld();
 		_localCommands.Clear();
 		_spawnedEntityIds.Clear();
 	}
@@ -398,9 +399,10 @@ public class Commands : ISystemParam
 		// earlier commands in the same batch should rely on synchronously-updated
 		// sources (e.g. RelationshipEntityMapper for parent lookups), not on archetype
 		// component storage which lags until EndDeferred drains.
+		var world = World;
 		foreach (var cmd in _localCommands)
 		{
-			cmd.Execute(_world!, this);
+			cmd.Execute(world, this);
 		}
 
 		_localCommands.Clear();
@@ -417,12 +419,12 @@ public class Commands : ISystemParam
 	/// </summary>
 	public EntityCommands Spawn()
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
 		// Spawn the entity immediately to get the real ID
 		// This is safe because systems with Commands never run in parallel
-		var entity = _world.Entity();
+		var entity = World.Entity();
 		ulong entityId = entity.ID;
 
 		// Component insertions are still deferred for thread-safety
@@ -463,10 +465,10 @@ public class Commands : ISystemParam
 	/// </summary>
 	public bool TryEntity(ulong entityId, out EntityCommands entityCommands)
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
-		if (_world.Exists(entityId))
+		if (World.Exists(entityId))
 		{
 			entityCommands = new EntityCommands(this, entityId);
 			return true;
@@ -482,10 +484,10 @@ public class Commands : ISystemParam
 	/// </summary>
 	public bool Exists(ulong entityId)
 	{
-		if (_world == null)
+		if (_app == null)
 			throw new InvalidOperationException("Commands has not been initialized.");
 
-		return _world.Exists(entityId);
+		return World.Exists(entityId);
 	}
 
 	/// <summary>
