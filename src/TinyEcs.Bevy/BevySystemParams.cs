@@ -25,6 +25,18 @@ public interface ISystemParam
 }
 
 /// <summary>
+/// Optional marker for system parameters that can receive the owning <see cref="App"/>.
+/// When set, the parameter is expected to read/write from <c>app.AppState</c> directly
+/// instead of going through <c>WorldExtensions.GetState()</c>. The <c>World</c> path
+/// remains as a fallback when <see cref="SetApp(App)"/> has not been called (e.g. when
+/// the parameter is used outside of the Bevy scheduler).
+/// </summary>
+internal interface IAppAwareParam
+{
+	void SetApp(App app);
+}
+
+/// <summary>
 /// Describes what resources a system parameter accesses
 /// </summary>
 public class SystemParamAccess
@@ -70,9 +82,12 @@ internal readonly struct DeferredEntityRef
 /// <summary>
 /// Immutable reference to a resource. Use for read-only access.
 /// </summary>
-public class Res<T> : ISystemParam where T : notnull
+public class Res<T> : ISystemParam, IAppAwareParam where T : notnull
 {
 	private ResourceBox<T>? _box;
+	private App? _app;
+
+	void IAppAwareParam.SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -81,7 +96,9 @@ public class Res<T> : ISystemParam where T : notnull
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_box = world.GetResourceBox<T>();
+		_box = _app != null
+			? _app.GetResourceBoxInternal<T>()
+			: world.GetResourceBox<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -109,9 +126,12 @@ public class Res<T> : ISystemParam where T : notnull
 /// <summary>
 /// Mutable reference to a resource. Use when you need to modify it.
 /// </summary>
-public class ResMut<T> : ISystemParam where T : notnull
+public class ResMut<T> : ISystemParam, IAppAwareParam where T : notnull
 {
 	private ResourceBox<T>? _box;
+	private App? _app;
+
+	void IAppAwareParam.SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
@@ -120,7 +140,9 @@ public class ResMut<T> : ISystemParam where T : notnull
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_box = world.GetResourceBox<T>();
+		_box = _app != null
+			? _app.GetResourceBoxInternal<T>()
+			: world.GetResourceBox<T>();
 	}
 
 	public SystemParamAccess GetAccess()
@@ -181,22 +203,25 @@ public class Local<T> : ISystemParam where T : new()
 /// Reads events of type T from the event queue.
 /// Events are consumed after being read.
 /// </summary>
-public class EventReader<T> : ISystemParam where T : notnull
+public class EventReader<T> : ISystemParam, IAppAwareParam where T : notnull
 {
 	private EventChannel<T>? _channel;
+	private App? _app;
 	private readonly List<T> _events = new();
 	private ulong _lastEpoch = ulong.MaxValue;
 	private int _lastReadIndex;
 
+	void IAppAwareParam.SetApp(App app) => _app = app;
+
 	public void Initialize(TinyEcs.World world)
 	{
-		_channel = world.GetEventChannel<T>();
+		_channel = _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
 		_events.Clear();
-		_channel ??= world.GetEventChannel<T>();
+		_channel ??= _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
 		_channel.CopyEvents(ref _lastEpoch, ref _lastReadIndex, _events);
 	}
 
@@ -234,18 +259,21 @@ public class EventReader<T> : ISystemParam where T : notnull
 /// Writes events of type T to the event queue.
 /// Events will be processed at the end of the current stage.
 /// </summary>
-public class EventWriter<T> : ISystemParam where T : notnull
+public class EventWriter<T> : ISystemParam, IAppAwareParam where T : notnull
 {
 	private EventChannel<T>? _channel;
+	private App? _app;
+
+	void IAppAwareParam.SetApp(App app) => _app = app;
 
 	public void Initialize(TinyEcs.World world)
 	{
-		_channel = world.GetEventChannel<T>();
+		_channel = _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
 	}
 
 	public void Fetch(TinyEcs.World world)
 	{
-		_channel ??= world.GetEventChannel<T>();
+		_channel ??= _app != null ? _app.GetOrCreateEventChannelInternal<T>() : world.GetEventChannel<T>();
 	}
 
 	/// <summary>
@@ -1227,11 +1255,27 @@ public class ParameterizedSystem : ISystem
 	private readonly ISystemParam[] _parameters;
 	private bool _initialized = false;
 	private SystemParamAccess? _cachedAccess;
+	private App? _app;
 
 	public ParameterizedSystem(Action<TinyEcs.World> systemFn, params ISystemParam[] parameters)
 	{
 		_systemFn = systemFn;
 		_parameters = parameters;
+	}
+
+	/// <summary>
+	/// Attach the owning <see cref="App"/> to this system and propagate it to any
+	/// parameters that opt-in via <see cref="IAppAwareParam"/>. Safe to call once
+	/// during system registration; subsequent calls overwrite the previous app.
+	/// </summary>
+	internal void SetApp(App app)
+	{
+		_app = app;
+		foreach (var param in _parameters)
+		{
+			if (param is IAppAwareParam aware)
+				aware.SetApp(app);
+		}
 	}
 
 	public void Run(TinyEcs.World world)

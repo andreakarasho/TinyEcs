@@ -374,31 +374,68 @@ internal sealed class ResourceBox<T> where T : notnull
 
 public sealed class State<TState> where TState : struct, Enum
 {
-	private readonly TinyEcs.World _world;
+	// State/NextState can be constructed against either a World (legacy path used
+	// when AddState runs before the App exists, e.g. via WorldExtensions) or an
+	// App (preferred during Bevy registration). When _app is set, all accessors
+	// route through App.AppState directly; otherwise the World extensions are used.
+	private readonly TinyEcs.World? _world;
+	private readonly App? _app;
 
 	internal State(TinyEcs.World world)
 	{
 		_world = world;
 	}
 
-	public TState Current => _world.GetState<TState>();
-	public TState Previous => _world.GetPreviousState<TState>() ?? _world.GetState<TState>();
-	public bool IsChanged => _world.StateChanged<TState>();
-	public bool IsQueued => _world.HasQueuedState<TState>();
+	internal State(App app)
+	{
+		_app = app;
+		_world = app._world;
+	}
+
+	public TState Current => _app != null ? _app.GetState<TState>() : _world!.GetState<TState>();
+	public TState Previous
+	{
+		get
+		{
+			if (_app != null)
+			{
+				// Prefer App-side previous-state lookup; falls back to current when no previous recorded.
+				return _app._world.GetPreviousState<TState>() ?? _app.GetState<TState>();
+			}
+			var w = _world!;
+			return w.GetPreviousState<TState>() ?? w.GetState<TState>();
+		}
+	}
+	public bool IsChanged => (_app?._world ?? _world!).StateChanged<TState>();
+	public bool IsQueued => (_app?._world ?? _world!).HasQueuedState<TState>();
 }
 
 public sealed class NextState<TState> where TState : struct, Enum
 {
-	private readonly TinyEcs.World _world;
+	private readonly TinyEcs.World? _world;
+	private readonly App? _app;
 
 	internal NextState(TinyEcs.World world)
 	{
 		_world = world;
 	}
 
-	public void Set(TState nextState) => _world.QueueState(nextState);
-	public bool IsQueued => _world.HasQueuedState<TState>();
-	public void Clear() => _world.ClearQueuedState<TState>();
+	internal NextState(App app)
+	{
+		_app = app;
+		_world = app._world;
+	}
+
+	public void Set(TState nextState)
+	{
+		if (_app != null)
+			_app.QueueState(nextState);
+		else
+			_world!.QueueState(nextState);
+	}
+
+	public bool IsQueued => (_app?._world ?? _world!).HasQueuedState<TState>();
+	public void Clear() => (_app?._world ?? _world!).ClearQueuedState<TState>();
 }
 
 internal interface IQueuedStateTransition
@@ -773,6 +810,22 @@ public class App
 	}
 
 	/// <summary>
+	/// Internal accessor used by App-aware system parameters to obtain the
+	/// resource box directly from <see cref="_appState"/> without going through
+	/// the world-extension shim.
+	/// </summary>
+	internal ResourceBox<T> GetResourceBoxInternal<T>() where T : notnull
+	{
+		lock (_appState.SyncRoot)
+		{
+			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+
+			return (ResourceBox<T>)boxed;
+		}
+	}
+
+	/// <summary>
 	/// Remove a previously-added resource of type <typeparamref name="T"/>.
 	/// </summary>
 	public void RemoveResource<T>() where T : notnull
@@ -813,6 +866,13 @@ public class App
 			return (EventChannel<T>)channelObj;
 		}
 	}
+
+	/// <summary>
+	/// Internal accessor used by App-aware system parameters (EventReader/EventWriter)
+	/// to obtain or lazily create the event channel directly from <see cref="_appState"/>.
+	/// </summary>
+	internal EventChannel<T> GetOrCreateEventChannelInternal<T>() where T : notnull
+		=> GetOrCreateEventChannel<T>();
 
 	/// <summary>
 	/// Immediately set the current state of <typeparamref name="TState"/>.
@@ -885,12 +945,15 @@ public class App
 
 		if (!_world.HasResource<State<TState>>())
 		{
-			_world.AddResource(new State<TState>(_world));
+			// Use the App-based constructor so State<T> reads from this App's AppState
+			// directly (the shared _appState is still attached to the World, so World-side
+			// state reads remain consistent).
+			_world.AddResource(new State<TState>(this));
 		}
 
 		if (!_world.HasResource<NextState<TState>>())
 		{
-			_world.AddResource(new NextState<TState>(_world));
+			_world.AddResource(new NextState<TState>(this));
 		}
 
 		return this;
@@ -940,6 +1003,10 @@ public class App
 	/// </summary>
 	public ISystemStageSelector AddSystem(ISystem system)
 	{
+		// Wire ParameterizedSystem to this App so its params can fetch from AppState directly.
+		if (system is ParameterizedSystem ps)
+			ps.SetApp(this);
+
 		var descriptor = new SystemDescriptor(system);
 		var previous = _previousSystem;
 		_previousSystem = descriptor;
@@ -951,6 +1018,10 @@ public class App
 	/// </summary>
 	public App AddSystem(Stage stage, ISystem system)
 	{
+		// Wire ParameterizedSystem to this App so its params can fetch from AppState directly.
+		if (system is ParameterizedSystem ps)
+			ps.SetApp(this);
+
 		var descriptor = new SystemDescriptor(system);
 		AddSystemToStage(stage, descriptor);
 		_previousSystem = descriptor;
