@@ -583,10 +583,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Insert<T>(T component) where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, component));
-		else
-			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, component));
+		_commands.QueueCommand(new InsertComponentCommand<T>(ToDeferredRef(), component));
 		return this;
 	}
 
@@ -595,10 +592,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Insert<T>() where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new InsertComponentCommand<T>(_commands, _spawnIndex, default));
-		else
-			_commands.QueueCommand(new InsertComponentCommand<T>(_entityId, default));
+		_commands.QueueCommand(new InsertComponentCommand<T>(ToDeferredRef(), default));
 		return this;
 	}
 
@@ -607,10 +601,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly EntityCommands Remove<T>() where T : struct
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new RemoveComponentCommand<T>(_commands, _spawnIndex));
-		else
-			_commands.QueueCommand(new RemoveComponentCommand<T>(_entityId));
+		_commands.QueueCommand(new RemoveComponentCommand<T>(ToDeferredRef()));
 		return this;
 	}
 
@@ -652,10 +643,7 @@ public ref struct EntityCommands
 	/// </summary>
 	public readonly void Despawn()
 	{
-		if (_spawnIndex >= 0)
-			_commands.QueueCommand(new DespawnEntityCommand(_commands, _spawnIndex));
-		else
-			_commands.QueueCommand(new DespawnEntityCommand(_entityId));
+		_commands.QueueCommand(new DespawnEntityCommand(ToDeferredRef()));
 	}
 
 	/// <summary>
@@ -742,29 +730,18 @@ internal readonly struct SpawnEntityCommand : IDeferredCommand
 /// </summary>
 internal readonly struct InsertComponentCommand<T> : IComponentCommand where T : struct
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 	private readonly T _component;
 
-	// Constructor for spawned entities (uses index)
-	public InsertComponentCommand(Commands commands, int spawnIndex, T component)
+	public InsertComponentCommand(DeferredEntityRef entityRef, T component)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-		_component = component;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public InsertComponentCommand(ulong entityId, T component)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 		_component = component;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		world.Set(entityId, _component);
 	}
 }
@@ -774,26 +751,16 @@ internal readonly struct InsertComponentCommand<T> : IComponentCommand where T :
 /// </summary>
 internal readonly struct RemoveComponentCommand<T> : IComponentCommand where T : struct
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 
-	// Constructor for spawned entities (uses index)
-	public RemoveComponentCommand(Commands commands, int spawnIndex)
+	public RemoveComponentCommand(DeferredEntityRef entityRef)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public RemoveComponentCommand(ulong entityId)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		world.Unset<T>(entityId);
 	}
 }
@@ -803,26 +770,16 @@ internal readonly struct RemoveComponentCommand<T> : IComponentCommand where T :
 /// </summary>
 internal readonly struct DespawnEntityCommand : IDeferredCommand
 {
-	private readonly int _spawnIndex; // -1 if existing entity
-	private readonly ulong _entityId;
+	private readonly DeferredEntityRef _entityRef;
 
-	// Constructor for spawned entities (uses index)
-	public DespawnEntityCommand(Commands commands, int spawnIndex)
+	public DespawnEntityCommand(DeferredEntityRef entityRef)
 	{
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-	}
-
-	// Constructor for existing entities (uses direct ID)
-	public DespawnEntityCommand(ulong entityId)
-	{
-		_spawnIndex = -1;
-		_entityId = entityId;
+		_entityRef = entityRef;
 	}
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var entityId = _spawnIndex >= 0 ? commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+		var entityId = commands.ResolveEntityId(_entityRef);
 		if (world.Exists(entityId))
 			world.Delete(entityId);
 	}

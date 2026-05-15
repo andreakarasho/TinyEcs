@@ -344,6 +344,81 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void DeferredCommandsUnifyEntityRef_SpawnedAndExistingPathsBothWork()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			// Pre-create two existing entities the commands will operate on by id
+			var existingForInsert = world.Entity().ID;
+			var existingForDespawn = world.Entity().ID;
+
+			var spawnedIds = new List<ulong>();
+			app.AddResource(spawnedIds);
+
+			// First system spawns one entity (Insert via spawn path) and inserts on an existing entity (Insert via id path).
+			var insertSystem = SystemFunctionAdapters.Create<Commands, ResMut<List<ulong>>>((commands, ids) =>
+			{
+				var spawned = commands.Spawn().Insert(new Position { X = 1 });
+				// We cannot read the id yet (deferred); capture via observer below.
+				_ = spawned;
+
+				commands.Entity(existingForInsert).Insert(new Position { X = 2 });
+			});
+
+			app.AddObserver<OnSpawn>((_, trigger) => spawnedIds.Add(trigger.EntityId));
+
+			app.AddSystem(insertSystem)
+				.InStage(Stage.Update)
+				.Label("InsertPhase")
+				.Build();
+
+			app.Run();
+
+			// Both insertions should have landed.
+			Assert.Single(spawnedIds);
+			var spawnedId = spawnedIds[0];
+
+			Assert.True(world.Has<Position>(spawnedId));
+			Assert.Equal(1, world.Get<Position>(spawnedId).X);
+
+			Assert.True(world.Has<Position>(existingForInsert));
+			Assert.Equal(2, world.Get<Position>(existingForInsert).X);
+
+			// Second system despawns one via spawn-path EntityCommands and one via id-path EntityCommands.
+			var spawnedToDespawn = 0UL;
+			var despawnSystem = SystemFunctionAdapters.Create<Commands>(commands =>
+			{
+				var freshSpawn = commands.Spawn().Insert(new Position { X = 3 });
+				freshSpawn.Despawn(); // spawn-path despawn
+
+				commands.Entity(existingForDespawn).Despawn(); // id-path despawn
+			});
+
+			// Capture id of the freshly-spawned-then-despawned entity to confirm it's gone.
+			app.AddObserver<OnSpawn>((_, trigger) =>
+			{
+				// The new spawn during the despawn phase
+				spawnedToDespawn = trigger.EntityId;
+			});
+
+			app.AddSystem(despawnSystem)
+				.InStage(Stage.PostUpdate)
+				.Build();
+
+			app.Run();
+
+			// Both despawns succeeded
+			Assert.False(world.Exists(existingForDespawn));
+			Assert.NotEqual(0UL, spawnedToDespawn);
+			Assert.False(world.Exists(spawnedToDespawn));
+
+			// The earlier spawned entity (from first run) is untouched.
+			Assert.True(world.Exists(spawnedId));
+			Assert.True(world.Exists(existingForInsert));
+		}
+
+		[Fact]
 		public void EventReaderReceivesEventsOnFollowingFrame()
 		{
 			using var world = new World();
