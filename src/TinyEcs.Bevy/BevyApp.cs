@@ -425,10 +425,23 @@ public interface ISystemConfigurator
 
 public class App
 {
+	/// <summary>
+	/// Per-stage runtime state: raw system list, topologically sorted view,
+	/// and the cached parallel-batch plan. Consolidates what used to be three
+	/// parallel dictionaries (raw systems, sorted, cached batches) all keyed
+	/// on <see cref="Stage"/>.
+	/// </summary>
+	internal sealed class StageRuntime
+	{
+		public readonly List<SystemDescriptor> Systems = new();
+		public List<SystemDescriptor>? Sorted;
+		public List<List<SystemDescriptor>>? Batches;
+	}
+
 	internal readonly TinyEcs.World _world;
 	private readonly AppState _appState = new();
 	private readonly ThreadingMode _threadingMode;
-	internal readonly Dictionary<Stage, List<SystemDescriptor>> _stageSystems = new();
+	internal readonly Dictionary<Stage, StageRuntime> _stageRuntimes = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
 	private readonly Dictionary<string, SystemDescriptor> _labeledSystems = new();
@@ -445,8 +458,6 @@ public class App
 
 	// Cached sorted results - computed once after app is built
 	private List<StageDescriptor>? _sortedStages = null;
-	private readonly Dictionary<Stage, List<SystemDescriptor>> _sortedStageSystems = new();
-	private readonly Dictionary<Stage, List<List<SystemDescriptor>>> _cachedBatches = new();
 	private bool _executionOrderDirty = false;
 
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
@@ -481,8 +492,11 @@ public class App
 		// Clear caches if rebuilding
 		if (_executionOrderDirty)
 		{
-			_sortedStageSystems.Clear();
-			_cachedBatches.Clear();
+			foreach (var runtime in _stageRuntimes.Values)
+			{
+				runtime.Sorted = null;
+				runtime.Batches = null;
+			}
 			_executionOrderDirty = false;
 		}
 
@@ -490,13 +504,13 @@ public class App
 		_sortedStages = TopologicalSortStages();
 
 		// Sort systems for each stage once and build parallel batches
-		foreach (var (stage, systems) in _stageSystems)
+		foreach (var (_, runtime) in _stageRuntimes)
 		{
-			if (systems.Count > 0)
+			if (runtime.Systems.Count > 0)
 			{
-				var sortedSystems = TopologicalSortSystems(systems);
-				_sortedStageSystems[stage] = sortedSystems;
-				_cachedBatches[stage] = BuildParallelBatches(sortedSystems);
+				var sortedSystems = TopologicalSortSystems(runtime.Systems);
+				runtime.Sorted = sortedSystems;
+				runtime.Batches = BuildParallelBatches(sortedSystems);
 			}
 		}
 	}
@@ -799,7 +813,7 @@ public class App
 		if (_stageDescriptorByStage.TryGetValue(stage, out var existing))
 			return existing;
 
-		_stageSystems[stage] = new List<SystemDescriptor>();
+		_stageRuntimes[stage] = new StageRuntime();
 		var descriptor = new StageDescriptor(stage);
 		_stageDescriptors.Add(descriptor);
 		_stageDescriptorByStage[stage] = descriptor;
@@ -876,12 +890,12 @@ public class App
 
 	internal void AddSystemToStage(Stage stage, SystemDescriptor descriptor)
 	{
-		if (!_stageSystems.ContainsKey(stage))
+		if (!_stageRuntimes.ContainsKey(stage))
 		{
 			AddStage(stage);
 		}
 		descriptor.Stage = stage; // Set the stage on the descriptor
-		_stageSystems[stage].Add(descriptor);
+		_stageRuntimes[stage].Systems.Add(descriptor);
 
 		// Mark execution order as dirty if systems are added after initial build
 		if (_sortedStages != null)
@@ -1106,11 +1120,15 @@ public class App
 			_ => false
 		};
 
+		if (!_stageRuntimes.TryGetValue(stage, out var runtime))
+			return;
+
 		// In single-threaded mode, skip batching and just run systems in topological order
 		// This preserves declaration order and respects explicit dependencies
 		if (!useParallel)
 		{
-			if (!_sortedStageSystems.TryGetValue(stage, out var systems))
+			var systems = runtime.Sorted;
+			if (systems == null)
 				return;
 
 			foreach (var descriptor in systems)
@@ -1124,7 +1142,8 @@ public class App
 		}
 
 		// Parallel mode: use cached batches (already computed during BuildExecutionOrder)
-		if (!_cachedBatches.TryGetValue(stage, out var batches))
+		var batches = runtime.Batches;
+		if (batches == null)
 			return;
 
 		// Execute each batch (systems within a batch run in parallel)
@@ -1463,7 +1482,7 @@ public class SystemConfigurator : ISystemStageSelector, ISystemConfigurator
 	{
 		if (_stageAssigned && _descriptor.Stage != null)
 		{
-			_app._stageSystems[_descriptor.Stage].Remove(_descriptor);
+			_app._stageRuntimes[_descriptor.Stage].Systems.Remove(_descriptor);
 		}
 
 		_descriptor.Stage = stage;
