@@ -709,6 +709,38 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void RunFrameHelperPreservesStartupAndUpdateSemantics()
+		{
+			// Regression test for the shared RunFrame helper extracted from
+			// RunStartup() and Run(). Verifies that startup systems execute exactly
+			// once and update systems execute on every Run() call.
+			using var world = new World();
+			var app = new App(world, ThreadingMode.Single);
+			var counter = new MutableCounter();
+			app.AddResource(counter);
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value = 1)
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value++)
+				.InStage(Stage.Update)
+				.Build();
+
+			// RunStartup() runs only Stage.Startup -> counter set to 1, Update did not run.
+			app.RunStartup();
+			Assert.Equal(1, counter.Value);
+
+			// Run() must not re-execute Stage.Startup, only Update -> 1 + 1 = 2.
+			app.Run();
+			Assert.Equal(2, counter.Value);
+
+			// Subsequent Run() calls keep advancing the Update counter -> 3.
+			app.Run();
+			Assert.Equal(3, counter.Value);
+		}
+
+		[Fact]
 		public void SystemsRespectAfterOrdering()
 		{
 			using var world = new World();

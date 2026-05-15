@@ -962,37 +962,51 @@ public class App
 
 		_startupHasRun = true;
 
-		// Increment world tick for change detection
-		// This marks all modifications in Startup with tick 1
-		_world.Update();
-
-		ExecuteSystemsParallel(Stage.Startup);
-
-		// Auto-flush observers after startup stage
-		_world.FlushObservers();
-
-		ProcessStateTransitions();
-		_world.ProcessEvents();
+		RunFrame(startup: true);
 	}
 
 	public void Run()
 	{
 		RunStartup();
 
+		RunFrame(startup: false);
+	}
+
+	/// <summary>
+	/// Shared frame execution helper used by both <see cref="RunStartup"/> and <see cref="Run"/>.
+	/// Increments the world tick, executes the appropriate stages (with observer flushes between
+	/// each), then processes pending state transitions and events.
+	/// </summary>
+	/// <param name="startup">
+	/// When <c>true</c>, only <see cref="Stage.Startup"/> is executed. When <c>false</c>, every
+	/// non-startup stage in <see cref="_sortedStages"/> is executed in order.
+	/// </param>
+	private void RunFrame(bool startup)
+	{
 		// Increment world tick for change detection
 		// This marks all modifications in this frame with the new tick
 		_world.Update();
 
-		// Use cached sorted stages (already built in RunStartup)
-		foreach (var stageDesc in _sortedStages!)
+		if (startup)
 		{
-			if (stageDesc.Stage == Stage.Startup)
-				continue;
+			ExecuteSystemsParallel(Stage.Startup);
 
-			ExecuteSystemsParallel(stageDesc.Stage);
-
-			// Auto-flush observers after each stage (like Bevy's apply_deferred)
+			// Auto-flush observers after startup stage
 			_world.FlushObservers();
+		}
+		else
+		{
+			// Use cached sorted stages (already built in RunStartup)
+			foreach (var stageDesc in _sortedStages!)
+			{
+				if (stageDesc.Stage == Stage.Startup)
+					continue;
+
+				ExecuteSystemsParallel(stageDesc.Stage);
+
+				// Auto-flush observers after each stage (like Bevy's apply_deferred)
+				_world.FlushObservers();
+			}
 		}
 
 		ProcessStateTransitions();
