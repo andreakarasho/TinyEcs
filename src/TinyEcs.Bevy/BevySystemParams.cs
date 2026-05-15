@@ -1222,7 +1222,7 @@ internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCom
 /// Standalone Bevy-style query that directly uses the low-level TinyEcs.Query infrastructure.
 /// </summary>
 public class Query<TQueryData> : Query<TQueryData, Empty>
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryComponentAccess, allows ref struct
 {
 	public Query() : base() { }
 }
@@ -1232,7 +1232,7 @@ public class Query<TQueryData> : Query<TQueryData, Empty>
 /// Standalone implementation that bypasses the Bevy.cs Query wrapper.
 /// </summary>
 public class Query<TQueryData, TQueryFilter> : ISystemParam
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryComponentAccess, allows ref struct
 	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
 {
 	private TinyEcs.Query? _lowLevelQuery;
@@ -1367,7 +1367,7 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 }
 
 public class Single<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter>
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryComponentAccess, allows ref struct
 	where TQueryFilter : struct, IFilter<TQueryFilter>, IQueryFilterAccess, allows ref struct
 {
 	public Single() : base() { }
@@ -1386,7 +1386,7 @@ public class Single<TQueryData, TQueryFilter> : Query<TQueryData, TQueryFilter>
 }
 
 public sealed class Single<TQueryData> : Single<TQueryData, Empty>
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, IQueryComponentAccess, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, IQueryComponentAccess, allows ref struct
 {
 }
 
@@ -1398,17 +1398,21 @@ public sealed class Single<TQueryData> : Single<TQueryData, Empty>
 /// Iterator for Bevy-style queries. Wraps QueryIterator and provides typed iteration.
 /// </summary>
 public ref struct BevyQueryIter<TQueryData, TQueryFilter>
-	where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+	where TQueryData : struct, IData<TQueryData>, allows ref struct
 	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 {
-	private TQueryData _dataIterator;
+	// Heavy iteration state lives here inline. The Data row is small and
+	// updated in-place across chunks so the per-element foreach copy stays tiny.
+	private TinyEcs.QueryIterator _iterator;
+	private TQueryData _row;
 	private TQueryFilter _filterIterator;
 
 	internal BevyQueryIter(uint lastTick, uint currentTick, TinyEcs.QueryIterator iterator)
 	{
-		_dataIterator = TQueryData.CreateIterator(iterator);
+		_iterator = iterator;
+		_row = default;
+		// Prime the row to an exhausted-chunk state so the first MoveNext pulls a chunk.
 		_filterIterator = TQueryFilter.CreateIterator(iterator);
-		// Set ticks for change detection (Changed<T>/Added<T> filters)
 		_filterIterator.SetTicks(lastTick, currentTick);
 	}
 
@@ -1416,7 +1420,18 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 	public ref TQueryData Current
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		get => ref _dataIterator;
+		get => ref _row;
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	private bool MoveNextData()
+	{
+		if (TQueryData.TryAdvance(ref _row))
+			return true;
+		if (!_iterator.Next())
+			return false;
+		TQueryData.LoadChunk(ref _row, _iterator);
+		return true;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1424,11 +1439,11 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 	{
 		// JIT constant per specialization — dead-code-eliminates the filter call when no filter is used.
 		if (typeof(TQueryFilter) == typeof(Empty))
-			return _dataIterator.MoveNext();
+			return MoveNextData();
 
 		while (true)
 		{
-			if (!_dataIterator.MoveNext())
+			if (!MoveNextData())
 				return false;
 
 			if (!_filterIterator.MoveNext())
