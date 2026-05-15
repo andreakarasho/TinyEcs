@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -149,11 +150,19 @@ internal interface IStateChangeDetector
 
 internal class AppState
 {
+	// SyncRoot is retained for multi-step atomic operations only:
+	// - SetState (write Previous + write Current as a pair)
+	// - QueueState (read current state then conditionally write pending)
+	// - ProcessStateTransitions (snapshot pending+detectors then clear)
+	// - StateChangeDetector.Detect (atomic processed-set Contains/Add)
+	//
+	// Single-key dictionary reads/writes on the ConcurrentDictionary fields below
+	// no longer need this lock — those collections are independently thread-safe.
 	public object SyncRoot { get; } = new object();
-	public Dictionary<Type, object> Resources { get; } = new();
-	public Dictionary<Type, IEventChannel> EventChannels { get; } = new();
-	public Dictionary<Type, object> States { get; } = new();
-	public Dictionary<Type, object> PreviousStates { get; } = new();
+	public ConcurrentDictionary<Type, object> Resources { get; } = new();
+	public ConcurrentDictionary<Type, IEventChannel> EventChannels { get; } = new();
+	public ConcurrentDictionary<Type, object> States { get; } = new();
+	public ConcurrentDictionary<Type, object> PreviousStates { get; } = new();
 	public HashSet<Type> StatesProcessedThisFrame { get; } = new();
 	public List<IStateChangeDetector> StateChangeDetectors { get; } = new();
 	public Dictionary<Type, IQueuedStateTransition> PendingStateChanges { get; } = new();
@@ -527,10 +536,8 @@ public class App
 
 	public App AddResource<T>(T resource) where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			_appState.Resources[typeof(T)] = new ResourceBox<T>(resource);
-		}
+		// ConcurrentDictionary indexer is thread-safe.
+		_appState.Resources[typeof(T)] = new ResourceBox<T>(resource);
 		return this;
 	}
 
@@ -547,13 +554,11 @@ public class App
 	/// </summary>
 	public T GetResource<T>() where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
 
-			return ((ResourceBox<T>)boxed).Value;
-		}
+		return ((ResourceBox<T>)boxed).Value;
 	}
 
 	/// <summary>
@@ -561,10 +566,8 @@ public class App
 	/// </summary>
 	public bool HasResource<T>() where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			return _appState.Resources.ContainsKey(typeof(T));
-		}
+		// ConcurrentDictionary.ContainsKey is lock-free.
+		return _appState.Resources.ContainsKey(typeof(T));
 	}
 
 	/// <summary>
@@ -572,15 +575,11 @@ public class App
 	/// </summary>
 	public ref T GetResourceRef<T>() where T : notnull
 	{
-		ResourceBox<T> box;
-		lock (_appState.SyncRoot)
-		{
-			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
 
-			box = (ResourceBox<T>)boxed;
-		}
-		return ref box.Value;
+		return ref ((ResourceBox<T>)boxed).Value;
 	}
 
 	/// <summary>
@@ -590,13 +589,11 @@ public class App
 	/// </summary>
 	internal ResourceBox<T> GetResourceBoxInternal<T>() where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
-				throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (!_appState.Resources.TryGetValue(typeof(T), out var boxed))
+			throw new InvalidOperationException($"Resource {typeof(T).Name} not found. Did you forget to call AddResource?");
 
-			return (ResourceBox<T>)boxed;
-		}
+		return (ResourceBox<T>)boxed;
 	}
 
 	/// <summary>
@@ -618,10 +615,8 @@ public class App
 
 	private bool RemoveResourceCore(Type type)
 	{
-		lock (_appState.SyncRoot)
-		{
-			return _appState.Resources.Remove(type);
-		}
+		// ConcurrentDictionary.TryRemove is lock-free.
+		return _appState.Resources.TryRemove(type, out _);
 	}
 
 	/// <summary>
@@ -647,17 +642,11 @@ public class App
 	/// </summary>
 	internal EventChannel<T> GetOrCreateEventChannel<T>() where T : notnull
 	{
-		lock (_appState.SyncRoot)
-		{
-			if (!_appState.EventChannels.TryGetValue(typeof(T), out var channelObj))
-			{
-				var channel = new EventChannel<T>();
-				_appState.EventChannels[typeof(T)] = channel;
-				return channel;
-			}
-
-			return (EventChannel<T>)channelObj;
-		}
+		// ConcurrentDictionary.GetOrAdd is lock-free. Under heavy contention the factory
+		// may run more than once (one unused instance becomes garbage), but the returned
+		// reference is always the single canonical channel in the dictionary.
+		var channelObj = _appState.EventChannels.GetOrAdd(typeof(T), _ => new EventChannel<T>());
+		return (EventChannel<T>)channelObj;
 	}
 
 	/// <summary>
@@ -666,6 +655,10 @@ public class App
 	public void SetState<TState>(TState state) where TState : struct, Enum
 	{
 		var type = typeof(TState);
+		// Lock kept: the (Previous, Current) pair must be updated atomically so
+		// readers never observe a new Current with a stale Previous. The lock
+		// also guards the PendingStateChanges Dictionary and the
+		// StatesProcessedThisFrame HashSet (both non-concurrent collections).
 		lock (_appState.SyncRoot)
 		{
 			if (_appState.States.TryGetValue(type, out var current))
@@ -683,13 +676,10 @@ public class App
 	/// </summary>
 	public TState GetState<TState>() where TState : struct, Enum
 	{
-		var type = typeof(TState);
-		lock (_appState.SyncRoot)
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (_appState.States.TryGetValue(typeof(TState), out var state))
 		{
-			if (_appState.States.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
+			return (TState)state;
 		}
 		throw new InvalidOperationException($"State {typeof(TState).Name} not found. Did you call AddState<T>()?");
 	}
@@ -699,10 +689,8 @@ public class App
 	/// </summary>
 	public bool HasState<TState>() where TState : struct, Enum
 	{
-		lock (_appState.SyncRoot)
-		{
-			return _appState.States.ContainsKey(typeof(TState));
-		}
+		// ConcurrentDictionary.ContainsKey is lock-free.
+		return _appState.States.ContainsKey(typeof(TState));
 	}
 
 	/// <summary>
@@ -711,6 +699,9 @@ public class App
 	public void QueueState<TState>(TState next) where TState : struct, Enum
 	{
 		var type = typeof(TState);
+		// Lock kept: this is a multi-step operation that reads the current state and
+		// conditionally writes to PendingStateChanges. It also guards the non-concurrent
+		// PendingStateChanges Dictionary and StatesProcessedThisFrame HashSet.
 		lock (_appState.SyncRoot)
 		{
 			if (_appState.States.TryGetValue(type, out var current) &&
@@ -730,6 +721,7 @@ public class App
 	/// </summary>
 	internal bool HasQueuedState<TState>() where TState : struct, Enum
 	{
+		// Lock kept: PendingStateChanges is a non-concurrent Dictionary.
 		lock (_appState.SyncRoot)
 		{
 			return _appState.PendingStateChanges.ContainsKey(typeof(TState));
@@ -741,6 +733,7 @@ public class App
 	/// </summary>
 	internal void ClearQueuedState<TState>() where TState : struct, Enum
 	{
+		// Lock kept: PendingStateChanges is a non-concurrent Dictionary.
 		lock (_appState.SyncRoot)
 		{
 			_appState.PendingStateChanges.Remove(typeof(TState));
@@ -752,13 +745,10 @@ public class App
 	/// </summary>
 	internal TState? GetPreviousState<TState>() where TState : struct, Enum
 	{
-		var type = typeof(TState);
-		lock (_appState.SyncRoot)
+		// ConcurrentDictionary.TryGetValue is lock-free.
+		if (_appState.PreviousStates.TryGetValue(typeof(TState), out var state))
 		{
-			if (_appState.PreviousStates.TryGetValue(type, out var state))
-			{
-				return (TState)state;
-			}
+			return (TState)state;
 		}
 		return null;
 	}
@@ -768,17 +758,18 @@ public class App
 	/// </summary>
 	internal bool StateChanged<TState>() where TState : struct, Enum
 	{
+		// ConcurrentDictionary reads are lock-free. There's a small window where
+		// Current and Previous could be observed mid-update relative to SetState,
+		// but SetState's lock ensures readers in that path see a coherent pair —
+		// here we only need the most recent committed values.
 		var type = typeof(TState);
-		lock (_appState.SyncRoot)
-		{
-			if (!_appState.States.TryGetValue(type, out var current))
-				return false;
+		if (!_appState.States.TryGetValue(type, out var current))
+			return false;
 
-			if (!_appState.PreviousStates.TryGetValue(type, out var previous))
-				return true;
+		if (!_appState.PreviousStates.TryGetValue(type, out var previous))
+			return true;
 
-			return !current.Equals(previous);
-		}
+		return !current.Equals(previous);
 	}
 
 	/// <summary>
@@ -786,14 +777,12 @@ public class App
 	/// </summary>
 	internal void ProcessEvents()
 	{
+		// ConcurrentDictionary.Values returns a moment-in-time snapshot; no lock needed.
 		var currentTick = _world.CurrentTick;
 		using var channels = new PooledList<IEventChannel>(_appState.EventChannels.Count);
-		lock (_appState.SyncRoot)
+		foreach (var channel in _appState.EventChannels.Values)
 		{
-			foreach (var channel in _appState.EventChannels.Values)
-			{
-				channels.Add(channel);
-			}
+			channels.Add(channel);
 		}
 		foreach (var channel in channels.AsSpan)
 		{
@@ -1004,12 +993,17 @@ public class App
 			TState? previousState;
 			TState? currentState;
 
+			// Lock kept: StatesProcessedThisFrame is a non-concurrent HashSet whose
+			// Contains/Add must be atomic so each state runs OnEnter/OnExit at most
+			// once per frame. The States/PreviousStates reads inside are on
+			// ConcurrentDictionary, so they're independently safe — the lock is only
+			// here for the processed-set and to snapshot the (current, previous) pair
+			// coherently relative to SetState.
 			lock (appState.SyncRoot)
 			{
 				if (appState.StatesProcessedThisFrame.Contains(type))
 					return;
 
-				// Manual StateChanged check — avoid re-entering the lock.
 				if (!appState.States.TryGetValue(type, out var currentObj))
 					return;
 				if (appState.PreviousStates.TryGetValue(type, out var previousObj) && currentObj.Equals(previousObj))
