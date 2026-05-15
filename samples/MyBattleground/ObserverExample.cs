@@ -96,30 +96,30 @@ public static class ObserverExample
 		}).InStage(TinyEcs.Bevy.Stage.Startup);
 
 		// Add an update system to move player
-		app.AddSystem((TinyEcs.World world) =>
+		app.AddSystem((Commands commands, Res<PlayerEntity> playerRes) =>
 		{
-			var player = world.GetResource<PlayerEntity>().Id;
+			var player = playerRes.Value.Id;
 
 			Console.WriteLine("\n--- Moving player ---\n");
-			world.Set(player, new Position { X = 5, Y = 3 });
+			commands.Entity(player).Insert(new Position { X = 5, Y = 3 });
 		}).InStage(TinyEcs.Bevy.Stage.Update);
 
 		// Add another system to damage enemy
-		app.AddSystem((TinyEcs.World world) =>
+		app.AddSystem((Commands commands, Res<EnemyEntity> enemyRes) =>
 		{
-			var enemy = world.GetResource<EnemyEntity>().Id;
+			var enemy = enemyRes.Value.Id;
 
 			Console.WriteLine("\n--- Enemy takes damage ---\n");
-			world.Unset<Health>(enemy);
+			commands.Entity(enemy).Remove<Health>();
 		}).InStage(TinyEcs.Bevy.Stage.PostUpdate);
 
 		// Add a final system to despawn enemy
-		app.AddSystem((TinyEcs.World world) =>
+		app.AddSystem((Commands commands, Res<EnemyEntity> enemyRes) =>
 		{
-			var enemy = world.GetResource<EnemyEntity>().Id;
+			var enemy = enemyRes.Value.Id;
 
 			Console.WriteLine("\n--- Despawning enemy ---\n");
-			world.Delete(enemy);
+			commands.Entity(enemy).Despawn();
 		}).InStage(TinyEcs.Bevy.Stage.Last);
 
 		// Run the app - observers will auto-flush at end of each stage

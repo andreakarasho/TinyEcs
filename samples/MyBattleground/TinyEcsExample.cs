@@ -84,29 +84,23 @@ public class GamePlugin : TinyEcs.Bevy.IPlugin
 		.Build();
 
 		// Time system
-		app.AddSystem(world =>
+		app.AddSystem((Res<Time> time) =>
 		{
-			var time = world.GetResource<Time>();
-			time.TotalTime += time.DeltaTime;
-			Console.WriteLine($"⏰ [Update] Time: {time.TotalTime:F2}s");
+			time.Value.TotalTime += time.Value.DeltaTime;
+			Console.WriteLine($"⏰ [Update] Time: {time.Value.TotalTime:F2}s");
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
 		.Label("time")
 		.Build();
 
 		// Move entities using TinyEcs Query<TData>
-		app.AddSystem(world =>
+		app.AddSystem((Query<Data<Position, Velocity>> query, Res<Time> time) =>
 		{
-			var time = world.GetResource<Time>();
-
-			// Use type-safe Query<Data<Position, Velocity>>
-			var query = world.Query<Data<Position, Velocity>>();
-
 			// Iterate using foreach with deconstruction
 			foreach (var (pos, vel) in query)
 			{
-				pos.Ref.X += vel.Ref.X * time.DeltaTime;
-				pos.Ref.Y += vel.Ref.Y * time.DeltaTime;
+				pos.Ref.X += vel.Ref.X * time.Value.DeltaTime;
+				pos.Ref.Y += vel.Ref.Y * time.Value.DeltaTime;
 			}
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
@@ -114,18 +108,13 @@ public class GamePlugin : TinyEcs.Bevy.IPlugin
 		.Build();
 
 		// Player-specific system using Query<TData, TFilter>
-		app.AddSystem(world =>
+		app.AddSystem((Query<Data<Position, Velocity>, With<PlayerTag>> query, ResMut<PlayerData> playerData) =>
 		{
-			var playerData = world.GetResource<PlayerData>();
-
-			// Use Query with With<PlayerTag> filter
-			var query = world.Query<Data<Position, Velocity>, With<PlayerTag>>();
-
 			// Iterate only entities that have PlayerTag
 			foreach (var (pos, vel) in query)
 			{
-				playerData.Score += 10;
-				Console.WriteLine($"🎮 [Update] Player - Score: {playerData.Score}, Pos: ({pos.Ref.X:F1}, {pos.Ref.Y:F1})");
+				playerData.Value.Score += 10;
+				Console.WriteLine($"🎮 [Update] Player - Score: {playerData.Value.Score}, Pos: ({pos.Ref.X:F1}, {pos.Ref.Y:F1})");
 			}
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
@@ -164,25 +153,21 @@ public class StatePlugin : TinyEcs.Bevy.IPlugin
 		.OnExit(AppState.Playing)
 		.Build();
 
-		app.AddSystem(world =>
+		app.AddSystem((Res<PlayerData> playerData) =>
 		{
-			var playerData = world.GetResource<PlayerData>();
-			Console.WriteLine($"💀 Game Over! Final score: {playerData.Score}");
+			Console.WriteLine($"💀 Game Over! Final score: {playerData.Value.Score}");
 		})
 		.OnEnter(AppState.GameOver)
 		.Build();
 
 		// Game logic system that changes state based on score
-		app.AddSystem(world =>
+		app.AddSystem((Res<PlayerData> playerData, Res<State<AppState>> state, ResMut<NextState<AppState>> nextState) =>
 		{
-			var playerData = world.GetResource<PlayerData>();
-			var state = world.GetState<AppState>();
-
 			// Transition to GameOver when score reaches 50
-			if (playerData.Score >= 50 && state == AppState.Playing)
+			if (playerData.Value.Score >= 50 && state.Value.Current == AppState.Playing)
 			{
 				Console.WriteLine("💀 Player reached 50 points - triggering Game Over!");
-				world.SetState(AppState.GameOver);
+				nextState.Value.Set(AppState.GameOver);
 			}
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
@@ -190,21 +175,21 @@ public class StatePlugin : TinyEcs.Bevy.IPlugin
 		.Build();
 
 		// Menu system
-		app.AddSystem(world =>
+		app.AddSystem((ResMut<NextState<AppState>> nextState) =>
 		{
 			Console.WriteLine("📋 [Update] Main Menu - Auto-starting game!");
-			world.SetState(AppState.Loading);
+			nextState.Value.Set(AppState.Loading);
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIfState(AppState.MainMenu)
 		.Build();
 
 		// Loading system
-		app.AddSystem(world =>
+		app.AddSystem((ResMut<NextState<AppState>> nextState) =>
 		{
 			Console.WriteLine("⏳ [Update] Loading assets...");
 			Console.WriteLine("✅ Loading complete!");
-			world.SetState(AppState.Playing);
+			nextState.Value.Set(AppState.Playing);
 		})
 		.InStage(TinyEcs.Bevy.Stage.Update)
 		.RunIfState(AppState.Loading)
