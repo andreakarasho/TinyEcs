@@ -544,6 +544,39 @@ app.AddSystem((Commands commands) =>
 - `OnRemove<T>` - Component removed
 - `On<TEvent>` - Custom user-defined events
 
+#### Event Propagation (`On<TEvent>` bubbling)
+
+Lifecycle triggers (`OnSpawn`/`OnDespawn`/`OnAdd<T>`/`OnInsert<T>`/`OnRemove<T>`)
+fire on the target entity only. They do not bubble.
+
+`On<TEvent>` is the propagating trigger. When emitted with `propagate: true`,
+the trigger walks up the parent hierarchy (via `Parent` component) and fires
+entity-specific observers at each ancestor until it reaches the root or an
+observer stops it via `trigger.Propagate(false)`.
+
+```csharp
+public readonly struct ButtonClick { public ulong Target; }
+
+// Child entity emits an event that bubbles to parents.
+app.AddSystem((Commands commands) =>
+{
+    commands.Entity(childId).EmitTrigger(new ButtonClick { Target = childId }, propagate: true);
+}).InStage(Stage.Update).Build();
+
+// Parent observes — receives the trigger as it bubbles up.
+commands.Entity(parentId)
+    .Observe<On<ButtonClick>>((trigger) =>
+    {
+        Console.WriteLine($"Parent saw click on {trigger.Event.Target}");
+        // Stop further propagation if desired:
+        trigger.Propagate(false);
+    });
+```
+
+Defaults: `EmitTrigger(evt)` is target-only (matches Bevy). Opt in with
+`EmitTrigger(evt, propagate: true)`. Global observers (`app.AddObserver<On<T>>`)
+fire once per emission regardless of propagation.
+
 ### Plugins
 
 Organize code into reusable modules:
