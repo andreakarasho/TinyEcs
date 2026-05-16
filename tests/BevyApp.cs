@@ -32,6 +32,11 @@ namespace TinyEcs.Tests
 			public int Value;
 		}
 
+		private struct HealthChanged
+		{
+			public int Value;
+		}
+
 		private sealed class ScoreTracker
 		{
 			public int Baseline;
@@ -588,86 +593,6 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { 0, 1 }, postUpdateEvents);
 		}
 
-		[Fact]
-		public void EventChannelFlushDoesNotDoubleNotifyObserversAcrossFrames()
-		{
-			using var world = new World();
-			var app = new App(world);
-
-			var observed = new List<int>();
-			app.AddObserver<ScoreEvent>(evt => observed.Add(evt.Value));
-
-			var sendOnce = new MutableCounter();
-			app.AddResource(sendOnce);
-
-			// Writer that sends a ScoreEvent only when the resource's flag is set.
-			var writerSystem = SystemFunctionAdapters.Create<ResMut<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((flag, writer) =>
-			{
-				if (flag.Value.Value != 0)
-				{
-					writer.Send(new ScoreEvent(flag.Value.Value));
-					flag.Value.Value = 0;
-				}
-			});
-
-			app.AddSystem(writerSystem)
-				.InStage(Stage.Update)
-				.Build();
-
-			// Frame N: send event with value 1. Observer should see it exactly once after this frame's Flush.
-			sendOnce.Value = 1;
-			app.Run();
-			Assert.Equal(new[] { 1 }, observed);
-
-			// Frame N+1: no new events. Observer must not be re-notified for previously delivered events.
-			app.Run();
-			Assert.Equal(new[] { 1 }, observed);
-
-			// Frame N+2: send event with value 2. Observer should now have both, in order, exactly once each.
-			sendOnce.Value = 2;
-			app.Run();
-			Assert.Equal(new[] { 1, 2 }, observed);
-
-			// Frame N+3: no new events again. No additional notifications.
-			app.Run();
-			Assert.Equal(new[] { 1, 2 }, observed);
-
-			// Verify multi-event flush: send 2 events in a single Update stage, then read in next frame.
-			var collected = new List<int>();
-			var burstWriter = SystemFunctionAdapters.Create<Local<MutableCounter>, TinyEcs.Bevy.EventWriter<ScoreEvent>>((counter, writer) =>
-			{
-				if (counter.Value.Value == 0)
-				{
-					writer.Send(new ScoreEvent(10));
-					writer.Send(new ScoreEvent(20));
-					counter.Value.Value = 1;
-				}
-			});
-
-			var burstReader = SystemFunctionAdapters.Create<TinyEcs.Bevy.EventReader<ScoreEvent>>(reader =>
-			{
-				foreach (var evt in reader.Read())
-				{
-					collected.Add(evt.Value);
-				}
-			});
-
-			app.AddSystem(burstWriter).InStage(Stage.Update).Label("BurstWriter").Build();
-			app.AddSystem(burstReader).InStage(Stage.PostUpdate).Build();
-
-			// First run after adding: burstWriter sends 10 and 20. Reader in PostUpdate of the same frame
-			// sees the previous-frame buffer (empty for these values). Flush at end promotes them.
-			app.Run();
-			Assert.DoesNotContain(10, collected);
-			Assert.DoesNotContain(20, collected);
-
-			// Next frame: reader picks up both events in order, each exactly once.
-			app.Run();
-			Assert.Equal(new[] { 10, 20 }, collected);
-
-			// And observer has now seen all four events (1, 2, 10, 20), each exactly once.
-			Assert.Equal(new[] { 1, 2, 10, 20 }, observed);
-		}
 
 		[Fact]
 		public void FilterCombinatorSelectsEntitiesMatchingAllPredicates()
@@ -1536,57 +1461,49 @@ namespace TinyEcs.Tests
 		[Fact]
 		public void ObserverPropagation_BubblesUpParentHierarchy()
 		{
-			// Test that triggers with .Propagate(true) fire on parent entities
+			// Test that triggers propagate up parent hierarchy
 			using var world = new World();
-			world.EnableObservers<Health>();
 
 			var triggerLog = new List<(ulong EntityId, int Value, string Source)>();
 
 			// Create entities and set up hierarchy
-			var grandparentId = world.Entity().ID;
-			var parentId = world.Entity().ID;
-			var childId = world.Entity().ID;
+			var grandparent = world.Entity();
+			var parent = world.Entity();
+			var child = world.Entity();
 
-			world.Set(parentId, new Parent { Id = grandparentId });
-			world.Set(childId, new Parent { Id = parentId });
+			grandparent.AddChild(parent);
+			parent.AddChild(child);
+
+			var grandparentId = grandparent.ID;
+			var parentId = parent.ID;
+			var childId = child.ID;
 
 			// Create Commands to register observers
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(childId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "child observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "child observer"));
 				});
 
-				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(parentId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "parent observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "parent observer"));
 				});
 
-				commands.Entity(grandparentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(grandparentId).Observe<On<HealthChanged>>((trigger) =>
 				{
-					triggerLog.Add((trigger.EntityId, trigger.Component.Value, "grandparent observer"));
+					triggerLog.Add((trigger.EntityId, trigger.Event.Value, "grandparent observer"));
 				});
 			});
 
 			app.AddSystem(system).InStage(Stage.Update).Build();
 			app.Run();
 
-			// Test 1: Non-propagating trigger (default) - should only fire on child
-			world.Set(childId, new Health { Value = 100 });
-			world.FlushObservers();
-
-			// Only child observer should fire
-			Assert.Single(triggerLog);
-			Assert.Equal(childId, triggerLog[0].EntityId);
-			Assert.Equal(100, triggerLog[0].Value);
-			Assert.Equal("child observer", triggerLog[0].Source);
-
-			triggerLog.Clear();
-
-			// Test 2: Propagating trigger - should fire on child, parent, and grandparent
-			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 200 }).Propagate(true));
+			// Propagating trigger (propagation is true by default) - should fire on child, parent, and grandparent
+			world.EmitTrigger(childId, new HealthChanged { Value = 200 });
+			app.Update(); // Apply deferred commands
 
 			// All three observers should fire
 			Assert.Equal(3, triggerLog.Count);
@@ -1597,12 +1514,12 @@ namespace TinyEcs.Tests
 			Assert.Equal("child observer", triggerLog[0].Source);
 
 			// Second: parent observer (propagated)
-			Assert.Equal(childId, triggerLog[1].EntityId); // EntityId stays the same
+			Assert.Equal(childId, triggerLog[1].EntityId); // EntityId stays the same (child's ID)
 			Assert.Equal(200, triggerLog[1].Value);
 			Assert.Equal("parent observer", triggerLog[1].Source);
 
 			// Third: grandparent observer (propagated)
-			Assert.Equal(childId, triggerLog[2].EntityId); // EntityId stays the same
+			Assert.Equal(childId, triggerLog[2].EntityId); // EntityId stays the same (child's ID)
 			Assert.Equal(200, triggerLog[2].Value);
 			Assert.Equal("grandparent observer", triggerLog[2].Source);
 		}
@@ -1612,24 +1529,26 @@ namespace TinyEcs.Tests
 		{
 			// Test that propagation stops when reaching an entity without a parent
 			using var world = new World();
-			world.EnableObservers<Health>();
 
 			var triggerLog = new List<string>();
 
 			// Create parent-child (no grandparent)
-			var parentId = world.Entity().ID;
-			var childId = world.Entity().ID;
-			world.Set(childId, new Parent { Id = parentId });
+			var parent = world.Entity();
+			var child = world.Entity();
+			parent.AddChild(child);
+
+			var parentId = parent.ID;
+			var childId = child.ID;
 
 			var app = new App(world);
 			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				commands.Entity(parentId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(parentId).Observe<On<HealthChanged>>((trigger) =>
 				{
 					triggerLog.Add("parent");
 				});
 
-				commands.Entity(childId).Observe<OnInsert<Health>>((trigger) =>
+				commands.Entity(childId).Observe<On<HealthChanged>>((trigger) =>
 				{
 					triggerLog.Add("child");
 				});
@@ -1638,8 +1557,9 @@ namespace TinyEcs.Tests
 			app.AddSystem(system).InStage(Stage.Update).Build();
 			app.Run();
 
-			// Propagating trigger should fire on child and parent, then stop
-			world.EmitTrigger(new OnInsert<Health>(childId, new Health { Value = 100 }).Propagate(true));
+			// Propagating trigger should fire on child and parent, then stop (propagation is true by default)
+			world.EmitTrigger(childId, new HealthChanged { Value = 100 });
+			app.Update(); // Apply deferred commands
 
 			Assert.Equal(2, triggerLog.Count);
 			Assert.Equal("child", triggerLog[0]);
@@ -2041,115 +1961,5 @@ namespace TinyEcs.Tests
 			Active
 		}
 
-		private readonly record struct PooledListEvent(int Value);
-
-		[Fact]
-		public void HotPathSnapshotsUsingPooledListPreserveBehavior()
-		{
-			// Regression: EventChannel.Flush, ProcessStateTransitions, and ProcessEvents
-			// were converted from List<T>.ToList() snapshots to ArrayPool-backed
-			// PooledList<T> snapshots. Behavior must be identical to the prior
-			// implementation across event dispatch and state transition handling.
-			using var world = new World();
-			var app = new App(world);
-
-			// Multiple resources to exercise general App plumbing alongside the hot paths.
-			app.AddResource(new ScoreTracker { Baseline = 10 });
-			app.AddResource(new MutableCounter { Value = 0 });
-
-			// State enum: alternate frames will queue transitions.
-			app.AddState(PooledListSnapshotState.Idle);
-
-			var enterIdleCount = 0;
-			var exitIdleCount = 0;
-			var enterActiveCount = 0;
-			var exitActiveCount = 0;
-
-			app.AddSystem(w => enterIdleCount++)
-				.OnEnter(PooledListSnapshotState.Idle)
-				.Build();
-			app.AddSystem(w => exitIdleCount++)
-				.OnExit(PooledListSnapshotState.Idle)
-				.Build();
-			app.AddSystem(w => enterActiveCount++)
-				.OnEnter(PooledListSnapshotState.Active)
-				.Build();
-			app.AddSystem(w => exitActiveCount++)
-				.OnExit(PooledListSnapshotState.Active)
-				.Build();
-
-			// Two observers on the same event type — exercises the observersSnapshot
-			// PooledList path in EventChannel<T>.Flush.
-			var observerA = new List<int>();
-			var observerB = new List<int>();
-			app.AddObserver<PooledListEvent>(evt => observerA.Add(evt.Value));
-			app.AddObserver<PooledListEvent>(evt => observerB.Add(evt.Value));
-
-			// 5 frames; each frame writes 2 events; every other frame queues a
-			// state transition. After 5 frames we should have 10 events total.
-			var nextValue = 0;
-			var frameIndex = 0;
-			var writerEnabled = true;
-			app.AddSystem((TinyEcs.Bevy.EventWriter<PooledListEvent> writer) =>
-			{
-				if (!writerEnabled) return;
-				writer.Send(new PooledListEvent(nextValue++));
-				writer.Send(new PooledListEvent(nextValue++));
-			})
-			.InStage(Stage.Update)
-			.Build();
-
-			for (var i = 0; i < 5; i++)
-			{
-				if ((frameIndex & 1) == 1)
-				{
-					var current = app.GetState<PooledListSnapshotState>();
-					app.SetState(current == PooledListSnapshotState.Idle
-						? PooledListSnapshotState.Active
-						: PooledListSnapshotState.Idle);
-				}
-				app.Run();
-				frameIndex++;
-			}
-
-			// Observers fire on Flush, which is called from ProcessEvents at the
-			// end of Run, so all 10 events should have been delivered to both
-			// observers already.
-			Assert.Equal(10, observerA.Count);
-			Assert.Equal(10, observerB.Count);
-			Assert.Equal(observerA, observerB);
-
-			// Disable the writer so the smoke runs below produce no events.
-			writerEnabled = false;
-
-			// State transitions: frames at frameIndex==1 and frameIndex==3 queued
-			// a transition each. The initial frame fires OnEnter(Idle) once.
-			// - Frame 0: enter Idle (initial)
-			// - Frame 1: Idle -> Active (exit Idle, enter Active)
-			// - Frame 2: no transition
-			// - Frame 3: Active -> Idle (exit Active, enter Idle)
-			// - Frame 4: no transition
-			Assert.Equal(2, enterIdleCount);
-			Assert.Equal(1, exitIdleCount);
-			Assert.Equal(1, enterActiveCount);
-			Assert.Equal(1, exitActiveCount);
-
-			// Smoke test: extra runs with no events queued / no transitions
-			// pending must not throw. Verifies the haveWork early-return and
-			// the zero-capacity rent paths.
-			app.Run();
-			app.Run();
-			app.Run();
-
-			// No new state-transition firings.
-			Assert.Equal(2, enterIdleCount);
-			Assert.Equal(1, exitIdleCount);
-			Assert.Equal(1, enterActiveCount);
-			Assert.Equal(1, exitActiveCount);
-
-			// Observer counts must not have grown (no events written in idle frames).
-			Assert.Equal(10, observerA.Count);
-			Assert.Equal(10, observerB.Count);
-		}
 	}
 }

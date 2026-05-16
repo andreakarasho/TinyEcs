@@ -229,7 +229,7 @@ public class Local<T> : ISystemParam where T : new()
 {
 	private T? _value;
 
-	public ref T? Value => ref _value;
+	public ref T Value => ref _value!;
 
 	public void Initialize(App app)
 	{
@@ -593,6 +593,10 @@ public class Commands : ISystemParam
 	public void EmitTrigger<TEvent>(TEvent evt) where TEvent : struct
 	{
 		_localCommands.Add(RentBox(new TriggerEventCommand<TEvent>(evt)));
+		if (evt is IEntityTrigger trigger && trigger.EntityId != 0)
+		{
+			_localCommands.Add(RentBox(new EntityTriggerCommand<TEvent>(trigger.EntityId, evt, propagate: true)));
+		}
 	}
 
 	public void AddChild(ulong parentId, ulong childId)
@@ -629,6 +633,25 @@ public class Commands : ISystemParam
 		if (childIds.IsEmpty) return;
 		foreach (var childId in childIds)
 			AddChild(parentId, childId);
+	}
+
+	/// <summary>
+	/// Attach an existing child at a specific index under a parent.
+	/// </summary>
+	public void AddChild(ulong parentId, ulong childId, int index)
+	{
+		_localCommands.Add(new AddChildAtCommand(
+			new DeferredEntityRef(-1, parentId),
+			new DeferredEntityRef(-1, childId),
+			index));
+	}
+
+	/// <summary>
+	/// Detach a child from its current parent (uses relationship mapper).
+	/// </summary>
+	public void RemoveChild(ulong childId)
+	{
+		_localCommands.Add(new RemoveChildCommand(new DeferredEntityRef(-1, childId)));
 	}
 
 	internal ulong ResolveEntityId(in DeferredEntityRef entityRef)
@@ -828,7 +851,7 @@ public ref struct EntityCommands
 	/// NOTE: The observer is attached immediately before subsequent Insert/Remove commands to ensure it sees those events.
 	/// </summary>
 	public readonly EntityCommands Observe<TTrigger>(Action<TTrigger> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 	{
 		// Insert the observer command at the front of the queue (right after Spawn if this is a spawned entity)
 		// This ensures the observer is attached BEFORE any subsequent Insert/Remove commands
@@ -840,7 +863,7 @@ public ref struct EntityCommands
 	/// Internal method for system parameter support. Use the Observe overloads with system parameters instead.
 	/// </summary>
 	internal readonly EntityCommands ObserveWithWorld<TTrigger>(Action<World, TTrigger> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 	{
 		_commands.InsertObserverCommand(new AttachObserverWithWorldCommand<TTrigger>(ToDeferredRef(), callback));
 		return this;
@@ -1048,11 +1071,57 @@ internal readonly struct AddChildCommand : IDeferredCommand
 }
 
 /// <summary>
+/// Command to attach a child at a given index.
+/// </summary>
+internal readonly struct AddChildAtCommand : IDeferredCommand
+{
+	private readonly DeferredEntityRef _parent;
+	private readonly DeferredEntityRef _child;
+	private readonly int _index;
+
+	public AddChildAtCommand(DeferredEntityRef parent, DeferredEntityRef child, int index)
+	{
+		_parent = parent;
+		_child = child;
+		_index = index;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var parentId = commands.ResolveEntityId(_parent);
+		var childId = commands.ResolveEntityId(_child);
+		world.AddChild(parentId, childId, _index);
+	}
+}
+
+/// <summary>
+/// Command to detach a child from its current parent using the relationship mapper.
+/// </summary>
+internal readonly struct RemoveChildCommand : IDeferredCommand
+{
+	private readonly DeferredEntityRef _child;
+
+	public RemoveChildCommand(DeferredEntityRef child)
+	{
+		_child = child;
+	}
+
+	public void Execute(TinyEcs.World world, Commands commands)
+	{
+		var childId = commands.ResolveEntityId(_child);
+		if (childId != 0 && world.Exists(childId))
+		{
+			world.RemoveChild(childId);
+		}
+	}
+}
+
+/// <summary>
 /// Command to trigger a custom observer event
 /// </summary>
-internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : struct
+internal struct TriggerEventCommand<TEvent> : IDeferredCommand where TEvent : struct
 {
-	private readonly TEvent _event;
+	private TEvent _event;
 
 	public TriggerEventCommand(TEvent evt)
 	{
@@ -1061,11 +1130,7 @@ internal readonly struct TriggerEventCommand<TEvent> : IDeferredCommand where TE
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		// Queue the emission until FlushObservers so observers see fully-merged world
-		// state (component writes, parent links, etc. applied during the current scope).
-		// Allocation-free: queued by value into a typed per-event-type queue. Global
-		// emissions don't bubble (no entity to walk from) so propagate is unused.
-		world.QueueCustomTrigger(entityId: 0, _event, propagate: false, isGlobal: true);
+		world.EmitTriggerInner(new On<TEvent>(_event));
 	}
 }
 
@@ -1089,10 +1154,9 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		// Queue the emission until FlushObservers so the bubble walk sees fully-merged
-		// world state. Allocation-free: the typed queue holds the entry by value;
-		// stack cells for propagate/current are allocated inside the queue's Flush loop.
-		world.QueueCustomTrigger(_entityId, _event, _propagate, isGlobal: false);
+		var propagate = true;
+		// Wrap the event with On<TEvent> and inject the entity ID
+		world.EmitTriggerInner(new On<TEvent>(_entityId, _event, ref propagate));
 	}
 }
 
@@ -1121,7 +1185,7 @@ internal readonly struct RemoveResourceCommand : IDeferredCommand
 /// Observers are stored as EntityObservers component on the entity.
 /// </summary>
 internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
-	where TTrigger : struct, ITrigger
+	where TTrigger : ITrigger
 {
 	private readonly DeferredEntityRef _entityRef;
 	private readonly Action<TTrigger> _callback;
@@ -1143,26 +1207,19 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 		default(TTrigger).Register(world);
 #endif
 
-		// Get or create EntityObservers component
-		if (!world.Has<EntityObservers>(entityId))
-		{
-			world.Set(entityId, new EntityObservers
-			{
-				Lists = new List<ITypedObserverList>()
-			});
-		}
+		var state = world.GetObserverState();
 
-		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Lists == null)
+		if (!state.EntityObservers.TryGetValue(entityId, out var observers))
 		{
-			entityObservers.Lists = new List<ITypedObserverList>();
+			observers = new List<IObserver>();
+			state.EntityObservers[entityId] = observers;
 		}
 
 		// Add the callback to this entity's typed list for TTrigger.
 		// Wrap to ignore the World parameter to match the typed list signature.
 		var callback = _callback;
-		var list = ObserverExtensions.GetOrCreateEntityList<TTrigger>(entityObservers.Lists);
-		list.Callbacks.Add((w, trigger) => callback(trigger));
+		// Wrap callback to ignore World parameter
+		observers.Add(new Observer<TTrigger>((w, trigger) => callback(trigger)));
 	}
 }
 
@@ -1171,7 +1228,7 @@ internal readonly struct AttachObserverCommand<TTrigger> : IDeferredCommand
 /// Used internally for system parameter support in entity observers.
 /// </summary>
 internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCommand
-	where TTrigger : struct, ITrigger
+	where TTrigger : ITrigger
 {
 	private readonly DeferredEntityRef _entityRef;
 	private readonly Action<World, TTrigger> _callback;
@@ -1193,23 +1250,16 @@ internal readonly struct AttachObserverWithWorldCommand<TTrigger> : IDeferredCom
 		default(TTrigger).Register(world);
 #endif
 
-		// Get or create EntityObservers component
-		if (!world.Has<EntityObservers>(entityId))
+		var state = world.GetObserverState();
+
+		if (!state.EntityObservers.TryGetValue(entityId, out var observers))
 		{
-			world.Set(entityId, new EntityObservers
-			{
-				Lists = new List<ITypedObserverList>()
-			});
+			observers = new List<IObserver>();
+			state.EntityObservers[entityId] = observers;
 		}
 
-		ref var entityObservers = ref world.Get<EntityObservers>(entityId);
-		if (entityObservers.Lists == null)
-		{
-			entityObservers.Lists = new List<ITypedObserverList>();
-		}
-
-		var list = ObserverExtensions.GetOrCreateEntityList<TTrigger>(entityObservers.Lists);
-		list.Callbacks.Add(_callback);
+		// Directly use the callback with World parameter
+		observers.Add(new Observer<TTrigger>(_callback));
 	}
 }
 

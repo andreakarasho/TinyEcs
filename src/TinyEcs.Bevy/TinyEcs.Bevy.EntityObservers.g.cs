@@ -13,7 +13,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1>(this EntityCommands entity, Action<TTrigger, T1> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -43,7 +43,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2>(this EntityCommands entity, Action<TTrigger, T1, T2> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -77,7 +77,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3>(this EntityCommands entity, Action<TTrigger, T1, T2, T3> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -115,7 +115,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -157,7 +157,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -203,7 +203,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -253,7 +253,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -307,7 +307,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -365,7 +365,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -427,7 +427,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -493,7 +493,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -563,7 +563,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -637,7 +637,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -715,7 +715,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
@@ -797,7 +797,7 @@ public static partial class EntityCommandsObserverExtensions
 	/// Commands parameters are automatically applied after the observer executes.
 	/// </summary>
 	public static EntityCommands Observe<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(this EntityCommands entity, Action<TTrigger, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		where T1 : ISystemParam, new() where T2 : ISystemParam, new() where T3 : ISystemParam, new() where T4 : ISystemParam, new() where T5 : ISystemParam, new() where T6 : ISystemParam, new() where T7 : ISystemParam, new() where T8 : ISystemParam, new() where T9 : ISystemParam, new() where T10 : ISystemParam, new() where T11 : ISystemParam, new() where T12 : ISystemParam, new() where T13 : ISystemParam, new() where T14 : ISystemParam, new() where T15 : ISystemParam, new()
 	{
 		// Use ObserveWithWorld to get World access, then fetch system parameters
