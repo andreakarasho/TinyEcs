@@ -105,7 +105,7 @@ namespace TinyEcs.Tests
 
 			transitions.Clear();
 
-			world.SetState(GameState.Playing);
+			app.SetState(GameState.Playing);
 			app.Run();
 
 			Assert.Equal(new[] { "ExitMenu", "EnterPlaying" }, transitions);
@@ -135,11 +135,88 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { GameState.Menu }, observed);
-			Assert.Equal(GameState.Playing, world.GetState<GameState>());
+			Assert.Equal(GameState.Playing, app.GetState<GameState>());
 
 			observed.Clear();
 			app.Run();
 			Assert.Equal(new[] { GameState.Playing }, observed);
+		}
+
+		private enum DetectorTestState
+		{
+			A,
+			B
+		}
+
+		[Fact]
+		public void StateChangeDetectorRunsOnlyOnTransitionWithoutAllocations()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			var enterCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+			var exitCounts = new Dictionary<DetectorTestState, int>
+			{
+				[DetectorTestState.A] = 0,
+				[DetectorTestState.B] = 0
+			};
+
+			app.AddState(DetectorTestState.A);
+
+			app.AddSystem(w => enterCounts[DetectorTestState.A]++)
+				.OnEnter(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.A]++)
+				.OnExit(DetectorTestState.A)
+				.Build();
+			app.AddSystem(w => enterCounts[DetectorTestState.B]++)
+				.OnEnter(DetectorTestState.B)
+				.Build();
+			app.AddSystem(w => exitCounts[DetectorTestState.B]++)
+				.OnExit(DetectorTestState.B)
+				.Build();
+
+			// Initial frame: OnEnter(A) should fire once.
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(0, exitCounts[DetectorTestState.A]);
+			Assert.Equal(0, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition to B: OnExit(A) and OnEnter(B) fire once each.
+			app.SetState(DetectorTestState.B);
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Idle frames: no further transitions should be fired.
+			app.Run();
+			app.Run();
+			Assert.Equal(1, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(0, exitCounts[DetectorTestState.B]);
+
+			// Transition back to A: OnExit(B) and OnEnter(A) fire once each.
+			app.SetState(DetectorTestState.A);
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
+
+			// Another idle frame: still no new invocations.
+			app.Run();
+			Assert.Equal(2, enterCounts[DetectorTestState.A]);
+			Assert.Equal(1, exitCounts[DetectorTestState.A]);
+			Assert.Equal(1, enterCounts[DetectorTestState.B]);
+			Assert.Equal(1, exitCounts[DetectorTestState.B]);
 		}
 
 		[Fact]
@@ -349,6 +426,81 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void DeferredCommandsUnifyEntityRef_SpawnedAndExistingPathsBothWork()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			// Pre-create two existing entities the commands will operate on by id
+			var existingForInsert = world.Entity().ID;
+			var existingForDespawn = world.Entity().ID;
+
+			var spawnedIds = new List<ulong>();
+			app.AddResource(spawnedIds);
+
+			// First system spawns one entity (Insert via spawn path) and inserts on an existing entity (Insert via id path).
+			var insertSystem = SystemFunctionAdapters.Create<Commands, ResMut<List<ulong>>>((commands, ids) =>
+			{
+				var spawned = commands.Spawn().Insert(new Position { X = 1 });
+				// We cannot read the id yet (deferred); capture via observer below.
+				_ = spawned;
+
+				commands.Entity(existingForInsert).Insert(new Position { X = 2 });
+			});
+
+			app.AddObserver<OnSpawn>((_, trigger) => spawnedIds.Add(trigger.EntityId));
+
+			app.AddSystem(insertSystem)
+				.InStage(Stage.Update)
+				.Label("InsertPhase")
+				.Build();
+
+			app.Run();
+
+			// Both insertions should have landed.
+			Assert.Single(spawnedIds);
+			var spawnedId = spawnedIds[0];
+
+			Assert.True(world.Has<Position>(spawnedId));
+			Assert.Equal(1, world.Get<Position>(spawnedId).X);
+
+			Assert.True(world.Has<Position>(existingForInsert));
+			Assert.Equal(2, world.Get<Position>(existingForInsert).X);
+
+			// Second system despawns one via spawn-path EntityCommands and one via id-path EntityCommands.
+			var spawnedToDespawn = 0UL;
+			var despawnSystem = SystemFunctionAdapters.Create<Commands>(commands =>
+			{
+				var freshSpawn = commands.Spawn().Insert(new Position { X = 3 });
+				freshSpawn.Despawn(); // spawn-path despawn
+
+				commands.Entity(existingForDespawn).Despawn(); // id-path despawn
+			});
+
+			// Capture id of the freshly-spawned-then-despawned entity to confirm it's gone.
+			app.AddObserver<OnSpawn>((_, trigger) =>
+			{
+				// The new spawn during the despawn phase
+				spawnedToDespawn = trigger.EntityId;
+			});
+
+			app.AddSystem(despawnSystem)
+				.InStage(Stage.PostUpdate)
+				.Build();
+
+			app.Run();
+
+			// Both despawns succeeded
+			Assert.False(world.Exists(existingForDespawn));
+			Assert.NotEqual(0UL, spawnedToDespawn);
+			Assert.False(world.Exists(spawnedToDespawn));
+
+			// The earlier spawned entity (from first run) is untouched.
+			Assert.True(world.Exists(spawnedId));
+			Assert.True(world.Exists(existingForInsert));
+		}
+
+		[Fact]
 		public void EventReaderReceivesEventsOnFollowingFrame()
 		{
 			using var world = new World();
@@ -441,6 +593,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { 0, 1 }, postUpdateEvents);
 		}
 
+
 		[Fact]
 		public void FilterCombinatorSelectsEntitiesMatchingAllPredicates()
 		{
@@ -478,6 +631,46 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { 42f }, captured);
+		}
+
+		[Fact]
+		public void OptionalFilterAllowsAbsentDataComponent()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			app.AddSystem(w =>
+			{
+				var posOnly = w.Entity();
+				posOnly.Set(new Position { X = 1 });
+
+				var posAndVel = w.Entity();
+				posAndVel.Set(new Position { X = 2 });
+				posAndVel.Set(new Velocity { Value = 20 });
+
+				var velOnly = w.Entity();
+				velOnly.Set(new Velocity { Value = 99 });
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			var captured = new List<(int posX, int velValue)>();
+
+			app.AddSystem((Query<Data<Position, Velocity>, Filter<Optional<Velocity>>> query) =>
+			{
+				foreach (var row in query)
+				{
+					row.Deconstruct(out var pos, out var vel);
+					captured.Add((pos.Ref.X, vel.IsValid() ? vel.Ref.Value : -1));
+				}
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			captured.Sort();
+			Assert.Equal(new[] { (1, -1), (2, 20) }, captured);
 		}
 
 		[Fact]
@@ -596,6 +789,38 @@ namespace TinyEcs.Tests
 			app.Run();
 
 			Assert.Equal(new[] { "First", "Second", "Third" }, executed);
+		}
+
+		[Fact]
+		public void RunFrameHelperPreservesStartupAndUpdateSemantics()
+		{
+			// Regression test for the shared RunFrame helper extracted from
+			// RunStartup() and Run(). Verifies that startup systems execute exactly
+			// once and update systems execute on every Run() call.
+			using var world = new World();
+			var app = new App(world, ThreadingMode.Single);
+			var counter = new MutableCounter();
+			app.AddResource(counter);
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value = 1)
+				.InStage(Stage.Startup)
+				.Build();
+
+			app.AddSystem((ResMut<MutableCounter> c) => c.Value.Value++)
+				.InStage(Stage.Update)
+				.Build();
+
+			// RunStartup() runs only Stage.Startup -> counter set to 1, Update did not run.
+			app.RunStartup();
+			Assert.Equal(1, counter.Value);
+
+			// Run() must not re-execute Stage.Startup, only Update -> 1 + 1 = 2.
+			app.Run();
+			Assert.Equal(2, counter.Value);
+
+			// Subsequent Run() calls keep advancing the Update counter -> 3.
+			app.Run();
+			Assert.Equal(3, counter.Value);
 		}
 
 		[Fact]
@@ -718,6 +943,57 @@ namespace TinyEcs.Tests
 			Assert.Equal(new[] { "First", "Second", "Third" }, executed);
 		}
 
+		private sealed class ChainPluginA : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginA(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("A"))
+					.InStage(Stage.Update)
+					.Label("a")
+					.Build();
+			}
+		}
+
+		private sealed class ChainPluginB : IPlugin
+		{
+			private readonly List<string> _executed;
+
+			public ChainPluginB(List<string> executed)
+			{
+				_executed = executed;
+			}
+
+			public void Build(App app)
+			{
+				app.AddSystem(w => _executed.Add("B"))
+					.InStage(Stage.Update)
+					.Chain()
+					.Build();
+			}
+		}
+
+		[Fact]
+		public void ChainAcrossPluginBoundaryPreservesPreviousSystem()
+		{
+			using var world = new World();
+			var app = new App(world);
+			var executed = new List<string>();
+
+			app.AddPlugin(new ChainPluginA(executed));
+			app.AddPlugin(new ChainPluginB(executed));
+
+			app.Run();
+
+			Assert.Equal(new[] { "A", "B" }, executed);
+		}
+
 		[Fact]
 		public void ComplexDependencyGraphRespectsAllConstraints()
 		{
@@ -825,12 +1101,6 @@ namespace TinyEcs.Tests
 			public Transform Transform;
 			public Sprite2 Sprite;
 
-			public readonly void Insert(EntityView entity)
-			{
-				entity.Set(Transform);
-				entity.Set(Sprite);
-			}
-
 			public readonly void Insert(EntityCommands entity)
 			{
 				entity.Insert(Transform);
@@ -842,21 +1112,33 @@ namespace TinyEcs.Tests
 		public void BundleCanBeInsertedIntoEntity()
 		{
 			using var world = new World();
-			var entity = world.Entity();
+			var app = new App(world);
 
-			var bundle = new SpriteBundle
+			var existingEntity = world.Entity();
+			var entityId = existingEntity.ID;
+
+			var system = SystemFunctionAdapters.Create<Commands>(commands =>
 			{
-				Transform = new Transform { X = 10, Y = 20 },
-				Sprite = new Sprite2 { TextureId = 42 }
-			};
+				var bundle = new SpriteBundle
+				{
+					Transform = new Transform { X = 10, Y = 20 },
+					Sprite = new Sprite2 { TextureId = 42 }
+				};
 
-			entity.InsertBundle(bundle);
+				commands.Entity(entityId).InsertBundle(bundle);
+			});
 
-			Assert.True(entity.Has<Transform>());
-			Assert.True(entity.Has<Sprite2>());
-			Assert.Equal(10, entity.Get<Transform>().X);
-			Assert.Equal(20, entity.Get<Transform>().Y);
-			Assert.Equal(42, entity.Get<Sprite2>().TextureId);
+			app.AddSystem(system)
+				.InStage(Stage.Update)
+				.Build();
+
+			app.Run();
+
+			Assert.True(existingEntity.Has<Transform>());
+			Assert.True(existingEntity.Has<Sprite2>());
+			Assert.Equal(10, existingEntity.Get<Transform>().X);
+			Assert.Equal(20, existingEntity.Get<Transform>().Y);
+			Assert.Equal(42, existingEntity.Get<Sprite2>().TextureId);
 		}
 
 		[Fact]
@@ -1522,5 +1804,162 @@ namespace TinyEcs.Tests
 			Assert.Equal("Clicked at (30,40) count=2", events[1]);
 			Assert.Equal(2, counter.Value);
 		}
+
+		[Fact]
+		public void ConfiguratorAllowsLabelOrderingMethodsInAnyOrder()
+		{
+			// Verify the simplified configurator: configuration methods can be
+			// called in any order without type-state ceremony, and "last label wins".
+			var executed = new List<string>();
+
+			var app = new App();
+
+			// Anchor system so the subsequent .After("anchor") resolves.
+			app.AddSystem(() => executed.Add("anchor"))
+				.InStage(Stage.Update)
+				.Label("anchor")
+				.Build();
+
+			// Anchor system to satisfy .Before("tail").
+			app.AddSystem(() => executed.Add("tail"))
+				.InStage(Stage.Update)
+				.Label("tail")
+				.Build();
+
+			// Forward order: RunIf -> Label -> After -> Before -> SingleThreaded.
+			app.AddSystem(() => executed.Add("forward"))
+				.InStage(Stage.Update)
+				.RunIf(_ => true)
+				.Label("forward")
+				.After("anchor")
+				.Before("tail")
+				.SingleThreaded()
+				.Build();
+
+			// Reverse order: SingleThreaded -> Before -> After -> Label -> RunIf.
+			app.AddSystem(() => executed.Add("reverse"))
+				.InStage(Stage.Update)
+				.SingleThreaded()
+				.Before("tail")
+				.After("anchor")
+				.Label("reverse")
+				.RunIf(_ => true)
+				.Build();
+
+			// Last-label-wins: declaring Label("a") then Label("b") should make "b"
+			// the resolvable label. .After("b") must therefore work without throwing.
+			app.AddSystem(() => executed.Add("relabeled"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.Label("b")
+				.After("anchor")
+				.Build();
+
+			app.AddSystem(() => executed.Add("after_b"))
+				.InStage(Stage.Update)
+				.After("b")
+				.Before("tail")
+				.Build();
+
+			app.Run();
+
+			// Anchor runs first, tail last; forward/reverse/relabeled/after_b between.
+			Assert.Equal("anchor", executed[0]);
+			Assert.Equal("tail", executed[^1]);
+			Assert.Contains("forward", executed);
+			Assert.Contains("reverse", executed);
+			Assert.Contains("relabeled", executed);
+			Assert.Contains("after_b", executed);
+			// after_b must run after relabeled (its dependency via the "b" label).
+			Assert.True(executed.IndexOf("after_b") > executed.IndexOf("relabeled"));
+		}
+
+		[Fact]
+		public void RelabeledSystemOldLabelNoLongerResolvable()
+		{
+			// "Last label wins" semantics: when a system is relabeled, the old
+			// label must no longer resolve. We verify this behaviorally by
+			// referencing the old label from another system, which must throw.
+			var app = new App();
+
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.Label("first")
+				.Label("second")
+				.Build();
+
+			// Referencing "second" must succeed.
+			app.AddSystem(() => { })
+				.InStage(Stage.Update)
+				.After("second")
+				.Build();
+
+			// Referencing "first" must throw because the relabel removed it.
+			var ex = Assert.Throws<System.InvalidOperationException>(() =>
+				app.AddSystem(() => { })
+					.InStage(Stage.Update)
+					.After("first")
+					.Build());
+
+			Assert.Contains("first", ex.Message);
+		}
+
+		[Fact]
+		public void ConfiguratorChainStillWorksWithoutInterfaceCeremony()
+		{
+			// Smoke test that the canonical fluent chain still compiles and runs.
+			var executed = new List<string>();
+			var app = new App();
+
+			app.AddSystem(() => executed.Add("b"))
+				.InStage(Stage.Update)
+				.Label("b")
+				.Build();
+
+			app.AddSystem(() => executed.Add("a"))
+				.InStage(Stage.Update)
+				.Label("a")
+				.After("b")
+				.RunIf(_ => true)
+				.SingleThreaded()
+				.Build();
+
+			app.Run();
+
+			Assert.Equal(new[] { "b", "a" }, executed);
+		}
+
+		private struct MyRes
+		{
+			public int Value;
+		}
+
+		[Fact]
+		public void MultipleAppsHaveIsolatedBevyState()
+		{
+			// Bevy state (resources/events/states) now lives on the App, not on the World.
+			// Two independent Apps must therefore own independent state stores even if
+			// they happen to share or wrap the same World concept.
+			using var world1 = new World();
+			using var world2 = new World();
+			var app1 = new App(world1);
+			var app2 = new App(world2);
+
+			app1.AddResource(new MyRes { Value = 1 });
+			app2.AddResource(new MyRes { Value = 2 });
+
+			Assert.True(app1.HasResource<MyRes>());
+			Assert.True(app2.HasResource<MyRes>());
+
+			Assert.Equal(1, app1.GetResource<MyRes>().Value);
+			Assert.Equal(2, app2.GetResource<MyRes>().Value);
+		}
+
+		private enum PooledListSnapshotState
+		{
+			Idle,
+			Active
+		}
+
 	}
 }

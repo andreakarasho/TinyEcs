@@ -293,7 +293,9 @@ public static class ObserverExtensions
 			w.EmitTriggerInner(new OnSpawn(entityId));
 		};
 
-		// Hook into entity deletion - automatically emit OnDespawn
+		// Hook into entity deletion - automatically emit OnDespawn.
+		// Emit BEFORE removing entity-specific observers so they can see the
+		// despawn event (otherwise .Observe<OnDespawn>() never fires).
 		world.OnEntityDeleted += (w, entityId) =>
 		{
 			if (!state.HooksEnabled) return;
@@ -301,12 +303,9 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			if (state.EntityObservers.Remove(entityId))
-			{
-
-			}
-
 			w.EmitTriggerInner(new OnDespawn(entityId));
+
+			state.EntityObservers.Remove(entityId);
 		};
 
 		// Hook into component set - queue for deferred processing
@@ -341,7 +340,9 @@ public static class ObserverExtensions
 			}
 		};
 
-		// Hook into component unset - automatically emit OnRemove
+		// Hook into component unset - emit OnRemove synchronously while the
+		// component value is still readable. Deferring would lose the value
+		// (the archetype move that follows OnComponentUnset removes the row).
 		world.OnComponentUnset += (w, entityId, componentInfo) =>
 		{
 			if (!state.HooksEnabled) return;
@@ -351,9 +352,7 @@ public static class ObserverExtensions
 
 			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
-				// Direct typed call - no reflection!
-				// handler.HandleUnset(w, entityId);
-				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Remove));
+				handler.HandleUnset(w, entityId);
 			}
 		};
 	}

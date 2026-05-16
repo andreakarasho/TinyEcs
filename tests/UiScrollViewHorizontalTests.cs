@@ -67,7 +67,7 @@ public class UiScrollViewHorizontalTests
 
         // Calculate layout explicitly
         var world = app.GetWorld();
-        var ui = world.GetResource<FlexboxUiState>();
+        var ui = app.GetResource<FlexboxUiState>();
         ui.CalculateLayout(1280, 720);
 
         // Run a frame to sync layouts and compute scrollable content size

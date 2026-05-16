@@ -20,7 +20,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Get the pointer input state resource
-		var pointerState = world.GetResource<PointerInputState>();
+		var pointerState = app.GetResource<PointerInputState>();
 
 		// Simulate mouse press
 		pointerState.Position = position;
@@ -234,7 +234,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify checkbox was created
@@ -316,7 +316,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify toggle was created
@@ -420,7 +420,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify radio buttons were created
@@ -521,7 +521,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify text input was created
@@ -574,7 +574,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify dropdown was created
@@ -651,7 +651,7 @@ public class UiThemedWidgetTests
 		var world = app.GetWorld();
 
 		// Set up delta time for interaction
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = 0.016f; // 60 FPS
 
 		// Verify dropdown was created with initial value

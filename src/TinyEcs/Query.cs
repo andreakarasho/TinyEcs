@@ -81,11 +81,17 @@ public sealed class QueryBuilder
 public sealed class Query
 {
 	private readonly IQueryTerm[] _terms;
+	private readonly ulong[] _termIds;
+	private readonly TermOp[] _termOps;
+	private readonly ulong[]? _withMask;
+	private readonly ulong[]? _withoutMask;
+	private readonly bool _fastPath;
 	private readonly List<Archetype> _matchedArchetypes;
 	private readonly HashSet<EcsID> _archetypesIdSet;
 	private EcsID _lastArchetypeIdMatched;
 	private ulong _lastStructuralVersion;
 	private readonly int[] _indices;
+	private readonly ulong[] _termIdsAccess;
 
 	internal Query(World world, IQueryTerm[] terms)
 	{
@@ -97,9 +103,51 @@ public sealed class Query
 		terms.CopyTo(_terms, 0);
 		Array.Sort(_terms);
 
+		_termIds = new ulong[_terms.Length];
+		_termOps = new TermOp[_terms.Length];
+		for (var i = 0; i < _terms.Length; i++)
+		{
+			_termIds[i] = _terms[i].Id;
+			_termOps[i] = _terms[i].Op;
+		}
+
+		var words = world.ComponentBitsetWords;
+		var maxBit = (ulong)(words << 6);
+		var fast = words > 0;
+		ulong[]? withMask = null;
+		ulong[]? withoutMask = null;
+		if (fast)
+		{
+			withMask = new ulong[words];
+			withoutMask = new ulong[words];
+			for (var i = 0; i < _terms.Length; i++)
+			{
+				var id = _termIds[i];
+#if USE_PAIR
+				if (id.IsPair()) { fast = false; break; }
+#endif
+				if (id >= maxBit) { fast = false; break; }
+				var w = (int)(id >> 6);
+				var bit = 1ul << (int)(id & 63);
+				switch (_termOps[i])
+				{
+					case TermOp.With: withMask[w] |= bit; break;
+					case TermOp.Without: withoutMask[w] |= bit; break;
+					case TermOp.Optional: break;
+				}
+			}
+		}
+		_fastPath = fast;
+		_withMask = fast ? withMask : null;
+		_withoutMask = fast ? withoutMask : null;
+
 		TermsAccess = terms
 			.Where(s => Lookup.GetComponent(s.Id).Size > 0)
 			.ToArray();
+
+		_termIdsAccess = new ulong[TermsAccess.Length];
+		for (var i = 0; i < TermsAccess.Length; i++)
+			_termIdsAccess[i] = TermsAccess[i].Id;
 
 		_indices = new int[TermsAccess.Length];
 		_indices.AsSpan().Fill(-1);
@@ -107,6 +155,11 @@ public sealed class Query
 
 	internal World World { get; }
 	internal IQueryTerm[] TermsAccess { get; }
+	internal ulong[] TermIds => _termIds;
+	internal TermOp[] TermOps => _termOps;
+	internal ulong[]? WithMask => _withMask;
+	internal ulong[]? WithoutMask => _withoutMask;
+	internal bool FastPath => _fastPath;
 
 
 
@@ -121,7 +174,7 @@ public sealed class Query
 		_lastStructuralVersion = World.StructuralChangeVersion;
 
 		_matchedArchetypes.Clear();
-		World.Root.GetSuperSets(_terms.AsSpan(), _matchedArchetypes);
+		World.Root.GetSuperSets(this, _matchedArchetypes);
 
 		_archetypesIdSet.Clear();
 		foreach (var arch in _matchedArchetypes)
@@ -162,7 +215,7 @@ public sealed class Query
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
 	{
-		return new(archetypes, TermsAccess, _indices, start, count);
+		return new(archetypes, _termIdsAccess, _indices, start, count);
 	}
 }
 
@@ -172,16 +225,16 @@ public ref struct QueryIterator
 {
 	private ReadOnlySpan<Archetype>.Enumerator _archetypeIterator;
 	private ReadOnlySpan<ArchetypeChunk>.Enumerator _chunkIterator;
-	private readonly ReadOnlySpan<IQueryTerm> _terms;
+	private readonly ReadOnlySpan<ulong> _termIds;
 	private readonly Span<int> _indices;
 	private readonly int _start, _startSafe, _count;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<IQueryTerm> terms, Span<int> indices, int start, int count)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<ulong> termIds, Span<int> indices, int start, int count)
 	{
 		_archetypeIterator = archetypes.GetEnumerator();
-		_terms = terms;
+		_termIds = termIds;
 		_indices = indices;
 		_start = start;
 		_startSafe = start & Archetype.CHUNK_THRESHOLD;
@@ -203,39 +256,45 @@ public ref struct QueryIterator
 		return _indices.IndexOf(_archetypeIterator.Current.GetComponentIndex<T>());
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
-	{
 #if NET9_0_OR_GREATER
-		Unsafe.SkipInit(out DataRow<T> data);
-#else
-		var data = new DataRow<T>();
-#endif
-
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly TRow GetColumn<T, TRow>(int index)
+		where T : struct
+		where TRow : IDataRow<TRow, T>, allows ref struct
+	{
 		if (index < 0 || index >= _indices.Length)
-		{
-			data.Value.Ref = ref Unsafe.NullRef<T>();
-			data.Size = 0;
-			return data;
-		}
+			return TRow.CreateAbsent();
 
 		var i = _indices[index];
 		if (i < 0)
-		{
-			data.Value.Ref = ref Unsafe.NullRef<T>();
-			data.Size = 0;
-			return data;
-		}
+			return TRow.CreateAbsent();
 
 		ref readonly var chunk = ref _chunkIterator.Current;
 		ref var column = ref chunk.GetColumn(i);
 		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
 
-		data.Size = Unsafe.SizeOf<T>();
-		data.Value.Ref = ref Unsafe.Add(ref reference, _startSafe);
-
-		return data;
+		return TRow.CreateFrom(ref Unsafe.Add(ref reference, _startSafe));
 	}
+#else
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public readonly DataRow<T> GetColumn<T>(int index) where T : struct
+	{
+		var data = new DataRow<T>();
+
+		if (index < 0 || index >= _indices.Length)
+			return data;
+
+		var i = _indices[index];
+		if (i < 0)
+			return data;
+
+		ref readonly var chunk = ref _chunkIterator.Current;
+		ref var column = ref chunk.GetColumn(i);
+		ref var reference = ref MemoryMarshal.GetArrayDataReference(Unsafe.As<T[]>(column.Data));
+
+		return new DataRow<T>(ref Unsafe.Add(ref reference, _startSafe));
+	}
+#endif
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public readonly Span<uint> GetChangedTicks(int index)
@@ -337,7 +396,7 @@ public ref struct QueryIterator
 
 		ref readonly var arch = ref _archetypeIterator.Current;
 		for (var i = 0; i < _indices.Length; ++i)
-			_indices[i] = arch.GetComponentIndex(_terms[i].Id);
+			_indices[i] = arch.GetComponentIndex(_termIds[i]);
 		_chunkIterator = arch.Chunks[(_start >> Archetype.CHUNK_LOG2)..].GetEnumerator();
 
 		goto REDO;

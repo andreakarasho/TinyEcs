@@ -12,7 +12,8 @@
     string ActionParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
     string FuncParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
     string ParamDecls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"var p{i} = new T{i}();"));
-    string FetchCalls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(world);"));
+    string InitCalls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"p{i}.Initialize(ownerApp);"));
+    string FetchCalls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(ownerApp);"));
 #>
 #pragma warning disable 1591
 #nullable enable
@@ -77,7 +78,9 @@ public static class SystemExtensions
 	public static ISystemConfigurator RunIf<<#= generics #>>(this ISystemConfigurator configurator, Func<<#= generics #>, bool> condition)
 		<#= whereClause #>
 	{
+		var ownerApp = ((SystemConfigurator)configurator).App;
 		<#= paramDecls #>
+		<#= InitCalls(i) #>
 		return configurator.RunIf(world =>
 		{
 			<#= fetchCalls #>
@@ -88,57 +91,4 @@ public static class SystemExtensions
     }
 #>
 
-	// ============================================================================
-	// RunIf Extensions - ISystemConfiguratorLabeled
-	// ============================================================================
-<#
-    for (var i = 1; i <= MAX_PARAMS; ++i)
-    {
-        var generics = GenericParams(i);
-        var whereClause = WhereConstraints(i);
-        var paramDecls = ParamDecls(i);
-        var fetchCalls = FetchCalls(i);
-        var funcParams = FuncParams(i);
-#>
-
-	public static ISystemConfiguratorLabeled RunIf<<#= generics #>>(this ISystemConfiguratorLabeled configurator, Func<<#= generics #>, bool> condition)
-		<#= whereClause #>
-	{
-		<#= paramDecls #>
-		return configurator.RunIf(world =>
-		{
-			<#= fetchCalls #>
-			return condition(<#= funcParams #>);
-		});
-	}
-<#
-    }
-#>
-
-	// ============================================================================
-	// RunIf Extensions - ISystemConfiguratorOrdered
-	// ============================================================================
-<#
-    for (var i = 1; i <= MAX_PARAMS; ++i)
-    {
-        var generics = GenericParams(i);
-        var whereClause = WhereConstraints(i);
-        var paramDecls = ParamDecls(i);
-        var fetchCalls = FetchCalls(i);
-        var funcParams = FuncParams(i);
-#>
-
-	public static ISystemConfiguratorOrdered RunIf<<#= generics #>>(this ISystemConfiguratorOrdered configurator, Func<<#= generics #>, bool> condition)
-		<#= whereClause #>
-	{
-		<#= paramDecls #>
-		return configurator.RunIf(world =>
-		{
-			<#= fetchCalls #>
-			return condition(<#= funcParams #>);
-		});
-	}
-<#
-    }
-#>
 }

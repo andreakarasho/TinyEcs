@@ -1859,14 +1859,6 @@ struct SpriteBundle : IBundle
 	public Sprite Sprite;
 	public Rotation Rotation;
 
-	public readonly void Insert(EntityView entity)
-	{
-		entity.Set(Position);
-		entity.Set(Velocity);
-		entity.Set(Sprite);
-		entity.Set(Rotation);
-	}
-
 	public readonly void Insert(EntityCommands entity)
 	{
 		entity.Insert(Position);

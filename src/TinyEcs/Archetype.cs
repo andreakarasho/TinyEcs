@@ -154,6 +154,8 @@ public sealed class Archetype : IComparable<Archetype>
 	private int _count;
 	private long _lastTraversalVersion;
 	private readonly int[] _fastLookup;
+	private readonly ulong[] _componentBits;
+	private readonly int _bitsetMaxId;
 
 	internal Archetype(
 		World world,
@@ -210,6 +212,19 @@ public sealed class Archetype : IComparable<Archetype>
 			.ToFrozenDictionary(s => s.Key, v => v.First().Value);
 #endif
 
+		var words = world.ComponentBitsetWords;
+		_bitsetMaxId = words << 6;
+		_componentBits = words > 0 ? new ulong[words] : Array.Empty<ulong>();
+		for (var i = 0; i < sign.Length; ++i)
+		{
+			var sid = sign[i].ID;
+#if USE_PAIR
+			if (sid.IsPair()) continue;
+#endif
+			if (sid < (ulong)_bitsetMaxId)
+				_componentBits[(int)(sid >> 6)] |= 1ul << (int)(sid & 63);
+		}
+
 		_add = new();
 		_remove = new();
 	}
@@ -250,7 +265,8 @@ public sealed class Archetype : IComparable<Archetype>
 			return _componentsLookup.GetValueOrDefault(id, -1);
 		}
 #endif
-		return (int)id >= _fastLookup.Length ? -1 : _fastLookup[(int)id];
+		var i = (uint)id;
+		return i >= (uint)_fastLookup.Length ? -1 : _fastLookup[i];
 	}
 
 #if USE_PAIR
@@ -265,10 +281,20 @@ public sealed class Archetype : IComparable<Archetype>
 		return _allLookup.GetValueOrDefault(id, -1);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal bool HasIndex(EcsID id)
 	{
+#if USE_PAIR
+		if (id.IsPair())
+			return _allLookup.ContainsKey(id);
+#endif
+		if (id < (ulong)_bitsetMaxId)
+			return (_componentBits[(int)(id >> 6)] & (1ul << (int)(id & 63))) != 0;
 		return _allLookup.ContainsKey(id);
 	}
+
+	internal ReadOnlySpan<ulong> ComponentBits => _componentBits;
+	internal int BitsetMaxId => _bitsetMaxId;
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int GetComponentIndex<T>() where T : struct
@@ -527,11 +553,16 @@ public sealed class Archetype : IComparable<Archetype>
 		return null;
 	}
 
-	internal void GetSuperSets(ReadOnlySpan<IQueryTerm> terms, List<Archetype> matched)
+	internal void GetSuperSets(Query query, List<Archetype> matched)
 	{
 		var stack = ArrayPool<Archetype>.Shared.Rent(64);
 		var version = Interlocked.Increment(ref _traversalVersion);
 		var top = 0;
+		var fastPath = query.FastPath;
+		var withMask = query.WithMask;
+		var withoutMask = query.WithoutMask;
+		var termIds = query.TermIds;
+		var termOps = query.TermOps;
 
 		try
 		{
@@ -548,7 +579,9 @@ public sealed class Archetype : IComparable<Archetype>
 
 				node._lastTraversalVersion = version;
 
-				var result = node.MatchWith(terms);
+				var result = fastPath
+					? FilterMatch.MatchBits(node, withMask!, withoutMask!)
+					: FilterMatch.MatchSwitch(node, termIds, termOps);
 				if (result == ArchetypeSearchResult.Stop)
 				{
 					continue;

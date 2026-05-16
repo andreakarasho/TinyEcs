@@ -27,7 +27,7 @@ public class InteractionTests
 	private static void SetDeltaTime(App app, float seconds = 0.016f)
 	{
 		var world = app.GetWorld();
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 		deltaTime.Seconds = seconds;
 	}
 
@@ -213,7 +213,7 @@ public class InteractionTests
 		app.RunStartup();
 
 		var world = app.GetWorld();
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 
 		Assert.NotNull(deltaTime);
 		Assert.Equal(0f, deltaTime.Seconds);
@@ -226,7 +226,7 @@ public class InteractionTests
 		app.RunStartup();
 
 		var world = app.GetWorld();
-		var deltaTime = world.GetResource<DeltaTime>();
+		var deltaTime = app.GetResource<DeltaTime>();
 
 		deltaTime.Seconds = 0.016f;
 

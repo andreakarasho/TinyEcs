@@ -251,7 +251,7 @@ internal sealed class EntitySparseSet<T>
 	{
 		var gen = index & EcsConst.ECS_GENERATION_MASK;
 		EcsAssert.Assert(gen == (index & (0xFFFF_FFFFul << 32)));
-		index -= gen;
+		index &= ~EcsConst.ECS_GENERATION_MASK;
 
 		return gen;
 	}

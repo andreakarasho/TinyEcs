@@ -35,9 +35,9 @@ namespace TinyEcs.Bevy
     {
         var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
         var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
-        var ptrList = GenerateSequence(i + 1, "\n\t\t", j => $"private DataRow<T{j}> _current{j};");
-        var ptrSet = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"_current{j} = _iterator.GetColumn<T{j}>({j});");
-        var ptrAdvance = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"_current{j}.Next();");
+        var ptrList = GenerateSequence(i + 1, "\n\t\t", j => $"internal DataRow<T{j}> _current{j};");
+        var ptrSetRow = GenerateSequence(i + 1, "\n\t\t\t", j => $"row._current{j} = iterator.GetColumn<T{j}, DataRow<T{j}>>({j});");
+        var ptrAdvanceRow = GenerateSequence(i + 1, "\n\t\t\t", j => $"row._current{j}.Next();");
         var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
         var fieldAssignments = GenerateSequence(i + 1, "\n\t\t\t", j => $"ptr{j} = _current{j}.Value;");
         var queryBuilderCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"builder.With<T{j}>();");
@@ -51,18 +51,9 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
         <#= ptrList #>
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
 
         public static void Build(QueryBuilder builder)
         {
@@ -70,14 +61,21 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<<#= generics #>> CreateIterator(QueryIterator iterator)
-            => new Data<<#= generics #>>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<<#= generics #>> Current
+        public static void LoadChunk(ref Data<<#= generics #>> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            <#= ptrSetRow #>
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<<#= generics #>> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            <#= ptrAdvanceRow #>
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -92,31 +90,6 @@ namespace TinyEcs.Bevy
             entity = new (in _entities[_index].ID);
             <#= fieldAssignments #>
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                <#= ptrSet #>
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                <#= ptrAdvance #>
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<<#= generics #>> GetEnumerator() => this;
     }
 
 <#
