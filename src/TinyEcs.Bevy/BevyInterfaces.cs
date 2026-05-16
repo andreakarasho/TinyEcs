@@ -19,10 +19,21 @@ public interface IQueryIterator<TData>
 	bool MoveNext();
 }
 
-public interface IData<TData> : ITermCreator, IQueryIterator<TData>
+public interface IData<TData> : ITermCreator
 	where TData : struct, allows ref struct
 {
-	public static abstract TData CreateIterator(QueryIterator iterator);
+	/// <summary>
+	/// Fill <paramref name="row"/>'s column pointers + entity span from the
+	/// iterator's current chunk. Called once per chunk transition.
+	/// </summary>
+	public static abstract void LoadChunk(ref TData row, QueryIterator iterator);
+
+	/// <summary>
+	/// Bump per-row pointers to the next element within the current chunk.
+	/// Returns false when the chunk is exhausted, prompting the caller to
+	/// pull the next chunk and call <see cref="LoadChunk"/>.
+	/// </summary>
+	public static abstract bool TryAdvance(ref TData row);
 }
 
 public interface IFilter<TFilter> : ITermCreator, IQueryIterator<TFilter>
@@ -68,10 +79,12 @@ public ref struct Empty : IData<Empty>, IFilter<Empty>, TinyEcs.IQueryComponentA
 
 	public readonly void SetTicks(uint lastRun, uint thisRun) { }
 
-	static Empty IData<Empty>.CreateIterator(QueryIterator iterator)
+	static void IData<Empty>.LoadChunk(ref Empty row, QueryIterator iterator)
 	{
-		return new Empty(iterator, false);
+		row._iterator = iterator;
 	}
+
+	static bool IData<Empty>.TryAdvance(ref Empty row) => false;
 
 	static Empty IFilter<Empty>.CreateIterator(QueryIterator iterator)
 	{

@@ -15,18 +15,9 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
 
         public static void Build(QueryBuilder builder)
         {
@@ -34,14 +25,21 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0> CreateIterator(QueryIterator iterator)
-            => new Data<T0>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0> Current
+        public static void LoadChunk(ref Data<T0> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -56,31 +54,6 @@ namespace TinyEcs.Bevy
             entity = new (in _entities[_index].ID);
             ptr0 = _current0.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -91,19 +64,10 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
 
         public static void Build(QueryBuilder builder)
         {
@@ -112,14 +76,23 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1> Current
+        public static void LoadChunk(ref Data<T0, T1> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -136,33 +109,6 @@ namespace TinyEcs.Bevy
             ptr0 = _current0.Value;
 			ptr1 = _current1.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -173,20 +119,11 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
 
         public static void Build(QueryBuilder builder)
         {
@@ -196,14 +133,25 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2> Current
+        public static void LoadChunk(ref Data<T0, T1, T2> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -222,35 +170,6 @@ namespace TinyEcs.Bevy
 			ptr1 = _current1.Value;
 			ptr2 = _current2.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -261,21 +180,12 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
 
         public static void Build(QueryBuilder builder)
         {
@@ -286,14 +196,27 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -314,37 +237,6 @@ namespace TinyEcs.Bevy
 			ptr2 = _current2.Value;
 			ptr3 = _current3.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -355,22 +247,13 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
 
         public static void Build(QueryBuilder builder)
         {
@@ -382,14 +265,29 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -412,39 +310,6 @@ namespace TinyEcs.Bevy
 			ptr3 = _current3.Value;
 			ptr4 = _current4.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -455,23 +320,14 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
 
         public static void Build(QueryBuilder builder)
         {
@@ -484,14 +340,31 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -516,41 +389,6 @@ namespace TinyEcs.Bevy
 			ptr4 = _current4.Value;
 			ptr5 = _current5.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -561,24 +399,15 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
 
         public static void Build(QueryBuilder builder)
         {
@@ -592,14 +421,33 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -626,43 +474,6 @@ namespace TinyEcs.Bevy
 			ptr5 = _current5.Value;
 			ptr6 = _current6.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -673,25 +484,16 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
 
         public static void Build(QueryBuilder builder)
         {
@@ -706,14 +508,35 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -742,45 +565,6 @@ namespace TinyEcs.Bevy
 			ptr6 = _current6.Value;
 			ptr7 = _current7.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -791,26 +575,17 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
 
         public static void Build(QueryBuilder builder)
         {
@@ -826,14 +601,37 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -864,47 +662,6 @@ namespace TinyEcs.Bevy
 			ptr7 = _current7.Value;
 			ptr8 = _current8.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -915,27 +672,18 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
 
         public static void Build(QueryBuilder builder)
         {
@@ -952,14 +700,39 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -992,49 +765,6 @@ namespace TinyEcs.Bevy
 			ptr8 = _current8.Value;
 			ptr9 = _current9.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1045,28 +775,19 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1084,14 +805,41 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1126,51 +874,6 @@ namespace TinyEcs.Bevy
 			ptr9 = _current9.Value;
 			ptr10 = _current10.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1181,29 +884,20 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-		private DataRow<T11> _current11;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
+		internal DataRow<T11> _current11;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1222,14 +916,43 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+			row._current11.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1266,53 +989,6 @@ namespace TinyEcs.Bevy
 			ptr10 = _current10.Value;
 			ptr11 = _current11.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-				_current11.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1323,30 +999,21 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-		private DataRow<T11> _current11;
-		private DataRow<T12> _current12;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
+		internal DataRow<T11> _current11;
+		internal DataRow<T12> _current12;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1366,14 +1033,45 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+			row._current11.Next();
+			row._current12.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1412,55 +1110,6 @@ namespace TinyEcs.Bevy
 			ptr11 = _current11.Value;
 			ptr12 = _current12.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
-				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-				_current11.Next();
-				_current12.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1471,31 +1120,22 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-		private DataRow<T11> _current11;
-		private DataRow<T12> _current12;
-		private DataRow<T13> _current13;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
+		internal DataRow<T11> _current11;
+		internal DataRow<T12> _current12;
+		internal DataRow<T13> _current13;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1516,14 +1156,47 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
+			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+			row._current11.Next();
+			row._current12.Next();
+			row._current13.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1564,57 +1237,6 @@ namespace TinyEcs.Bevy
 			ptr12 = _current12.Value;
 			ptr13 = _current13.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
-				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
-				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-				_current11.Next();
-				_current12.Next();
-				_current13.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1625,32 +1247,23 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-		private DataRow<T11> _current11;
-		private DataRow<T12> _current12;
-		private DataRow<T13> _current13;
-		private DataRow<T14> _current14;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
+		internal DataRow<T11> _current11;
+		internal DataRow<T12> _current12;
+		internal DataRow<T13> _current13;
+		internal DataRow<T14> _current14;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1672,14 +1285,49 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
+			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
+			row._current14 = iterator.GetColumn<T14, DataRow<T14>>(14);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+			row._current11.Next();
+			row._current12.Next();
+			row._current13.Next();
+			row._current14.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1722,59 +1370,6 @@ namespace TinyEcs.Bevy
 			ptr13 = _current13.Value;
 			ptr14 = _current14.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
-				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
-				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
-				_current14 = _iterator.GetColumn<T14, DataRow<T14>>(14);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-				_current11.Next();
-				_current12.Next();
-				_current13.Next();
-				_current14.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> GetEnumerator() => this;
     }
 
     [SkipLocalsInit]
@@ -1785,33 +1380,24 @@ namespace TinyEcs.Bevy
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
-        private QueryIterator _iterator;
-        private int _index, _count;
-        private ReadOnlySpan<EntityView> _entities;
-        private DataRow<T0> _current0;
-		private DataRow<T1> _current1;
-		private DataRow<T2> _current2;
-		private DataRow<T3> _current3;
-		private DataRow<T4> _current4;
-		private DataRow<T5> _current5;
-		private DataRow<T6> _current6;
-		private DataRow<T7> _current7;
-		private DataRow<T8> _current8;
-		private DataRow<T9> _current9;
-		private DataRow<T10> _current10;
-		private DataRow<T11> _current11;
-		private DataRow<T12> _current12;
-		private DataRow<T13> _current13;
-		private DataRow<T14> _current14;
-		private DataRow<T15> _current15;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Data(QueryIterator queryIterator)
-        {
-            _iterator = queryIterator;
-            _index = -1;
-            _count = -1;
-        }
+        internal int _index, _count;
+        internal ReadOnlySpan<EntityView> _entities;
+        internal DataRow<T0> _current0;
+		internal DataRow<T1> _current1;
+		internal DataRow<T2> _current2;
+		internal DataRow<T3> _current3;
+		internal DataRow<T4> _current4;
+		internal DataRow<T5> _current5;
+		internal DataRow<T6> _current6;
+		internal DataRow<T7> _current7;
+		internal DataRow<T8> _current8;
+		internal DataRow<T9> _current9;
+		internal DataRow<T10> _current10;
+		internal DataRow<T11> _current11;
+		internal DataRow<T12> _current12;
+		internal DataRow<T13> _current13;
+		internal DataRow<T14> _current14;
+		internal DataRow<T15> _current15;
 
         public static void Build(QueryBuilder builder)
         {
@@ -1834,14 +1420,51 @@ namespace TinyEcs.Bevy
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> CreateIterator(QueryIterator iterator)
-            => new Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(iterator);
-
-        [System.Diagnostics.CodeAnalysis.UnscopedRef]
-        public ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> Current
+        public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> row, QueryIterator iterator)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref this;
+            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
+			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
+			row._current14 = iterator.GetColumn<T14, DataRow<T14>>(14);
+			row._current15 = iterator.GetColumn<T15, DataRow<T15>>(15);
+            row._entities = iterator.Entities();
+            row._index = 0;
+            row._count = iterator.Count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryAdvance(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> row)
+        {
+            if (++row._index >= row._count)
+                return false;
+            row._current0.Next();
+			row._current1.Next();
+			row._current2.Next();
+			row._current3.Next();
+			row._current4.Next();
+			row._current5.Next();
+			row._current6.Next();
+			row._current7.Next();
+			row._current8.Next();
+			row._current9.Next();
+			row._current10.Next();
+			row._current11.Next();
+			row._current12.Next();
+			row._current13.Next();
+			row._current14.Next();
+			row._current15.Next();
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1886,61 +1509,6 @@ namespace TinyEcs.Bevy
 			ptr14 = _current14.Value;
 			ptr15 = _current15.Value;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MoveNext()
-        {
-            if (++_index >= _count)
-            {
-                if (!_iterator.Next())
-                    return false;
-
-                _current0 = _iterator.GetColumn<T0, DataRow<T0>>(0);
-				_current1 = _iterator.GetColumn<T1, DataRow<T1>>(1);
-				_current2 = _iterator.GetColumn<T2, DataRow<T2>>(2);
-				_current3 = _iterator.GetColumn<T3, DataRow<T3>>(3);
-				_current4 = _iterator.GetColumn<T4, DataRow<T4>>(4);
-				_current5 = _iterator.GetColumn<T5, DataRow<T5>>(5);
-				_current6 = _iterator.GetColumn<T6, DataRow<T6>>(6);
-				_current7 = _iterator.GetColumn<T7, DataRow<T7>>(7);
-				_current8 = _iterator.GetColumn<T8, DataRow<T8>>(8);
-				_current9 = _iterator.GetColumn<T9, DataRow<T9>>(9);
-				_current10 = _iterator.GetColumn<T10, DataRow<T10>>(10);
-				_current11 = _iterator.GetColumn<T11, DataRow<T11>>(11);
-				_current12 = _iterator.GetColumn<T12, DataRow<T12>>(12);
-				_current13 = _iterator.GetColumn<T13, DataRow<T13>>(13);
-				_current14 = _iterator.GetColumn<T14, DataRow<T14>>(14);
-				_current15 = _iterator.GetColumn<T15, DataRow<T15>>(15);
-                _entities = _iterator.Entities();
-
-                _index = 0;
-                _count = _iterator.Count;
-            }
-            else
-            {
-                _current0.Next();
-				_current1.Next();
-				_current2.Next();
-				_current3.Next();
-				_current4.Next();
-				_current5.Next();
-				_current6.Next();
-				_current7.Next();
-				_current8.Next();
-				_current9.Next();
-				_current10.Next();
-				_current11.Next();
-				_current12.Next();
-				_current13.Next();
-				_current14.Next();
-				_current15.Next();
-            }
-
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> GetEnumerator() => this;
     }
 
 #endif

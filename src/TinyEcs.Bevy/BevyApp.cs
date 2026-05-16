@@ -103,7 +103,7 @@ public static class WorldExtensions
 	/// Create a query with automatic tick tracking for Changed/Added filters
 	/// </summary>
 	public static BevyQueryIter<TQueryData, Empty> Query<TQueryData>(this TinyEcs.World world)
-		where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+		where TQueryData : struct, IData<TQueryData>, allows ref struct
 	{
 		// Use world's tick system for change detection
 		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
@@ -123,7 +123,7 @@ public static class WorldExtensions
 	/// Create a query with automatic tick tracking for Changed/Added filters
 	/// </summary>
 	public static BevyQueryIter<TQueryData, TQueryFilter> Query<TQueryData, TQueryFilter>(this TinyEcs.World world)
-		where TQueryData : struct, IData<TQueryData>, IQueryIterator<TQueryData>, allows ref struct
+		where TQueryData : struct, IData<TQueryData>, allows ref struct
 		where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 	{
 		// Use world's tick system for change detection
