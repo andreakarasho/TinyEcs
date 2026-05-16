@@ -90,6 +90,7 @@ public sealed class Query
 	private EcsID _lastArchetypeIdMatched;
 	private ulong _lastStructuralVersion;
 	private readonly int[] _indices;
+	private readonly ulong[] _termIdsAccess;
 
 	internal Query(World world, IQueryTerm[] terms)
 	{
@@ -141,6 +142,10 @@ public sealed class Query
 		TermsAccess = terms
 			.Where(s => Lookup.GetComponent(s.Id).Size > 0)
 			.ToArray();
+
+		_termIdsAccess = new ulong[TermsAccess.Length];
+		for (var i = 0; i < TermsAccess.Length; i++)
+			_termIdsAccess[i] = TermsAccess[i].Id;
 
 		_indices = new int[TermsAccess.Length];
 		_indices.AsSpan().Fill(-1);
@@ -205,7 +210,7 @@ public sealed class Query
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
 	{
-		return new(archetypes, TermsAccess, _indices, start, count);
+		return new(archetypes, _termIdsAccess, _indices, start, count);
 	}
 }
 
@@ -215,16 +220,16 @@ public ref struct QueryIterator
 {
 	private ReadOnlySpan<Archetype>.Enumerator _archetypeIterator;
 	private ReadOnlySpan<ArchetypeChunk>.Enumerator _chunkIterator;
-	private readonly ReadOnlySpan<IQueryTerm> _terms;
+	private readonly ReadOnlySpan<ulong> _termIds;
 	private readonly Span<int> _indices;
 	private readonly int _start, _startSafe, _count;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<IQueryTerm> terms, Span<int> indices, int start, int count)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<ulong> termIds, Span<int> indices, int start, int count)
 	{
 		_archetypeIterator = archetypes.GetEnumerator();
-		_terms = terms;
+		_termIds = termIds;
 		_indices = indices;
 		_start = start;
 		_startSafe = start & Archetype.CHUNK_THRESHOLD;
@@ -386,7 +391,7 @@ public ref struct QueryIterator
 
 		ref readonly var arch = ref _archetypeIterator.Current;
 		for (var i = 0; i < _indices.Length; ++i)
-			_indices[i] = arch.GetComponentIndex(_terms[i].Id);
+			_indices[i] = arch.GetComponentIndex(_termIds[i]);
 		_chunkIterator = arch.Chunks[(_start >> Archetype.CHUNK_LOG2)..].GetEnumerator();
 
 		goto REDO;
