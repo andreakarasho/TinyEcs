@@ -103,7 +103,7 @@ internal sealed class EntitySparseSet<T>
 
 	public bool Contains(ulong outerIdx)
 	{
-		ref var chunk = ref GetChunkOrCreate((int)outerIdx >> 12);
+		ref var chunk = ref GetChunk((int)outerIdx >> 12);
 		if (Unsafe.IsNullRef(ref chunk) || chunk.Sparse == null)
 			return false;
 
@@ -258,7 +258,7 @@ internal sealed class EntitySparseSet<T>
 
 
 	private ref Chunk GetChunk(int index)
-		=> ref (index >= _chunks.Length ? ref Unsafe.NullRef<Chunk>() : ref _chunks[index]);
+		=> ref (index < 0 || index >= _chunks.Length ? ref Unsafe.NullRef<Chunk>() : ref _chunks[index]);
 
 	private ref Chunk GetChunkOrCreate(int index)
 	{

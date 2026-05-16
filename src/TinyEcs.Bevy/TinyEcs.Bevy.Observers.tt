@@ -13,7 +13,7 @@
         $"var p{i} = new T{i}();\n\t\tp{i}.Initialize(app);"));
     string FetchCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"p{i}.Fetch(app);"));
     string CallbackParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
-
+    string ApplyCalls(int count) => string.Join("\n\t\t\t", Enumerable.Range(1, count).Select(i => $"if (p{i} is Commands cmd{i}) cmd{i}.Apply();"));
 #>
 #pragma warning disable 1591
 #nullable enable
@@ -32,12 +32,13 @@ public static partial class AppObserverExtensions
         var paramDecls = ParamDecls(i);
         var fetchCalls = FetchCalls(i);
         var callbackParams = CallbackParams(i);
+        var applyCalls = ApplyCalls(i);
 #>
 	/// <summary>
 	/// Register an observer with system parameters
 	/// </summary>
 	public static App AddObserver<TTrigger, <#= generics #>>(this App app, Action<TTrigger, <#= generics #>> callback)
-		where TTrigger : struct, ITrigger
+		where TTrigger : ITrigger
 		<#= whereClause #>
 	{
 		var world = app.GetWorld();
@@ -54,6 +55,7 @@ public static partial class AppObserverExtensions
 		{
 			<#= fetchCalls #>
 			callback(trigger, <#= callbackParams #>);
+			<#= applyCalls #>
 		});
 
 		return app;

@@ -208,7 +208,12 @@ public sealed partial class World
 	/// <returns></returns>
 	public EntityView Entity<T>() where T : struct
 	{
-		return new EntityView(this, Component<T>().ID);
+		var id = Component<T>().ID;
+		// Mirror Entity(string) behavior so typed and named lookups resolve to
+		// the same entity: register the component's full type name on first
+		// access. Idempotent for repeated calls.
+		NamingEntityMapper.SetName(id, Lookup.Component<T>.Name);
+		return new EntityView(this, id);
 	}
 
 	/// <summary>
