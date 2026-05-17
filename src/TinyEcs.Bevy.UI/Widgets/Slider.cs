@@ -1,5 +1,4 @@
 using System.Numerics;
-using TinyEcs.Bevy;
 
 namespace TinyEcs.Bevy.UI.Widgets;
 
@@ -33,107 +32,111 @@ public struct SliderChanged
 	public float Value;
 }
 
+public sealed class SliderQueries : CompositeSystemParam
+{
+	public readonly Query<Data<Slider>> Sliders;
+	public readonly Query<Data<SliderThumb>> Thumbs;
+	public readonly Query<Data<SliderDragState>> DragStates;
+	public readonly Query<Data<ComputedNode>> Computed;
+	public readonly Query<Data<TinyEcs.Children>> Children;
+	public readonly Query<Data<TinyEcs.Parent>> Parents;
+	public readonly Query<Data<Node>> Nodes;
+
+	public SliderQueries()
+	{
+		Sliders    = Add(new Query<Data<Slider>>());
+		Thumbs     = Add(new Query<Data<SliderThumb>>());
+		DragStates = Add(new Query<Data<SliderDragState>>());
+		Computed   = Add(new Query<Data<ComputedNode>>());
+		Children   = Add(new Query<Data<TinyEcs.Children>>());
+		Parents    = Add(new Query<Data<TinyEcs.Parent>>());
+		Nodes      = Add(new Query<Data<Node>>());
+	}
+}
+
 public sealed class SliderPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		app.AddSystem((WorldParam wp, Query<Data<Slider>> sliders) =>
-		{
-			PositionThumbs(wp.World, sliders);
-		})
-		.InStage(Stage.PreUpdate)
-		.SingleThreaded()
-		.Build();
+		app.AddSystem((SliderQueries q) => PositionThumbs(q))
+		.InStage(Stage.PreUpdate).SingleThreaded().Build();
 
-		app.AddObserver<On<UiPointerDown>, WorldParam>(
-			(trigger, wp) => OnPointerDown(wp.World, trigger.EntityId, trigger.Event.Position));
+		app.AddObserver<On<UiPointerDown>, Commands, SliderQueries>(
+			(trigger, cmd, q) => OnPointerDown(cmd, q, trigger.EntityId, trigger.Event.Position));
 
-		app.AddObserver<On<UiPointerUp>, WorldParam>(
-			(trigger, wp) => OnPointerUp(wp.World, trigger.EntityId));
+		app.AddObserver<On<UiPointerUp>, SliderQueries>(
+			(trigger, q) => OnPointerUp(q, trigger.EntityId));
 
-		app.AddSystem((WorldParam wp, Res<UiPointer> pointer,
-			Query<Data<SliderDragState>, Filter<With<SliderThumb>>> thumbs) =>
-		{
-			DragMotion(wp.World, pointer.Value, thumbs);
-		})
-		.InStage(Stage.Update)
-		.SingleThreaded()
-		.Build();
+		app.AddSystem((Commands cmd, Res<UiPointer> pointer, SliderQueries q) =>
+			DragMotion(cmd, pointer.Value, q))
+		.InStage(Stage.Update).SingleThreaded().Build();
 	}
 
-	private static void PositionThumbs(World world, Query<Data<Slider>> sliders)
+	private static void PositionThumbs(SliderQueries q)
 	{
-		foreach (var (eid, sliderPtr) in sliders)
+		foreach (var (eid, sliderPtr) in q.Sliders)
 		{
-			ref var slider = ref sliderPtr.Ref;
-			var sliderView = world.Entity(eid.Ref);
-			if (!sliderView.Has<ComputedNode>() || !sliderView.Has<TinyEcs.Children>())
+			if (!q.Computed.Contains(eid.Ref) || !q.Children.Contains(eid.Ref))
 				continue;
 
+			var (_, kids) = q.Children.Get(eid.Ref);
 			ulong thumbId = 0;
-			ref var children = ref sliderView.Get<TinyEcs.Children>();
-			foreach (var cid in children)
+			foreach (var cid in kids.Ref)
 			{
-				var cv = world.Entity(cid);
-				if (cv.Has<SliderThumb>()) { thumbId = cid; break; }
+				if (q.Thumbs.Contains(cid)) { thumbId = cid; break; }
 			}
-			if (thumbId == 0)
+			if (thumbId == 0 || !q.Nodes.Contains(thumbId))
 				continue;
 
-			var thumbView = world.Entity(thumbId);
-			if (!thumbView.Has<Node>())
-				continue;
-
-			ref var barComputed = ref sliderView.Get<ComputedNode>();
-			ref var thumbNode = ref thumbView.Get<Node>();
+			var (_, barComputed) = q.Computed.Get(eid.Ref);
+			var (_, thumbNode) = q.Nodes.Get(thumbId);
+			ref var slider = ref sliderPtr.Ref;
 
 			bool vertical = slider.Orientation == ScrollbarOrientation.Vertical;
-			float trackLen = vertical ? barComputed.Size.Y : barComputed.Size.X;
+			float trackLen = vertical ? barComputed.Ref.Size.Y : barComputed.Ref.Size.X;
 			float thumbLen = slider.ThumbLength > 0 ? slider.ThumbLength : 16f;
 			float range = MathF.Max(0.0001f, slider.Max - slider.Min);
 			float t = Math.Clamp((slider.Value - slider.Min) / range, 0f, 1f);
 			float pos = t * MathF.Max(0f, trackLen - thumbLen);
 
-			thumbNode.PositionType = PositionType.Absolute;
+			thumbNode.Ref.PositionType = PositionType.Absolute;
 			if (vertical)
 			{
-				thumbNode.Top = Val.Px(pos);
-				thumbNode.Left = Val.Px(0);
-				thumbNode.Width = Val.Px(barComputed.Size.X);
-				thumbNode.Height = Val.Px(thumbLen);
+				thumbNode.Ref.Top = Val.Px(pos);
+				thumbNode.Ref.Left = Val.Px(0);
+				thumbNode.Ref.Width = Val.Px(barComputed.Ref.Size.X);
+				thumbNode.Ref.Height = Val.Px(thumbLen);
 			}
 			else
 			{
-				thumbNode.Top = Val.Px(0);
-				thumbNode.Left = Val.Px(pos);
-				thumbNode.Width = Val.Px(thumbLen);
-				thumbNode.Height = Val.Px(barComputed.Size.Y);
+				thumbNode.Ref.Top = Val.Px(0);
+				thumbNode.Ref.Left = Val.Px(pos);
+				thumbNode.Ref.Width = Val.Px(thumbLen);
+				thumbNode.Ref.Height = Val.Px(barComputed.Ref.Size.Y);
 			}
 		}
 	}
 
-	private static void OnPointerDown(World world, ulong entityId, Vector2 pointer)
+	private static void OnPointerDown(Commands cmd, SliderQueries q, ulong entityId, Vector2 pointer)
 	{
-		var view = world.Entity(entityId);
-
-		// Thumb pressed: snap drag state from current value.
-		if (view.Has<SliderThumb>() && view.Has<SliderDragState>())
+		if (q.Thumbs.Contains(entityId) && q.DragStates.Contains(entityId))
 		{
-			if (!TryResolveSlider(world, entityId, out _, out var slider, out var trackPixels))
+			if (!TryResolveSlider(q, entityId, out _, out var slider, out var trackPixels))
 				return;
-			ref var state = ref view.Get<SliderDragState>();
-			state.Dragging = true;
-			state.StartValue = slider.Value;
-			state.StartPointer = slider.Orientation == ScrollbarOrientation.Vertical ? pointer.Y : pointer.X;
-			state.TrackPixels = trackPixels;
+			var (_, state) = q.DragStates.Get(entityId);
+			state.Ref.Dragging = true;
+			state.Ref.StartValue = slider.Value;
+			state.Ref.StartPointer = slider.Orientation == ScrollbarOrientation.Vertical ? pointer.Y : pointer.X;
+			state.Ref.TrackPixels = trackPixels;
 			return;
 		}
 
-		// Track pressed: jump value + engage thumb drag.
-		if (!view.Has<Slider>() || !view.Has<ComputedNode>())
+		if (!q.Sliders.Contains(entityId) || !q.Computed.Contains(entityId))
 			return;
-		ref var trackSlider = ref view.Get<Slider>();
-		ref var bc = ref view.Get<ComputedNode>();
+		var (_, sliderPtr) = q.Sliders.Get(entityId);
+		var (_, computedPtr) = q.Computed.Get(entityId);
+		ref var trackSlider = ref sliderPtr.Ref;
+		ref var bc = ref computedPtr.Ref;
 		bool verticalT = trackSlider.Orientation == ScrollbarOrientation.Vertical;
 		float origin = verticalT ? bc.Position.Y : bc.Position.X;
 		float size   = verticalT ? bc.Size.Y     : bc.Size.X;
@@ -145,64 +148,61 @@ public sealed class SliderPlugin : IPlugin
 		if (newValue != trackSlider.Value)
 		{
 			trackSlider.Value = newValue;
-			world.EmitTrigger(entityId, new SliderChanged { Value = newValue });
+			cmd.Entity(entityId).EmitTrigger(new SliderChanged { Value = newValue }, propagate: true);
 		}
 
-		if (!view.Has<TinyEcs.Children>())
+		if (!q.Children.Contains(entityId))
 			return;
 		float thumbLen = trackSlider.ThumbLength > 0 ? trackSlider.ThumbLength : 16f;
 		float trackPx  = MathF.Max(0f, size - thumbLen);
-		ref var children = ref view.Get<TinyEcs.Children>();
-		foreach (var cid in children)
+		var (_, kids) = q.Children.Get(entityId);
+		foreach (var cid in kids.Ref)
 		{
-			var cv = world.Entity(cid);
-			if (!cv.Has<SliderThumb>() || !cv.Has<SliderDragState>())
+			if (!q.Thumbs.Contains(cid) || !q.DragStates.Contains(cid))
 				continue;
-			ref var ds = ref cv.Get<SliderDragState>();
-			ds.Dragging   = true;
-			ds.StartValue = newValue;
-			ds.StartPointer = verticalT ? pointer.Y : pointer.X;
-			ds.TrackPixels = trackPx;
+			var (_, ds) = q.DragStates.Get(cid);
+			ds.Ref.Dragging   = true;
+			ds.Ref.StartValue = newValue;
+			ds.Ref.StartPointer = verticalT ? pointer.Y : pointer.X;
+			ds.Ref.TrackPixels = trackPx;
 			return;
 		}
 	}
 
-	private static void OnPointerUp(World world, ulong entityId)
+	private static void OnPointerUp(SliderQueries q, ulong entityId)
 	{
-		var view = world.Entity(entityId);
-		if (view.Has<SliderDragState>())
+		if (q.DragStates.Contains(entityId))
 		{
-			view.Get<SliderDragState>().Dragging = false;
+			var (_, state) = q.DragStates.Get(entityId);
+			state.Ref.Dragging = false;
 			return;
 		}
-		if (!view.Has<TinyEcs.Children>())
+		if (!q.Children.Contains(entityId))
 			return;
-		ref var children = ref view.Get<TinyEcs.Children>();
-		foreach (var cid in children)
+		var (_, kids) = q.Children.Get(entityId);
+		foreach (var cid in kids.Ref)
 		{
-			var cv = world.Entity(cid);
-			if (cv.Has<SliderDragState>())
-				cv.Get<SliderDragState>().Dragging = false;
+			if (!q.DragStates.Contains(cid))
+				continue;
+			var (_, state) = q.DragStates.Get(cid);
+			state.Ref.Dragging = false;
 		}
 	}
 
-	private static void DragMotion(
-		World world,
-		in UiPointer pointer,
-		Query<Data<SliderDragState>, Filter<With<SliderThumb>>> thumbs)
+	private static void DragMotion(Commands cmd, in UiPointer pointer, SliderQueries q)
 	{
 		if (!pointer.Down)
 		{
-			foreach (var (_, state) in thumbs)
+			foreach (var (_, state) in q.DragStates)
 				if (state.Ref.Dragging) state.Ref.Dragging = false;
 			return;
 		}
 
-		foreach (var (thumbEid, state) in thumbs)
+		foreach (var (thumbEid, state) in q.DragStates)
 		{
-			if (!state.Ref.Dragging)
+			if (!state.Ref.Dragging || !q.Thumbs.Contains(thumbEid.Ref))
 				continue;
-			if (!TryResolveSlider(world, thumbEid.Ref, out var sliderEid, out var slider, out _))
+			if (!TryResolveSlider(q, thumbEid.Ref, out var sliderEid, out var slider, out _))
 				continue;
 
 			bool vertical = slider.Orientation == ScrollbarOrientation.Vertical;
@@ -217,32 +217,31 @@ public sealed class SliderPlugin : IPlugin
 			if (newValue == slider.Value)
 				continue;
 
-			var sliderView = world.Entity(sliderEid);
-			ref var sliderRef = ref sliderView.Get<Slider>();
-			sliderRef.Value = newValue;
-			world.EmitTrigger(sliderEid, new SliderChanged { Value = newValue });
+			var (_, sliderPtr) = q.Sliders.Get(sliderEid);
+			sliderPtr.Ref.Value = newValue;
+			cmd.Entity(sliderEid).EmitTrigger(new SliderChanged { Value = newValue }, propagate: true);
 		}
 	}
 
 	private static bool TryResolveSlider(
-		World world,
+		SliderQueries q,
 		ulong thumbEntity,
 		out ulong sliderEntity,
 		out Slider slider,
 		out float trackPixels)
 	{
 		sliderEntity = 0; slider = default; trackPixels = 0;
-		var thumbView = world.Entity(thumbEntity);
-		if (!thumbView.Has<TinyEcs.Parent>())
+		if (!q.Parents.Contains(thumbEntity))
 			return false;
-		sliderEntity = thumbView.Get<TinyEcs.Parent>().Id;
-		var sliderView = world.Entity(sliderEntity);
-		if (!sliderView.Has<Slider>() || !sliderView.Has<ComputedNode>())
+		var (_, parentPtr) = q.Parents.Get(thumbEntity);
+		sliderEntity = parentPtr.Ref.Id;
+		if (!q.Sliders.Contains(sliderEntity) || !q.Computed.Contains(sliderEntity))
 			return false;
-		slider = sliderView.Get<Slider>();
-		ref var sliderComputed = ref sliderView.Get<ComputedNode>();
+		var (_, sliderPtr) = q.Sliders.Get(sliderEntity);
+		var (_, cnPtr) = q.Computed.Get(sliderEntity);
+		slider = sliderPtr.Ref;
 		bool vertical = slider.Orientation == ScrollbarOrientation.Vertical;
-		float trackLen = vertical ? sliderComputed.Size.Y : sliderComputed.Size.X;
+		float trackLen = vertical ? cnPtr.Ref.Size.Y : cnPtr.Ref.Size.X;
 		float thumbLen = slider.ThumbLength > 0 ? slider.ThumbLength : 16f;
 		trackPixels = MathF.Max(0f, trackLen - thumbLen);
 		return true;

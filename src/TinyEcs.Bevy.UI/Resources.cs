@@ -29,7 +29,12 @@ public sealed class UiRenderCommands
 public sealed class UiClayContext
 {
 	internal ClayContext Context = null!;
-	internal RenderCommand[] LastCommands = Array.Empty<RenderCommand>();
+	// Reusable buffer for the most recent frame's render commands. LayoutSystem
+	// copies Clay's span into this and bumps Count; consumers read via the
+	// LastCommands span getter. No per-frame allocation.
+	internal RenderCommand[] LastCommandsBuffer = Array.Empty<RenderCommand>();
+	internal int LastCommandsCount;
+	public ReadOnlySpan<RenderCommand> LastCommands => LastCommandsBuffer.AsSpan(0, LastCommandsCount);
 	internal readonly Dictionary<uint, ulong> ClayToEntity = new();
 	// Clay ElementId -> entity for elements declared with Overflow.Scroll.
 	// Renderers consult this each frame to draw scrollbar overlays.
@@ -75,20 +80,6 @@ public sealed class UiTextureRegistry
 		texture = null!;
 		return false;
 	}
-}
-
-/// Exposes the underlying TinyEcs World inside a system. The Bevy app schedules
-/// systems by ISystemParam list; this thin wrapper lets us reach the World
-/// without bypassing the scheduler.
-public sealed class WorldParam : ISystemParam
-{
-	private TinyEcs.World _world = null!;
-
-	public TinyEcs.World World => _world;
-
-	public void Initialize(App app) => _world = app.GetWorld();
-	public void Fetch(App app) => _world = app.GetWorld();
-	public SystemParamAccess GetAccess() => new();
 }
 
 public sealed class UiFontRegistry

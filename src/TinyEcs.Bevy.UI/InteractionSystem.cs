@@ -21,13 +21,11 @@ internal static class InteractionSystem
 	}
 
 	public static void PostLayout(
-		WorldParam worldParam,
 		Commands commands,
 		ResMut<UiPointer> pointer,
 		ResMut<UiClayContext> ctx,
 		Query<Data<Interaction>> interactives)
 	{
-		var world = worldParam.World;
 		ref var p = ref pointer.Value;
 		var cmds = ctx.Value.LastCommands;
 		var map = ctx.Value.ClayToEntity;
@@ -74,14 +72,14 @@ internal static class InteractionSystem
 
 			// Press edge: down began this frame over this entity.
 			if (p.Down && !p.WasDown)
-				world.EmitTrigger(hovered, new UiPointerDown { Position = p.Position });
+				commands.Entity(hovered).EmitTrigger(new UiPointerDown { Position = p.Position }, propagate: true);
 
 			// Click only when press AND release happened over the same entity.
 			if (!p.Down && p.WasDown && ctx.Value.PressedEntity == hovered)
-				world.EmitTrigger(hovered, new UiClick { Position = p.Position });
+				commands.Entity(hovered).EmitTrigger(new UiClick { Position = p.Position }, propagate: true);
 
 			if (prevHover != hovered)
-				world.EmitTrigger(hovered, new UiOver());
+				commands.Entity(hovered).EmitTrigger(new UiOver(), propagate: true);
 
 			// Cursor relative position
 			var rel = new Vector2(
@@ -91,14 +89,14 @@ internal static class InteractionSystem
 		}
 
 		if (prevHover != 0 && prevHover != hovered)
-			world.EmitTrigger(prevHover, new UiOut());
+			commands.Entity(prevHover).EmitTrigger(new UiOut(), propagate: true);
 
 		// Release edge: pointer up this frame. Fire on the press-origin entity (if any),
 		// then clear the press latch.
 		if (!p.Down && p.WasDown)
 		{
 			if (ctx.Value.PressedEntity != 0)
-				world.EmitTrigger(ctx.Value.PressedEntity, new UiPointerUp { Position = p.Position });
+				commands.Entity(ctx.Value.PressedEntity).EmitTrigger(new UiPointerUp { Position = p.Position }, propagate: true);
 			ctx.Value.PressedEntity = 0;
 		}
 

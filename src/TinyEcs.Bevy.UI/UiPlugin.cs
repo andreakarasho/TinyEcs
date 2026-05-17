@@ -38,15 +38,16 @@ public sealed class UiPlugin : IPlugin
 			InteractionSystem.PreLayout(p, c, q))
 			.InStage(UiPreLayoutStage).SingleThreaded().Build();
 
-		app.AddSystem((WorldParam w, Res<UiSurface> s, ResMut<UiClayContext> c,
+		app.AddSystem((Res<UiSurface> s, ResMut<UiClayContext> c,
 			Query<Data<Node>, Filter<With<UiRoot>>> roots,
+			UiLayoutQueries q,
 			Query<Data<ScrollPosition>> scrolls) =>
-			LayoutSystem.Run(w, s, c, roots, scrolls))
+			LayoutSystem.Run(s, c, roots, q, scrolls))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
-		app.AddSystem((WorldParam w, Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
+		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
 			Query<Data<Interaction>> q) =>
-			InteractionSystem.PostLayout(w, cmd, p, c, q))
+			InteractionSystem.PostLayout(cmd, p, c, q))
 			.InStage(UiPostLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Res<UiClayContext> c, ResMut<UiRenderCommands> o) =>

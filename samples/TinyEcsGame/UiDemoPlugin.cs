@@ -273,6 +273,56 @@ sealed class UiDemoPlugin : IPlugin
 			commands.AddChild(sliderRow, sliderTrack);
 			commands.AddChild(sliderTrack, sliderThumb);
 			commands.AddChild(sliderRow, sliderValueLabel);
+
+			// Bubble-propagation demo. The button is a child of `buttonRow` which
+			// is a child of `panel`. Clicking the button fires UiClick with
+			// propagate=true; the button's entity observer runs first, then the
+			// trigger walks up Parent links and fires the row's observer and the
+			// panel's observer with the SAME trigger.EntityId (the button).
+			var buttonRow = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					FlexDirection = FlexDirection.Row,
+					AlignItems = AlignItems.Center,
+					Gap = Val.Px(8),
+					Width = Val.Px(256),
+					Height = Val.Px(32),
+				});
+
+			var button = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					Width = Val.Px(120),
+					Height = Val.Px(28),
+					Padding = UiRect.Symmetric(8, 4),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new Button())
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true })
+				.Insert(new BackgroundColor(ClayColor.Rgba(60, 130, 220, 255)))
+				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 });
+
+			var buttonText = commands.Spawn()
+				.Insert(new Node())
+				.Insert(new Text("Send"))
+				.Insert(new TextFont { Size = 14 })
+				.Insert(new TextColor(ClayColor.White));
+
+			commands.AddChild(panel, buttonRow);
+			commands.AddChild(buttonRow, button);
+			commands.AddChild(button, buttonText);
+
+			// Entity-targeted observers (one per ancestor) — fired in bubble order.
+			button.Observe<On<UiClick>>((trigger) =>
+				Console.WriteLine($"  [button]  click on entity {trigger.EntityId}"));
+			buttonRow.Observe<On<UiClick>>((trigger) =>
+				Console.WriteLine($"  [row]     bubbled click from entity {trigger.EntityId}"));
+			panel.Observe<On<UiClick>>((trigger) =>
+				Console.WriteLine($"  [panel]   bubbled click from entity {trigger.EntityId}"));
 		})
 		.InStage(Stage.Startup)
 		.After("raylib:create-window")
@@ -280,12 +330,12 @@ sealed class UiDemoPlugin : IPlugin
 		.Build();
 
 		// Click → update selection. Entity-targeted trigger fires on the row entity.
-		app.AddObserver<On<UiClick>, WorldParam, ResMut<FruitSelection>>((trigger, wp, sel) =>
+		app.AddObserver<On<UiClick>, Query<Data<FruitItem>>, ResMut<FruitSelection>>((trigger, rows, sel) =>
 		{
-			var view = wp.World.Entity(trigger.EntityId);
-			if (!view.Has<FruitItem>())
+			if (!rows.Contains(trigger.EntityId))
 				return;
-			sel.Value.Selected = view.Get<FruitItem>().Name;
+			var (_, item) = rows.Get(trigger.EntityId);
+			sel.Value.Selected = item.Ref.Name;
 		});
 
 		// Tint rows by selection × interaction state.

@@ -1,5 +1,3 @@
-using TinyEcs.Bevy;
-
 namespace TinyEcs.Bevy.UI.Widgets;
 
 /// Toggle widget. Place on an entity that also carries `Interaction`. The
@@ -19,14 +17,13 @@ public sealed class CheckboxPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		app.AddObserver<On<UiClick>, WorldParam>((trigger, wp) =>
+		app.AddObserver<On<UiClick>, Commands, Query<Data<Checkbox>>>((trigger, cmd, boxes) =>
 		{
-			var view = wp.World.Entity(trigger.EntityId);
-			if (!view.Has<Checkbox>())
+			if (!boxes.Contains(trigger.EntityId))
 				return;
-			ref var cb = ref view.Get<Checkbox>();
-			cb.Checked = !cb.Checked;
-			wp.World.EmitTrigger(trigger.EntityId, new CheckboxChanged { Checked = cb.Checked });
+			var (_, cb) = boxes.Get(trigger.EntityId);
+			cb.Ref.Checked = !cb.Ref.Checked;
+			cmd.Entity(trigger.EntityId).EmitTrigger(new CheckboxChanged { Checked = cb.Ref.Checked }, propagate: true);
 		});
 	}
 }

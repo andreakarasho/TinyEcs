@@ -12,7 +12,7 @@ internal static class RenderSystem
 		ref var dst = ref output.Value;
 		if (dst.Buffer.Length < src.Length)
 			dst.Buffer = new RenderCommand[Math.Max(src.Length, dst.Buffer.Length * 2)];
-		Array.Copy(src, dst.Buffer, src.Length);
+		src.CopyTo(dst.Buffer);
 		dst.Count = src.Length;
 	}
 }

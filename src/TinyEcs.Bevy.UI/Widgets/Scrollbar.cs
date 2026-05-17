@@ -1,6 +1,5 @@
 using System.Numerics;
 using Clay;
-using TinyEcs.Bevy;
 
 namespace TinyEcs.Bevy.UI.Widgets;
 
@@ -36,121 +35,128 @@ public struct ScrollbarDragState
 	public float MaxScroll;
 }
 
+/// Composite param bundling the queries the scrollbar plugin reads. Lets observer
+/// callbacks stay short while keeping read access scheduler-visible.
+public sealed class ScrollbarQueries : CompositeSystemParam
+{
+	public readonly Query<Data<Scrollbar>> Bars;
+	public readonly Query<Data<ScrollbarThumb>> Thumbs;
+	public readonly Query<Data<ScrollbarDragState>> DragStates;
+	public readonly Query<Data<ComputedNode>> Computed;
+	public readonly Query<Data<TinyEcs.Children>> Children;
+	public readonly Query<Data<TinyEcs.Parent>> Parents;
+	public readonly Query<Data<Node>> Nodes;
+
+	public ScrollbarQueries()
+	{
+		Bars       = Add(new Query<Data<Scrollbar>>());
+		Thumbs     = Add(new Query<Data<ScrollbarThumb>>());
+		DragStates = Add(new Query<Data<ScrollbarDragState>>());
+		Computed   = Add(new Query<Data<ComputedNode>>());
+		Children   = Add(new Query<Data<TinyEcs.Children>>());
+		Parents    = Add(new Query<Data<TinyEcs.Parent>>());
+		Nodes      = Add(new Query<Data<Node>>());
+	}
+}
+
 public sealed class ScrollbarPlugin : IPlugin
 {
 	public void Build(App app)
 	{
 		// 1) Position thumbs each frame from target's scroll data.
-		app.AddSystem((WorldParam wp, Res<UiClayContext> ctx, Query<Data<Scrollbar>> bars) =>
-		{
-			PositionThumbs(wp.World, ctx.Value, bars);
-		})
-		.InStage(Stage.PreUpdate)
-		.SingleThreaded()
-		.Build();
+		app.AddSystem((Res<UiClayContext> ctx, ScrollbarQueries q) =>
+			PositionThumbs(ctx.Value, q))
+		.InStage(Stage.PreUpdate).SingleThreaded().Build();
 
 		// 2) Pointer-down observer: start drag (thumb or rail).
-		app.AddObserver<On<UiPointerDown>, WorldParam, ResMut<UiClayContext>>(
-			(trigger, wp, ctx) => OnPointerDown(wp.World, ctx.Value, trigger.EntityId, trigger.Event.Position));
+		app.AddObserver<On<UiPointerDown>, ResMut<UiClayContext>, ScrollbarQueries>(
+			(trigger, ctx, q) => OnPointerDown(ctx.Value, q, trigger.EntityId, trigger.Event.Position));
 
-		// 3) Pointer-up observer: clear drag state on the press-origin thumb (or any thumb).
-		app.AddObserver<On<UiPointerUp>, WorldParam>(
-			(trigger, wp) => OnPointerUp(wp.World, trigger.EntityId));
+		// 3) Pointer-up observer: clear drag state.
+		app.AddObserver<On<UiPointerUp>, ScrollbarQueries>(
+			(trigger, q) => OnPointerUp(q, trigger.EntityId));
 
 		// 4) Motion system: while pointer stays down, update target's scroll position.
-		app.AddSystem((WorldParam wp, Res<UiPointer> pointer, ResMut<UiClayContext> ctx,
-			Query<Data<ScrollbarDragState>, Filter<With<ScrollbarThumb>>> thumbs) =>
-		{
-			DragMotion(wp.World, pointer.Value, ctx.Value, thumbs);
-		})
-		.InStage(Stage.Update)
-		.SingleThreaded()
-		.Build();
+		app.AddSystem((Res<UiPointer> pointer, ResMut<UiClayContext> ctx, ScrollbarQueries q) =>
+			DragMotion(pointer.Value, ctx.Value, q))
+		.InStage(Stage.Update).SingleThreaded().Build();
 	}
 
-	private static void PositionThumbs(World world, UiClayContext ctx, Query<Data<Scrollbar>> bars)
+	private static void PositionThumbs(UiClayContext ctx, ScrollbarQueries q)
 	{
-		foreach (var (barEid, bar) in bars)
+		foreach (var (barEid, bar) in q.Bars)
 		{
-			var barView = world.Entity(barEid.Ref);
-			if (!barView.Has<ComputedNode>() || !barView.Has<TinyEcs.Children>())
+			if (!q.Computed.Contains(barEid.Ref) || !q.Children.Contains(barEid.Ref))
 				continue;
 
+			var (_, barChildren) = q.Children.Get(barEid.Ref);
 			ulong thumbEid = 0;
-			ref var children = ref barView.Get<TinyEcs.Children>();
-			foreach (var cid in children)
+			foreach (var cid in barChildren.Ref)
 			{
-				var cv = world.Entity(cid);
-				if (cv.Has<ScrollbarThumb>()) { thumbEid = cid; break; }
+				if (q.Thumbs.Contains(cid)) { thumbEid = cid; break; }
 			}
-			if (thumbEid == 0)
+			if (thumbEid == 0 || !q.Nodes.Contains(thumbEid))
 				continue;
 
 			var data = ctx.GetScrollContainerData(ElementId.HashNumber((uint)bar.Ref.Target).Id);
 			if (!data.Found)
 				continue;
 
-			ref var barComputed = ref barView.Get<ComputedNode>();
-			var thumbView = world.Entity(thumbEid);
-			if (!thumbView.Has<Node>())
-				continue;
-			ref var thumbNode = ref thumbView.Get<Node>();
+			var (_, barComputed) = q.Computed.Get(barEid.Ref);
+			var (_, thumbNode) = q.Nodes.Get(thumbEid);
 
 			bool vertical = bar.Ref.Orientation == ScrollbarOrientation.Vertical;
-			float trackLen = vertical ? barComputed.Size.Y : barComputed.Size.X;
+			float trackLen = vertical ? barComputed.Ref.Size.Y : barComputed.Ref.Size.X;
 			float visible  = vertical ? data.ScrollContainerDimensions.Height : data.ScrollContainerDimensions.Width;
 			float content  = vertical ? data.ContentDimensions.Height : data.ContentDimensions.Width;
 			float minThumb = bar.Ref.MinThumbLength > 0 ? bar.Ref.MinThumbLength : 16f;
-
-			float thumbLen = content <= visible
-				? trackLen
-				: MathF.Max(minThumb, trackLen * visible / content);
+			float thumbLen = content <= visible ? trackLen : MathF.Max(minThumb, trackLen * visible / content);
 
 			float maxScroll = vertical ? data.MaxScrollY : data.MaxScrollX;
 			float scrollPos = vertical ? data.ScrollPosition.Y : data.ScrollPosition.X;
 			float thumbPos  = maxScroll > 0f ? scrollPos / maxScroll * (trackLen - thumbLen) : 0f;
 
-			thumbNode.PositionType = PositionType.Absolute;
+			thumbNode.Ref.PositionType = PositionType.Absolute;
 			if (vertical)
 			{
-				thumbNode.Top = Val.Px(thumbPos);
-				thumbNode.Left = Val.Px(0);
-				thumbNode.Width = Val.Px(barComputed.Size.X);
-				thumbNode.Height = Val.Px(thumbLen);
+				thumbNode.Ref.Top = Val.Px(thumbPos);
+				thumbNode.Ref.Left = Val.Px(0);
+				thumbNode.Ref.Width = Val.Px(barComputed.Ref.Size.X);
+				thumbNode.Ref.Height = Val.Px(thumbLen);
 			}
 			else
 			{
-				thumbNode.Top = Val.Px(0);
-				thumbNode.Left = Val.Px(thumbPos);
-				thumbNode.Width = Val.Px(thumbLen);
-				thumbNode.Height = Val.Px(barComputed.Size.Y);
+				thumbNode.Ref.Top = Val.Px(0);
+				thumbNode.Ref.Left = Val.Px(thumbPos);
+				thumbNode.Ref.Width = Val.Px(thumbLen);
+				thumbNode.Ref.Height = Val.Px(barComputed.Ref.Size.Y);
 			}
 		}
 	}
 
-	private static void OnPointerDown(World world, UiClayContext ctx, ulong entityId, Vector2 pointer)
+	private static void OnPointerDown(UiClayContext ctx, ScrollbarQueries q, ulong entityId, Vector2 pointer)
 	{
-		var view = world.Entity(entityId);
-
 		// Thumb pressed: start drag immediately.
-		if (view.Has<ScrollbarThumb>() && view.Has<ScrollbarDragState>())
+		if (q.Thumbs.Contains(entityId) && q.DragStates.Contains(entityId))
 		{
-			if (!TryResolveBar(world, entityId, out var bar, out var trackLen, out var maxScroll, out var startScroll))
+			if (!TryResolveBar(q, entityId, out var bar, out var trackLen, out var maxScroll, out var startScroll))
 				return;
-			ref var state = ref view.Get<ScrollbarDragState>();
-			state.Dragging    = true;
-			state.StartScroll  = startScroll;
-			state.StartPointer = bar.Orientation == ScrollbarOrientation.Vertical ? pointer.Y : pointer.X;
-			state.TrackPixels  = trackLen;
-			state.MaxScroll    = maxScroll;
+			var (_, state) = q.DragStates.Get(entityId);
+			state.Ref.Dragging    = true;
+			state.Ref.StartScroll = startScroll;
+			state.Ref.StartPointer = bar.Orientation == ScrollbarOrientation.Vertical ? pointer.Y : pointer.X;
+			state.Ref.TrackPixels = trackLen;
+			state.Ref.MaxScroll   = maxScroll;
 			return;
 		}
 
-		// Track pressed: jump to clicked position AND latch the thumb into drag mode.
-		if (!view.Has<Scrollbar>() || !view.Has<ComputedNode>())
+		// Track pressed: jump to clicked position + latch thumb into drag mode.
+		if (!q.Bars.Contains(entityId) || !q.Computed.Contains(entityId))
 			return;
-		var barCmp = view.Get<Scrollbar>();
-		ref var bc = ref view.Get<ComputedNode>();
+		var (_, barPtr) = q.Bars.Get(entityId);
+		var (_, computedPtr) = q.Computed.Get(entityId);
+		ref var barCmp = ref barPtr.Ref;
+		ref var bc = ref computedPtr.Ref;
 		bool verticalT = barCmp.Orientation == ScrollbarOrientation.Vertical;
 		float trackOrigin = verticalT ? bc.Position.Y : bc.Position.X;
 		float trackSize   = verticalT ? bc.Size.Y     : bc.Size.X;
@@ -165,69 +171,64 @@ public sealed class ScrollbarPlugin : IPlugin
 		ctx.SetScrollPosition(barCmp.Target,
 			verticalT ? new Vector2(0, jumpedScroll) : new Vector2(jumpedScroll, 0));
 
-		if (!view.Has<TinyEcs.Children>())
+		if (!q.Children.Contains(entityId))
 			return;
 		float visiblePx = verticalT ? scrollData.ScrollContainerDimensions.Height : scrollData.ScrollContainerDimensions.Width;
 		float contentPx = verticalT ? scrollData.ContentDimensions.Height       : scrollData.ContentDimensions.Width;
 		float minThumb  = barCmp.MinThumbLength > 0 ? barCmp.MinThumbLength : 16f;
 		float thumbLen  = contentPx <= visiblePx ? trackSize : MathF.Max(minThumb, trackSize * visiblePx / contentPx);
 		float trackPx   = MathF.Max(0f, trackSize - thumbLen);
-		ref var children = ref view.Get<TinyEcs.Children>();
-		foreach (var cid in children)
+
+		var (_, kids) = q.Children.Get(entityId);
+		foreach (var cid in kids.Ref)
 		{
-			var cv = world.Entity(cid);
-			if (!cv.Has<ScrollbarThumb>() || !cv.Has<ScrollbarDragState>())
+			if (!q.Thumbs.Contains(cid) || !q.DragStates.Contains(cid))
 				continue;
-			ref var ds = ref cv.Get<ScrollbarDragState>();
-			ds.Dragging    = true;
-			ds.StartScroll = jumpedScroll;
-			ds.StartPointer = verticalT ? pointer.Y : pointer.X;
-			ds.TrackPixels = trackPx;
-			ds.MaxScroll   = maxS;
+			var (_, ds) = q.DragStates.Get(cid);
+			ds.Ref.Dragging    = true;
+			ds.Ref.StartScroll = jumpedScroll;
+			ds.Ref.StartPointer = verticalT ? pointer.Y : pointer.X;
+			ds.Ref.TrackPixels = trackPx;
+			ds.Ref.MaxScroll   = maxS;
 			return;
 		}
 	}
 
-	private static void OnPointerUp(World world, ulong entityId)
+	private static void OnPointerUp(ScrollbarQueries q, ulong entityId)
 	{
-		// The release fires on the press-origin entity. Walk down to its thumb (or
-		// the entity itself if it IS a thumb) and clear the drag latch.
-		var view = world.Entity(entityId);
-		if (view.Has<ScrollbarDragState>())
+		// Release fires on press-origin. Clear drag on entity itself or its first thumb child.
+		if (q.DragStates.Contains(entityId))
 		{
-			view.Get<ScrollbarDragState>().Dragging = false;
+			var (_, state) = q.DragStates.Get(entityId);
+			state.Ref.Dragging = false;
 			return;
 		}
-		if (!view.Has<TinyEcs.Children>())
+		if (!q.Children.Contains(entityId))
 			return;
-		ref var children = ref view.Get<TinyEcs.Children>();
-		foreach (var cid in children)
+		var (_, kids) = q.Children.Get(entityId);
+		foreach (var cid in kids.Ref)
 		{
-			var cv = world.Entity(cid);
-			if (cv.Has<ScrollbarDragState>())
-				cv.Get<ScrollbarDragState>().Dragging = false;
+			if (!q.DragStates.Contains(cid))
+				continue;
+			var (_, state) = q.DragStates.Get(cid);
+			state.Ref.Dragging = false;
 		}
 	}
 
-	private static void DragMotion(
-		World world,
-		in UiPointer pointer,
-		UiClayContext ctx,
-		Query<Data<ScrollbarDragState>, Filter<With<ScrollbarThumb>>> thumbs)
+	private static void DragMotion(in UiPointer pointer, UiClayContext ctx, ScrollbarQueries q)
 	{
 		if (!pointer.Down)
 		{
-			// Safety net: pointer lost while drag was active (e.g. moved off-window).
-			foreach (var (_, state) in thumbs)
+			foreach (var (_, state) in q.DragStates)
 				if (state.Ref.Dragging) state.Ref.Dragging = false;
 			return;
 		}
 
-		foreach (var (eid, state) in thumbs)
+		foreach (var (eid, state) in q.DragStates)
 		{
-			if (!state.Ref.Dragging)
+			if (!state.Ref.Dragging || !q.Thumbs.Contains(eid.Ref))
 				continue;
-			if (!TryResolveBar(world, eid.Ref, out var bar, out _, out _, out _))
+			if (!TryResolveBar(q, eid.Ref, out var bar, out _, out _, out _))
 				continue;
 
 			bool vertical = bar.Orientation == ScrollbarOrientation.Vertical;
@@ -244,7 +245,7 @@ public sealed class ScrollbarPlugin : IPlugin
 	}
 
 	private static bool TryResolveBar(
-		World world,
+		ScrollbarQueries q,
 		ulong thumbEntity,
 		out Scrollbar bar,
 		out float trackLen,
@@ -252,17 +253,18 @@ public sealed class ScrollbarPlugin : IPlugin
 		out float startScroll)
 	{
 		bar = default; trackLen = 0; maxScroll = 0; startScroll = 0;
-		var thumbView = world.Entity(thumbEntity);
-		if (!thumbView.Has<TinyEcs.Parent>())
+		if (!q.Parents.Contains(thumbEntity))
 			return false;
-		var parentId = thumbView.Get<TinyEcs.Parent>().Id;
-		var barView = world.Entity(parentId);
-		if (!barView.Has<Scrollbar>() || !barView.Has<ComputedNode>())
+		var (_, parentPtr) = q.Parents.Get(thumbEntity);
+		var parentId = parentPtr.Ref.Id;
+		if (!q.Bars.Contains(parentId) || !q.Computed.Contains(parentId))
 			return false;
-		bar = barView.Get<Scrollbar>();
-		ref var barComputed = ref barView.Get<ComputedNode>();
+
+		var (_, barPtr) = q.Bars.Get(parentId);
+		var (_, cnPtr) = q.Computed.Get(parentId);
+		bar = barPtr.Ref;
 		bool vertical = bar.Orientation == ScrollbarOrientation.Vertical;
-		trackLen = vertical ? barComputed.Size.Y : barComputed.Size.X;
+		trackLen = vertical ? cnPtr.Ref.Size.Y : cnPtr.Ref.Size.X;
 
 		var clayId = ElementId.HashNumber((uint)bar.Target);
 		var sd = global::Clay.Clay.Context!.GetScrollContainerData(clayId);
