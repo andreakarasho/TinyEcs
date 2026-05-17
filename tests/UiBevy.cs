@@ -667,6 +667,60 @@ public class UiBevyTests
 	}
 
 	[Fact]
+	public void Absolute_zindex_orders_render_commands()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiRoot())
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var lower = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(10), Top = Val.Px(10),
+					Width = Val.Px(40), Height = Val.Px(40),
+				})
+				.Insert(new BackgroundColor(ClayColor.Red))
+				.Insert(new ZIndex(1));
+
+			var higher = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(20), Top = Val.Px(20),
+					Width = Val.Px(40), Height = Val.Px(40),
+				})
+				.Insert(new BackgroundColor(ClayColor.Blue))
+				.Insert(new ZIndex(5));
+
+			c.AddChild(parent, lower);
+			c.AddChild(parent, higher);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		// Higher-z (Blue) must appear in the render stream after lower-z (Red).
+		var cmds = app.GetResource<UiRenderCommands>().Span;
+		int redIdx = -1, blueIdx = -1;
+		for (var i = 0; i < cmds.Length; i++)
+		{
+			if (cmds[i].CommandType != RenderCommandType.Rectangle) continue;
+			ref readonly var c = ref cmds[i].Rectangle;
+			if (c.BackgroundColor.R == 255 && c.BackgroundColor.B == 0) redIdx = i;
+			if (c.BackgroundColor.B == 255 && c.BackgroundColor.R == 0) blueIdx = i;
+		}
+		Assert.True(redIdx >= 0 && blueIdx >= 0, $"red={redIdx} blue={blueIdx}");
+		Assert.True(blueIdx > redIdx, $"expected blue (z=5) after red (z=1); red={redIdx} blue={blueIdx}");
+	}
+
+	[Fact]
 	public void Absolute_right_bottom_anchors_to_opposite_edges()
 	{
 		var app = MakeApp(new Vector2(400, 300));

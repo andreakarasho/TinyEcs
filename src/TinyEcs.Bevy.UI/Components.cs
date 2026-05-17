@@ -71,7 +71,13 @@ public struct UiImage
 	public ClayColor Tint;
 }
 
+/// Local layering order. Higher values render on top of siblings.
+/// Currently only respected on `PositionType.Absolute` elements (Clay z-sorts
+/// floating elements only). Non-absolute siblings stack in tree order.
 public struct ZIndex       { public int Value; public ZIndex(int v)       => Value = v; }
+
+/// Global layering override. When present, wins over `ZIndex` and is treated as
+/// a global z order. Same Absolute-only caveat as `ZIndex`.
 public struct GlobalZIndex { public int Value; public GlobalZIndex(int v) => Value = v; }
 
 public struct Text         { public string Value; public Text(string v) => Value = v; }

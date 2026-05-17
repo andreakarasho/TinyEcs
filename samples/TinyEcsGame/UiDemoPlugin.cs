@@ -46,6 +46,7 @@ sealed class UiDemoPlugin : IPlugin
 		app.AddPlugin(new CheckboxPlugin());
 		app.AddPlugin(new SliderPlugin());
 		app.AddResource(new FruitSelection());
+		app.AddResource(new ZSwapState { NextTop = 3 });
 
 		app.AddSystem((Commands commands) =>
 		{
@@ -323,6 +324,59 @@ sealed class UiDemoPlugin : IPlugin
 				Console.WriteLine($"  [row]     bubbled click from entity {trigger.EntityId}"));
 			panel.Observe<On<UiClick>>((trigger) =>
 				Console.WriteLine($"  [panel]   bubbled click from entity {trigger.EntityId}"));
+
+			// ZIndex demo: two overlapping absolute squares pinned to the top-right
+			// of the panel. Clicking either square swaps their ZIndex so they
+			// reorder visually. ZIndex/GlobalZIndex are only honoured on
+			// PositionType.Absolute elements.
+			var stackHolder = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Top = Val.Px(8),
+					Right = Val.Px(8),
+					Width = Val.Px(70),
+					Height = Val.Px(50),
+				});
+
+			var squareA = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(0),
+					Top = Val.Px(0),
+					Width = Val.Px(40),
+					Height = Val.Px(40),
+				})
+				.Insert(new BackgroundColor(ClayColor.Rgba(220, 80, 80, 230)))
+				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 })
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true })
+				.Insert(new ZIndex(1))
+				.Insert(new ZSwapTag { Id = 1 });
+
+			var squareB = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(20),
+					Top = Val.Px(10),
+					Width = Val.Px(40),
+					Height = Val.Px(40),
+				})
+				.Insert(new BackgroundColor(ClayColor.Rgba(80, 160, 220, 230)))
+				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 })
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true })
+				.Insert(new ZIndex(2))
+				.Insert(new ZSwapTag { Id = 2 });
+
+			commands.AddChild(panel, stackHolder);
+			commands.AddChild(stackHolder, squareA);
+			commands.AddChild(stackHolder, squareB);
 		})
 		.InStage(Stage.Startup)
 		.After("raylib:create-window")
@@ -336,6 +390,16 @@ sealed class UiDemoPlugin : IPlugin
 				return;
 			var (_, item) = rows.Get(trigger.EntityId);
 			sel.Value.Selected = item.Ref.Name;
+		});
+
+		// Click a ZSwap square → assign it the next highest ZIndex so it pops to the top.
+		app.AddObserver<On<UiClick>, ResMut<ZSwapState>, Query<Data<ZSwapTag, ZIndex>>>((trigger, top, squares) =>
+		{
+			if (!squares.Contains(trigger.EntityId))
+				return;
+			var (_, _tag, z) = squares.Get(trigger.EntityId);
+			z.Ref.Value = top.Value.NextTop++;
+			Console.WriteLine($"  [zswap]   entity {trigger.EntityId} now z={z.Ref.Value}");
 		});
 
 		// Tint rows by selection × interaction state.
@@ -414,4 +478,14 @@ struct StatusLabel
 struct SliderValueLabel
 {
 	public byte _;
+}
+
+struct ZSwapTag
+{
+	public byte Id;
+}
+
+sealed class ZSwapState
+{
+	public int NextTop;
 }

@@ -227,18 +227,21 @@ internal static class LayoutSystem
 				: (node.Top.Type  == ValType.Px ? node.Top.Value  : 0f);
 			decl.Floating.Offset = new Vector2(ox, oy);
 
-			short z = 0;
+			// Z layering on absolute elements maps directly to Clay's Floating.ZIndex
+			// (signed 16-bit). GlobalZIndex wins over ZIndex when both are present;
+			// non-absolute elements ignore both since Clay only z-sorts floats.
+			int z = 0;
 			if (q.GlobalZIndexes.Contains(entityId))
 			{
 				var (_, p) = q.GlobalZIndexes.Get(entityId);
-				z = (short)p.Ref.Value;
+				z = p.Ref.Value;
 			}
 			else if (q.ZIndexes.Contains(entityId))
 			{
 				var (_, p) = q.ZIndexes.Get(entityId);
-				z = (short)p.Ref.Value;
+				z = p.Ref.Value;
 			}
-			decl.Floating.ZIndex = z;
+			decl.Floating.ZIndex = (short)Math.Clamp(z, short.MinValue, short.MaxValue);
 		}
 
 		return decl;
