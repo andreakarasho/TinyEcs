@@ -46,7 +46,6 @@ sealed class UiDemoPlugin : IPlugin
 		app.AddPlugin(new CheckboxPlugin());
 		app.AddPlugin(new SliderPlugin());
 		app.AddResource(new FruitSelection());
-		app.AddResource(new ZSwapState { NextTop = 3 });
 
 		app.AddSystem((Commands commands) =>
 		{
@@ -392,14 +391,22 @@ sealed class UiDemoPlugin : IPlugin
 			sel.Value.Selected = item.Ref.Name;
 		});
 
-		// Click a ZSwap square → assign it the next highest ZIndex so it pops to the top.
-		app.AddObserver<On<UiClick>, ResMut<ZSwapState>, Query<Data<ZSwapTag, ZIndex>>>((trigger, top, squares) =>
+		// Click a ZSwap square → bump it past the current top, but only if it
+		// isn't already on top (avoid runaway ZIndex on repeated clicks).
+		app.AddObserver<On<UiClick>, Query<Data<ZSwapTag, ZIndex>>>((trigger, squares) =>
 		{
 			if (!squares.Contains(trigger.EntityId))
 				return;
-			var (_, _tag, z) = squares.Get(trigger.EntityId);
-			z.Ref.Value = top.Value.NextTop++;
-			Console.WriteLine($"  [zswap]   entity {trigger.EntityId} now z={z.Ref.Value}");
+
+			int maxZ = int.MinValue;
+			foreach (var (_e, _tag, z) in squares)
+				if (z.Ref.Value > maxZ) maxZ = z.Ref.Value;
+
+			var (_, _tag2, myZ) = squares.Get(trigger.EntityId);
+			if (myZ.Ref.Value >= maxZ)
+				return;
+			myZ.Ref.Value = maxZ + 1;
+			Console.WriteLine($"  [zswap]   entity {trigger.EntityId} now z={myZ.Ref.Value}");
 		});
 
 		// Tint rows by selection × interaction state.
@@ -483,9 +490,4 @@ struct SliderValueLabel
 struct ZSwapTag
 {
 	public byte Id;
-}
-
-sealed class ZSwapState
-{
-	public int NextTop;
 }
