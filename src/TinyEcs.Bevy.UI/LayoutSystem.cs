@@ -20,6 +20,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 	public readonly Query<Data<ZIndex>> ZIndexes;
 	public readonly Query<Data<GlobalZIndex>> GlobalZIndexes;
 	public readonly Query<Data<BoxShadow>> Shadows;
+	public readonly Query<Data<ComputedNode>> Computed;
 
 	public UiLayoutQueries()
 	{
@@ -35,6 +36,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 		ZIndexes        = Add(new Query<Data<ZIndex>>());
 		GlobalZIndexes  = Add(new Query<Data<GlobalZIndex>>());
 		Shadows         = Add(new Query<Data<BoxShadow>>());
+		Computed        = Add(new Query<Data<ComputedNode>>());
 	}
 }
 
@@ -68,7 +70,7 @@ internal static class LayoutSystem
 		c.ScrollClayToEntity.Clear();
 
 		foreach (var (entityId, node) in roots)
-			EmitNode(entityId.Ref, in node.Ref, c, q);
+			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q);
 
 		var cmds = Clay.Clay.EndLayout();
 		if (c.LastCommandsBuffer.Length < cmds.Length)
@@ -88,12 +90,12 @@ internal static class LayoutSystem
 		}
 	}
 
-	private static void EmitNode(ulong entityId, in Node node, UiClayContext c, UiLayoutQueries q)
+	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q)
 	{
 		if (node.Display == Display.None)
 			return;
 
-		var decl = BuildDecl(entityId, in node, q);
+		var decl = BuildDecl(entityId, parentId, in node, q);
 		var ctx = Clay.Clay.Context!;
 		ctx.OpenElement();
 		ctx.ConfigureOpenElement(decl);
@@ -128,14 +130,14 @@ internal static class LayoutSystem
 				if (!q.Nodes.Contains(childId))
 					continue;
 				var (_, childNodePtr) = q.Nodes.Get(childId);
-				EmitNode(childId, in childNodePtr.Ref, c, q);
+				EmitNode(childId, entityId, in childNodePtr.Ref, c, q);
 			}
 		}
 
 		ctx.CloseElement();
 	}
 
-	private static ElementDeclaration BuildDecl(ulong entityId, in Node node, UiLayoutQueries q)
+	private static ElementDeclaration BuildDecl(ulong entityId, ulong parentId, in Node node, UiLayoutQueries q)
 	{
 		var decl = new ElementDeclaration
 		{
@@ -198,9 +200,32 @@ internal static class LayoutSystem
 		if (node.PositionType == PositionType.Absolute)
 		{
 			decl.Floating.AttachTo = FloatingAttachTo.Parent;
-			decl.Floating.Offset = new Vector2(
-				node.Left.Type == ValType.Px ? node.Left.Value : 0f,
-				node.Top.Type  == ValType.Px ? node.Top.Value  : 0f);
+
+			// Clay's Floating only honours `Offset` (relative to parent top-left),
+			// so anchor to the opposite edge by translating Right/Bottom into a
+			// left/top offset using the parent's size. Left wins over Right when
+			// both are set; same for Top vs Bottom.
+			bool useRight  = node.Right.Type  == ValType.Px && node.Left.Type != ValType.Px;
+			bool useBottom = node.Bottom.Type == ValType.Px && node.Top.Type  != ValType.Px;
+
+			float parentW = 0f, parentH = 0f;
+			if ((useRight || useBottom) && parentId != 0 && q.Computed.Contains(parentId))
+			{
+				var (_, pc) = q.Computed.Get(parentId);
+				parentW = pc.Ref.Size.X;
+				parentH = pc.Ref.Size.Y;
+			}
+
+			float childW = node.Width.Type  == ValType.Px ? node.Width.Value  : 0f;
+			float childH = node.Height.Type == ValType.Px ? node.Height.Value : 0f;
+
+			float ox = useRight
+				? MathF.Max(0f, parentW - childW - node.Right.Value)
+				: (node.Left.Type == ValType.Px ? node.Left.Value : 0f);
+			float oy = useBottom
+				? MathF.Max(0f, parentH - childH - node.Bottom.Value)
+				: (node.Top.Type  == ValType.Px ? node.Top.Value  : 0f);
+			decl.Floating.Offset = new Vector2(ox, oy);
 
 			short z = 0;
 			if (q.GlobalZIndexes.Contains(entityId))

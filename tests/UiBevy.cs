@@ -667,6 +667,49 @@ public class UiBevyTests
 	}
 
 	[Fact]
+	public void Absolute_right_bottom_anchors_to_opposite_edges()
+	{
+		var app = MakeApp(new Vector2(400, 300));
+
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiRoot())
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(400), Height = Val.Px(300) })
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var child = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Width = Val.Px(40),
+					Height = Val.Px(20),
+					Right = Val.Px(10),
+					Bottom = Val.Px(15),
+				})
+				.Insert(new BackgroundColor(ClayColor.Red));
+
+			c.AddChild(parent, child);
+			childId = child.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		// First frame seeds ComputedNode on the parent; second frame's layout
+		// reads it to translate Right/Bottom into pixel offsets.
+		app.Update();
+		app.Update();
+
+		var computed = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		// Parent is 400x300, child is 40x20. Right=10, Bottom=15 means
+		// child's right edge sits 10px from parent's right (x = 400 - 40 - 10 = 350)
+		// and bottom edge sits 15px from parent's bottom (y = 300 - 20 - 15 = 265).
+		Assert.Equal(350f, computed.Position.X);
+		Assert.Equal(265f, computed.Position.Y);
+	}
+
+	[Fact]
 	public void ComputedNode_written_after_layout()
 	{
 		var app = MakeApp();
