@@ -30,31 +30,30 @@ internal static class InteractionSystem
 		var cmds = ctx.Value.LastCommands;
 		var map = ctx.Value.ClayToEntity;
 		var prevHover = ctx.Value.HoveredEntity;
+		var clayCtx = ctx.Value.Context;
 
 		ulong hovered = 0;
 		BoundingBox hoveredBox = default;
 
-		// Walk render commands back-to-front: later commands draw on top.
-		for (var i = cmds.Length - 1; i >= 0; i--)
+		// Clay maintains PointerOverIds in topmost-first order. Pick the first one
+		// that maps to an interactive entity and passes clip (scroll scissor) tests.
+		// Refresh against this frame's layout (PreLayout's SetPointerState saw the
+		// previous frame's tree).
+		global::Clay.Clay.SetContext(clayCtx);
+		clayCtx.RefreshPointerOverIds();
+		var overIds = global::Clay.Clay.PointerOverIds;
+		for (var i = 0; i < overIds.Length; i++)
 		{
-			ref readonly var cmd = ref cmds[i];
-			if (cmd.CommandType != RenderCommandType.Rectangle &&
-			    cmd.CommandType != RenderCommandType.Image &&
-			    cmd.CommandType != RenderCommandType.Border)
+			var elementId = overIds[i];
+			if (!map.TryGetValue(elementId.Id, out var entityId))
 				continue;
-
-			if (!cmd.BoundingBox.Contains(p.Position))
-				continue;
-
-			if (!map.TryGetValue(cmd.Id, out var entityId))
-				continue;
-
-			// Only entities with Interaction participate in hit testing.
 			if (!interactives.Contains(entityId))
 				continue;
+			if (!clayCtx.PointerOver(elementId))
+				continue; // outside clip bounds or rejected by CustomHitTest
 
 			hovered = entityId;
-			hoveredBox = cmd.BoundingBox;
+			hoveredBox = clayCtx.GetElementData(elementId).BoundingBox;
 			break;
 		}
 

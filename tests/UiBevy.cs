@@ -764,6 +764,142 @@ public class UiBevyTests
 	}
 
 	[Fact]
+	public void HitTest_topmost_zindex_wins_over_lower_sibling()
+	{
+		var app = MakeApp();
+		ulong lowerId = 0, higherId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiRoot())
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var lower = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(20), Top = Val.Px(20),
+					Width = Val.Px(80), Height = Val.Px(80),
+				})
+				.Insert(new BackgroundColor(ClayColor.Red))
+				.Insert(new ZIndex(1))
+				.Insert(new Interaction());
+			lowerId = lower.Id;
+
+			var higher = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(20), Top = Val.Px(20),
+					Width = Val.Px(80), Height = Val.Px(80),
+				})
+				.Insert(new BackgroundColor(ClayColor.Blue))
+				.Insert(new ZIndex(5))
+				.Insert(new Interaction());
+			higherId = higher.Id;
+
+			c.AddChild(parent, lower);
+			c.AddChild(parent, higher);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.RunStartup();
+		// First Update lays out + builds render commands. PointerOverIds depends on
+		// the tree existing at SetPointerState time (PreLayout uses previous frame's tree).
+		app.Update();
+		app.GetResource<UiPointer>().Position = new Vector2(50, 50);
+		app.Update();
+
+		var w = app.GetWorld();
+		Assert.Equal(Interaction.Hovered, w.Entity(higherId).Get<Interaction>());
+		Assert.Equal(Interaction.None,    w.Entity(lowerId).Get<Interaction>());
+	}
+
+	[Fact]
+	public void HitTest_inner_child_wins_over_interactive_parent()
+	{
+		var app = MakeApp();
+		ulong parentId = 0, childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiRoot())
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction());
+			parentId = parent.Id;
+
+			var child = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(40), Top = Val.Px(40),
+					Width = Val.Px(60), Height = Val.Px(60),
+				})
+				.Insert(new BackgroundColor(ClayColor.Red))
+				.Insert(new Interaction());
+			childId = child.Id;
+
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.RunStartup();
+		app.Update();
+		// Pointer over child (which sits inside parent bbox).
+		app.GetResource<UiPointer>().Position = new Vector2(60, 60);
+		app.Update();
+
+		var w = app.GetWorld();
+		Assert.Equal(Interaction.Hovered, w.Entity(childId).Get<Interaction>());
+		Assert.Equal(Interaction.None,    w.Entity(parentId).Get<Interaction>());
+	}
+
+	[Fact]
+	public void Clay_PointerOverIds_topmost_first_after_layout()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			// Parent + flex child in the same layout tree (no absolute positioning,
+			// which would split into separate floating roots and short-circuit DFS
+			// via Capture mode).
+			var parent = c.Spawn()
+				.Insert(new UiRoot())
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(60), Height = Val.Px(60) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.RunStartup();
+		app.Update();
+		// Child sits at top-left of parent in flex layout; (30,30) lands inside it.
+		app.GetResource<UiPointer>().Position = new Vector2(30, 30);
+		app.Update();
+
+		var ctx = global::Clay.Clay.Context!;
+		var ids = ctx.PointerOverIds.AsReadOnlySpan();
+		Assert.True(ids.Length >= 2, $"expected >=2 ids (parent + child overlap), got {ids.Length}");
+
+		// First entry = topmost (child); a later entry = ancestor (parent or
+		// Clay's implicit root). Bbox area is a stand-in for depth here.
+		var first = ctx.GetElementData(ids[0]).BoundingBox;
+		var last = ctx.GetElementData(ids[ids.Length - 1]).BoundingBox;
+		Assert.True(first.Width * first.Height <= last.Width * last.Height,
+			$"first {first.Width}x{first.Height} should not be larger than last {last.Width}x{last.Height}");
+	}
+
+	[Fact]
 	public void ComputedNode_written_after_layout()
 	{
 		var app = MakeApp();
