@@ -114,16 +114,16 @@ Deferred entity / component / resource operations. Applied after the system
 (or batch) finishes. Each system gets its own buffer — thread-safe.
 
 ```csharp
-ulong existingId = /* obtained earlier, e.g. saved from a previous Spawn */ 0;
-
-app.AddSystem((Commands cmd) =>
+app.AddSystem((Commands cmd, Query<Data<Health>> wounded) =>
 {
     // Spawn a brand-new entity with components.
-    cmd.Spawn().Insert(new Position { X = 0, Y = 0 });
+    var spawned = cmd.Spawn()
+        .Insert(new Position { X = 0, Y = 0 })
+        .Insert(new Health { Value = 100 });
 
-    // Patch an existing entity by id.
-    if (existingId != 0)
-        cmd.Entity(existingId).Insert(new Health { Value = 100 });
+    // Patch an existing entity discovered via a query.
+    foreach (var (entity, _) in wounded)
+        cmd.Entity(entity.Ref).Insert(new Position { X = 0, Y = 0 });
 
     // Drop a resource onto the App (applies after the frame).
     cmd.InsertResource(new GameSettings());
@@ -170,11 +170,16 @@ Query<Data<Sprite>,    Filter<With<Mass>, Without<Moon>>> q3;
 Query<Empty,           Filter<With<Position>, With<Mass>>>  q4;
 ```
 
-`Optional<T>` example:
+`Optional<T>` example — the query type is shown so the `Ptr<T>` shape of the
+loop variables is obvious:
 ```csharp
-foreach ((Ptr<Position> maybe, Ptr<Velocity> vel) in q)
-    if (maybe.IsValid())
-        maybe.Ref.X += 1;
+app.AddSystem((Query<Data<Position, Velocity>, Filter<Optional<Position>>> q) =>
+{
+    foreach ((Ptr<Position> maybe, Ptr<Velocity> vel) in q)
+        if (maybe.IsValid())
+            maybe.Ref.X += 1;
+})
+.InStage(Stage.Update).Build();
 ```
 
 ### Resources — `Res<T>` and `ResMut<T>`
@@ -299,8 +304,16 @@ struct PlayerBundle : IBundle
     }
 }
 
-commands.SpawnBundle(new PlayerBundle { /* ... */ });
-commands.Entity(id).InsertBundle(otherBundle);
+app.AddSystem((Commands cmd, Query<Data<Player>> players) =>
+{
+    // Spawn a new entity with the full bundle.
+    cmd.SpawnBundle(new PlayerBundle { /* ... */ });
+
+    // Re-equip every existing player from a different bundle.
+    foreach (var (entity, _) in players)
+        cmd.Entity(entity.Ref).InsertBundle(new RespawnBundle { /* ... */ });
+})
+.InStage(Stage.Update).Build();
 ```
 
 ## Observers
@@ -338,14 +351,20 @@ a component on the entity; auto-cleaned on despawn. The base form takes the
 trigger only; extra system parameters can follow.
 
 ```csharp
-commands.Spawn()
-    .Observe<OnInsert<Health>>(t => Console.WriteLine(t.Component.Value))
-    .Insert(new Health { Value = 100 });
+app.AddSystem((Commands cmd) =>
+{
+    // Attach an observer to a brand-new entity.
+    cmd.Spawn()
+        .Observe<OnInsert<Health>>(t => Console.WriteLine(t.Component.Value))
+        .Insert(new Health { Value = 100 });
 
-commands.Entity(id)
-    .Observe<OnInsert<Health>, Commands>((t, cmd) =>
-        cmd.Spawn().Insert(new Particle()))
-    .Insert(new Health { Value = 99 });
+    // Attach an observer that itself takes system parameters.
+    cmd.Spawn()
+        .Observe<OnInsert<Health>, Commands>((t, inner) =>
+            inner.Spawn().Insert(new Particle()))
+        .Insert(new Health { Value = 99 });
+})
+.InStage(Stage.Startup).Build();
 ```
 
 Custom events via `commands.EmitTrigger`:
@@ -367,6 +386,41 @@ Available trigger types:
 
 All triggers implement `IEntityTrigger` with reflection-free `EntityId`
 access.
+
+### Trigger propagation
+
+`On<TEvent>` implements `IPropagatingTrigger`. When fired with
+`propagate: true`, after the target entity's observers run, the trigger
+bubbles up to the entity's `Parent`, then *its* parent, all the way to the
+root. Any observer in the chain can call `trigger.Propagate(false)` to stop
+the bubble — observers receive the trigger by reference precisely for this.
+
+```csharp
+app.AddSystem((Commands commands, Query<Data<TinyEcs.Children>> withKids) =>
+{
+    foreach (var (entity, _) in withKids)
+    {
+        // Entity-targeted emit with bubbling enabled. Each ancestor that
+        // observes On<DamageEvent> will be invoked in turn.
+        commands.Entity(entity.Ref)
+            .EmitTrigger(new DamageEvent { Amount = 5 }, propagate: true);
+    }
+})
+.InStage(Stage.Update).Build();
+
+app.AddObserver<On<DamageEvent>>((world, trigger) =>
+{
+    Console.WriteLine($"#{trigger.EntityId} took {trigger.Event.Amount}");
+    // Stop bubbling if this entity is a shielded boss.
+    if (world.Entity(trigger.EntityId).Has<Shielded>())
+        trigger.Propagate(false);
+});
+```
+
+`Commands.EmitTrigger(evt)` (no `propagate` argument) always emits both
+globally and — if the event implements `IEntityTrigger` with `EntityId != 0` —
+on the entity with `propagate: true`. The `EntityCommands.EmitTrigger`
+overload defaults `propagate` to `false`, so you opt in.
 
 ## Plugins
 

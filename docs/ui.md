@@ -164,12 +164,16 @@ Convenience aggregates that insert a common set of components:
 | `ImageBundle`  | `Node`, `UiImage`.                                     |
 
 ```csharp
-commands.SpawnBundle(new ButtonBundle
+app.AddSystem((Commands commands) =>
 {
-    Node = new Node { Width = Val.Px(120), Height = Val.Px(36) },
-    Background = new BackgroundColor(Color.Rgba(50, 60, 80, 255)),
-    Focus = FocusPolicy.BlockAll,
-});
+    commands.SpawnBundle(new ButtonBundle
+    {
+        Node = new Node { Width = Val.Px(120), Height = Val.Px(36) },
+        Background = new BackgroundColor(Color.Rgba(50, 60, 80, 255)),
+        Focus = FocusPolicy.BlockAll,
+    });
+})
+.InStage(Stage.Startup).Build();
 ```
 
 ## Interaction
@@ -187,8 +191,7 @@ public enum Interaction : byte { None, Hovered, Pressed }
 ## Pointer events
 
 Fired as entity-targeted triggers via `commands.EmitTrigger` during
-`UiPostLayoutStage`. Observe globally or per-entity (entity observers can
-opt into propagation):
+`UiPostLayoutStage`. Observe globally or per-entity:
 
 | Trigger          | When                                                      |
 |------------------|-----------------------------------------------------------|
@@ -198,11 +201,32 @@ opt into propagation):
 | `UiPointerUp`    | Pointer released — fires on the **press origin** entity.  |
 | `UiClick`        | Press + release happened on the **same** entity.          |
 
+**All UI triggers are emitted with `propagate: true`** — after the hit
+entity's observers run, the trigger bubbles up the parent chain so a
+container can react to a child button's click. An observer can stop the
+bubble by calling `trigger.Propagate(false)` (triggers are passed by ref so
+this works).
+
 ```csharp
-commands.SpawnBundle(new ButtonBundle { /* ... */ })
-    .Observe<On<UiClick>>(t => Console.WriteLine("clicked"))
-    .Observe<On<UiOver>>(t  => Console.WriteLine("hover in"))
-    .Observe<On<UiOut>>(t   => Console.WriteLine("hover out"));
+app.AddObserver<On<UiClick>>((world, trigger) =>
+{
+    // Container observes child clicks via propagation.
+    Console.WriteLine($"click bubbled through #{trigger.EntityId}");
+    // Stop if a modal owns this subtree.
+    if (world.Entity(trigger.EntityId).Has<ModalRoot>())
+        trigger.Propagate(false);
+});
+```
+
+```csharp
+app.AddSystem((Commands commands) =>
+{
+    commands.SpawnBundle(new ButtonBundle { /* ... */ })
+        .Observe<On<UiClick>>(t => Console.WriteLine("clicked"))
+        .Observe<On<UiOver>>(t  => Console.WriteLine("hover in"))
+        .Observe<On<UiOut>>(t   => Console.WriteLine("hover out"));
+})
+.InStage(Stage.Startup).Build();
 ```
 
 `RelativeCursorPosition { Normalized, InBounds }` is written to the hovered
@@ -322,8 +346,12 @@ and components; add them after `UiPlugin`.
 ```csharp
 app.AddPlugin(new CheckboxPlugin());
 
-commands.SpawnBundle(new ButtonBundle { /* ... */ })
-    .Insert(new Checkbox { Checked = false });
+app.AddSystem((Commands commands) =>
+{
+    commands.SpawnBundle(new ButtonBundle { /* ... */ })
+        .Insert(new Checkbox { Checked = false });
+})
+.InStage(Stage.Startup).Build();
 ```
 
 Flips `Checkbox.Checked` on every `UiClick` and emits a `CheckboxChanged`
@@ -334,22 +362,26 @@ entity-targeted trigger with the new value.
 ```csharp
 app.AddPlugin(new SliderPlugin());
 
-var track = commands.Spawn()
-    .Insert(new Node { /* track size */ })
-    .Insert(new Slider
-    {
-        Min = 0, Max = 100, Value = 50,
-        ThumbLength = 20,
-        Orientation = ScrollbarOrientation.Horizontal,
-    })
-    .Insert(new Interaction());
+app.AddSystem((Commands commands) =>
+{
+    var track = commands.Spawn()
+        .Insert(new Node { /* track size */ })
+        .Insert(new Slider
+        {
+            Min = 0, Max = 100, Value = 50,
+            ThumbLength = 20,
+            Orientation = ScrollbarOrientation.Horizontal,
+        })
+        .Insert(new Interaction());
 
-var thumb = commands.Spawn()
-    .Insert(new Node { PositionType = PositionType.Absolute, /* thumb size */ })
-    .Insert(new SliderThumb())
-    .Insert(new Interaction());
+    var thumb = commands.Spawn()
+        .Insert(new Node { PositionType = PositionType.Absolute, /* thumb size */ })
+        .Insert(new SliderThumb())
+        .Insert(new Interaction());
 
-commands.AddChild(track, thumb);
+    commands.AddChild(track, thumb);
+})
+.InStage(Stage.Startup).Build();
 ```
 
 Drag updates `Slider.Value` and emits `SliderChanged`.
