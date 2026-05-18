@@ -112,7 +112,5 @@ public struct ComputedNode
 {
 	public Vector2 Size;
 	public Vector2 Position;
-	public Vector4 Padding;
-	public Vector4 Border;
 	public uint ClayId;
 }
