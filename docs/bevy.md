@@ -114,10 +114,18 @@ Deferred entity / component / resource operations. Applied after the system
 (or batch) finishes. Each system gets its own buffer — thread-safe.
 
 ```csharp
+ulong existingId = /* obtained earlier, e.g. saved from a previous Spawn */ 0;
+
 app.AddSystem((Commands cmd) =>
 {
+    // Spawn a brand-new entity with components.
     cmd.Spawn().Insert(new Position { X = 0, Y = 0 });
-    cmd.Entity(id).Insert(new Health { Value = 100 });
+
+    // Patch an existing entity by id.
+    if (existingId != 0)
+        cmd.Entity(existingId).Insert(new Health { Value = 100 });
+
+    // Drop a resource onto the App (applies after the frame).
     cmd.InsertResource(new GameSettings());
 })
 .InStage(Stage.Update).Build();
