@@ -44,14 +44,18 @@ internal static class LayoutSystem
 {
 	public static void Run(
 		Res<UiSurface> surface,
+		Res<UiScale> scale,
 		ResMut<UiClayContext> ctx,
 		Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 		UiLayoutQueries q,
-		Query<Data<ScrollPosition>> scrollPositions)
+		Query<Data<ScrollPosition>> scrollPositions,
+		Local<HashSet<ulong>> liveScrollIds,
+		Local<List<ulong>> scrollPruneBuffer)
 	{
 		ref var c = ref ctx.Value;
 		Clay.Clay.SetContext(c.Context);
-		Clay.Clay.SetLayoutDimensions(new Dimensions(surface.Value.LogicalSize.X, surface.Value.LogicalSize.Y));
+		var s = MathF.Max(0.01f, scale.Value.Value);
+		Clay.Clay.SetLayoutDimensions(new Dimensions(surface.Value.LogicalSize.X * s, surface.Value.LogicalSize.Y * s));
 
 		Clay.Clay.UpdateScrollContainers(c.EnableDragScrolling, c.ScrollDelta, c.DeltaTime);
 
@@ -70,7 +74,7 @@ internal static class LayoutSystem
 		c.ScrollClayToEntity.Clear();
 
 		foreach (var (entityId, node) in roots)
-			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q);
+			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s);
 
 		var cmds = Clay.Clay.EndLayout();
 		if (c.LastCommandsBuffer.Length < cmds.Length)
@@ -78,8 +82,12 @@ internal static class LayoutSystem
 		cmds.CopyTo(c.LastCommandsBuffer);
 		c.LastCommandsCount = cmds.Length;
 
+		var live = liveScrollIds.Value;
+		var prune = scrollPruneBuffer.Value;
+		live.Clear();
 		foreach (var (eid, sp) in scrollPositions)
 		{
+			live.Add(eid.Ref);
 			var clayId = ElementId.HashNumber((uint)eid.Ref).Id;
 			var data = c.GetScrollContainerData(clayId);
 			if (!data.Found)
@@ -88,14 +96,27 @@ internal static class LayoutSystem
 			sp.Ref.OffsetY = data.ScrollPosition.Y;
 			c.LastSyncedScroll[eid.Ref] = new Vector2(data.ScrollPosition.X, data.ScrollPosition.Y);
 		}
+
+		// Purge LastSyncedScroll entries whose entity has been despawned (or had its
+		// ScrollPosition removed). Without this the dict grows unbounded over a
+		// session, and entity-id recycling could resurrect stale offsets.
+		if (c.LastSyncedScroll.Count > live.Count)
+		{
+			prune.Clear();
+			foreach (var key in c.LastSyncedScroll.Keys)
+				if (!live.Contains(key))
+					prune.Add(key);
+			foreach (var dead in prune)
+				c.LastSyncedScroll.Remove(dead);
+		}
 	}
 
-	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q)
+	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale)
 	{
 		if (node.Display == Display.None)
 			return;
 
-		var decl = BuildDecl(entityId, parentId, in node, q);
+		var decl = BuildDecl(entityId, parentId, in node, q, scale);
 		var ctx = Clay.Clay.Context!;
 		ctx.OpenElement();
 		ctx.ConfigureOpenElement(decl);
@@ -111,7 +132,8 @@ internal static class LayoutSystem
 			{
 				var (_, fontPtr) = q.TextFonts.Get(entityId);
 				tcfg.FontId = fontPtr.Ref.FontId;
-				if (fontPtr.Ref.Size > 0) tcfg.FontSize = fontPtr.Ref.Size;
+				if (fontPtr.Ref.Size > 0)
+					tcfg.FontSize = (ushort)MathF.Max(1, fontPtr.Ref.Size * scale);
 			}
 			if (q.TextColors.Contains(entityId))
 			{
@@ -130,14 +152,14 @@ internal static class LayoutSystem
 				if (!q.Nodes.Contains(childId))
 					continue;
 				var (_, childNodePtr) = q.Nodes.Get(childId);
-				EmitNode(childId, entityId, in childNodePtr.Ref, c, q);
+				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale);
 			}
 		}
 
 		ctx.CloseElement();
 	}
 
-	private static ElementDeclaration BuildDecl(ulong entityId, ulong parentId, in Node node, UiLayoutQueries q)
+	private static ElementDeclaration BuildDecl(ulong entityId, ulong parentId, in Node node, UiLayoutQueries q, float scale)
 	{
 		var decl = new ElementDeclaration
 		{
@@ -145,10 +167,10 @@ internal static class LayoutSystem
 			Layout = new LayoutConfig
 			{
 				Sizing = new Sizing(
-					ClayMap.ToSizing(node.Width,  node.MinWidth,  node.MaxWidth),
-					ClayMap.ToSizing(node.Height, node.MinHeight, node.MaxHeight)),
-				Padding = ClayMap.ToPadding(node.Padding),
-				ChildGap = node.Gap.Type == ValType.Px ? (ushort)MathF.Max(0, node.Gap.Value) : (ushort)0,
+					ClayMap.ToSizing(node.Width,  node.MinWidth,  node.MaxWidth, scale),
+					ClayMap.ToSizing(node.Height, node.MinHeight, node.MaxHeight, scale)),
+				Padding = ClayMap.ToPadding(node.Padding, scale),
+				ChildGap = node.Gap.Type == ValType.Px ? (ushort)MathF.Max(0, node.Gap.Value * scale) : (ushort)0,
 				ChildAlignment = new ChildAlignment(
 					ClayMap.MapJustify(node.JustifyContent),
 					ClayMap.MapAlign(node.AlignItems)),
@@ -169,30 +191,31 @@ internal static class LayoutSystem
 		if (q.BorderRadii.Contains(entityId))
 		{
 			var (_, p) = q.BorderRadii.Get(entityId);
-			decl.CornerRadius = ClayMap.ToCornerRadius(p.Ref);
+			decl.CornerRadius = ClayMap.ToCornerRadius(p.Ref, scale);
 		}
 
 		if (q.BorderColors.Contains(entityId))
 		{
 			var (_, p) = q.BorderColors.Get(entityId);
 			decl.Border.Color = p.Ref.Value;
-			decl.Border.Width = ClayMap.ToBorderWidth(node.Border);
+			decl.Border.Width = ClayMap.ToBorderWidth(node.Border, scale);
 		}
 
 		if (q.Shadows.Contains(entityId))
 		{
 			var (_, p) = q.Shadows.Get(entityId);
 			decl.Shadow.Color = p.Ref.Color;
-			decl.Shadow.OffsetX = p.Ref.OffsetX;
-			decl.Shadow.OffsetY = p.Ref.OffsetY;
-			decl.Shadow.BlurRadius = p.Ref.BlurRadius;
-			decl.Shadow.SpreadRadius = p.Ref.SpreadRadius;
+			decl.Shadow.OffsetX = p.Ref.OffsetX * scale;
+			decl.Shadow.OffsetY = p.Ref.OffsetY * scale;
+			decl.Shadow.BlurRadius = p.Ref.BlurRadius * scale;
+			decl.Shadow.SpreadRadius = p.Ref.SpreadRadius * scale;
 		}
 
 		if (q.Images.Contains(entityId))
 		{
 			var (_, p) = q.Images.Get(entityId);
 			decl.Image.ImageData = p.Ref.ImageData;
+			// SourceDimensions is the texture's native pixel size — unaffected by scale.
 			decl.Image.SourceDimensions = new Dimensions(p.Ref.SourceSize.X, p.Ref.SourceSize.Y);
 			decl.Image.Tint = p.Ref.Tint;
 		}
@@ -208,6 +231,8 @@ internal static class LayoutSystem
 			bool useRight  = node.Right.Type  == ValType.Px && node.Left.Type != ValType.Px;
 			bool useBottom = node.Bottom.Type == ValType.Px && node.Top.Type  != ValType.Px;
 
+			// Parent's ComputedNode.Size is already in scaled (Clay-output) pixels,
+			// so we compare child dimensions in the same space.
 			float parentW = 0f, parentH = 0f;
 			if ((useRight || useBottom) && parentId != 0 && q.Computed.Contains(parentId))
 			{
@@ -216,15 +241,15 @@ internal static class LayoutSystem
 				parentH = pc.Ref.Size.Y;
 			}
 
-			float childW = node.Width.Type  == ValType.Px ? node.Width.Value  : 0f;
-			float childH = node.Height.Type == ValType.Px ? node.Height.Value : 0f;
+			float childW = node.Width.Type  == ValType.Px ? node.Width.Value  * scale : 0f;
+			float childH = node.Height.Type == ValType.Px ? node.Height.Value * scale : 0f;
 
 			float ox = useRight
-				? MathF.Max(0f, parentW - childW - node.Right.Value)
-				: (node.Left.Type == ValType.Px ? node.Left.Value : 0f);
+				? MathF.Max(0f, parentW - childW - node.Right.Value * scale)
+				: (node.Left.Type == ValType.Px ? node.Left.Value * scale : 0f);
 			float oy = useBottom
-				? MathF.Max(0f, parentH - childH - node.Bottom.Value)
-				: (node.Top.Type  == ValType.Px ? node.Top.Value  : 0f);
+				? MathF.Max(0f, parentH - childH - node.Bottom.Value * scale)
+				: (node.Top.Type  == ValType.Px ? node.Top.Value  * scale : 0f);
 			decl.Floating.Offset = new Vector2(ox, oy);
 
 			// Z layering on absolute elements maps directly to Clay's Floating.ZIndex

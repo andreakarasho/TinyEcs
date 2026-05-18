@@ -878,6 +878,165 @@ public class UiBevyTests
 	}
 
 	[Fact]
+	public void UiScale_doubles_computed_size_for_px_values()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
+				.Insert(new BackgroundColor(ClayColor.White));
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.GetResource<UiScale>().Value = 2f;
+		app.Run();
+
+		ComputedNode computed = default;
+		foreach (var (_e, c) in app.GetWorld().Query<Data<ComputedNode>>()) computed = c.Ref;
+		Assert.Equal(200f, computed.Size.X);
+		Assert.Equal(100f, computed.Size.Y);
+	}
+
+	[Fact]
+	public void UiScale_scales_padding_and_border()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var root = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(200), Height = Val.Px(200),
+					Padding = UiRect.All(10),
+				})
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(50), Height = Val.Px(50) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+
+			c.AddChild(root, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.GetResource<UiScale>().Value = 2f;
+		app.Run();
+
+		// Padding doubles → child offset by 20px from root's top-left.
+		var childComputed = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		Assert.Equal(20f, childComputed.Position.X);
+		Assert.Equal(20f, childComputed.Position.Y);
+		// Child size also doubles.
+		Assert.Equal(100f, childComputed.Size.X);
+	}
+
+	[Fact]
+	public void Despawn_removes_entity_from_next_layout()
+	{
+		var app = MakeApp();
+		ulong targetId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var target = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			targetId = target.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.RunStartup();
+		app.Update();
+
+		// Two roots, two Rectangle render commands.
+		var beforeCount = 0;
+		foreach (var cmd in app.GetResource<UiRenderCommands>().Span)
+			if (cmd.CommandType == RenderCommandType.Rectangle) beforeCount++;
+		Assert.Equal(2, beforeCount);
+
+		// Despawn the red root.
+		app.GetWorld().Entity(targetId).Delete();
+		app.Update();
+
+		var afterCount = 0;
+		foreach (var cmd in app.GetResource<UiRenderCommands>().Span)
+			if (cmd.CommandType == RenderCommandType.Rectangle) afterCount++;
+		Assert.Equal(1, afterCount);
+	}
+
+	[Fact]
+	public void Despawn_hovered_entity_does_not_crash_next_frame()
+	{
+		var app = MakeApp();
+		ulong targetId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var target = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+			targetId = target.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.RunStartup();
+		app.GetResource<UiPointer>().Position = new Vector2(50, 50);
+		app.Update();
+
+		// Entity should be hovered now.
+		Assert.Equal(Interaction.Hovered, app.GetWorld().Entity(targetId).Get<Interaction>());
+
+		// Despawn while hovered, then run another frame. Must not throw.
+		app.GetWorld().Entity(targetId).Delete();
+		var ex = Record.Exception(() => app.Update());
+		Assert.Null(ex);
+	}
+
+	[Fact]
+	public void Despawn_pressed_entity_does_not_fire_click_on_release()
+	{
+		var app = MakeApp();
+		ulong targetId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var target = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+			targetId = target.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		int clickCount = 0;
+		app.AddObserver<On<UiClick>>((w, t) => clickCount++);
+
+		app.RunStartup();
+		var pointer = app.GetResource<UiPointer>();
+		pointer.Position = new Vector2(50, 50);
+
+		// Press.
+		pointer.Down = true;
+		app.Update();
+		Assert.Equal(Interaction.Pressed, app.GetWorld().Entity(targetId).Get<Interaction>());
+
+		// Kill the entity, then release.
+		app.GetWorld().Entity(targetId).Delete();
+		pointer.Down = false;
+		var ex = Record.Exception(() => app.Update());
+		Assert.Null(ex);
+		Assert.Equal(0, clickCount);
+	}
+
+	[Fact]
 	public void ComputedNode_written_after_layout()
 	{
 		var app = MakeApp();

@@ -38,11 +38,13 @@ public sealed class UiPlugin : IPlugin
 			InteractionSystem.PreLayout(p, c, q))
 			.InStage(UiPreLayoutStage).SingleThreaded().Build();
 
-		app.AddSystem((Res<UiSurface> s, ResMut<UiClayContext> c,
+		app.AddSystem((Res<UiSurface> s, Res<UiScale> scale, ResMut<UiClayContext> c,
 			Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 			UiLayoutQueries q,
-			Query<Data<ScrollPosition>> scrolls) =>
-			LayoutSystem.Run(s, c, roots, q, scrolls))
+			Query<Data<ScrollPosition>> scrolls,
+			Local<HashSet<ulong>> liveIds,
+			Local<List<ulong>> pruneBuf) =>
+			LayoutSystem.Run(s, scale, c, roots, q, scrolls, liveIds, pruneBuf))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,

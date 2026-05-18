@@ -288,6 +288,35 @@ s.LogicalSize  = new Vector2(1280, 720);   // what your code positions in
 s.PhysicalSize = new Vector2(2560, 1440);  // backing framebuffer (for HiDPI)
 ```
 
+## `UiScale`
+
+Global multiplier applied to every pixel-typed `Val` before layout, plus to
+padding, border widths, gaps, corner radii, shadow offsets, text font size,
+and the logical surface size handed to Clay. `Val.Percent` and `Val.Auto`
+are unaffected. Defaults to `1`.
+
+```csharp
+app.GetResource<UiScale>().Value = 2f;   // crisp HiDPI at 200%
+```
+
+Because the resource scales the **layout output** (everything Clay computes
+ends up in scaled pixels), your pointer feed must live in the same space —
+multiply incoming mouse coordinates by the scale before writing to
+`UiPointer.Position`, or, equivalently, feed your renderer in scaled pixels
+and let the OS layer hand you scaled pointer coords already.
+
+## Entity lifecycle
+
+Nodes can be despawned at any time — including while they are hovered or
+pressed — without crashing the UI pipeline:
+
+- `ClayToEntity` and `ScrollClayToEntity` are rebuilt every `UiLayoutStage`,
+  so stale entries can't linger.
+- `LastSyncedScroll` is purged of dead entity ids at the end of the same
+  stage, so id recycling can't resurrect a stale offset.
+- The hit-test loop skips entities that no longer carry `Interaction`, so a
+  click on an entity that vanished mid-press silently produces no `UiClick`.
+
 ## Rendering
 
 `UiRenderStage` publishes a flat list of `RenderCommand`s to
