@@ -39,7 +39,7 @@ public sealed class UiPlugin : IPlugin
 			.InStage(UiPreLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Res<UiSurface> s, ResMut<UiClayContext> c,
-			Query<Data<Node>, Filter<With<UiRoot>>> roots,
+			Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 			UiLayoutQueries q,
 			Query<Data<ScrollPosition>> scrolls) =>
 			LayoutSystem.Run(s, c, roots, q, scrolls))

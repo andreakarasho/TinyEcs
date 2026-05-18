@@ -3,8 +3,6 @@ using ClayColor = Clay.Color;
 
 namespace TinyEcs.Bevy.UI;
 
-public struct UiRoot { }
-
 public struct Node
 {
 	public Display Display;

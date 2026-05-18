@@ -51,7 +51,6 @@ sealed class UiDemoPlugin : IPlugin
 		{
 			// Fullscreen root, centers panel.
 			var root = commands.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new Node
 				{
 					Display = Display.Flex,

@@ -45,7 +45,7 @@ internal static class LayoutSystem
 	public static void Run(
 		Res<UiSurface> surface,
 		ResMut<UiClayContext> ctx,
-		Query<Data<Node>, Filter<With<UiRoot>>> roots,
+		Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 		UiLayoutQueries q,
 		Query<Data<ScrollPosition>> scrollPositions)
 	{

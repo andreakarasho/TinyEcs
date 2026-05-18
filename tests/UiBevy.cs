@@ -31,7 +31,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
 				.Insert(new BackgroundColor(ClayColor.White));
 		})
@@ -51,7 +50,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var root = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -83,7 +81,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
@@ -117,7 +114,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
@@ -153,7 +149,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
@@ -190,7 +185,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var root = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -230,7 +224,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var root = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -277,7 +270,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var root = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -328,7 +320,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var root = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(300), Height = Val.Px(60) });
 
 			var label = c.Spawn()
@@ -354,7 +345,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(100), Height = Val.Px(50) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction());
@@ -381,7 +371,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var target = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -402,7 +391,6 @@ public class UiBevyTests
 			}
 
 			var bar = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(10), Height = Val.Px(100) })
 				.Insert(new Scrollbar
 				{
@@ -459,7 +447,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var box = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(40), Height = Val.Px(40) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
@@ -502,7 +489,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var slider = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(20) })
 				.Insert(new BackgroundColor(ClayColor.Gray))
 				.Insert(new Slider
@@ -546,7 +532,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var target = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -568,7 +553,6 @@ public class UiBevyTests
 
 			// Bar lives at x=200..210, y=0..100.
 			var bar = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -626,7 +610,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var track = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(20) })
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
@@ -673,7 +656,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var parent = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
 				.Insert(new BackgroundColor(ClayColor.White));
 
@@ -729,7 +711,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var parent = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(400), Height = Val.Px(300) })
 				.Insert(new BackgroundColor(ClayColor.White));
 
@@ -771,7 +752,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var parent = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
 				.Insert(new BackgroundColor(ClayColor.White));
 
@@ -826,7 +806,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			var parent = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction());
@@ -869,7 +848,6 @@ public class UiBevyTests
 			// which would split into separate floating roots and short-circuit DFS
 			// via Capture mode).
 			var parent = c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(200) })
 				.Insert(new BackgroundColor(ClayColor.White));
 
@@ -906,7 +884,6 @@ public class UiBevyTests
 		app.AddSystem((Commands c) =>
 		{
 			c.Spawn()
-				.Insert(new UiRoot())
 				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(120), Height = Val.Px(40) })
 				.Insert(new BackgroundColor(ClayColor.White));
 		})
