@@ -1,0 +1,3 @@
+[submodule "external/Clay.NET"]
+	path = external/Clay.NET
+	url = https://github.com/andreakarasho/Clay.NET.git
