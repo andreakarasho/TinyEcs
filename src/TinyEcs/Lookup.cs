@@ -23,6 +23,7 @@ internal static class Lookup
 	private static int _index = 0;
 
 	private static readonly FastIdLookup<Func<int, Array?>> _arrayCreator = new ();
+	private static readonly FastIdLookup<Func<int, Column>> _columnCreator = new ();
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
 
 	public static ref readonly ComponentInfo GetComponent(EcsID id)
@@ -66,6 +67,39 @@ internal static class Lookup
 		return null;
 	}
 
+	public static Column CreateColumn(EcsID hashcode, int count)
+	{
+		ref var fn = ref _columnCreator.TryGet(hashcode, out var exists);
+		if (exists)
+			return fn(count);
+
+#if USE_PAIR
+		if (hashcode.IsPair())
+		{
+			(var first, var second) = hashcode.Pair();
+
+			fn = ref _columnCreator.TryGet(first, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(first, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
+
+			fn = ref _columnCreator.TryGet(second, out exists)!;
+			if (exists)
+			{
+				ref var cmp = ref _components.TryGet(second, out exists);
+				if (exists && cmp.Size > 0)
+					return fn(count);
+			}
+		}
+#endif
+
+		EcsAssert.Panic(false, $"component not found with hashcode {hashcode}");
+		return null!;
+	}
+
 
 	[SkipLocalsInit]
     internal static class Component<T> where T : struct
@@ -78,6 +112,7 @@ internal static class Lookup
 		static Component()
 		{
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
+			_columnCreator.Add(Value.ID, count => new Column<T>(Size > 0 ? count : 0));
 			_components.Add(Value.ID, Value);
 		}
 

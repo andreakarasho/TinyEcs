@@ -242,10 +242,10 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 					{
-						(var array, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
-						if (array != null && op.Data != null)
+						(var col, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
+						if (col != null && op.Data != null)
 						{
-							array.SetValue(op.Data, row & TinyEcs.Archetype.CHUNK_THRESHOLD);
+							col.SetUntyped(row, op.Data);
 						}
 
 						break;

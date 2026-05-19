@@ -56,7 +56,7 @@ partial class World
 
         (var raw, var row) = Attach(entity, id, second.Size, second.IsManaged);
         var array = (TTarget[])raw!;
-        array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = target;
+        array[row] = target;
 	}
 
 	/// <summary>
@@ -108,7 +108,7 @@ partial class World
 
 		(var array, var row) = Attach(entity, pairId, act.Size, act.IsManaged);
 		var cmpArr = Unsafe.As<TAction[]>(array!);
-		cmpArr[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = action;
+		cmpArr[row] = action;
 	}
 
 	/// <summary>

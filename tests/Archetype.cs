@@ -14,21 +14,9 @@ namespace TinyEcs.Tests
 			var arch = ctx.World.Root;
 
 			for (var i = 0; i < amount; ++i)
-				arch.Add((ulong)(i + 1), out _);
+				arch.Add((ulong)(i + 1));
 
-
-			var total = 0;
-			var chunks = arch.Chunks;
-			for (var i = 0; i < chunks.Length - 1; ++i)
-			{
-				total += chunks[i].Count;
-
-				Assert.Equal(Archetype.CHUNK_SIZE, chunks[i].Count);
-			}
-
-			total += chunks[^1].Count;
-
-			Assert.Equal(arch.Count, total);
+			Assert.Equal(amount, arch.Count);
 		}
 
 		[Theory]
@@ -50,18 +38,7 @@ namespace TinyEcs.Tests
 			entities[entities.Count / 2].Delete();
 
 			var arch = ctx.World.Root;
-			var total = 0;
-			var chunks = arch.Chunks;
-			for (var i = 0; i < chunks.Length - 1; ++i)
-			{
-				total += chunks[i].Count;
-
-				Assert.Equal(Archetype.CHUNK_SIZE, chunks[i].Count);
-			}
-
-			total += chunks[^1].Count;
-
-			Assert.Equal(arch.Count, total);
+			Assert.Equal(amount - 3, arch.Count);
 		}
 	}
 }

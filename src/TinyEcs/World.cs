@@ -137,7 +137,7 @@ public sealed partial class World : IDisposable
 			}
 		}
 
-		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, true, out record.Row);
+		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, true);
 		record.Archetype = foundArch!;
 		_structuralChangeVersion++;
 		EndDeferred();
@@ -165,7 +165,7 @@ public sealed partial class World : IDisposable
 #endif
 	}
 
-	private (Array?, int) Attach(EcsID entity, EcsID id, int size)
+	private (Column?, int) Attach(EcsID entity, EcsID id, int size)
 	{
 		ref var record = ref GetRecord(entity);
 		var oldArch = record.Archetype;
@@ -178,9 +178,9 @@ public sealed partial class World : IDisposable
 
 			if (size > 0)
 			{
-				record.Chunk.MarkChanged(column, record.Row, _ticks);
+				record.Archetype.MarkChanged(column, record.Row, _ticks);
 			}
-			return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
+			return (size > 0 ? record.Archetype.Columns![column] : null, record.Row);
 		}
 
 		// Component doesn't exist - this is a new addition
@@ -216,7 +216,7 @@ public sealed partial class World : IDisposable
 			}
 		}
 
-		record.Chunk = record.Archetype.MoveEntity(foundArch!, ref record.Chunk, record.Row, false, out record.Row);
+		record.Row = record.Archetype.MoveEntity(foundArch!, record.Row, false);
 		record.Archetype = foundArch!;
 		_structuralChangeVersion++;
 		EndDeferred();
@@ -250,10 +250,10 @@ public sealed partial class World : IDisposable
 		column = size > 0 ? foundArch.GetComponentIndex(id) : foundArch.GetAnyIndex(id);
 		if (size > 0)
 		{
-			record.Chunk.MarkAdded(column, record.Row, _ticks);
-			record.Chunk.MarkChanged(column, record.Row, _ticks);
+			record.Archetype.MarkAdded(column, record.Row, _ticks);
+			record.Archetype.MarkChanged(column, record.Row, _ticks);
 		}
-		return (size > 0 ? record.Chunk.Columns![column].Data : null, record.Row);
+		return (size > 0 ? record.Archetype.Columns![column] : null, record.Row);
 	}
 
 	internal bool IsAttached(ref EcsRecord record, EcsID id)
@@ -360,7 +360,7 @@ public sealed partial class World : IDisposable
 			EcsAssert.Panic(false, $"Component {id} not found on entity {entity}");
 		}
 
-		return ref record.Chunk.GetReferenceAt<T>(column, record.Row);
+		return ref record.Archetype.GetReferenceAt<T>(column, record.Row);
 	}
 }
 
@@ -371,7 +371,6 @@ struct EcsRecord
 #if USE_PAIR
 	public EntityFlags Flags;
 #endif
-	public ArchetypeChunk Chunk;
 }
 
 #if USE_PAIR

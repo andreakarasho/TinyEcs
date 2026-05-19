@@ -1451,8 +1451,6 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 	where TQueryData : struct, IData<TQueryData>, allows ref struct
 	where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 {
-	// Heavy iteration state lives here inline. The Data row is small and
-	// updated in-place across chunks so the per-element foreach copy stays tiny.
 	private TinyEcs.QueryIterator _iterator;
 	private TQueryData _row;
 	private TQueryFilter _filterIterator;
@@ -1461,7 +1459,6 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 	{
 		_iterator = iterator;
 		_row = default;
-		// Prime the row to an exhausted-chunk state so the first MoveNext pulls a chunk.
 		_filterIterator = TQueryFilter.CreateIterator(iterator);
 		_filterIterator.SetTicks(lastTick, currentTick);
 	}

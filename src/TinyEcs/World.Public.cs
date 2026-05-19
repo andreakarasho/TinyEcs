@@ -154,7 +154,7 @@ public sealed partial class World
 	{
 		ref var record = ref NewId(out var id);
 		record.Archetype = arch;
-		record.Chunk = arch.Add(id, out record.Row);
+		record.Row = arch.Add(id);
 #if USE_PAIR
 		record.Flags = EntityFlags.None;
 #endif
@@ -185,7 +185,7 @@ public sealed partial class World
 
 				ref var record = ref NewId(out id, id);
 				record.Archetype = _archRoot;
-				record.Chunk = _archRoot.Add(id, out record.Row);
+				record.Row = _archRoot.Add(id);
 #if USE_PAIR
 				record.Flags = EntityFlags.None;
 #endif
@@ -288,18 +288,15 @@ public sealed partial class World
 					using var it = world.GetQueryIterator(terms);
 					while (it.Next(out var arch) && arch != null)
 					{
-						foreach (ref readonly var chunk in arch)
+						foreach (ref readonly var child in arch.Entities)
 						{
-							foreach (ref readonly var child in chunk.Entities.AsSpan(0, chunk.Count))
-							{
-								var action = world.Action(child.ID, entity);
-								if (world.Has<OnDelete, Delete>(action))
-									child.Delete();
-								if (world.Has<OnDelete, Unset>(action))
-									child.Unset(action, entity);
-								if (world.Has<OnDelete, Panic>(action))
-									EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
-							}
+							var action = world.Action(child.ID, entity);
+							if (world.Has<OnDelete, Delete>(action))
+								child.Delete();
+							if (world.Has<OnDelete, Unset>(action))
+								child.Unset(action, entity);
+							if (world.Has<OnDelete, Panic>(action))
+								EcsAssert.Panic(false, "you cant remove this entity because of {OnDelete, Panic} relation");
 						}
 					}
 					world.EndDeferred();
@@ -359,7 +356,7 @@ public sealed partial class World
 		ref var record = ref GetRecord(entity);
 		var index = record.Archetype.GetComponentIndex(component);
 		EcsAssert.Panic(index >= 0, "Component not found in the entity");
-		record.Chunk.MarkChanged(index, record.Row, _ticks);
+		record.Archetype.MarkChanged(index, record.Row, _ticks);
 	}
 
 	/// <inheritdoc cref="SetChanged"/>
@@ -448,11 +445,10 @@ public sealed partial class World
 			return;
 		}
 
-		(var raw, var row) = Attach(entity, cmp.ID, cmp.Size);
+		(var col, var row) = Attach(entity, cmp.ID, cmp.Size);
 		if (cmp.Size <= 0)
 			return;
-		var array = (T[])raw!;
-		array[row & TinyEcs.Archetype.CHUNK_THRESHOLD] = component;
+		((Column<T>)col!).GetRef(row) = component;
 	}
 
 #if USE_PAIR

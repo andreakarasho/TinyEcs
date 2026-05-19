@@ -11,11 +11,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0> : IData<Data<T0>>, IQueryComponentAccess
         where T0 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x1u;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 
@@ -27,7 +31,17 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
+            row._current0 = iterator.GetColumn<T0>(0);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -38,7 +52,13 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
             return true;
         }
 
@@ -60,11 +80,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1> : IData<Data<T0, T1>>, IQueryComponentAccess
         where T0 : struct where T1 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x3u;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -78,8 +102,19 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -90,8 +125,15 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
             return true;
         }
 
@@ -115,11 +157,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2> : IData<Data<T0, T1, T2>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x7u;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -135,9 +181,21 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -148,9 +206,17 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
             return true;
         }
 
@@ -176,11 +242,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3> : IData<Data<T0, T1, T2, T3>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0xFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -198,10 +268,23 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -212,10 +295,19 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
             return true;
         }
 
@@ -243,11 +335,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4> : IData<Data<T0, T1, T2, T3, T4>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x1Fu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -267,11 +363,25 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -282,11 +392,21 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
             return true;
         }
 
@@ -316,11 +436,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5> : IData<Data<T0, T1, T2, T3, T4, T5>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x3Fu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -342,12 +466,27 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -358,12 +497,23 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
             return true;
         }
 
@@ -395,11 +545,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6> : IData<Data<T0, T1, T2, T3, T4, T5, T6>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x7Fu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -423,13 +577,29 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -440,13 +610,25 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
             return true;
         }
 
@@ -480,11 +662,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0xFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -510,14 +696,31 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -528,14 +731,27 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
             return true;
         }
 
@@ -571,11 +787,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x1FFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -603,15 +823,33 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -622,15 +860,29 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
             return true;
         }
 
@@ -668,11 +920,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x3FFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -702,16 +958,35 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -722,16 +997,31 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
             return true;
         }
 
@@ -771,11 +1061,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x7FFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -807,17 +1101,37 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -828,17 +1142,33 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
             return true;
         }
 
@@ -880,11 +1210,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0xFFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -918,18 +1252,39 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
-			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+			row._current11 = iterator.GetColumn<T11>(11);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u) |
+					(row._current11.Value.IsValid() ? (1u << 11) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -940,18 +1295,35 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
-			row._current11.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+				row._current11.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
+			if ((m & (1u << 11)) != 0) row._current11.Next();
             return true;
         }
 
@@ -995,11 +1367,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x1FFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -1035,19 +1411,41 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
-			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
-			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+			row._current11 = iterator.GetColumn<T11>(11);
+			row._current12 = iterator.GetColumn<T12>(12);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u) |
+					(row._current11.Value.IsValid() ? (1u << 11) : 0u) |
+					(row._current12.Value.IsValid() ? (1u << 12) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -1058,19 +1456,37 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
-			row._current11.Next();
-			row._current12.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+				row._current11.Next();
+				row._current12.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
+			if ((m & (1u << 11)) != 0) row._current11.Next();
+			if ((m & (1u << 12)) != 0) row._current12.Next();
             return true;
         }
 
@@ -1116,11 +1532,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x3FFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -1158,20 +1578,43 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
-			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
-			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
-			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+			row._current11 = iterator.GetColumn<T11>(11);
+			row._current12 = iterator.GetColumn<T12>(12);
+			row._current13 = iterator.GetColumn<T13>(13);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u) |
+					(row._current11.Value.IsValid() ? (1u << 11) : 0u) |
+					(row._current12.Value.IsValid() ? (1u << 12) : 0u) |
+					(row._current13.Value.IsValid() ? (1u << 13) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -1182,20 +1625,39 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
-			row._current11.Next();
-			row._current12.Next();
-			row._current13.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+				row._current11.Next();
+				row._current12.Next();
+				row._current13.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
+			if ((m & (1u << 11)) != 0) row._current11.Next();
+			if ((m & (1u << 12)) != 0) row._current12.Next();
+			if ((m & (1u << 13)) != 0) row._current13.Next();
             return true;
         }
 
@@ -1243,11 +1705,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0x7FFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13), typeof(T14) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -1287,21 +1753,45 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
-			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
-			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
-			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
-			row._current14 = iterator.GetColumn<T14, DataRow<T14>>(14);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+			row._current11 = iterator.GetColumn<T11>(11);
+			row._current12 = iterator.GetColumn<T12>(12);
+			row._current13 = iterator.GetColumn<T13>(13);
+			row._current14 = iterator.GetColumn<T14>(14);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u) |
+					(row._current11.Value.IsValid() ? (1u << 11) : 0u) |
+					(row._current12.Value.IsValid() ? (1u << 12) : 0u) |
+					(row._current13.Value.IsValid() ? (1u << 13) : 0u) |
+					(row._current14.Value.IsValid() ? (1u << 14) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -1312,21 +1802,41 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
-			row._current11.Next();
-			row._current12.Next();
-			row._current13.Next();
-			row._current14.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+				row._current11.Next();
+				row._current12.Next();
+				row._current13.Next();
+				row._current14.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
+			if ((m & (1u << 11)) != 0) row._current11.Next();
+			if ((m & (1u << 12)) != 0) row._current12.Next();
+			if ((m & (1u << 13)) != 0) row._current13.Next();
+			if ((m & (1u << 14)) != 0) row._current14.Next();
             return true;
         }
 
@@ -1376,11 +1886,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IData<Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>, IQueryComponentAccess
         where T0 : struct where T1 : struct where T2 : struct where T3 : struct where T4 : struct where T5 : struct where T6 : struct where T7 : struct where T8 : struct where T9 : struct where T10 : struct where T11 : struct where T12 : struct where T13 : struct where T14 : struct where T15 : struct
     {
+        private const uint ALL_PRESENT_MASK = 0xFFFFu;
+
 		private static readonly System.Type[] s_componentTypes = new[] { typeof(T0), typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10), typeof(T11), typeof(T12), typeof(T13), typeof(T14), typeof(T15) };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         internal DataRow<T0> _current0;
 		internal DataRow<T1> _current1;
@@ -1422,22 +1936,47 @@ namespace TinyEcs.Bevy
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LoadChunk(ref Data<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> row, QueryIterator iterator)
         {
-            row._current0 = iterator.GetColumn<T0, DataRow<T0>>(0);
-			row._current1 = iterator.GetColumn<T1, DataRow<T1>>(1);
-			row._current2 = iterator.GetColumn<T2, DataRow<T2>>(2);
-			row._current3 = iterator.GetColumn<T3, DataRow<T3>>(3);
-			row._current4 = iterator.GetColumn<T4, DataRow<T4>>(4);
-			row._current5 = iterator.GetColumn<T5, DataRow<T5>>(5);
-			row._current6 = iterator.GetColumn<T6, DataRow<T6>>(6);
-			row._current7 = iterator.GetColumn<T7, DataRow<T7>>(7);
-			row._current8 = iterator.GetColumn<T8, DataRow<T8>>(8);
-			row._current9 = iterator.GetColumn<T9, DataRow<T9>>(9);
-			row._current10 = iterator.GetColumn<T10, DataRow<T10>>(10);
-			row._current11 = iterator.GetColumn<T11, DataRow<T11>>(11);
-			row._current12 = iterator.GetColumn<T12, DataRow<T12>>(12);
-			row._current13 = iterator.GetColumn<T13, DataRow<T13>>(13);
-			row._current14 = iterator.GetColumn<T14, DataRow<T14>>(14);
-			row._current15 = iterator.GetColumn<T15, DataRow<T15>>(15);
+            row._current0 = iterator.GetColumn<T0>(0);
+			row._current1 = iterator.GetColumn<T1>(1);
+			row._current2 = iterator.GetColumn<T2>(2);
+			row._current3 = iterator.GetColumn<T3>(3);
+			row._current4 = iterator.GetColumn<T4>(4);
+			row._current5 = iterator.GetColumn<T5>(5);
+			row._current6 = iterator.GetColumn<T6>(6);
+			row._current7 = iterator.GetColumn<T7>(7);
+			row._current8 = iterator.GetColumn<T8>(8);
+			row._current9 = iterator.GetColumn<T9>(9);
+			row._current10 = iterator.GetColumn<T10>(10);
+			row._current11 = iterator.GetColumn<T11>(11);
+			row._current12 = iterator.GetColumn<T12>(12);
+			row._current13 = iterator.GetColumn<T13>(13);
+			row._current14 = iterator.GetColumn<T14>(14);
+			row._current15 = iterator.GetColumn<T15>(15);
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    (row._current0.Value.IsValid() ? (1u << 0) : 0u) |
+					(row._current1.Value.IsValid() ? (1u << 1) : 0u) |
+					(row._current2.Value.IsValid() ? (1u << 2) : 0u) |
+					(row._current3.Value.IsValid() ? (1u << 3) : 0u) |
+					(row._current4.Value.IsValid() ? (1u << 4) : 0u) |
+					(row._current5.Value.IsValid() ? (1u << 5) : 0u) |
+					(row._current6.Value.IsValid() ? (1u << 6) : 0u) |
+					(row._current7.Value.IsValid() ? (1u << 7) : 0u) |
+					(row._current8.Value.IsValid() ? (1u << 8) : 0u) |
+					(row._current9.Value.IsValid() ? (1u << 9) : 0u) |
+					(row._current10.Value.IsValid() ? (1u << 10) : 0u) |
+					(row._current11.Value.IsValid() ? (1u << 11) : 0u) |
+					(row._current12.Value.IsValid() ? (1u << 12) : 0u) |
+					(row._current13.Value.IsValid() ? (1u << 13) : 0u) |
+					(row._current14.Value.IsValid() ? (1u << 14) : 0u) |
+					(row._current15.Value.IsValid() ? (1u << 15) : 0u);
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -1448,22 +1987,43 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            row._current0.Next();
-			row._current1.Next();
-			row._current2.Next();
-			row._current3.Next();
-			row._current4.Next();
-			row._current5.Next();
-			row._current6.Next();
-			row._current7.Next();
-			row._current8.Next();
-			row._current9.Next();
-			row._current10.Next();
-			row._current11.Next();
-			row._current12.Next();
-			row._current13.Next();
-			row._current14.Next();
-			row._current15.Next();
+            if (!row._anyAbsent)
+            {
+                row._current0.Next();
+				row._current1.Next();
+				row._current2.Next();
+				row._current3.Next();
+				row._current4.Next();
+				row._current5.Next();
+				row._current6.Next();
+				row._current7.Next();
+				row._current8.Next();
+				row._current9.Next();
+				row._current10.Next();
+				row._current11.Next();
+				row._current12.Next();
+				row._current13.Next();
+				row._current14.Next();
+				row._current15.Next();
+                return true;
+            }
+            var m = row._presentMask;
+            if ((m & (1u << 0)) != 0) row._current0.Next();
+			if ((m & (1u << 1)) != 0) row._current1.Next();
+			if ((m & (1u << 2)) != 0) row._current2.Next();
+			if ((m & (1u << 3)) != 0) row._current3.Next();
+			if ((m & (1u << 4)) != 0) row._current4.Next();
+			if ((m & (1u << 5)) != 0) row._current5.Next();
+			if ((m & (1u << 6)) != 0) row._current6.Next();
+			if ((m & (1u << 7)) != 0) row._current7.Next();
+			if ((m & (1u << 8)) != 0) row._current8.Next();
+			if ((m & (1u << 9)) != 0) row._current9.Next();
+			if ((m & (1u << 10)) != 0) row._current10.Next();
+			if ((m & (1u << 11)) != 0) row._current11.Next();
+			if ((m & (1u << 12)) != 0) row._current12.Next();
+			if ((m & (1u << 13)) != 0) row._current13.Next();
+			if ((m & (1u << 14)) != 0) row._current14.Next();
+			if ((m & (1u << 15)) != 0) row._current15.Next();
             return true;
         }
 

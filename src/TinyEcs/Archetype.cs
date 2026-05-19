@@ -4,146 +4,13 @@ using System.Threading;
 namespace TinyEcs;
 
 
-[SkipLocalsInit]
-internal readonly struct Column
-{
-	public readonly Array Data;
-	public readonly uint[] ChangedTicks, AddedTicks;
-
-	internal Column(ref readonly ComponentInfo component, int chunkSize)
-	{
-		Data = Lookup.GetArray(component.ID, chunkSize)!;
-		ChangedTicks = new uint[chunkSize];
-		AddedTicks = new uint[chunkSize];
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkChanged(int index, uint ticks)
-	{
-		ChangedTicks[index] = ticks;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkAdded(int index, uint ticks)
-	{
-		AddedTicks[index] = ticks;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void CopyTo(int srcIdx, ref readonly Column dest, int dstIdx)
-	{
-		Array.Copy(Data, srcIdx, dest.Data, dstIdx, 1);
-		dest.ChangedTicks[dstIdx] = ChangedTicks[srcIdx];
-		dest.AddedTicks[dstIdx] = AddedTicks[srcIdx];
-	}
-}
-
-[SkipLocalsInit]
-internal struct ArchetypeChunk
-{
-	internal readonly Column[]? Columns;
-	internal readonly EntityView[] Entities;
-
-	internal ArchetypeChunk(ReadOnlySpan<ComponentInfo> sign, int chunkSize)
-	{
-		Entities = new EntityView[chunkSize];
-		Columns = new Column[sign.Length];
-		for (var i = 0; i < sign.Length; ++i)
-			Columns[i] = new(in sign[i], chunkSize);
-	}
-
-	public int Count { get; internal set; }
-
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref EntityView EntityAt(int row)
-		=> ref Unsafe.Add(ref Entities.AsSpan(0, Count)[0], row & Archetype.CHUNK_THRESHOLD);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T GetReference<T>(int column) where T : struct
-	{
-		if (column < 0 || column >= Columns!.Length)
-			return ref Unsafe.NullRef<T>();
-
-		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
-		return ref MemoryMarshal.GetReference(span);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
-	{
-		if (column < 0 || column >= Columns!.Length)
-		{
-			sizeInBytes = 0;
-			return ref Unsafe.NullRef<T>();
-		}
-
-		sizeInBytes = Unsafe.SizeOf<T>();
-
-		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
-		return ref MemoryMarshal.GetReference(span);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref Column GetColumn(int column)
-	{
-		if (column < 0 || column >= Columns!.Length)
-		{
-			return ref Unsafe.NullRef<Column>();
-		}
-
-		return ref Columns[column];
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ref T GetReferenceAt<T>(int column, int row) where T : struct
-	{
-		ref var reference = ref GetReference<T>(column);
-		if (Unsafe.IsNullRef(ref reference))
-			return ref reference;
-		return ref Unsafe.Add(ref reference, row & Archetype.CHUNK_THRESHOLD);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly Span<T> GetSpan<T>(int column) where T : struct
-	{
-		if (column < 0 || column >= Columns!.Length)
-			return Span<T>.Empty;
-
-		var span = new Span<T>(Unsafe.As<T[]>(Columns[column].Data), 0, Count);
-		return span;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public readonly ReadOnlySpan<EntityView> GetEntities()
-		=> Entities.AsSpan(0, Count);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkChanged(int column, int row, uint ticks)
-	{
-		Columns![column].MarkChanged(row & Archetype.CHUNK_THRESHOLD, ticks);
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void MarkAdded(int column, int row, uint ticks)
-	{
-		Columns![column].MarkAdded(row & Archetype.CHUNK_THRESHOLD, ticks);
-	}
-}
-
 public sealed class Archetype : IComparable<Archetype>
 {
-	const int ARCHETYPE_INITIAL_CAPACITY = 1;
-
-	internal const int CHUNK_SIZE = 4096;
-	internal const int CHUNK_LOG2 = 12;
-	internal const int CHUNK_THRESHOLD = CHUNK_SIZE - 1;
+	const int INITIAL_CAPACITY = 8;
 
 	private static long _traversalVersion;
 
-
 	private readonly World _world;
-	private ArchetypeChunk[] _chunks;
 	private readonly ComponentComparer _comparer;
 	private readonly FrozenDictionary<EcsID, int> _componentsLookup, _allLookup
 #if USE_PAIR
@@ -152,10 +19,14 @@ public sealed class Archetype : IComparable<Archetype>
 		;
 	internal readonly List<EcsEdge> _add, _remove;
 	private int _count;
+	private int _capacity;
 	private long _lastTraversalVersion;
 	private readonly int[] _fastLookup;
 	private readonly ulong[] _componentBits;
 	private readonly int _bitsetMaxId;
+
+	internal Column[]? _columns;
+	internal EntityView[] _entities;
 
 	internal Archetype(
 		World world,
@@ -171,8 +42,15 @@ public sealed class Archetype : IComparable<Archetype>
 #if USE_PAIR
 		Pairs = All.Where(x => x.ID.IsPair()).ToImmutableArray();
 #endif
-		_chunks = new ArchetypeChunk[ARCHETYPE_INITIAL_CAPACITY];
 
+		_capacity = 0;
+		_entities = Array.Empty<EntityView>();
+		_columns = Components.Length > 0 ? new Column[Components.Length] : null;
+		if (_columns != null)
+		{
+			for (var i = 0; i < Components.Length; ++i)
+				_columns[i] = Lookup.CreateColumn(Components[i].ID, 0);
+		}
 
 		var hash = 0ul;
 		var dict = new Dictionary<EcsID, int>();
@@ -234,28 +112,80 @@ public sealed class Archetype : IComparable<Archetype>
 	public int Count => _count;
 	public readonly ComponentInfo[] All, Components, Tags, Pairs = Array.Empty<ComponentInfo>();
 	public EcsID Id { get; }
-	internal ReadOnlySpan<ArchetypeChunk> Chunks => _chunks.AsSpan(0, (_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
-	internal int EmptyChunks => _chunks.Length - ((_count + CHUNK_SIZE - 1) >> CHUNK_LOG2);
 
-	private ref ArchetypeChunk GetOrCreateChunk(int index)
+	internal Column[]? Columns => _columns;
+	internal ReadOnlySpan<EntityView> Entities => _entities.AsSpan(0, _count);
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal ref EntityView EntityAt(int row) => ref _entities[row];
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public ref T GetReference<T>(int column) where T : struct
 	{
-		index >>= CHUNK_LOG2;
+		if (_columns == null || column < 0 || column >= _columns.Length)
+			return ref Unsafe.NullRef<T>();
 
-		if (index >= _chunks.Length)
-			Array.Resize(ref _chunks, Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length * 2));
-
-		ref var chunk = ref _chunks[index];
-		if (chunk.Columns == null)
-		{
-			chunk = new ArchetypeChunk(Components, CHUNK_SIZE);
-		}
-
-		return ref chunk;
+		return ref ((Column<T>)_columns[column]).GetFirstRef();
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal ref ArchetypeChunk GetChunk(int index)
-		=> ref _chunks[index >> CHUNK_LOG2];
+	public ref T GetReferenceWithSize<T>(int column, out int sizeInBytes) where T : struct
+	{
+		if (_columns == null || column < 0 || column >= _columns.Length)
+		{
+			sizeInBytes = 0;
+			return ref Unsafe.NullRef<T>();
+		}
+
+		sizeInBytes = Unsafe.SizeOf<T>();
+		return ref ((Column<T>)_columns[column]).GetFirstRef();
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public ref T GetReferenceAt<T>(int column, int row) where T : struct
+	{
+		if (_columns == null || column < 0 || column >= _columns.Length)
+			return ref Unsafe.NullRef<T>();
+
+		return ref ((Column<T>)_columns[column]).GetRef(row);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public Span<T> GetSpan<T>(int column) where T : struct
+	{
+		if (_columns == null || column < 0 || column >= _columns.Length)
+			return Span<T>.Empty;
+
+		return ((Column<T>)_columns[column]).AsSpan(_count);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Column? GetColumn(int column)
+	{
+		if (_columns == null || column < 0 || column >= _columns.Length)
+			return null;
+		return _columns[column];
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal Column<T>? GetColumn<T>(int column) where T : struct
+	{
+		if (_columns == null || column < 0 || column >= _columns.Length)
+			return null;
+		return (Column<T>)_columns[column];
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkChanged(int column, int row, uint ticks)
+	{
+		_columns![column].MarkChanged(row, ticks);
+	}
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public void MarkAdded(int column, int row, uint ticks)
+	{
+		_columns![column].MarkAdded(row, ticks);
+	}
 
 	internal int GetComponentIndex(EcsID id)
 	{
@@ -304,65 +234,60 @@ public sealed class Archetype : IComparable<Archetype>
 		return size > 0 ? GetComponentIndex(id) : GetAnyIndex(id);
 	}
 
-	internal ref ArchetypeChunk Add(EntityView ent, out int row)
+	private void EnsureCapacity(int needed)
 	{
-		ref var chunk = ref GetOrCreateChunk(_count);
-		chunk.EntityAt(chunk.Count++) = ent;
-		row = _count++;
-		return ref chunk;
+		if (needed <= _capacity)
+			return;
+
+		var newCap = _capacity == 0 ? INITIAL_CAPACITY : _capacity;
+		while (newCap < needed) newCap *= 2;
+
+		Array.Resize(ref _entities, newCap);
+		if (_columns != null)
+		{
+			for (var i = 0; i < _columns.Length; ++i)
+				_columns[i].EnsureCapacity(newCap);
+		}
+
+		_capacity = newCap;
 	}
 
-	internal ref ArchetypeChunk Add(EcsID id, out int newRow)
-		=> ref Add(new(_world, id), out newRow);
+	internal int Add(EntityView ent)
+	{
+		EnsureCapacity(_count + 1);
+		_entities[_count] = ent;
+		return _count++;
+	}
 
-	private EcsID RemoveByRow(ref ArchetypeChunk chunk, int row)
+	internal int Add(EcsID id) => Add(new EntityView(_world, id));
+
+	private EcsID RemoveByRow(int row)
 	{
 		_count -= 1;
 		EcsAssert.Assert(_count >= 0, "Negative count");
 
-		// ref var chunk = ref GetChunk(row);
-		ref var lastChunk = ref GetChunk(_count);
-		var removed = chunk.EntityAt(row).ID;
+		var removed = _entities[row].ID;
 
 		if (row < _count)
 		{
-			EcsAssert.Assert(lastChunk.EntityAt(_count).ID.IsValid(), "Entity is invalid. This should never happen!");
+			EcsAssert.Assert(_entities[_count].ID.IsValid(), "Entity is invalid. This should never happen!");
 
-			chunk.EntityAt(row) = lastChunk.EntityAt(_count);
+			_entities[row] = _entities[_count];
 
-			var srcIdx = _count & CHUNK_THRESHOLD;
-			var dstIdx = row & CHUNK_THRESHOLD;
-			for (var i = 0; i < Components.Length; ++i)
+			if (_columns != null)
 			{
-				lastChunk.Columns![i].CopyTo(srcIdx, in chunk.Columns![i], dstIdx);
+				for (var i = 0; i < _columns.Length; ++i)
+					_columns[i].CopyTo(_count, _columns[i], row);
 			}
 
-			ref var rec = ref _world.GetRecord(chunk.EntityAt(row).ID);
-			rec.Chunk = chunk;
+			ref var rec = ref _world.GetRecord(_entities[row].ID);
 			rec.Row = row;
 		}
-
-		// lastChunk.EntityAt(_count) = EntityView.Invalid;
-		//
-		// for (var i = 0; i < All.Length; ++i)
-		// {
-		// 	if (All[i].Size <= 0)
-		// 		continue;
-		//
-		// 	var lastValidArray = lastChunk.RawComponentData(i);
-		// 	Array.Clear(lastValidArray, _count & CHUNK_THRESHOLD, 1);
-		// }
-
-		lastChunk.Count -= 1;
-		EcsAssert.Assert(lastChunk.Count >= 0, "Negative chunk count");
-
-		TrimChunksIfNeeded();
 
 		return removed;
 	}
 
-	internal EcsID Remove(ref EcsRecord record)
-		=> RemoveByRow(ref record.Chunk, record.Row);
+	internal EcsID Remove(ref EcsRecord record) => RemoveByRow(record.Row);
 
 	internal Archetype InsertVertex(Archetype left, ComponentInfo[] sign, EcsID id)
 	{
@@ -383,9 +308,9 @@ public sealed class Archetype : IComparable<Archetype>
 		return vertex;
 	}
 
-	internal ref ArchetypeChunk MoveEntity(Archetype newArch, ref ArchetypeChunk fromChunk, int oldRow, bool isRemove, out int newRow)
+	internal int MoveEntity(Archetype newArch, int oldRow, bool isRemove)
 	{
-		ref var toChunk = ref newArch.Add(fromChunk.EntityAt(oldRow), out newRow);
+		var newRow = newArch.Add(_entities[oldRow]);
 
 		int i = 0, j = 0;
 		var count = isRemove ? newArch.Components.Length : Components.Length;
@@ -393,8 +318,6 @@ public sealed class Archetype : IComparable<Archetype>
 		ref var x = ref (isRemove ? ref j : ref i);
 		ref var y = ref (!isRemove ? ref j : ref i);
 
-		var srcIdx = oldRow & CHUNK_THRESHOLD;
-		var dstIdx = newRow & CHUNK_THRESHOLD;
 		var items = Components;
 		var newItems = newArch.Components;
 		for (; x < count; ++x, ++y)
@@ -405,12 +328,12 @@ public sealed class Archetype : IComparable<Archetype>
 				++y;
 			}
 
-			fromChunk.Columns![i].CopyTo(srcIdx, in toChunk.Columns![j], dstIdx);
+			_columns![i].CopyTo(oldRow, newArch._columns![j], newRow);
 		}
 
-		_ = RemoveByRow(ref fromChunk, oldRow);
+		_ = RemoveByRow(oldRow);
 
-		return ref toChunk;
+		return newRow;
 	}
 
 	internal void Clear()
@@ -418,16 +341,6 @@ public sealed class Archetype : IComparable<Archetype>
 		_count = 0;
 		_add.Clear();
 		_remove.Clear();
-		TrimChunksIfNeeded();
-	}
-
-	private void TrimChunksIfNeeded()
-	{
-		// Cleanup
-		var empty = EmptyChunks;
-		var half = Math.Max(ARCHETYPE_INITIAL_CAPACITY, _chunks.Length / 2);
-		if (empty > half)
-			Array.Resize(ref _chunks, half);
 	}
 
 	internal void RemoveEmptyArchetypes(ref int removed, Dictionary<EcsID, Archetype> cache)
@@ -542,13 +455,6 @@ public sealed class Archetype : IComparable<Archetype>
 			if (edge.Id == nodeId)
 				return edge.Archetype;
 		}
-
-		// foreach (ref var edge in CollectionsMarshal.AsSpan(onAdd ? root._add : root._remove))
-		// {
-		// 	var found = onAdd ? edge.Archetype.TraverseRight(nodeId) : edge.Archetype.TraverseLeft(nodeId);
-		// 	if (found != null)
-		// 		return found;
-		// }
 
 		return null;
 	}

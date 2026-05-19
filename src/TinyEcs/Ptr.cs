@@ -38,7 +38,6 @@ public ref struct DataRow<T>
 	where T : struct
 {
 	private Ptr<T> _value;
-	private static readonly nint SizeOf = Unsafe.SizeOf<T>();
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public DataRow(ref T value)
@@ -60,11 +59,7 @@ public ref struct DataRow<T>
 	public Ptr<T> Value { [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _value; }
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public void Next()
-	{
-		// _value.Ref = ref Unsafe.AddByteOffset(ref _value.Ref, SizeOf);
-		_value.Ref = ref Unsafe.Add(ref _value.Ref, 1);
-	}
+	public void Next() => _value.Ref = ref Unsafe.Add(ref _value.Ref, 1);
 }
 
 [SkipLocalsInit]
