@@ -503,23 +503,21 @@ public static class ObserverExtensions
 		{
 			var (entityId, handler, action) = pending;
 
+			if (!world.Exists(entityId))
+			{
+				// Entity was deleted between enqueue and flush - skip
+				continue;
+			}
+
 			switch (action)
 			{
 				case PendingComponentActionType.Set:
-					// Now the component value has been written - safe to read!
 					handler.HandleSet(world, entityId);
 					break;
 				case PendingComponentActionType.Add:
-					// Now the component value has been written - safe to read!
 					handler.HandleAdd(world, entityId);
 					break;
 				case PendingComponentActionType.Remove:
-					if (!world.Exists(entityId))
-					{
-						// Entity was deleted - skip
-						continue;
-					}
-					// Now the component value has been written - safe to read!
 					handler.HandleUnset(world, entityId);
 					break;
 			}
