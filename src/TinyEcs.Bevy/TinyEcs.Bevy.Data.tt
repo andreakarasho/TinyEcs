@@ -36,8 +36,11 @@ namespace TinyEcs.Bevy
         var generics = GenerateSequence(i + 1, ", ", j => $"T{j}");
         var whereGenerics = GenerateSequence(i + 1, " ", j => $"where T{j} : struct");
         var ptrList = GenerateSequence(i + 1, "\n\t\t", j => $"internal DataRow<T{j}> _current{j};");
-        var ptrSetRow = GenerateSequence(i + 1, "\n\t\t\t", j => $"row._current{j} = iterator.GetColumn<T{j}, DataRow<T{j}>>({j});");
-        var ptrAdvanceRow = GenerateSequence(i + 1, "\n\t\t\t", j => $"row._current{j}.Next();");
+        var ptrSetRow = GenerateSequence(i + 1, "\n\t\t\t", j => $"row._current{j} = iterator.GetColumn<T{j}>({j});");
+        var maskBuild = GenerateSequence(i + 1, " |\n\t\t\t\t\t", j => $"(row._current{j}.Value.IsValid() ? (1u << {j}) : 0u)");
+        var ptrAdvanceRow = GenerateSequence(i + 1, "\n\t\t\t\t", j => $"row._current{j}.Next();");
+        var ptrAdvanceRowMasked = GenerateSequence(i + 1, "\n\t\t\t", j => $"if ((m & (1u << {j})) != 0) row._current{j}.Next();");
+        var allPresentMask = ((1L << (i + 1)) - 1).ToString("X") + "u";
         var fieldSign = GenerateSequence(i + 1, ", ", j => $"out Ptr<T{j}> ptr{j}");
         var fieldAssignments = GenerateSequence(i + 1, "\n\t\t\t", j => $"ptr{j} = _current{j}.Value;");
         var queryBuilderCalls = GenerateSequence(i + 1, "\n\t\t\t", j => $"builder.With<T{j}>();");
@@ -47,11 +50,15 @@ namespace TinyEcs.Bevy
     public unsafe ref struct Data<<#= generics #>> : IData<Data<<#= generics #>>>, IQueryComponentAccess
         <#= whereGenerics #>
     {
+        private const uint ALL_PRESENT_MASK = 0x<#= allPresentMask #>;
+
 		private static readonly System.Type[] s_componentTypes = new[] { <#= typeOfs #> };
 		public static System.ReadOnlySpan<System.Type> ReadComponents => s_componentTypes;
         public static System.ReadOnlySpan<System.Type> WriteComponents => s_componentTypes;
 
         internal int _index, _count;
+        internal uint _presentMask;
+        internal bool _anyAbsent;
         internal ReadOnlySpan<EntityView> _entities;
         <#= ptrList #>
 
@@ -64,6 +71,16 @@ namespace TinyEcs.Bevy
         public static void LoadChunk(ref Data<<#= generics #>> row, QueryIterator iterator)
         {
             <#= ptrSetRow #>
+            if (iterator.HasOptional)
+            {
+                row._presentMask =
+                    <#= maskBuild #>;
+                row._anyAbsent = row._presentMask != ALL_PRESENT_MASK;
+            }
+            else
+            {
+                row._anyAbsent = false;
+            }
             row._entities = iterator.Entities();
             row._index = 0;
             row._count = iterator.Count;
@@ -74,7 +91,13 @@ namespace TinyEcs.Bevy
         {
             if (++row._index >= row._count)
                 return false;
-            <#= ptrAdvanceRow #>
+            if (!row._anyAbsent)
+            {
+                <#= ptrAdvanceRow #>
+                return true;
+            }
+            var m = row._presentMask;
+            <#= ptrAdvanceRowMasked #>
             return true;
         }
 

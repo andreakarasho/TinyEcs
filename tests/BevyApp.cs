@@ -1961,5 +1961,34 @@ namespace TinyEcs.Tests
 			Active
 		}
 
+		[Fact]
+		public void OptionalColumn_DoesNotAdvanceNullRef_AcrossArchetypes()
+		{
+			var app = new App();
+			var w = app.GetWorld();
+
+			// Archetype WITH optional component
+			w.Entity().Set(new Position { X = 1 }).Set(new Velocity { Value = 10 });
+			// Archetype WITHOUT optional component — multiple entities to trigger second-iter NRE
+			w.Entity().Set(new Position { X = 2 });
+			w.Entity().Set(new Position { X = 3 });
+			w.Entity().Set(new Position { X = 4 });
+
+			var seen = new List<(int x, bool hasVel)>();
+			app.AddSystem((Query<Data<Position, Velocity>, Filter<Optional<Velocity>>> q) =>
+			{
+				foreach (var (pos, vel) in q)
+					seen.Add((pos.Ref.X, vel.IsValid()));
+			}).InStage(Stage.Update).Build();
+
+			app.Run();
+
+			Assert.Equal(4, seen.Count);
+			Assert.Contains((1, true), seen);
+			Assert.Contains((2, false), seen);
+			Assert.Contains((3, false), seen);
+			Assert.Contains((4, false), seen);
+		}
+
 	}
 }
