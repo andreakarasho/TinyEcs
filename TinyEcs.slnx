@@ -6,8 +6,13 @@
   <Folder Name="/src/">
     <Project Path="src/TinyEcs/TinyEcs.csproj" />
     <Project Path="src/TinyEcs.Bevy/TinyEcs.Bevy.csproj" />
+    <Project Path="src/TinyEcs.Bevy.UI/TinyEcs.Bevy.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TinyEcs.Tests.csproj" />
+  </Folder>
+  <Folder Name="/external/">
+    <Project Path="external/Clay.NET/src/Clay/Clay.csproj" />
+    <Project Path="external/Clay.NET/src/StbTextEdit/StbTextEdit.csproj" />
   </Folder>
 </Solution>

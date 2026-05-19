@@ -5,6 +5,7 @@ using System.Numerics;
 using Raylib_cs;
 using TinyEcs;
 using TinyEcs.Bevy;
+using TinyEcsMonogameSample;
 
 using var world = new World();
 var app = new App(world, ThreadingMode.Single);
@@ -18,9 +19,12 @@ app.AddPlugin(new RaylibPlugin
 
 app.AddPlugin(new GameRootPlugin
 {
-	EntitiesToSpawn = 100_000,
+	EntitiesToSpawn = 100,
 	Velocity = 250
 });
+
+app.AddPlugin(new RaylibUiPlugin { LogicalSize = new Vector2(800, 600) });
+app.AddPlugin(new UiDemoPlugin());
 
 app.RunStartup();
 
@@ -249,6 +253,7 @@ sealed class RenderingPlugin : IPlugin
 
 		app.AddSystem((World _) => Raylib.EndDrawing())
 		.InStage(Stage.Last)
+		.Label("render:end")
 		.After("render:debug")
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
