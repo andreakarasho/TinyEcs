@@ -21,6 +21,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 	public readonly Query<Data<GlobalZIndex>> GlobalZIndexes;
 	public readonly Query<Data<BoxShadow>> Shadows;
 	public readonly Query<Data<ComputedNode>> Computed;
+	public readonly Query<Data<UiCustom>> Customs;
 
 	public UiLayoutQueries()
 	{
@@ -37,6 +38,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 		GlobalZIndexes  = Add(new Query<Data<GlobalZIndex>>());
 		Shadows         = Add(new Query<Data<BoxShadow>>());
 		Computed        = Add(new Query<Data<ComputedNode>>());
+		Customs         = Add(new Query<Data<UiCustom>>());
 	}
 }
 
@@ -171,9 +173,17 @@ internal static class LayoutSystem
 					ClayMap.ToSizing(node.Height, node.MinHeight, node.MaxHeight, scale)),
 				Padding = ClayMap.ToPadding(node.Padding, scale),
 				ChildGap = node.Gap.Type == ValType.Px ? (ushort)MathF.Max(0, node.Gap.Value * scale) : (ushort)0,
-				ChildAlignment = new ChildAlignment(
-					ClayMap.MapJustify(node.JustifyContent),
-					ClayMap.MapAlign(node.AlignItems)),
+				// Clay's ChildAlignment is direction-agnostic (X, Y). Flexbox semantics
+				// flip the axes by FlexDirection: row → main=X/cross=Y, column →
+				// main=Y/cross=X. Map JustifyContent to the main axis and AlignItems
+				// to the cross axis accordingly.
+				ChildAlignment = node.FlexDirection == FlexDirection.Column
+					? new ChildAlignment(
+						ClayMap.MapAlignItemsX(node.AlignItems),
+						ClayMap.MapJustifyY(node.JustifyContent))
+					: new ChildAlignment(
+						ClayMap.MapJustify(node.JustifyContent),
+						ClayMap.MapAlign(node.AlignItems)),
 				Direction = ClayMap.MapDirection(node.FlexDirection),
 				ClipContent = node.Overflow == Overflow.Clip || node.Overflow == Overflow.Scroll,
 			},
@@ -218,6 +228,12 @@ internal static class LayoutSystem
 			// SourceDimensions is the texture's native pixel size — unaffected by scale.
 			decl.Image.SourceDimensions = new Dimensions(p.Ref.SourceSize.X, p.Ref.SourceSize.Y);
 			decl.Image.Tint = p.Ref.Tint;
+		}
+
+		if (q.Customs.Contains(entityId))
+		{
+			var (_, p) = q.Customs.Get(entityId);
+			decl.Custom = CustomConfig.Create(p.Ref.Data);
 		}
 
 		if (node.PositionType == PositionType.Absolute)

@@ -14,7 +14,7 @@ internal static class ClayMap
 		return val.Type switch
 		{
 			ValType.Px      => SizingAxis.Fixed(val.Value * scale),
-			ValType.Percent => new SizingAxis { Percent = val.Value, Type = SizingType.Percent },
+			ValType.Percent => new SizingAxis { Percent = val.Value * 0.01f, Type = SizingType.Percent },
 			_               => SizingAxis.Fit(minPx, maxPx),
 		};
 	}
@@ -53,6 +53,22 @@ internal static class ClayMap
 		AlignItems.Center => AlignY.Center,
 		AlignItems.End    => AlignY.Bottom,
 		_                 => AlignY.Top,
+	};
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static AlignX MapAlignItemsX(AlignItems a) => a switch
+	{
+		AlignItems.Center => AlignX.Center,
+		AlignItems.End    => AlignX.Right,
+		_                 => AlignX.Left,
+	};
+
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static AlignY MapJustifyY(JustifyContent j) => j switch
+	{
+		JustifyContent.Center => AlignY.Center,
+		JustifyContent.End    => AlignY.Bottom,
+		_                     => AlignY.Top,
 	};
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

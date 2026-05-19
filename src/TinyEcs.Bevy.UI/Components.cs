@@ -114,3 +114,12 @@ public struct ComputedNode
 	public Vector2 Position;
 	public uint ClayId;
 }
+
+/// Marker that makes the layout pass emit a Clay Custom render command for this
+/// entity. Renderers can resolve the originating entity via
+/// `UiClayContext.ClayToEntity` and pull whatever per-renderer data they need.
+/// `Data` is passed through to `Clay.RenderCommand.Custom.CustomData`.
+public struct UiCustom
+{
+	public object? Data;
+}
