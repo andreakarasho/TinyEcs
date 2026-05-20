@@ -1055,4 +1055,100 @@ public class UiBevyTests
 		Assert.Equal(120f, computed.Size.X);
 		Assert.Equal(40f, computed.Size.Y);
 	}
+
+	// Regression: Val.Percent uses Bevy's 0..100 range. Val.Percent(100) on a root
+	// must produce a ComputedNode that fills the logical surface. A prior bug
+	// shipped Val.Percent(1f) in samples and saw a 1% root (~8x6 on an 800x600
+	// surface), which pushed centered children to the top-left corner.
+	[Fact]
+	public void Root_with_Percent_100_fills_logical_size()
+	{
+		var size = new Vector2(800, 600);
+		var app = MakeApp(size);
+		ulong rootId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			rootId = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Percent(100f),
+					Height = Val.Percent(100f),
+				})
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var computed = app.GetWorld().Entity(rootId).Get<ComputedNode>();
+		Assert.Equal(size.X, computed.Size.X);
+		Assert.Equal(size.Y, computed.Size.Y);
+	}
+
+	[Fact]
+	public void Root_with_Percent_50_fills_half_logical_size()
+	{
+		var size = new Vector2(800, 600);
+		var app = MakeApp(size);
+		ulong rootId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			rootId = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Percent(50f),
+					Height = Val.Percent(50f),
+				})
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var computed = app.GetWorld().Entity(rootId).Get<ComputedNode>();
+		Assert.Equal(size.X * 0.5f, computed.Size.X);
+		Assert.Equal(size.Y * 0.5f, computed.Size.Y);
+	}
+
+	// Verifies the centering pipeline that the TinyEcsGame sample relies on:
+	// a full-surface root with JustifyContent.Center + AlignItems.Center should
+	// position a fixed-size child at the surface midpoint.
+	[Fact]
+	public void Center_alignment_on_percent_root_positions_child_at_midpoint()
+	{
+		var size = new Vector2(800, 600);
+		var app = MakeApp(size);
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var root = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					FlexDirection = FlexDirection.Row,
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+					Width = Val.Percent(100f),
+					Height = Val.Percent(100f),
+				});
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+
+			c.AddChild(root, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var computed = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		Assert.Equal((size.X - 200) * 0.5f, computed.Position.X, precision: 1);
+		Assert.Equal((size.Y - 100) * 0.5f, computed.Position.Y, precision: 1);
+	}
 }

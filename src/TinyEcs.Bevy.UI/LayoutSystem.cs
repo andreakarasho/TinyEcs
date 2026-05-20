@@ -207,27 +207,36 @@ internal static class LayoutSystem
 		if (q.BorderColors.Contains(entityId))
 		{
 			var (_, p) = q.BorderColors.Get(entityId);
-			decl.Border.Color = p.Ref.Value;
-			decl.Border.Width = ClayMap.ToBorderWidth(node.Border, scale);
+			decl.Border = new BorderConfig
+			{
+				Color = p.Ref.Value,
+				Width = ClayMap.ToBorderWidth(node.Border, scale),
+			};
 		}
 
 		if (q.Shadows.Contains(entityId))
 		{
 			var (_, p) = q.Shadows.Get(entityId);
-			decl.Shadow.Color = p.Ref.Color;
-			decl.Shadow.OffsetX = p.Ref.OffsetX * scale;
-			decl.Shadow.OffsetY = p.Ref.OffsetY * scale;
-			decl.Shadow.BlurRadius = p.Ref.BlurRadius * scale;
-			decl.Shadow.SpreadRadius = p.Ref.SpreadRadius * scale;
+			decl.Shadow = new ShadowConfig
+			{
+				Color = p.Ref.Color,
+				OffsetX = p.Ref.OffsetX * scale,
+				OffsetY = p.Ref.OffsetY * scale,
+				BlurRadius = p.Ref.BlurRadius * scale,
+				SpreadRadius = p.Ref.SpreadRadius * scale,
+			};
 		}
 
 		if (q.Images.Contains(entityId))
 		{
 			var (_, p) = q.Images.Get(entityId);
-			decl.Image.ImageData = p.Ref.ImageData;
-			// SourceDimensions is the texture's native pixel size — unaffected by scale.
-			decl.Image.SourceDimensions = new Dimensions(p.Ref.SourceSize.X, p.Ref.SourceSize.Y);
-			decl.Image.Tint = p.Ref.Tint;
+			decl.Image = new ImageConfig
+			{
+				ImageData = p.Ref.ImageData,
+				// SourceDimensions is the texture's native pixel size — unaffected by scale.
+				SourceDimensions = new Dimensions(p.Ref.SourceSize.X, p.Ref.SourceSize.Y),
+				Tint = p.Ref.Tint,
+			};
 		}
 
 		if (q.Customs.Contains(entityId))
@@ -238,8 +247,6 @@ internal static class LayoutSystem
 
 		if (node.PositionType == PositionType.Absolute)
 		{
-			decl.Floating.AttachTo = FloatingAttachTo.Parent;
-
 			// Clay's Floating only honours `Offset` (relative to parent top-left),
 			// so anchor to the opposite edge by translating Right/Bottom into a
 			// left/top offset using the parent's size. Left wins over Right when
@@ -266,7 +273,6 @@ internal static class LayoutSystem
 			float oy = useBottom
 				? MathF.Max(0f, parentH - childH - node.Bottom.Value * scale)
 				: (node.Top.Type  == ValType.Px ? node.Top.Value  * scale : 0f);
-			decl.Floating.Offset = new Vector2(ox, oy);
 
 			// Z layering on absolute elements maps directly to Clay's Floating.ZIndex
 			// (signed 16-bit). GlobalZIndex wins over ZIndex when both are present;
@@ -282,7 +288,13 @@ internal static class LayoutSystem
 				var (_, p) = q.ZIndexes.Get(entityId);
 				z = p.Ref.Value;
 			}
-			decl.Floating.ZIndex = (short)Math.Clamp(z, short.MinValue, short.MaxValue);
+
+			decl.Floating = new FloatingConfig
+			{
+				AttachTo = FloatingAttachTo.Parent,
+				Offset = new Vector2(ox, oy),
+				ZIndex = (short)Math.Clamp(z, short.MinValue, short.MaxValue),
+			};
 		}
 
 		return decl;

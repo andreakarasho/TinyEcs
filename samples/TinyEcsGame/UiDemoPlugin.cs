@@ -57,8 +57,8 @@ sealed class UiDemoPlugin : IPlugin
 					FlexDirection = FlexDirection.Row,
 					JustifyContent = JustifyContent.Center,
 					AlignItems = AlignItems.Center,
-					Width = Val.Percent(1f),
-					Height = Val.Percent(1f),
+					Width = Val.Percent(100f),
+					Height = Val.Percent(100f),
 				});
 
 			// Outer panel: title + (list + scrollbar row) + status + checkbox + slider.
