@@ -1287,6 +1287,12 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 {
 	private TinyEcs.Query? _lowLevelQuery;
 	private TinyEcs.World? _world;
+	// Per-system change-detection window. Advanced once per system run in
+	// Fetch (which only fires when the system actually runs), so the window
+	// spans every tick elapsed since THIS query last observed the world —
+	// Bevy's per-system last_run semantics.
+	private uint _lastRun;
+	private uint _thisRun;
 	private static readonly SystemParamAccess _access = BuildAccess();
 
 	private static SystemParamAccess BuildAccess()
@@ -1325,6 +1331,14 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 			TQueryFilter.Build(builder);
 			_lowLevelQuery = builder.Build();
 		}
+
+		// Advance the change-detection window. RunIf-skipped frames don't
+		// Fetch, so _lastRun stays put and the next real run spans the gap —
+		// the system can't miss a change that landed while it was gated out.
+		// For an every-frame system this collapses to [CurrentTick-1,
+		// CurrentTick), identical to the previous global-window behaviour.
+		_lastRun = _thisRun;
+		_thisRun = world.CurrentTick;
 	}
 
 	/// <summary>
@@ -1399,15 +1413,11 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 
 	private BevyQueryIter<TQueryData, TQueryFilter> GetIter(ulong id = 0)
 	{
-		// Use world's tick system for change detection
-		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
-		// We check for changes in the current frame: [currentTick-1, currentTick)
-		// This detects components modified with the current tick
-		uint currentTick = _world!.CurrentTick;
-		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
-
+		// Window captured in Fetch (per-system last_run .. this_run). All
+		// enumerations / Contains / Get within one system run share it, so a
+		// query iterated more than once per frame stays consistent.
 		var rawIter = id == 0 ? _lowLevelQuery!.Iter() : _lowLevelQuery!.Iter(id);
-		return new BevyQueryIter<TQueryData, TQueryFilter>(lastTick, currentTick, rawIter);
+		return new BevyQueryIter<TQueryData, TQueryFilter>(_lastRun, _thisRun, rawIter);
 	}
 
 	/// <summary>

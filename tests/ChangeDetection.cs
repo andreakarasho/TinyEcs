@@ -254,6 +254,127 @@ namespace TinyEcs.Tests
         }
 
         [Fact]
+        public void SystemParamChangedSpansSkippedFrames()
+        {
+            // A Changed<T> consumer that is RunIf-gated out of the frame on
+            // which the change lands must still observe it when it next runs.
+            // The per-system change window must span the skipped frames rather
+            // than collapse to "the single previous tick".
+            using var world = new World();
+            var app = new App(world);
+
+            ulong id = 0;
+            bool gateOpen = true;
+            bool doModify = false;
+            int detected = 0;
+            int detectorRuns = 0;
+
+            app.AddSystem(Stage.Startup, w =>
+            {
+                var e = w.Entity();
+                e.Set(new Position { X = 1, Y = 1 });
+                id = e.ID;
+            });
+
+            // Modifier — runs every frame, mutates only when asked.
+            app.AddSystem(Stage.Update, w =>
+            {
+                if (!doModify) return;
+                var e = w.Entity(id);
+                var p = e.Get<Position>();
+                p.X += 1;
+                e.Set(p);
+                doModify = false;
+            });
+
+            // Detector — system-param Query<> with Changed<>, gated by RunIf.
+            app.AddSystem((Query<Data<Position>, Filter<Changed<Position>>> q) =>
+            {
+                detectorRuns++;
+                int c = 0;
+                foreach (var _ in q) c++;
+                detected = c;
+            })
+            .InStage(Stage.Update)
+            .RunIf(_ => gateOpen)
+            .Build();
+
+            // Frame 1: gate open, detector observes the startup creation.
+            app.Run();
+            Assert.Equal(1, detectorRuns);
+            Assert.Equal(1, detected);
+
+            // Gate the detector out, then modify while it's skipped.
+            gateOpen = false;
+            app.Run();          // frame 2: no modify, detector skipped
+            doModify = true;
+            app.Run();          // frame 3: modify lands here, detector skipped
+            app.Run();          // frame 4: still gated
+            Assert.Equal(1, detectorRuns); // never ran across frames 2-4
+
+            // Reopen: the detector must catch the frame-3 change.
+            gateOpen = true;
+            detected = -1;
+            app.Run();          // frame 5
+            Assert.Equal(2, detectorRuns);
+            Assert.Equal(1, detected); // would be 0 under the old [tick-1,tick) window
+        }
+
+        [Fact]
+        public void SystemParamChangedEveryFrameFiresOnceAfterChange()
+        {
+            // Regression guard: for a detector that runs every frame, the new
+            // per-system window must behave exactly like the legacy
+            // [CurrentTick-1, CurrentTick) window — change visible one frame
+            // later, for one frame only.
+            using var world = new World();
+            var app = new App(world);
+
+            ulong id = 0;
+            bool doModify = false;
+            var fired = new List<int>();
+
+            app.AddSystem(Stage.Startup, w =>
+            {
+                var e = w.Entity();
+                e.Set(new Position { X = 0, Y = 0 });
+                id = e.ID;
+            });
+
+            app.AddSystem(Stage.Update, w =>
+            {
+                if (!doModify) return;
+                var e = w.Entity(id);
+                var p = e.Get<Position>();
+                p.X += 1;
+                e.Set(p);
+                doModify = false;
+            });
+
+            app.AddSystem((Query<Data<Position>, Filter<Changed<Position>>> q) =>
+            {
+                int c = 0;
+                foreach (var _ in q) c++;
+                fired.Add(c);
+            })
+            .InStage(Stage.Update)
+            .Build();
+
+            app.Run();                   // frame1: sees creation
+            app.Run();                   // frame2: quiet
+            doModify = true;
+            app.Run();                   // frame3: modify lands (not visible same frame)
+            app.Run();                   // frame4: change visible
+            app.Run();                   // frame5: quiet again
+
+            Assert.Equal(1, fired[0]);   // creation
+            Assert.Equal(0, fired[1]);
+            Assert.Equal(0, fired[2]);   // same-frame change not visible
+            Assert.Equal(1, fired[3]);   // detected one frame later
+            Assert.Equal(0, fired[4]);   // and only once
+        }
+
+        [Fact]
         public void MarkChangedFilterMarksComponentAsChanged()
         {
             using var world = new World();
