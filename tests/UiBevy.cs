@@ -1151,4 +1151,68 @@ public class UiBevyTests
 		Assert.Equal((size.X - 200) * 0.5f, computed.Position.X, precision: 1);
 		Assert.Equal((size.Y - 100) * 0.5f, computed.Position.Y, precision: 1);
 	}
+
+	[Fact]
+	public void Absolute_child_inherits_root_z_when_it_has_none()
+	{
+		// A floating child with no z of its own must render on its root's
+		// layer, so a window can carry a single z on its root and the whole
+		// subtree rides it (no per-child z propagation).
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			var root = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, PositionType = PositionType.Absolute,
+					Left = Val.Px(0), Top = Val.Px(0), Width = Val.Px(100), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.Rgba(255, 0, 0, 255)))
+				.Insert(new GlobalZIndex(7));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, PositionType = PositionType.Absolute,
+					Left = Val.Px(10), Top = Val.Px(10), Width = Val.Px(20), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Rgba(0, 255, 0, 255)));
+
+			c.AddChild(root, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		var childCmd = cmds.First(c => c.CommandType == RenderCommandType.Rectangle
+			&& c.Rectangle.BackgroundColor.G > 200 && c.Rectangle.BackgroundColor.R < 50);
+		Assert.Equal((short)7, childCmd.ZIndex);
+	}
+
+	[Fact]
+	public void Absolute_child_keeps_its_own_z_over_inherited()
+	{
+		// Backward-compat: an element that sets its own z is unchanged —
+		// inheritance only fills in for elements with none.
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			var root = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, PositionType = PositionType.Absolute,
+					Left = Val.Px(0), Top = Val.Px(0), Width = Val.Px(100), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.Rgba(255, 0, 0, 255)))
+				.Insert(new GlobalZIndex(7));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, PositionType = PositionType.Absolute,
+					Left = Val.Px(10), Top = Val.Px(10), Width = Val.Px(20), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Rgba(0, 255, 0, 255)))
+				.Insert(new GlobalZIndex(3));
+
+			c.AddChild(root, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		var childCmd = cmds.First(c => c.CommandType == RenderCommandType.Rectangle
+			&& c.Rectangle.BackgroundColor.G > 200 && c.Rectangle.BackgroundColor.R < 50);
+		Assert.Equal((short)3, childCmd.ZIndex);
+	}
 }

@@ -44,6 +44,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 
 internal static class LayoutSystem
 {
+
 	public static void Run(
 		Res<UiSurface> surface,
 		Res<UiScale> scale,
@@ -76,7 +77,7 @@ internal static class LayoutSystem
 		c.ScrollClayToEntity.Clear();
 
 		foreach (var (entityId, node) in roots)
-			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s);
+			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s, inheritedZ: 0);
 
 		var cmds = Clay.Clay.EndLayout();
 		if (c.LastCommandsBuffer.Length < cmds.Length)
@@ -113,12 +114,21 @@ internal static class LayoutSystem
 		}
 	}
 
-	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale)
+	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ)
 	{
 		if (node.Display == Display.None)
 			return;
 
-		var decl = BuildDecl(entityId, parentId, in node, q, scale);
+		// Resolve the z once here so it can be both applied to this element and
+		// threaded down to children. An element with no z of its own inherits
+		// its ancestor's — so a window only needs to carry a single z on its
+		// root and the whole subtree rides that layer (Clay sorts every
+		// absolute element as an independent float root by z, equal z keeping
+		// DFS order). Backward-compatible: an element that sets its own z is
+		// unchanged.
+		int resolvedZ = ResolveZ(entityId, q, inheritedZ);
+
+		var decl = BuildDecl(entityId, parentId, in node, q, scale, resolvedZ);
 		var ctx = Clay.Clay.Context!;
 		ctx.OpenElement();
 		ctx.ConfigureOpenElement(decl);
@@ -154,14 +164,30 @@ internal static class LayoutSystem
 				if (!q.Nodes.Contains(childId))
 					continue;
 				var (_, childNodePtr) = q.Nodes.Get(childId);
-				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale);
+				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale, resolvedZ);
 			}
 		}
 
 		ctx.CloseElement();
 	}
 
-	private static ElementDeclaration BuildDecl(ulong entityId, ulong parentId, in Node node, UiLayoutQueries q, float scale)
+	// Own z wins; absent z inherits the ancestor's (threaded down the walk).
+	private static int ResolveZ(ulong entityId, UiLayoutQueries q, int inheritedZ)
+	{
+		if (q.GlobalZIndexes.Contains(entityId))
+		{
+			var (_, p) = q.GlobalZIndexes.Get(entityId);
+			return p.Ref.Value;
+		}
+		if (q.ZIndexes.Contains(entityId))
+		{
+			var (_, p) = q.ZIndexes.Get(entityId);
+			return p.Ref.Value;
+		}
+		return inheritedZ;
+	}
+
+	private static ElementDeclaration BuildDecl(ulong entityId, ulong parentId, in Node node, UiLayoutQueries q, float scale, int resolvedZ)
 	{
 		var decl = new ElementDeclaration
 		{
@@ -275,25 +301,14 @@ internal static class LayoutSystem
 				: (node.Top.Type  == ValType.Px ? node.Top.Value  * scale : 0f);
 
 			// Z layering on absolute elements maps directly to Clay's Floating.ZIndex
-			// (signed 16-bit). GlobalZIndex wins over ZIndex when both are present;
-			// non-absolute elements ignore both since Clay only z-sorts floats.
-			int z = 0;
-			if (q.GlobalZIndexes.Contains(entityId))
-			{
-				var (_, p) = q.GlobalZIndexes.Get(entityId);
-				z = p.Ref.Value;
-			}
-			else if (q.ZIndexes.Contains(entityId))
-			{
-				var (_, p) = q.ZIndexes.Get(entityId);
-				z = p.Ref.Value;
-			}
-
+			// (signed 16-bit). resolvedZ is the element's own z, or its ancestor's
+			// when it carries none — so children ride their window's root layer.
+			// Non-absolute elements ignore z since Clay only z-sorts floats.
 			decl.Floating = new FloatingConfig
 			{
 				AttachTo = FloatingAttachTo.Parent,
 				Offset = new Vector2(ox, oy),
-				ZIndex = (short)Math.Clamp(z, short.MinValue, short.MaxValue),
+				ZIndex = (short)Math.Clamp(resolvedZ, short.MinValue, short.MaxValue),
 			};
 		}
 
