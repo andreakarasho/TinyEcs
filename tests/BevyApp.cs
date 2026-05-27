@@ -227,8 +227,8 @@ namespace TinyEcs.Tests
 			var spawns = new List<ulong>();
 			var despawns = new List<ulong>();
 
-			app.AddObserver<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
-			app.AddObserver<OnDespawn>((_, trigger) => despawns.Add(trigger.EntityId));
+			app.AddObserver<OnSpawn>(trigger => spawns.Add(trigger.EntityId));
+			app.AddObserver<OnDespawn>(trigger => despawns.Add(trigger.EntityId));
 
 			ulong spawnedEntity = 0;
 			bool deleted = false;
@@ -312,9 +312,9 @@ namespace TinyEcs.Tests
 			var app = new App(world);
 			var events = new List<string>();
 
-			app.AddObserver<OnInsert<Position>>((_, trigger) =>
+			app.AddObserver<OnInsert<Position>>(trigger =>
 				events.Add($"insert:{trigger.EntityId}:{trigger.Component.X}"));
-			app.AddObserver<OnRemove<Position>>((_, trigger) =>
+			app.AddObserver<OnRemove<Position>>(trigger =>
 				events.Add($"remove:{trigger.EntityId}"));
 
 			ulong entityId = 0;
@@ -353,11 +353,11 @@ namespace TinyEcs.Tests
 			var app = new App(world);
 			var events = new List<string>();
 
-			app.AddObserver<OnDespawn>((_, trigger) =>
+			app.AddObserver<OnDespawn>(trigger =>
 				events.Add($"despawn:{trigger.EntityId}"));
-			app.AddObserver<OnRemove<Position>>((_, trigger) =>
+			app.AddObserver<OnRemove<Position>>(trigger =>
 				events.Add($"remove:position:{trigger.EntityId}"));
-			app.AddObserver<OnRemove<Velocity>>((_, trigger) =>
+			app.AddObserver<OnRemove<Velocity>>(trigger =>
 				events.Add($"remove:velocity:{trigger.EntityId}"));
 
 			ulong entityId = 0;
@@ -403,8 +403,8 @@ namespace TinyEcs.Tests
 			var spawns = new List<ulong>();
 			var inserts = new List<int>();
 
-			app.AddObserver<OnSpawn>((_, trigger) => spawns.Add(trigger.EntityId));
-			app.AddObserver<OnInsert<Health>>((_, trigger) => inserts.Add(trigger.Component.Value));
+			app.AddObserver<OnSpawn>(trigger => spawns.Add(trigger.EntityId));
+			app.AddObserver<OnInsert<Health>>(trigger => inserts.Add(trigger.Component.Value));
 
 			var system = SystemFunctionAdapters.Create<TinyEcs.Bevy.ResMut<MutableCounter>, TinyEcs.Bevy.Commands>((counterParam, commands) =>
 			{
@@ -448,7 +448,7 @@ namespace TinyEcs.Tests
 				commands.Entity(existingForInsert).Insert(new Position { X = 2 });
 			});
 
-			app.AddObserver<OnSpawn>((_, trigger) => spawnedIds.Add(trigger.EntityId));
+			app.AddObserver<OnSpawn>(trigger => spawnedIds.Add(trigger.EntityId));
 
 			app.AddSystem(insertSystem)
 				.InStage(Stage.Update)
@@ -478,7 +478,7 @@ namespace TinyEcs.Tests
 			});
 
 			// Capture id of the freshly-spawned-then-despawned entity to confirm it's gone.
-			app.AddObserver<OnSpawn>((_, trigger) =>
+			app.AddObserver<OnSpawn>(trigger =>
 			{
 				// The new spawn during the despawn phase
 				spawnedToDespawn = trigger.EntityId;
@@ -1412,13 +1412,13 @@ namespace TinyEcs.Tests
 			var onInsertEvents = new List<int>();
 
 			// OnAdd should fire only on first addition
-			app.AddObserver<OnAdd<Health>>((_, trigger) =>
+			app.AddObserver<OnAdd<Health>>(trigger =>
 			{
 				onAddEvents.Add(trigger.Component.Value);
 			});
 
 			// OnInsert should fire on both addition and update
-			app.AddObserver<OnInsert<Health>>((_, trigger) =>
+			app.AddObserver<OnInsert<Health>>(trigger =>
 			{
 				onInsertEvents.Add(trigger.Component.Value);
 			});

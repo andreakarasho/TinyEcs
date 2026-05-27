@@ -242,6 +242,9 @@ public sealed partial class World
 
 				case DeferredOpTypes.SetComponent:
 					{
+						if (!Exists(op.Entity))
+							break;
+
 						(var col, var row) = Attach(op.Entity, op.ComponentInfo.ID, op.ComponentInfo.Size);
 						if (col != null && op.Data != null)
 						{
@@ -253,6 +256,9 @@ public sealed partial class World
 
 				case DeferredOpTypes.UnsetComponent:
 					{
+						if (!Exists(op.Entity))
+							break;
+
 						Detach(op.Entity, op.ComponentInfo.ID);
 
 						break;

@@ -884,6 +884,13 @@ public class App
 	public App AddObserver<T>(Action<T> observer)
 		where T : ITrigger
 	{
+		// Auto-register component type if this is a component trigger
+#if NET9_0_OR_GREATER
+		T.Register(_world);
+#else
+		default(T).Register(_world);
+#endif
+
 		_world.RegisterObserver<T>((w, t) => observer(t));
 		return this;
 	}

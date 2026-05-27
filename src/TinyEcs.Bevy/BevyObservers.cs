@@ -550,23 +550,4 @@ internal class ObserverState
 
 public static partial class AppObserverExtensions
 {
-	/// <summary>
-	/// Register an observer that runs when the trigger occurs
-	/// </summary>
-	public static App AddObserver<TTrigger>(this App app, Action<World, TTrigger> callback)
-		where TTrigger : ITrigger
-	{
-		var world = app.GetWorld();
-
-		// Auto-register component type if this is a component trigger
-#if NET9_0_OR_GREATER
-		TTrigger.Register(world);
-#else
-		default(TTrigger).Register(world);
-#endif
-
-		world.RegisterObserver(callback);
-		return app;
-	}
-
 }

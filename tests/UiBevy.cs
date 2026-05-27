@@ -122,7 +122,7 @@ public class UiBevyTests
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
 
 		int clickCount = 0;
-		app.AddObserver<On<UiClick>>((world, trigger) => clickCount++);
+		app.AddObserver<On<UiClick>>(trigger => clickCount++);
 
 		app.RunStartup();
 
@@ -157,7 +157,7 @@ public class UiBevyTests
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
 
 		int clickCount = 0;
-		app.AddObserver<On<UiClick>>((world, trigger) => clickCount++);
+		app.AddObserver<On<UiClick>>(trigger => clickCount++);
 
 		app.RunStartup();
 
@@ -1017,7 +1017,7 @@ public class UiBevyTests
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
 
 		int clickCount = 0;
-		app.AddObserver<On<UiClick>>((w, t) => clickCount++);
+		app.AddObserver<On<UiClick>>(t => clickCount++);
 
 		app.RunStartup();
 		var pointer = app.GetResource<UiPointer>();

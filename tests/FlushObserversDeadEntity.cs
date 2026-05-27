@@ -34,7 +34,7 @@ public class FlushObserversDeadEntityTests
 		world.EnableObservers<FlushFoo>();
 
 		var addFired = false;
-		app.AddObserver<OnAdd<FlushFoo>>((w, trigger) => addFired = true);
+		app.AddObserver<OnAdd<FlushFoo>>(trigger => addFired = true);
 
 		var entity = world.Entity();
 		entity.Set(new FlushFoo { Value = 1 });
@@ -55,7 +55,7 @@ public class FlushObserversDeadEntityTests
 
 		var fireCount = 0;
 		var observedValue = 0;
-		app.AddObserver<OnInsert<FlushFoo>>((w, trigger) =>
+		app.AddObserver<OnInsert<FlushFoo>>(trigger =>
 		{
 			fireCount++;
 			observedValue = trigger.Component.Value;

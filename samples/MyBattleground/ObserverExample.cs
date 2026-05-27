@@ -35,25 +35,25 @@ public static class ObserverExample
 		// Observers automatically enable component tracking when registered!
 
 		// Observer: React when Position is updated
-		app.AddObserver<OnInsert<Position>>((world, trigger) =>
+		app.AddObserver<OnInsert<Position>>(trigger =>
 		{
 			Console.WriteLine($"📍 Entity {trigger.EntityId} moved to ({trigger.Component.X}, {trigger.Component.Y})");
 		});
 
 		// Observer: React when Health is removed
-		app.AddObserver<OnRemove<Health>>((world, trigger) =>
+		app.AddObserver<OnRemove<Health>>(trigger =>
 		{
 			Console.WriteLine($"💀 Entity {trigger.EntityId} lost Health component");
 		});
 
 		// Observer: React when entity spawns
-		app.AddObserver<OnSpawn>((world, trigger) =>
+		app.AddObserver<OnSpawn>(trigger =>
 		{
 			Console.WriteLine($"✨ Entity {trigger.EntityId} spawned");
 		});
 
 		// Observer: React when entity despawns
-		app.AddObserver<OnDespawn>((world, trigger) =>
+		app.AddObserver<OnDespawn>(trigger =>
 		{
 			Console.WriteLine($"💥 Entity {trigger.EntityId} despawned");
 		});

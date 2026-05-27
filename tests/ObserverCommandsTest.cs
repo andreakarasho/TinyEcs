@@ -29,7 +29,7 @@ public class ObserverCommandsTests
 		ulong? spawnedEntityId = null;
 
 		// Global observer listening for HelloEvent
-		app.AddObserver<On<HelloEvent>>((w, trigger) =>
+		app.AddObserver<On<HelloEvent>>(trigger =>
 		{
 			helloEventFired = true;
 			Assert.Equal(99, trigger.Event.Value);
