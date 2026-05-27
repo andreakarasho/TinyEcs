@@ -46,6 +46,12 @@ public sealed class UiClayContext
 	// Entity the pointer-down began on this gesture. Reset on release. Used to gate
 	// UiClick so a click only fires when press and release land on the same entity.
 	internal ulong PressedEntity;
+	// Optional pixel-perfect hit-test hook. When set, InteractionSystem calls it
+	// for each pointer-over candidate (entity, cursor pos, element box); returning
+	// false treats the cursor as missing that element — e.g. a transparent sprite
+	// pixel — and the hover falls through to the element behind. Keeps Bevy.UI
+	// asset-agnostic while letting the host reject clicks on transparent pixels.
+	public Func<ulong, Vector2, BoundingBox, bool>? PixelHitTest;
 	public float DeltaTime;
 	public Vector2 ScrollDelta;
 	public bool EnableDragScrolling;

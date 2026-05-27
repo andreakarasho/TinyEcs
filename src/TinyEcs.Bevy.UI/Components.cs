@@ -113,6 +113,12 @@ public struct ComputedNode
 	public Vector2 Size;
 	public Vector2 Position;
 	public uint ClayId;
+	// Index of this element's render command in the frame's command list =
+	// paint order. Higher means painted later (drawn on top). Hit-tests that
+	// need topmost-first selection among overlapping elements should tiebreak
+	// on this rather than ClayId (which is an entity-id hash, unrelated to
+	// draw order and unstable across entity recycling).
+	public int PaintOrder;
 }
 
 /// Marker that makes the layout pass emit a Clay Custom render command for this

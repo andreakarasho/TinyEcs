@@ -42,6 +42,7 @@ internal static class InteractionSystem
 		global::Clay.Clay.SetContext(clayCtx);
 		clayCtx.RefreshPointerOverIds();
 		var overIds = global::Clay.Clay.PointerOverIds;
+		var pixelHit = ctx.Value.PixelHitTest;
 		for (var i = 0; i < overIds.Length; i++)
 		{
 			var elementId = overIds[i];
@@ -52,8 +53,15 @@ internal static class InteractionSystem
 			if (!clayCtx.PointerOver(elementId))
 				continue; // outside clip bounds or rejected by CustomHitTest
 
+			var box = clayCtx.GetElementData(elementId).BoundingBox;
+			// Pixel-perfect pass-through: a host hook can reject this element
+			// when the cursor lands on a transparent sprite pixel, letting the
+			// hover fall through to whatever is drawn behind it.
+			if (pixelHit != null && !pixelHit(entityId, p.Position, box))
+				continue;
+
 			hovered = entityId;
-			hoveredBox = clayCtx.GetElementData(elementId).BoundingBox;
+			hoveredBox = box;
 			break;
 		}
 
@@ -106,7 +114,8 @@ internal static class InteractionSystem
 			if (cmd.CommandType != RenderCommandType.Rectangle &&
 			    cmd.CommandType != RenderCommandType.Image &&
 			    cmd.CommandType != RenderCommandType.Border &&
-			    cmd.CommandType != RenderCommandType.Text)
+			    cmd.CommandType != RenderCommandType.Text &&
+			    cmd.CommandType != RenderCommandType.Custom)
 				continue;
 			if (!map.TryGetValue(cmd.Id, out var entityId))
 				continue;
@@ -115,6 +124,7 @@ internal static class InteractionSystem
 				Size = new Vector2(cmd.BoundingBox.Width, cmd.BoundingBox.Height),
 				Position = new Vector2(cmd.BoundingBox.X, cmd.BoundingBox.Y),
 				ClayId = cmd.Id,
+				PaintOrder = i,
 			});
 		}
 
