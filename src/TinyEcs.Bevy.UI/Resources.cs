@@ -71,11 +71,22 @@ public sealed class UiClayContext
 	public ScrollContainerData GetScrollContainerData(uint clayId)
 		=> Context.GetScrollContainerData(new ElementId { Id = clayId });
 
+	/// Last-frame layout bounding box for an entity, by entity id. Returns false
+	/// when the entity emitted no element last frame. Works for layout-only nodes
+	/// (e.g. an empty scroll/clip container) that paint nothing and therefore have
+	/// no render command / ComputedNode — the host can still hit-test them.
+	public bool TryGetElementBoundingBox(ulong entityId, out BoundingBox box)
+	{
+		var data = Context.GetElementData(UiClayId.Of(entityId));
+		box = data.BoundingBox;
+		return data.Found;
+	}
+
 	/// Programmatically scroll a container by entity id. `offset` follows Bevy's
 	/// convention: positive Y = scrolled down (content shifts up).
 	public void SetScrollPosition(ulong entityId, Vector2 offset)
 	{
-		var clayId = ElementId.HashNumber((uint)entityId);
+		var clayId = UiClayId.Of(entityId);
 		Context.SetScrollPosition(clayId, offset);
 	}
 }

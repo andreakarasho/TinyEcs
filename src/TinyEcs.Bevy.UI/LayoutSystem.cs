@@ -42,6 +42,34 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 	}
 }
 
+// Clay element id derived from a TinyEcs entity.
+//
+// Keyed on the entity INDEX only (the low 32 bits of the EcsID). The index is
+// unique among LIVE entities, so no two live elements ever collide on a Clay id
+// in a single frame — which is exactly what Clay's duplicate-id check enforces.
+//
+// Generation (high 32 bits) is deliberately NOT mixed in: the Clay id is only
+// 32 bits, the entity index can exceed 2^20 (the world index space is shared
+// with mobiles/items), so no injective pack fits and any hash that folds in the
+// generation can map two DISTINCT live entities to the same id → Clay throws
+// "Duplicate element ID". Index-only is collision-free over the index values in
+// use, matching the long-standing behaviour.
+//
+// Caveat: a recycled index (despawn → respawn) reuses its Clay id, so the new
+// element inherits the dead one's retained per-id Clay state (scroll/hover).
+// That is a cosmetic state-bleed, not a disappearance, and is the lesser evil
+// versus duplicate-id crashes. Callers that must not bleed state should despawn
+// only when no live element needs the freed index that same frame.
+//
+// Every Clay-id site MUST go through this so the forward id and the reverse
+// ClayToEntity map agree.
+internal static class UiClayId
+{
+	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+	public static ElementId Of(ulong entityId)
+		=> ElementId.HashNumber((uint)entityId);
+}
+
 internal static class LayoutSystem
 {
 
@@ -67,7 +95,7 @@ internal static class LayoutSystem
 			var current = new Vector2(sp.Ref.OffsetX, sp.Ref.OffsetY);
 			if (c.LastSyncedScroll.TryGetValue(eid.Ref, out var last) && last == current)
 				continue;
-			var clayId = ElementId.HashNumber((uint)eid.Ref);
+			var clayId = UiClayId.Of(eid.Ref);
 			Clay.Clay.Context!.SetScrollPosition(clayId, current);
 		}
 
@@ -91,7 +119,7 @@ internal static class LayoutSystem
 		foreach (var (eid, sp) in scrollPositions)
 		{
 			live.Add(eid.Ref);
-			var clayId = ElementId.HashNumber((uint)eid.Ref).Id;
+			var clayId = UiClayId.Of(eid.Ref).Id;
 			var data = c.GetScrollContainerData(clayId);
 			if (!data.Found)
 				continue;
@@ -191,7 +219,7 @@ internal static class LayoutSystem
 	{
 		var decl = new ElementDeclaration
 		{
-			Id = ElementId.HashNumber((uint)entityId),
+			Id = UiClayId.Of(entityId),
 			Layout = new LayoutConfig
 			{
 				Sizing = new Sizing(

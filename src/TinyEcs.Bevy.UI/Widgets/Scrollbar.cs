@@ -98,7 +98,7 @@ public sealed class ScrollbarPlugin : IPlugin
 			if (thumbEid == 0 || !q.Nodes.Contains(thumbEid))
 				continue;
 
-			var data = ctx.GetScrollContainerData(ElementId.HashNumber((uint)bar.Ref.Target).Id);
+			var data = ctx.GetScrollContainerData(UiClayId.Of(bar.Ref.Target).Id);
 			if (!data.Found)
 				continue;
 
@@ -163,7 +163,7 @@ public sealed class ScrollbarPlugin : IPlugin
 		if (trackSize <= 0f)
 			return;
 		float ratio = Math.Clamp(((verticalT ? pointer.Y : pointer.X) - trackOrigin) / trackSize, 0f, 1f);
-		var scrollData = ctx.GetScrollContainerData(ElementId.HashNumber((uint)barCmp.Target).Id);
+		var scrollData = ctx.GetScrollContainerData(UiClayId.Of(barCmp.Target).Id);
 		if (!scrollData.Found)
 			return;
 		float maxS = verticalT ? scrollData.MaxScrollY : scrollData.MaxScrollX;
@@ -266,7 +266,7 @@ public sealed class ScrollbarPlugin : IPlugin
 		bool vertical = bar.Orientation == ScrollbarOrientation.Vertical;
 		trackLen = vertical ? cnPtr.Ref.Size.Y : cnPtr.Ref.Size.X;
 
-		var clayId = ElementId.HashNumber((uint)bar.Target);
+		var clayId = UiClayId.Of(bar.Target);
 		var sd = global::Clay.Clay.Context!.GetScrollContainerData(clayId);
 		if (!sd.Found)
 			return false;
