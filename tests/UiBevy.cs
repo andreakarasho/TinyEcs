@@ -179,6 +179,192 @@ public class UiBevyTests
 	}
 
 	[Fact]
+	public void DoubleClick_fires_on_two_clicks_within_window()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		int clickCount = 0;
+		int doubleClickCount = 0;
+		app.AddObserver<On<UiClick>>(_ => clickCount++);
+		app.AddObserver<On<UiDoubleClick>>(_ => doubleClickCount++);
+
+		app.RunStartup();
+
+		var pointer = app.GetResource<UiPointer>();
+		var ctx = app.GetResource<UiClayContext>();
+		pointer.Position = new Vector2(40, 40);
+		// Default window is 0.35s; advance time well under that between clicks.
+		ctx.DeltaTime = 0.05f;
+
+		// First click (press + release).
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+		Assert.Equal(1, clickCount);
+		Assert.Equal(0, doubleClickCount);
+
+		// Second click within the window -> UiDoubleClick.
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+		Assert.Equal(2, clickCount);
+		Assert.Equal(1, doubleClickCount);
+	}
+
+	[Fact]
+	public void DoubleClick_does_not_fire_when_second_click_is_too_late()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		int doubleClickCount = 0;
+		app.AddObserver<On<UiDoubleClick>>(_ => doubleClickCount++);
+
+		app.RunStartup();
+
+		var pointer = app.GetResource<UiPointer>();
+		var ctx = app.GetResource<UiClayContext>();
+		pointer.Position = new Vector2(40, 40);
+
+		// First click.
+		ctx.DeltaTime = 0.0f;
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+
+		// Advance time past the window before the second click.
+		ctx.DeltaTime = ctx.DoubleClickWindow + 0.1f;
+		app.Update();
+		ctx.DeltaTime = 0.0f;
+
+		// Second click — too late.
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+		Assert.Equal(0, doubleClickCount);
+	}
+
+	[Fact]
+	public void DoubleClick_requires_same_entity_for_both_clicks()
+	{
+		var app = MakeApp();
+		ulong leftId = 0, rightId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			// Two side-by-side hit-test rects.
+			var left = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(0), Top = Val.Px(0),
+					Width = Val.Px(100), Height = Val.Px(100),
+				})
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+			leftId = left.Id;
+
+			var right = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(200), Top = Val.Px(0),
+					Width = Val.Px(100), Height = Val.Px(100),
+				})
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+			rightId = right.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		int doubleClickCount = 0;
+		app.AddObserver<On<UiDoubleClick>>(_ => doubleClickCount++);
+
+		app.RunStartup();
+
+		var pointer = app.GetResource<UiPointer>();
+		var ctx = app.GetResource<UiClayContext>();
+		ctx.DeltaTime = 0.05f;
+
+		// Click left rect.
+		pointer.Position = new Vector2(50, 50);
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+
+		// Click right rect within window — different entity, no UiDoubleClick.
+		pointer.Position = new Vector2(250, 50);
+		pointer.Down = true;
+		app.Update();
+		pointer.Down = false;
+		app.Update();
+
+		Assert.Equal(0, doubleClickCount);
+	}
+
+	[Fact]
+	public void DoubleClick_clears_latch_so_triple_click_is_click_plus_dclick()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true });
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		int doubleClickCount = 0;
+		app.AddObserver<On<UiDoubleClick>>(_ => doubleClickCount++);
+
+		app.RunStartup();
+
+		var pointer = app.GetResource<UiPointer>();
+		var ctx = app.GetResource<UiClayContext>();
+		pointer.Position = new Vector2(40, 40);
+		ctx.DeltaTime = 0.05f;
+
+		// Three back-to-back clicks within the dclick window.
+		for (int i = 0; i < 3; i++)
+		{
+			pointer.Down = true;
+			app.Update();
+			pointer.Down = false;
+			app.Update();
+		}
+
+		// Click 1 -> nothing. Click 2 -> dclick (latch cleared). Click 3 -> nothing.
+		Assert.Equal(1, doubleClickCount);
+	}
+
+	[Fact]
 	public void OverflowScroll_registers_scroll_container()
 	{
 		var app = MakeApp();

@@ -7,6 +7,7 @@ namespace TinyEcs.Bevy.UI;
 // propagation up the parent chain (`trigger.Propagate(true)`).
 
 public struct UiClick       { public Vector2 Position; }
+public struct UiDoubleClick { public Vector2 Position; }
 public struct UiOver        { }
 public struct UiOut         { }
 public struct UiPointerDown { public Vector2 Position; }

@@ -46,6 +46,18 @@ public sealed class UiClayContext
 	// Entity the pointer-down began on this gesture. Reset on release. Used to gate
 	// UiClick so a click only fires when press and release land on the same entity.
 	internal ulong PressedEntity;
+	// Last UiClick target + the ElapsedTime tick it landed on. Powers
+	// UiDoubleClick synthesis: a second UiClick on the same entity within
+	// DoubleClickWindow seconds emits UiDoubleClick and clears the latch.
+	internal ulong LastClickEntity;
+	internal float LastClickTime;
+	// Monotonic clock fed by DeltaTime each PostLayout. Bevy.UI is the
+	// authority for UI-event timing (host's Time resource isn't visible
+	// here), so we accumulate locally.
+	internal float ElapsedTime;
+	// Window for UiDoubleClick synthesis (seconds). 0.35s matches the
+	// platform double-click default used by most legacy clients.
+	public float DoubleClickWindow = 0.35f;
 	// Optional pixel-perfect hit-test hook. When set, InteractionSystem calls it
 	// for each pointer-over candidate (entity, cursor pos, element box); returning
 	// false treats the cursor as missing that element — e.g. a transparent sprite

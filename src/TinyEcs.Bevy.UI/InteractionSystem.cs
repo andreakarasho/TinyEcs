@@ -32,6 +32,11 @@ internal static class InteractionSystem
 		var prevHover = ctx.Value.HoveredEntity;
 		var clayCtx = ctx.Value.Context;
 
+		// Monotonic clock for UiDoubleClick synthesis. Bevy.UI doesn't pull
+		// the host Time resource; accumulate from DeltaTime fed by the host
+		// each frame (UiClayContext.DeltaTime).
+		ctx.Value.ElapsedTime += ctx.Value.DeltaTime;
+
 		ulong hovered = 0;
 		BoundingBox hoveredBox = default;
 
@@ -83,7 +88,27 @@ internal static class InteractionSystem
 
 			// Click only when press AND release happened over the same entity.
 			if (!p.Down && p.WasDown && ctx.Value.PressedEntity == hovered)
+			{
 				commands.Entity(hovered).EmitTrigger(new UiClick { Position = p.Position }, propagate: true);
+
+				// Double-click synthesis: second UiClick on the same entity
+				// within DoubleClickWindow seconds emits UiDoubleClick. Clears
+				// the latch on emit so a triple-click reads as click + dclick,
+				// not two dclicks.
+				var now = ctx.Value.ElapsedTime;
+				if (ctx.Value.LastClickEntity == hovered
+					&& now - ctx.Value.LastClickTime <= ctx.Value.DoubleClickWindow)
+				{
+					commands.Entity(hovered).EmitTrigger(new UiDoubleClick { Position = p.Position }, propagate: true);
+					ctx.Value.LastClickEntity = 0;
+					ctx.Value.LastClickTime = 0f;
+				}
+				else
+				{
+					ctx.Value.LastClickEntity = hovered;
+					ctx.Value.LastClickTime = now;
+				}
+			}
 
 			if (prevHover != hovered)
 				commands.Entity(hovered).EmitTrigger(new UiOver(), propagate: true);
