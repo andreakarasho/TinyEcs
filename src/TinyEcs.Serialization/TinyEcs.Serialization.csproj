@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Library</OutputType>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>preview</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<PackageId>TinyEcs.Serialization</PackageId>
+		<PackageVersion>1.0.0</PackageVersion>
+		<Authors>andreakarasho</Authors>
+		<Description>Reflection-free JSON serialization for TinyEcs worlds and entities.</Description>
+		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+		<PackageReleaseNotes>First release</PackageReleaseNotes>
+		<PackageTags>ecs gamedev serialization json nativeaot</PackageTags>
+		<PackageProjectUrl>https://github.com/andreakarasho/TinyEcs</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/andreakarasho/TinyEcs</RepositoryUrl>
+		<RepositoryType>Github</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TinyEcs\TinyEcs.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -30,6 +30,7 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="$(AssemblyName).Tests" />
+		<InternalsVisibleTo Include="TinyEcs.Serialization" />
 	</ItemGroup>
 
 	<!-- Start Templates -->
