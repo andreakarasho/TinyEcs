@@ -217,9 +217,6 @@ internal interface IComponentHandler
 /// </summary>
 internal class ComponentHandler<T> : IComponentHandler where T : struct
 {
-	// Store component ID statically to avoid lookups
-	private static ulong? _componentId;
-
 	public void HandleSet(TinyEcs.World world, ulong entityId)
 	{
 		if (!world.Has<T>(entityId))
@@ -246,13 +243,6 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 		ref var component = ref world.Get<T>(entityId);
 		world.EmitTriggerInner(new OnRemove<T>(entityId, component));
 	}
-
-	public static void SetComponentId(ulong id)
-	{
-		_componentId = id;
-	}
-
-	public static ulong? GetComponentId() => _componentId;
 }
 
 // ============================================================================
@@ -386,33 +376,18 @@ public static class ObserverExtensions
 	{
 		var state = world.GetObserverState();
 
-		// Check if already registered
-		var existingId = ComponentHandler<T>.GetComponentId();
-		if (existingId.HasValue)
-		{
-			if (!state.ComponentHandlers.ContainsKey(existingId.Value))
-			{
-				state.ComponentHandlers[existingId.Value] = new ComponentHandler<T>();
-			}
-			return;
-		}
-
-		// Temporarily disable hooks to prevent spurious events during registration
+		// Resolve the component id for THIS world. Component ids are per-world,
+		// so the handler must be keyed by the id this world assigned to T.
+		// Temporarily disable hooks to prevent spurious events during registration.
 		var wasEnabled = state.HooksEnabled;
 		state.HooksEnabled = false;
 
-		// Get component entity ID directly - no dummy entity needed!
-		var componentEntity = world.Entity<T>();
-		var componentId = componentEntity.ID;
+		var componentId = world.Entity<T>().ID;
 
-		// Register typed handler first
-		state.ComponentHandlers[componentId] = new ComponentHandler<T>();
-
-		// Store component ID in the handler
-		ComponentHandler<T>.SetComponentId(componentId);
-
-		// Re-enable hooks
 		state.HooksEnabled = wasEnabled;
+
+		if (!state.ComponentHandlers.ContainsKey(componentId))
+			state.ComponentHandlers[componentId] = new ComponentHandler<T>();
 	}
 
 	/// <summary>
