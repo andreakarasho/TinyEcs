@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -251,7 +252,9 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 
 public static class ObserverExtensions
 {
-	private static readonly Dictionary<TinyEcs.World, ObserverState> _observerStates = new();
+	// Lazy<T> ensures the state (and its one-time world-hook registration) is
+	// created exactly once per world even under concurrent access.
+	private static readonly ConcurrentDictionary<TinyEcs.World, Lazy<ObserverState>> _observerStates = new();
 
 	/// <summary>
 	/// Test hook: true if an observer state is currently registered for the world.
@@ -262,15 +265,13 @@ public static class ObserverExtensions
 
 	internal static ObserverState GetObserverState(this TinyEcs.World world)
 	{
-		if (!_observerStates.TryGetValue(world, out var state))
+		return _observerStates.GetOrAdd(world, static w => new Lazy<ObserverState>(() =>
 		{
-			state = new ObserverState();
-			state.MaxComponentEntityId = world.MaxComponentId;
-			_observerStates[world] = state;
-			RegisterWorldHooks(world, state);
-		}
-
-		return state;
+			var state = new ObserverState();
+			state.MaxComponentEntityId = w.MaxComponentId;
+			RegisterWorldHooks(w, state);
+			return state;
+		})).Value;
 	}
 
 	private static void RegisterWorldHooks(TinyEcs.World world, ObserverState state)
@@ -281,7 +282,7 @@ public static class ObserverExtensions
 
 		// Evict observer state when the world is disposed, otherwise the static
 		// _observerStates map pins the world (and all its observer callbacks) forever.
-		world.OnDisposed += static w => _observerStates.Remove(w);
+		world.OnDisposed += static w => _observerStates.TryRemove(w, out _);
 
 		// Hook into entity creation - automatically emit OnSpawn
 		world.OnEntityCreated += (w, entityId) =>
