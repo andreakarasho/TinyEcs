@@ -200,6 +200,15 @@ Fired as entity-targeted triggers via `commands.EmitTrigger` during
 | `UiPointerDown`  | Pointer pressed over this entity (press edge).            |
 | `UiPointerUp`    | Pointer released — fires on the **press origin** entity.  |
 | `UiClick`        | Press + release happened on the **same** entity.          |
+| `UiDoubleClick`  | Second `UiClick` on same entity within `DoubleClickWindow`.|
+| `UiMove`         | Pointer moved while over this entity. Carries `Delta`.    |
+| `UiScroll`       | Wheel input dispatched to entity under pointer (`Delta`). |
+
+`UiMove` skips the frame an entity first becomes hovered (that's a `UiOver`)
+and only fires when the cursor actually moved. `UiScroll` reads the host-fed
+`UiClayContext.ScrollDelta` (same input that drives scroll containers) and
+dispatches it to the hovered entity; `Delta` follows Bevy's convention
+(positive Y = scrolled up).
 
 **All UI triggers are emitted with `propagate: true`** — after the hit
 entity's observers run, the trigger bubbles up the parent chain so a

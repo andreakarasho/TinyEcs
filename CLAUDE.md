@@ -333,6 +333,13 @@ struct PhysicsPlugin : IPlugin
 app.AddPlugin(new PhysicsPlugin { Gravity = 9.81f });
 ```
 
+- Duplicate installs are skipped silently (tracked by type in `_installedPlugins`).
+- **Conditional plugins**: plain `if` + `app.IsPluginAdded<T>()` to gate installs.
+  ```csharp
+  if (!app.IsPluginAdded<PhysicsPlugin>())
+      app.AddPlugin(new PhysicsPlugin());
+  ```
+
 ## Important Implementation Details
 
 ### Ptr<T> and Component Access
@@ -557,6 +564,14 @@ dotnet build samples/TinyEcsGame/TinyEcsGame.csproj   # Sample game
 - `World` is pure ECS storage (entities, components, archetypes, entity-tied observers).
 - Old `world.GetResource<T>()` etc. removed. Use `app.GetResource<T>()` or `Res<T>` system params.
 - Old `<InternalsVisibleTo>` from core to Bevy removed — clean assembly boundary.
+
+### Plugin queries + UI pointer picking (2026-05-29)
+- Added `app.IsPluginAdded<T>()` — public check enabling conditional plugin installs (`BevyApp.cs`).
+- Added `UiMove` and `UiScroll` pointer events to `TinyEcs.Bevy.UI` (`Events.cs`, `InteractionSystem.cs`).
+  - `UiMove` fires on cursor displacement over the hovered entity (carries `Delta`); skips the Over frame and stationary frames.
+  - `UiScroll` dispatches host-fed `UiClayContext.ScrollDelta` to the hovered entity (Bevy Y-up convention).
+  - Both bubble via `propagate: true`. `UiPointer.LastPosition` latches per frame for move delta.
+- See `docs/ui.md` Pointer events table. Tests in `tests/UiBevy.cs`.
 
 ## Migration Notes
 

@@ -16,6 +16,9 @@ public sealed class UiPointer
 	public Vector2 Position;
 	public bool Down;
 	public bool WasDown;
+	// Previous-frame cursor position, latched by InteractionSystem. Powers UiMove
+	// delta. Not host-fed.
+	public Vector2 LastPosition;
 }
 
 public sealed class UiRenderCommands

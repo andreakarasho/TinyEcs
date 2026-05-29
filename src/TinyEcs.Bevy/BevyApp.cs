@@ -846,6 +846,14 @@ public class App
 	}
 
 	/// <summary>
+	/// Returns true if a plugin of type <typeparamref name="T"/> has already been installed.
+	/// </summary>
+	public bool IsPluginAdded<T>() where T : IPlugin
+	{
+		return _installedPlugins.Contains(typeof(T));
+	}
+
+	/// <summary>
 	/// Add a system with fluent configuration (must call .InStage() or state transition methods)
 	/// </summary>
 	public ISystemStageSelector AddSystem(ISystem system)
