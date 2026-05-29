@@ -263,6 +263,13 @@ public static class ObserverExtensions
 {
 	private static readonly Dictionary<TinyEcs.World, ObserverState> _observerStates = new();
 
+	/// <summary>
+	/// Test hook: true if an observer state is currently registered for the world.
+	/// Used to verify cleanup on world disposal.
+	/// </summary>
+	internal static bool HasObserverState(this TinyEcs.World world)
+		=> _observerStates.ContainsKey(world);
+
 	internal static ObserverState GetObserverState(this TinyEcs.World world)
 	{
 		if (!_observerStates.TryGetValue(world, out var state))
@@ -281,6 +288,10 @@ public static class ObserverExtensions
 		if (state.HooksRegistered) return;
 
 		state.HooksRegistered = true;
+
+		// Evict observer state when the world is disposed, otherwise the static
+		// _observerStates map pins the world (and all its observer callbacks) forever.
+		world.OnDisposed += static w => _observerStates.Remove(w);
 
 		// Hook into entity creation - automatically emit OnSpawn
 		world.OnEntityCreated += (w, entityId) =>

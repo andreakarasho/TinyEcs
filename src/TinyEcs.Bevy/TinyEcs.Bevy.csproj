@@ -7,6 +7,9 @@
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="TinyEcs.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\TinyEcs\TinyEcs.csproj" />
   </ItemGroup>
 
