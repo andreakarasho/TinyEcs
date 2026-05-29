@@ -118,6 +118,19 @@ internal static class InteractionSystem
 				(p.Position.X - hoveredBox.X) / MathF.Max(1, hoveredBox.Width),
 				(p.Position.Y - hoveredBox.Y) / MathF.Max(1, hoveredBox.Height));
 			commands.Entity(hovered).Insert(new RelativeCursorPosition { Normalized = rel, InBounds = true });
+
+			// Move: pointer displaced this frame while over the entity. Skip the
+			// first frame an entity becomes hovered (prevHover != hovered) — that's
+			// an Over, not a Move, and LastPosition may be stale.
+			var moveDelta = p.Position - p.LastPosition;
+			if (prevHover == hovered && moveDelta != Vector2.Zero)
+				commands.Entity(hovered).EmitTrigger(new UiMove { Position = p.Position, Delta = moveDelta }, propagate: true);
+
+			// Scroll: wheel input this frame is dispatched to the entity under the
+			// pointer (the layout system separately applies it to scroll containers).
+			var scroll = ctx.Value.ScrollDelta;
+			if (scroll != Vector2.Zero)
+				commands.Entity(hovered).EmitTrigger(new UiScroll { Position = p.Position, Delta = scroll }, propagate: true);
 		}
 
 		if (prevHover != 0 && prevHover != hovered)
@@ -155,5 +168,6 @@ internal static class InteractionSystem
 
 		// Latch pointer edges for next frame
 		p.WasDown = p.Down;
+		p.LastPosition = p.Position;
 	}
 }

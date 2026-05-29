@@ -1401,4 +1401,135 @@ public class UiBevyTests
 			&& c.Rectangle.BackgroundColor.G > 200 && c.Rectangle.BackgroundColor.R < 50);
 		Assert.Equal((short)3, childCmd.ZIndex);
 	}
+
+	private static App MakeInteractiveApp(out System.Func<ulong> spawnedId)
+	{
+		var app = MakeApp();
+		ulong id = 0;
+		app.AddSystem((Commands c) =>
+		{
+			id = c.Spawn()
+				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(200), Height = Val.Px(100) })
+				.Insert(new BackgroundColor(ClayColor.White))
+				.Insert(new Interaction())
+				.Insert(new FocusPolicy { Block = true })
+				.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+		spawnedId = () => id;
+		return app;
+	}
+
+	[Fact]
+	public void Move_fires_with_delta_when_pointer_moves_over_entity()
+	{
+		var app = MakeInteractiveApp(out _);
+
+		int moveCount = 0;
+		Vector2 lastDelta = default;
+		app.AddObserver<On<UiMove>>(trigger => { moveCount++; lastDelta = trigger.Event.Delta; });
+
+		app.RunStartup();
+		var pointer = app.GetResource<UiPointer>();
+
+		// Frame 1: pointer enters → Over, not Move. Latches LastPosition.
+		pointer.Position = new Vector2(50, 50);
+		app.Update();
+		Assert.Equal(0, moveCount);
+
+		// Frame 2: pointer moved while still over the same entity → Move with delta.
+		pointer.Position = new Vector2(70, 60);
+		app.Update();
+		Assert.Equal(1, moveCount);
+		Assert.Equal(new Vector2(20, 10), lastDelta);
+	}
+
+	[Fact]
+	public void Move_does_not_fire_on_first_hover_frame()
+	{
+		var app = MakeInteractiveApp(out _);
+
+		int moveCount = 0;
+		app.AddObserver<On<UiMove>>(_ => moveCount++);
+
+		app.RunStartup();
+		app.GetResource<UiPointer>().Position = new Vector2(50, 50);
+		app.Update();
+
+		Assert.Equal(0, moveCount);
+	}
+
+	[Fact]
+	public void Move_does_not_fire_when_pointer_stationary()
+	{
+		var app = MakeInteractiveApp(out _);
+
+		int moveCount = 0;
+		app.AddObserver<On<UiMove>>(_ => moveCount++);
+
+		app.RunStartup();
+		var pointer = app.GetResource<UiPointer>();
+		pointer.Position = new Vector2(50, 50);
+		app.Update(); // becomes hovered
+		app.Update(); // same position → no Move
+
+		Assert.Equal(0, moveCount);
+	}
+
+	[Fact]
+	public void Scroll_dispatched_to_hovered_entity()
+	{
+		var app = MakeInteractiveApp(out var idOf);
+
+		int scrollCount = 0;
+		Vector2 lastDelta = default;
+		ulong lastEntity = 0;
+		app.AddObserver<On<UiScroll>>(trigger =>
+		{
+			scrollCount++;
+			lastDelta = trigger.Event.Delta;
+			lastEntity = trigger.EntityId;
+		});
+
+		app.RunStartup();
+		app.GetResource<UiPointer>().Position = new Vector2(50, 50);
+		app.GetResource<UiClayContext>().ScrollDelta = new Vector2(0, 3);
+		app.Update();
+
+		Assert.Equal(1, scrollCount);
+		Assert.Equal(new Vector2(0, 3), lastDelta);
+		Assert.Equal(idOf(), lastEntity);
+	}
+
+	[Fact]
+	public void Scroll_not_fired_when_no_entity_hovered()
+	{
+		var app = MakeInteractiveApp(out _);
+
+		int scrollCount = 0;
+		app.AddObserver<On<UiScroll>>(_ => scrollCount++);
+
+		app.RunStartup();
+		app.GetResource<UiPointer>().Position = new Vector2(500, 500); // off element
+		app.GetResource<UiClayContext>().ScrollDelta = new Vector2(0, 3);
+		app.Update();
+
+		Assert.Equal(0, scrollCount);
+	}
+
+	[Fact]
+	public void Scroll_not_fired_when_delta_zero()
+	{
+		var app = MakeInteractiveApp(out _);
+
+		int scrollCount = 0;
+		app.AddObserver<On<UiScroll>>(_ => scrollCount++);
+
+		app.RunStartup();
+		app.GetResource<UiPointer>().Position = new Vector2(50, 50);
+		// ScrollDelta left at default (zero).
+		app.Update();
+
+		Assert.Equal(0, scrollCount);
+	}
 }
