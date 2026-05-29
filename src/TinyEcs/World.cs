@@ -14,6 +14,14 @@ public sealed partial class World : IDisposable
 	private readonly int _componentBitsetWords;
 	private readonly FastIdLookup<EcsID> _cachedComponents = new();
 	private readonly object _newEntLock = new();
+
+	// Per-world component registry. Component types share a global dense "slot"
+	// (Lookup.Component<T>.HashCode), but each world assigns its own EcsID to a
+	// type on first use, so component ids are isolated per world.
+	private ComponentInfo[] _slotComponents = new ComponentInfo[64];
+	private bool[] _slotRegistered = new bool[64];
+	private readonly Dictionary<EcsID, int> _idToSlot = new();
+	private ulong _componentCounter;
 	private uint _ticks;
 	private ulong _structuralChangeVersion;
 
@@ -61,36 +69,40 @@ public sealed partial class World : IDisposable
 
 	internal ref readonly ComponentInfo Component<T>() where T : struct
 	{
-		ref readonly var lookup = ref Lookup.Component<T>.Value;
+		// Global dense slot for this component type (stable for the process).
+		var slot = (int)Lookup.Component<T>.HashCode;
+		if (slot >= _slotComponents.Length)
+			GrowSlots(slot);
 
-		EcsAssert.Panic(lookup.ID < _maxCmpId,
-			"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
+		if (!_slotRegistered[slot])
+		{
+			var id = ++_componentCounter;
+			EcsAssert.Panic(id < _maxCmpId,
+				"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
 
-		// 		ref var idx = ref _cachedComponents.GetOrCreate(lookup.ID, out var exists);
-		// 		if (!exists)
-		// 		{
-		// 			idx = Entity(lookup.ID).Set(lookup).ID;
+			_slotComponents[slot] = new ComponentInfo(id, Lookup.Component<T>.Size);
+			_slotRegistered[slot] = true;
+			_idToSlot[id] = slot;
+		}
 
-		// 			NamingEntityMapper.SetName(idx, Lookup.Component<T>.Name);
-
-		// #if USE_PAIR
-		// 			if (!lookup.ID.IsPair())
-		// 			{
-		// 				ref var record = ref GetRecord(lookup.ID);
-
-		// 				if ((record.Flags & EntityFlags.HasName) == 0)
-		// 				{
-		// 					record.Flags |= EntityFlags.HasName;
-		// 					var name = Lookup.Component<T>.Name;
-		// 					_names[name] = lookup.ID;
-		// 					Set<Identifier>(lookup.ID, new (name), Defaults.Name.ID);
-		// 				}
-		// 			}
-		// #endif
-		// 		}
-
-		return ref lookup;
+		return ref _slotComponents[slot];
 	}
+
+	private void GrowSlots(int slot)
+	{
+		var newLen = _slotComponents.Length;
+		while (newLen <= slot) newLen *= 2;
+		Array.Resize(ref _slotComponents, newLen);
+		Array.Resize(ref _slotRegistered, newLen);
+	}
+
+	// Resolve a per-world component id back to its global slot, used to reach the
+	// world-agnostic column/array factories registered in Lookup.
+	internal Column CreateColumn(EcsID id, int count)
+		=> Lookup.CreateColumn((ulong)_idToSlot[id], count);
+
+	internal ref readonly ComponentInfo GetComponentInfo(EcsID id)
+		=> ref _slotComponents[_idToSlot[id]];
 
 
 	internal ref EcsRecord GetRecord(EcsID id)

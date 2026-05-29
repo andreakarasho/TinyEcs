@@ -49,7 +49,7 @@ public sealed class Archetype : IComparable<Archetype>
 		if (_columns != null)
 		{
 			for (var i = 0; i < Components.Length; ++i)
-				_columns[i] = Lookup.CreateColumn(Components[i].ID, 0);
+				_columns[i] = _world.CreateColumn(Components[i].ID, 0);
 		}
 
 		var hash = 0ul;
@@ -229,7 +229,7 @@ public sealed class Archetype : IComparable<Archetype>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int GetComponentIndex<T>() where T : struct
 	{
-		var id = Lookup.Component<T>.HashCode;
+		var id = _world.Component<T>().ID;
 		var size = Lookup.Component<T>.Size;
 		return size > 0 ? GetComponentIndex(id) : GetAnyIndex(id);
 	}

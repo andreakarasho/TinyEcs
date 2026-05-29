@@ -145,7 +145,7 @@ public sealed class Query
 		_withoutMask = fast ? withoutMask : null;
 
 		TermsAccess = terms
-			.Where(s => Lookup.GetComponent(s.Id).Size > 0)
+			.Where(s => World.GetComponentInfo(s.Id).Size > 0)
 			.ToArray();
 
 		_termIdsAccess = new ulong[TermsAccess.Length];
