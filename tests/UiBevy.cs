@@ -1532,4 +1532,324 @@ public class UiBevyTests
 
 		Assert.Equal(0, scrollCount);
 	}
+
+	// --- Repro: centering a child inside a UiCustom (custom-render) parent ---
+	// ClassicUO server-gump / character rows are UiCustom nodes (gump sprites).
+	// A flex attempt to center a label inside such a row blanked the label. These
+	// tests isolate whether carrying a UiCustom config on the parent breaks its
+	// children's layout/centering (it should NOT — Clay lays out custom-element
+	// children like any container).
+
+	// Baseline: plain (no UiCustom) fixed parent centers a fixed child.
+	[Fact]
+	public void Plain_parent_centers_fixed_child()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(40), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var ch = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		Assert.Equal((280 - 40) / 2f, ch.Position.X, precision: 1);
+		Assert.Equal((30 - 20) / 2f, ch.Position.Y, precision: 1);
+	}
+
+	// Same, but the parent carries a UiCustom config (the only structural
+	// difference from the working pattern). If centering still works, the custom
+	// config does NOT break child layout.
+	[Fact]
+	public void Custom_parent_centers_fixed_child()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new UiCustom { Data = "gump" });
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(40), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var ch = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		Assert.Equal((280 - 40) / 2f, ch.Position.X, precision: 1);
+		Assert.Equal((30 - 20) / 2f, ch.Position.Y, precision: 1);
+	}
+
+	// The exact failing case: an ABSOLUTE (Clay-floating) UiCustom parent — like a
+	// character row — centering an auto-sized TEXT child. Asserts the text child
+	// gets a non-zero box centered within the parent's own computed bounds.
+	[Fact]
+	public void Absolute_custom_parent_centers_text_child()
+	{
+		var app = MakeApp();
+		ulong parentId = 0, childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(100), Top = Val.Px(100),
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new UiCustom { Data = "gump" });
+			parentId = parent.Id;
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Auto, Height = Val.Auto })
+				.Insert(new UiText("Shanon"))
+				.Insert(new TextFont { Size = 16 })
+				.Insert(new TextColor(ClayColor.White));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Update();
+		app.Update();
+
+		// Text command exists AND lands inside the floating parent's box
+		// (Left=100,Top=100, 280x30). The suspected bug: the floating offset isn't
+		// applied to the in-flow child, so the text draws at ~0,0 off the row.
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		var text = cmds.FirstOrDefault(c => c.CommandType == RenderCommandType.Text);
+		Assert.True(text.CommandType == RenderCommandType.Text, "no Text command emitted");
+		Assert.InRange(text.BoundingBox.X, 100f, 380f);
+		Assert.InRange(text.BoundingBox.Y, 100f, 130f);
+	}
+
+	// Isolation A: ABSOLUTE (floating) PLAIN parent + auto text child. If the
+	// child gets a ComputedNode here, the breakage is the custom config, not the
+	// floating-ness.
+	[Fact]
+	public void Absolute_plain_parent_lays_out_text_child()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(100), Top = Val.Px(100),
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Auto, Height = Val.Auto })
+				.Insert(new UiText("Shanon"))
+				.Insert(new TextFont { Size = 16 })
+				.Insert(new TextColor(ClayColor.White));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Update();
+		app.Update();
+
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		Assert.Contains(cmds, c => c.CommandType == RenderCommandType.Text);
+	}
+
+	// Isolation B: ABSOLUTE (floating) CUSTOM parent + FIXED child. If the fixed
+	// child gets a ComputedNode here, the breakage is auto/text sizing under a
+	// floating custom parent, not the custom config alone.
+	[Fact]
+	public void Absolute_custom_parent_lays_out_fixed_child()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(100), Top = Val.Px(100),
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new UiCustom { Data = "gump" });
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(40), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Update();
+		app.Update();
+
+		Assert.True(app.GetWorld().Entity(childId).Has<ComputedNode>(),
+			"fixed child under floating CUSTOM parent got NO ComputedNode");
+	}
+
+	// Inserting Node twice on the same entity (e.g. AddGumpNinePatch's node, then
+	// an override carrying alignment) must keep the LAST insert. If the first
+	// wins, the override's JustifyContent/AlignItems is lost and the child lands
+	// top-left instead of centered. Pins whether the double-insert was the bug.
+	[Fact]
+	public void Last_node_insert_wins_for_alignment()
+	{
+		var app = MakeApp();
+		ulong childId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				// First node: no alignment (Start), like MakeFloatingNode.
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(280), Height = Val.Px(30),
+				})
+				.Insert(new UiCustom { Data = "gump" })
+				// Second node: override with center alignment.
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				});
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Px(40), Height = Val.Px(20) })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			childId = child.Id;
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var ch = app.GetWorld().Entity(childId).Get<ComputedNode>();
+		// If the override won, the child is centered at (120, 5). If the first
+		// (Start) node won, it'd be at (0, 0).
+		Assert.Equal((280 - 40) / 2f, ch.Position.X, precision: 1);
+		Assert.Equal((30 - 20) / 2f, ch.Position.Y, precision: 1);
+	}
+
+	// Paint order: inside a floating custom parent, the parent's Custom (gump
+	// fill) command must come BEFORE the child's Text command, else the opaque
+	// gump bar paints over the text and it vanishes — the actual blank-row cause.
+	[Fact]
+	public void Custom_parent_fill_paints_before_child_text()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					PositionType = PositionType.Absolute,
+					Left = Val.Px(100), Top = Val.Px(100),
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new UiCustom { Data = "gump" });
+
+			var child = c.Spawn()
+				.Insert(new UiNode { Width = Val.Auto, Height = Val.Auto })
+				.Insert(new UiText("Shanon"))
+				.Insert(new TextFont { Size = 16 })
+				.Insert(new TextColor(ClayColor.White));
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Update();
+		app.Update();
+
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		int customIdx = -1, textIdx = -1;
+		for (var i = 0; i < cmds.Length; i++)
+		{
+			if (cmds[i].CommandType == RenderCommandType.Custom && customIdx < 0) customIdx = i;
+			if (cmds[i].CommandType == RenderCommandType.Text && textIdx < 0) textIdx = i;
+		}
+		Assert.True(customIdx >= 0, "no Custom command");
+		Assert.True(textIdx >= 0, "no Text command");
+		Assert.True(customIdx < textIdx, $"gump fill (idx {customIdx}) must paint before text (idx {textIdx})");
+	}
+
+	// A text child must also emit a Text render command when nested in a custom
+	// parent (the blank rows showed no text at all).
+	[Fact]
+	public void Custom_parent_emits_text_command_for_child()
+	{
+		var app = MakeApp();
+		app.AddSystem((Commands c) =>
+		{
+			var parent = c.Spawn()
+				.Insert(new UiNode
+				{
+					Display = Display.Flex,
+					Width = Val.Px(280), Height = Val.Px(30),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new UiCustom { Data = "gump" });
+
+			var child = c.Spawn()
+				.Insert(new UiNode())
+				.Insert(new UiText("Shanon"))
+				.Insert(new TextFont { Size = 16 })
+				.Insert(new TextColor(ClayColor.White));
+			c.AddChild(parent, child);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+
+		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
+		Assert.Contains(cmds, c => c.CommandType == RenderCommandType.Text);
+	}
 }
