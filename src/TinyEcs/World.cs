@@ -14,6 +14,7 @@ public sealed partial class World : IDisposable
 	private readonly int _componentBitsetWords;
 	private readonly FastIdLookup<EcsID> _cachedComponents = new();
 	private readonly object _newEntLock = new();
+	private readonly object _componentLock = new();
 
 	// Per-world component registry. Component types share a global dense "slot"
 	// (Lookup.Component<T>.HashCode), but each world assigns its own EcsID to a
@@ -71,18 +72,38 @@ public sealed partial class World : IDisposable
 	{
 		// Global dense slot for this component type (stable for the process).
 		var slot = (int)Lookup.Component<T>.HashCode;
-		if (slot >= _slotComponents.Length)
-			GrowSlots(slot);
 
-		if (!_slotRegistered[slot])
+		// First-use registration mutates the slot arrays (GrowSlots resizes
+		// them). Parallel system scheduling can have several systems first-touch
+		// new component types via their query builds on the same frame; without
+		// serialization two GrowSlots race and one thread indexes the stale
+		// (smaller) array -> IndexOutOfRangeException.
+		//
+		// Fast path: snapshot the registry array into a local so the bounds check
+		// and the index read use the SAME instance — a concurrent resize can swap
+		// the field but can't make this snapshot inconsistent. Slow path locks the
+		// actual mutation. The final element read is lock-free but safe: once a
+		// slot is registered every present/future array is >= that size and the
+		// old array stays alive (GC), so [slot] is always in-bounds.
+		var reg = _slotRegistered;
+		if (slot < reg.Length && reg[slot])
+			return ref _slotComponents[slot];
+
+		lock (_componentLock)
 		{
-			var id = ++_componentCounter;
-			EcsAssert.Panic(id < _maxCmpId,
-				"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
+			if (slot >= _slotComponents.Length)
+				GrowSlots(slot);
 
-			_slotComponents[slot] = new ComponentInfo(id, Lookup.Component<T>.Size);
-			_slotRegistered[slot] = true;
-			_idToSlot[id] = slot;
+			if (!_slotRegistered[slot])
+			{
+				var id = ++_componentCounter;
+				EcsAssert.Panic(id < _maxCmpId,
+					"Increase the minimum number for components when initializing the world [ex: new World(1024)]");
+
+				_slotComponents[slot] = new ComponentInfo(id, Lookup.Component<T>.Size);
+				_slotRegistered[slot] = true;
+				_idToSlot[id] = slot;
+			}
 		}
 
 		return ref _slotComponents[slot];
