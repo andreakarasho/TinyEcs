@@ -149,11 +149,16 @@ internal static class InteractionSystem
 		for (var i = 0; i < cmds.Length; i++)
 		{
 			ref readonly var cmd = ref cmds[i];
+			// ScissorStart: an Overflow.Scroll/Clip container that paints nothing
+			// of its own still needs a ComputedNode = its clip box, so hit-tests
+			// can clip overflowing children to the visible viewport (the scissor's
+			// BoundingBox IS that box, keyed by the element id).
 			if (cmd.CommandType != RenderCommandType.Rectangle &&
 			    cmd.CommandType != RenderCommandType.Image &&
 			    cmd.CommandType != RenderCommandType.Border &&
 			    cmd.CommandType != RenderCommandType.Text &&
-			    cmd.CommandType != RenderCommandType.Custom)
+			    cmd.CommandType != RenderCommandType.Custom &&
+			    cmd.CommandType != RenderCommandType.ScissorStart)
 				continue;
 			if (!map.TryGetValue(cmd.Id, out var entityId))
 				continue;
