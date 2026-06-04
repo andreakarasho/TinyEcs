@@ -45,7 +45,10 @@ public sealed class UiClayContext
 	// entity -> last ScrollPosition value we wrote to its component last frame.
 	// Used to detect user mutations and push them back to Clay.
 	internal readonly Dictionary<ulong, Vector2> LastSyncedScroll = new();
-	internal ulong HoveredEntity;
+	// Topmost interactive entity under the pointer this frame (0 = none). Public
+	// so host event routers can derive DOM-style enter/leave at subtree
+	// boundaries instead of per-frame hovered-target flips.
+	public ulong HoveredEntity;
 	// Entity the pointer-down began on this gesture. Reset on release. Used to gate
 	// UiClick so a click only fires when press and release land on the same entity.
 	internal ulong PressedEntity;
