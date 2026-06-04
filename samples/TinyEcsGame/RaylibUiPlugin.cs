@@ -10,7 +10,7 @@ namespace TinyEcsMonogameSample;
 
 sealed class RaylibTextMeasurer : ITextMeasurer
 {
-	public Dimensions MeasureText(ReadOnlySpan<char> text, ushort fontId, ushort fontSize, ushort letterSpacing)
+	public Dimensions MeasureText(ReadOnlySpan<char> text, ushort fontId, ushort fontSize, ushort letterSpacing, float maxWidth = 0)
 	{
 		var s = new string(text);
 		var size = Raylib.MeasureTextEx(Raylib.GetFontDefault(), s, fontSize, letterSpacing);
