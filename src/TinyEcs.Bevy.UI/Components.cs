@@ -82,6 +82,11 @@ public struct Text         { public string Value; public Text(string v) => Value
 public struct TextFont     { public ushort FontId; public ushort Size; }
 public struct TextColor    { public ClayColor Value; public TextColor(ClayColor c) => Value = c; }
 
+/// <summary>How a Text node's content wraps at the container width. Mirrors
+/// Clay's TextWrapMode; absent = Words (Clay's default).</summary>
+public enum TextWrapKind : byte { Words = 0, Newlines = 1, None = 2 }
+public struct TextWrap     { public TextWrapKind Kind; public TextWrap(TextWrapKind k) => Kind = k; }
+
 public enum Interaction : byte
 {
 	None = 0,

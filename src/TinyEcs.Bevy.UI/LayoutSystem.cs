@@ -17,6 +17,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 	public readonly Query<Data<Text>> Texts;
 	public readonly Query<Data<TextFont>> TextFonts;
 	public readonly Query<Data<TextColor>> TextColors;
+	public readonly Query<Data<TextWrap>> TextWraps;
 	public readonly Query<Data<ZIndex>> ZIndexes;
 	public readonly Query<Data<GlobalZIndex>> GlobalZIndexes;
 	public readonly Query<Data<BoxShadow>> Shadows;
@@ -34,6 +35,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 		Texts           = Add(new Query<Data<Text>>());
 		TextFonts       = Add(new Query<Data<TextFont>>());
 		TextColors      = Add(new Query<Data<TextColor>>());
+		TextWraps       = Add(new Query<Data<TextWrap>>());
 		ZIndexes        = Add(new Query<Data<ZIndex>>());
 		GlobalZIndexes  = Add(new Query<Data<GlobalZIndex>>());
 		Shadows         = Add(new Query<Data<BoxShadow>>());
@@ -179,6 +181,11 @@ internal static class LayoutSystem
 			{
 				var (_, colorPtr) = q.TextColors.Get(entityId);
 				tcfg.TextColor = colorPtr.Ref.Value;
+			}
+			if (q.TextWraps.Contains(entityId))
+			{
+				var (_, wrapPtr) = q.TextWraps.Get(entityId);
+				tcfg.WrapMode = (TextWrapMode)wrapPtr.Ref.Kind;
 			}
 			ctx.AddText((textPtr.Ref.Value ?? string.Empty).AsSpan(), tcfg);
 		}
