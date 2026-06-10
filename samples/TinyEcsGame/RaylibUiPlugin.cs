@@ -30,12 +30,14 @@ sealed class RaylibUiPlugin : IPlugin
 			LogicalSize = LogicalSize,
 		});
 
-		// Feed pointer + delta-time + wheel into UI state before layout runs.
-		app.AddSystem((ResMut<UiPointer> pointer, ResMut<UiClayContext> ctx, ResMut<UiSurface> surf) =>
+		// Feed pointer + the shared Time clock + wheel into UI state before
+		// layout runs (the library never reads a wall clock itself).
+		app.AddSystem((ResMut<UiPointer> pointer, ResMut<UiClayContext> ctx, ResMut<UiSurface> surf, ResMut<Time> time) =>
 		{
 			pointer.Value.Position = Raylib.GetMousePosition();
 			pointer.Value.Down = Raylib.IsMouseButtonDown(MouseButton.Left);
-			ctx.Value.DeltaTime = Raylib.GetFrameTime();
+			time.Value.Frame = Raylib.GetFrameTime();
+			time.Value.Total += time.Value.Frame * 1000f;
 			// Clay multiplies the delta by 30 internally inside UpdateScrollContainers.
 			// One raylib wheel tick (~1.0) thus becomes ~30 pixels of scroll — about one row.
 			var wheel = Raylib.GetMouseWheelMoveV();
