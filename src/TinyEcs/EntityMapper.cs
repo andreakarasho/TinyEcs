@@ -39,8 +39,9 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 
 	public void Add(EcsID parentId, EcsID childId, int index = -1)
 	{
-		// update current parent
-		RemoveChild(childId);
+		// update current parent — detach only: reparenting must never touch
+		// the child's own subtree (its children move with it).
+		Detach(childId);
 
 		_childrenToParent.Add(childId, parentId);
 
@@ -61,13 +62,15 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 			children.Add(childId);
 	}
 
+	// Explicit unlink (world.RemoveChild): detach the entity from its parent
+	// only. Its own subtree stays linked and alive — the cleanup policy applies
+	// exclusively to entity deletion (OnEntityRemoved).
 	public void Remove(EcsID id)
 	{
-		RemoveChild(id);
-		RemoveParent(id);
+		Detach(id);
 	}
 
-	private bool RemoveChild(EcsID childId)
+	private bool Detach(EcsID childId)
 	{
 		// remove the child
 		if (!_childrenToParent.Remove(childId, out var parentId))
@@ -82,11 +85,11 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 			_world.SetChanged<TChildrenComponent>(parentId);
 
 			if (children.Count == 0)
-				RemoveParent(parentId);
+			{
+				_parentsToChildren.Remove(parentId);
+				_world.Unset<TChildrenComponent>(parentId);
+			}
 		}
-
-		// if child is a parent, remove associated children too
-		RemoveParent(childId);
 
 		return true;
 	}
@@ -115,8 +118,13 @@ public abstract class EntityMapper<TParentComponent, TChildrenComponent>
 		return true;
 	}
 
+	// Entity deletion: detach from its parent, then apply the cleanup policy
+	// to its descendants (DeleteDescendants cascades the delete down).
 	private void OnEntityRemoved(World world, EcsID id)
-		=> Remove(id);
+	{
+		Detach(id);
+		RemoveParent(id);
+	}
 
 	private void ApplyPolicy(EcsID id)
 	{
