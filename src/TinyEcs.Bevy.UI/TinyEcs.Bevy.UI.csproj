@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+    <ProjectReference Include="..\TinyEcs.Bevy.Input\TinyEcs.Bevy.Input.csproj" />
     <ProjectReference Include="..\..\external\Clay.NET\src\Clay\Clay.csproj" />
+    <ProjectReference Include="..\..\external\Clay.NET\src\StbTextEdit\StbTextEdit.csproj" />
   </ItemGroup>
 </Project>

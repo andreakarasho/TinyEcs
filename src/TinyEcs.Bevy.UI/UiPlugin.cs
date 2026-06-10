@@ -21,7 +21,10 @@ public sealed class UiPlugin : IPlugin
 		Clay.Clay.Initialize(new Dimensions(LogicalSize.X, LogicalSize.Y), measurer, MaxElements);
 		var clayCtx = Clay.Clay.Context!;
 
+		app.AddPlugin(new TimePlugin());
+
 		app.AddResource(new UiScale());
+		app.AddResource(new UiTextMeasure { Measurer = measurer });
 		app.AddResource(new UiSurface { LogicalSize = LogicalSize, PhysicalSize = LogicalSize });
 		app.AddResource(new UiPointer());
 		app.AddResource(new UiRenderCommands());
@@ -39,17 +42,19 @@ public sealed class UiPlugin : IPlugin
 			.InStage(UiPreLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Res<UiSurface> s, Res<UiScale> scale, ResMut<UiClayContext> c,
+			Res<Time> time,
 			Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 			UiLayoutQueries q,
 			Query<Data<ScrollPosition>> scrolls,
 			Local<HashSet<ulong>> liveIds,
 			Local<List<ulong>> pruneBuf) =>
-			LayoutSystem.Run(s, scale, c, roots, q, scrolls, liveIds, pruneBuf))
+			LayoutSystem.Run(s, scale, c, time, roots, q, scrolls, liveIds, pruneBuf))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
+			Res<Time> time,
 			Query<Data<Interaction>> q) =>
-			InteractionSystem.PostLayout(cmd, p, c, q))
+			InteractionSystem.PostLayout(cmd, p, c, time, q))
 			.InStage(UiPostLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Res<UiClayContext> c, ResMut<UiRenderCommands> o) =>

@@ -79,6 +79,7 @@ internal static class LayoutSystem
 		Res<UiSurface> surface,
 		Res<UiScale> scale,
 		ResMut<UiClayContext> ctx,
+		Res<Time> time,
 		Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 		UiLayoutQueries q,
 		Query<Data<ScrollPosition>> scrollPositions,
@@ -90,7 +91,7 @@ internal static class LayoutSystem
 		var s = MathF.Max(0.01f, scale.Value.Value);
 		Clay.Clay.SetLayoutDimensions(new Dimensions(surface.Value.LogicalSize.X * s, surface.Value.LogicalSize.Y * s));
 
-		Clay.Clay.UpdateScrollContainers(c.EnableDragScrolling, c.ScrollDelta, c.DeltaTime);
+		Clay.Clay.UpdateScrollContainers(c.EnableDragScrolling, c.ScrollDelta, time.Value.Frame);
 
 		foreach (var (eid, sp) in scrollPositions)
 		{
@@ -101,7 +102,7 @@ internal static class LayoutSystem
 			Clay.Clay.Context!.SetScrollPosition(clayId, current);
 		}
 
-		Clay.Clay.BeginLayout(c.DeltaTime);
+		Clay.Clay.BeginLayout(time.Value.Frame);
 
 		c.ClayToEntity.Clear();
 		c.ScrollClayToEntity.Clear();

@@ -5,6 +5,11 @@ namespace TinyEcs.Bevy.UI;
 
 public sealed class UiScale { public float Value = 1f; }
 
+/// <summary>The ITextMeasurer the layout pass was initialized with — exposed
+/// so widgets (e.g. TextField caret math) measure with the same metrics Clay
+/// laid the glyphs out with.</summary>
+public sealed class UiTextMeasure { public ITextMeasurer Measurer = null!; }
+
 public sealed class UiSurface
 {
 	public Vector2 LogicalSize = new(1280, 720);
@@ -52,15 +57,11 @@ public sealed class UiClayContext
 	// Entity the pointer-down began on this gesture. Reset on release. Used to gate
 	// UiClick so a click only fires when press and release land on the same entity.
 	internal ulong PressedEntity;
-	// Last UiClick target + the ElapsedTime tick it landed on. Powers
+	// Last UiClick target + the Time.Total second it landed on. Powers
 	// UiDoubleClick synthesis: a second UiClick on the same entity within
 	// DoubleClickWindow seconds emits UiDoubleClick and clears the latch.
 	internal ulong LastClickEntity;
 	internal float LastClickTime;
-	// Monotonic clock fed by DeltaTime each PostLayout. Bevy.UI is the
-	// authority for UI-event timing (host's Time resource isn't visible
-	// here), so we accumulate locally.
-	internal float ElapsedTime;
 	// Window for UiDoubleClick synthesis (seconds). 0.35s matches the
 	// platform double-click default used by most legacy clients.
 	public float DoubleClickWindow = 0.35f;
@@ -70,7 +71,6 @@ public sealed class UiClayContext
 	// pixel — and the hover falls through to the element behind. Keeps Bevy.UI
 	// asset-agnostic while letting the host reject clicks on transparent pixels.
 	public Func<ulong, Vector2, BoundingBox, bool>? PixelHitTest;
-	public float DeltaTime;
 	public Vector2 ScrollDelta;
 	public bool EnableDragScrolling;
 

@@ -24,6 +24,7 @@ internal static class InteractionSystem
 		Commands commands,
 		ResMut<UiPointer> pointer,
 		ResMut<UiClayContext> ctx,
+		Res<Time> time,
 		Query<Data<Interaction>> interactives)
 	{
 		ref var p = ref pointer.Value;
@@ -31,11 +32,6 @@ internal static class InteractionSystem
 		var map = ctx.Value.ClayToEntity;
 		var prevHover = ctx.Value.HoveredEntity;
 		var clayCtx = ctx.Value.Context;
-
-		// Monotonic clock for UiDoubleClick synthesis. Bevy.UI doesn't pull
-		// the host Time resource; accumulate from DeltaTime fed by the host
-		// each frame (UiClayContext.DeltaTime).
-		ctx.Value.ElapsedTime += ctx.Value.DeltaTime;
 
 		ulong hovered = 0;
 		BoundingBox hoveredBox = default;
@@ -95,7 +91,7 @@ internal static class InteractionSystem
 				// within DoubleClickWindow seconds emits UiDoubleClick. Clears
 				// the latch on emit so a triple-click reads as click + dclick,
 				// not two dclicks.
-				var now = ctx.Value.ElapsedTime;
+				var now = time.Value.Total / 1000f;
 				if (ctx.Value.LastClickEntity == hovered
 					&& now - ctx.Value.LastClickTime <= ctx.Value.DoubleClickWindow)
 				{

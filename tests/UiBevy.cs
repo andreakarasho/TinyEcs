@@ -14,6 +14,9 @@ using BevyStage = TinyEcs.Bevy.Stage;
 
 namespace TinyEcs.Tests;
 
+// Clay keeps a process-global context; every UI test class must share one
+// xUnit collection so they never run in parallel against it.
+[Collection("ClayUi")]
 public class UiBevyTests
 {
 	private static App MakeApp(Vector2? size = null)
@@ -200,10 +203,9 @@ public class UiBevyTests
 		app.RunStartup();
 
 		var pointer = app.GetResource<UiPointer>();
-		var ctx = app.GetResource<UiClayContext>();
 		pointer.Position = new Vector2(40, 40);
-		// Default window is 0.35s; advance time well under that between clicks.
-		ctx.DeltaTime = 0.05f;
+		// Default window is 0.35s; the Time resource stays at 0 between clicks,
+		// well within the window.
 
 		// First click (press + release).
 		pointer.Down = true;
@@ -246,16 +248,14 @@ public class UiBevyTests
 		pointer.Position = new Vector2(40, 40);
 
 		// First click.
-		ctx.DeltaTime = 0.0f;
 		pointer.Down = true;
 		app.Update();
 		pointer.Down = false;
 		app.Update();
 
-		// Advance time past the window before the second click.
-		ctx.DeltaTime = ctx.DoubleClickWindow + 0.1f;
+		// Advance the clock past the window before the second click.
+		app.GetResource<Time>().Total += (ctx.DoubleClickWindow + 0.1f) * 1000f;
 		app.Update();
-		ctx.DeltaTime = 0.0f;
 
 		// Second click — too late.
 		pointer.Down = true;
@@ -307,8 +307,6 @@ public class UiBevyTests
 		app.RunStartup();
 
 		var pointer = app.GetResource<UiPointer>();
-		var ctx = app.GetResource<UiClayContext>();
-		ctx.DeltaTime = 0.05f;
 
 		// Click left rect.
 		pointer.Position = new Vector2(50, 50);
@@ -347,11 +345,9 @@ public class UiBevyTests
 		app.RunStartup();
 
 		var pointer = app.GetResource<UiPointer>();
-		var ctx = app.GetResource<UiClayContext>();
 		pointer.Position = new Vector2(40, 40);
-		ctx.DeltaTime = 0.05f;
 
-		// Three back-to-back clicks within the dclick window.
+		// Three back-to-back clicks within the dclick window (clock stays at 0).
 		for (int i = 0; i < 3; i++)
 		{
 			pointer.Down = true;
