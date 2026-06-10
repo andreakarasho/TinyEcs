@@ -634,6 +634,54 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void QueryTryGetMatchesContainsPlusGet()
+		{
+			using var world = new World();
+			var app = new App(world);
+
+			ulong matching = 0, nonMatching = 0;
+
+			app.AddSystem(w =>
+			{
+				var a = w.Entity();
+				a.Set(new Position { X = 5 });
+				a.Set(new Velocity { Value = 3 });
+				matching = a.ID;
+
+				var b = w.Entity();
+				b.Set(new Position { X = 9 });
+				nonMatching = b.ID;
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			bool hitMatching = false, hitNonMatching = true, hitDead = true;
+			float capturedX = 0;
+
+			app.AddSystem((Query<Data<Position>, Filter<With<Velocity>>> query) =>
+			{
+				if (query.TryGet(matching, out var row))
+				{
+					hitMatching = true;
+					row.Deconstruct(out var pos);
+					capturedX = pos.Ref.X;
+				}
+
+				hitNonMatching = query.TryGet(nonMatching, out _);
+				hitDead = query.TryGet(0xDEAD_BEEF, out _);
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			Assert.True(hitMatching);
+			Assert.Equal(5f, capturedX);
+			Assert.False(hitNonMatching);
+			Assert.False(hitDead);
+		}
+
+		[Fact]
 		public void OptionalFilterAllowsAbsentDataComponent()
 		{
 			using var world = new World();

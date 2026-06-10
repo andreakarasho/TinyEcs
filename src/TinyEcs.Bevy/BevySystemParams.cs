@@ -1375,6 +1375,23 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	}
 
 	/// <summary>
+	/// Combined Contains + Get in one lookup: true when the entity matches
+	/// this query, with the row data in <paramref name="data"/>.
+	/// </summary>
+	public bool TryGet(ulong id, out TQueryData data)
+	{
+		var iter = GetIter(id);
+		if (iter.MoveNext())
+		{
+			data = iter.Current;
+			return true;
+		}
+
+		data = default;
+		return false;
+	}
+
+	/// <summary>
 	/// Gets a single entity matching this query (throws if not exactly one match)
 	/// </summary>
 	public TQueryData Single()
