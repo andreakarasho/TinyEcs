@@ -96,6 +96,12 @@ public enum Interaction : byte
 
 public struct FocusPolicy { public bool Block; public static readonly FocusPolicy BlockAll = new() { Block = true }; }
 
+/// <summary>Hit-test opt-out: this element's whole bounding box is the hit
+/// target — InteractionSystem skips the host's PixelHitTest hook for it. For
+/// elements whose transparent regions must still capture the pointer (a
+/// see-through frame, a bar with cutouts).</summary>
+public struct UiContainsByBounds;
+
 public struct Button { }
 
 public struct RelativeCursorPosition

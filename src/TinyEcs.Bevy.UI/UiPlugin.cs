@@ -53,8 +53,15 @@ public sealed class UiPlugin : IPlugin
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
 			Res<Time> time,
-			Query<Data<Interaction>> q) =>
-			InteractionSystem.PostLayout(cmd, p, c, time, q))
+			Query<Data<Interaction>> q,
+			Query<Data<UiContainsByBounds>> boundsOnly) =>
+			InteractionSystem.PostLayout(cmd, p, c, time, q, boundsOnly))
+			.InStage(UiPostLayoutStage).SingleThreaded().Build();
+
+		app.AddSystem((Commands cmd, Res<UiPointer> p, Res<UiClayContext> c, Res<Time> time,
+			Local<InteractionSystem.HoverIntentState> state,
+			Query<Data<UiHoverIntent>> intents) =>
+			InteractionSystem.HoverIntent(cmd, p, c, time, state, intents))
 			.InStage(UiPostLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Res<UiClayContext> c, ResMut<UiRenderCommands> o) =>

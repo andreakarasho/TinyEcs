@@ -25,7 +25,8 @@ internal static class InteractionSystem
 		ResMut<UiPointer> pointer,
 		ResMut<UiClayContext> ctx,
 		Res<Time> time,
-		Query<Data<Interaction>> interactives)
+		Query<Data<Interaction>> interactives,
+		Query<Data<UiContainsByBounds>> boundsOnly)
 	{
 		ref var p = ref pointer.Value;
 		var cmds = ctx.Value.LastCommands;
@@ -57,8 +58,9 @@ internal static class InteractionSystem
 			var box = clayCtx.GetElementData(elementId).BoundingBox;
 			// Pixel-perfect pass-through: a host hook can reject this element
 			// when the cursor lands on a transparent sprite pixel, letting the
-			// hover fall through to whatever is drawn behind it.
-			if (pixelHit != null && !pixelHit(entityId, p.Position, box))
+			// hover fall through to whatever is drawn behind it. UiContainsByBounds
+			// opts an element out — its whole box captures.
+			if (pixelHit != null && !boundsOnly.Contains(entityId) && !pixelHit(entityId, p.Position, box))
 				continue;
 
 			hovered = entityId;
@@ -170,5 +172,49 @@ internal static class InteractionSystem
 		// Latch pointer edges for next frame
 		p.WasDown = p.Down;
 		p.LastPosition = p.Position;
+	}
+
+	internal struct HoverIntentState
+	{
+		public ulong Entity;
+		public float StartMs;
+		public bool Fired;
+	}
+
+	// Hover intent: UiHoverStart after the pointer rests over a
+	// UiHoverIntent-tagged entity for its delay, UiHoverEnd when it leaves.
+	// Runs after PostLayout (declaration order) so HoveredEntity is fresh.
+	public static void HoverIntent(
+		Commands commands,
+		Res<UiPointer> pointer,
+		Res<UiClayContext> ctx,
+		Res<Time> time,
+		Local<HoverIntentState> state,
+		Query<Data<UiHoverIntent>> intents)
+	{
+		var hovered = ctx.Value.HoveredEntity;
+		if (hovered != 0 && !intents.Contains(hovered))
+			hovered = 0;
+
+		var now = time.Value.Total;
+
+		if (hovered != state.Value.Entity)
+		{
+			if (state.Value.Fired && state.Value.Entity != 0 && intents.Contains(state.Value.Entity))
+				commands.Entity(state.Value.Entity).EmitTrigger(new UiHoverEnd(), propagate: true);
+			state.Value = new HoverIntentState { Entity = hovered, StartMs = now };
+			return;
+		}
+
+		if (hovered == 0 || state.Value.Fired)
+			return;
+
+		var (_, intent) = intents.Get(hovered);
+		var delay = intent.Ref.DelayMs > 0 ? intent.Ref.DelayMs : 250f;
+		if (now - state.Value.StartMs >= delay)
+		{
+			commands.Entity(hovered).EmitTrigger(new UiHoverStart { Position = pointer.Value.Position }, propagate: true);
+			state.Value.Fired = true;
+		}
 	}
 }
