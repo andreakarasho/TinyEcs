@@ -7,6 +7,7 @@
     <Project Path="src/TinyEcs/TinyEcs.csproj" />
     <Project Path="src/TinyEcs.Bevy/TinyEcs.Bevy.csproj" />
     <Project Path="src/TinyEcs.Bevy.UI/TinyEcs.Bevy.UI.csproj" />
+    <Project Path="src/TinyEcs.Bevy.Input/TinyEcs.Bevy.Input.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TinyEcs.Tests.csproj" />
