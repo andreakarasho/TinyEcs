@@ -648,3 +648,4 @@ Inspired by:
 ## Cool Design Reference
 
 -   [flecs Manual](https://github.com/SanderMertens/flecs/blob/master/docs/Manual.md)
+-   [wasvy](https://github.com/wasvy-org/wasvy) — WASM-based modding/scripting for Bevy
