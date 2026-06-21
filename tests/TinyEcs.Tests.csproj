@@ -8,6 +8,11 @@
     <IsPackable>false</IsPackable>
 
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- This project sits at the tests/ root and recursively globs **/*.cs, so
+         exclude the sibling test project's folder — its files belong to
+         TinyEcs.Bevy.Modding.Tests, not here. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);TinyEcs.Bevy.Modding.Tests/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

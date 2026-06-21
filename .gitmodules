@@ -1,3 +1,6 @@
 [submodule "external/Clay.NET"]
 	path = external/Clay.NET
 	url = https://github.com/andreakarasho/Clay.NET.git
+[submodule "external/wasmtime-dotnet"]
+	path = external/wasmtime-dotnet
+	url = https://github.com/andreakarasho/wasmtime-dotnet

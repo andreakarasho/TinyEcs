@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- net10.0 only: the sole consumers (cuo-ecs + tests) are net10.0, and a
+         single TFM avoids dragging TinyEcs/Clay/Wasmtime into net9.0 inner builds
+         they never otherwise exercise. Wasmtime resolves to its net9.0 asset. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>preview</LangVersion>
+    <RootNamespace>TinyEcs.Bevy.Modding</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <!-- The bridge impls + generated WIT types are internal; the cuo test drives
+       the bridge directly. (The lib's own tests use only the public surface.) -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClassicUO.Ecs.Tests" />
+    <InternalsVisibleTo Include="TinyEcs.Bevy.Modding.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TinyEcs\TinyEcs.csproj" />
+    <ProjectReference Include="..\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+    <ProjectReference Include="..\TinyEcs.Bevy.UI\TinyEcs.Bevy.UI.csproj" />
+    <ProjectReference Include="..\..\external\Clay.NET\src\Clay\Clay.csproj" />
+  </ItemGroup>
+
+  <!-- wasmtime-dotnet fork (component-model host + WIT source generator), vendored
+       as a submodule under this repo's external/. The generator emits
+       Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" />
+    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime.SourceGenerator\Wasmtime.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="wit\tinyecs\tinyecs.wit" />
+  </ItemGroup>
+
+  <!-- The native wasmtime library is a runtime asset of the fork that does NOT
+       flow reliably through a ProjectReference. Copy it from the fork's build
+       output next to this lib's output so referencing host/test projects can
+       P/Invoke it. Globbed over TFM (**) and the per-OS native name so neither
+       net9.0 nor Windows is hardcoded — only the current OS's file exists, so
+       only it is copied. -->
+  <ItemGroup>
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
+  </ItemGroup>
+  <Target Name="CopyWasmtimeNative" AfterTargets="Build">
+    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

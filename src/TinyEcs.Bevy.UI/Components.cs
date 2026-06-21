@@ -102,6 +102,16 @@ public struct FocusPolicy { public bool Block; public static readonly FocusPolic
 /// see-through frame, a bar with cutouts).</summary>
 public struct UiContainsByBounds;
 
+/// Generic, stable string identity for a UI node. Host/gump code can tag notable
+/// containers/widgets with a UiName (e.g. "options.viewport", "topbar.full") so a
+/// modding layer can locate them by name instead of the host exposing a bespoke
+/// marker component per gump. The naming convention is the contract — keep stable.
+public struct UiName
+{
+    public string Value;
+    public UiName(string value) => Value = value;
+}
+
 public struct Button { }
 
 public struct RelativeCursorPosition

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- ONLY the lib + TinyEcs core — NO ClassicUO.Ecs. This proves the modding
+       runtime is usable standalone, with no game-specific glue. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy.UI\TinyEcs.Bevy.UI.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy.Modding\TinyEcs.Bevy.Modding.csproj" />
+  </ItemGroup>
+
+  <!-- Vendored guest component fixture (a counter mod that imports ONLY
+       tinyecs:modding) so this test has no dependency on the parent repo. -->
+  <ItemGroup>
+    <None Include="fixtures\ecs_counter.wasm" Link="fixtures\ecs_counter.wasm" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Native wasmtime library next to the test output (does not flow via ProjectRef).
+       Globbed over TFM (**) and per-OS name so neither net9.0 nor Windows is hardcoded. -->
+  <ItemGroup>
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
+  </ItemGroup>
+  <Target Name="CopyWasmtimeNative" AfterTargets="Build">
+    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
