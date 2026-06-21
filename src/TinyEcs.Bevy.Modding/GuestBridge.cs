@@ -219,7 +219,6 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity) : G.IEntity
     }
 
     public void Despawn() { if (ctx.World.Exists(entity)) ctx.World.Delete(entity); }
-    public void TryDespawn() { if (ctx.World.Exists(entity)) ctx.World.Delete(entity); }
     public void Dispose() { }
 }
 

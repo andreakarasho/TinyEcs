@@ -96,7 +96,6 @@ interface app {
 		add-child: func(child: borrow<entity>, index: u32);
 
 		despawn: func();
-		try-despawn: func();
 	}
 
 	/// An entity identifier handle.
