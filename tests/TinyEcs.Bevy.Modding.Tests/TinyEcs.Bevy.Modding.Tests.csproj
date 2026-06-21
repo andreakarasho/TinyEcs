@@ -34,7 +34,7 @@
 
   <!-- Native wasmtime.dll next to the test output (does not flow via ProjectRef). -->
   <ItemGroup>
-    <_WasmtimeNative Include="..\..\..\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
   </ItemGroup>
   <Target Name="CopyWasmtimeNative" AfterTargets="Build">
     <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_WasmtimeNative)')" />

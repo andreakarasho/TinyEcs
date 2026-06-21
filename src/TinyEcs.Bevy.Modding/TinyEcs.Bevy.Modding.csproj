@@ -16,6 +16,7 @@
        the bridge directly. (The lib's own tests use only the public surface.) -->
   <ItemGroup>
     <InternalsVisibleTo Include="ClassicUO.Ecs.Tests" />
+    <InternalsVisibleTo Include="TinyEcs.Bevy.Modding.Tests" />
   </ItemGroup>
 
   <ItemGroup>
