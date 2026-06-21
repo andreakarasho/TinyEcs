@@ -36,14 +36,18 @@
     <AdditionalFiles Include="wit\tinyecs\tinyecs.wit" />
   </ItemGroup>
 
-  <!-- The native wasmtime.dll is a runtime asset of the fork that does NOT flow
-       reliably through a ProjectReference. Copy it from the fork's net9.0 output
-       next to this lib's output so referencing host/test projects can P/Invoke
-       it. Windows x64 only for now. -->
+  <!-- The native wasmtime library is a runtime asset of the fork that does NOT
+       flow reliably through a ProjectReference. Copy it from the fork's build
+       output next to this lib's output so referencing host/test projects can
+       P/Invoke it. Globbed over TFM (**) and the per-OS native name so neither
+       net9.0 nor Windows is hardcoded — only the current OS's file exists, so
+       only it is copied. -->
   <ItemGroup>
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
   </ItemGroup>
   <Target Name="CopyWasmtimeNative" AfterTargets="Build">
-    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_WasmtimeNative)')" />
+    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 </Project>

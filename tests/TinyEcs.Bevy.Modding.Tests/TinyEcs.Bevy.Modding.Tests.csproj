@@ -32,12 +32,15 @@
     <None Include="fixtures\ecs_counter.wasm" Link="fixtures\ecs_counter.wasm" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Native wasmtime.dll next to the test output (does not flow via ProjectRef). -->
+  <!-- Native wasmtime library next to the test output (does not flow via ProjectRef).
+       Globbed over TFM (**) and per-OS name so neither net9.0 nor Windows is hardcoded. -->
   <ItemGroup>
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
   </ItemGroup>
   <Target Name="CopyWasmtimeNative" AfterTargets="Build">
-    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_WasmtimeNative)')" />
+    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
