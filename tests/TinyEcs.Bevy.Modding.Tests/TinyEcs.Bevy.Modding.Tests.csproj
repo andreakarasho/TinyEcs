@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- ONLY the lib + TinyEcs core — NO ClassicUO.Ecs. This proves the modding
+       runtime is usable standalone, with no game-specific glue. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy\TinyEcs.Bevy.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy.UI\TinyEcs.Bevy.UI.csproj" />
+    <ProjectReference Include="..\..\src\TinyEcs.Bevy.Modding\TinyEcs.Bevy.Modding.csproj" />
+  </ItemGroup>
+
+  <!-- Vendored guest component fixture (a counter mod that imports ONLY
+       tinyecs:modding) so this test has no dependency on the parent repo. -->
+  <ItemGroup>
+    <None Include="fixtures\ecs_counter.wasm" Link="fixtures\ecs_counter.wasm" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Native wasmtime.dll next to the test output (does not flow via ProjectRef). -->
+  <ItemGroup>
+    <_WasmtimeNative Include="..\..\..\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
+  </ItemGroup>
+  <Target Name="CopyWasmtimeNative" AfterTargets="Build">
+    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_WasmtimeNative)')" />
+  </Target>
+
+</Project>
