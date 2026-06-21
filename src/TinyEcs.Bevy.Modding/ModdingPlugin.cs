@@ -204,10 +204,10 @@ public readonly struct ModdingPlugin : IPlugin
 
     private static void RunSystemsForStage(ModRuntime rt, WitApp.Schedule.Case which)
     {
-        foreach (var sys in rt.Ctx.Systems)
+        if (!rt.Ctx.SystemsByStage.TryGetValue(which, out var systems))
+            return;
+        foreach (var sys in systems)
         {
-            if (sys.Stage != which)
-                continue;
             try
             {
                 CallSystem(rt, sys);
@@ -223,7 +223,8 @@ public readonly struct ModdingPlugin : IPlugin
     {
         var ctx = rt.Ctx;
         var count = sys.Params.Count;
-        var vals = new ComponentValue[count];
+        // Param counts are tiny; stack the common case, heap-fall-back for the rare large one.
+        Span<ComponentValue> vals = count <= 16 ? stackalloc ComponentValue[count] : new ComponentValue[count];
         rt.SnapshotScratch.Clear();
 
         for (var i = 0; i < count; i++)

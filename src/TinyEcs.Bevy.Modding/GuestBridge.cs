@@ -11,6 +11,7 @@
 // inside a guest call mid-system, so they touch the World directly (the documented
 // carve-out); the runner systems are SingleThreaded to keep that safe.
 
+using System.Diagnostics.CodeAnalysis;
 using TinyEcs;
 using TinyEcs.Bevy;
 using G = Wit.Tinyecs.Modding.GuestImports;
@@ -57,6 +58,13 @@ public sealed class ModHostContext
     // The generic lib has no input model of its own; the host wires this.
     public Action<byte>? ConsumeMouse;
     internal readonly List<ModSystemSpec> Systems = new();
+    // Systems bucketed by stage so the per-frame runner does a dict lookup
+    // instead of scanning every system and filtering. Populated in AddSystems;
+    // per-stage insertion order preserved (declaration order within a stage).
+    internal readonly Dictionary<WitApp.Schedule.Case, List<ModSystemSpec>> SystemsByStage = new();
+    // Cached `With<Parent>` query for EntityImpl.Children — EntityImpl is a struct
+    // recreated per call, so the cache lives here (one ctx per mod/world).
+    internal Query? ChildrenQuery;
 }
 
 internal sealed class GuestBridge(ModHostContext ctx) : G
@@ -74,6 +82,9 @@ internal struct AppImpl(ModHostContext ctx) : G.IApp
             spec.Stage = schedule.Discriminant;
             spec.CustomStage = schedule.CustomPayload;
             ctx.Systems.Add(spec);
+            if (!ctx.SystemsByStage.TryGetValue(spec.Stage, out var bucket))
+                ctx.SystemsByStage[spec.Stage] = bucket = new List<ModSystemSpec>();
+            bucket.Add(spec);
         }
     }
 
@@ -231,7 +242,7 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId) : G.IEntity
     {
         // Enumerate by the Parent relationship (no host-internal access needed).
         var result = new List<G.IEntity>();
-        var q = ctx.World.QueryBuilder().With<TinyEcs.Parent>().Build();
+        var q = ctx.ChildrenQuery ??= ctx.World.QueryBuilder().With<TinyEcs.Parent>().Build();
         var it = q.Iter();
         while (it.Next())
             foreach (var ev in it.Entities())
@@ -287,7 +298,7 @@ internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath,
     public void Set(string value)
     {
         if (!mutable)
-            throw new InvalidOperationException($"component {typePath} was not declared mutable");
+            ThrowNotMutable(typePath);
         if (ctx.Registry.TryGet(typePath, out var comp))
             comp.SetJson(ctx.World, entity, value);
     }
@@ -297,9 +308,13 @@ internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath,
     public void SetTyped(WitApp.ComponentValue value)
     {
         if (!mutable)
-            throw new InvalidOperationException($"component {typePath} was not declared mutable");
+            ThrowNotMutable(typePath);
         ModTypedComponents.Apply(ctx.World, entity, value);
     }
+
+    [DoesNotReturn]
+    private static void ThrowNotMutable(string typePath)
+        => throw new InvalidOperationException($"component {typePath} was not declared mutable");
 
     public void Dispose() { }
 }

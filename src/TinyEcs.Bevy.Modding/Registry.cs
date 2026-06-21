@@ -30,13 +30,18 @@ public interface IModComponent
 
 public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent where T : struct
 {
+    // ponytail: cached on first use, not in the ctor — the ctor has no World.
+    // Built once and reused; Query.Match() re-resolves archetypes lazily.
+    // Single-world assumption (one registry per App/World).
+    private Query? _query;
+
     public bool Has(World world, ulong entity) => world.Has<T>(entity);
 
     public void CollectEntities(World world, ref PooledList<ulong> into)
     {
         // QueryBuilder (by component id) instead of Query<Data<T>>: works for
         // zero-size marker components too, which Data<T> mis-casts.
-        var q = world.QueryBuilder().With<T>().Build();
+        var q = _query ??= world.QueryBuilder().With<T>().Build();
         var it = q.Iter();
         while (it.Next())
             foreach (var ev in it.Entities())
