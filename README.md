@@ -12,10 +12,26 @@ TinyEcs: a high-performance, reflection-free entity component system (ECS) frame
 -   **Component bundles**: Group related components for cleaner entity spawning
 -   **Observer system**: React to entity lifecycle events (spawn, despawn, component changes)
 -   **State management**: Enum-based state transitions with OnEnter/OnExit systems
+-   **WASM modding**: Load sandboxed WebAssembly component mods at runtime (`TinyEcs.Bevy.Modding`)
 
 ## Requirements
 -   Core ECS (`TinyEcs`): .NET 8.0 / 9.0 / 10.0
 -   Bevy layer (`TinyEcs.Bevy`): .NET 9.0 / 10.0
+
+## Getting Started
+
+Clone with submodules (the UI and WASM-modding layers depend on `external/`):
+
+```bash
+# either clone recursively...
+git clone --recurse-submodules https://github.com/andreakarasho/TinyEcs.git
+
+# ...or, if already cloned, pull the submodules
+git submodule update --init --recursive
+
+cd TinyEcs
+dotnet build TinyEcs.slnx
+```
 
 ## Status
 
@@ -629,6 +645,36 @@ struct Position { public float X, Y; }
 struct Velocity { public float X, Y; }
 class Time { public float Delta; }
 ```
+
+## Modding (WASM)
+
+`TinyEcs.Bevy.Modding` lets you load **WebAssembly component** mods at runtime, inspired by
+[wasvy](https://github.com/wasvy-org/wasvy). Mods implement the `tinyecs:modding` WIT contract and
+run sandboxed through a [wasmtime-dotnet](https://github.com/andreakarasho/wasmtime-dotnet) fork
+(component-model host + WIT source generator). The host stays in control: it chooses exactly which
+components and resources to expose, keyed by a string type-path and (de)serialized as JSON — so the
+path is reflection-free and NativeAOT-friendly.
+
+```csharp
+using TinyEcs.Bevy.Modding;
+
+var config = new ModdingConfig { ModFolder = "ecs-mods" };
+
+// Expose host state to mods by WIT type-path (closed generics + source-gen JSON).
+config.Registry.Register("game/position", new ModComponent<Position>(GameJson.Default.Position));
+config.Registry.RegisterResource("game/score", new ModResource<Score>(GameJson.Default.Score));
+
+app.AddResource(config);
+app.AddPlugin(new ModdingPlugin()); // loads *.wasm from ModFolder, runs setup, dispatches per stage
+```
+
+A mod registers systems into the standard stages (`First`/`Update`/`Last`/…) and drives the host ECS
+through the bridge — spawn/despawn entities, query, get/set registered components, read/write
+exposed resources. The plugin is a no-op when the mod folder is absent, so it is always safe to
+install.
+
+> Requires `net10.0` and the `external/wasmtime-dotnet` submodule
+> (`git submodule update --init --recursive`).
 
 ## Run the pepe game!
 
