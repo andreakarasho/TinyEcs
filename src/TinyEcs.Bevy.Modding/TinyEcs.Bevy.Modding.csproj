@@ -24,12 +24,12 @@
     <ProjectReference Include="..\..\external\Clay.NET\src\Clay\Clay.csproj" />
   </ItemGroup>
 
-  <!-- wasmtime-dotnet fork (component-model host + WIT source generator), cloned
-       into the PARENT repo's external/ (outside this submodule). The generator
-       emits Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. -->
+  <!-- wasmtime-dotnet fork (component-model host + WIT source generator), vendored
+       as a submodule under this repo's external/. The generator emits
+       Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" />
-    <ProjectReference Include="..\..\..\..\external\wasmtime-dotnet\src\Wasmtime.SourceGenerator\Wasmtime.SourceGenerator.csproj"
+    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" />
+    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime.SourceGenerator\Wasmtime.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <AdditionalFiles Include="wit\tinyecs\tinyecs.wit" />
   </ItemGroup>
@@ -39,7 +39,7 @@
        next to this lib's output so referencing host/test projects can P/Invoke
        it. Windows x64 only for now. -->
   <ItemGroup>
-    <_WasmtimeNative Include="..\..\..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
+    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\net9.0\wasmtime.dll" />
   </ItemGroup>
   <Target Name="CopyWasmtimeNative" AfterTargets="Build">
     <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_WasmtimeNative)')" />
