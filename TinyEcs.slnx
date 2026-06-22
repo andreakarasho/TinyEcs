@@ -16,5 +16,7 @@
   <Folder Name="/external/">
     <Project Path="external/Clay.NET/src/Clay/Clay.csproj" />
     <Project Path="external/Clay.NET/src/StbTextEdit/StbTextEdit.csproj" />
+    <Project Path="external/wasmtime-dotnet/src/Wasmtime/Wasmtime.csproj" />
+    <Project Path="external/wasmtime-dotnet/src/Wasmtime.SourceGenerator/Wasmtime.SourceGenerator.csproj" />
   </Folder>
 </Solution>
