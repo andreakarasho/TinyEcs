@@ -129,12 +129,10 @@ public abstract class CompositeSystemParam : ISystemParam
 
 internal readonly struct DeferredEntityRef
 {
-	public readonly int SpawnIndex;
 	public readonly ulong EntityId;
 
-	public DeferredEntityRef(int spawnIndex, ulong entityId)
+	public DeferredEntityRef(ulong entityId)
 	{
-		SpawnIndex = spawnIndex;
 		EntityId = entityId;
 	}
 }
@@ -368,7 +366,6 @@ public class Commands : ISystemParam
 {
 	private App? _app;
 	private readonly List<IDeferredCommand> _localCommands = new();
-	private readonly List<ulong> _spawnedEntityIds = new();
 	// Per-Commands pool of boxed command wrappers, keyed by wrapper concrete type.
 	// Reuses wrapper class instances across frames to eliminate the per-command boxing
 	// allocation that would otherwise occur when adding a struct command to a
@@ -391,7 +388,6 @@ public class Commands : ISystemParam
 	{
 		_app = app;
 		_localCommands.Clear();
-		_spawnedEntityIds.Clear();
 	}
 
 	/// <summary>
@@ -501,22 +497,6 @@ public class Commands : ISystemParam
 	}
 
 	/// <summary>
-	/// Get entity ID by index (internal use by EntityCommands)
-	/// </summary>
-	internal ulong GetSpawnedEntityId(int index)
-	{
-		return _spawnedEntityIds[index];
-	}
-
-	/// <summary>
-	/// Set entity ID by index (internal use by SpawnEntityCommand)
-	/// </summary>
-	internal void SetSpawnedEntityId(int index, ulong entityId)
-	{
-		_spawnedEntityIds[index] = entityId;
-	}
-
-	/// <summary>
 	/// Get entity commands for an existing entity.
 	/// Does not validate if the entity exists - commands will silently fail if entity is invalid.
 	/// Use TryEntity() for checked access.
@@ -602,8 +582,8 @@ public class Commands : ISystemParam
 	public void AddChild(ulong parentId, ulong childId)
 	{
 		_localCommands.Add(RentBox(new AddChildCommand(
-			new DeferredEntityRef(-1, parentId),
-			new DeferredEntityRef(-1, childId))));
+			new DeferredEntityRef(parentId),
+			new DeferredEntityRef(childId))));
 	}
 
 	public void AddChild(EntityCommands parent, EntityCommands child)
@@ -613,12 +593,12 @@ public class Commands : ISystemParam
 
 	public void AddChild(EntityCommands parent, ulong childId)
 	{
-		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(-1, childId))));
+		_localCommands.Add(RentBox(new AddChildCommand(parent.ToDeferredRef(), new DeferredEntityRef(childId))));
 	}
 
 	public void AddChild(ulong parentId, EntityCommands child)
 	{
-		_localCommands.Add(RentBox(new AddChildCommand(new DeferredEntityRef(-1, parentId), child.ToDeferredRef())));
+		_localCommands.Add(RentBox(new AddChildCommand(new DeferredEntityRef(parentId), child.ToDeferredRef())));
 	}
 
 	public void AddChildren(EntityCommands parent, ReadOnlySpan<ulong> childIds)
@@ -641,8 +621,8 @@ public class Commands : ISystemParam
 	public void AddChild(ulong parentId, ulong childId, int index)
 	{
 		_localCommands.Add(new AddChildAtCommand(
-			new DeferredEntityRef(-1, parentId),
-			new DeferredEntityRef(-1, childId),
+			new DeferredEntityRef(parentId),
+			new DeferredEntityRef(childId),
 			index));
 	}
 
@@ -651,14 +631,12 @@ public class Commands : ISystemParam
 	/// </summary>
 	public void RemoveChild(ulong childId)
 	{
-		_localCommands.Add(new RemoveChildCommand(new DeferredEntityRef(-1, childId)));
+		_localCommands.Add(new RemoveChildCommand(new DeferredEntityRef(childId)));
 	}
 
 	internal ulong ResolveEntityId(in DeferredEntityRef entityRef)
 	{
-		return entityRef.SpawnIndex >= 0
-			? GetSpawnedEntityId(entityRef.SpawnIndex)
-			: entityRef.EntityId;
+		return entityRef.EntityId;
 	}
 
 	/// <summary>
@@ -695,47 +673,28 @@ public class Commands : ISystemParam
 
 	/// <summary>
 	/// Internal method to insert an observer command at the right position.
-	/// For spawned entities: Insert after the last SpawnEntityCommand
-	/// For existing entities: Insert at the current position (before pending commands)
-	/// This ensures observers are attached before subsequent Insert/Remove commands execute.
+	/// Insert before the first pending component command so the observer is
+	/// attached before any subsequent Insert/Remove command executes.
 	/// </summary>
 	internal void InsertObserverCommand<T>(in T command) where T : struct, IDeferredCommand
 	{
 		var boxed = RentBox(command);
 
-		// Find the last SpawnEntityCommand and insert right after it.
-		// SpawnEntityCommand isn't currently queued via Commands.Spawn() (entities are
-		// allocated eagerly), so this loop is defensive — kept for parity with the
-		// original ordering policy in case SpawnEntityCommand starts being queued later.
+		// Find the first component command from the end and insert before it
 		int insertIndex = -1;
 		for (int i = _localCommands.Count - 1; i >= 0; i--)
 		{
-			if (_localCommands[i] is BoxedCommand<SpawnEntityCommand>)
+			var cmd = _localCommands[i];
+			if (IsComponentCommand(cmd))
 			{
-				insertIndex = i + 1;
+				insertIndex = i;
 				break;
 			}
 		}
 
-		// If no spawn command found, this is for an existing entity
-		// Insert at the beginning of any pending component commands
+		// If no component commands, insert at current end
 		if (insertIndex == -1)
-		{
-			// Find the first component command from the end and insert before it
-			for (int i = _localCommands.Count - 1; i >= 0; i--)
-			{
-				var cmd = _localCommands[i];
-				if (IsComponentCommand(cmd))
-				{
-					insertIndex = i;
-					break;
-				}
-			}
-
-			// If no component commands, insert at current end
-			if (insertIndex == -1)
-				insertIndex = _localCommands.Count;
-		}
+			insertIndex = _localCommands.Count;
 
 		_localCommands.Insert(insertIndex, boxed);
 	}
@@ -749,27 +708,18 @@ public class Commands : ISystemParam
 public ref struct EntityCommands
 {
 	private readonly Commands _commands;
-	private readonly int _spawnIndex; // Index into _spawnedEntityIds list (-1 if not spawned)
 	private readonly ulong _entityId;
-
-	internal EntityCommands(Commands commands, int spawnIndex)
-	{
-		_commands = commands;
-		_spawnIndex = spawnIndex;
-		_entityId = 0;
-	}
 
 	internal EntityCommands(Commands commands, ulong entityId)
 	{
 		_commands = commands;
-		_spawnIndex = -1;
 		_entityId = entityId;
 	}
 
 	/// <summary>
-	/// The entity ID (returns 0 if entity hasn't been spawned yet)
+	/// The entity ID
 	/// </summary>
-	public ulong Id => _spawnIndex >= 0 ? _commands.GetSpawnedEntityId(_spawnIndex) : _entityId;
+	public ulong Id => _entityId;
 
 	/// <summary>
 	/// The owning App associated with this entity's Commands. May be null if Commands
@@ -835,7 +785,7 @@ public ref struct EntityCommands
 	/// <summary>
 	/// Attach multiple deferred children.
 	/// </summary>
-	internal readonly DeferredEntityRef ToDeferredRef() => new DeferredEntityRef(_spawnIndex, _entityId);
+	internal readonly DeferredEntityRef ToDeferredRef() => new DeferredEntityRef(_entityId);
 
 	/// <summary>
 	/// Despawn the entity
@@ -947,25 +897,6 @@ internal sealed class BoxedComponentCommand<T> : IDeferredCommand, IPoolableBox,
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void Execute(TinyEcs.World world, Commands commands) => Value.Execute(world, commands);
-}
-
-/// <summary>
-/// Command to spawn a new entity
-/// </summary>
-internal readonly struct SpawnEntityCommand : IDeferredCommand
-{
-	private readonly int _spawnIndex;
-
-	public SpawnEntityCommand(int spawnIndex)
-	{
-		_spawnIndex = spawnIndex;
-	}
-
-	public void Execute(TinyEcs.World world, Commands commands)
-	{
-		var entity = world.Entity();
-		commands.SetSpawnedEntityId(_spawnIndex, entity.ID);
-	}
 }
 
 /// <summary>
@@ -1154,7 +1085,7 @@ internal readonly struct EntityTriggerCommand<TEvent> : IDeferredCommand
 
 	public void Execute(TinyEcs.World world, Commands commands)
 	{
-		var propagate = true;
+		var propagate = _propagate;
 		// Wrap the event with On<TEvent> and inject the entity ID
 		world.EmitTriggerInner(new On<TEvent>(_entityId, _event, ref propagate));
 	}

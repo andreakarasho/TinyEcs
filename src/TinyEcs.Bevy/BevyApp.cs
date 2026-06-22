@@ -84,7 +84,6 @@ public class StageDescriptor
 {
 	public Stage Stage { get; }
 	public List<Stage> BeforeStages { get; } = new();
-	public List<Stage> AfterStages { get; } = new();
 
 	public StageDescriptor(Stage stage)
 	{
@@ -144,7 +143,6 @@ public static class WorldExtensions
 
 internal interface IStateChangeDetector
 {
-	Type StateType { get; }
 	void Detect();
 }
 
@@ -213,7 +211,6 @@ public sealed class NextState<TState> where TState : struct, Enum
 internal interface IQueuedStateTransition
 {
 	void Apply(App app);
-	Type StateType { get; }
 }
 
 internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition where TState : struct, Enum
@@ -226,8 +223,6 @@ internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition 
 	}
 
 	public void Apply(App app) => app.SetState(_next);
-
-	public Type StateType => typeof(TState);
 }
 
 internal interface IEventChannel
@@ -998,8 +993,6 @@ public class App
 			_app = app;
 		}
 
-		public Type StateType => typeof(TState);
-
 		public void Detect()
 		{
 			var appState = _app._appState;
@@ -1347,13 +1340,6 @@ public class App
 		var visited = new HashSet<StageDescriptor>(count);
 		var visiting = new HashSet<StageDescriptor>(count);
 
-		// Build a lookup dictionary to avoid FirstOrDefault() allocations
-		var stageToDescriptor = new Dictionary<Stage, StageDescriptor>(count);
-		foreach (var desc in _stageDescriptors)
-		{
-			stageToDescriptor[desc.Stage] = desc;
-		}
-
 		void Visit(StageDescriptor node)
 		{
 			if (visited.Contains(node)) return;
@@ -1364,7 +1350,7 @@ public class App
 
 			foreach (var before in node.BeforeStages)
 			{
-				if (stageToDescriptor.TryGetValue(before, out var beforeDescriptor))
+				if (_stageDescriptorByStage.TryGetValue(before, out var beforeDescriptor))
 					Visit(beforeDescriptor);
 			}
 
@@ -1458,9 +1444,6 @@ public class StageConfigurator
 		if (!targetDescriptor.BeforeStages.Contains(currentStage))
 			targetDescriptor.BeforeStages.Add(currentStage);
 
-		if (!_descriptor.AfterStages.Contains(stage))
-			_descriptor.AfterStages.Add(stage);
-
 		return this;
 	}
 
@@ -1474,9 +1457,6 @@ public class StageConfigurator
 
 		if (!_descriptor.BeforeStages.Contains(stage))
 			_descriptor.BeforeStages.Add(stage);
-
-		if (!targetDescriptor.AfterStages.Contains(currentStage))
-			targetDescriptor.AfterStages.Add(currentStage);
 
 		return this;
 	}

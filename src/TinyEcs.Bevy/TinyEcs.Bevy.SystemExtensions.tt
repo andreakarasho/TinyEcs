@@ -9,7 +9,6 @@
 
     string GenericParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
     string WhereConstraints(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : ISystemParam, new()"));
-    string ActionParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
     string FuncParams(int count) => string.Join(", ", Enumerable.Range(1, count).Select(i => $"p{i}"));
     string ParamDecls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"var p{i} = new T{i}();"));
     string InitCalls(int count) => string.Join(" ", Enumerable.Range(1, count).Select(i => $"p{i}.Initialize(ownerApp);"));

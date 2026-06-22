@@ -303,14 +303,13 @@ public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 	private Ptr<uint> _stateRow;
 	private int _row, _count;
 	private nint _size;
-	private uint _lastRun, _thisRun;
+	private uint _thisRun;
 
 	private MarkChanged(QueryIterator iterator)
 	{
 		_iterator = iterator;
 		_row = -1;
 		_count = -1;
-		_lastRun = 0;
 		_thisRun = 0;
 	}
 
@@ -319,7 +318,6 @@ public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 
 	public static void Build(QueryBuilder builder)
 	{
-		// builder.With<T>();
 	}
 
 	static MarkChanged<T> IFilter<MarkChanged<T>>.CreateIterator(QueryIterator iterator)
@@ -372,7 +370,6 @@ public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 
 	public void SetTicks(uint lastRun, uint thisRun)
 	{
-		_lastRun = lastRun;
 		_thisRun = thisRun;
 	}
 }

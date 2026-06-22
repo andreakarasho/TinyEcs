@@ -49,8 +49,6 @@ public sealed class DelayedAction
 			fn();
 		_due.Clear();
 	}
-
-	public void Clear() => _actions.Clear();
 }
 
 /// <summary>Registers <see cref="DelayedAction"/> and ticks it each PreUpdate from <see cref="Time"/>.</summary>

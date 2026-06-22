@@ -173,8 +173,6 @@ public interface IObserver
 	Type TriggerType { get; }
 }
 
-public delegate void ExecuteObserverDel<T>(TinyEcs.World world, ref T trigger) where T : struct;
-
 /// <summary>
 /// Typed observer for specific trigger.
 /// For propagating triggers, receives trigger by reference so observers can stop propagation.
@@ -276,10 +274,6 @@ public static class ObserverExtensions
 
 	private static void RegisterWorldHooks(TinyEcs.World world, ObserverState state)
 	{
-		if (state.HooksRegistered) return;
-
-		state.HooksRegistered = true;
-
 		// Evict observer state when the world is disposed, otherwise the static
 		// _observerStates map pins the world (and all its observer callbacks) forever.
 		world.OnDisposed += static w => _observerStates.TryRemove(w, out _);
@@ -504,9 +498,6 @@ public static class ObserverExtensions
 				case PendingComponentActionType.Add:
 					handler.HandleAdd(world, entityId);
 					break;
-				case PendingComponentActionType.Remove:
-					handler.HandleUnset(world, entityId);
-					break;
 			}
 
 		}
@@ -516,8 +507,7 @@ public static class ObserverExtensions
 internal enum PendingComponentActionType
 {
 	Set,
-	Add,
-	Remove
+	Add
 }
 
 internal class ObserverState
@@ -526,15 +516,6 @@ internal class ObserverState
 	public Dictionary<ulong, List<IObserver>> EntityObservers { get; } = new();
 	public Dictionary<ulong, IComponentHandler> ComponentHandlers { get; } = new();
 	public Queue<(ulong EntityId, IComponentHandler Handler, PendingComponentActionType Action)> PendingComponentActions { get; } = new();
-	public bool HooksRegistered { get; set; }
 	public bool HooksEnabled { get; set; } = true;
 	public ulong MaxComponentEntityId { get; set; } // Component entities have IDs <= this value
-}
-
-// ============================================================================
-// App Extensions for Observers
-// ============================================================================
-
-public static partial class AppObserverExtensions
-{
 }

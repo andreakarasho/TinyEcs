@@ -1804,6 +1804,83 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void EntityEmitTriggerDoesNotPropagateByDefault()
+		{
+			// entity.EmitTrigger(evt) defaults to propagate:false (Bevy opt-in semantics):
+			// the trigger must fire ONLY on the target entity, not bubble up to the parent.
+			using var world = new World();
+
+			var parent = world.Entity();
+			var child = world.Entity();
+			parent.AddChild(child);
+			var parentId = parent.ID;
+			var childId = child.ID;
+
+			var log = new List<string>();
+			var app = new App(world);
+
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(childId).Observe<On<OnClicked>>((trigger) => log.Add("child"));
+				commands.Entity(parentId).Observe<On<OnClicked>>((trigger) => log.Add("parent"));
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(childId).EmitTrigger(new OnClicked(1, 2)); // default propagate: false
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			// Only the child observer fires; propagation is off by default.
+			Assert.Single(log);
+			Assert.Equal("child", log[0]);
+		}
+
+		[Fact]
+		public void EntityEmitTriggerPropagatesWhenRequested()
+		{
+			// entity.EmitTrigger(evt, propagate: true) bubbles up the parent hierarchy:
+			// fires on the target entity first, then its parent.
+			using var world = new World();
+
+			var parent = world.Entity();
+			var child = world.Entity();
+			parent.AddChild(child);
+			var parentId = parent.ID;
+			var childId = child.ID;
+
+			var log = new List<string>();
+			var app = new App(world);
+
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(childId).Observe<On<OnClicked>>((trigger) => log.Add("child"));
+				commands.Entity(parentId).Observe<On<OnClicked>>((trigger) => log.Add("parent"));
+			})
+			.InStage(Stage.Startup)
+			.Build();
+
+			app.AddSystem((Commands commands) =>
+			{
+				commands.Entity(childId).EmitTrigger(new OnClicked(1, 2), propagate: true);
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			app.Run();
+
+			// Both observers fire, child before parent.
+			Assert.Equal(2, log.Count);
+			Assert.Equal("child", log[0]);
+			Assert.Equal("parent", log[1]);
+		}
+
+		[Fact]
 		public void EntityEmitTriggerWorksWithSystemParameters()
 		{
 			// Test that entity observers with system parameters work with EmitTrigger
