@@ -31,6 +31,25 @@ interface app {
 			schedule: schedule,
 			systems: list<borrow<system>>,
 		);
+
+		/// Register an observer. `name` MUST match a guest export with signature
+		/// func(entity: u64, json: string) — json is the component value for
+		/// insert/remove, "" for spawn/despawn. Fired events are buffered and
+		/// dispatched at a safe point (end of frame), so the callback may mutate
+		/// the world through commands without re-entrancy hazards.
+		add-observer: func(name: string, evt: observer-event);
+	}
+
+	/// Lifecycle/component events a mod can observe. Insert/remove carry the
+	/// component type-path (must be a host-registered component).
+	variant observer-event {
+		spawn,
+		despawn,
+		insert(string),
+		remove(string),
+		// A host-registered custom event, by name. Fired via commands.emit-event
+		// (mod) or the host's own EmitTrigger — both reach this observer.
+		custom(string),
 	}
 
 	/// A system the mod defines. Name MUST match a guest export.
@@ -80,6 +99,11 @@ interface app {
 		/// button before gameplay reads it. (Keyboard consume needs library
 		/// support and is a follow-up.)
 		input-consume-mouse: func(button: u8);
+
+		/// Emit a host-registered custom event by name (entity 0 = global). The
+		/// host fires it as a typed trigger, so host systems and any mod observing
+		/// `custom(name)` both receive it. No-op if `name` is not registered.
+		emit-event: func(name: string, entity: u64, json: string);
 	}
 
 	/// Queued edits for a single entity.

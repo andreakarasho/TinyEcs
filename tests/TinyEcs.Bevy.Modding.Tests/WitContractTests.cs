@@ -16,11 +16,13 @@ namespace TinyEcs.Bevy.Modding.Tests;
 public struct WitPos { public int X { get; set; } public int Y { get; set; } }
 public struct WitTag { } // zero-size marker — the case the WIT uses QueryBuilder for
 public struct WitScore { public int Value { get; set; } }
+public struct WitPing { public int N { get; set; } } // custom event payload
 
 [JsonSourceGenerationOptions(IncludeFields = true)]
 [JsonSerializable(typeof(WitPos))]
 [JsonSerializable(typeof(WitTag))]
 [JsonSerializable(typeof(WitScore))]
+[JsonSerializable(typeof(WitPing))]
 internal partial class WitJsonContext : JsonSerializerContext { }
 
 public class WitContractTests

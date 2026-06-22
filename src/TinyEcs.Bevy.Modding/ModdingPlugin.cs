@@ -38,6 +38,9 @@ internal sealed class ModRuntime
     // Safe to share (one buffer per runtime): the stage runners are
     // SingleThreaded and CallSystem is never re-entered during Instance.Call.
     public readonly List<ulong[]> SnapshotScratch = new();
+    // Observer fires buffered by host global observers, drained by FlushObservers
+    // at a safe point (end of frame) so guest callbacks can mutate via the bridge.
+    public readonly Queue<(string Name, ulong Entity, string Json)> ObserverFires = new();
 }
 
 internal sealed class ModRuntimes
@@ -109,6 +112,16 @@ public readonly struct ModdingPlugin : IPlugin
         // the tag before the mod's NEXT Update poll ever sees it.
         var clearFn = ClearClicks;
         app.AddSystem(clearFn).InStage(Stage.Update).After(RunnerUpdate).Build();
+
+        // Drain buffered observer fires into the guest callbacks at end of frame,
+        // after the Last runner — a safe single-threaded point (no mid-mutation
+        // re-entry). Events fired during Last reach the guest next frame.
+        app.AddSystem((ResMut<ModRuntimes> runtimes) =>
+            {
+                foreach (var rt in runtimes.Value.Runtimes)
+                    FlushObservers(rt);
+            })
+            .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
     }
 
     private static void ClearClicks(Commands commands, Query<Data<ModClicked>> q)
@@ -184,7 +197,11 @@ public readonly struct ModdingPlugin : IPlugin
                 };
                 runtimes.Runtimes.Add(rt);
 
-                Console.WriteLine("[ecs-mod] loaded {0} ({1} systems)", Path.GetFileName(file), ctx.Systems.Count);
+                Console.WriteLine("[ecs-mod] loaded {0} ({1} systems, {2} observers)",
+                    Path.GetFileName(file), ctx.Systems.Count, ctx.Observers.Count);
+
+                // Wire the observers the mod registered during setup to host globals.
+                RegisterModObservers(appRes.Value, rt);
 
                 // mod-startup systems run once, now.
                 RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
@@ -215,6 +232,69 @@ public readonly struct ModdingPlugin : IPlugin
             catch (Exception e)
             {
                 Console.WriteLine("[ecs-mod] system '{0}' failed: {1}", sys.Name, e.Message);
+            }
+        }
+    }
+
+    // Wire every observer the mod registered to a host global observer that
+    // buffers fires onto the runtime's queue (no World mutation in the callback —
+    // re-entrancy-safe; the guest is called later in FlushObservers).
+    private static void RegisterModObservers(App app, ModRuntime rt)
+    {
+        foreach (var obs in rt.Ctx.Observers)
+            RegisterObserver(app, obs, rt.Ctx.Registry, (name, e, json) => rt.ObserverFires.Enqueue((name, e, json)));
+    }
+
+    // Internal + testable: maps one observer spec to the matching host global
+    // observer. Component events resolve their type-path via the registry.
+    internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Action<string, ulong, string> onFire)
+    {
+        switch (obs.Kind)
+        {
+            case WitApp.ObserverEvent.Case.Spawn:
+                app.AddObserver<OnSpawn>(t => onFire(obs.Name, t.EntityId, ""));
+                break;
+            case WitApp.ObserverEvent.Case.Despawn:
+                app.AddObserver<OnDespawn>(t => onFire(obs.Name, t.EntityId, ""));
+                break;
+            case WitApp.ObserverEvent.Case.Insert:
+                if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var ci))
+                    ci.RegisterInsertObserver(app, (e, json) => onFire(obs.Name, e, json));
+                break;
+            case WitApp.ObserverEvent.Case.Remove:
+                if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var cr))
+                    cr.RegisterRemoveObserver(app, (e, json) => onFire(obs.Name, e, json));
+                break;
+            case WitApp.ObserverEvent.Case.Custom:
+                if (obs.TypePath != null && registry.TryGetEvent(obs.TypePath, out var ev))
+                    ev.RegisterObserver(app, (e, json) => onFire(obs.Name, e, json));
+                break;
+        }
+    }
+
+    // Dispatch buffered observer fires to the guest. Each fire calls the guest
+    // export `name` with (entity: u64, json: string). Not yet exercised by a test
+    // fixture — needs a mod that exports an observer callback.
+    private static void FlushObservers(ModRuntime rt)
+    {
+        while (rt.ObserverFires.Count > 0)
+        {
+            var (name, entity, json) = rt.ObserverFires.Dequeue();
+            Span<ComponentValue> args = stackalloc ComponentValue[2];
+            args[0] = ComponentValue.CreateUInt64(entity);
+            args[1] = ComponentValue.CreateString(json, true);
+            try
+            {
+                using var _ = rt.Instance.Call(name, 0, args);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("[ecs-mod] observer '{0}' failed: {1}", name, e.Message);
+            }
+            finally
+            {
+                args[0].Dispose(rt.Store);
+                args[1].Dispose(rt.Store);
             }
         }
     }

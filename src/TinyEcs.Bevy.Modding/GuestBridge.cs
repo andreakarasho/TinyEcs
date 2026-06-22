@@ -45,6 +45,13 @@ internal sealed class ModSystemSpec
     public readonly List<string> Before = new();
 }
 
+internal sealed class ModObserverSpec
+{
+    public string Name = "";                       // guest export to call on fire
+    public WitApp.ObserverEvent.Case Kind;
+    public string? TypePath;                        // component path for Insert/Remove
+}
+
 /// Shared glue for one mod instance. Public so a host can configure per-mod
 /// behaviour (extra linker imports, input wiring) from a ModdingConfig hook.
 public sealed class ModHostContext
@@ -65,6 +72,9 @@ public sealed class ModHostContext
     // Cached `With<Parent>` query for EntityImpl.Children — EntityImpl is a struct
     // recreated per call, so the cache lives here (one ctx per mod/world).
     internal Query? ChildrenQuery;
+    // Observers the mod registered during setup; wired to host global observers
+    // after setup (see ModdingPlugin.RegisterModObservers).
+    internal readonly List<ModObserverSpec> Observers = new();
 }
 
 internal sealed class GuestBridge(ModHostContext ctx) : G
@@ -86,6 +96,22 @@ internal struct AppImpl(ModHostContext ctx) : G.IApp
                 ctx.SystemsByStage[spec.Stage] = bucket = new List<ModSystemSpec>();
             bucket.Add(spec);
         }
+    }
+
+    public void AddObserver(string name, WitApp.ObserverEvent evt)
+    {
+        ctx.Observers.Add(new ModObserverSpec
+        {
+            Name = name,
+            Kind = evt.Discriminant,
+            TypePath = evt.Discriminant switch
+            {
+                WitApp.ObserverEvent.Case.Insert => evt.InsertPayload,
+                WitApp.ObserverEvent.Case.Remove => evt.RemovePayload,
+                WitApp.ObserverEvent.Case.Custom => evt.CustomPayload,
+                _ => null,
+            },
+        });
     }
 
     public void Dispose() { }
@@ -182,6 +208,15 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
     // Input override — consume a mouse button this frame. The lib owns no input
     // model; route to the host's hook (no-op if the host didn't wire one).
     public void InputConsumeMouse(byte button) => ctx.ConsumeMouse?.Invoke(button);
+
+    // Emit a host-registered custom event by name. Fires as a typed host trigger
+    // (On<T>), so host systems and any mod observing `custom(name)` both receive
+    // it. No-op if the name isn't registered.
+    public void EmitEvent(string name, ulong entity, string json)
+    {
+        if (ctx.Registry.TryGetEvent(name, out var ev))
+            ev.Emit(ctx.World, entity, json);
+    }
 
     public void Dispose() { }
 }

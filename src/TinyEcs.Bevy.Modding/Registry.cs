@@ -26,6 +26,11 @@ public interface IModComponent
     string GetJson(World world, ulong entity);
     void SetJson(World world, ulong entity, string json);
     void Remove(World world, ulong entity);
+    // Wire a host global observer for this component's OnInsert/OnRemove, marshaling
+    // the trigger to (entityId, componentJson). Closed-generic inside the impl, so
+    // it stays reflection-free / AOT-safe.
+    void RegisterInsertObserver(App app, Action<ulong, string> onFire);
+    void RegisterRemoveObserver(App app, Action<ulong, string> onFire);
 }
 
 public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent where T : struct
@@ -55,6 +60,12 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
         => world.Set(entity, JsonSerializer.Deserialize(json, typeInfo)!);
 
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
+
+    public void RegisterInsertObserver(App app, Action<ulong, string> onFire)
+        => app.AddObserver<OnInsert<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo)));
+
+    public void RegisterRemoveObserver(App app, Action<ulong, string> onFire)
+        => app.AddObserver<OnRemove<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo)));
 }
 
 /// One registered singleton resource, keyed by WIT type-path. Mirrors
@@ -79,10 +90,30 @@ public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo) : IModResource wher
     }
 }
 
+/// One registered custom event, keyed by name. The host owns the event type T;
+/// mods observe it by name (`custom(name)`) and emit it by name. Bridges the
+/// modding string-keyed event surface onto the host's typed On<T> / EmitTrigger,
+/// so host code and mods see the same event.
+public interface IModEvent
+{
+    void RegisterObserver(App app, Action<ulong, string> onFire);
+    void Emit(World world, ulong entity, string json);
+}
+
+public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent where T : struct
+{
+    public void RegisterObserver(App app, Action<ulong, string> onFire)
+        => app.AddObserver<On<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Event, typeInfo)));
+
+    public void Emit(World world, ulong entity, string json)
+        => world.EmitTrigger(entity, JsonSerializer.Deserialize(json, typeInfo)!);
+}
+
 public sealed class ModComponentRegistry
 {
     private readonly Dictionary<string, IModComponent> _byPath = new();
     private readonly Dictionary<string, IModResource> _resByPath = new();
+    private readonly Dictionary<string, IModEvent> _evByName = new();
 
     public void Register(string typePath, IModComponent component) => _byPath[typePath] = component;
 
@@ -91,4 +122,8 @@ public sealed class ModComponentRegistry
     public void RegisterResource(string typePath, IModResource resource) => _resByPath[typePath] = resource;
 
     public bool TryGetResource(string typePath, [MaybeNullWhen(false)] out IModResource resource) => _resByPath.TryGetValue(typePath, out resource);
+
+    public void RegisterEvent(string name, IModEvent ev) => _evByName[name] = ev;
+
+    public bool TryGetEvent(string name, [MaybeNullWhen(false)] out IModEvent ev) => _evByName.TryGetValue(name, out ev);
 }
