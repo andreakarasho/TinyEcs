@@ -8,13 +8,15 @@
 // The lib knows no concrete game component, no networking, no input device —
 // only the generic ECS+UI contract in tinyecs.wit.
 //
-// Mods are loaded from the ModFolder in the working dir / next to the exe
-// (*.wasm). If the folder is absent the plugin is a no-op, so it is always safe
-// to install.
+// Mods live in the ModFolder (in the working dir / next to the exe), one folder
+// per mod: `<ModFolder>/<mod>/{mod.json, *.wasm}`. The `mod.json` manifest names
+// the WASM component to load (plus name/version/ruleset). If the folder is absent
+// the plugin is a no-op, so it is always safe to install.
 
 using System.Buffers;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.UI;
@@ -27,6 +29,7 @@ namespace TinyEcs.Bevy.Modding;
 
 internal sealed class ModRuntime
 {
+    public ModManifest Manifest = null!;
     public Linker Linker = null!;
     public Store Store = null!;
     public ComponentInstance Instance = null!;
@@ -144,26 +147,29 @@ public readonly struct ModdingPlugin : IPlugin
         var config = configRes.Value;
 
         // Look both next to the exe (deployed alongside the build) and in the
-        // working dir, so launch location doesn't matter. Dedup by file name.
+        // working dir, so launch location doesn't matter. Each mod is a subfolder
+        // with a mod.json manifest; dedup by manifest name (exe dir wins over cwd).
         var candidates = new[]
         {
             Path.Combine(AppContext.BaseDirectory, config.ModFolder),
             Path.Combine(Directory.GetCurrentDirectory(), config.ModFolder),
         };
-        var files = candidates
+        var mods = candidates
             .Where(Directory.Exists)
-            .SelectMany(d => Directory.GetFiles(d, "*.wasm"))
-            .GroupBy(Path.GetFileName)
+            .SelectMany(Directory.GetDirectories)
+            .Select(LoadManifest)
+            .OfType<(ModManifest Manifest, string WasmPath)>()
+            .GroupBy(m => m.Manifest.Name)
             .Select(g => g.First())
             .ToArray();
-        if (files.Length == 0)
+        if (mods.Length == 0)
             return;
 
         var world = appRes.Value.GetWorld();
         var runtimes = runtimesRes.Value;
         runtimes.Engine = new Engine();
 
-        foreach (var file in files)
+        foreach (var (manifest, file) in mods)
         {
             try
             {
@@ -188,6 +194,7 @@ public readonly struct ModdingPlugin : IPlugin
 
                 var rt = new ModRuntime
                 {
+                    Manifest = manifest,
                     Linker = linker,
                     Store = store,
                     Instance = instance,
@@ -197,8 +204,8 @@ public readonly struct ModdingPlugin : IPlugin
                 };
                 runtimes.Runtimes.Add(rt);
 
-                Console.WriteLine("[ecs-mod] loaded {0} ({1} systems, {2} observers)",
-                    Path.GetFileName(file), ctx.Systems.Count, ctx.Observers.Count);
+                Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
+                    manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count);
 
                 // Wire the observers the mod registered during setup to host globals.
                 RegisterModObservers(appRes.Value, rt);
@@ -208,9 +215,48 @@ public readonly struct ModdingPlugin : IPlugin
             }
             catch (Exception e)
             {
-                Console.WriteLine("[ecs-mod] failed to load {0}: {1}", Path.GetFileName(file), e);
+                Console.WriteLine("[ecs-mod] failed to load {0}: {1}", manifest.Name, e);
             }
         }
+    }
+
+    // Read `<dir>/mod.json` and resolve the WASM it names (relative to the mod's
+    // own folder). Returns null (skipping the folder) if there is no manifest, it
+    // doesn't parse, names no wasm, or the wasm is missing.
+    private static (ModManifest Manifest, string WasmPath)? LoadManifest(string dir)
+    {
+        var manifestPath = Path.Combine(dir, "mod.json");
+        if (!File.Exists(manifestPath))
+            return null;
+
+        ModManifest? manifest;
+        try
+        {
+            manifest = JsonSerializer.Deserialize(File.ReadAllText(manifestPath), ModManifestJsonContext.Default.ModManifest);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("[ecs-mod] bad manifest {0}: {1}", manifestPath, e.Message);
+            return null;
+        }
+
+        if (manifest == null || string.IsNullOrEmpty(manifest.Wasm))
+        {
+            Console.WriteLine("[ecs-mod] manifest {0} names no 'wasm'", manifestPath);
+            return null;
+        }
+
+        var wasmPath = Path.Combine(dir, manifest.Wasm);
+        if (!File.Exists(wasmPath))
+        {
+            Console.WriteLine("[ecs-mod] {0}: wasm '{1}' not found in {2}", manifest.Name, manifest.Wasm, dir);
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(manifest.Name))
+            manifest.Name = Path.GetFileName(dir);
+
+        return (manifest, wasmPath);
     }
 
     private static void RunStage(ModRuntimes runtimes, WitApp.Schedule.Case which)
