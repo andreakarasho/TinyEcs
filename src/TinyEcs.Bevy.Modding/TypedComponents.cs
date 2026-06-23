@@ -21,12 +21,15 @@ internal static class ModTypedComponents
 
     private static Node ToNode(in WitApp.NodeRec n) => new()
     {
-        Display = (Display)n.Display,
-        PositionType = (PositionType)n.PositionType,
-        Overflow = (Overflow)n.Overflow,
-        FlexDirection = (FlexDirection)n.FlexDirection,
-        JustifyContent = (JustifyContent)n.JustifyContent,
-        AlignItems = (AlignItems)n.AlignItems,
+        // WIT enum discriminant -> host enum. WIT case order == host enum order
+        // (both 0-based, Val.cs), so cast through the integral value. C# forbids
+        // a direct enum->enum cast.
+        Display = (Display)(byte)n.Display,
+        PositionType = (PositionType)(byte)n.PositionType,
+        Overflow = (Overflow)(byte)n.Overflow,
+        FlexDirection = (FlexDirection)(byte)n.FlexDirection,
+        JustifyContent = (JustifyContent)(byte)n.JustifyContent,
+        AlignItems = (AlignItems)(byte)n.AlignItems,
         Width = ToVal(n.Width), Height = ToVal(n.Height),
         MinWidth = ToVal(n.MinWidth), MinHeight = ToVal(n.MinHeight),
         MaxWidth = ToVal(n.MaxWidth), MaxHeight = ToVal(n.MaxHeight),
