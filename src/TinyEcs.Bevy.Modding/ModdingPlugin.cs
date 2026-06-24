@@ -36,6 +36,12 @@ internal sealed class ModRuntime
     public GuestBridge Imports = null!;
     public Wit.Tinyecs.Modding.GuestExports Exports = null!;
     public ModHostContext Ctx = null!;
+    // Lifecycle (host enable/disable/reload via ModControl). Disabled mods are
+    // skipped by the per-stage runner; Slot scopes their entities for teardown;
+    // WasmPath lets Reload re-read the component bytes from disk.
+    public bool Enabled = true;
+    public int Slot;
+    public string WasmPath = "";
     // Reused per CallSystem: the ArrayPool-rented query snapshots in flight for
     // one system call, returned in CallSystem's finally after the wasm Call.
     // Safe to share (one buffer per runtime): the stage runners are
@@ -51,6 +57,33 @@ internal sealed class ModRuntimes
     public Engine Engine = null!;
     public readonly List<ModRuntime> Runtimes = new();
 }
+
+/// One loaded mod's host-visible state. Enabled flips as the host enables/disables
+/// (the actual runtime work is deferred — see ModControl).
+public sealed class ModInfo
+{
+    public string Name = "";
+    public string Version = "";
+    public bool Enabled = true;
+}
+
+/// Host-facing control surface for the loaded mods: the list to render (Mods, in
+/// load order — index is stable and matches the runtime) plus queued enable/disable
+/// /reload requests. Requests are NOT applied inline: they enqueue and a lib system
+/// drains them at a safe single-threaded point (after the Last runner), where it can
+/// dispose wasm instances and mutate the World directly. Always registered (empty
+/// when no mods are present).
+public sealed class ModControl
+{
+    public readonly List<ModInfo> Mods = new();
+    internal readonly Queue<(int Index, ModAction Action)> Pending = new();
+
+    public void Enable(int index) => Pending.Enqueue((index, ModAction.Enable));
+    public void Disable(int index) => Pending.Enqueue((index, ModAction.Disable));
+    public void Reload(int index) => Pending.Enqueue((index, ModAction.Reload));
+}
+
+internal enum ModAction : byte { Enable, Disable, Reload }
 
 /// Host-supplied configuration for the modding plugin. Register an instance with
 /// `app.AddResource(new ModdingConfig { ... })` BEFORE adding the plugin; the
@@ -89,6 +122,7 @@ public readonly struct ModdingPlugin : IPlugin
         if (!app.HasResource<ModdingConfig>())
             app.AddResource(new ModdingConfig());
         app.AddResource(new ModRuntimes());
+        app.AddResource(new ModControl());
 
         var setupFn = SetupEcsMods;
         app.AddSystem(setupFn).InStage(Stage.Startup).Build();
@@ -142,6 +176,13 @@ public readonly struct ModdingPlugin : IPlugin
                     FlushObservers(rt);
             })
             .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
+
+        // Apply queued enable/disable/reload requests at the same safe point. These
+        // dispose wasm instances + spawn/despawn entities directly, so they must run
+        // single-threaded and outside any mod system call (no re-entry).
+        var processControlFn = ProcessModControl;
+        app.AddSystem(processControlFn)
+            .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
     }
 
     private static void ClearClicks(Commands commands, Query<Data<ModClicked>> q)
@@ -159,7 +200,7 @@ public readonly struct ModdingPlugin : IPlugin
             .Build();
     }
 
-    private static void SetupEcsMods(Res<App> appRes, ResMut<ModRuntimes> runtimesRes, Res<ModdingConfig> configRes)
+    private static void SetupEcsMods(Res<App> appRes, ResMut<ModRuntimes> runtimesRes, Res<ModdingConfig> configRes, ResMut<ModControl> controlRes)
     {
         var config = configRes.Value;
 
@@ -190,7 +231,8 @@ public readonly struct ModdingPlugin : IPlugin
         {
             try
             {
-                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value };
+                var slot = runtimes.Runtimes.Count;
+                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot };
                 var linker = new Linker(runtimes.Engine);
                 linker.AddWasiP2();
                 var imports = new GuestBridge(ctx);
@@ -218,8 +260,11 @@ public readonly struct ModdingPlugin : IPlugin
                     Imports = imports,
                     Exports = exports,
                     Ctx = ctx,
+                    Slot = slot,
+                    WasmPath = file,
                 };
                 runtimes.Runtimes.Add(rt);
+                controlRes.Value.Mods.Add(new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true });
 
                 Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
                     manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count);
@@ -279,7 +324,8 @@ public readonly struct ModdingPlugin : IPlugin
     private static void RunStage(ModRuntimes runtimes, WitApp.Schedule.Case which)
     {
         foreach (var rt in runtimes.Runtimes)
-            RunSystemsForStage(rt, which);
+            if (rt.Enabled)
+                RunSystemsForStage(rt, which);
     }
 
     private static void RunSystemsForStage(ModRuntime rt, WitApp.Schedule.Case which)
@@ -297,6 +343,121 @@ public readonly struct ModdingPlugin : IPlugin
                 Console.WriteLine("[ecs-mod] system '{0}' failed: {1}", sys.Name, e.Message);
             }
         }
+    }
+
+    // Drain host enable/disable/reload requests at a safe single-threaded point.
+    private static void ProcessModControl(ResMut<ModRuntimes> runtimesRes, ResMut<ModControl> controlRes, Res<App> appRes)
+    {
+        var control = controlRes.Value;
+        if (control.Pending.Count == 0)
+            return;
+
+        var runtimes = runtimesRes.Value;
+        while (control.Pending.Count > 0)
+        {
+            var (idx, action) = control.Pending.Dequeue();
+            if (idx < 0 || idx >= runtimes.Runtimes.Count)
+                continue;
+            var rt = runtimes.Runtimes[idx];
+            var info = idx < control.Mods.Count ? control.Mods[idx] : null;
+            try
+            {
+                switch (action)
+                {
+                    case ModAction.Disable: DisableMod(rt, info); break;
+                    case ModAction.Enable: EnableMod(rt, info); break;
+                    case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info); break;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("[ecs-mod] {0} on '{1}' failed: {2}", action, rt.Manifest.Name, e);
+            }
+        }
+    }
+
+    // Stop a mod ticking and remove everything it spawned. The wasm instance stays
+    // loaded; re-enable re-runs its startup. Only its host entities are despawned.
+    private static void DisableMod(ModRuntime rt, ModInfo? info)
+    {
+        if (!rt.Enabled)
+            return;
+        rt.Enabled = false;
+        if (info != null) info.Enabled = false;
+        DespawnModEntities(rt.Ctx.World, rt.Slot);
+    }
+
+    // Resume ticking and re-run the mod's startup so it rebuilds its UI. A mod whose
+    // startup is one-shot-guarded won't rebuild until a reload; the React UI mod does.
+    private static void EnableMod(ModRuntime rt, ModInfo? info)
+    {
+        if (rt.Enabled)
+            return;
+        rt.Enabled = true;
+        if (info != null) info.Enabled = true;
+        RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
+    }
+
+    // Tear the mod down and re-instantiate it from disk (picks up a rebuilt .wasm).
+    // Reuses the same ModRuntime + ModHostContext AND the existing Linker + bridge:
+    // the host import functions never change between loads, and the fork registers
+    // every linker.Define'd function in a STATIC, process-global, never-freed table
+    // capped at 1024 (ComponentExport.RegisterFunction). Re-Define'ing on reload
+    // leaked a full set of slots each time and overflowed almost immediately, so we
+    // do NOT build a new Linker — we only recompile the component and instantiate it
+    // on a fresh Store with the original linker. Zero new function registrations.
+    //
+    // CEILING (inherent, no clean fix here): TinyEcs has no global-observer removal,
+    // so observers wired at first load persist. Same-named exports on the new
+    // instance still receive them, but observers a mod registers ONLY on reload are
+    // not wired. (The 1024-function cap still bounds how many mods can be LOADED at
+    // once — Define count scales with mod count — but reload no longer consumes it.)
+    private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info)
+    {
+        DespawnModEntities(rt.Ctx.World, rt.Slot);
+
+        try { rt.Store.Dispose(); } catch { /* already torn down */ }
+
+        // Re-setup repopulates these from the fresh instance's setup() call.
+        rt.Ctx.Systems.Clear();
+        rt.Ctx.SystemsByStage.Clear();
+        rt.Ctx.Observers.Clear();
+        rt.Ctx.ChildrenQuery = null;
+
+        // Fresh store (fresh WASI state); REUSE rt.Linker + rt.Imports (no re-Define).
+        var store = new Store(runtimes.Engine);
+        store.AddWasiP2(inheritStdout: true, inheritStderr: true);
+
+        var component = Component.Compile(runtimes.Engine, File.ReadAllBytes(rt.WasmPath));
+        var instance = store.GetComponentInstance(component, rt.Linker);
+        var exports = new Wit.Tinyecs.Modding.GuestExports(instance, store);
+
+        var appHandle = rt.Imports.RegisterApp(new AppImpl(rt.Ctx));
+        exports.Setup(appHandle);
+
+        rt.Store = store;
+        rt.Instance = instance;
+        rt.Exports = exports;
+        rt.Enabled = true;
+        if (info != null) info.Enabled = true;
+
+        RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
+    }
+
+    // Delete every entity this mod spawned (ModEntity.Slot == slot). Deleting a root
+    // cascades to its children, so already-gone children are skipped by Exists.
+    private static void DespawnModEntities(World world, int slot)
+    {
+        var q = world.QueryBuilder().With<ModEntity>().Build();
+        var ids = new List<ulong>();
+        var it = q.Iter();
+        while (it.Next())
+            foreach (var ev in it.Entities())
+                if (world.Get<ModEntity>(ev.ID).Slot == slot)
+                    ids.Add(ev.ID);
+        foreach (var id in ids)
+            if (world.Exists(id))
+                world.Delete(id);
     }
 
     // Wire every observer the mod registered to a host global observer that

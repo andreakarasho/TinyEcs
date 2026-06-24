@@ -58,6 +58,10 @@ public sealed class ModHostContext
 {
     public World World = null!;
     public ModComponentRegistry Registry = null!;
+    // Index of this mod among the loaded runtimes — stamped onto every ModEntity
+    // this mod spawns (ModEntity.Slot) so the host can scope a mod's entities for
+    // disable/reload teardown without touching other mods' entities.
+    public int Slot;
     // The host App — used to resolve singleton resources lazily at call time.
     // Absent in bare unit-test apps, so every use is guarded by HasResource.
     public App? App;
@@ -164,14 +168,14 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
     public G.IEntityCommands SpawnEmpty()
     {
         var ent = ctx.World.Entity();
-        ent.Set(new ModEntity());
+        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
         return new EntityCommandsImpl(ctx, ent.ID);
     }
 
     public G.IEntityCommands Spawn(ReadOnlySpan<(string, string)> bundle)
     {
         var ent = ctx.World.Entity();
-        ent.Set(new ModEntity());
+        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
         var id = ent.ID;
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
@@ -186,7 +190,7 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
     public G.IEntityCommands SpawnTyped(ReadOnlySpan<WitApp.ComponentValue> bundle)
     {
         var ent = ctx.World.Entity();
-        ent.Set(new ModEntity());
+        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
         var id = ent.ID;
         foreach (var cv in bundle)
             ModTypedComponents.Apply(ctx.World, id, cv);
