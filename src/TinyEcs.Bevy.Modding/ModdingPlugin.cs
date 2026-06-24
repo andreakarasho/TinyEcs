@@ -110,6 +110,23 @@ public readonly struct ModdingPlugin : IPlugin
                 commands.Entity(trigger.EntityId).Insert(new ModClicked());
         });
 
+        // Hover bridge: mirror Bevy.UI's single HoveredEntity onto a sparse marker
+        // so mods stop scanning every interactive element's Interaction byte each
+        // frame. UiOver/UiOut fire once per enter/leave on the topmost entity, so
+        // ModHovered lives on at most one entity at a time — no clear system, no
+        // refcount, no enter-before-leave ordering hazard (Over and Out target
+        // different entities). The mod walks ancestors itself (DOM mouseenter).
+        app.AddObserver<On<UiOver>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
+        {
+            if (modQ.Contains(trigger.EntityId))
+                commands.Entity(trigger.EntityId).Insert(new ModHovered());
+        });
+        app.AddObserver<On<UiOut>, Commands, Query<Data<ModHovered>>>((trigger, commands, hoveredQ) =>
+        {
+            if (hoveredQ.Contains(trigger.EntityId))
+                commands.Entity(trigger.EntityId).Remove<ModHovered>();
+        });
+
         // Clear ModClicked AFTER the Update runner (read-then-clear, same frame).
         // NOT Stage.Last: UiClick fires after Update, so a Last clear would strip
         // the tag before the mod's NEXT Update poll ever sees it.

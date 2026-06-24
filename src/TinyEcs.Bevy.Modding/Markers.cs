@@ -14,3 +14,11 @@ public struct ModEntity { public byte Slot; }
 /// it each frame (Stage.Update, after the Update runner). Bridges Bevy.UI's
 /// observer-based clicks to the mod's poll-a-component model.
 public struct ModClicked { public byte Tick; }
+
+/// Stateful tag mirroring Bevy.UI's single HoveredEntity: the hover bridge inserts
+/// it on UiOver and removes it on UiOut, so at most ONE mod entity carries it.
+/// Mods poll a sparse `with ModHovered` query (the currently-hovered element) and
+/// walk ancestors themselves — instead of scanning every interactive element's
+/// Interaction byte each frame. NOT one-frame: it persists until the pointer
+/// leaves, so there is no clear system (unlike ModClicked).
+public struct ModHovered { public byte Tick; }
