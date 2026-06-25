@@ -68,6 +68,8 @@ public sealed class ModHostContext
     // Optional host hook to consume a mouse button (the input-override capability).
     // The generic lib has no input model of its own; the host wires this.
     public Action<byte>? ConsumeMouse;
+    // Keyboard half of the input-override capability (consume a key this frame).
+    public Action<uint>? ConsumeKeyboard;
     internal readonly List<ModSystemSpec> Systems = new();
     // Systems bucketed by stage so the per-frame runner does a dict lookup
     // instead of scanning every system and filtering. Populated in AddSystems;
@@ -186,6 +188,8 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
     public G.IEntityCommands Entity(G.IEntity entity)
         => new EntityCommandsImpl(ctx, ((EntityImpl)entity).EcsId);
 
+    public G.IEntityCommands EntityById(ulong id) => new EntityCommandsImpl(ctx, id);
+
     // Typed spawn — components cross as native records (no JSON registry).
     public G.IEntityCommands SpawnTyped(ReadOnlySpan<WitApp.ComponentValue> bundle)
     {
@@ -212,6 +216,9 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
     // Input override — consume a mouse button this frame. The lib owns no input
     // model; route to the host's hook (no-op if the host didn't wire one).
     public void InputConsumeMouse(byte button) => ctx.ConsumeMouse?.Invoke(button);
+
+    // Keyboard half of the input override — same routing (no-op if unwired).
+    public void InputConsumeKeyboard(uint key) => ctx.ConsumeKeyboard?.Invoke(key);
 
     // Emit a host-registered custom event by name. Fires as a typed host trigger
     // (On<T>), so host systems and any mod observing `custom(name)` both receive
@@ -264,6 +271,8 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity) : G.IEntity
 internal struct EntityImpl(ModHostContext ctx, ulong ecsId) : G.IEntity
 {
     public ulong EcsId => ecsId;
+
+    public ulong Id() => ecsId;
 
     public G.IEntity? Parent()
     {

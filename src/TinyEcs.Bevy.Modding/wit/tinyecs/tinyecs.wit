@@ -76,6 +76,12 @@ interface app {
 		spawn: func(bundle: bundle) -> entity-commands;
 		entity: func(entity: borrow<entity>) -> entity-commands;
 
+		/// Get an entity-commands handle for an entity by its raw id (the value
+		/// `entity::id` returns). Lets a mod queue edits against an entity it only
+		/// holds the u64 for (e.g. one resolved via cuo:net/resolve-serial) without
+		/// an `entity` handle.
+		entity-by-id: func(id: u64) -> entity-commands;
+
 		/// TYPED spawn: components cross as native records (no JSON), via the
 		/// component-value variant. The core UI set is migrating off the string
 		/// bundle to this. Coexists with `spawn` during the migration.
@@ -99,6 +105,13 @@ interface app {
 		/// button before gameplay reads it. (Keyboard consume needs library
 		/// support and is a follow-up.)
 		input-consume-mouse: func(button: u8);
+
+		/// Consume a keyboard key this frame so host gameplay ignores it (the
+		/// keyboard half of input-consume-mouse). `key` is the platform key code
+		/// (host casts it to its native Keys). Honored everywhere the host checks
+		/// the keyboard consume flag; call from a pre-update system to take the key
+		/// before gameplay reads it.
+		input-consume-keyboard: func(key: u32);
 
 		/// Emit a host-registered custom event by name (entity 0 = global). The
 		/// host fires it as a typed trigger, so host systems and any mod observing
@@ -124,6 +137,10 @@ interface app {
 
 	/// An entity identifier handle.
 	resource entity {
+		/// The raw entity id (a stable u64). Pair with commands::entity-by-id to
+		/// queue edits against an entity a mod stored the id for across frames.
+		id: func() -> u64;
+
 		/// Parent in the UI/scene tree (none for a root). Lets mods navigate
 		/// any gump generically — no per-gump host cooperation.
 		parent: func() -> option<entity>;

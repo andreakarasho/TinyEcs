@@ -50,12 +50,72 @@ internal sealed class ModRuntime
     // Observer fires buffered by host global observers, drained by FlushObservers
     // at a safe point (end of frame) so guest callbacks can mutate via the bridge.
     public readonly Queue<(string Name, ulong Entity, string Json)> ObserverFires = new();
+    // Presence of a host-called guest export, by name (true=present, false=absent).
+    // GetFunction throws on a missing export and does NOT cache the miss, so we cache
+    // it here to keep ModRuntimes.AnyReturnsTrue exception-free on the hot path.
+    // Cleared on reload (the fresh instance may export a different set).
+    public readonly Dictionary<string, bool> ExportPresence = new();
 }
 
-internal sealed class ModRuntimes
+/// Loaded mod runtimes (public so a host can drive synchronous guest calls — e.g.
+/// a packet filter the host must consult inline). Fields stay internal; the host
+/// uses the methods.
+public sealed class ModRuntimes
 {
-    public Engine Engine = null!;
-    public readonly List<ModRuntime> Runtimes = new();
+    internal Engine Engine = null!;
+    internal readonly List<ModRuntime> Runtimes = new();
+
+    /// Invoke a guest export `name(id: u8, data: list&lt;u8&gt;) -> bool` on every
+    /// ENABLED mod that exports it; returns true if ANY returned true. Mods without
+    /// the export are skipped (presence probed once per mod, miss cached — no
+    /// per-call throw). Synchronous: call ONLY from a SingleThreaded host system, so
+    /// it never re-enters a mod instance mid-call. Allocates only for mods that
+    /// actually export `name`.
+    public bool AnyReturnsTrue(string name, byte id, ReadOnlySpan<byte> data)
+    {
+        var result = false;
+        Span<ComponentValue> args = stackalloc ComponentValue[2];
+        foreach (var rt in Runtimes)
+        {
+            if (!rt.Enabled || !HasExport(rt, name))
+                continue;
+
+            var idVal = ComponentValue.CreateByte(id);
+            var lb = new ListBuilder(data.Length);
+            for (var i = 0; i < data.Length; i++)
+                lb[i] = ComponentValue.CreateByte(data[i]);
+            var listVal = ComponentValue.CreateList(lb, externallyOwned: false);
+
+            args[0] = idVal;
+            args[1] = listVal;
+            try
+            {
+                using var res = rt.Instance.Call(name, 1, args);
+                if (res.Length > 0 && res[0].ToBoolean())
+                    result = true;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("[ecs-mod] hook '{0}' on '{1}' failed: {2}", name, rt.Manifest.Name, e.Message);
+            }
+            finally
+            {
+                idVal.Dispose(rt.Store);
+                listVal.Dispose(rt.Store);
+            }
+        }
+        return result;
+    }
+
+    private static bool HasExport(ModRuntime rt, string name)
+    {
+        if (rt.ExportPresence.TryGetValue(name, out var has))
+            return has;
+        try { rt.Instance.GetFunction(name); has = true; }
+        catch { has = false; }
+        rt.ExportPresence[name] = has;
+        return has;
+    }
 }
 
 /// One loaded mod's host-visible state. Enabled flips as the host enables/disables
@@ -423,6 +483,8 @@ public readonly struct ModdingPlugin : IPlugin
         rt.Ctx.SystemsByStage.Clear();
         rt.Ctx.Observers.Clear();
         rt.Ctx.ChildrenQuery = null;
+        // Fresh instance — re-probe which exports it has (e.g. on-incoming-packet).
+        rt.ExportPresence.Clear();
 
         // Fresh store (fresh WASI state); REUSE rt.Linker + rt.Imports (no re-Define).
         var store = new Store(runtimes.Engine);

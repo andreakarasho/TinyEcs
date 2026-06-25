@@ -68,6 +68,37 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
         => app.AddObserver<OnRemove<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo)));
 }
 
+/// Presence-only component exposure: a mod queries `with <path>` to FIND the entity
+/// (and may despawn it), but the struct's contents are NOT serialized — get() returns
+/// "{}" and set is a no-op. For markers whose raw struct can't cross STJ (holds a
+/// Dictionary / HashSet / engine ref) or whose internals aren't meaningful to a mod,
+/// and for zero-size tags (World.Get on a tag has no data to read — would panic).
+public sealed class ModPresence<T> : IModComponent where T : struct
+{
+    private Query? _query;
+
+    public bool Has(World world, ulong entity) => world.Has<T>(entity);
+
+    public void CollectEntities(World world, ref PooledList<ulong> into)
+    {
+        var q = _query ??= world.QueryBuilder().With<T>().Build();
+        var it = q.Iter();
+        while (it.Next())
+            foreach (var ev in it.Entities())
+                into.Add(ev.ID);
+    }
+
+    public string GetJson(World world, ulong entity) => "{}";
+    public void SetJson(World world, ulong entity, string json) { }
+    public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
+
+    public void RegisterInsertObserver(App app, Action<ulong, string> onFire)
+        => app.AddObserver<OnInsert<T>>(t => onFire(t.EntityId, "{}"));
+
+    public void RegisterRemoveObserver(App app, Action<ulong, string> onFire)
+        => app.AddObserver<OnRemove<T>>(t => onFire(t.EntityId, "{}"));
+}
+
 /// One registered singleton resource, keyed by WIT type-path. Mirrors
 /// IModComponent but operates on App-owned Res<T> instead of per-entity columns.
 public interface IModResource
