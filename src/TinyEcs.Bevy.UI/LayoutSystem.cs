@@ -188,7 +188,10 @@ internal static class LayoutSystem
 				var (_, wrapPtr) = q.TextWraps.Get(entityId);
 				tcfg.WrapMode = (TextWrapMode)wrapPtr.Ref.Kind;
 			}
-			ctx.AddText((textPtr.Ref.Value ?? string.Empty).AsSpan(), tcfg);
+			// Pass the string directly (not .AsSpan()): Clay's string overload
+			// stores the reference instead of copying the span into a fresh
+			// string every frame (immediate-mode runs this per text node/frame).
+			ctx.AddText(textPtr.Ref.Value ?? string.Empty, tcfg);
 		}
 
 		if (q.Children.Contains(entityId))
