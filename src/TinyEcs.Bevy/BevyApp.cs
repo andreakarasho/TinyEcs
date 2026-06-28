@@ -377,7 +377,17 @@ public class SystemDescriptor
 
 	public bool ShouldRun(TinyEcs.World world)
 	{
-		return RunConditions.All(condition => condition(world));
+		// Plain loop, NOT RunConditions.All(c => c(world)): that lambda captures
+		// `world` (a per-call closure) and the delegate handed to LINQ .All is a
+		// Func<Func<World,bool>,bool> — both allocated for EVERY system EVERY
+		// frame (~49 MB/s in profiling). This path is the hottest in the engine.
+		var conditions = RunConditions;
+		for (var i = 0; i < conditions.Count; i++)
+		{
+			if (!conditions[i](world))
+				return false;
+		}
+		return true;
 	}
 }
 
@@ -454,6 +464,10 @@ public class App
 	private readonly AppState _appState = new();
 	private readonly ThreadingMode _threadingMode;
 	private readonly bool _multipleProcessors;
+	// Lazily created on the first parallel batch, so Single-mode apps never
+	// spawn worker threads. Workers are background threads — safe to leave
+	// unreaped at process exit; call Dispose via App teardown if one exists.
+	private ParallelSystemExecutor? _parallelExecutor;
 	internal readonly Dictionary<Stage, StageRuntime> _stageRuntimes = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
@@ -1175,14 +1189,12 @@ public class App
 			}
 			else
 			{
-				// Multiple systems - run in parallel
-				Parallel.ForEach(batch, descriptor =>
-				{
-					if (descriptor.ShouldRun(_world))
-					{
-						descriptor.System.Run(_world);
-					}
-				});
+				// Multiple systems - run in parallel via the persistent worker
+				// pool. NOT Parallel.ForEach: that allocated TaskReplicator /
+				// RangeWorker / Task scaffolding + a capturing closure every
+				// frame (~80% of frame-time GC garbage in profiling). The pool
+				// reuses its sync primitives across calls -> zero steady-state alloc.
+				(_parallelExecutor ??= new ParallelSystemExecutor()).Run(batch, _world);
 			}
 		}
 		_world.EndDeferred();
