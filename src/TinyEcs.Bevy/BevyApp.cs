@@ -389,6 +389,40 @@ public class SystemDescriptor
 		}
 		return true;
 	}
+
+	// --- profiling (opt-in via SystemProfiler.Enabled) ---
+	// A descriptor runs at most once per frame and never on two threads at once
+	// (it lives in exactly one parallel batch), so these counters are written by
+	// a single thread per frame — no locking needed.
+	public long ProfTicks;
+	public long ProfCalls;
+	public long ProfMaxTicks;
+
+	// Owning App, stamped at registration — lets RunProfiled fetch the SystemProfiler resource.
+	internal App? App;
+
+	/// <summary>Readable label for the profile table: explicit Label, else the stamped system name, else the impl type.</summary>
+	public string ProfName => Label ?? (System as ParameterizedSystem)?.Name ?? System.GetType().Name;
+
+	/// <summary>Runs the system, timing it when the SystemProfiler resource is Enabled. Resource fetch + bool check when off.</summary>
+	public void RunProfiled(TinyEcs.World world)
+	{
+		// Plain Res: fetch the profiler resource per run (App always registers it).
+		var profiler = App?.GetResource<SystemProfiler>();
+		if (profiler is not { Enabled: true })
+		{
+			System.Run(world);
+			return;
+		}
+
+		var start = global::System.Diagnostics.Stopwatch.GetTimestamp();
+		System.Run(world);
+		var dt = global::System.Diagnostics.Stopwatch.GetTimestamp() - start;
+		ProfTicks += dt;
+		ProfCalls++;
+		if (dt > ProfMaxTicks)
+			ProfMaxTicks = dt;
+	}
 }
 
 // ============================================================================
@@ -502,6 +536,10 @@ public class App
 		AddStage(Stage.Update).After(Stage.PreUpdate);
 		AddStage(Stage.PostUpdate).After(Stage.Update);
 		AddStage(Stage.Last).After(Stage.PostUpdate);
+
+		// Core profiling resource (opt-in via TINYECS_PROFILE / the Enabled field).
+		// Always registered so Res/ResMut<SystemProfiler> resolves in any consumer.
+		AddResource(new SystemProfiler());
 	}
 
 	/// <summary>
@@ -892,7 +930,7 @@ public class App
 		if (system is ParameterizedSystem ps)
 			ps.SetApp(this);
 
-		var descriptor = new SystemDescriptor(system);
+		var descriptor = new SystemDescriptor(system) { App = this };
 		var previous = _previousSystem;
 		_previousSystem = descriptor;
 		return (descriptor, previous);
@@ -1126,6 +1164,80 @@ public class App
 
 		ProcessStateTransitions();
 		ProcessEvents();
+
+		if (!startup)
+		{
+			var profiler = GetResource<SystemProfiler>();
+			if (profiler.Enabled)
+				ReportSystemProfileIfDue(profiler);
+		}
+	}
+
+	private long _profNextReportTs;
+
+	/// <summary>
+	/// Every <see cref="SystemProfiler.ReportIntervalSeconds"/>, dumps a table of
+	/// per-system CPU (total / avg / max ms, call count) sorted by total, then
+	/// resets the counters for the next window. No-op until the interval elapses.
+	/// </summary>
+	private void ReportSystemProfileIfDue(SystemProfiler profiler)
+	{
+		var freq = global::System.Diagnostics.Stopwatch.Frequency;
+		var now = global::System.Diagnostics.Stopwatch.GetTimestamp();
+		if (_profNextReportTs == 0)
+		{
+			_profNextReportTs = now + (long)(profiler.ReportIntervalSeconds * freq);
+			return;
+		}
+		if (now < _profNextReportTs)
+			return;
+		_profNextReportTs = now + (long)(profiler.ReportIntervalSeconds * freq);
+
+		var msPerTick = 1000.0 / freq;
+		var rows = new List<(string name, string stage, double total, double avg, double max, long calls)>();
+		foreach (var (stage, runtime) in _stageRuntimes)
+		{
+			foreach (var d in runtime.Systems)
+			{
+				if (d.ProfCalls == 0)
+					continue;
+				var total = d.ProfTicks * msPerTick;
+				rows.Add((d.ProfName, stage.Name, total, total / d.ProfCalls, d.ProfMaxTicks * msPerTick, d.ProfCalls));
+				d.ProfTicks = 0;
+				d.ProfCalls = 0;
+				d.ProfMaxTicks = 0;
+			}
+		}
+		rows.Sort((a, b) => b.total.CompareTo(a.total));
+
+		var sb = new System.Text.StringBuilder();
+		sb.Append("[system-profile] window=").Append(profiler.ReportIntervalSeconds.ToString("0.0"))
+		  .Append("s  systems by total CPU (top ").Append(profiler.TopN == 0 ? rows.Count : profiler.TopN).Append("):\n");
+		sb.Append("    total ms |   avg ms |   max ms |   calls | system\n");
+		var shown = 0;
+		foreach (var r in rows)
+		{
+			if (profiler.TopN > 0 && shown >= profiler.TopN)
+				break;
+			shown++;
+			sb.Append(r.total.ToString("0.00").PadLeft(12)).Append(" | ")
+			  .Append(r.avg.ToString("0.000").PadLeft(8)).Append(" | ")
+			  .Append(r.max.ToString("0.000").PadLeft(8)).Append(" | ")
+			  .Append(r.calls.ToString().PadLeft(7)).Append(" | ")
+			  .Append(r.name).Append(" [").Append(r.stage).Append("]\n");
+		}
+		sb.Append("  layout: roots=").Append(profiler.LayoutRoots)
+		  .Append(" nodes=").Append(profiler.LayoutNodes)
+		  .Append(" culled(Display.None)=").Append(profiler.LayoutCulled)
+		  .Append("  | walk=").Append((profiler.LayoutWalkTicks * msPerTick).ToString("0.000"))
+		  .Append("ms solve=").Append((profiler.LayoutSolveTicks * msPerTick).ToString("0.000"))
+		  .Append("ms | build=").Append((profiler.LayoutBuildTicks * msPerTick).ToString("0.000"))
+		  .Append("ms config=").Append((profiler.LayoutConfigTicks * msPerTick).ToString("0.000")).Append("ms (last frame)\n");
+		var table = sb.ToString();
+		if (HasResource<SystemProfileReport>())
+			GetResource<SystemProfileReport>().Publish(table);
+		else
+			global::System.Console.WriteLine(table);
 	}
 
 	/// <summary>
@@ -1162,7 +1274,7 @@ public class App
 			{
 				if (descriptor.ShouldRun(_world))
 				{
-					descriptor.System.Run(_world);
+					descriptor.RunProfiled(_world);
 				}
 			}
 			_world.EndDeferred();
@@ -1184,7 +1296,7 @@ public class App
 				var descriptor = batch[0];
 				if (descriptor.ShouldRun(_world))
 				{
-					descriptor.System.Run(_world);
+					descriptor.RunProfiled(_world);
 				}
 			}
 			else

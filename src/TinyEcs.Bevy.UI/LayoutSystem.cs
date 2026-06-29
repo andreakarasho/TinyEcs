@@ -84,7 +84,8 @@ internal static class LayoutSystem
 		UiLayoutQueries q,
 		Query<Data<ScrollPosition>> scrollPositions,
 		Local<HashSet<ulong>> liveScrollIds,
-		Local<List<ulong>> scrollPruneBuffer)
+		Local<List<ulong>> scrollPruneBuffer,
+		SystemProfiler profiler)
 	{
 		ref var c = ref ctx.Value;
 		Clay.Clay.SetContext(c.Context);
@@ -107,10 +108,34 @@ internal static class LayoutSystem
 		c.ClayToEntity.Clear();
 		c.ScrollClayToEntity.Clear();
 
+		if (profiler.Enabled)
+		{
+			profiler.LayoutRoots = 0;
+			profiler.LayoutNodes = 0;
+			profiler.LayoutCulled = 0;
+			profiler.LayoutBuildTicks = 0;
+			profiler.LayoutConfigTicks = 0;
+		}
+
+		var walkStart = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+
 		foreach (var (entityId, node) in roots)
-			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s, inheritedZ: 0);
+		{
+			if (profiler.Enabled)
+				profiler.LayoutRoots++;
+			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s, inheritedZ: 0, profiler);
+		}
+
+		var solveStart = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 
 		var cmds = Clay.Clay.EndLayout();
+
+		if (profiler.Enabled)
+		{
+			var solveEnd = System.Diagnostics.Stopwatch.GetTimestamp();
+			profiler.LayoutWalkTicks = solveStart - walkStart;
+			profiler.LayoutSolveTicks = solveEnd - solveStart;
+		}
 		if (c.LastCommandsBuffer.Length < cmds.Length)
 			c.LastCommandsBuffer = new RenderCommand[Math.Max(cmds.Length, c.LastCommandsBuffer.Length * 2)];
 		cmds.CopyTo(c.LastCommandsBuffer);
@@ -145,10 +170,17 @@ internal static class LayoutSystem
 		}
 	}
 
-	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ)
+	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ, SystemProfiler profiler)
 	{
 		if (node.Display == Display.None)
+		{
+			if (profiler.Enabled)
+				profiler.LayoutCulled++;
 			return;
+		}
+
+		if (profiler.Enabled)
+			profiler.LayoutNodes++;
 
 		// Resolve the z once here so it can be both applied to this element and
 		// threaded down to children. An element with no z of its own inherits
@@ -157,35 +189,43 @@ internal static class LayoutSystem
 		// absolute element as an independent float root by z, equal z keeping
 		// DFS order). Backward-compatible: an element that sets its own z is
 		// unchanged.
+		var tBuild = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 		int resolvedZ = ResolveZ(entityId, q, inheritedZ);
 
 		var decl = BuildDecl(entityId, parentId, in node, q, scale, resolvedZ);
+		if (profiler.Enabled)
+			profiler.LayoutBuildTicks += System.Diagnostics.Stopwatch.GetTimestamp() - tBuild;
+
 		var ctx = Clay.Clay.Context!;
 		ctx.OpenElement();
+
+		var tConfig = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 		ctx.ConfigureOpenElement(decl);
+		if (profiler.Enabled)
+			profiler.LayoutConfigTicks += System.Diagnostics.Stopwatch.GetTimestamp() - tConfig;
 		c.ClayToEntity[decl.Id.Id] = entityId;
 		if (node.Overflow == Overflow.Scroll)
 			c.ScrollClayToEntity[decl.Id.Id] = entityId;
 
-		if (q.Texts.Contains(entityId))
+		if (q.Texts.TryGet(entityId, out var textData))
 		{
-			var (_, textPtr) = q.Texts.Get(entityId);
+			var (_, textPtr) = textData;
 			var tcfg = TextConfig.Default;
-			if (q.TextFonts.Contains(entityId))
+			if (q.TextFonts.TryGet(entityId, out var fontData))
 			{
-				var (_, fontPtr) = q.TextFonts.Get(entityId);
+				var (_, fontPtr) = fontData;
 				tcfg.FontId = fontPtr.Ref.FontId;
 				if (fontPtr.Ref.Size > 0)
 					tcfg.FontSize = (ushort)MathF.Max(1, fontPtr.Ref.Size * scale);
 			}
-			if (q.TextColors.Contains(entityId))
+			if (q.TextColors.TryGet(entityId, out var colorData))
 			{
-				var (_, colorPtr) = q.TextColors.Get(entityId);
+				var (_, colorPtr) = colorData;
 				tcfg.TextColor = colorPtr.Ref.Value;
 			}
-			if (q.TextWraps.Contains(entityId))
+			if (q.TextWraps.TryGet(entityId, out var wrapData))
 			{
-				var (_, wrapPtr) = q.TextWraps.Get(entityId);
+				var (_, wrapPtr) = wrapData;
 				tcfg.WrapMode = (TextWrapMode)wrapPtr.Ref.Kind;
 			}
 			// Pass the string directly (not .AsSpan()): Clay's string overload
@@ -194,16 +234,16 @@ internal static class LayoutSystem
 			ctx.AddText(textPtr.Ref.Value ?? string.Empty, tcfg);
 		}
 
-		if (q.Children.Contains(entityId))
+		if (q.Children.TryGet(entityId, out var childrenData))
 		{
-			var (_, childrenPtr) = q.Children.Get(entityId);
+			var (_, childrenPtr) = childrenData;
 			ref var children = ref childrenPtr.Ref;
 			foreach (var childId in children)
 			{
-				if (!q.Nodes.Contains(childId))
+				if (!q.Nodes.TryGet(childId, out var childNodeData))
 					continue;
-				var (_, childNodePtr) = q.Nodes.Get(childId);
-				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale, resolvedZ);
+				var (_, childNodePtr) = childNodeData;
+				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale, resolvedZ, profiler);
 			}
 		}
 
@@ -213,14 +253,14 @@ internal static class LayoutSystem
 	// Own z wins; absent z inherits the ancestor's (threaded down the walk).
 	private static int ResolveZ(ulong entityId, UiLayoutQueries q, int inheritedZ)
 	{
-		if (q.GlobalZIndexes.Contains(entityId))
+		if (q.GlobalZIndexes.TryGet(entityId, out var gz))
 		{
-			var (_, p) = q.GlobalZIndexes.Get(entityId);
+			var (_, p) = gz;
 			return p.Ref.Value;
 		}
-		if (q.ZIndexes.Contains(entityId))
+		if (q.ZIndexes.TryGet(entityId, out var z))
 		{
-			var (_, p) = q.ZIndexes.Get(entityId);
+			var (_, p) = z;
 			return p.Ref.Value;
 		}
 		return inheritedZ;
@@ -257,21 +297,21 @@ internal static class LayoutSystem
 		if (node.Overflow == Overflow.Scroll)
 			decl.Scroll = ScrollConfig.VerticalScroll;
 
-		if (q.Backgrounds.Contains(entityId))
+		if (q.Backgrounds.TryGet(entityId, out var bg))
 		{
-			var (_, p) = q.Backgrounds.Get(entityId);
+			var (_, p) = bg;
 			decl.BackgroundColor = p.Ref.Value;
 		}
 
-		if (q.BorderRadii.Contains(entityId))
+		if (q.BorderRadii.TryGet(entityId, out var br))
 		{
-			var (_, p) = q.BorderRadii.Get(entityId);
+			var (_, p) = br;
 			decl.CornerRadius = ClayMap.ToCornerRadius(p.Ref, scale);
 		}
 
-		if (q.BorderColors.Contains(entityId))
+		if (q.BorderColors.TryGet(entityId, out var bc))
 		{
-			var (_, p) = q.BorderColors.Get(entityId);
+			var (_, p) = bc;
 			decl.Border = new BorderConfig
 			{
 				Color = p.Ref.Value,
@@ -279,9 +319,9 @@ internal static class LayoutSystem
 			};
 		}
 
-		if (q.Shadows.Contains(entityId))
+		if (q.Shadows.TryGet(entityId, out var sh))
 		{
-			var (_, p) = q.Shadows.Get(entityId);
+			var (_, p) = sh;
 			decl.Shadow = new ShadowConfig
 			{
 				Color = p.Ref.Color,
@@ -292,9 +332,9 @@ internal static class LayoutSystem
 			};
 		}
 
-		if (q.Images.Contains(entityId))
+		if (q.Images.TryGet(entityId, out var img))
 		{
-			var (_, p) = q.Images.Get(entityId);
+			var (_, p) = img;
 			decl.Image = new ImageConfig
 			{
 				ImageData = p.Ref.ImageData,
@@ -304,9 +344,9 @@ internal static class LayoutSystem
 			};
 		}
 
-		if (q.Customs.Contains(entityId))
+		if (q.Customs.TryGet(entityId, out var cu))
 		{
-			var (_, p) = q.Customs.Get(entityId);
+			var (_, p) = cu;
 			decl.Custom = CustomConfig.Create(p.Ref.Data);
 		}
 
@@ -322,9 +362,9 @@ internal static class LayoutSystem
 			// Parent's ComputedNode.Size is already in scaled (Clay-output) pixels,
 			// so we compare child dimensions in the same space.
 			float parentW = 0f, parentH = 0f;
-			if ((useRight || useBottom) && parentId != 0 && q.Computed.Contains(parentId))
+			if ((useRight || useBottom) && parentId != 0 && q.Computed.TryGet(parentId, out var pcData))
 			{
-				var (_, pc) = q.Computed.Get(parentId);
+				var (_, pc) = pcData;
 				parentW = pc.Ref.Size.X;
 				parentH = pc.Ref.Size.Y;
 			}

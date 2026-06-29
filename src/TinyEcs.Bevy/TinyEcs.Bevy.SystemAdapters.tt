@@ -34,7 +34,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(<#= callbackParams #>),
 			<#= callbackParams #>
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 <#

@@ -101,7 +101,7 @@ internal sealed class ParallelSystemExecutor : IDisposable
 		{
 			var d = batch[i];
 			if (d.ShouldRun(world))
-				d.System.Run(world);
+				d.RunProfiled(world);
 		}
 	}
 

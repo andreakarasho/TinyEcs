@@ -47,8 +47,9 @@ public sealed class UiPlugin : IPlugin
 			UiLayoutQueries q,
 			Query<Data<ScrollPosition>> scrolls,
 			Local<HashSet<ulong>> liveIds,
-			Local<List<ulong>> pruneBuf) =>
-			LayoutSystem.Run(s, scale, c, time, roots, q, scrolls, liveIds, pruneBuf))
+			Local<List<ulong>> pruneBuf,
+			ResMut<SystemProfiler> prof) =>
+			LayoutSystem.Run(s, scale, c, time, roots, q, scrolls, liveIds, pruneBuf, prof.Value))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,

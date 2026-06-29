@@ -12,7 +12,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1),
 			p1
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2>(Action<T1, T2> systemFn)
@@ -22,7 +22,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2),
 			p1, p2
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3>(Action<T1, T2, T3> systemFn)
@@ -32,7 +32,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3),
 			p1, p2, p3
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4>(Action<T1, T2, T3, T4> systemFn)
@@ -42,7 +42,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4),
 			p1, p2, p3, p4
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5>(Action<T1, T2, T3, T4, T5> systemFn)
@@ -52,7 +52,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5),
 			p1, p2, p3, p4, p5
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6>(Action<T1, T2, T3, T4, T5, T6> systemFn)
@@ -62,7 +62,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6),
 			p1, p2, p3, p4, p5, p6
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7>(Action<T1, T2, T3, T4, T5, T6, T7> systemFn)
@@ -72,7 +72,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7),
 			p1, p2, p3, p4, p5, p6, p7
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8>(Action<T1, T2, T3, T4, T5, T6, T7, T8> systemFn)
@@ -82,7 +82,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8),
 			p1, p2, p3, p4, p5, p6, p7, p8
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9> systemFn)
@@ -92,7 +92,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> systemFn)
@@ -102,7 +102,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> systemFn)
@@ -112,7 +112,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> systemFn)
@@ -122,7 +122,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> systemFn)
@@ -132,7 +132,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> systemFn)
@@ -142,7 +142,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> systemFn)
@@ -152,7 +152,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 	public static ISystem Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16>(Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16> systemFn)
@@ -162,7 +162,7 @@ public static class SystemFunctionAdapters
 		return new ParameterizedSystem(
 			world => systemFn(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16),
 			p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16
-		);
+		) { Name = SystemName.Of(systemFn) };
 	}
 
 }

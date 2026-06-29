@@ -1468,6 +1468,9 @@ public ref struct BevyQueryIter<TQueryData, TQueryFilter>
 
 public class ParameterizedSystem : ISystem
 {
+	/// <summary>Readable "Type.Method" label of the wrapped user delegate, stamped by the adapter. Used by <see cref="SystemProfiler"/>.</summary>
+	public string? Name;
+
 	private readonly Action<TinyEcs.World> _systemFn;
 	private readonly ISystemParam[] _parameters;
 	private bool _initialized = false;
