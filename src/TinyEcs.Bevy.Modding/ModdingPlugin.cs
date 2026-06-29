@@ -22,7 +22,6 @@ using TinyEcs.Bevy;
 using TinyEcs.Bevy.UI;
 using TinyEcs.Collections;
 using Wasmtime;
-using G = Wit.Tinyecs.Modding.GuestImports;
 using WitApp = Wit.Tinyecs.Modding.App;
 
 namespace TinyEcs.Bevy.Modding;
@@ -30,11 +29,8 @@ namespace TinyEcs.Bevy.Modding;
 internal sealed class ModRuntime
 {
     public ModManifest Manifest = null!;
-    public Linker Linker = null!;
-    public Store Store = null!;
-    public ComponentInstance Instance = null!;
-    public GuestBridge Imports = null!;
-    public Wit.Tinyecs.Modding.GuestExports Exports = null!;
+    // The runtime-backed mod instance (wasmtime today; backend chosen by config).
+    public IModInstance Instance = null!;
     public ModHostContext Ctx = null!;
     // Lifecycle (host enable/disable/reload via ModControl). Disabled mods are
     // skipped by the per-stage runner; Slot scopes their entities for teardown;
@@ -42,80 +38,40 @@ internal sealed class ModRuntime
     public bool Enabled = true;
     public int Slot;
     public string WasmPath = "";
-    // Reused per CallSystem: the ArrayPool-rented query snapshots in flight for
-    // one system call, returned in CallSystem's finally after the wasm Call.
-    // Safe to share (one buffer per runtime): the stage runners are
-    // SingleThreaded and CallSystem is never re-entered during Instance.Call.
-    public readonly List<ulong[]> SnapshotScratch = new();
     // Observer fires buffered by host global observers, drained by FlushObservers
     // at a safe point (end of frame) so guest callbacks can mutate via the bridge.
     public readonly Queue<(string Name, ulong Entity, string Json)> ObserverFires = new();
-    // Presence of a host-called guest export, by name (true=present, false=absent).
-    // GetFunction throws on a missing export and does NOT cache the miss, so we cache
-    // it here to keep ModRuntimes.AnyReturnsTrue exception-free on the hot path.
-    // Cleared on reload (the fresh instance may export a different set).
-    public readonly Dictionary<string, bool> ExportPresence = new();
 }
 
-/// Loaded mod runtimes (public so a host can drive synchronous guest calls — e.g.
-/// a packet filter the host must consult inline). Fields stay internal; the host
-/// uses the methods.
+/// One loaded mod as a host sees it, for hosts that must call a guest export inline
+/// (outside the per-frame scheduler — e.g. a synchronous predicate hook). The lib owns
+/// normal per-stage dispatch; this is the escape hatch. Meaning-free: the host names the
+/// export and decides what a true return means.
+public readonly struct LoadedMod
+{
+    private readonly ModRuntime _rt;
+    internal LoadedMod(ModRuntime rt) => _rt = rt;
+
+    public bool Enabled => _rt.Enabled;
+    public string Name => _rt.Manifest.Name;
+
+    /// Invoke `export(arg: u8, data: list&lt;u8&gt;) -> bool` on this mod; false if absent.
+    public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
+        => _rt.Instance.TryInvokeBoolExport(export, arg, data);
+}
+
+/// Loaded mod runtimes (public so a host can drive synchronous guest calls — see
+/// LoadedMod). Fields stay internal; the host iterates via Count + the indexer. Calls
+/// here re-enter a mod instance, so drive them ONLY from a SingleThreaded host system.
 public sealed class ModRuntimes
 {
-    internal Engine Engine = null!;
+    internal IModBackend Backend = null!;
     internal readonly List<ModRuntime> Runtimes = new();
 
-    /// Invoke a guest export `name(id: u8, data: list&lt;u8&gt;) -> bool` on every
-    /// ENABLED mod that exports it; returns true if ANY returned true. Mods without
-    /// the export are skipped (presence probed once per mod, miss cached — no
-    /// per-call throw). Synchronous: call ONLY from a SingleThreaded host system, so
-    /// it never re-enters a mod instance mid-call. Allocates only for mods that
-    /// actually export `name`.
-    public bool AnyReturnsTrue(string name, byte id, ReadOnlySpan<byte> data)
-    {
-        var result = false;
-        Span<ComponentValue> args = stackalloc ComponentValue[2];
-        foreach (var rt in Runtimes)
-        {
-            if (!rt.Enabled || !HasExport(rt, name))
-                continue;
-
-            var idVal = ComponentValue.CreateByte(id);
-            var lb = new ListBuilder(data.Length);
-            for (var i = 0; i < data.Length; i++)
-                lb[i] = ComponentValue.CreateByte(data[i]);
-            var listVal = ComponentValue.CreateList(lb, externallyOwned: false);
-
-            args[0] = idVal;
-            args[1] = listVal;
-            try
-            {
-                using var res = rt.Instance.Call(name, 1, args);
-                if (res.Length > 0 && res[0].ToBoolean())
-                    result = true;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("[ecs-mod] hook '{0}' on '{1}' failed: {2}", name, rt.Manifest.Name, e.Message);
-            }
-            finally
-            {
-                idVal.Dispose(rt.Store);
-                listVal.Dispose(rt.Store);
-            }
-        }
-        return result;
-    }
-
-    private static bool HasExport(ModRuntime rt, string name)
-    {
-        if (rt.ExportPresence.TryGetValue(name, out var has))
-            return has;
-        try { rt.Instance.GetFunction(name); has = true; }
-        catch { has = false; }
-        rt.ExportPresence[name] = has;
-        return has;
-    }
+    /// Loaded mods in load order (index stable, matches the control list). Iterate with
+    /// a plain for-loop — LoadedMod is a struct, so no per-call allocation in hot paths.
+    public int Count => Runtimes.Count;
+    public LoadedMod this[int index] => new(Runtimes[index]);
 }
 
 /// One loaded mod's host-visible state. Enabled flips as the host enables/disables
@@ -154,6 +110,9 @@ public sealed class ModdingConfig
     /// Components + resources the host exposes to mods, keyed by WIT type-path.
     public ModComponentRegistry Registry = new();
 
+    /// Which wasm runtime hosts the mods. Wasmtime (native) is the desktop default.
+    public WasmBackend Backend = WasmBackend.Wasmtime;
+
     /// Folder (relative to the exe + cwd) scanned for *.wasm component mods.
     public string ModFolder = "ecs-mods";
 
@@ -161,6 +120,7 @@ public sealed class ModdingConfig
     /// is defined and before the component is instantiated. Use to `Define` extra
     /// game-specific linker imports (other WIT packages a mod consumes) and to
     /// wire host capabilities onto the ModHostContext (e.g. ConsumeMouse).
+    /// Wasmtime backend only.
     public readonly List<Action<Linker, ModHostContext>> PerMod = new();
 }
 
@@ -285,40 +245,27 @@ public readonly struct ModdingPlugin : IPlugin
 
         var world = appRes.Value.GetWorld();
         var runtimes = runtimesRes.Value;
-        runtimes.Engine = new Engine();
+        runtimes.Backend = config.Backend switch
+        {
+            WasmBackend.Wasmtime => new WasmtimeModBackend(config.PerMod),
+            _ => throw new NotSupportedException($"mod backend {config.Backend} is not implemented"),
+        };
 
+        var failedMods = new List<string>();
         foreach (var (manifest, file) in mods)
         {
             try
             {
                 var slot = runtimes.Runtimes.Count;
                 var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot };
-                var linker = new Linker(runtimes.Engine);
-                linker.AddWasiP2();
-                var imports = new GuestBridge(ctx);
-                linker.Define(imports);
-                // Host-specific imports + per-mod context wiring (game bridges, input).
-                foreach (var hook in config.PerMod)
-                    hook(linker, ctx);
 
-                var store = new Store(runtimes.Engine);
-                store.AddWasiP2(inheritStdout: true, inheritStderr: true);
-
-                var component = Component.Compile(runtimes.Engine, File.ReadAllBytes(file));
-                var instance = store.GetComponentInstance(component, linker);
-                var exports = new Wit.Tinyecs.Modding.GuestExports(instance, store);
-
-                var appHandle = imports.RegisterApp(new AppImpl(ctx));
-                exports.Setup(appHandle);
+                var instance = runtimes.Backend.Load(File.ReadAllBytes(file), ctx);
+                instance.Setup();
 
                 var rt = new ModRuntime
                 {
                     Manifest = manifest,
-                    Linker = linker,
-                    Store = store,
                     Instance = instance,
-                    Imports = imports,
-                    Exports = exports,
                     Ctx = ctx,
                     Slot = slot,
                     WasmPath = file,
@@ -337,9 +284,14 @@ public readonly struct ModdingPlugin : IPlugin
             }
             catch (Exception e)
             {
+                failedMods.Add(manifest.Name);
                 Console.WriteLine("[ecs-mod] failed to load {0}: {1}", manifest.Name, e);
             }
         }
+
+        Console.WriteLine("[ecs-mod] backend={0}: {1}/{2} mods loaded{3}",
+            config.Backend, runtimes.Runtimes.Count, mods.Length,
+            failedMods.Count > 0 ? $" — FAILED: {string.Join(", ", failedMods)}" : "");
     }
 
     // Read `<dir>/mod.json` and resolve the WASM it names (relative to the mod's
@@ -396,7 +348,7 @@ public readonly struct ModdingPlugin : IPlugin
         {
             try
             {
-                CallSystem(rt, sys);
+                rt.Instance.RunSystem(sys);
             }
             catch (Exception e)
             {
@@ -476,30 +428,16 @@ public readonly struct ModdingPlugin : IPlugin
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
 
-        try { rt.Store.Dispose(); } catch { /* already torn down */ }
-
         // Re-setup repopulates these from the fresh instance's setup() call.
         rt.Ctx.Systems.Clear();
         rt.Ctx.SystemsByStage.Clear();
         rt.Ctx.Observers.Clear();
         rt.Ctx.ChildrenQuery = null;
-        // Fresh instance — re-probe which exports it has (e.g. on-incoming-packet).
-        rt.ExportPresence.Clear();
 
-        // Fresh store (fresh WASI state); REUSE rt.Linker + rt.Imports (no re-Define).
-        var store = new Store(runtimes.Engine);
-        store.AddWasiP2(inheritStdout: true, inheritStderr: true);
+        // Backend tears down + re-instantiates from fresh bytes (reusing host imports)
+        // and re-runs setup, which repopulates ctx.Systems via the guest.
+        rt.Instance.Reload(File.ReadAllBytes(rt.WasmPath));
 
-        var component = Component.Compile(runtimes.Engine, File.ReadAllBytes(rt.WasmPath));
-        var instance = store.GetComponentInstance(component, rt.Linker);
-        var exports = new Wit.Tinyecs.Modding.GuestExports(instance, store);
-
-        var appHandle = rt.Imports.RegisterApp(new AppImpl(rt.Ctx));
-        exports.Setup(appHandle);
-
-        rt.Store = store;
-        rt.Instance = instance;
-        rt.Exports = exports;
         rt.Enabled = true;
         if (info != null) info.Enabled = true;
 
@@ -566,71 +504,22 @@ public readonly struct ModdingPlugin : IPlugin
         while (rt.ObserverFires.Count > 0)
         {
             var (name, entity, json) = rt.ObserverFires.Dequeue();
-            Span<ComponentValue> args = stackalloc ComponentValue[2];
-            args[0] = ComponentValue.CreateUInt64(entity);
-            args[1] = ComponentValue.CreateString(json, true);
             try
             {
-                using var _ = rt.Instance.Call(name, 0, args);
+                rt.Instance.CallObserver(name, entity, json);
             }
             catch (Exception e)
             {
                 Console.WriteLine("[ecs-mod] observer '{0}' failed: {1}", name, e.Message);
             }
-            finally
-            {
-                args[0].Dispose(rt.Store);
-                args[1].Dispose(rt.Store);
-            }
-        }
-    }
-
-    private static void CallSystem(ModRuntime rt, ModSystemSpec sys)
-    {
-        var ctx = rt.Ctx;
-        var count = sys.Params.Count;
-        // Param counts are tiny; stack the common case, heap-fall-back for the rare large one.
-        Span<ComponentValue> vals = count <= 16 ? stackalloc ComponentValue[count] : new ComponentValue[count];
-        rt.SnapshotScratch.Clear();
-
-        for (var i = 0; i < count; i++)
-        {
-            var p = sys.Params[i];
-            if (p.Kind == ModParamKind.Commands)
-            {
-                var h = rt.Imports.RegisterCommands(new CommandsImpl(ctx));
-                vals[i] = ComponentValue.CreateOwnResource(rt.Store, h, G.CommandsTypeId);
-            }
-            else
-            {
-                var snapshot = BuildSnapshot(ctx, p.Query!, out var matched);
-                rt.SnapshotScratch.Add(snapshot);
-                var h = rt.Imports.RegisterQuery(new QueryImpl(ctx, snapshot, matched, p.Query!.Components));
-                vals[i] = ComponentValue.CreateOwnResource(rt.Store, h, G.QueryTypeId);
-            }
-        }
-
-        try
-        {
-            using var _ = rt.Instance.Call(sys.Name, 0, vals);
-        }
-        finally
-        {
-            for (var i = 0; i < count; i++)
-                vals[i].Dispose(rt.Store);
-            // Return query snapshots only AFTER the Call: the guest iterates them
-            // synchronously within Call and drops the resource at fn end. ulong is
-            // unmanaged → no clear needed.
-            foreach (var arr in rt.SnapshotScratch)
-                ArrayPool<ulong>.Shared.Return(arr);
-            rt.SnapshotScratch.Clear();
         }
     }
 
     // Builds the matching-entity snapshot into an ArrayPool-rented buffer (caller
-    // owns it: returned in CallSystem's finally). Returns the buffer; `matched` is
-    // the valid prefix length. `candidates` is method-scoped scratch (PooledList).
-    private static ulong[] BuildSnapshot(ModHostContext ctx, ModQuerySpec q, out int matched)
+    // owns it: returned in the backend's RunSystem finally after the wasm Call).
+    // Returns the buffer; `matched` is the valid prefix length. `candidates` is
+    // method-scoped scratch (PooledList). Runtime-agnostic — used by every backend.
+    internal static ulong[] BuildSnapshot(ModHostContext ctx, ModQuerySpec q, out int matched)
     {
         matched = 0;
 
