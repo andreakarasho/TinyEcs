@@ -26,4 +26,7 @@ public sealed class ModManifest
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ModManifest))]
+// Array variant for IJsModChannel.ListMods() — the Jco backend's discovery
+// returns every available mod's manifest in one JSON array (no filesystem scan).
+[JsonSerializable(typeof(ModManifest[]))]
 internal partial class ModManifestJsonContext : JsonSerializerContext;

@@ -18,24 +18,24 @@ internal sealed class WasmtimeModBackend : IModBackend
     // Game-specific per-mod linker hooks (e.g. cuo:modding/net + ui), defined once
     // per mod after the generic `app` bridge and before instantiation. Reused as-is
     // on reload (the host imports never change between loads).
-    private readonly IReadOnlyList<Action<Linker, ModHostContext>> _perMod;
+    private readonly IReadOnlyList<Action<Linker, ModHostContext>> _perModLinker;
 
-    public WasmtimeModBackend(IReadOnlyList<Action<Linker, ModHostContext>> perMod)
-        => _perMod = perMod;
+    public WasmtimeModBackend(IReadOnlyList<Action<Linker, ModHostContext>> perModLinker)
+        => _perModLinker = perModLinker;
 
-    public IModInstance Load(byte[] wasm, ModHostContext ctx)
+    public IModInstance Load(in ModSource source, ModHostContext ctx)
     {
         var linker = new Linker(_engine);
         linker.AddWasiP2();
         var imports = new GuestBridge(ctx);
         linker.Define(imports);
-        foreach (var hook in _perMod)
+        foreach (var hook in _perModLinker)
             hook(linker, ctx);
 
         var store = new Store(_engine);
         store.AddWasiP2(inheritStdout: true, inheritStderr: true);
 
-        var component = Component.Compile(_engine, wasm);
+        var component = Component.Compile(_engine, source.Bytes!);
         var instance = store.GetComponentInstance(component, linker);
         var exports = new Wit.Tinyecs.Modding.GuestExports(instance, store);
 
@@ -79,7 +79,7 @@ internal sealed class WasmtimeModInstance : IModInstance
 
     public void Setup()
     {
-        var appHandle = _imports.RegisterApp(new AppImpl(_ctx));
+        var appHandle = _imports.RegisterApp(new AppAdapter(new AppImpl(_ctx)));
         _exports.Setup(appHandle);
     }
 
@@ -147,14 +147,14 @@ internal sealed class WasmtimeModInstance : IModInstance
             var p = sys.Params[i];
             if (p.Kind == ModParamKind.Commands)
             {
-                var h = _imports.RegisterCommands(new CommandsImpl(_ctx));
+                var h = _imports.RegisterCommands(new CommandsAdapter(new CommandsImpl(_ctx)));
                 vals[i] = ComponentValue.CreateOwnResource(_store, h, G.CommandsTypeId);
             }
             else
             {
                 var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, out var matched);
                 _snapshotScratch.Add(snapshot);
-                var h = _imports.RegisterQuery(new QueryImpl(_ctx, snapshot, matched, p.Query!.Components));
+                var h = _imports.RegisterQuery(new QueryAdapter(new QueryImpl(_ctx, snapshot, matched, p.Query!.Components)));
                 vals[i] = ComponentValue.CreateOwnResource(_store, h, G.QueryTypeId);
             }
         }
@@ -180,7 +180,7 @@ internal sealed class WasmtimeModInstance : IModInstance
     // fork registers every linker.Define'd function in a STATIC, process-global,
     // never-freed table capped at 1024 — re-Define'ing on reload leaks a full set of
     // slots each time. So we only recompile + instantiate on a fresh Store.
-    public void Reload(byte[] wasm)
+    public void Reload(in ModSource source)
     {
         try { _store.Dispose(); } catch { /* already torn down */ }
         _exportPresence.Clear();
@@ -188,7 +188,7 @@ internal sealed class WasmtimeModInstance : IModInstance
         _store = new Store(_engine);
         _store.AddWasiP2(inheritStdout: true, inheritStderr: true);
 
-        var component = Component.Compile(_engine, wasm);
+        var component = Component.Compile(_engine, source.Bytes!);
         _instance = _store.GetComponentInstance(component, _linker);
         _exports = new Wit.Tinyecs.Modding.GuestExports(_instance, _store);
 

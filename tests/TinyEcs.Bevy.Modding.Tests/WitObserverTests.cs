@@ -2,7 +2,6 @@ using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.Modding;
 using Xunit;
-using WitApp = Wit.Tinyecs.Modding.App;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
@@ -19,7 +18,7 @@ public class WitObserverTests
         var fires = new List<(string Name, ulong Entity, string Json)>();
         ModdingPlugin.RegisterObserver(
             app,
-            new ModObserverSpec { Name = "on_spawn", Kind = WitApp.ObserverEvent.Case.Spawn },
+            new ModObserverSpec { Name = "on_spawn", Kind = ModObserverKind.Spawn },
             new ModComponentRegistry(),
             (n, e, j) => fires.Add((n, e, j)));
 
@@ -43,7 +42,7 @@ public class WitObserverTests
         var fires = new List<(string Name, ulong Entity, string Json)>();
         ModdingPlugin.RegisterObserver(
             app,
-            new ModObserverSpec { Name = "on_pos", Kind = WitApp.ObserverEvent.Case.Insert, TypePath = "test/pos" },
+            new ModObserverSpec { Name = "on_pos", Kind = ModObserverKind.Insert, TypePath = "test/pos" },
             reg,
             (n, e, j) => fires.Add((n, e, j)));
 
@@ -65,7 +64,7 @@ public class WitObserverTests
         // type-path not in the registry -> no observer wired, no throw.
         ModdingPlugin.RegisterObserver(
             app,
-            new ModObserverSpec { Name = "on_missing", Kind = WitApp.ObserverEvent.Case.Insert, TypePath = "test/missing" },
+            new ModObserverSpec { Name = "on_missing", Kind = ModObserverKind.Insert, TypePath = "test/missing" },
             new ModComponentRegistry(),
             (n, e, j) => fires.Add((n, e, j)));
 

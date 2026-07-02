@@ -2,7 +2,6 @@ using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.Modding;
 using Xunit;
-using WitApp = Wit.Tinyecs.Modding.App;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
@@ -39,7 +38,7 @@ public class WitEventTests
         var fires = new List<(string Name, ulong Entity, string Json)>();
         ModdingPlugin.RegisterObserver(
             app,
-            new ModObserverSpec { Name = "on_ping", Kind = WitApp.ObserverEvent.Case.Custom, TypePath = "test/ping" },
+            new ModObserverSpec { Name = "on_ping", Kind = ModObserverKind.Custom, TypePath = "test/ping" },
             reg,
             (n, e, j) => fires.Add((n, e, j)));
 

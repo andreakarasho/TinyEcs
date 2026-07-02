@@ -1,17 +1,20 @@
-// Generic component-model modding plugin (tinyecs:modding WIT, via the
-// wasmtime-dotnet fork). Loads WASM *component* mods from a folder, runs their
-// `setup`, then dispatches the systems they registered into the matching Bevy
-// Stage each frame — mirroring wasvy's dynamic_system.
+// Generic component-model modding plugin (tinyecs:modding WIT). Loads WASM
+// *component* mods, runs their `setup`, then dispatches the systems they
+// registered into the matching Bevy Stage each frame — mirroring wasvy's
+// dynamic_system. Runtime-agnostic: this file has ZERO wasmtime/Wit.* references
+// (compiles under WasmGuest) — WasmtimeModBackend.cs / JcoModBackend.cs own the
+// concrete runtime, selected via ModdingConfig.Backend.
 //
-// Game-agnostic: the host supplies a ModComponentRegistry and per-mod linker
-// hooks through ModdingConfig (registered before this plugin's Startup runs).
-// The lib knows no concrete game component, no networking, no input device —
-// only the generic ECS+UI contract in tinyecs.wit.
+// Game-agnostic: the host supplies a ModComponentRegistry and per-mod hooks
+// through ModdingConfig (registered before this plugin's Startup runs). The lib
+// knows no concrete game component, no networking, no input device — only the
+// generic ECS+UI contract in tinyecs.wit.
 //
-// Mods live in the ModFolder (in the working dir / next to the exe), one folder
-// per mod: `<ModFolder>/<mod>/{mod.json, *.wasm}`. The `mod.json` manifest names
-// the WASM component to load (plus name/version/ruleset). If the folder is absent
-// the plugin is a no-op, so it is always safe to install.
+// Mods live in the ModFolder (in the working dir / next to the exe) for the
+// wasmtime backend — one folder per mod: `<ModFolder>/<mod>/{mod.json, *.wasm}`.
+// The Jco backend has no filesystem at all on this path: discovery comes from
+// ModdingConfig.JsChannel.ListMods() instead (see SetupEcsMods). Either way, if
+// no mods are found the plugin is a no-op, so it is always safe to install.
 
 using System.Buffers;
 using System.IO;
@@ -21,8 +24,6 @@ using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.UI;
 using TinyEcs.Collections;
-using Wasmtime;
-using WitApp = Wit.Tinyecs.Modding.App;
 
 namespace TinyEcs.Bevy.Modding;
 
@@ -34,7 +35,8 @@ internal sealed class ModRuntime
     public ModHostContext Ctx = null!;
     // Lifecycle (host enable/disable/reload via ModControl). Disabled mods are
     // skipped by the per-stage runner; Slot scopes their entities for teardown;
-    // WasmPath lets Reload re-read the component bytes from disk.
+    // WasmPath lets Reload re-read the component bytes from disk (wasmtime only —
+    // empty under the Jco backend, which re-instantiates by name instead).
     public bool Enabled = true;
     public int Slot;
     public string WasmPath = "";
@@ -105,7 +107,9 @@ internal enum ModAction : byte { Enable, Disable, Reload }
 /// `app.AddResource(new ModdingConfig { ... })` BEFORE adding the plugin; the
 /// plugin reads it at Startup. If absent the plugin uses an empty default (mods
 /// load but see no registered components/resources and no game-specific imports).
-public sealed class ModdingConfig
+/// `partial`: the wasmtime-only PerModLinker hook lives in ModdingConfigWasmtime.cs
+/// (excluded under WasmGuest) so this type stays usable without pulling in Wasmtime.
+public sealed partial class ModdingConfig
 {
     /// Components + resources the host exposes to mods, keyed by WIT type-path.
     public ModComponentRegistry Registry = new();
@@ -113,15 +117,22 @@ public sealed class ModdingConfig
     /// Which wasm runtime hosts the mods. Wasmtime (native) is the desktop default.
     public WasmBackend Backend = WasmBackend.Wasmtime;
 
+    /// host->guest transport for WasmBackend.Jco — supplied by the WASM_GUEST host
+    /// (it owns the component-model imports the JS glue satisfies). Null otherwise.
+    /// When set, mod DISCOVERY also switches from the filesystem scan to JsChannel.ListMods().
+    public IJsModChannel? JsChannel;
+
     /// Folder (relative to the exe + cwd) scanned for *.wasm component mods.
+    /// Ignored when JsChannel is set (discovery comes from ListMods() instead).
     public string ModFolder = "ecs-mods";
 
-    /// Per-mod hooks run once for each loaded mod after the generic `app` bridge
-    /// is defined and before the component is instantiated. Use to `Define` extra
-    /// game-specific linker imports (other WIT packages a mod consumes) and to
-    /// wire host capabilities onto the ModHostContext (e.g. ConsumeMouse).
-    /// Wasmtime backend only.
-    public readonly List<Action<Linker, ModHostContext>> PerMod = new();
+    /// Runtime-neutral per-mod hook run for EVERY backend, once per loaded mod right
+    /// after its ModHostContext is created (before Load). Use to wire host
+    /// capabilities that don't need a wasm linker — e.g. ConsumeMouse/ConsumeKeyboard,
+    /// an incoming-packet filter delegate. This is the ONLY per-mod hook the Jco
+    /// backend runs; see ModdingConfigWasmtime.PerModLinker for the wasmtime-only
+    /// (Linker.Define) hook.
+    public readonly List<Action<ModHostContext>> PerModContext = new();
 }
 
 public readonly struct ModdingPlugin : IPlugin
@@ -150,11 +161,11 @@ public readonly struct ModdingPlugin : IPlugin
         // One dispatcher per Stage. SingleThreaded: mod systems touch the World
         // directly through the bridge (see GuestBridge), so they must not share a
         // parallel batch.
-        AddRunner(app, Stage.First, WitApp.Schedule.Case.First, RunnerFirst);
-        AddRunner(app, Stage.PreUpdate, WitApp.Schedule.Case.PreUpdate, RunnerPreUpdate);
-        AddRunner(app, Stage.Update, WitApp.Schedule.Case.Update, RunnerUpdate);
-        AddRunner(app, Stage.PostUpdate, WitApp.Schedule.Case.PostUpdate, RunnerPostUpdate);
-        AddRunner(app, Stage.Last, WitApp.Schedule.Case.Last, RunnerLast);
+        AddRunner(app, Stage.First, ModSchedule.First, RunnerFirst);
+        AddRunner(app, Stage.PreUpdate, ModSchedule.PreUpdate, RunnerPreUpdate);
+        AddRunner(app, Stage.Update, ModSchedule.Update, RunnerUpdate);
+        AddRunner(app, Stage.PostUpdate, ModSchedule.PostUpdate, RunnerPostUpdate);
+        AddRunner(app, Stage.Last, ModSchedule.Last, RunnerLast);
 
         // Click bridge: Bevy.UI fires On<UiClick> (observer); mods poll. When a
         // mod-owned entity is clicked, tag it ModClicked so a mod query sees it.
@@ -211,7 +222,7 @@ public readonly struct ModdingPlugin : IPlugin
             commands.Entity(e.Ref).Remove<ModClicked>();
     }
 
-    private static void AddRunner(App app, Stage stage, WitApp.Schedule.Case which, string label)
+    private static void AddRunner(App app, Stage stage, ModSchedule which, string label)
     {
         app.AddSystem((ResMut<ModRuntimes> runtimes) => RunStage(runtimes.Value, which))
             .InStage(stage)
@@ -224,22 +235,9 @@ public readonly struct ModdingPlugin : IPlugin
     {
         var config = configRes.Value;
 
-        // Look both next to the exe (deployed alongside the build) and in the
-        // working dir, so launch location doesn't matter. Each mod is a subfolder
-        // with a mod.json manifest; dedup by manifest name (exe dir wins over cwd).
-        var candidates = new[]
-        {
-            Path.Combine(AppContext.BaseDirectory, config.ModFolder),
-            Path.Combine(Directory.GetCurrentDirectory(), config.ModFolder),
-        };
-        var mods = candidates
-            .Where(Directory.Exists)
-            .SelectMany(Directory.GetDirectories)
-            .Select(LoadManifest)
-            .OfType<(ModManifest Manifest, string WasmPath)>()
-            .GroupBy(m => m.Manifest.Name)
-            .Select(g => g.First())
-            .ToArray();
+        var mods = config.JsChannel != null
+            ? DiscoverJsMods(config.JsChannel)
+            : DiscoverFolderMods(config.ModFolder);
         if (mods.Length == 0)
             return;
 
@@ -247,19 +245,32 @@ public readonly struct ModdingPlugin : IPlugin
         var runtimes = runtimesRes.Value;
         runtimes.Backend = config.Backend switch
         {
-            WasmBackend.Wasmtime => new WasmtimeModBackend(config.PerMod),
+            // WasmtimeModBackend + ModdingConfig.PerModLinker live in wasmtime-only
+            // files excluded from this build (see the csproj) — the browser guest
+            // never links wasmtime, so WasmBackend.Wasmtime falls through to the
+            // NotSupportedException below instead.
+#if !WASM_GUEST
+            WasmBackend.Wasmtime => new WasmtimeModBackend(config.PerModLinker),
+#endif
+            WasmBackend.Jco => new JcoModBackend(config.JsChannel
+                ?? throw new InvalidOperationException("WasmBackend.Jco requires ModdingConfig.JsChannel (set by the WASM_GUEST host)")),
             _ => throw new NotSupportedException($"mod backend {config.Backend} is not implemented"),
         };
 
         var failedMods = new List<string>();
-        foreach (var (manifest, file) in mods)
+        foreach (var (manifest, wasmPath) in mods)
         {
             try
             {
                 var slot = runtimes.Runtimes.Count;
                 var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot };
+                foreach (var hook in config.PerModContext)
+                    hook(ctx);
 
-                var instance = runtimes.Backend.Load(File.ReadAllBytes(file), ctx);
+                var source = config.JsChannel != null
+                    ? new ModSource(manifest.Name, null)
+                    : new ModSource(manifest.Name, File.ReadAllBytes(wasmPath));
+                var instance = runtimes.Backend.Load(in source, ctx);
                 instance.Setup();
 
                 var rt = new ModRuntime
@@ -268,7 +279,7 @@ public readonly struct ModdingPlugin : IPlugin
                     Instance = instance,
                     Ctx = ctx,
                     Slot = slot,
-                    WasmPath = file,
+                    WasmPath = wasmPath,
                 };
                 runtimes.Runtimes.Add(rt);
                 controlRes.Value.Mods.Add(new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true });
@@ -280,7 +291,7 @@ public readonly struct ModdingPlugin : IPlugin
                 RegisterModObservers(appRes.Value, rt);
 
                 // mod-startup systems run once, now.
-                RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
+                RunSystemsForStage(rt, ModSchedule.ModStartup);
             }
             catch (Exception e)
             {
@@ -292,6 +303,54 @@ public readonly struct ModdingPlugin : IPlugin
         Console.WriteLine("[ecs-mod] backend={0}: {1}/{2} mods loaded{3}",
             config.Backend, runtimes.Runtimes.Count, mods.Length,
             failedMods.Count > 0 ? $" — FAILED: {string.Join(", ", failedMods)}" : "");
+    }
+
+    // Filesystem discovery (wasmtime backend). Look both next to the exe (deployed
+    // alongside the build) and in the working dir, so launch location doesn't
+    // matter. Each mod is a subfolder with a mod.json manifest; dedup by manifest
+    // name (exe dir wins over cwd).
+    private static (ModManifest Manifest, string WasmPath)[] DiscoverFolderMods(string modFolder)
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, modFolder),
+            Path.Combine(Directory.GetCurrentDirectory(), modFolder),
+        };
+        return candidates
+            .Where(Directory.Exists)
+            .SelectMany(Directory.GetDirectories)
+            .Select(LoadManifest)
+            .OfType<(ModManifest Manifest, string WasmPath)>()
+            .GroupBy(m => m.Manifest.Name)
+            .Select(g => g.First())
+            .ToArray();
+    }
+
+    // JSON discovery (Jco backend): no filesystem access on this path at all — the
+    // WASM_GUEST host's JS side has already pre-transpiled every mod it can
+    // instantiate and reports them here. WasmPath is unused (empty): Jco re-
+    // instantiates by manifest name, never by re-reading bytes from disk.
+    private static (ModManifest Manifest, string WasmPath)[] DiscoverJsMods(IJsModChannel channel)
+    {
+        var json = channel.ListMods();
+        ModManifest[]? manifests;
+        try
+        {
+            manifests = JsonSerializer.Deserialize(json, ModManifestJsonContext.Default.ModManifestArray);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("[ecs-mod] bad ListMods() payload: {0}", e.Message);
+            return Array.Empty<(ModManifest, string)>();
+        }
+        if (manifests == null)
+            return Array.Empty<(ModManifest, string)>();
+
+        return manifests
+            .Where(m => !string.IsNullOrEmpty(m.Name))
+            .GroupBy(m => m.Name)
+            .Select(g => (g.First(), ""))
+            .ToArray();
     }
 
     // Read `<dir>/mod.json` and resolve the WASM it names (relative to the mod's
@@ -333,14 +392,14 @@ public readonly struct ModdingPlugin : IPlugin
         return (manifest, wasmPath);
     }
 
-    private static void RunStage(ModRuntimes runtimes, WitApp.Schedule.Case which)
+    private static void RunStage(ModRuntimes runtimes, ModSchedule which)
     {
         foreach (var rt in runtimes.Runtimes)
             if (rt.Enabled)
                 RunSystemsForStage(rt, which);
     }
 
-    private static void RunSystemsForStage(ModRuntime rt, WitApp.Schedule.Case which)
+    private static void RunSystemsForStage(ModRuntime rt, ModSchedule which)
     {
         if (!rt.Ctx.SystemsByStage.TryGetValue(which, out var systems))
             return;
@@ -358,7 +417,7 @@ public readonly struct ModdingPlugin : IPlugin
     }
 
     // Drain host enable/disable/reload requests at a safe single-threaded point.
-    private static void ProcessModControl(ResMut<ModRuntimes> runtimesRes, ResMut<ModControl> controlRes, Res<App> appRes)
+    private static void ProcessModControl(ResMut<ModRuntimes> runtimesRes, ResMut<ModControl> controlRes, Res<App> appRes, Res<ModdingConfig> configRes)
     {
         var control = controlRes.Value;
         if (control.Pending.Count == 0)
@@ -378,7 +437,7 @@ public readonly struct ModdingPlugin : IPlugin
                 {
                     case ModAction.Disable: DisableMod(rt, info); break;
                     case ModAction.Enable: EnableMod(rt, info); break;
-                    case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info); break;
+                    case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info, configRes.Value); break;
                 }
             }
             catch (Exception e)
@@ -407,24 +466,26 @@ public readonly struct ModdingPlugin : IPlugin
             return;
         rt.Enabled = true;
         if (info != null) info.Enabled = true;
-        RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
+        RunSystemsForStage(rt, ModSchedule.ModStartup);
     }
 
-    // Tear the mod down and re-instantiate it from disk (picks up a rebuilt .wasm).
-    // Reuses the same ModRuntime + ModHostContext AND the existing Linker + bridge:
-    // the host import functions never change between loads, and the fork registers
-    // every linker.Define'd function in a STATIC, process-global, never-freed table
-    // capped at 1024 (ComponentExport.RegisterFunction). Re-Define'ing on reload
-    // leaked a full set of slots each time and overflowed almost immediately, so we
-    // do NOT build a new Linker — we only recompile the component and instantiate it
-    // on a fresh Store with the original linker. Zero new function registrations.
+    // Tear the mod down and re-instantiate it (picks up a rebuilt .wasm). Reuses the
+    // same ModRuntime + ModHostContext AND the existing Linker + bridge (wasmtime): the
+    // host import functions never change between loads, and the fork registers every
+    // linker.Define'd function in a STATIC, process-global, never-freed table capped
+    // at 1024 (ComponentExport.RegisterFunction). Re-Define'ing on reload leaked a full
+    // set of slots each time and overflowed almost immediately, so we do NOT build a
+    // new Linker — we only recompile the component and instantiate it on a fresh Store
+    // with the original linker. Zero new function registrations. Under the Jco backend
+    // there is no Linker or bytes at all: the channel re-instantiates by manifest name
+    // (deferred-capable — see IJsModChannel.Reload).
     //
     // CEILING (inherent, no clean fix here): TinyEcs has no global-observer removal,
     // so observers wired at first load persist. Same-named exports on the new
     // instance still receive them, but observers a mod registers ONLY on reload are
     // not wired. (The 1024-function cap still bounds how many mods can be LOADED at
     // once — Define count scales with mod count — but reload no longer consumes it.)
-    private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info)
+    private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info, ModdingConfig config)
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
 
@@ -434,14 +495,17 @@ public readonly struct ModdingPlugin : IPlugin
         rt.Ctx.Observers.Clear();
         rt.Ctx.ChildrenQuery = null;
 
-        // Backend tears down + re-instantiates from fresh bytes (reusing host imports)
+        // Backend tears down + re-instantiates (reusing host imports where it applies)
         // and re-runs setup, which repopulates ctx.Systems via the guest.
-        rt.Instance.Reload(File.ReadAllBytes(rt.WasmPath));
+        var source = config.JsChannel != null
+            ? new ModSource(rt.Manifest.Name, null)
+            : new ModSource(rt.Manifest.Name, File.ReadAllBytes(rt.WasmPath));
+        rt.Instance.Reload(in source);
 
         rt.Enabled = true;
         if (info != null) info.Enabled = true;
 
-        RunSystemsForStage(rt, WitApp.Schedule.Case.ModStartup);
+        RunSystemsForStage(rt, ModSchedule.ModStartup);
     }
 
     // Delete every entity this mod spawned (ModEntity.Slot == slot). Deleting a root
@@ -475,21 +539,21 @@ public readonly struct ModdingPlugin : IPlugin
     {
         switch (obs.Kind)
         {
-            case WitApp.ObserverEvent.Case.Spawn:
+            case ModObserverKind.Spawn:
                 app.AddObserver<OnSpawn>(t => onFire(obs.Name, t.EntityId, ""));
                 break;
-            case WitApp.ObserverEvent.Case.Despawn:
+            case ModObserverKind.Despawn:
                 app.AddObserver<OnDespawn>(t => onFire(obs.Name, t.EntityId, ""));
                 break;
-            case WitApp.ObserverEvent.Case.Insert:
+            case ModObserverKind.Insert:
                 if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var ci))
                     ci.RegisterInsertObserver(app, (e, json) => onFire(obs.Name, e, json));
                 break;
-            case WitApp.ObserverEvent.Case.Remove:
+            case ModObserverKind.Remove:
                 if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var cr))
                     cr.RegisterRemoveObserver(app, (e, json) => onFire(obs.Name, e, json));
                 break;
-            case WitApp.ObserverEvent.Case.Custom:
+            case ModObserverKind.Custom:
                 if (obs.TypePath != null && registry.TryGetEvent(obs.TypePath, out var ev))
                     ev.RegisterObserver(app, (e, json) => onFire(obs.Name, e, json));
                 break;
@@ -526,7 +590,7 @@ public readonly struct ModdingPlugin : IPlugin
         // Driver = first present-required term (ref/mut/with) that is registered.
         IModComponent? driver = null;
         foreach (var (typePath, _, kind) in q.Terms)
-            if (kind != WitApp.QueryFor.Case.Without && ctx.Registry.TryGet(typePath, out driver))
+            if (kind != ModQueryTermKind.Without && ctx.Registry.TryGet(typePath, out driver))
                 break;
         if (driver == null)
             return ArrayPool<ulong>.Shared.Rent(1);
@@ -548,12 +612,12 @@ public readonly struct ModdingPlugin : IPlugin
                 {
                     if (!ctx.Registry.TryGet(typePath, out var comp))
                     {
-                        if (kind != WitApp.QueryFor.Case.Without) { ok = false; break; }
+                        if (kind != ModQueryTermKind.Without) { ok = false; break; }
                         continue;
                     }
                     var has = comp.Has(ctx.World, id);
-                    if (kind == WitApp.QueryFor.Case.Without && has) { ok = false; break; }
-                    if (kind != WitApp.QueryFor.Case.Without && !has) { ok = false; break; }
+                    if (kind == ModQueryTermKind.Without && has) { ok = false; break; }
+                    if (kind != ModQueryTermKind.Without && !has) { ok = false; break; }
                 }
                 if (ok)
                     result[matched++] = id;

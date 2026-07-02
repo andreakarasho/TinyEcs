@@ -24,9 +24,10 @@ internal partial class TestJsonContext : JsonSerializerContext { }
 // TinyEcs, so a green run proves the runtime is reusable on its own.
 public class ModdingPluginTests
 {
-    // Fresh isolated mod folder containing only the counter wasm, cwd pointed at
-    // it (the plugin scans <cwd>/ecs-mods/*.wasm), and a bare App + lib plugin
-    // configured with a registry that exposes just the counter.
+    // Fresh isolated mod folder containing only the counter mod, cwd pointed at
+    // it (the plugin scans <cwd>/ecs-mods/<mod>/mod.json — one subfolder per mod,
+    // same layout as every real mod under the repo's ecs-mods/), and a bare App +
+    // lib plugin configured with a registry that exposes just the counter.
     private static App BuildCounterApp()
     {
         var baseDir = AppContext.BaseDirectory;
@@ -34,11 +35,14 @@ public class ModdingPluginTests
         Assert.True(File.Exists(src), $"guest component missing: {src}");
 
         var root = Path.Combine(Path.GetTempPath(), "tinyecs-bevy-modding-counter");
-        var modDir = Path.Combine(root, "ecs-mods");
-        if (Directory.Exists(modDir))
-            Directory.Delete(modDir, recursive: true);
+        var modsRoot = Path.Combine(root, "ecs-mods");
+        if (Directory.Exists(modsRoot))
+            Directory.Delete(modsRoot, recursive: true);
+        var modDir = Path.Combine(modsRoot, "ecs_counter");
         Directory.CreateDirectory(modDir);
         File.Copy(src, Path.Combine(modDir, "ecs_counter.wasm"), overwrite: true);
+        File.WriteAllText(Path.Combine(modDir, "mod.json"),
+            """{"name":"ecs_counter","version":"0.1.0","wasm":"ecs_counter.wasm"}""");
         Directory.SetCurrentDirectory(root);
 
         var registry = new ModComponentRegistry();

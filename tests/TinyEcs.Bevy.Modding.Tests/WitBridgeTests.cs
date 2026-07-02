@@ -1,7 +1,6 @@
 using TinyEcs;
 using TinyEcs.Bevy.Modding;
 using Xunit;
-using G = Wit.Tinyecs.Modding.GuestImports;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
@@ -56,7 +55,7 @@ public class WitBridgeTests
         var children = new EntityImpl(ctx, parent).Children();
         var ids = new HashSet<ulong>();
         foreach (var ch in children)
-            ids.Add(((EntityImpl)ch).EcsId);
+            ids.Add(ch.EcsId);
 
         Assert.Equal(2, children.Length);
         Assert.Contains(c1, ids);
@@ -64,7 +63,7 @@ public class WitBridgeTests
 
         var p = new EntityImpl(ctx, c1).Parent();
         Assert.NotNull(p);
-        Assert.Equal(parent, ((EntityImpl)p!).EcsId);
+        Assert.Equal(parent, p!.Value.EcsId);
     }
 
     [Fact]

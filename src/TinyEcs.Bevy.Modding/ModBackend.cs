@@ -15,6 +15,19 @@ public enum WasmBackend : byte
 {
     /// Native wasmtime via the wasmtime-dotnet fork (desktop default).
     Wasmtime,
+    /// Browser: host runs as a wasm component (NativeAOT-LLVM), mods are jco-transpiled
+    /// and brokered by the JS glue. Requires ModdingConfig.JsChannel. See JcoModBackend.cs.
+    Jco,
+}
+
+/// A mod component to load, backend-shaped: wasmtime instantiates from raw bytes
+/// (Bytes required); Jco instantiates a pre-compiled, pre-transpiled component by
+/// name (Bytes is null — sync instantiate-from-bytes is impossible in the browser).
+/// Name is always the manifest name, so logging/errors can name the mod either way.
+internal readonly struct ModSource(string name, byte[]? bytes)
+{
+    public readonly string Name = name;
+    public readonly byte[]? Bytes = bytes;
 }
 
 /// One per process. Owns the runtime engine and instantiates mod components.
@@ -23,7 +36,7 @@ internal interface IModBackend : IDisposable
     /// Compile + instantiate a component, defining the host imports (the generic
     /// `app` bridge plus the game-specific per-mod hooks). Does NOT run the guest
     /// `setup` — the caller invokes IModInstance.Setup once the runtime is recorded.
-    IModInstance Load(byte[] wasm, ModHostContext ctx);
+    IModInstance Load(in ModSource source, ModHostContext ctx);
 }
 
 /// One loaded mod, as the runtime-agnostic scheduler sees it. Implementations wrap
@@ -47,7 +60,9 @@ internal interface IModInstance : IDisposable
     /// hook it must consult synchronously (outside the per-frame scheduler).
     bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data);
 
-    /// Tear down + re-instantiate from fresh bytes, reusing the host imports, then
-    /// re-run setup. The caller resets the shared ModHostContext first.
-    void Reload(byte[] wasm);
+    /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
+    /// caller resets the shared ModHostContext first. Wasmtime instantiates fresh
+    /// from source.Bytes; Jco is deferred-capable — it may kick an async recompile
+    /// and swap the instance on a LATER call (fire-and-forget from this call's POV).
+    void Reload(in ModSource source);
 }

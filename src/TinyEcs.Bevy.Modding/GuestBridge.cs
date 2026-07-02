@@ -1,21 +1,26 @@
-// Host implementation of the tinyecs:modding `app` interface (the imports the WASM
-// guest/mod consumes). The wasmtime-dotnet fork emits each WIT resource (app/
-// system/commands/entity-commands/entity/query/query-result/component) as an
-// INTERFACE; the host implements them. We use structs (the fork boxes each once
-// when it's stored in the handle table — same single alloc as a class, with the
-// boxed instance persisting mutable state like QueryImpl._cursor across calls).
-// The top-level imports (GuestBridge) is still an abstract class with overrides.
+// Runtime-agnostic half of the tinyecs:modding `app` bridge (the imports a WASM
+// guest/mod consumes). Every type in this file is neutral — no wasmtime types, no
+// Wit.* generated bindings — so it compiles under WasmGuest with zero wasmtime
+// references. Each Impl struct exposes the guest-facing operations as concrete
+// methods over neutral/BCL types (ModSchedule/ModObserverKind/ModQueryTerm, plain
+// strings/spans, concrete struct returns instead of interfaces).
+//
+// The wasmtime backend needs each of these to satisfy a fork-generated G.I*
+// interface (G.IApp, G.ICommands, ...) with WitApp-typed parameters. Those thin
+// adapter shims — plus the GuestBridge(ModHostContext) : G.GuestImports class
+// itself, plus the typed (component-value) methods (SpawnTyped/InsertTyped/
+// SetTyped), which only the wasmtime channel ever calls — live in
+// WasmtimeGuestAdapters.cs, a wasmtime-only file excluded under WasmGuest. Several
+// structs here are declared `partial` so that file can add those typed methods
+// without this file needing to know about WitApp.ComponentValue.
 //
 // They share a per-mod ModHostContext (World + component registry + the list of
 // systems the mod registered during setup). These methods run synchronously
 // inside a guest call mid-system, so they touch the World directly (the documented
 // carve-out); the runner systems are SingleThreaded to keep that safe.
 
-using System.Diagnostics.CodeAnalysis;
 using TinyEcs;
 using TinyEcs.Bevy;
-using G = Wit.Tinyecs.Modding.GuestImports;
-using WitApp = Wit.Tinyecs.Modding.App;
 
 namespace TinyEcs.Bevy.Modding;
 
@@ -24,7 +29,7 @@ internal enum ModParamKind { Commands, Query }
 internal sealed class ModQuerySpec
 {
     // All declared terms (used to compute the matching-entity snapshot).
-    public readonly List<(string typePath, bool mut, WitApp.QueryFor.Case kind)> Terms = new();
+    public readonly List<(string typePath, bool mut, ModQueryTermKind kind)> Terms = new();
     // ref/mut terms only, in declared order — defines query-result component index.
     public readonly List<(string typePath, bool mut)> Components = new();
 }
@@ -38,7 +43,7 @@ internal sealed class ModParam
 internal sealed class ModSystemSpec
 {
     public string Name = "";
-    public WitApp.Schedule.Case Stage;
+    public ModSchedule Stage;
     public string? CustomStage;
     public readonly List<ModParam> Params = new();
     public readonly List<string> After = new();
@@ -48,8 +53,8 @@ internal sealed class ModSystemSpec
 internal sealed class ModObserverSpec
 {
     public string Name = "";                       // guest export to call on fire
-    public WitApp.ObserverEvent.Case Kind;
-    public string? TypePath;                        // component path for Insert/Remove
+    public ModObserverKind Kind;
+    public string? TypePath;                        // component/event path for Insert/Remove/Custom
 }
 
 /// Shared glue for one mod instance. Public so a host can configure per-mod
@@ -74,7 +79,7 @@ public sealed class ModHostContext
     // Systems bucketed by stage so the per-frame runner does a dict lookup
     // instead of scanning every system and filtering. Populated in AddSystems;
     // per-stage insertion order preserved (declaration order within a stage).
-    internal readonly Dictionary<WitApp.Schedule.Case, List<ModSystemSpec>> SystemsByStage = new();
+    internal readonly Dictionary<ModSchedule, List<ModSystemSpec>> SystemsByStage = new();
     // Cached `With<Parent>` query for EntityImpl.Children — EntityImpl is a struct
     // recreated per call, so the cache lives here (one ctx per mod/world).
     internal Query? ChildrenQuery;
@@ -83,20 +88,15 @@ public sealed class ModHostContext
     internal readonly List<ModObserverSpec> Observers = new();
 }
 
-internal sealed class GuestBridge(ModHostContext ctx) : G
+internal struct AppImpl(ModHostContext ctx)
 {
-    public override G.ISystem NewSystem(string name) => new SystemImpl(name);
-}
-
-internal struct AppImpl(ModHostContext ctx) : G.IApp
-{
-    public void AddSystems(WitApp.Schedule schedule, ReadOnlySpan<G.ISystem> systems)
+    public void AddSystems(ModSchedule schedule, string? customStage, ReadOnlySpan<SystemImpl> systems)
     {
         foreach (var s in systems)
         {
-            var spec = ((SystemImpl)s).Spec;
-            spec.Stage = schedule.Discriminant;
-            spec.CustomStage = schedule.CustomPayload;
+            var spec = s.Spec;
+            spec.Stage = schedule;
+            spec.CustomStage = customStage;
             ctx.Systems.Add(spec);
             if (!ctx.SystemsByStage.TryGetValue(spec.Stage, out var bucket))
                 ctx.SystemsByStage[spec.Stage] = bucket = new List<ModSystemSpec>();
@@ -104,26 +104,13 @@ internal struct AppImpl(ModHostContext ctx) : G.IApp
         }
     }
 
-    public void AddObserver(string name, WitApp.ObserverEvent evt)
+    public void AddObserver(string name, ModObserverKind kind, string? typePath)
     {
-        ctx.Observers.Add(new ModObserverSpec
-        {
-            Name = name,
-            Kind = evt.Discriminant,
-            TypePath = evt.Discriminant switch
-            {
-                WitApp.ObserverEvent.Case.Insert => evt.InsertPayload,
-                WitApp.ObserverEvent.Case.Remove => evt.RemovePayload,
-                WitApp.ObserverEvent.Case.Custom => evt.CustomPayload,
-                _ => null,
-            },
-        });
+        ctx.Observers.Add(new ModObserverSpec { Name = name, Kind = kind, TypePath = typePath });
     }
-
-    public void Dispose() { }
 }
 
-internal struct SystemImpl : G.ISystem
+internal struct SystemImpl
 {
     public readonly ModSystemSpec Spec;
 
@@ -131,50 +118,49 @@ internal struct SystemImpl : G.ISystem
 
     public void AddCommands() => Spec.Params.Add(new ModParam { Kind = ModParamKind.Commands });
 
-    public void AddQuery(ReadOnlySpan<WitApp.QueryFor> query)
+    public void AddQuery(ReadOnlySpan<ModQueryTerm> query)
     {
         var q = new ModQuerySpec();
         foreach (var qf in query)
         {
-            switch (qf.Discriminant)
+            switch (qf.Kind)
             {
-                case WitApp.QueryFor.Case.Ref:
-                    q.Terms.Add((qf.RefPayload, false, qf.Discriminant));
-                    q.Components.Add((qf.RefPayload, false));
+                case ModQueryTermKind.Ref:
+                    q.Terms.Add((qf.TypePath, false, qf.Kind));
+                    q.Components.Add((qf.TypePath, false));
                     break;
-                case WitApp.QueryFor.Case.Mut:
-                    q.Terms.Add((qf.MutPayload, true, qf.Discriminant));
-                    q.Components.Add((qf.MutPayload, true));
+                case ModQueryTermKind.Mut:
+                    q.Terms.Add((qf.TypePath, true, qf.Kind));
+                    q.Components.Add((qf.TypePath, true));
                     break;
-                case WitApp.QueryFor.Case.With:
-                    q.Terms.Add((qf.WithPayload, false, qf.Discriminant));
+                case ModQueryTermKind.With:
+                    q.Terms.Add((qf.TypePath, false, qf.Kind));
                     break;
-                case WitApp.QueryFor.Case.Without:
-                    q.Terms.Add((qf.WithoutPayload, false, qf.Discriminant));
+                case ModQueryTermKind.Without:
+                    q.Terms.Add((qf.TypePath, false, qf.Kind));
                     break;
             }
         }
         Spec.Params.Add(new ModParam { Kind = ModParamKind.Query, Query = q });
     }
 
-    public void After(G.ISystem other) => Spec.After.Add(((SystemImpl)other).Spec.Name);
-    public void Before(G.ISystem other) => Spec.Before.Add(((SystemImpl)other).Spec.Name);
-    public void Dispose() { }
+    public void After(SystemImpl other) => Spec.After.Add(other.Spec.Name);
+    public void Before(SystemImpl other) => Spec.Before.Add(other.Spec.Name);
 }
 
-// Internal: it implements the (internal) generated G.ICommands and references
-// internal generated types. Tests that drive it directly reach it via
-// InternalsVisibleTo (see the csproj).
-internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
+// Internal: references internal generated types. Tests that drive it directly
+// reach it via InternalsVisibleTo (see the csproj). `partial`: the typed
+// (component-value) SpawnTyped overload is wasmtime-only — see WasmtimeGuestAdapters.cs.
+internal partial struct CommandsImpl(ModHostContext ctx)
 {
-    public G.IEntityCommands SpawnEmpty()
+    public EntityCommandsImpl SpawnEmpty()
     {
         var ent = ctx.World.Entity();
         ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
         return new EntityCommandsImpl(ctx, ent.ID);
     }
 
-    public G.IEntityCommands Spawn(ReadOnlySpan<(string, string)> bundle)
+    public EntityCommandsImpl Spawn(ReadOnlySpan<(string, string)> bundle)
     {
         var ent = ctx.World.Entity();
         ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
@@ -185,21 +171,10 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
         return new EntityCommandsImpl(ctx, id);
     }
 
-    public G.IEntityCommands Entity(G.IEntity entity)
-        => new EntityCommandsImpl(ctx, ((EntityImpl)entity).EcsId);
+    public EntityCommandsImpl Entity(EntityImpl entity)
+        => new EntityCommandsImpl(ctx, entity.EcsId);
 
-    public G.IEntityCommands EntityById(ulong id) => new EntityCommandsImpl(ctx, id);
-
-    // Typed spawn — components cross as native records (no JSON registry).
-    public G.IEntityCommands SpawnTyped(ReadOnlySpan<WitApp.ComponentValue> bundle)
-    {
-        var ent = ctx.World.Entity();
-        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
-        var id = ent.ID;
-        foreach (var cv in bundle)
-            ModTypedComponents.Apply(ctx.World, id, cv);
-        return new EntityCommandsImpl(ctx, id);
-    }
+    public EntityCommandsImpl EntityById(ulong id) => new EntityCommandsImpl(ctx, id);
 
     // Singleton-resource access by type-path (the "change resource" capability).
     public string ResourceGet(string resource)
@@ -228,25 +203,18 @@ internal struct CommandsImpl(ModHostContext ctx) : G.ICommands
         if (ctx.Registry.TryGetEvent(name, out var ev))
             ev.Emit(ctx.World, entity, json);
     }
-
-    public void Dispose() { }
 }
 
-internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity) : G.IEntityCommands
+// `partial`: InsertTyped (component-value) is wasmtime-only — see WasmtimeGuestAdapters.cs.
+internal partial struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
 {
-    public G.IEntity Id() => new EntityImpl(ctx, entity);
+    public EntityImpl Id() => new EntityImpl(ctx, entity);
 
     public void Insert(ReadOnlySpan<(string, string)> bundle)
     {
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
                 comp.SetJson(ctx.World, entity, json);
-    }
-
-    public void InsertTyped(ReadOnlySpan<WitApp.ComponentValue> bundle)
-    {
-        foreach (var cv in bundle)
-            ModTypedComponents.Apply(ctx.World, entity, cv);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)
@@ -257,24 +225,23 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity) : G.IEntity
     }
 
     // `entity` is the parent (this entity-commands' entity); add `child` under it.
-    public void AddChild(G.IEntity child, uint index)
+    public void AddChild(EntityImpl child, uint index)
     {
-        var childId = ((EntityImpl)child).EcsId;
+        var childId = child.EcsId;
         if (ctx.World.Exists(entity) && ctx.World.Exists(childId))
             ctx.World.AddChild(entity, childId, index >= int.MaxValue ? -1 : (int)index);
     }
 
     public void Despawn() { if (ctx.World.Exists(entity)) ctx.World.Delete(entity); }
-    public void Dispose() { }
 }
 
-internal struct EntityImpl(ModHostContext ctx, ulong ecsId) : G.IEntity
+internal struct EntityImpl(ModHostContext ctx, ulong ecsId)
 {
     public ulong EcsId => ecsId;
 
     public ulong Id() => ecsId;
 
-    public G.IEntity? Parent()
+    public EntityImpl? Parent()
     {
         var p = (ulong)ctx.World.GetParent(ecsId);
         return p != 0 && ctx.World.Exists(p) ? new EntityImpl(ctx, p) : null;
@@ -285,10 +252,10 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId) : G.IEntity
             ? c.GetJson(ctx.World, ecsId)
             : "null";
 
-    public ReadOnlySpan<G.IEntity> Children()
+    public EntityImpl[] Children()
     {
         // Enumerate by the Parent relationship (no host-internal access needed).
-        var result = new List<G.IEntity>();
+        var result = new List<EntityImpl>();
         var q = ctx.ChildrenQuery ??= ctx.World.QueryBuilder().With<TinyEcs.Parent>().Build();
         var it = q.Iter();
         while (it.Next())
@@ -297,19 +264,18 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId) : G.IEntity
                     result.Add(new EntityImpl(ctx, ev.ID));
         return result.ToArray();
     }
-
-    public void Dispose() { }
 }
 
 // snapshot is an ArrayPool-rented buffer owned by CallSystem (returned in its
 // finally after the wasm Call); only [0, count) is valid. We never return it here
 // — the buffer outlives this resource's Dispose and is reclaimed post-Call. The
-// fork boxes this struct once on RegisterQuery, so _cursor persists across Iter().
-internal struct QueryImpl(ModHostContext ctx, ulong[] snapshot, int count, List<(string typePath, bool mut)> components) : G.IQuery
+// wasmtime adapter boxes this struct once on RegisterQuery, so _cursor persists
+// across Iter().
+internal struct QueryImpl(ModHostContext ctx, ulong[] snapshot, int count, List<(string typePath, bool mut)> components)
 {
     private int _cursor;
 
-    public G.IQueryResult? Iter()
+    public QueryResultImpl? Iter()
     {
         // Skip entities despawned mid-iteration (snapshot is taken up front).
         while (_cursor < count)
@@ -320,24 +286,21 @@ internal struct QueryImpl(ModHostContext ctx, ulong[] snapshot, int count, List<
         }
         return null;
     }
-
-    public void Dispose() { }
 }
 
-internal struct QueryResultImpl(ModHostContext ctx, ulong entity, List<(string typePath, bool mut)> components) : G.IQueryResult
+internal struct QueryResultImpl(ModHostContext ctx, ulong entity, List<(string typePath, bool mut)> components)
 {
-    public G.IEntity Entity() => new EntityImpl(ctx, entity);
+    public EntityImpl Entity() => new EntityImpl(ctx, entity);
 
-    public G.IComponent Component(byte index)
+    public ComponentImpl Component(byte index)
     {
         var (typePath, mut) = components[index];
         return new ComponentImpl(ctx, entity, typePath, mut);
     }
-
-    public void Dispose() { }
 }
 
-internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable) : G.IComponent
+// `partial`: SetTyped (component-value) is wasmtime-only — see WasmtimeGuestAdapters.cs.
+internal partial struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable)
 {
     public string Get()
         => ctx.Registry.TryGet(typePath, out var comp) ? comp.GetJson(ctx.World, entity) : "null";
@@ -350,18 +313,7 @@ internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath,
             comp.SetJson(ctx.World, entity, value);
     }
 
-    // Typed write — native record via component-value, no JSON. (Typed READ is
-    // not exposed: the fork runtime mishandles variant-return ownership.)
-    public void SetTyped(WitApp.ComponentValue value)
-    {
-        if (!mutable)
-            ThrowNotMutable(typePath);
-        ModTypedComponents.Apply(ctx.World, entity, value);
-    }
-
-    [DoesNotReturn]
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     private static void ThrowNotMutable(string typePath)
         => throw new InvalidOperationException($"component {typePath} was not declared mutable");
-
-    public void Dispose() { }
 }

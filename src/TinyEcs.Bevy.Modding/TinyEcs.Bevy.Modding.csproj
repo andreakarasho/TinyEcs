@@ -12,11 +12,26 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
+  <!-- Browser guest build (cuo-guest.wasm, NativeAOT-LLVM WASI p2): the host itself
+       runs as a wasm component, so it cannot embed wasmtime in-process. This global
+       CLI property (passed by the WASM_GUEST publish) strips every wasmtime-dotnet
+       reference + the WIT source-gen wiring below, leaving only the Jco backend +
+       the runtime-neutral scheduler. -->
+  <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
+    <DefineConstants>$(DefineConstants);WASM_GUEST</DefineConstants>
+  </PropertyGroup>
+
   <!-- The bridge impls + generated WIT types are internal; the cuo test drives
        the bridge directly. (The lib's own tests use only the public surface.) -->
   <ItemGroup>
     <InternalsVisibleTo Include="ClassicUO.Ecs.Tests" />
     <InternalsVisibleTo Include="TinyEcs.Bevy.Modding.Tests" />
+    <!-- The browser guest dispatcher (ClassicUO.Ecs.Wasm/Modding/ModBridge.cs) drives
+         the neutral GuestBridge structs (CommandsImpl/EntityCommandsImpl/EntityImpl/
+         QueryImpl/QueryResultImpl/ComponentImpl, all `internal`) directly, the same
+         way WasmtimeGuestAdapters.cs does on desktop. AssemblyName below, not the
+         csproj/directory name (ClassicUO.Ecs.Wasm). -->
+    <InternalsVisibleTo Include="cuo-guest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,10 +41,23 @@
     <ProjectReference Include="..\..\external\Clay.NET\src\Clay\Clay.csproj" />
   </ItemGroup>
 
+  <!-- Wasmtime-only sources: the adapter shims + typed-component path over the
+       fork's generated G.I*/WitApp.* bindings, and the Linker-typed half of
+       ModdingConfig. Excluded under WasmGuest so no Wit.*/Wasmtime symbol is ever
+       referenced by the compiled guest lib (see also the ProjectReference /
+       AdditionalFiles below, which are the source of those symbols). -->
+  <ItemGroup Condition="'$(WasmGuest)' == 'true'">
+    <Compile Remove="WasmtimeModBackend.cs" />
+    <Compile Remove="WasmtimeGuestAdapters.cs" />
+    <Compile Remove="ModdingConfigWasmtime.cs" />
+    <Compile Remove="TypedComponents.cs" />
+  </ItemGroup>
+
   <!-- wasmtime-dotnet fork (component-model host + WIT source generator), vendored
        as a submodule under this repo's external/. The generator emits
-       Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. -->
-  <ItemGroup>
+       Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. Dropped
+       entirely under WasmGuest — the browser guest never links wasmtime. -->
+  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
     <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" />
     <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime.SourceGenerator\Wasmtime.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -41,13 +69,13 @@
        output next to this lib's output so referencing host/test projects can
        P/Invoke it. Globbed over TFM (**) and the per-OS native name so neither
        net9.0 nor Windows is hardcoded — only the current OS's file exists, so
-       only it is copied. -->
-  <ItemGroup>
+       only it is copied. Skipped under WasmGuest (no wasmtime reference to copy for). -->
+  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
     <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
     <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
     <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
   </ItemGroup>
-  <Target Name="CopyWasmtimeNative" AfterTargets="Build">
+  <Target Name="CopyWasmtimeNative" AfterTargets="Build" Condition="'$(WasmGuest)' != 'true'">
     <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
 </Project>
