@@ -496,12 +496,10 @@ public class App
 
 	internal readonly TinyEcs.World _world;
 	private readonly AppState _appState = new();
-	private readonly ThreadingMode _threadingMode;
-	private readonly bool _multipleProcessors;
-	// Lazily created on the first parallel batch, so Single-mode apps never
-	// spawn worker threads. Workers are background threads — safe to leave
-	// unreaped at process exit; call Dispose via App teardown if one exists.
-	private ParallelSystemExecutor? _parallelExecutor;
+	private readonly SystemExecutor _executor;
+	// Stage.Startup always runs sequentially regardless of the chosen executor,
+	// for deterministic initialization. Stateless, so one shared instance.
+	private static readonly SequentialSystemExecutor StartupExecutor = new();
 	internal readonly Dictionary<Stage, StageRuntime> _stageRuntimes = new();
 	private readonly List<StageDescriptor> _stageDescriptors = new();
 	private readonly Dictionary<Stage, StageDescriptor> _stageDescriptorByStage = new();
@@ -522,10 +520,20 @@ public class App
 	private bool _executionOrderDirty = false;
 
 	public App(TinyEcs.World world, ThreadingMode threadingMode = ThreadingMode.Auto)
+		: this(world, CreateExecutor(threadingMode))
+	{
+	}
+
+	/// <summary>
+	/// Create an App with an explicit system executor. Pass a
+	/// <see cref="SequentialSystemExecutor"/> on hosts without OS threads (wasi
+	/// guest) — the threaded scheduler is then unreachable and trims out of the
+	/// binary entirely.
+	/// </summary>
+	public App(TinyEcs.World world, SystemExecutor executor)
 	{
 		_world = world;
-		_threadingMode = threadingMode;
-		_multipleProcessors = Environment.ProcessorCount > 1;
+		_executor = executor;
 
 		// Initialize Startup stage (runs once)
 		AddStage(Stage.Startup);
@@ -548,6 +556,16 @@ public class App
 	public App(ThreadingMode threadingMode = ThreadingMode.Auto) : this(new World(), threadingMode)
 	{
 	}
+
+	private static SystemExecutor CreateExecutor(ThreadingMode mode) => mode switch
+	{
+		ThreadingMode.Single => new SequentialSystemExecutor(),
+		ThreadingMode.Multi => new ThreadedSystemExecutor(),
+		// Auto: parallel only pays off with more than one core.
+		_ => Environment.ProcessorCount > 1
+			? new ThreadedSystemExecutor()
+			: new SequentialSystemExecutor(),
+	};
 
 	// Call this after all systems and stages are added (before first Run())
 	private void BuildExecutionOrder()
@@ -1241,74 +1259,19 @@ public class App
 	}
 
 	/// <summary>
-	/// Execute systems in parallel where possible, respecting dependency constraints
+	/// Execute the stage's systems through the app's <see cref="SystemExecutor"/>.
 	/// </summary>
 	private void ExecuteSystemsParallel(Stage stage)
 	{
-		// Stage.Startup always runs in single-threaded mode by default
-		// This ensures deterministic initialization and proper resource setup
-		bool forceStartupSingleThreaded = stage == Stage.Startup;
-
-		// Determine if we should use parallel execution
-		bool useParallel = forceStartupSingleThreaded ? false : _threadingMode switch
-		{
-			ThreadingMode.Single => false,
-			ThreadingMode.Multi => true,
-			ThreadingMode.Auto => _multipleProcessors,
-			_ => false
-		};
-
-		if (!_stageRuntimes.TryGetValue(stage, out var runtime))
+		// Sorted/Batches are built together in BuildExecutionOrder; null means
+		// the stage has no systems.
+		if (!_stageRuntimes.TryGetValue(stage, out var runtime) || runtime.Sorted == null)
 			return;
 
-		// In single-threaded mode, skip batching and just run systems in topological order
-		// This preserves declaration order and respects explicit dependencies
-		if (!useParallel)
-		{
-			var systems = runtime.Sorted;
-			if (systems == null)
-				return;
+		var executor = stage == Stage.Startup ? StartupExecutor : _executor;
 
-			_world.BeginDeferred();
-			foreach (var descriptor in systems)
-			{
-				if (descriptor.ShouldRun(_world))
-				{
-					descriptor.RunProfiled(_world);
-				}
-			}
-			_world.EndDeferred();
-			return;
-		}
-
-		// Parallel mode: use cached batches (already computed during BuildExecutionOrder)
-		var batches = runtime.Batches;
-		if (batches == null)
-			return;
-
-		// Execute each batch (systems within a batch run in parallel)
 		_world.BeginDeferred();
-		foreach (var batch in batches)
-		{
-			if (batch.Count == 1)
-			{
-				// Single system - run directly
-				var descriptor = batch[0];
-				if (descriptor.ShouldRun(_world))
-				{
-					descriptor.RunProfiled(_world);
-				}
-			}
-			else
-			{
-				// Multiple systems - run in parallel via the persistent worker
-				// pool. NOT Parallel.ForEach: that allocated TaskReplicator /
-				// RangeWorker / Task scaffolding + a capturing closure every
-				// frame (~80% of frame-time GC garbage in profiling). The pool
-				// reuses its sync primitives across calls -> zero steady-state alloc.
-				(_parallelExecutor ??= new ParallelSystemExecutor()).Run(batch, _world);
-			}
-		}
+		executor.ExecuteStage(runtime, _world);
 		_world.EndDeferred();
 	}
 

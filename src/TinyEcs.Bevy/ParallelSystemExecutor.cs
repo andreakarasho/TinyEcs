@@ -1,3 +1,6 @@
+// Only ever constructed by ThreadedSystemExecutor. A host without OS threads
+// (wasi guest) builds its App with a SequentialSystemExecutor, which makes this
+// type unreachable and lets the trimmer drop it — no preprocessor gate needed.
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -7,7 +10,7 @@ namespace TinyEcs.Bevy;
 /// <summary>
 /// Persistent worker pool that runs a batch of conflict-free systems in
 /// parallel with NO per-dispatch allocation. Replaces the per-frame
-/// <c>Parallel.ForEach</c> in <see cref="App.ExecuteSystemsParallel"/>, which
+/// <c>Parallel.ForEach</c> the scheduler used before, which
 /// allocated the whole <c>TaskReplicator</c> / <c>RangeWorker</c> / <c>Task</c>
 /// scaffolding plus a capturing closure on every call — measured at ~80% of
 /// frame-time GC garbage when profiling a real workload.
