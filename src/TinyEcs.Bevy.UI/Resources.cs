@@ -74,6 +74,18 @@ public sealed class UiClayContext
 	public Vector2 ScrollDelta;
 	public bool EnableDragScrolling;
 
+	// Per-group fingerprints of the last laid-out frame's layout inputs (see
+	// LayoutSystem.ComputeGroupHashes). When the current frame's fingerprints
+	// all match, the whole Clay relayout is skipped and consumers keep reading
+	// LastCommands / the retained Clay tree from the previous layout.
+	internal readonly ulong[] LastGroupHashes = new ulong[LayoutSystem.HashGroups];
+	internal bool ForceRelayout = true;
+
+	/// Force a full relayout on the next frame even if no layout-input component
+	/// changed. Escape hatch for inputs the fingerprint cannot see — e.g. a font
+	/// or text-measurer registered AFTER text nodes were spawned.
+	public void MarkLayoutDirty() => ForceRelayout = true;
+
 	public ScrollContainerData GetScrollContainerData(uint clayId)
 		=> Context.GetScrollContainerData(new ElementId { Id = clayId });
 

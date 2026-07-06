@@ -43,13 +43,14 @@ public sealed class UiPlugin : IPlugin
 
 		app.AddSystem((Res<UiSurface> s, Res<UiScale> scale, ResMut<UiClayContext> c,
 			Res<Time> time,
+			Res<UiPointer> pointer,
 			Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 			UiLayoutQueries q,
 			Query<Data<ScrollPosition>> scrolls,
 			Local<HashSet<ulong>> liveIds,
 			Local<List<ulong>> pruneBuf,
 			ResMut<SystemProfiler> prof) =>
-			LayoutSystem.Run(s, scale, c, time, roots, q, scrolls, liveIds, pruneBuf, prof.Value))
+			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, scrolls, liveIds, pruneBuf, prof.Value))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,

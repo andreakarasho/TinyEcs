@@ -154,6 +154,8 @@ internal sealed class JcoModInstance : IModInstance
         var @params = _paramScratch;
         _snapshotScratch.Clear();
 
+        var hasQuery = false;
+        var anyRows = false;
         for (var i = 0; i < count; i++)
         {
             var p = sys.Params[i];
@@ -166,11 +168,17 @@ internal sealed class JcoModInstance : IModInstance
                 var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, out var matched);
                 _snapshotScratch.Add(snapshot);
                 @params[i] = ModRunParam.Query(snapshot, matched, p.Query!.Components);
+                hasQuery = true;
+                anyRows |= matched > 0;
             }
         }
 
         try
         {
+            // Idle-skip: every query empty this tick AND last — don't cross the
+            // boundary (the jco JS-engine-in-wasm hop costs ~0.3ms per no-op call).
+            if (ModdingPlugin.ShouldSkipIdle(sys, hasQuery, anyRows))
+                return;
             _channel.RunSystem(_handle, sys.Name, @params.AsSpan(0, count));
         }
         finally

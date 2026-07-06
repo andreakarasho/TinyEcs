@@ -80,6 +80,7 @@ internal static class LayoutSystem
 		Res<UiScale> scale,
 		ResMut<UiClayContext> ctx,
 		Res<Time> time,
+		Res<UiPointer> pointer,
 		Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 		UiLayoutQueries q,
 		Query<Data<ScrollPosition>> scrollPositions,
@@ -88,8 +89,42 @@ internal static class LayoutSystem
 		SystemProfiler profiler)
 	{
 		ref var c = ref ctx.Value;
-		Clay.Clay.SetContext(c.Context);
 		var s = MathF.Max(0.01f, scale.Value.Value);
+
+		// Relayout gate: Clay is immediate-mode, but the tree only needs
+		// re-solving when a layout INPUT changed. Fingerprint every component the
+		// walk consumes (value-based — catches in-place `node.Ref.X = ...`
+		// mutations that never bump change ticks, and stays stable across
+		// redundant same-value writes). Wheel/drag-scroll frames force a run so
+		// Clay consumes the delta; scroll momentum keeps ScrollPosition (hashed)
+		// moving until it settles, holding the gate open by itself. ComputedNode
+		// is hashed too although it's an output: BuildDecl reads the PARENT's
+		// ComputedNode for Right/Bottom anchoring, so layout must re-run until
+		// that feedback reaches its fixpoint.
+		// Skipping leaves the retained Clay tree + LastCommands untouched —
+		// InteractionSystem.PostLayout (hover/click) and RenderSystem.Publish
+		// read those every frame regardless, so pointer picking stays live.
+		Span<ulong> groups = stackalloc ulong[HashGroups];
+		ComputeGroupHashes(groups, surface.Value, s, q, scrollPositions);
+		var dirtyMask = 0;
+		for (var gi = 0; gi < HashGroups; gi++)
+			if (groups[gi] != c.LastGroupHashes[gi])
+				dirtyMask |= 1 << gi;
+		bool force = c.ForceRelayout
+			|| c.ScrollDelta != Vector2.Zero
+			|| (c.EnableDragScrolling && (pointer.Value.Down || pointer.Value.WasDown));
+		if (!force && dirtyMask == 0)
+		{
+			if (profiler.Enabled)
+				profiler.LayoutSkipped++;
+			return;
+		}
+		c.ForceRelayout = false;
+		groups.CopyTo(c.LastGroupHashes);
+		if (profiler.Enabled)
+			profiler.LayoutDirtyMask = dirtyMask;
+
+		Clay.Clay.SetContext(c.Context);
 		Clay.Clay.SetLayoutDimensions(new Dimensions(surface.Value.LogicalSize.X * s, surface.Value.LogicalSize.Y * s));
 
 		Clay.Clay.UpdateScrollContainers(c.EnableDragScrolling, c.ScrollDelta, time.Value.Frame);
@@ -168,6 +203,123 @@ internal static class LayoutSystem
 			foreach (var dead in prune)
 				c.LastSyncedScroll.Remove(dead);
 		}
+	}
+
+	// ---- relayout-gate fingerprint ------------------------------------------
+	// Folds every layout input into one 64-bit value: entity membership +
+	// iteration order (the entity id is folded with each row), all blittable
+	// component bytes, and identity (not contents) for the object-ref fields —
+	// Text strings are immutable (replaced on edit), and UiCustom.Data /
+	// UiImage.ImageData contents are read at RENDER time from the same captured
+	// reference, so in-place mutation of those needs no relayout. A hash change
+	// costs one extra relayout at worst; a collision (2^-64) misses one.
+
+	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+	private static ulong Fold(ulong h, ulong v)
+	{
+		h ^= v;
+		h *= 0x9E3779B97F4A7C15UL;
+		return System.Numerics.BitOperations.RotateLeft(h, 29);
+	}
+
+	private static ulong FoldBytes(ulong h, ReadOnlySpan<byte> bytes)
+	{
+		while (bytes.Length >= 8)
+		{
+			h = Fold(h, System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(bytes));
+			bytes = bytes[8..];
+		}
+		if (bytes.Length > 0)
+		{
+			ulong tail = 0;
+			for (var i = 0; i < bytes.Length; i++)
+				tail |= (ulong)bytes[i] << (i * 8);
+			h = Fold(h, tail ^ 0xB5UL);
+		}
+		return h;
+	}
+
+	private static ulong FoldQuery<T>(ulong h, Query<Data<T>> query) where T : unmanaged
+	{
+		foreach (var (eid, p) in query)
+		{
+			h = Fold(h, eid.Ref);
+			h = FoldBytes(h, System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+				System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref p.Ref, 1)));
+		}
+		return h;
+	}
+
+	// One sub-hash per input group so a stuck-open gate is diagnosable: the
+	// profiler's layout line prints a bit mask of the groups that changed last
+	// relayout (bit index = position in this fill order).
+	internal const int HashGroups = 17;
+
+	private static void ComputeGroupHashes(
+		Span<ulong> g, UiSurface surface, float scale, UiLayoutQueries q, Query<Data<ScrollPosition>> scrollPositions)
+	{
+		var h = 0x517CC1B727220A95UL;
+		h = Fold(h, (ulong)BitConverter.SingleToInt32Bits(surface.LogicalSize.X));
+		h = Fold(h, (ulong)BitConverter.SingleToInt32Bits(surface.LogicalSize.Y));
+		g[0] = Fold(h, (ulong)BitConverter.SingleToInt32Bits(scale));
+
+		g[1] = FoldQuery(0xA5UL, q.Nodes);
+		g[2] = FoldQuery(0xA5UL, q.Backgrounds);
+		g[3] = FoldQuery(0xA5UL, q.BorderColors);
+		g[4] = FoldQuery(0xA5UL, q.BorderRadii);
+		g[5] = FoldQuery(0xA5UL, q.TextFonts);
+		g[6] = FoldQuery(0xA5UL, q.TextColors);
+		g[7] = FoldQuery(0xA5UL, q.TextWraps);
+		g[8] = FoldQuery(0xA5UL, q.ZIndexes);
+		g[9] = FoldQuery(0xA5UL, q.GlobalZIndexes);
+		g[10] = FoldQuery(0xA5UL, q.Shadows);
+		g[11] = FoldQuery(0xA5UL, q.Computed);
+		g[12] = FoldQuery(0xA5UL, scrollPositions);
+
+		h = 0xA5UL;
+		foreach (var (eid, t) in q.Texts)
+		{
+			h = Fold(h, eid.Ref);
+			var sv = t.Ref.Value;
+			// CONTENT hash, not reference identity: hosts rebuild content-equal
+			// strings every frame (status text, counters) — identity would flap
+			// the gate open permanently.
+			h = sv == null ? Fold(h, 0UL)
+				: FoldBytes(h, System.Runtime.InteropServices.MemoryMarshal.AsBytes(sv.AsSpan()));
+		}
+		g[13] = h;
+
+		h = 0xA5UL;
+		foreach (var (eid, im) in q.Images)
+		{
+			h = Fold(h, eid.Ref);
+			h = Fold(h, im.Ref.ImageData == null ? 0UL
+				: (ulong)System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(im.Ref.ImageData));
+			h = Fold(h, (ulong)BitConverter.SingleToInt32Bits(im.Ref.SourceSize.X)
+				| ((ulong)(uint)BitConverter.SingleToInt32Bits(im.Ref.SourceSize.Y) << 32));
+			h = FoldBytes(h, System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+				System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref im.Ref.Tint, 1)));
+		}
+		g[14] = h;
+
+		h = 0xA5UL;
+		foreach (var (eid, cu) in q.Customs)
+		{
+			h = Fold(h, eid.Ref);
+			h = Fold(h, cu.Ref.Data == null ? 0UL
+				: (ulong)System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(cu.Ref.Data));
+		}
+		g[15] = h;
+
+		h = 0xA5UL;
+		foreach (var (eid, ch) in q.Children)
+		{
+			h = Fold(h, eid.Ref);
+			ref var children = ref ch.Ref;
+			foreach (var childId in children)
+				h = Fold(h, childId);
+		}
+		g[16] = h;
 	}
 
 	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ, SystemProfiler profiler)

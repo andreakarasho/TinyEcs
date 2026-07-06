@@ -1247,10 +1247,13 @@ public class App
 		sb.Append("  layout: roots=").Append(profiler.LayoutRoots)
 		  .Append(" nodes=").Append(profiler.LayoutNodes)
 		  .Append(" culled(Display.None)=").Append(profiler.LayoutCulled)
+		  .Append(" skipped=").Append(profiler.LayoutSkipped)
+		  .Append(" dirty=0x").Append(profiler.LayoutDirtyMask.ToString("X"))
 		  .Append("  | walk=").Append((profiler.LayoutWalkTicks * msPerTick).ToString("0.000"))
 		  .Append("ms solve=").Append((profiler.LayoutSolveTicks * msPerTick).ToString("0.000"))
 		  .Append("ms | build=").Append((profiler.LayoutBuildTicks * msPerTick).ToString("0.000"))
 		  .Append("ms config=").Append((profiler.LayoutConfigTicks * msPerTick).ToString("0.000")).Append("ms (last frame)\n");
+		profiler.LayoutSkipped = 0;
 		var table = sb.ToString();
 		if (HasResource<SystemProfileReport>())
 			GetResource<SystemProfileReport>().Publish(table);

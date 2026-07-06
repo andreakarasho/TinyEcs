@@ -142,6 +142,8 @@ internal sealed class WasmtimeModInstance : IModInstance
         Span<ComponentValue> vals = count <= 16 ? stackalloc ComponentValue[count] : new ComponentValue[count];
         _snapshotScratch.Clear();
 
+        var hasQuery = false;
+        var anyRows = false;
         for (var i = 0; i < count; i++)
         {
             var p = sys.Params[i];
@@ -156,12 +158,17 @@ internal sealed class WasmtimeModInstance : IModInstance
                 _snapshotScratch.Add(snapshot);
                 var h = _imports.RegisterQuery(new QueryAdapter(new QueryImpl(_ctx, snapshot, matched, p.Query!.Components)));
                 vals[i] = ComponentValue.CreateOwnResource(_store, h, G.QueryTypeId);
+                hasQuery = true;
+                anyRows |= matched > 0;
             }
         }
 
         try
         {
-            using var _ = _instance.Call(sys.Name, 0, vals);
+            // Idle-skip: every query empty this tick AND last — skip the guest call.
+            // The finally still disposes the registered resources, same as a run.
+            if (!ModdingPlugin.ShouldSkipIdle(sys, hasQuery, anyRows))
+                using (var _ = _instance.Call(sys.Name, 0, vals)) { }
         }
         finally
         {

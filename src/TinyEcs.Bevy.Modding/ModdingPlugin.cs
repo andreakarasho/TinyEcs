@@ -416,6 +416,28 @@ public readonly struct ModdingPlugin : IPlugin
         }
     }
 
+    // Idle-skip (used by the backends' RunSystem AFTER snapshots are built, so
+    // the query evaluation is never paid twice): don't cross the component
+    // boundary for a system whose every query matched zero entities LAST tick
+    // too. The first all-empty tick always runs so the guest sees one empty
+    // result set (e.g. ecs-ui's hover diff emits MouseLeave off it). Every 8th
+    // idle tick still runs as a safety net for guest-side timer pumps that
+    // piggyback on the call (~130ms at 60fps — tooltip-delay-scale latency).
+    // Query-less systems (Commands-only) never skip — no signal to gate on.
+    internal const int IdleSafetyRunPeriod = 8;
+
+    internal static bool ShouldSkipIdle(ModSystemSpec sys, bool hasQuery, bool anyRows)
+    {
+        if (!hasQuery || anyRows)
+        {
+            sys.EmptyStreak = 0;
+            return false;
+        }
+        sys.EmptyStreak++;
+        // Streak 1 = the transition tick — run it. Then run every Nth.
+        return sys.EmptyStreak > 1 && (sys.EmptyStreak % IdleSafetyRunPeriod) != 0;
+    }
+
     // Drain host enable/disable/reload requests at a safe single-threaded point.
     private static void ProcessModControl(ResMut<ModRuntimes> runtimesRes, ResMut<ModControl> controlRes, Res<App> appRes, Res<ModdingConfig> configRes)
     {

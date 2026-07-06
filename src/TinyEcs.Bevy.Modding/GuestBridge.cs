@@ -48,6 +48,11 @@ internal sealed class ModSystemSpec
     public readonly List<ModParam> Params = new();
     public readonly List<string> After = new();
     public readonly List<string> Before = new();
+    // Consecutive scheduler ticks every query param matched zero entities.
+    // Drives the idle-skip in ModdingPlugin.RunSystemsForStage — crossing the
+    // component boundary for a no-row tick costs ~0.3ms/system on the jco
+    // (JS-engine-in-wasm) backend.
+    public int EmptyStreak;
 }
 
 internal sealed class ModObserverSpec
