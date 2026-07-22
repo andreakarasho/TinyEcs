@@ -1,21 +1,17 @@
-// Runtime-neutral mirrors of the tinyecs.wit `schedule` / `observer-event` /
-// `query-for` variants. The fork's source generator emits these as
-// Wit.Tinyecs.Modding.App.Schedule/ObserverEvent/QueryFor (aliased WitApp.* at call
-// sites) from the WIT AdditionalFile — a wasmtime-only concept. GuestBridge.cs, the
-// scheduler in ModdingPlugin.cs, and JcoModBackend.cs talk ONLY these neutral types;
-// WasmtimeModBackend.cs (and its adapter file, WasmtimeGuestAdapters.cs) is the sole
-// place that maps WitApp.* onto them. Keeps the runtime-agnostic half of the lib
-// compilable with zero wasmtime/Wit.* references under WasmGuest.
+// Runtime-neutral schedule / observer-event / query-term enums the modding surface
+// speaks. GuestBridge.cs, the scheduler in ModdingPlugin.cs, and both backends
+// (CoreWasmModBackend translates the FlatBuffers ModAbi enums onto these; JcoModBackend
+// consumes them directly) talk ONLY these neutral types — no generated bindings, so the
+// lib compiles unchanged under WasmGuest.
 //
-// Each WIT variant case with a payload (Insert(type-path), Custom(string), ...)
-// splits into the enum case here + a separate payload field on the type that holds
-// it (ModSystemSpec.CustomStage, ModObserverSpec.TypePath, ModQueryTerm.TypePath) —
-// a plain enum can't carry per-case data the way a WIT variant / C# discriminated
-// union can.
+// A case that carries a payload (Insert(type-path), Custom(string), ...) splits into
+// the enum case here + a separate payload field on the owning type (ModSystemSpec.
+// CustomStage, ModObserverSpec.TypePath, ModQueryTerm.TypePath) — a plain enum can't
+// carry per-case data.
 
 namespace TinyEcs.Bevy.Modding;
 
-/// Mirrors tinyecs.wit `schedule` (cuo Stage selection).
+/// Which Bevy Stage a mod system runs in (plus the once-on-load ModStartup).
 internal enum ModSchedule : byte
 {
     /// Runs once when a mod is first loaded (not Stage.Startup).
@@ -29,8 +25,8 @@ internal enum ModSchedule : byte
     Custom,
 }
 
-/// Mirrors tinyecs.wit `observer-event`. Insert/Remove/Custom carry a type-path /
-/// event-name payload separately — see ModObserverSpec.TypePath.
+/// Observer event kind. Insert/Remove/Custom carry a type-path / event-name payload
+/// separately — see ModObserverSpec.TypePath.
 internal enum ModObserverKind : byte
 {
     Spawn,
@@ -40,8 +36,7 @@ internal enum ModObserverKind : byte
     Custom,
 }
 
-/// Mirrors tinyecs.wit `query-for`. Every case carries a type-path payload — see
-/// ModQueryTerm.TypePath.
+/// Query term kind. Every case names a type-path — see ModQueryTerm.TypePath.
 internal enum ModQueryTermKind : byte
 {
     Ref,
@@ -50,8 +45,8 @@ internal enum ModQueryTermKind : byte
     Without,
 }
 
-/// One query term: a ModQueryTermKind plus the type-path it names. Neutral
-/// replacement for WitApp.QueryFor — SystemImpl.AddQuery takes a span of these.
+/// One query term: a ModQueryTermKind plus the type-path it names. SystemImpl.AddQuery
+/// takes a span of these.
 internal readonly struct ModQueryTerm(ModQueryTermKind kind, string typePath)
 {
     public readonly ModQueryTermKind Kind = kind;

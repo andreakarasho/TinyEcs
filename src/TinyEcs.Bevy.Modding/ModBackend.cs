@@ -10,14 +10,17 @@
 
 namespace TinyEcs.Bevy.Modding;
 
-/// Which wasm component runtime hosts the mods.
+/// Which wasm runtime hosts the mods.
 public enum WasmBackend : byte
 {
-    /// Native wasmtime via the wasmtime-dotnet fork (desktop default).
-    Wasmtime,
     /// Browser: host runs as a wasm component (NativeAOT-LLVM), mods are jco-transpiled
     /// and brokered by the JS glue. Requires ModdingConfig.JsChannel. See JcoModBackend.cs.
     Jco,
+    /// Native core-wasm module mods (desktop default) via the upstream Wasmtime NuGet +
+    /// the FlatSharp ModAbi wire contract (abi/mod-abi.fbs). See CoreWasmModBackend.cs.
+    /// The component-model mod path (wasmtime-dotnet fork) was removed — a component
+    /// binary is now rejected by ModdingPlugin's sniff guard.
+    Core,
 }
 
 /// A mod component to load, backend-shaped: wasmtime instantiates from raw bytes

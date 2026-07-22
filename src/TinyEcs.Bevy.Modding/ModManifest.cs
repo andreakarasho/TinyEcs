@@ -15,8 +15,13 @@ public sealed class ModManifest
     /// Mod version (semver string; recorded, not enforced yet).
     public string Version { get; set; } = "";
 
-    /// The WASM component file to load, relative to the mod's own folder.
+    /// The WASM file to load, relative to the mod's own folder.
     public string Wasm { get; set; } = "";
+
+    /// Reserved. Mods are core-wasm modules (abi/mod-abi.fbs); the field is kept for
+    /// manifest forward-compat but is no longer read — the loader sniffs the wasm
+    /// preamble and rejects component-model binaries outright.
+    public string Abi { get; set; } = "";
 
     /// Reserved per-mod rules / capability grants. Empty object for now.
     // ponytail: raw JsonElement placeholder so it round-trips any future shape

@@ -140,6 +140,16 @@ public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent where T : 
         => world.EmitTrigger(entity, JsonSerializer.Deserialize(json, typeInfo)!);
 }
 
+/// Which kind of registered entry a type-path names. Used by the core-wasm backend
+/// to intern every path (components + resources + events) into one shared u16 id
+/// space for the Handshake, keyed back to the right registry lookup.
+public enum ModRegistryKind : byte
+{
+    Component,
+    Resource,
+    Event,
+}
+
 public sealed class ModComponentRegistry
 {
     private readonly Dictionary<string, IModComponent> _byPath = new();
@@ -157,4 +167,20 @@ public sealed class ModComponentRegistry
     public void RegisterEvent(string name, IModEvent ev) => _evByName[name] = ev;
 
     public bool TryGetEvent(string name, [MaybeNullWhen(false)] out IModEvent ev) => _evByName.TryGetValue(name, out ev);
+
+    /// Every registered path with its kind, in a stable order (components, then
+    /// resources, then events). Reflection-free — just walks the three dicts. The
+    /// core-wasm backend interns these into the Handshake's u16 type-path id space.
+    public IEnumerable<(string Path, ModRegistryKind Kind)> Entries
+    {
+        get
+        {
+            foreach (var path in _byPath.Keys)
+                yield return (path, ModRegistryKind.Component);
+            foreach (var path in _resByPath.Keys)
+                yield return (path, ModRegistryKind.Resource);
+            foreach (var name in _evByName.Keys)
+                yield return (name, ModRegistryKind.Event);
+        }
+    }
 }

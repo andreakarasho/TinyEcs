@@ -26,21 +26,15 @@
     <ProjectReference Include="..\..\src\TinyEcs.Bevy.Modding\TinyEcs.Bevy.Modding.csproj" />
   </ItemGroup>
 
-  <!-- Vendored guest component fixture (a counter mod that imports ONLY
-       tinyecs:modding) so this test has no dependency on the parent repo. -->
+  <!-- Upstream Wasmtime native (core-wasm module backend) next to the test output — it
+       does not flow via ProjectRef (RID-scoped). Read from the modding lib's output
+       (which resolves it from the NuGet cache). Windows x64 only for now; other RIDs
+       need the matching runtimes/<rid>/native name. -->
   <ItemGroup>
-    <None Include="fixtures\ecs_counter.wasm" Link="fixtures\ecs_counter.wasm" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <!-- Native wasmtime library next to the test output (does not flow via ProjectRef).
-       Globbed over TFM (**) and per-OS name so neither net9.0 nor Windows is hardcoded. -->
-  <ItemGroup>
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
+    <_UpstreamWasmtimeNative Include="..\..\src\TinyEcs.Bevy.Modding\bin\$(Configuration)\net10.0\wasmtime.dll" />
   </ItemGroup>
   <Target Name="CopyWasmtimeNative" AfterTargets="Build">
-    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_UpstreamWasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_UpstreamWasmtimeNative)')" />
   </Target>
 
 </Project>

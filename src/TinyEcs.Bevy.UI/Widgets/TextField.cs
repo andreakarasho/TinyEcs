@@ -13,8 +13,7 @@ namespace TinyEcs.Bevy.UI.Widgets;
 //
 // Caret/selection VISUALS are deliberately not drawn here — rendering is
 // host-specific. Read TextFieldEditor (Focused/Caret/Selection/CaretX) to
-// paint them. Multiline, masking and bespoke fonts-with-kerning stay host-side
-// (see ClassicUO's TextEditPlugin for a full example).
+// paint them. Multiline, masking and bespoke fonts-with-kerning stay host-side.
 
 /// <summary>Editable single-line field marker. MaxLength 0 = unbounded.</summary>
 public struct TextField

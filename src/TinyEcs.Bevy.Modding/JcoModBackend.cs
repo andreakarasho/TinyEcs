@@ -6,7 +6,7 @@
 //
 // Two directions cross the JS boundary:
 //
-//   host -> guest  (this file): Setup / RunSystem / observer / packet / reload. The
+//   host -> guest  (this file): Setup / RunSystem / observer / filter / reload. The
 //     host marshals the call and forwards it through IJsModChannel, which calls the
 //     jco-instantiated mod's matching export. This half is pure C# and is what this
 //     file implements — it slots into IModInstance like the wasmtime backend.

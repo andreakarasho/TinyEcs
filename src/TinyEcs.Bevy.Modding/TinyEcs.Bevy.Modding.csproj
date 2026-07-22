@@ -21,6 +21,25 @@
     <DefineConstants>$(DefineConstants);WASM_GUEST</DefineConstants>
   </PropertyGroup>
 
+  <!-- GUEST_CORE guest flavor (bare wasip1 core module, no jco) — propagates from
+       ClassicUO.Ecs.Wasm's publish -p:CoreModule=true (a global property, so it
+       flows to this P2P reference exactly like WasmGuest does). Mods stay
+       core-wasm modules on this path too (see abi/mod-abi.fbs), just relayed
+       through flat env imports to JS instead of an embedded Wasmtime — so this
+       flavor needs FlatSharp (below) but never Wasmtime. -->
+  <PropertyGroup Condition="'$(CoreModule)' == 'true'">
+    <DefineConstants>$(DefineConstants);GUEST_CORE</DefineConstants>
+  </PropertyGroup>
+
+  <!-- FlatSharp (the ModAbi wire types + ModAbiRunner/CoreWasmModBackend, which
+       speak them) is needed by desktop AND the GUEST_CORE guest — both host
+       core-wasm mods over the same FlatSharp wire format, just through a
+       different IModWasmExecutor. Only the plain Jco guest (Component Model
+       mods, JSON over the canonical ABI) has no use for it. -->
+  <PropertyGroup>
+    <UseFlatSharp Condition="'$(WasmGuest)' != 'true' OR '$(CoreModule)' == 'true'">true</UseFlatSharp>
+  </PropertyGroup>
+
   <!-- The bridge impls + generated WIT types are internal; the cuo test drives
        the bridge directly. (The lib's own tests use only the public surface.) -->
   <ItemGroup>
@@ -32,6 +51,11 @@
          way WasmtimeGuestAdapters.cs does on desktop. AssemblyName below, not the
          csproj/directory name (ClassicUO.Ecs.Wasm). -->
     <InternalsVisibleTo Include="cuo-guest" />
+    <!-- The CoreModule flavor renames the assembly to cuo-guest-core (see that
+         csproj); its guest-relay executor (Core/ModRelayExecutor.cs) constructs
+         ModdingConfig.WasmExecutor/WasmManifestSource (internal) and implements
+         IModWasmExecutor/IModImportSink (internal) directly. -->
+    <InternalsVisibleTo Include="cuo-guest-core" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,41 +65,98 @@
     <ProjectReference Include="..\..\external\Clay.NET\src\Clay\Clay.csproj" />
   </ItemGroup>
 
-  <!-- Wasmtime-only sources: the adapter shims + typed-component path over the
-       fork's generated G.I*/WitApp.* bindings, and the Linker-typed half of
-       ModdingConfig. Excluded under WasmGuest so no Wit.*/Wasmtime symbol is ever
-       referenced by the compiled guest lib (see also the ProjectReference /
-       AdditionalFiles below, which are the source of those symbols). -->
+  <!-- ModWasmExecutor.cs (the executor/sink seam interfaces) and ModAbiBacking.cs
+       (the generic import backing + CoreModState) have NEITHER a Wasmtime nor a
+       FlatSharp dependency and stay compiled everywhere — every executor
+       (Wasmtime today, the GUEST_CORE guest-relay executor) shares them unchanged.
+       ModAbiRunner.cs + CoreWasmModBackend.cs (FlatSharp) drop out with the plain
+       Jco guest (no use for the FlatSharp ModAbi wire format there); Wasmtime
+       ModWasmExecutor.cs drops out of EVERY guest flavor (no embedded runtime
+       in a browser guest, core or jco). -->
+  <ItemGroup Condition="'$(UseFlatSharp)' != 'true'">
+    <Compile Remove="CoreWasmModBackend.cs" />
+    <Compile Remove="ModAbiRunner.cs" />
+  </ItemGroup>
   <ItemGroup Condition="'$(WasmGuest)' == 'true'">
-    <Compile Remove="WasmtimeModBackend.cs" />
-    <Compile Remove="WasmtimeGuestAdapters.cs" />
-    <Compile Remove="ModdingConfigWasmtime.cs" />
-    <Compile Remove="TypedComponents.cs" />
+    <Compile Remove="WasmtimeModWasmExecutor.cs" />
   </ItemGroup>
 
-  <!-- wasmtime-dotnet fork (component-model host + WIT source generator), vendored
-       as a submodule under this repo's external/. The generator emits
-       Wit.Tinyecs.Modding.* host bindings from the .wit AdditionalFile. Dropped
-       entirely under WasmGuest — the browser guest never links wasmtime. -->
-  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
-    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" />
-    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime.SourceGenerator\Wasmtime.SourceGenerator.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <AdditionalFiles Include="wit\tinyecs\tinyecs.wit" />
+  <!-- Core-wasm mod ABI (FlatSharp). The canonical schema abi/mod-abi.fbs is
+       ATTRIBUTE-FREE (planus rejects user attributes); FlatSharp needs an annotated
+       copy, so DeriveFlatSharpSchema copies it into obj/, prepends the fs_serializer
+       attribute decl, and tags the 5 boundary root tables — annotating a root pulls
+       its whole graph. Generated C# lands in namespace ModAbi (from the .fbs).
+       Needed by desktop AND the GUEST_CORE guest (see UseFlatSharp above); the plain
+       Jco guest pushes JSON instead and never touches this. -->
+  <ItemGroup Condition="'$(UseFlatSharp)' == 'true'">
+    <PackageReference Include="FlatSharp.Compiler" Version="7.9.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="FlatSharp.Runtime" Version="7.9.0" />
   </ItemGroup>
 
-  <!-- The native wasmtime library is a runtime asset of the fork that does NOT
-       flow reliably through a ProjectReference. Copy it from the fork's build
-       output next to this lib's output so referencing host/test projects can
-       P/Invoke it. Globbed over TFM (**) and the per-OS native name so neither
-       net9.0 nor Windows is hardcoded — only the current OS's file exists, so
-       only it is copied. Skipped under WasmGuest (no wasmtime reference to copy for). -->
-  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\wasmtime.dll" />
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.so" />
-    <_WasmtimeNative Include="..\..\external\wasmtime-dotnet\src\Wasmtime\bin\$(Configuration)\**\libwasmtime.dylib" />
+  <PropertyGroup Condition="'$(UseFlatSharp)' == 'true'">
+    <CanonicalModAbiFbs>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\abi\mod-abi.fbs'))</CanonicalModAbiFbs>
+    <DerivedModAbiFbs>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\obj\mod-abi.fs.fbs'))</DerivedModAbiFbs>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseFlatSharp)' == 'true'">
+    <FlatSharpSchema Include="$(DerivedModAbiFbs)" />
   </ItemGroup>
-  <Target Name="CopyWasmtimeNative" AfterTargets="Build" Condition="'$(WasmGuest)' != 'true'">
-    <Copy SourceFiles="@(_WasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+
+  <UsingTask Condition="'$(UseFlatSharp)' == 'true'" TaskName="WriteTextFile" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Path ParameterType="System.String" Required="true" />
+      <Content ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        System.IO.File.WriteAllText(Path, Content);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="DeriveFlatSharpSchema"
+          Condition="'$(UseFlatSharp)' == 'true'"
+          BeforeTargets="FlatSharpFbsCompile"
+          Inputs="$(CanonicalModAbiFbs)"
+          Outputs="$(DerivedModAbiFbs)">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\obj" />
+    <PropertyGroup>
+      <_ModAbi>$([System.IO.File]::ReadAllText('$(CanonicalModAbiFbs)'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table Handshake {', 'table Handshake (fs_serializer) {'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table SetupReply {', 'table SetupReply (fs_serializer) {'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table SystemInput {', 'table SystemInput (fs_serializer) {'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table CommandBuffer {', 'table CommandBuffer (fs_serializer) {'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table ObserverInput {', 'table ObserverInput (fs_serializer) {'))</_ModAbi>
+      <_DerivedModAbi>// AUTO-DERIVED from abi/mod-abi.fbs for FlatSharp — do not edit.
+attribute &quot;fs_serializer&quot;%3B
+$(_ModAbi)</_DerivedModAbi>
+    </PropertyGroup>
+    <WriteTextFile Path="$(DerivedModAbiFbs)" Content="$(_DerivedModAbi)" />
+    <Message Text="Derived FlatSharp schema: $(DerivedModAbiFbs)" Importance="high" />
+  </Target>
+
+  <!-- Upstream official Wasmtime NuGet (core-module runtime) — the CoreWasmModBackend's
+       host. The component-model fork ProjectReference + its WIT source generator were
+       removed with the component-model mod path, so there is no longer a Wasmtime
+       namespace collision: this is a plain PackageReference (no alias, compile asset
+       flows to consumers). Dropped under WasmGuest — the browser guest never links
+       wasmtime (it hosts mods via the Jco backend). -->
+  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
+    <PackageReference Include="Wasmtime" Version="44.0.0" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <!-- Upstream Wasmtime native (core-module runtime). The win-x64 native wasmtime.dll
+       does NOT flow through the PackageReference (no RID), so copy it from the NuGet
+       cache ($(PkgWasmtime) via GeneratePathProperty) next to this lib's output.
+       Consumers (cuo-ecs + tests) then read it from here. Windows x64 for now; other
+       RIDs need their own runtimes/<rid>/native path. -->
+  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
+    <_UpstreamWasmtimeNative Include="$(PkgWasmtime)\runtimes\win-x64\native\wasmtime.dll" />
+  </ItemGroup>
+  <Target Name="CopyUpstreamWasmtimeNative" AfterTargets="Build" Condition="'$(WasmGuest)' != 'true'">
+    <Copy SourceFiles="@(_UpstreamWasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_UpstreamWasmtimeNative)')" />
   </Target>
 </Project>

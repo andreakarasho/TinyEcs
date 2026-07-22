@@ -1,18 +1,10 @@
-// Runtime-agnostic half of the tinyecs:modding `app` bridge (the imports a WASM
-// guest/mod consumes). Every type in this file is neutral — no wasmtime types, no
-// Wit.* generated bindings — so it compiles under WasmGuest with zero wasmtime
-// references. Each Impl struct exposes the guest-facing operations as concrete
-// methods over neutral/BCL types (ModSchedule/ModObserverKind/ModQueryTerm, plain
-// strings/spans, concrete struct returns instead of interfaces).
-//
-// The wasmtime backend needs each of these to satisfy a fork-generated G.I*
-// interface (G.IApp, G.ICommands, ...) with WitApp-typed parameters. Those thin
-// adapter shims — plus the GuestBridge(ModHostContext) : G.GuestImports class
-// itself, plus the typed (component-value) methods (SpawnTyped/InsertTyped/
-// SetTyped), which only the wasmtime channel ever calls — live in
-// WasmtimeGuestAdapters.cs, a wasmtime-only file excluded under WasmGuest. Several
-// structs here are declared `partial` so that file can add those typed methods
-// without this file needing to know about WitApp.ComponentValue.
+// The `app` bridge a WASM guest/mod calls back into (spawn / component get-set /
+// query iter / emit-event / resource get-set). Every type here is neutral — no
+// wasmtime types, no generated bindings — so it compiles unchanged under both the
+// desktop core-wasm backend (CoreWasmModBackend applies a mod's CommandBuffer through
+// these Impl structs) and the browser Jco backend, and under WasmGuest. Each Impl
+// struct exposes the guest-facing operations as concrete methods over neutral/BCL
+// types (ModSchedule/ModObserverKind/ModQueryTerm, plain strings/spans).
 //
 // They share a per-mod ModHostContext (World + component registry + the list of
 // systems the mod registered during setup). These methods run synchronously
@@ -80,6 +72,15 @@ public sealed class ModHostContext
     public Action<byte>? ConsumeMouse;
     // Keyboard half of the input-override capability (consume a key this frame).
     public Action<uint>? ConsumeKeyboard;
+    // Game-specific wasm host imports, described by the HOST (a ModdingConfig.
+    // PerModContext hook) as meaning-free shape descriptors — see ModHostImports.cs.
+    // The generic lib defines only the ECS imports (log / entity_parent /
+    // entity_children / component_get / resource_get) and supplies no game imports
+    // of its own; it never learns their names or semantics. HostImportModule is the
+    // wasm import module BOTH sets are defined under (fixed by the mod wire ABI the
+    // host ships, so the host owns the string).
+    public string HostImportModule = "host";
+    public readonly List<ModHostImport> HostImports = new();
     internal readonly List<ModSystemSpec> Systems = new();
     // Systems bucketed by stage so the per-frame runner does a dict lookup
     // instead of scanning every system and filtering. Populated in AddSystems;
@@ -153,10 +154,8 @@ internal struct SystemImpl
     public void Before(SystemImpl other) => Spec.Before.Add(other.Spec.Name);
 }
 
-// Internal: references internal generated types. Tests that drive it directly
-// reach it via InternalsVisibleTo (see the csproj). `partial`: the typed
-// (component-value) SpawnTyped overload is wasmtime-only — see WasmtimeGuestAdapters.cs.
-internal partial struct CommandsImpl(ModHostContext ctx)
+// Internal: the lib tests drive it directly via InternalsVisibleTo (see the csproj).
+internal struct CommandsImpl(ModHostContext ctx)
 {
     public EntityCommandsImpl SpawnEmpty()
     {
@@ -210,8 +209,7 @@ internal partial struct CommandsImpl(ModHostContext ctx)
     }
 }
 
-// `partial`: InsertTyped (component-value) is wasmtime-only — see WasmtimeGuestAdapters.cs.
-internal partial struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
+internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
 {
     public EntityImpl Id() => new EntityImpl(ctx, entity);
 
@@ -304,8 +302,7 @@ internal struct QueryResultImpl(ModHostContext ctx, ulong entity, List<(string t
     }
 }
 
-// `partial`: SetTyped (component-value) is wasmtime-only — see WasmtimeGuestAdapters.cs.
-internal partial struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable)
+internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable)
 {
     public string Get()
         => ctx.Registry.TryGet(typePath, out var comp) ? comp.GetJson(ctx.World, entity) : "null";
