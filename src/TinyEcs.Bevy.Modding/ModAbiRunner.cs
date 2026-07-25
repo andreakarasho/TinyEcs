@@ -322,9 +322,8 @@ internal sealed class ModAbiRunner : IModInstance
                     var v = cmd.ResourceSetCmd.Value;
                     if (v != null && _state.IdToEntry.TryGetValue(v.TypeId, out var e))
                     {
-                        if (v.Encoding != ModAbi.Encoding.Json)
-                            throw new NotSupportedException($"typed CompValue encoding not supported in phase 1 (resource {e.Path})");
-                        commands.ResourceSet(e.Path, Utf8(v.Data));
+                        if (IsApplicable(v.Encoding, e.Path))
+                            commands.ResourceSet(e.Path, Utf8(v.Data));
                     }
                     break;
                 }
@@ -361,8 +360,8 @@ internal sealed class ModAbiRunner : IModInstance
             {
                 if (!_state.IdToEntry.TryGetValue(cv.TypeId, out var e))
                     continue;
-                if (cv.Encoding != ModAbi.Encoding.Json)
-                    throw new NotSupportedException($"typed CompValue encoding not supported in phase 1 (component {e.Path})");
+                if (!IsApplicable(cv.Encoding, e.Path))
+                    continue;
                 _bundleScratch.Add((e.Path, Utf8(cv.Data)));
             }
         return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_bundleScratch);
@@ -380,4 +379,16 @@ internal sealed class ModAbiRunner : IModInstance
 
     private static string Utf8(Memory<byte>? data)
         => data is { Length: > 0 } d ? System.Text.Encoding.UTF8.GetString(d.Span) : "{}";
+
+    // Encoding.Typed (the phase-2 registry SetFlat path) is not implemented yet. Wire
+    // input is a boundary: SKIP the one payload and log it rather than throwing —
+    // a throw here escapes ApplyCommandBuffer and silently drops every remaining
+    // command in the guest's buffer (half-built UI, no diagnostic beyond one line).
+    private static bool IsApplicable(ModAbi.Encoding encoding, string path)
+    {
+        if (encoding == ModAbi.Encoding.Json)
+            return true;
+        Console.WriteLine("[ecs-mod] skipped {0}: CompValue encoding {1} is not implemented", path, encoding);
+        return false;
+    }
 }

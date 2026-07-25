@@ -40,6 +40,29 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
     // Single-world assumption (one registry per App/World).
     private Query? _query;
 
+    // TinyEcs classifies a FIELDLESS struct as a zero-size TAG: it has no column, so
+    // World.Get panics on one ("this is not a component"). Plenty of registered paths
+    // are tags (`struct UiMovable;`, `struct Mobiles;`, scene/gump markers…), and a
+    // mod reads them like any other component — through a Ref query term or the
+    // component_get import, where a throw traps the guest. A tag carries no data, so
+    // "{}" IS its payload both ways. Probed the way TinyEcs sizes components
+    // (Lookup.GetSize; credit BeanCheeseBurrito from Flecs.NET): a 1-byte struct whose
+    // single byte doesn't participate in equality has no fields.
+    private static readonly bool IsTag = ProbeIsTag();
+
+    private static bool ProbeIsTag()
+    {
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>()
+            || System.Runtime.CompilerServices.Unsafe.SizeOf<T>() != 1)
+            return false;
+
+        System.Runtime.CompilerServices.Unsafe.SkipInit<T>(out var a);
+        System.Runtime.CompilerServices.Unsafe.SkipInit<T>(out var b);
+        System.Runtime.CompilerServices.Unsafe.As<T, byte>(ref a) = 0x7F;
+        System.Runtime.CompilerServices.Unsafe.As<T, byte>(ref b) = 0xFF;
+        return ValueType.Equals(a, b);
+    }
+
     public bool Has(World world, ulong entity) => world.Has<T>(entity);
 
     public void CollectEntities(World world, ref PooledList<ulong> into)
@@ -54,10 +77,12 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
     }
 
     public string GetJson(World world, ulong entity)
-        => JsonSerializer.Serialize(world.Get<T>(entity), typeInfo);
+        => IsTag ? "{}" : JsonSerializer.Serialize(world.Get<T>(entity), typeInfo);
 
+    // A tag has nothing to deserialize INTO — attach it and skip the payload (which a
+    // mod may legitimately send as "", "{}" or garbage; STJ throws on the empty one).
     public void SetJson(World world, ulong entity, string json)
-        => world.Set(entity, JsonSerializer.Deserialize(json, typeInfo)!);
+        => world.Set(entity, IsTag ? default : JsonSerializer.Deserialize(json, typeInfo)!);
 
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
 

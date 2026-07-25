@@ -213,8 +213,15 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
 {
     public EntityImpl Id() => new EntityImpl(ctx, entity);
 
+    // Exists-guarded like Remove/AddChild/Despawn: a guest's InsertCmd routinely
+    // names an entity that died between the pushed query snapshot and this apply
+    // (or an unresolvable temp ref, which ModAbiRunner.Resolve maps to 0). World.Set
+    // panics on a dead id, and that throw escapes the whole CommandBuffer — every
+    // later command in the buffer would be silently dropped.
     public void Insert(ReadOnlySpan<(string, string)> bundle)
     {
+        if (!ctx.World.Exists(entity))
+            return;
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
                 comp.SetJson(ctx.World, entity, json);
