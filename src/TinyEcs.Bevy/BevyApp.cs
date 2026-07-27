@@ -842,18 +842,31 @@ public class App
 	/// </summary>
 	internal void ProcessEvents()
 	{
-		// ConcurrentDictionary.Values returns a moment-in-time snapshot; no lock needed.
+		// Channels are only ever added (at plugin-build time / first EventReader fetch),
+		// never removed — so a count change is the only way the set can differ. Reading
+		// .Values every frame allocated an array + ReadOnlyCollection + enumerator, which
+		// measured as ~40% of the client's whole steady-state allocation.
 		var currentTick = _world.CurrentTick;
-		using var channels = new PooledList<IEventChannel>(_appState.EventChannels.Count);
-		foreach (var channel in _appState.EventChannels.Values)
+		var registered = _appState.EventChannels;
+		if (_eventChannelsCache.Length != registered.Count)
 		{
-			channels.Add(channel);
+			var snapshot = new IEventChannel[registered.Count];
+			var i = 0;
+			foreach (var pair in registered)
+			{
+				if (i == snapshot.Length) break;   // raced with another registration; next frame catches it
+				snapshot[i++] = pair.Value;
+			}
+			_eventChannelsCache = snapshot;
 		}
-		foreach (var channel in channels.AsSpan)
+
+		foreach (var channel in _eventChannelsCache)
 		{
 			channel.Flush(currentTick);
 		}
 	}
+
+	private IEventChannel[] _eventChannelsCache = [];
 
 	public App AddState<TState>(TState initialState) where TState : struct, Enum
 	{

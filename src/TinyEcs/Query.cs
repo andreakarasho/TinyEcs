@@ -189,7 +189,12 @@ public sealed class Query
 	{
 		Match();
 
-		return _matchedArchetypes.Sum(static s => s.Count);
+		// Enumerable.Sum boxes the List enumerator on every call. Count() sits under
+		// every RunIf gate, so that box was the single largest allocator in the client.
+		var count = 0;
+		foreach (var arch in CollectionsMarshal.AsSpan(_matchedArchetypes))
+			count += arch.Count;
+		return count;
 	}
 
 	public QueryIterator Iter()
