@@ -44,7 +44,19 @@ internal sealed class ParallelSystemExecutor : IDisposable
 	public ParallelSystemExecutor(int threadCount = 0)
 	{
 		if (threadCount <= 0)
-			threadCount = Math.Max(1, Environment.ProcessorCount - 1);
+		{
+			// One helper is woken per system per batch per frame, so pool size drives
+			// semaphore traffic, not throughput: sizing it at ProcessorCount - 1 made a
+			// 28-core box spend ~1 core in worker wakeups and 25% of the caller thread in
+			// SemaphoreSlim.Release. Measured in-world on the ClassicUO client, standing
+			// still (cores of CPU / fps): 27 -> 2.11/1752, 4 -> 1.93/1949, 2 -> 1.65/2050,
+			// 1 -> 1.54/2203. Same ordering during chunk streaming. Small boxes keep the
+			// old value; the cap only bites above 5 cores. TINYECS_WORKERS overrides —
+			// the sweet spot is workload-dependent and worth re-measuring per game.
+			threadCount = int.TryParse(Environment.GetEnvironmentVariable("TINYECS_WORKERS"), out var configured) && configured > 0
+				? configured
+				: Math.Min(Math.Max(1, Environment.ProcessorCount - 1), 4);
+		}
 
 		_workers = new Thread[threadCount];
 		for (var i = 0; i < threadCount; i++)
