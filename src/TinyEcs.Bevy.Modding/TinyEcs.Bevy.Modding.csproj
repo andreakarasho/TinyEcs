@@ -1,4 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Guest publishes build this lib with WASM_GUEST / GUEST_CORE / CUO_HOST_FS, which
+       change what it compiles (no Wasmtime backend, no folder mod discovery). Keep those
+       out of the bin the desktop client links from — otherwise a `make publish-wasi*`
+       leaves cuo-ecs.exe loading a mod loader that can't see ecs-mods/ at all. -->
+  <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
+    <BaseOutputPath>$(MSBuildProjectDirectory)\bin\wasmguest\</BaseOutputPath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- net10.0 only: the sole consumers (cuo-ecs + tests) are net10.0, and a
          single TFM avoids dragging TinyEcs/Clay/Wasmtime into net9.0 inner builds
@@ -31,6 +39,15 @@
     <DefineConstants>$(DefineConstants);GUEST_CORE</DefineConstants>
   </PropertyGroup>
 
+  <!-- -p:HostFs=true guest: no System.IO at all (the host serves files over flat env
+       fs_* imports). Mods reach that guest through the manifest-JSON / relay path,
+       never off disk, so the folder-discovery half of this plugin is compiled out —
+       leaving a single File.* reference behind would keep wasi's file syscalls in the
+       module's import table, which is the whole point of the flavor. -->
+  <PropertyGroup Condition="'$(HostFs)' == 'true'">
+    <DefineConstants>$(DefineConstants);CUO_HOST_FS</DefineConstants>
+  </PropertyGroup>
+
   <!-- FlatSharp (the ModAbi wire types + ModAbiRunner/CoreWasmModBackend, which
        speak them) is needed by desktop AND the GUEST_CORE guest — both host
        core-wasm mods over the same FlatSharp wire format, just through a
@@ -56,6 +73,9 @@
          ModdingConfig.WasmExecutor/WasmManifestSource (internal) and implements
          IModWasmExecutor/IModImportSink (internal) directly. -->
     <InternalsVisibleTo Include="cuo-guest-core" />
+    <!-- Same guest, emscripten/browser-wasm flavor (-p:BrowserWasm=true) — another
+         AssemblyName, same Core/ sources. -->
+    <InternalsVisibleTo Include="cuo-guest-browser" />
   </ItemGroup>
 
   <ItemGroup>

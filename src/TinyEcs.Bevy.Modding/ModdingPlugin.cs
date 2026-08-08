@@ -313,7 +313,7 @@ public readonly struct ModdingPlugin : IPlugin
                 // the compiled module, the guest never sees raw bytes at all).
                 var source = config.JsChannel != null || config.WasmManifestSource != null
                     ? new ModSource(manifest.Name, null)
-                    : new ModSource(manifest.Name, File.ReadAllBytes(wasmPath));
+                    : ReadModBytes(manifest.Name, wasmPath);
                 var backend = PickBackend(runtimes, manifest, source.Bytes);
                 var instance = backend.Load(in source, ctx);
                 instance.Setup();
@@ -365,10 +365,25 @@ public readonly struct ModdingPlugin : IPlugin
         return runtimes.Backend;
     }
 
+    // The only two places mod BYTES are read off disk. Isolated behind one method so the
+    // -p:HostFs=true guest (no System.IO) can compile it out; that guest always reaches
+    // mods through JsChannel/WasmManifestSource, so neither caller's branch is taken.
+#if CUO_HOST_FS
+    private static ModSource ReadModBytes(string name, string wasmPath)
+        => throw new NotSupportedException($"{name}: disk-loaded mods are unavailable in a HostFs guest ({wasmPath})");
+#else
+    private static ModSource ReadModBytes(string name, string wasmPath)
+        => new ModSource(name, File.ReadAllBytes(wasmPath));
+#endif
+
     // Filesystem discovery (wasmtime backend). Look both next to the exe (deployed
     // alongside the build) and in the working dir, so launch location doesn't
     // matter. Each mod is a subfolder with a mod.json manifest; dedup by manifest
     // name (exe dir wins over cwd).
+#if CUO_HOST_FS
+    private static (ModManifest Manifest, string WasmPath)[] DiscoverFolderMods(string modFolder)
+        => Array.Empty<(ModManifest, string)>();
+#else
     private static (ModManifest Manifest, string WasmPath)[] DiscoverFolderMods(string modFolder)
     {
         var candidates = new[]
@@ -385,6 +400,7 @@ public readonly struct ModdingPlugin : IPlugin
             .Select(g => g.First())
             .ToArray();
     }
+#endif
 
     // JSON discovery (Jco backend): no filesystem access on this path at all — the
     // WASM_GUEST host's JS side has already pre-transpiled every mod it can
@@ -419,6 +435,7 @@ public readonly struct ModdingPlugin : IPlugin
             .ToArray();
     }
 
+#if !CUO_HOST_FS
     // Read `<dir>/mod.json` and resolve the WASM it names (relative to the mod's
     // own folder). Returns null (skipping the folder) if there is no manifest, it
     // doesn't parse, names no wasm, or the wasm is missing.
@@ -457,6 +474,7 @@ public readonly struct ModdingPlugin : IPlugin
 
         return (manifest, wasmPath);
     }
+#endif
 
     private static void RunStage(ModRuntimes runtimes, ModSchedule which)
     {
@@ -587,7 +605,7 @@ public readonly struct ModdingPlugin : IPlugin
         // and re-runs setup, which repopulates ctx.Systems via the guest.
         var source = config.JsChannel != null || config.WasmManifestSource != null
             ? new ModSource(rt.Manifest.Name, null)
-            : new ModSource(rt.Manifest.Name, File.ReadAllBytes(rt.WasmPath));
+            : ReadModBytes(rt.Manifest.Name, rt.WasmPath);
         rt.Instance.Reload(in source);
 
         rt.Enabled = true;

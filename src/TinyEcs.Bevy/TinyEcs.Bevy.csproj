@@ -1,4 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- A cuo guest publish (-p:WasmGuest=true) rebuilds this lib WITHOUT WASM_THREADS and
+       would otherwise drop that build into the same bin the desktop client links from,
+       silently swapping the parallel scheduler out of an already-built exe. Separate bin
+       for guest builds. (BaseOutputPath only: BaseIntermediateOutputPath has to be set
+       before the SDK props import, and obj sharing is harmless — DefineConstants are part
+       of the up-to-date check, so the next build recompiles.) -->
+  <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
+    <BaseOutputPath>$(MSBuildProjectDirectory)\bin\wasmguest\</BaseOutputPath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
