@@ -1291,6 +1291,14 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// </summary>
 	public bool Contains(ulong id)
 	{
+		// 0 is not an entity — it is the caller's "nothing here" sentinel (no
+		// selection, no UI hit). GetIter overloads id 0 as "no id, iterate the
+		// whole query", so without this guard the raw iterator reports the
+		// query's FIRST row as a match and the caller acts on an entity nobody
+		// picked.
+		if (id == 0)
+			return false;
+
 		var iter = GetIter(id);
 		return iter.MoveNext();
 	}
@@ -1300,6 +1308,9 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// </summary>
 	public TQueryData Get(ulong id)
 	{
+		if (id == 0)
+			return default;
+
 		var iter = GetIter(id);
 		var success = iter.MoveNext();
 		return success ? iter.Current : default;
@@ -1311,6 +1322,12 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// </summary>
 	public bool TryGet(ulong id, out TQueryData data)
 	{
+		if (id == 0)
+		{
+			data = default;
+			return false;
+		}
+
 		var iter = GetIter(id);
 		if (iter.MoveNext())
 		{
