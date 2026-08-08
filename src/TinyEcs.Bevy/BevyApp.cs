@@ -1287,8 +1287,18 @@ public class App
 		var executor = stage == Stage.Startup ? StartupExecutor : _executor;
 
 		_world.BeginDeferred();
-		executor.ExecuteStage(runtime, _world);
-		_world.EndDeferred();
+		try
+		{
+			executor.ExecuteStage(runtime, _world);
+		}
+		finally
+		{
+			// A throwing system must not leak the deferred lock: with Locks stuck > 0
+			// Merge() never runs again, so every later structural command boxes into
+			// the deferred queues forever — the world silently stops applying changes
+			// while the app keeps ticking.
+			_world.EndDeferred();
+		}
 	}
 
 	/// <summary>

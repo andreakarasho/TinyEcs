@@ -1,3 +1,5 @@
+using TinyEcs.Bevy;
+
 namespace TinyEcs.Tests
 {
     public class DeferredTest
@@ -179,6 +181,36 @@ namespace TinyEcs.Tests
 
 			Assert.Equal(5f, entity.Get<FloatComponent>().Value);
 			Assert.Equal(5, entity.Get<IntComponent>().Value);
+		}
+
+		[Fact]
+		public void Deferred_ThrowingSystemDoesNotLeakTheStageLock()
+		{
+			// A system throwing out of a stage must not skip EndDeferred: with Locks
+			// stuck > 0 Merge() never runs again and every later structural command
+			// queues forever while the app keeps ticking.
+			using var world = new World();
+			var app = new App(world);
+
+			bool thrown = false;
+			app.AddSystem((Commands cmd) =>
+			{
+				if (!thrown)
+				{
+					thrown = true;
+					throw new InvalidOperationException("boom");
+				}
+				cmd.Spawn().Insert(new IntComponent { Value = 42 });
+			})
+			.InStage(Stage.Update)
+			.Build();
+
+			Assert.Throws<InvalidOperationException>(() => app.Update());
+			Assert.False(world.IsDeferred);
+
+			var count = world.EntityCount;
+			app.Update();
+			Assert.Equal(count + 1, world.EntityCount);
 		}
     }
 }
