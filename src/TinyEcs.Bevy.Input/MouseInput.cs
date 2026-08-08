@@ -25,7 +25,13 @@ public sealed class MouseInput
 
 	private Vector2 _oldPos, _newPos;
 	private MouseButtons _oldDown, _newDown;
-	private bool _active;
+	// Matches _pendingActive's default: without this the FIRST Update would look
+	// like a focus-regain and swallow the first press edge of the process.
+	private bool _active = true;
+	// Last position reported while focused: what Position keeps answering while
+	// the window is inactive, so hover/pick/tooltip consumers don't track a
+	// cursor the app doesn't own.
+	private Vector2 _lastActivePos;
 
 	private float _lastClickTime, _currentTime;
 	private readonly MouseButton?[] _lastClickButtons = new MouseButton?[2];
@@ -38,15 +44,20 @@ public sealed class MouseInput
 
 	/// <summary>
 	/// Feed the raw state for the upcoming frame. <paramref name="active"/> is
-	/// the window-focus gate: while false, all edge checks report nothing
-	/// (state still advances so no stale edges fire on refocus).
-	/// <paramref name="wheelDelta"/> is this frame's scroll in notches.
+	/// the window-focus gate: while false, edge checks report nothing, the wheel
+	/// reads zero and Position freezes (state still advances so no stale edges
+	/// fire on refocus). <paramref name="wheelDelta"/> is this frame's scroll in
+	/// notches.
 	/// </summary>
 	public void SetSnapshot(Vector2 position, MouseButtons down, float wheelDelta = 0f, bool active = true)
 	{
 		_pendingPos = position;
 		_pendingDown = down;
-		_pendingWheel += wheelDelta;
+		// Dropped, not deferred: an unfocused window still receives wheel events
+		// on Windows ("scroll inactive windows"), and accumulating them would
+		// dump the whole spin into the first focused frame.
+		if (active)
+			_pendingWheel += wheelDelta;
 		_pendingActive = active;
 	}
 
@@ -57,6 +68,8 @@ public sealed class MouseInput
 			_consumed[i] = false;
 		WheelConsumed = false;
 
+		var wasActive = _active;
+
 		_oldPos = _newPos;
 		_oldDown = _newDown;
 		_newPos = _pendingPos;
@@ -65,6 +78,21 @@ public sealed class MouseInput
 		Wheel = _pendingWheel;
 		_pendingWheel = 0f;
 		_currentTime = totalTimeMs;
+
+		// Focus regained: the click that raised the window (and any key/button
+		// held through the switch) happened while we weren't focused, so its
+		// press edge must not reach gameplay. Seeding old = new on this frame
+		// makes everything currently down read as "already held", so only a
+		// press that STARTS after focus counts. Same for the position: no jump
+		// offset from wherever the cursor wandered while we were away.
+		if (_active && !wasActive)
+		{
+			_oldDown = _newDown;
+			_oldPos = _newPos;
+		}
+
+		if (_active)
+			_lastActivePos = _newPos;
 
 		for (var button = MouseButton.None + 1; button < MouseButton.Count; button++)
 		{
@@ -102,10 +130,11 @@ public sealed class MouseInput
 		}
 	}
 
-	public Vector2 Position => _newPos;
-	public Vector2 PositionOffset => _newPos - _oldPos;
+	/// <summary>Cursor position, frozen at its last focused value while the window is inactive.</summary>
+	public Vector2 Position => _active ? _newPos : _lastActivePos;
+	public Vector2 PositionOffset => _active ? _newPos - _oldPos : Vector2.Zero;
 	/// <summary>Offset from the position of the last button press. Zero-anchored after release.</summary>
-	public Vector2 DraggingOffset => _newPos - _lastClickPosition;
+	public Vector2 DraggingOffset => _active ? _newPos - _lastClickPosition : Vector2.Zero;
 
 	public float Wheel { get; private set; }
 
@@ -132,7 +161,7 @@ public sealed class MouseInput
 		=> !IsConsumed(button) && _active && !Down(_newDown, button) && Down(_oldDown, button);
 
 	public bool IsPressedDouble(MouseButton button)
-		=> !IsConsumed(button) && _lastClickButtons[0] == button && _lastClickButtons[1] == button;
+		=> !IsConsumed(button) && _active && _lastClickButtons[0] == button && _lastClickButtons[1] == button;
 
 	public void Consume(MouseButton button)
 	{

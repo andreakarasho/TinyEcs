@@ -14,7 +14,9 @@ public sealed class KeyboardInput
 	private readonly bool[] _old = new bool[MaxKeys];
 	private readonly bool[] _new = new bool[MaxKeys];
 	private bool _pendingActive = true;
-	private bool _active;
+	// Matches _pendingActive's default: without this the FIRST Update would look
+	// like a focus-regain and swallow the first key edge of the process.
+	private bool _active = true;
 
 	private readonly KeyCode[] _pressedBuf = new KeyCode[MaxKeys];
 	private int _pressedCount;
@@ -38,9 +40,18 @@ public sealed class KeyboardInput
 	/// <summary>Advance one frame.</summary>
 	public void Update(float totalTimeMs)
 	{
+		var wasActive = _active;
+
 		Array.Copy(_new, _old, MaxKeys);
 		Array.Copy(_pending, _new, MaxKeys);
 		_active = _pendingActive;
+
+		// Focus regained: a key held across the switch (the Alt of an alt-tab,
+		// the Enter that dismissed another window) pressed while we weren't
+		// focused. Seed old = new so it reads as already-held and only a press
+		// that STARTS after focus fires an edge.
+		if (_active && !wasActive)
+			Array.Copy(_new, _old, MaxKeys);
 
 		_pressedCount = 0;
 		for (var i = 0; i < MaxKeys; i++)
@@ -54,6 +65,11 @@ public sealed class KeyboardInput
 
 	public bool IsReleased(KeyCode key) => _active && !_new[(int)key] && _old[(int)key];
 
-	/// <summary>Keys down this frame. Valid until the next <see cref="Update"/>.</summary>
-	public ReadOnlySpan<KeyCode> PressedKeys => _pressedBuf.AsSpan(0, _pressedCount);
+	/// <summary>
+	/// Keys down this frame — empty while the window is inactive, so consumers
+	/// that poll the held set (hotkey capture, mod input feeds) see no input
+	/// typed into another app. Valid until the next <see cref="Update"/>.
+	/// </summary>
+	public ReadOnlySpan<KeyCode> PressedKeys
+		=> _active ? _pressedBuf.AsSpan(0, _pressedCount) : ReadOnlySpan<KeyCode>.Empty;
 }
