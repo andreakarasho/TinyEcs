@@ -13,6 +13,9 @@ public sealed class KeyboardInput
 	private readonly bool[] _pending = new bool[MaxKeys];
 	private readonly bool[] _old = new bool[MaxKeys];
 	private readonly bool[] _new = new bool[MaxKeys];
+	// Keys the backend still reported as down at the moment focus came back. See
+	// Update: they read as UP until the backend reports them released.
+	private readonly bool[] _stale = new bool[MaxKeys];
 	private bool _pendingActive = true;
 	// Matches _pendingActive's default: without this the FIRST Update would look
 	// like a focus-regain and swallow the first key edge of the process.
@@ -51,19 +54,36 @@ public sealed class KeyboardInput
 		// focused. Seed old = new so it reads as already-held and only a press
 		// that STARTS after focus fires an edge.
 		if (_active && !wasActive)
+		{
 			Array.Copy(_new, _old, MaxKeys);
+			// ...and hide it from the HELD reads too, until the backend says it
+			// came up. Suppressing only the EDGE is not enough when the key-up
+			// never arrives: the window switcher swallows the Alt-up of an
+			// alt-tab, and a backend that keeps its own key cache (FNA's
+			// Keyboard.keys, which SDL3_FNAPlatform never clears on
+			// FOCUS_LOST) then reports that Alt held for the rest of the
+			// process — silently disabling every shortcut that stands down
+			// while Alt is down.
+			Array.Copy(_new, _stale, MaxKeys);
+		}
 
 		_pressedCount = 0;
 		for (var i = 0; i < MaxKeys; i++)
-			if (_new[i])
+		{
+			// A stranded key stops being stale once it is genuinely up; from then
+			// on a fresh press is a real press.
+			if (_stale[i] && !_new[i])
+				_stale[i] = false;
+			if (_new[i] && !_stale[i])
 				_pressedBuf[_pressedCount++] = (KeyCode)i;
+		}
 	}
 
-	public bool IsPressed(KeyCode key) => _active && _new[(int)key] && _old[(int)key];
+	public bool IsPressed(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && _old[(int)key];
 
-	public bool IsPressedOnce(KeyCode key) => _active && _new[(int)key] && !_old[(int)key];
+	public bool IsPressedOnce(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && !_old[(int)key];
 
-	public bool IsReleased(KeyCode key) => _active && !_new[(int)key] && _old[(int)key];
+	public bool IsReleased(KeyCode key) => _active && !_stale[(int)key] && !_new[(int)key] && _old[(int)key];
 
 	/// <summary>
 	/// Keys down this frame — empty while the window is inactive, so consumers
