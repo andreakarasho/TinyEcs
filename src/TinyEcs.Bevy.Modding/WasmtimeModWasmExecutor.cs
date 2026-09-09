@@ -67,6 +67,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         public Func<int, int, int, long>? RunFn;
         public Func<int, long, int, int, long>? ObserverFn;
         public Func<int, int, int, int>? FilterFn;
+        public Func<int, int, int, int>? FilterOutFn;
         public Action<int, int>? SpawnedFn;
 
         // Grow-only copy-out buffer for the guest's packed reply — see CopyPackedOut.
@@ -124,16 +125,22 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     }
 
     public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data)
+        => CallFilterSlot(_slots[handle]!.FilterFn, handle, arg, data);
+
+    public bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data)
+        => CallFilterSlot(_slots[handle]!.FilterOutFn, handle, arg, data);
+
+    private bool CallFilterSlot(Func<int, int, int, int>? fn, int handle, byte arg, ReadOnlySpan<byte> data)
     {
-        var slot = _slots[handle]!;
-        if (slot.FilterFn == null)
+        if (fn == null)
             return false;
+        var slot = _slots[handle]!;
         slot.Store.SetEpochDeadline(CallDeadlineTicks);
         slot.ArenaReset();
         var ptr = slot.Alloc(data.Length);
         if (data.Length > 0)
             data.CopyTo(slot.Memory.GetSpan(ptr, data.Length)); // SPAN RULE: after alloc
-        return slot.FilterFn(arg, ptr, data.Length) != 0;
+        return fn(arg, ptr, data.Length) != 0;
     }
 
     public void CallSpawned(int handle, ReadOnlySpan<byte> input)
@@ -205,6 +212,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         slot.RunFn = instance.GetFunction<int, int, int, long>("mod_run");
         slot.ObserverFn = instance.GetFunction<int, long, int, int, long>("mod_observer");
         slot.FilterFn = instance.GetFunction<int, int, int, int>("mod_filter");
+        slot.FilterOutFn = instance.GetFunction<int, int, int, int>("mod_filter_out");
         slot.SpawnedFn = instance.GetAction<int, int>("mod_spawned");
         // WASI reactor init (globals / component ctors) — before any other export.
         instance.GetAction("_initialize")?.Invoke();

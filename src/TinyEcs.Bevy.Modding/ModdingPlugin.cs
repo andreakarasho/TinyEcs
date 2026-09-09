@@ -70,6 +70,10 @@ public readonly struct LoadedMod
     /// enabled mod wants it, so a filter-less set costs nothing per packet.
     public bool WantsFilter => _rt.Instance.WantsFilter;
 
+    /// True when this mod asked to receive the host's SECOND inline bool export (the
+    /// core ABI's wants_filter_out). Same zero-cost gate as WantsFilter.
+    public bool WantsFilterOut => _rt.Instance.WantsFilterOut;
+
     /// Report a failed inline export call so it counts toward the auto-disable budget
     /// (the lib already does this for the systems + observers it drives itself).
     public void RecordFailure(string what, Exception e) => ModdingPlugin.NoteFailure(_rt, what, e);
@@ -77,6 +81,10 @@ public readonly struct LoadedMod
     /// Invoke `export(arg: u8, data: list&lt;u8&gt;) -> bool` on this mod; false if absent.
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
         => _rt.Instance.TryInvokeBoolExport(export, arg, data);
+
+    /// Slot-2 twin of TryInvokeBoolExport (the ABI's mod_filter_out).
+    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
+        => _rt.Instance.TryInvokeBoolExportOut(export, arg, data);
 }
 
 /// Loaded mod runtimes (public so a host can drive synchronous guest calls — see

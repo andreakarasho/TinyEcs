@@ -306,6 +306,101 @@ public class ModAbiV2Tests
         Assert.Equal(2u, hs.AbiVersion);
     }
 
+    // ── the two filter slots (mod_filter / mod_filter_out) ─────────────────────
+
+    [Fact]
+    public void Filter_slots_are_independent_and_gated_by_their_own_wants_flag()
+    {
+        using var world = new World();
+
+        // Only wants_filter: slot 1 calls through, slot 2 never does.
+        var inOnly = Runner(world, new SetupReply { WantsFilter = true }, out var execIn);
+        execIn.FilterResult = true;
+        execIn.FilterOutResult = true;
+        Assert.True(inOnly.WantsFilter);
+        Assert.False(inOnly.WantsFilterOut);
+        Assert.True(inOnly.TryInvokeBoolExport("in", 0x11, default));
+        Assert.False(inOnly.TryInvokeBoolExportOut("out", 0x02, default));
+        Assert.Equal(1, execIn.FilterCalls);
+        Assert.Equal(0, execIn.FilterOutCalls);
+
+        // Only wants_filter_out: the mirror image.
+        var outOnly = Runner(world, new SetupReply { WantsFilterOut = true }, out var execOut);
+        execOut.FilterResult = true;
+        execOut.FilterOutResult = true;
+        Assert.False(outOnly.WantsFilter);
+        Assert.True(outOnly.WantsFilterOut);
+        Assert.False(outOnly.TryInvokeBoolExport("in", 0x11, default));
+        Assert.True(outOnly.TryInvokeBoolExportOut("out", 0x02, default));
+        Assert.Equal(0, execOut.FilterCalls);
+        Assert.Equal(1, execOut.FilterOutCalls);
+
+        // The arg byte + payload reach the right slot untouched.
+        var both = Runner(world, new SetupReply { WantsFilter = true, WantsFilterOut = true }, out var execBoth);
+        both.TryInvokeBoolExportOut("out", 0x02, new byte[] { 0x02, 0xAB });
+        Assert.Equal(0x02, execBoth.LastOutArg);
+        Assert.Equal(new byte[] { 0x02, 0xAB }, execBoth.LastOutData);
+    }
+
+    [Fact]
+    public void Filter_out_defaults_to_absent_so_an_older_executor_never_filters()
+    {
+        using var world = new World();
+        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
+        // ScriptedExecutor does NOT implement CallFilterOut — the interface default does.
+        var exec = new ScriptedExecutor
+        {
+            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply { WantsFilterOut = true }),
+        };
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+
+        Assert.True(runner.WantsFilterOut);
+        Assert.False(runner.TryInvokeBoolExportOut("out", 0x02, default));
+    }
+
+    private static ModAbiRunner Runner(World world, SetupReply reply, out FilterExecutor executor)
+    {
+        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
+        executor = new FilterExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, reply) };
+        var runner = new ModAbiRunner(executor, 0, new CoreModState(), ctx);
+        runner.Setup();
+        return runner;
+    }
+
+    // Canned guest that records both filter slots separately.
+    private sealed class FilterExecutor : IModWasmExecutor
+    {
+        public byte[]? SetupReplyBytes;
+        public bool FilterResult;
+        public bool FilterOutResult;
+        public int FilterCalls;
+        public int FilterOutCalls;
+        public byte LastOutArg;
+        public byte[] LastOutData = System.Array.Empty<byte>();
+
+        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => SetupReplyBytes;
+        public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => default;
+        public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
+        public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data)
+        {
+            FilterCalls++;
+            return FilterResult;
+        }
+        public bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data)
+        {
+            FilterOutCalls++;
+            LastOutArg = arg;
+            LastOutData = data.ToArray();
+            return FilterOutResult;
+        }
+        public void CallSpawned(int handle, ReadOnlySpan<byte> input) { }
+        public void Reload(int handle, in ModSource source) { }
+        public void DisposeInstance(int handle) { }
+        public void Dispose() { }
+    }
+
     private static byte[] Bytes<T>(ISerializer<T> serializer, T value) where T : class
     {
         var buf = new byte[serializer.GetMaxSize(value)];

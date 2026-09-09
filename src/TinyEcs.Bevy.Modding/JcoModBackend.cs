@@ -146,6 +146,13 @@ internal sealed class JcoModInstance : IModInstance
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
         => _channel.TryInvokeBoolExport(_handle, export, arg, data);
 
+    // The JS channel resolves a bool export BY NAME, so both slots ride the one
+    // method — the host passes a different logical name for slot 2.
+    public bool WantsFilterOut => true;
+
+    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
+        => _channel.TryInvokeBoolExport(_handle, export, arg, data);
+
     public void RunSystem(ModSystemSpec sys)
     {
         var count = sys.Params.Count;

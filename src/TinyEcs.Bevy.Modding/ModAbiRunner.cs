@@ -28,6 +28,7 @@ internal sealed class ModAbiRunner : IModInstance
     private readonly ModHostContext _ctx;
 
     private bool _wantsFilter;
+    private bool _wantsFilterOut;
 
     // guest system id (SystemDecl.id) keyed by the neutral spec the runner passes back.
     private readonly Dictionary<ModSystemSpec, uint> _sysToId = new();
@@ -96,6 +97,7 @@ internal sealed class ModAbiRunner : IModInstance
         var reply = SetupReply.Serializer.Parse(replyBytes);
         TranslateSetup(reply);
         _wantsFilter = reply.WantsFilter;
+        _wantsFilterOut = reply.WantsFilterOut;
     }
 
     // SetupReply.systems -> ctx.Systems/SystemsByStage (via AppImpl.AddSystems, exactly
@@ -377,12 +379,18 @@ internal sealed class ModAbiRunner : IModInstance
     }
 
     // The host picks the logical export name; the core backend maps any bool export
-    // onto the single mod_filter guest export. Absent export (or the mod didn't ask
+    // onto the mod_filter guest export. Absent export (or the mod didn't ask
     // to filter via wants_filter) = no call, returns false.
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
         => _wantsFilter && _executor.CallFilter(_handle, arg, data);
 
+    // Second, independent filter slot (mod_filter_out), gated by wants_filter_out.
+    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
+        => _wantsFilterOut && _executor.CallFilterOut(_handle, arg, data);
+
     public bool WantsFilter => _wantsFilter;
+
+    public bool WantsFilterOut => _wantsFilterOut;
 
     // Re-instantiate from fresh bytes (the executor reuses whatever host-import
     // wiring it built at Load), then re-run setup — ModdingPlugin.ReloadMod has

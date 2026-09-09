@@ -69,6 +69,15 @@ internal interface IModInstance : IDisposable
     /// exports it (Jco probes the export list per call).
     bool WantsFilter => true;
 
+    /// The SECOND, independent inline bool export (the ABI's mod_filter_out, gated by
+    /// wants_filter_out) — a host that needs two synchronous predicate hooks (e.g. one
+    /// per traffic direction) drives them through the two slots. Defaults to "absent"
+    /// so an implementation that predates the slot needs no edit.
+    bool WantsFilterOut => false;
+
+    /// Slot-2 twin of TryInvokeBoolExport. Same contract; false (no call) when absent.
+    bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data) => false;
+
     /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
     /// caller resets the shared ModHostContext first. Wasmtime instantiates fresh
     /// from source.Bytes; Jco is deferred-capable — it may kick an async recompile

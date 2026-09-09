@@ -19,6 +19,10 @@
 //   mod_observer(obs_id, entity: u64, ptr, len) -> u64
 //                                        in: ObserverInput, out: CommandBuffer or 0
 //   mod_filter(arg, ptr, len) -> u32     host-tagged byte blob; nonzero = filtered
+//   mod_filter_out(arg, ptr, len) -> u32 OPTIONAL second, independent filter slot,
+//                                        same shape as mod_filter. Gated by
+//                                        SetupReply.wants_filter_out; a guest that
+//                                        only sets wants_filter need not export it.
 //   mod_spawned(ptr, len)                OPTIONAL. in: SpawnedInput, no return. Called
 //                                        synchronously right after the host applies a
 //                                        CommandBuffer that contained >= 1 SpawnCmd, so
@@ -139,6 +143,7 @@ table SetupReply {
   systems: [SystemDecl];
   observers: [ObserverDecl];
   wants_filter: bool;
+  wants_filter_out: bool;   // opt in to the SECOND filter slot (mod_filter_out)
 }
 
 // ---------------------------------------------------------------------------

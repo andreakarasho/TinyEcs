@@ -82,6 +82,11 @@ internal interface IModWasmExecutor : IDisposable
     /// Call mod_filter(arg, data) -> bool; false when the guest exports none.
     bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data);
 
+    /// Call the OPTIONAL second filter slot mod_filter_out(arg, data) -> bool; false
+    /// when the guest exports none. Defaulted so an executor that predates the slot
+    /// (or a test double) needs no edit — it simply never filters on it.
+    bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data) => false;
+
     /// Call the OPTIONAL mod_spawned(SpawnedInput) export — no return. Invoked right
     /// after the host applies a CommandBuffer that spawned at least one entity, so the
     /// guest can map its TempIds onto real ecs ids. No-op when the guest doesn't
