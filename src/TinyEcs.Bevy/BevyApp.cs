@@ -397,6 +397,9 @@ public class SystemDescriptor
 	public long ProfTicks;
 	public long ProfCalls;
 	public long ProfMaxTicks;
+	// Ticks spent in THIS frame (valid when ProfFrameId == App.ProfFrameId) — feeds the spike dump.
+	public long ProfFrameTicks;
+	public long ProfFrameId;
 
 	// Owning App, stamped at registration — lets RunProfiled fetch the SystemProfiler resource.
 	internal App? App;
@@ -422,6 +425,9 @@ public class SystemDescriptor
 		ProfCalls++;
 		if (dt > ProfMaxTicks)
 			ProfMaxTicks = dt;
+		var fid = App!.ProfFrameId;
+		if (ProfFrameId != fid) { ProfFrameId = fid; ProfFrameTicks = 0; }
+		ProfFrameTicks += dt;
 	}
 }
 
@@ -1116,7 +1122,7 @@ public class App
 					foreach (var descriptor in exitSystems)
 					{
 						if (descriptor.ShouldRun(world))
-							descriptor.System.Run(world);
+							descriptor.RunProfiled(world);
 					}
 				}
 			}
@@ -1129,7 +1135,7 @@ public class App
 					foreach (var descriptor in enterSystems)
 					{
 						if (descriptor.ShouldRun(world))
-							descriptor.System.Run(world);
+							descriptor.RunProfiled(world);
 					}
 				}
 			}
@@ -1153,7 +1159,87 @@ public class App
 	{
 		RunStartup();
 
+		var profiler = GetResource<SystemProfiler>();
+		if (!profiler.Enabled)
+		{
+			RunFrame(startup: false);
+			return;
+		}
+
+		ProfFrameId++;
+		var gc0 = GC.CollectionCount(0); var gc1 = GC.CollectionCount(1); var gc2 = GC.CollectionCount(2);
+		var pause = GC.GetTotalPauseDuration();
+		var t0 = global::System.Diagnostics.Stopwatch.GetTimestamp();
 		RunFrame(startup: false);
+		var ms = (global::System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / global::System.Diagnostics.Stopwatch.Frequency;
+		RecordFrame(profiler, ms, GC.CollectionCount(0) - gc0, GC.CollectionCount(1) - gc1, GC.CollectionCount(2) - gc2, (GC.GetTotalPauseDuration() - pause).TotalMilliseconds);
+	}
+
+	internal long ProfFrameId;
+	// Frame time spent OUTSIDE systems: deferred-command merge (EndDeferred), observer
+	// flush, state/event processing. Reset per frame by RecordFrame.
+	internal long ProfDeferredTicks, ProfObserverTicks, ProfEventTicks;
+
+	private void RecordFrame(SystemProfiler profiler, double ms, int gc0, int gc1, int gc2, double gcPauseMs)
+	{
+		if (profiler.FrameMs.Count < 1 << 20)
+			profiler.FrameMs.Add(ms);
+		if (ms > 16.7) profiler.FramesOver16++;
+		if (ms > 33.4) profiler.FramesOver33++;
+		if (ms > 100) profiler.FramesOver100++;
+
+		var msPerTick = 1000.0 / global::System.Diagnostics.Stopwatch.Frequency;
+		var deferredMs = ProfDeferredTicks * msPerTick;
+		var observerMs = ProfObserverTicks * msPerTick;
+		var eventMs = ProfEventTicks * msPerTick;
+		ProfDeferredTicks = ProfObserverTicks = ProfEventTicks = 0;
+
+		if (profiler.SpikeThresholdMs <= 0 || ms <= profiler.SpikeThresholdMs)
+			return;
+
+		var rows = new List<(string name, string stage, double ms)>();
+		double accounted = 0;
+		foreach (var (stage, runtime) in _stageRuntimes)
+		{
+			foreach (var d in runtime.Systems)
+			{
+				if (d.ProfFrameId != ProfFrameId || d.ProfFrameTicks == 0)
+					continue;
+				var sms = d.ProfFrameTicks * msPerTick;
+				accounted += sms;
+				rows.Add((d.ProfName, stage.Name, sms));
+			}
+		}
+		foreach (var list in _onEnterSystems.Values)
+			foreach (var d in list)
+				if (d.ProfFrameId == ProfFrameId && d.ProfFrameTicks != 0)
+				{ var sms = d.ProfFrameTicks * msPerTick; accounted += sms; rows.Add((d.ProfName, "OnEnter", sms)); }
+		foreach (var list in _onExitSystems.Values)
+			foreach (var d in list)
+				if (d.ProfFrameId == ProfFrameId && d.ProfFrameTicks != 0)
+				{ var sms = d.ProfFrameTicks * msPerTick; accounted += sms; rows.Add((d.ProfName, "OnExit", sms)); }
+		rows.Sort((a, b) => b.ms.CompareTo(a.ms));
+
+		var sb = new System.Text.StringBuilder();
+		sb.Append("[frame-spike] frame=").Append(ProfFrameId)
+		  .Append(" wall=").Append(ms.ToString("0.0")).Append("ms")
+		  .Append(" systems=").Append(accounted.ToString("0.0")).Append("ms")
+		  .Append(" gc=").Append(gc0).Append('/').Append(gc1).Append('/').Append(gc2)
+		  .Append(" gcPause=").Append(gcPauseMs.ToString("0.0")).Append("ms")
+		  .Append(" merge=").Append(deferredMs.ToString("0.0"))
+		  .Append(" observers=").Append(observerMs.ToString("0.0"))
+		  .Append(" events=").Append(eventMs.ToString("0.0")).Append(" |");
+		var shown = 0;
+		foreach (var r in rows)
+		{
+			if (shown++ >= profiler.SpikeTopN) break;
+			sb.Append(' ').Append(r.name).Append('[').Append(r.stage).Append("]=").Append(r.ms.ToString("0.0"));
+		}
+		var line = sb.ToString();
+		if (HasResource<SystemProfileReport>())
+			GetResource<SystemProfileReport>().Publish(line);
+		else
+			global::System.Console.WriteLine(line);
 	}
 
 	/// <summary>
@@ -1189,12 +1275,16 @@ public class App
 				ExecuteSystemsParallel(stageDesc.Stage);
 
 				// Auto-flush observers after each stage (like Bevy's apply_deferred)
+				var t0 = global::System.Diagnostics.Stopwatch.GetTimestamp();
 				_world.FlushObservers();
+				ProfObserverTicks += global::System.Diagnostics.Stopwatch.GetTimestamp() - t0;
 			}
 		}
 
+		var t1 = global::System.Diagnostics.Stopwatch.GetTimestamp();
 		ProcessStateTransitions();
 		ProcessEvents();
+		ProfEventTicks += global::System.Diagnostics.Stopwatch.GetTimestamp() - t1;
 
 		if (!startup)
 		{
@@ -1257,6 +1347,25 @@ public class App
 			  .Append(r.calls.ToString().PadLeft(7)).Append(" | ")
 			  .Append(r.name).Append(" [").Append(r.stage).Append("]\n");
 		}
+		var fm = profiler.FrameMs;
+		if (fm.Count > 0)
+		{
+			fm.Sort();
+			double sum = 0;
+			foreach (var f in fm) sum += f;
+			static double Pct(List<double> l, double p) => l[Math.Min(l.Count - 1, (int)(l.Count * p))];
+			sb.Append("  frames=").Append(fm.Count)
+			  .Append(" avg=").Append((sum / fm.Count).ToString("0.00"))
+			  .Append(" p50=").Append(Pct(fm, 0.5).ToString("0.00"))
+			  .Append(" p95=").Append(Pct(fm, 0.95).ToString("0.00"))
+			  .Append(" p99=").Append(Pct(fm, 0.99).ToString("0.00"))
+			  .Append(" max=").Append(fm[^1].ToString("0.00"))
+			  .Append("ms  >16.7=").Append(profiler.FramesOver16)
+			  .Append(" >33=").Append(profiler.FramesOver33)
+			  .Append(" >100=").Append(profiler.FramesOver100).Append('\n');
+			fm.Clear();
+			profiler.FramesOver16 = profiler.FramesOver33 = profiler.FramesOver100 = 0;
+		}
 		sb.Append("  layout: roots=").Append(profiler.LayoutRoots)
 		  .Append(" nodes=").Append(profiler.LayoutNodes)
 		  .Append(" culled(Display.None)=").Append(profiler.LayoutCulled)
@@ -1297,7 +1406,9 @@ public class App
 			// Merge() never runs again, so every later structural command boxes into
 			// the deferred queues forever — the world silently stops applying changes
 			// while the app keeps ticking.
+			var t0 = global::System.Diagnostics.Stopwatch.GetTimestamp();
 			_world.EndDeferred();
+			ProfDeferredTicks += global::System.Diagnostics.Stopwatch.GetTimestamp() - t0;
 		}
 	}
 

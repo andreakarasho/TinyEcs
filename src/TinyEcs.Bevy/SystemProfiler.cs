@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace TinyEcs.Bevy;
 
@@ -53,6 +54,20 @@ public sealed class SystemProfiler
 	// ConfigureOpenElement interop. Isolates whether per-node cost is lookups.
 	public long LayoutBuildTicks;
 	public long LayoutConfigTicks;
+
+	/// <summary>
+	/// Frame-spike capture. A frame whose wall time exceeds this dumps a one-line
+	/// per-system breakdown of THAT frame (+ GC deltas) instead of hiding in the
+	/// window average. Env <c>TINYECS_SPIKE_MS</c> overrides; 0 disables.
+	/// </summary>
+	public double SpikeThresholdMs = double.TryParse(Environment.GetEnvironmentVariable("TINYECS_SPIKE_MS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 16.0;
+
+	/// <summary>Max systems listed per spike line.</summary>
+	public int SpikeTopN = 8;
+
+	// Per-window frame wall times (ms), drained into the report as p50/p95/p99/max.
+	internal readonly List<double> FrameMs = new(16384);
+	internal int FramesOver16, FramesOver33, FramesOver100;
 }
 
 /// <summary>
