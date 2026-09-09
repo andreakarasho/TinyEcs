@@ -187,6 +187,13 @@ public sealed class Archetype : IComparable<Archetype>
 		_columns![column].MarkAdded(row, ticks);
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	internal uint GetChangedTick(int column, int row)
+	{
+		var ticks = _columns![column].ChangedTicks;
+		return (uint)row < (uint)ticks.Length ? ticks[row] : 0u;
+	}
+
 	internal int GetComponentIndex(EcsID id)
 	{
 #if USE_PAIR

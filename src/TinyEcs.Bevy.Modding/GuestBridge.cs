@@ -24,6 +24,45 @@ internal sealed class ModQuerySpec
     public readonly List<(string typePath, bool mut, ModQueryTermKind kind)> Terms = new();
     // ref/mut terms only, in declared order — defines query-result component index.
     public readonly List<(string typePath, bool mut)> Components = new();
+
+    // Registry mappers resolved ONCE per spec. Both hot loops (BuildSnapshot filters
+    // every term per candidate entity; the row builder serializes every read term per
+    // row) used to hash the type-path string on each visit — O(entities x terms)
+    // dictionary lookups per tick. A registry is built once per App and the wire id
+    // space is interned in the mod's Handshake, so both are stable for the spec's life.
+    private (IModComponent? Comp, ModQueryTermKind Kind)[]? _termMappers;
+    private (IModComponent Comp, ushort TypeId)[]? _rowMappers;
+
+    // Parallel to Terms; null Comp = the path names nothing registered (BuildSnapshot
+    // treats that as "matches only a Without term", same as the lookup it replaces).
+    public (IModComponent? Comp, ModQueryTermKind Kind)[] TermMappers(ModComponentRegistry registry)
+    {
+        if (_termMappers != null)
+            return _termMappers;
+        var mappers = new (IModComponent?, ModQueryTermKind)[Terms.Count];
+        for (var i = 0; i < Terms.Count; i++)
+            mappers[i] = (registry.TryGet(Terms[i].typePath, out var comp) ? comp : null, Terms[i].kind);
+        return _termMappers = mappers;
+    }
+
+    // Parallel to Components. Throws (not skips) on an unregistered read term: the row
+    // builder emits one CompValue per read term in declaration order, so a hole would
+    // shift every later positional accessor in the guest for the whole row.
+    public (IModComponent Comp, ushort TypeId)[] RowMappers(
+        ModComponentRegistry registry, Dictionary<string, ushort> pathToId, string systemName)
+    {
+        if (_rowMappers != null)
+            return _rowMappers;
+        var mappers = new (IModComponent, ushort)[Components.Count];
+        for (var i = 0; i < Components.Count; i++)
+        {
+            var path = Components[i].typePath;
+            if (!registry.TryGet(path, out var comp))
+                throw new InvalidOperationException($"system '{systemName}': unregistered component '{path}'");
+            mappers[i] = (comp, pathToId.TryGetValue(path, out var id) ? id : (ushort)0xFFFF);
+        }
+        return _rowMappers = mappers;
+    }
 }
 
 internal sealed class ModParam
@@ -45,6 +84,17 @@ internal sealed class ModSystemSpec
     // component boundary for a no-row tick costs ~0.3ms/system on the jco
     // (JS-engine-in-wasm) backend.
     public int EmptyStreak;
+    // Minimum host-milliseconds between runs (SystemDecl.interval_ms); 0 = every tick.
+    // Checked BEFORE any query is evaluated — a throttled system costs nothing.
+    public uint IntervalMs;
+    // Time.Total (ms) at the last run; the interval gate's reference point. Starts at
+    // -inf so the FIRST tick always runs (a 0 default would gate the system out at
+    // boot, when Time.Total is still ~0).
+    public float LastRunTime = float.NegativeInfinity;
+    // World.CurrentTick at the last EVALUATION of this system (set even when the run
+    // was idle-skipped, since the queries were still evaluated). Changed query terms
+    // filter on "changed-tick newer than this".
+    public uint LastRunWorldTick;
 }
 
 internal sealed class ModObserverSpec
@@ -60,6 +110,9 @@ public sealed class ModHostContext
 {
     public World World = null!;
     public ModComponentRegistry Registry = null!;
+    // Manifest name of the mod this context belongs to — diagnostics raised deep in
+    // the guest-call path (a rejected command, a bad payload) name the mod.
+    public string Name = "";
     // Index of this mod among the loaded runtimes — stamped onto every ModEntity
     // this mod spawns (ModEntity.Slot) so the host can scope a mod's entities for
     // disable/reload teardown without touching other mods' entities.
@@ -86,9 +139,6 @@ public sealed class ModHostContext
     // instead of scanning every system and filtering. Populated in AddSystems;
     // per-stage insertion order preserved (declaration order within a stage).
     internal readonly Dictionary<ModSchedule, List<ModSystemSpec>> SystemsByStage = new();
-    // Cached `With<Parent>` query for EntityImpl.Children — EntityImpl is a struct
-    // recreated per call, so the cache lives here (one ctx per mod/world).
-    internal Query? ChildrenQuery;
     // Observers the mod registered during setup; wired to host global observers
     // after setup (see ModdingPlugin.RegisterModObservers).
     internal readonly List<ModObserverSpec> Observers = new();
@@ -139,6 +189,14 @@ internal struct SystemImpl
                     q.Terms.Add((qf.TypePath, true, qf.Kind));
                     q.Components.Add((qf.TypePath, true));
                     break;
+                // Changed is BOTH a filter term (Terms, so BuildSnapshot applies the
+                // change gate) and a read term (Components, so the row carries the
+                // payload) — the guest sees it interleaved with Ref/Mut in declaration
+                // order, exactly like a Ref.
+                case ModQueryTermKind.Changed:
+                    q.Terms.Add((qf.TypePath, false, qf.Kind));
+                    q.Components.Add((qf.TypePath, false));
+                    break;
                 case ModQueryTermKind.With:
                     q.Terms.Add((qf.TypePath, false, qf.Kind));
                     break;
@@ -175,6 +233,19 @@ internal struct CommandsImpl(ModHostContext ctx)
         return new EntityCommandsImpl(ctx, id);
     }
 
+    // UTF8 overload for the core-ABI apply path: payloads are slices of the guest's
+    // reply buffer and go straight into the registry, so no string per component.
+    public EntityCommandsImpl Spawn(ReadOnlySpan<(string, ReadOnlyMemory<byte>)> bundle)
+    {
+        var ent = ctx.World.Entity();
+        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
+        var id = ent.ID;
+        foreach (var (typePath, json) in bundle)
+            if (ctx.Registry.TryGet(typePath, out var comp))
+                comp.SetJsonUtf8(ctx.World, id, json.Span);
+        return new EntityCommandsImpl(ctx, id);
+    }
+
     public EntityCommandsImpl Entity(EntityImpl entity)
         => new EntityCommandsImpl(ctx, entity.EcsId);
 
@@ -190,6 +261,12 @@ internal struct CommandsImpl(ModHostContext ctx)
     {
         if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
             r.SetJson(ctx.App, value);
+    }
+
+    public void ResourceSet(string resource, ReadOnlySpan<byte> value)
+    {
+        if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
+            r.SetJsonUtf8(ctx.App, value);
     }
 
     // Input override — consume a mouse button this frame. The lib owns no input
@@ -225,6 +302,16 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
                 comp.SetJson(ctx.World, entity, json);
+    }
+
+    // UTF8 overload — see CommandsImpl.Spawn(ReadOnlySpan<(string, ReadOnlyMemory<byte>)>).
+    public void Insert(ReadOnlySpan<(string, ReadOnlyMemory<byte>)> bundle)
+    {
+        if (!ctx.World.Exists(entity))
+            return;
+        foreach (var (typePath, json) in bundle)
+            if (ctx.Registry.TryGet(typePath, out var comp))
+                comp.SetJsonUtf8(ctx.World, entity, json.Span);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)
@@ -264,15 +351,17 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId)
 
     public EntityImpl[] Children()
     {
-        // Enumerate by the Parent relationship (no host-internal access needed).
-        var result = new List<EntityImpl>();
-        var q = ctx.ChildrenQuery ??= ctx.World.QueryBuilder().With<TinyEcs.Parent>().Build();
-        var it = q.Iter();
-        while (it.Next())
-            foreach (var ev in it.Entities())
-                if ((ulong)ctx.World.Get<TinyEcs.Parent>(ev.ID).Id == ecsId)
-                    result.Add(new EntityImpl(ctx, ev.ID));
-        return result.ToArray();
+        // TinyEcs's relationship mapper keeps the ordered child list on the parent as
+        // a `Children` component — read it instead of scanning every entity with a
+        // Parent (which was O(all parented entities) per call).
+        if (!ctx.World.Has<TinyEcs.Children>(ecsId))
+            return Array.Empty<EntityImpl>();
+        var children = ctx.World.Get<TinyEcs.Children>(ecsId);
+        var result = new EntityImpl[children.Count];
+        var i = 0;
+        foreach (var child in children)
+            result[i++] = new EntityImpl(ctx, (ulong)child);
+        return result;
     }
 }
 

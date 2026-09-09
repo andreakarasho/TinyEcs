@@ -150,6 +150,7 @@
       <_ModAbi>$(_ModAbi.Replace('table SystemInput {', 'table SystemInput (fs_serializer) {'))</_ModAbi>
       <_ModAbi>$(_ModAbi.Replace('table CommandBuffer {', 'table CommandBuffer (fs_serializer) {'))</_ModAbi>
       <_ModAbi>$(_ModAbi.Replace('table ObserverInput {', 'table ObserverInput (fs_serializer) {'))</_ModAbi>
+      <_ModAbi>$(_ModAbi.Replace('table SpawnedInput {', 'table SpawnedInput (fs_serializer) {'))</_ModAbi>
       <_DerivedModAbi>// AUTO-DERIVED from abi/mod-abi.fbs for FlatSharp — do not edit.
 attribute &quot;fs_serializer&quot;%3B
 $(_ModAbi)</_DerivedModAbi>

@@ -28,6 +28,9 @@ internal sealed class ModAbiBacking : IModImportSink
     private readonly ModHostContext _ctx;
     private readonly CoreModState _state;
     private readonly string _modName;
+    // Reused UTF8 staging buffer for the two out-buffer imports (a mod polls these
+    // mid-run, so a string + byte[] per call was per-frame garbage).
+    private readonly ModJsonBuffer _json = new();
 
     public ModAbiBacking(ModHostContext ctx, CoreModState state, string modName)
     {
@@ -44,25 +47,27 @@ internal sealed class ModAbiBacking : IModImportSink
         return p != 0 && _ctx.World.Exists(p) ? p : 0UL;
     }
 
-    // Enumerate an entity's children by the Parent relationship (mirrors
-    // EntityImpl.Children). Two-phase: collect host-side, then one write into the
-    // caller-supplied span — the caller (an executor) owns whatever SPAN RULE
-    // applies to its own memory (e.g. no guest call between GetSpan() and this).
+    // Enumerate an entity's children. TinyEcs's relationship mapper already keeps the
+    // ordered child list on the parent as a `Children` component, so this reads it
+    // directly instead of scanning every entity that has a Parent (mirrors
+    // EntityImpl.Children). Written straight into the caller-supplied span — the
+    // caller (an executor) owns whatever SPAN RULE applies to its own memory (e.g.
+    // no guest call between GetSpan() and this).
     public int EntityChildren(ulong entity, Span<byte> outBytes)
     {
-        var q = _ctx.ChildrenQuery ??= _ctx.World.QueryBuilder().With<Parent>().Build();
-        var ids = new List<ulong>();
-        var it = q.Iter();
-        while (it.Next())
-            foreach (var ev in it.Entities())
-                if ((ulong)_ctx.World.Get<Parent>(ev.ID).Id == entity)
-                    ids.Add(ev.ID);
+        if (!_ctx.World.Has<Children>(entity))
+            return 0;
 
         var cap = outBytes.Length / 8;
-        var writeCount = Math.Min(ids.Count, cap);
-        for (var i = 0; i < writeCount; i++)
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(outBytes.Slice(i * 8, 8), ids[i]);
-        return ids.Count;
+        var count = 0;
+        foreach (var child in _ctx.World.Get<Children>(entity))
+        {
+            if (count < cap)
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(
+                    outBytes.Slice(count * 8, 8), (ulong)child);
+            count++;
+        }
+        return count;
     }
 
     public int ComponentGet(ulong entity, ushort typeId, Span<byte> outBytes)
@@ -71,7 +76,9 @@ internal sealed class ModAbiBacking : IModImportSink
             || !_ctx.Registry.TryGet(e.Path, out var comp)
             || !comp.Has(_ctx.World, entity))
             return 0;
-        return WriteOut(outBytes, comp.GetJson(_ctx.World, entity));
+        _json.Reset();
+        comp.GetJsonUtf8(_ctx.World, entity, _json);
+        return WriteOut(outBytes, _json.WrittenSpan);
     }
 
     public int ResourceGet(ushort typeId, Span<byte> outBytes)
@@ -80,14 +87,15 @@ internal sealed class ModAbiBacking : IModImportSink
             || !_state.IdToEntry.TryGetValue(typeId, out var e)
             || !_ctx.Registry.TryGetResource(e.Path, out var res))
             return 0;
-        return WriteOut(outBytes, res.GetJson(_ctx.App));
+        _json.Reset();
+        IModComponent.WriteUtf8(_json, res.GetJson(_ctx.App));
+        return WriteOut(outBytes, _json.WrittenSpan);
     }
 
-    private static int WriteOut(Span<byte> outBytes, string json)
+    private static int WriteOut(Span<byte> outBytes, ReadOnlySpan<byte> json)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-        if (bytes.Length > 0 && bytes.Length <= outBytes.Length)
-            bytes.CopyTo(outBytes);
-        return bytes.Length;
+        if (json.Length > 0 && json.Length <= outBytes.Length)
+            json.CopyTo(outBytes);
+        return json.Length;
     }
 }

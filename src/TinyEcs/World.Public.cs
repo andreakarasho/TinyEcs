@@ -533,6 +533,27 @@ public sealed partial class World
 	}
 
 	/// <summary>
+	/// The tick at which <typeparamref name="T"/> was last written on the entity — the
+	/// same column tick the <c>Changed&lt;T&gt;</c> filter compares. 0 when the entity
+	/// is dead, lacks the component, or <typeparamref name="T"/> is a zero-size tag
+	/// (tags have no column, hence no tick).
+	/// <para>
+	/// Point lookup by entity id, for callers that hold ids rather than a query cursor
+	/// (the modding bridge's `Changed` query term). Reflection-free; no allocation.
+	/// </para>
+	/// </summary>
+	public uint GetChangedTick<T>(EcsID entity) where T : struct
+	{
+		ref readonly var cmp = ref Component<T>();
+		if (cmp.Size <= 0 || !Exists(entity))
+			return 0;
+
+		ref var record = ref GetRecord(entity);
+		var column = record.Archetype.GetComponentIndex(cmp.ID);
+		return column < 0 ? 0u : record.Archetype.GetChangedTick(column, record.Row);
+	}
+
+	/// <summary>
 	/// Get the name associated to the entity.
 	/// </summary>
 	/// <param name="id"></param>

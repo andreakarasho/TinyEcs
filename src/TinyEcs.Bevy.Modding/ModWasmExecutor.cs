@@ -63,20 +63,30 @@ internal interface IModWasmExecutor : IDisposable
     /// `slot` back, as WasmtimeModWasmExecutor does).
     int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports);
 
-    /// Call mod_setup(handshake) -> SetupReply bytes; null when the guest
-    /// returned no reply (packed == 0).
-    byte[]? CallSetup(int handle, byte[] handshake);
+    /// Every Call* below is span-IN (the caller's FlatSharp write buffer is reused
+    /// and over-sized, so an exact-length copy would be pure garbage) and
+    /// reply-buffer-OUT: the returned memory is a slice of a buffer the EXECUTOR
+    /// owns and reuses, valid only until the next call on this handle. Empty = no
+    /// reply (the guest exports nothing, or returned packed == 0). Memory, not
+    /// ReadOnlyMemory: FlatSharp refuses a read-only input buffer for a table that
+    /// has a [ubyte] field, because the parsed vector aliases the input.
+    /// Call mod_setup(handshake) -> SetupReply bytes.
+    Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake);
 
-    /// Call mod_run(sysId, input) -> CommandBuffer bytes; null when the guest
-    /// exports no mod_run, or it returned no reply.
-    byte[]? CallRun(int handle, uint sysId, byte[] input);
+    /// Call mod_run(sysId, input) -> CommandBuffer bytes.
+    Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input);
 
-    /// Call mod_observer(obsId, entity, input) -> CommandBuffer bytes; null
-    /// when the guest exports no mod_observer, or it returned no reply.
-    byte[]? CallObserver(int handle, uint obsId, ulong entity, byte[] input);
+    /// Call mod_observer(obsId, entity, input) -> CommandBuffer bytes.
+    Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input);
 
     /// Call mod_filter(arg, data) -> bool; false when the guest exports none.
     bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data);
+
+    /// Call the OPTIONAL mod_spawned(SpawnedInput) export — no return. Invoked right
+    /// after the host applies a CommandBuffer that spawned at least one entity, so the
+    /// guest can map its TempIds onto real ecs ids. No-op when the guest doesn't
+    /// export it (most mods don't).
+    void CallSpawned(int handle, ReadOnlySpan<byte> input);
 
     /// Tear down + re-instantiate this handle from fresh bytes, reusing the same
     /// host imports (see WasmtimeModWasmExecutor's Reload doc comment for why).

@@ -20,7 +20,7 @@ internal sealed class ModAbiRunner : IModInstance
 {
     // Canonical ABI version stamped into every Handshake. Bumped only on a
     // breaking wire change; the guest asserts it matches its compiled schema.
-    internal const uint AbiVersion = 1;
+    internal const uint AbiVersion = 2;
 
     private readonly IModWasmExecutor _executor;
     private readonly int _handle;
@@ -35,15 +35,28 @@ internal sealed class ModAbiRunner : IModInstance
     private readonly Dictionary<string, (uint ObsId, ushort TypeId)> _obsByName = new();
     // SpawnCmd.temp_id -> freshly spawned ecs id, per applied CommandBuffer.
     private readonly Dictionary<uint, ulong> _tempTable = new();
+    // Same pairs in SpawnCmd order — the dictionary answers Resolve()'s lookups, this
+    // list preserves the order SpawnedInput promises the guest.
+    private readonly List<(uint TempId, ulong Entity)> _tempOrder = new();
 
     // Reused per RunSystem: ArrayPool query snapshots in flight, returned after the call.
     private readonly List<ulong[]> _snapshotScratch = new();
-    // Reused FlatSharp write buffer (grown as needed) — serialized before handing
-    // an exact-length copy to the executor.
+    // Reused FlatSharp write buffer (grown as needed); handed to the executor as a
+    // span, so there is no exact-length copy.
     private byte[] _writeScratch = new byte[1024];
     // Reused command-apply scratch (bundles/paths are tiny and consumed synchronously).
-    private readonly List<(string, string)> _bundleScratch = new();
+    private readonly List<(string, ReadOnlyMemory<byte>)> _bundleScratch = new();
     private readonly List<string> _pathScratch = new();
+    // Per-system reusable SystemInput object graph — see SysScratch.
+    private readonly Dictionary<ModSystemSpec, SysScratch> _sysScratch = new();
+    // Reused ObserverInput graph + its payload buffer (one fire at a time).
+    private readonly ModJsonBuffer _obsJson = new();
+    private readonly CompValue _obsValue = new() { Encoding = ModAbi.Encoding.Json };
+    private readonly ObserverInput _obsInput;
+    // Reused SpawnedInput graph; the pair list is grown, cleared and refilled.
+    private readonly List<SpawnResolved> _spawnedLive = new();
+    private readonly List<SpawnResolved> _spawnedPool = new();
+    private readonly SpawnedInput _spawnedInput;
 
     public ModAbiRunner(IModWasmExecutor executor, int handle, CoreModState state, ModHostContext ctx)
     {
@@ -51,6 +64,8 @@ internal sealed class ModAbiRunner : IModInstance
         _handle = handle;
         _state = state;
         _ctx = ctx;
+        _obsInput = new ObserverInput { Value = _obsValue };
+        _spawnedInput = new SpawnedInput { Spawned = _spawnedLive };
     }
 
     public void Setup()
@@ -59,6 +74,9 @@ internal sealed class ModAbiRunner : IModInstance
         _state.IdToEntry.Clear();
         _sysToId.Clear();
         _obsByName.Clear();
+        // Reload replaces every ModSystemSpec (ReloadMod clears ctx.Systems), so the
+        // per-spec scratch keyed on the old ones is dead weight.
+        _sysScratch.Clear();
 
         // Handshake: intern every registered path into one u16 id space.
         var handshake = new Handshake { AbiVersion = AbiVersion, TypePaths = new List<TypePath>() };
@@ -71,9 +89,10 @@ internal sealed class ModAbiRunner : IModInstance
             next++;
         }
 
-        var bytes = SerializeToArray(Handshake.Serializer, handshake);
-        var replyBytes = _executor.CallSetup(_handle, bytes)
-            ?? throw new InvalidOperationException("mod_setup returned no SetupReply");
+        var len = Serialize(Handshake.Serializer, handshake);
+        var replyBytes = _executor.CallSetup(_handle, _writeScratch.AsSpan(0, len));
+        if (replyBytes.IsEmpty)
+            throw new InvalidOperationException("mod_setup returned no SetupReply");
         var reply = SetupReply.Serializer.Parse(replyBytes);
         TranslateSetup(reply);
         _wantsFilter = reply.WantsFilter;
@@ -104,7 +123,7 @@ internal sealed class ModAbiRunner : IModInstance
                         if (pd.Kind == ParamKind.Commands)
                             si.AddCommands();
                         else
-                            si.AddQuery(BuildTerms(pd.Query));
+                            si.AddQuery(BuildTerms(pd.Query, sd.Name ?? "?"));
                     }
                 if (sd.After != null)
                     foreach (var aid in sd.After)
@@ -112,6 +131,8 @@ internal sealed class ModAbiRunner : IModInstance
                 if (sd.Before != null)
                     foreach (var bid in sd.Before)
                         if (idToName.TryGetValue(bid, out var n)) si.Spec.Before.Add(n);
+
+                si.Spec.IntervalMs = sd.IntervalMs;
 
                 one[0] = si;
                 appImpl.AddSystems((ModSchedule)(byte)sd.Schedule, sd.CustomStage, one);
@@ -137,7 +158,12 @@ internal sealed class ModAbiRunner : IModInstance
             }
     }
 
-    private ModQueryTerm[] BuildTerms(QueryDecl? q)
+    // A term whose type id names nothing registered (or names a resource/event
+    // instead of a component) is a HARD setup failure: the row builder emits one
+    // CompValue per read term in declaration order, so silently dropping a term
+    // shifts every later positional accessor in the guest. Throwing here makes the
+    // loader skip the mod with a named error instead.
+    private ModQueryTerm[] BuildTerms(QueryDecl? q, string systemName)
     {
         if (q?.Terms == null || q.Terms.Count == 0)
             return Array.Empty<ModQueryTerm>();
@@ -145,8 +171,10 @@ internal sealed class ModAbiRunner : IModInstance
         for (var i = 0; i < q.Terms.Count; i++)
         {
             var t = q.Terms[i];
-            var path = _state.IdToEntry.TryGetValue(t.TypeId, out var e) ? e.Path : "";
-            terms[i] = new ModQueryTerm((ModQueryTermKind)(byte)t.Kind, path);
+            if (!_state.IdToEntry.TryGetValue(t.TypeId, out var e) || !_ctx.Registry.TryGet(e.Path, out _))
+                throw new InvalidOperationException(
+                    $"system '{systemName}' query term #{i} names unregistered component type id {t.TypeId}");
+            terms[i] = new ModQueryTerm((ModQueryTermKind)(byte)t.Kind, e.Path);
         }
         return terms;
     }
@@ -154,9 +182,12 @@ internal sealed class ModAbiRunner : IModInstance
     public void RunSystem(ModSystemSpec sys)
     {
         _snapshotScratch.Clear();
-        List<QueryRows>? queries = null;
+        var scratch = ScratchFor(sys);
+        var liveQueries = scratch.LiveQueries;
+        liveQueries.Clear();
         var hasQuery = false;
         var anyRows = false;
+        var queryIndex = 0;
 
         for (var pi = 0; pi < sys.Params.Count; pi++)
         {
@@ -164,32 +195,42 @@ internal sealed class ModAbiRunner : IModInstance
             if (p.Kind != ModParamKind.Query)
                 continue;
             hasQuery = true;
-            var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, out var matched);
+            var q = p.Query!;
+            var snapshot = ModdingPlugin.BuildSnapshot(_ctx, q, sys.LastRunWorldTick, out var matched);
             _snapshotScratch.Add(snapshot);
             anyRows |= matched > 0;
 
-            var rows = new List<Row>(matched);
+            // Resolved once per spec, not per row: mapper + interned wire type id.
+            var mappers = q.RowMappers(_ctx.Registry, _state.PathToId, sys.Name);
+            var param = scratch.Param(queryIndex++, (uint)pi, mappers.Length);
+            var rows = param.LiveRows;
+            rows.Clear();
+
             for (var r = 0; r < matched; r++)
             {
                 var entId = snapshot[r];
                 if (!_ctx.World.Exists(entId))
                     continue;
-                var comps = new List<CompValue>(p.Query!.Components.Count);
-                foreach (var (typePath, _) in p.Query!.Components)
+                var slot = param.Rent(rows.Count);
+                slot.Row.Entity = entId;
+                for (var ci = 0; ci < mappers.Length; ci++)
                 {
-                    if (!_ctx.Registry.TryGet(typePath, out var comp))
-                        continue;
-                    comps.Add(new CompValue
-                    {
-                        TypeId = _state.PathToId.TryGetValue(typePath, out var tid) ? tid : (ushort)0xFFFF,
-                        Encoding = ModAbi.Encoding.Json,
-                        Data = System.Text.Encoding.UTF8.GetBytes(comp.GetJson(_ctx.World, entId)),
-                    });
+                    var (comp, typeId) = mappers[ci];
+                    var json = slot.Json[ci];
+                    json.Reset();
+                    comp.GetJsonUtf8(_ctx.World, entId, json);
+                    var cv = slot.Comps[ci];
+                    cv.TypeId = typeId;
+                    cv.Data = json.Written;
                 }
-                rows.Add(new Row { Entity = entId, Comps = comps });
+                rows.Add(slot.Row);
             }
-            (queries ??= new List<QueryRows>()).Add(new QueryRows { ParamIndex = (uint)pi, Rows = rows });
+            liveQueries.Add(param.Out);
         }
+
+        // The queries were evaluated above, so the Changed window closes HERE — even
+        // when the guest call is idle-skipped below (the rows were still consumed).
+        sys.LastRunWorldTick = _ctx.World.CurrentTick;
 
         try
         {
@@ -198,12 +239,18 @@ internal sealed class ModAbiRunner : IModInstance
             if (ModdingPlugin.ShouldSkipIdle(sys, hasQuery, anyRows))
                 return;
 
-            var sysId = _sysToId.TryGetValue(sys, out var sid) ? sid : 0u;
-            var input = new SystemInput { SysId = sysId, Tick = CurrentTick(), Queries = queries };
-            var bytes = SerializeToArray(SystemInput.Serializer, input);
-            var replyBytes = _executor.CallRun(_handle, sysId, bytes);
-            if (replyBytes != null)
-                ApplyCommandBuffer(CommandBuffer.Serializer.Parse(replyBytes));
+            var sysId = scratch.SysId;
+            var input = scratch.Input;
+            input.SysId = sysId;
+            input.Tick = CurrentTick();
+            // null, not an empty vector: a Commands-only system's wire shape must not
+            // change (the guest distinguishes "no queries" from "an empty one").
+            input.Queries = liveQueries.Count > 0 ? liveQueries : null;
+            var len = Serialize(SystemInput.Serializer, input);
+            var reply = _executor.CallRun(_handle, sysId, _writeScratch.AsSpan(0, len));
+            if (!reply.IsEmpty)
+                ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
+            NotifySpawned();
         }
         finally
         {
@@ -213,26 +260,120 @@ internal sealed class ModAbiRunner : IModInstance
         }
     }
 
+    private SysScratch ScratchFor(ModSystemSpec sys)
+    {
+        if (_sysScratch.TryGetValue(sys, out var s))
+            return s;
+        return _sysScratch[sys] = new SysScratch(_sysToId.TryGetValue(sys, out var sid) ? sid : 0u);
+    }
+
+    // FlatSharp serializes FROM the object model, so reusing the SystemInput graph
+    // (QueryRows / Row / CompValue and their backing lists + JSON buffers) is what
+    // removes the per-row garbage: at 200 rows x 3 components that was 800 objects
+    // and 600 byte[] per tick. Grow-only, refilled in place; one graph per system,
+    // safe because a mod's systems run one at a time on the scheduler thread.
+    private sealed class SysScratch(uint sysId)
+    {
+        public readonly uint SysId = sysId;
+        public readonly SystemInput Input = new();
+        public readonly List<QueryRows> LiveQueries = new();
+        private readonly List<ParamScratch> _params = new();
+
+        public ParamScratch Param(int index, uint paramIndex, int compCount)
+        {
+            while (_params.Count <= index)
+                _params.Add(new ParamScratch(compCount));
+            var p = _params[index];
+            p.Out.ParamIndex = paramIndex;
+            return p;
+        }
+    }
+
+    private sealed class ParamScratch
+    {
+        public readonly QueryRows Out;
+        public readonly List<Row> LiveRows = new();
+        private readonly List<RowScratch> _pool = new();
+        private readonly int _compCount;
+
+        public ParamScratch(int compCount)
+        {
+            _compCount = compCount;
+            Out = new QueryRows { Rows = LiveRows };
+        }
+
+        public RowScratch Rent(int index)
+        {
+            while (_pool.Count <= index)
+                _pool.Add(new RowScratch(_compCount));
+            return _pool[index];
+        }
+    }
+
+    private sealed class RowScratch
+    {
+        public readonly Row Row;
+        public readonly CompValue[] Comps;
+        public readonly ModJsonBuffer[] Json;
+
+        public RowScratch(int compCount)
+        {
+            Comps = new CompValue[compCount];
+            Json = new ModJsonBuffer[compCount];
+            var comps = new List<CompValue>(compCount);
+            for (var i = 0; i < compCount; i++)
+            {
+                Comps[i] = new CompValue { Encoding = ModAbi.Encoding.Json };
+                Json[i] = new ModJsonBuffer();
+                comps.Add(Comps[i]);
+            }
+            Row = new Row { Comps = comps };
+        }
+    }
+
     public void CallObserver(string export, ulong entity, string json)
     {
         if (!_obsByName.TryGetValue(export, out var obs))
             return; // unknown observer token — no-op
 
-        var input = new ObserverInput
+        _obsJson.Reset();
+        if (!string.IsNullOrEmpty(json))
+            IModComponent.WriteUtf8(_obsJson, json);
+        _obsInput.ObsId = obs.ObsId;
+        _obsInput.Entity = entity;
+        _obsValue.TypeId = obs.TypeId;
+        _obsValue.Data = _obsJson.Written;
+
+        var len = Serialize(ObserverInput.Serializer, _obsInput);
+        var reply = _executor.CallObserver(_handle, obs.ObsId, entity, _writeScratch.AsSpan(0, len));
+        if (!reply.IsEmpty)
+            ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
+        NotifySpawned();
+    }
+
+    // Push the temp-id -> real-ecs-id pairs from the buffer just applied back into the
+    // guest (optional mod_spawned export). Called on BOTH apply paths (RunSystem and
+    // CallObserver); no-ops when the last buffer spawned nothing. The table is cleared
+    // afterwards so a later apply that spawns nothing never re-sends stale pairs.
+    private void NotifySpawned()
+    {
+        if (_tempOrder.Count == 0)
+            return;
+
+        _spawnedLive.Clear();
+        for (var i = 0; i < _tempOrder.Count; i++)
         {
-            ObsId = obs.ObsId,
-            Entity = entity,
-            Value = new CompValue
-            {
-                TypeId = obs.TypeId,
-                Encoding = ModAbi.Encoding.Json,
-                Data = string.IsNullOrEmpty(json) ? Array.Empty<byte>() : System.Text.Encoding.UTF8.GetBytes(json),
-            },
-        };
-        var bytes = SerializeToArray(ObserverInput.Serializer, input);
-        var replyBytes = _executor.CallObserver(_handle, obs.ObsId, entity, bytes);
-        if (replyBytes != null)
-            ApplyCommandBuffer(CommandBuffer.Serializer.Parse(replyBytes));
+            while (_spawnedPool.Count <= i)
+                _spawnedPool.Add(new SpawnResolved());
+            var sr = _spawnedPool[i];
+            (sr.TempId, sr.Entity) = _tempOrder[i];
+            _spawnedLive.Add(sr);
+        }
+        _tempTable.Clear();
+        _tempOrder.Clear();
+
+        var len = Serialize(SpawnedInput.Serializer, _spawnedInput);
+        _executor.CallSpawned(_handle, _writeScratch.AsSpan(0, len));
     }
 
     // The host picks the logical export name; the core backend maps any bool export
@@ -240,6 +381,8 @@ internal sealed class ModAbiRunner : IModInstance
     // to filter via wants_filter) = no call, returns false.
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
         => _wantsFilter && _executor.CallFilter(_handle, arg, data);
+
+    public bool WantsFilter => _wantsFilter;
 
     // Re-instantiate from fresh bytes (the executor reuses whatever host-import
     // wiring it built at Load), then re-run setup — ModdingPlugin.ReloadMod has
@@ -259,16 +402,15 @@ internal sealed class ModAbiRunner : IModInstance
 
     // ── FlatSharp plumbing ────────────────────────────────────────────────────
 
-    // Serialize into the reused scratch buffer, then hand the executor an
-    // exact-length copy (the byte[]-in/byte[]-out executor seam owns no knowledge
-    // of FlatSharp's max-size-vs-actual-size distinction).
-    private byte[] SerializeToArray<T>(ISerializer<T> serializer, T value) where T : class
+    // Serialize into the reused scratch buffer and return the written length; the
+    // caller hands the executor `_writeScratch.AsSpan(0, len)` (the executor seam is
+    // span-in, so FlatSharp's max-size-vs-actual-size distinction costs no copy).
+    private int Serialize<T>(ISerializer<T> serializer, T value) where T : class
     {
         var max = serializer.GetMaxSize(value);
         if (_writeScratch.Length < max)
             _writeScratch = new byte[max];
-        var len = serializer.Write(_writeScratch, value);
-        return _writeScratch.AsSpan(0, len).ToArray();
+        return serializer.Write(_writeScratch, value);
     }
 
     // ── CommandBuffer applier ─────────────────────────────────────────────────
@@ -283,63 +425,93 @@ internal sealed class ModAbiRunner : IModInstance
 
         var commands = new CommandsImpl(_ctx);
         _tempTable.Clear();
+        _tempOrder.Clear();
 
-        foreach (var cmd in cmds)
+        // FlatSharp parses lazily, so a malformed payload (or a JSON body the registry
+        // refuses) throws WHERE IT IS TOUCHED — mid-iteration. Without a per-command
+        // guard that abandons every command after it: half-built UI, one log line.
+        try
         {
-            switch (cmd.Kind)
+            for (var i = 0; i < cmds.Count; i++)
             {
-                case Cmd.ItemKind.SpawnCmd:
+                var kind = default(Cmd.ItemKind);
+                try
                 {
-                    var sc = cmd.SpawnCmd;
-                    var ec = commands.Spawn(BuildBundle(sc.Comps));
-                    _tempTable[sc.TempId] = ec.Id().EcsId;
-                    break;
+                    var cmd = cmds[i];
+                    kind = cmd.Kind;
+                    ApplyOne(commands, cmd);
                 }
-                case Cmd.ItemKind.InsertCmd:
+                catch (Exception e)
                 {
-                    var ic = cmd.InsertCmd;
-                    commands.EntityById(Resolve(ic.Entity)).Insert(BuildBundle(ic.Comps));
-                    break;
+                    Console.WriteLine("[ecs-mod] {0} cmd #{1} ({2}) failed: {3}", _ctx.Name, i, kind, e.Message);
                 }
-                case Cmd.ItemKind.RemoveCmd:
-                {
-                    var rc = cmd.RemoveCmd;
-                    commands.EntityById(Resolve(rc.Entity)).Remove(BuildPaths(rc.TypeIds));
-                    break;
-                }
-                case Cmd.ItemKind.DespawnCmd:
-                    commands.EntityById(Resolve(cmd.DespawnCmd.Entity)).Despawn();
-                    break;
-                case Cmd.ItemKind.AddChildCmd:
-                {
-                    var ac = cmd.AddChildCmd;
-                    commands.EntityById(Resolve(ac.Parent))
-                        .AddChild(new EntityImpl(_ctx, Resolve(ac.Child)), ac.Index);
-                    break;
-                }
-                case Cmd.ItemKind.ResourceSetCmd:
-                {
-                    var v = cmd.ResourceSetCmd.Value;
-                    if (v != null && _state.IdToEntry.TryGetValue(v.TypeId, out var e))
-                    {
-                        if (IsApplicable(v.Encoding, e.Path))
-                            commands.ResourceSet(e.Path, Utf8(v.Data));
-                    }
-                    break;
-                }
-                case Cmd.ItemKind.EmitEventCmd:
-                {
-                    var ee = cmd.EmitEventCmd;
-                    commands.EmitEvent(ee.EventName ?? string.Empty, ee.Entity, Utf8(ee.Data));
-                    break;
-                }
-                case Cmd.ItemKind.ConsumeMouseCmd:
-                    commands.InputConsumeMouse(cmd.ConsumeMouseCmd.Button);
-                    break;
-                case Cmd.ItemKind.ConsumeKeyCmd:
-                    commands.InputConsumeKeyboard(cmd.ConsumeKeyCmd.Key);
-                    break;
             }
+        }
+        catch (Exception e)
+        {
+            // The vector itself is unreadable — nothing more to salvage.
+            Console.WriteLine("[ecs-mod] {0}: command buffer is malformed: {1}", _ctx.Name, e.Message);
+        }
+    }
+
+    private void ApplyOne(CommandsImpl commands, Cmd cmd)
+    {
+        switch (cmd.Kind)
+        {
+            case Cmd.ItemKind.SpawnCmd:
+            {
+                var sc = cmd.SpawnCmd;
+                var ec = commands.Spawn(BuildBundle(sc.Comps));
+                var newId = ec.Id().EcsId;
+                _tempTable[sc.TempId] = newId;
+                _tempOrder.Add((sc.TempId, newId));
+                break;
+            }
+            case Cmd.ItemKind.InsertCmd:
+            {
+                var ic = cmd.InsertCmd;
+                commands.EntityById(Resolve(ic.Entity)).Insert(BuildBundle(ic.Comps));
+                break;
+            }
+            case Cmd.ItemKind.RemoveCmd:
+            {
+                var rc = cmd.RemoveCmd;
+                commands.EntityById(Resolve(rc.Entity)).Remove(BuildPaths(rc.TypeIds));
+                break;
+            }
+            case Cmd.ItemKind.DespawnCmd:
+                commands.EntityById(Resolve(cmd.DespawnCmd.Entity)).Despawn();
+                break;
+            case Cmd.ItemKind.AddChildCmd:
+            {
+                var ac = cmd.AddChildCmd;
+                commands.EntityById(Resolve(ac.Parent))
+                    .AddChild(new EntityImpl(_ctx, Resolve(ac.Child)), ac.Index);
+                break;
+            }
+            case Cmd.ItemKind.ResourceSetCmd:
+            {
+                var v = cmd.ResourceSetCmd.Value;
+                if (v != null && _state.IdToEntry.TryGetValue(v.TypeId, out var e))
+                {
+                    if (IsApplicable(v.Encoding, e.Path))
+                        commands.ResourceSet(e.Path, Utf8(v.Data).Span);
+                }
+                break;
+            }
+            case Cmd.ItemKind.EmitEventCmd:
+            {
+                var ee = cmd.EmitEventCmd;
+                commands.EmitEvent(ee.EventName ?? string.Empty, ee.Entity,
+                    System.Text.Encoding.UTF8.GetString(Utf8(ee.Data).Span));
+                break;
+            }
+            case Cmd.ItemKind.ConsumeMouseCmd:
+                commands.InputConsumeMouse(cmd.ConsumeMouseCmd.Button);
+                break;
+            case Cmd.ItemKind.ConsumeKeyCmd:
+                commands.InputConsumeKeyboard(cmd.ConsumeKeyCmd.Key);
+                break;
         }
     }
 
@@ -352,7 +524,9 @@ internal sealed class ModAbiRunner : IModInstance
     }
 
     // Reused scratch — the returned span is consumed synchronously by the Impl call.
-    private ReadOnlySpan<(string, string)> BuildBundle(IList<CompValue>? comps)
+    // Payloads stay as UTF8 slices of the reply buffer: the registry deserializes
+    // straight off the span (SetJsonUtf8), so no string per component per command.
+    private ReadOnlySpan<(string, ReadOnlyMemory<byte>)> BuildBundle(IList<CompValue>? comps)
     {
         _bundleScratch.Clear();
         if (comps != null)
@@ -377,8 +551,11 @@ internal sealed class ModAbiRunner : IModInstance
         return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_pathScratch);
     }
 
-    private static string Utf8(Memory<byte>? data)
-        => data is { Length: > 0 } d ? System.Text.Encoding.UTF8.GetString(d.Span) : "{}";
+    // An absent/empty payload IS "{}" (a tag carries no data both ways).
+    private static readonly ReadOnlyMemory<byte> EmptyObject = new byte[] { (byte)'{', (byte)'}' };
+
+    private static ReadOnlyMemory<byte> Utf8(Memory<byte>? data)
+        => data is { Length: > 0 } d ? d : EmptyObject;
 
     // Encoding.Typed (the phase-2 registry SetFlat path) is not implemented yet. Wire
     // input is a boundary: SKIP the one payload and log it rather than throwing —

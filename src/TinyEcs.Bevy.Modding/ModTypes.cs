@@ -43,6 +43,10 @@ internal enum ModQueryTermKind : byte
     Mut,
     With,
     Without,
+    /// Read + change-filter: carries the component into the row like Ref, and matches
+    /// only entities whose changed-tick is at or after the system's last run (see
+    /// IModComponent.ChangedSince for why the bound is inclusive).
+    Changed,
 }
 
 /// One query term: a ModQueryTermKind plus the type-path it names. SystemImpl.AddQuery

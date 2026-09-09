@@ -8,6 +8,7 @@
 // and resources it chooses to expose, then hands it to the plugin via
 // ModdingConfig. This file is the mechanism only — it knows no concrete game type.
 
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -16,6 +17,51 @@ using TinyEcs.Bevy;
 using TinyEcs.Collections;
 
 namespace TinyEcs.Bevy.Modding;
+
+/// Grow-only UTF8 sink for ONE component payload. Each pooled CompValue owns its
+/// own instance because CompValue.Data is a Memory over this buffer and FlatSharp
+/// reads it after every row is filled — a shared arena would relocate on growth
+/// and dangle the slices handed out before it grew.
+internal sealed class ModJsonBuffer : IBufferWriter<byte>
+{
+    private byte[] _buf = new byte[64];
+    private int _len;
+
+    public void Reset() => _len = 0;
+    public Memory<byte> Written => new(_buf, 0, _len);
+    public ReadOnlySpan<byte> WrittenSpan => _buf.AsSpan(0, _len);
+
+    public void Advance(int count) => _len += count;
+    public Memory<byte> GetMemory(int sizeHint = 0) { Grow(sizeHint); return _buf.AsMemory(_len); }
+    public Span<byte> GetSpan(int sizeHint = 0) { Grow(sizeHint); return _buf.AsSpan(_len); }
+
+    private void Grow(int sizeHint)
+    {
+        if (sizeHint <= 0)
+            sizeHint = 64;
+        if (_buf.Length - _len >= sizeHint)
+            return;
+        Array.Resize(ref _buf, Math.Max(_buf.Length * 2, _len + sizeHint));
+    }
+}
+
+/// STJ has no `Serialize(IBufferWriter<byte>, value, JsonTypeInfo<T>)` overload, only
+/// the Utf8JsonWriter one — and a fresh Utf8JsonWriter per component per row is exactly
+/// the garbage this whole path exists to avoid. Reset an existing writer onto the target
+/// buffer instead. Thread-static because a mapper is shared across mods (and the modding
+/// runner systems are single-threaded, but the registry itself makes no such promise).
+internal static class ModJsonWriter
+{
+    [ThreadStatic] private static Utf8JsonWriter? _writer;
+
+    public static Utf8JsonWriter For(IBufferWriter<byte> target)
+    {
+        if (_writer == null)
+            return _writer = new Utf8JsonWriter(target);
+        _writer.Reset(target);
+        return _writer;
+    }
+}
 
 /// One registered component type, keyed by WIT type-path. All ECS access is
 /// through the closed generic so there is no runtime reflection.
@@ -31,6 +77,50 @@ public interface IModComponent
     // it stays reflection-free / AOT-safe.
     void RegisterInsertObserver(App app, Action<ulong, string> onFire);
     void RegisterRemoveObserver(App app, Action<ulong, string> onFire);
+
+    /// Gated variants: `wanted` is asked BEFORE the component is serialized, so a fire
+    /// that would be dropped anyway (the mod is disabled — ModdingPlugin clears its
+    /// queue) costs nothing. DEFAULT implementations forward to the ungated overloads,
+    /// so a host's hand-written mapper compiles unchanged (it just keeps serializing).
+    void RegisterInsertObserver(App app, Func<bool> wanted, Action<ulong, string> onFire)
+        => RegisterInsertObserver(app, onFire);
+
+    void RegisterRemoveObserver(App app, Func<bool> wanted, Action<ulong, string> onFire)
+        => RegisterRemoveObserver(app, onFire);
+
+    // Change detection for the `Changed` query term. DEFAULT implementations degrade to
+    // presence, so a host's hand-written IModComponent mapper (game registries define
+    // their own) compiles and behaves unchanged — a Changed term over such a mapper is
+    // just a With term. ModComponent<T> overrides both with real column tick reads.
+    /// True when this component's changed-tick on `entity` is AT OR AFTER `tick`.
+    /// Inclusive on purpose: the system stamps `tick` = the world tick it last ran at,
+    /// and a write made LATER in that same tick (a host system downstream of the mod
+    /// runner) carries exactly that tick. `&gt;` would drop it forever; `&gt;=` re-delivers
+    /// one already-seen change at most, and only when nothing else moved the tick on.
+    bool ChangedSince(World world, ulong entity, uint tick) => Has(world, entity);
+
+    /// Every entity whose component changed at or after `sinceTick` (driver-term path).
+    void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
+        => CollectEntities(world, ref into);
+
+    /// UTF8 half of GetJson/SetJson, for the paths that run per row per tick (the
+    /// pushed query snapshot) — a string + a byte[] per component per entity was the
+    /// bulk of the modding host's per-tick garbage. DEFAULT implementations bounce off
+    /// the string overloads, so a host's hand-written mapper compiles and behaves
+    /// unchanged; ModComponent&lt;T&gt; overrides both with direct STJ span/writer calls.
+    void GetJsonUtf8(World world, ulong entity, IBufferWriter<byte> writer)
+        => WriteUtf8(writer, GetJson(world, entity));
+
+    void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
+        => SetJson(world, entity, System.Text.Encoding.UTF8.GetString(json));
+
+    public static void WriteUtf8(IBufferWriter<byte> writer, string json)
+    {
+        if (json.Length == 0)
+            return;
+        var span = writer.GetSpan(System.Text.Encoding.UTF8.GetMaxByteCount(json.Length));
+        writer.Advance(System.Text.Encoding.UTF8.GetBytes(json, span));
+    }
 }
 
 public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent where T : struct
@@ -84,13 +174,56 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
     public void SetJson(World world, ulong entity, string json)
         => world.Set(entity, IsTag ? default : JsonSerializer.Deserialize(json, typeInfo)!);
 
+    public void GetJsonUtf8(World world, ulong entity, IBufferWriter<byte> writer)
+    {
+        if (IsTag)
+            IModComponent.WriteUtf8(writer, "{}");
+        else
+            JsonSerializer.Serialize(ModJsonWriter.For(writer), world.Get<T>(entity), typeInfo);
+    }
+
+    public void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
+        => world.Set(entity, IsTag ? default : JsonSerializer.Deserialize(json, typeInfo)!);
+
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
+
+    // A TAG has no column, hence no changed-tick — World.GetChangedTick returns 0 for
+    // one, which would make a Changed term over a tag match nothing. Degrade to
+    // presence there (same contract as the interface default).
+    public bool ChangedSince(World world, ulong entity, uint tick)
+        => IsTag
+            ? world.Has<T>(entity)
+            : world.Has<T>(entity) && world.GetChangedTick<T>(entity) >= tick;
+
+    public void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
+    {
+        var q = _query ??= world.QueryBuilder().With<T>().Build();
+        var it = q.Iter();
+        while (it.Next())
+            foreach (var ev in it.Entities())
+                if (IsTag || world.GetChangedTick<T>(ev.ID) >= sinceTick)
+                    into.Add(ev.ID);
+    }
 
     public void RegisterInsertObserver(App app, Action<ulong, string> onFire)
         => app.AddObserver<OnInsert<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo)));
 
     public void RegisterRemoveObserver(App app, Action<ulong, string> onFire)
         => app.AddObserver<OnRemove<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo)));
+
+    public void RegisterInsertObserver(App app, Func<bool> wanted, Action<ulong, string> onFire)
+        => app.AddObserver<OnInsert<T>>(t =>
+        {
+            if (wanted())
+                onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo));
+        });
+
+    public void RegisterRemoveObserver(App app, Func<bool> wanted, Action<ulong, string> onFire)
+        => app.AddObserver<OnRemove<T>>(t =>
+        {
+            if (wanted())
+                onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo));
+        });
 }
 
 /// Presence-only component exposure: a mod queries `with <path>` to FIND the entity
@@ -115,6 +248,9 @@ public sealed class ModPresence<T> : IModComponent where T : struct
 
     public string GetJson(World world, ulong entity) => "{}";
     public void SetJson(World world, ulong entity, string json) { }
+    public void GetJsonUtf8(World world, ulong entity, IBufferWriter<byte> writer)
+        => IModComponent.WriteUtf8(writer, "{}");
+    public void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json) { }
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
 
     public void RegisterInsertObserver(App app, Action<ulong, string> onFire)
@@ -130,19 +266,58 @@ public interface IModResource
 {
     string GetJson(App app);
     void SetJson(App app, string json);
+
+    /// UTF8 half of SetJson — see IModComponent.SetJsonUtf8. Default bounces off the
+    /// string overload so a host's hand-written mapper compiles unchanged.
+    void SetJsonUtf8(App app, ReadOnlySpan<byte> json)
+        => SetJson(app, System.Text.Encoding.UTF8.GetString(json));
+
+    /// The registry hands each resource the type-path it was registered under, so a
+    /// diagnostic can name it. Default no-op: only ModResource&lt;T&gt; (read-only
+    /// reporting) needs it; a host's own mapper can ignore it.
+    void BindPath(string path) { }
 }
 
 /// Plain struct/class resource (de)serialized whole via STJ. AOT-safe (closed
 /// generic, source-gen JSON). Used for resources with a clean serializable shape.
-public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo) : IModResource where T : notnull
+/// `readOnly` exposes a resource for READING only: a host resource the engine owns
+/// (the clock, a packet-fed action cache) is not a mod's to overwrite — a write would
+/// silently desync the host until the next packet rewrote it. The write is dropped and
+/// reported once per path (a mod that does it does it every tick).
+public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = false) : IModResource where T : notnull
 {
+    private string _path = "";
+    private bool _reported;
+
+    public void BindPath(string path) => _path = path;
+
     public string GetJson(App app)
         => app.HasResource<T>() ? JsonSerializer.Serialize(app.GetResource<T>(), typeInfo) : "null";
 
     public void SetJson(App app, string json)
     {
-        if (app.HasResource<T>())
-            app.GetResourceRef<T>() = JsonSerializer.Deserialize(json, typeInfo)!;
+        if (RejectWrite() || !app.HasResource<T>())
+            return;
+        app.GetResourceRef<T>() = JsonSerializer.Deserialize(json, typeInfo)!;
+    }
+
+    public void SetJsonUtf8(App app, ReadOnlySpan<byte> json)
+    {
+        if (RejectWrite() || !app.HasResource<T>())
+            return;
+        app.GetResourceRef<T>() = JsonSerializer.Deserialize(json, typeInfo)!;
+    }
+
+    private bool RejectWrite()
+    {
+        if (!readOnly)
+            return false;
+        if (!_reported)
+        {
+            _reported = true;
+            Console.WriteLine("[ecs-mod] write to read-only resource {0} ignored", _path);
+        }
+        return true;
     }
 }
 
@@ -180,16 +355,35 @@ public sealed class ModComponentRegistry
     private readonly Dictionary<string, IModComponent> _byPath = new();
     private readonly Dictionary<string, IModResource> _resByPath = new();
     private readonly Dictionary<string, IModEvent> _evByName = new();
+    private readonly List<string> _actions = new();
 
     public void Register(string typePath, IModComponent component) => _byPath[typePath] = component;
 
     public bool TryGet(string typePath, [MaybeNullWhen(false)] out IModComponent component) => _byPath.TryGetValue(typePath, out component);
 
-    public void RegisterResource(string typePath, IModResource resource) => _resByPath[typePath] = resource;
+    public void RegisterResource(string typePath, IModResource resource)
+    {
+        resource.BindPath(typePath);
+        _resByPath[typePath] = resource;
+    }
 
     public bool TryGetResource(string typePath, [MaybeNullWhen(false)] out IModResource resource) => _resByPath.TryGetValue(typePath, out resource);
 
     public void RegisterEvent(string name, IModEvent ev) => _evByName[name] = ev;
+
+    /// An event the HOST acts on: the guest emits it to ask the host to perform a game
+    /// action, and a host observer does the state change + packet. Wire-identical to
+    /// RegisterEvent (same `_evByName` lookup, same EmitEventCmd path) — the flag exists
+    /// so a code generator can emit call-shaped bindings for these and payload-shaped
+    /// ones for plain events.
+    public void RegisterAction(string name, IModEvent ev)
+    {
+        _evByName[name] = ev;
+        _actions.Add(name);
+    }
+
+    /// Names registered through <see cref="RegisterAction"/>, in registration order.
+    public IReadOnlyList<string> Actions => _actions;
 
     public bool TryGetEvent(string name, [MaybeNullWhen(false)] out IModEvent ev) => _evByName.TryGetValue(name, out ev);
 

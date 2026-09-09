@@ -39,6 +39,15 @@ internal sealed class ModRuntime
     public bool Enabled = true;
     public int Slot;
     public string WasmPath = "";
+    // The host-visible mirror of this runtime (same index in ModControl.Mods), so a
+    // failure recorded deep in a dispatch path can flip Enabled + publish LastError
+    // without every caller threading it through.
+    public ModInfo? Info;
+    // Guest failures (system / observer / a host's inline export), cumulative until
+    // an explicit Enable/Reload. At MaxModFailures the mod is auto-disabled — a
+    // trapping guest otherwise retries every frame forever.
+    public int FailureCount;
+    public string LastError = "";
     // Observer fires buffered by host global observers, drained by FlushObservers
     // at a safe point (end of frame) so guest callbacks can mutate via the bridge.
     public readonly Queue<(string Name, ulong Entity, string Json)> ObserverFires = new();
@@ -55,6 +64,15 @@ public readonly struct LoadedMod
 
     public bool Enabled => _rt.Enabled;
     public string Name => _rt.Manifest.Name;
+
+    /// True when this mod asked to receive the host's inline bool export (the core
+    /// ABI's wants_filter). A host installs its per-packet hook only when some
+    /// enabled mod wants it, so a filter-less set costs nothing per packet.
+    public bool WantsFilter => _rt.Instance.WantsFilter;
+
+    /// Report a failed inline export call so it counts toward the auto-disable budget
+    /// (the lib already does this for the systems + observers it drives itself).
+    public void RecordFailure(string what, Exception e) => ModdingPlugin.NoteFailure(_rt, what, e);
 
     /// Invoke `export(arg: u8, data: list&lt;u8&gt;) -> bool` on this mod; false if absent.
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
@@ -93,6 +111,8 @@ public sealed class ModInfo
     public string Name = "";
     public string Version = "";
     public bool Enabled = true;
+    /// Message of the most recent guest failure ("" when the mod never failed).
+    public string LastError = "";
 }
 
 /// Host-facing control surface for the loaded mods: the list to render (Mods, in
@@ -169,6 +189,9 @@ public readonly struct ModdingPlugin : IPlugin
     public const string RunnerUpdate = "tinyecs:mod_runner_update";
     public const string RunnerPostUpdate = "tinyecs:mod_runner_post_update";
     public const string RunnerLast = "tinyecs:mod_runner_last";
+    /// The Startup system that discovers + loads + sets up the mods. A host orders its
+    /// own Startup work (anything reading the loaded set) After this.
+    public const string Loader = "tinyecs:mod_loader";
 
     public void Build(App app)
     {
@@ -180,7 +203,7 @@ public readonly struct ModdingPlugin : IPlugin
         app.AddResource(new ModControl());
 
         var setupFn = SetupEcsMods;
-        app.AddSystem(setupFn).InStage(Stage.Startup).Build();
+        app.AddSystem(setupFn).InStage(Stage.Startup).Label(Loader).Build();
 
         // One dispatcher per Stage. SingleThreaded: mod systems touch the World
         // directly through the bridge (see GuestBridge), so they must not share a
@@ -228,7 +251,15 @@ public readonly struct ModdingPlugin : IPlugin
         app.AddSystem((ResMut<ModRuntimes> runtimes) =>
             {
                 foreach (var rt in runtimes.Value.Runtimes)
-                    FlushObservers(rt);
+                    if (rt.Enabled)
+                        FlushObservers(rt);
+                    else
+                        // A disabled mod still has its host global observers wired
+                        // (TinyEcs can't unregister them), so fires keep arriving.
+                        // Drop them: dispatching would tick a disabled guest, and
+                        // buffering would grow unbounded and replay stale fires on
+                        // re-enable.
+                        rt.ObserverFires.Clear();
             })
             .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
 
@@ -304,7 +335,7 @@ public readonly struct ModdingPlugin : IPlugin
             try
             {
                 var slot = runtimes.Runtimes.Count;
-                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot };
+                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot, Name = manifest.Name };
                 foreach (var hook in config.PerModContext)
                     hook(ctx);
 
@@ -327,7 +358,8 @@ public readonly struct ModdingPlugin : IPlugin
                     WasmPath = wasmPath,
                 };
                 runtimes.Runtimes.Add(rt);
-                controlRes.Value.Mods.Add(new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true });
+                rt.Info = new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true };
+                controlRes.Value.Mods.Add(rt.Info);
 
                 Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
                     manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count);
@@ -480,22 +512,39 @@ public readonly struct ModdingPlugin : IPlugin
     {
         foreach (var rt in runtimes.Runtimes)
             if (rt.Enabled)
+            {
+                // Drain observer fires buffered since the previous stage BEFORE this
+                // stage's systems run: a UiClick / OnInsert that fired in PreUpdate then
+                // reaches the guest in time for its Update systems to react the SAME
+                // frame (it used to wait for the Stage.Last flush = one frame of lag).
+                // The Last flush stays — it catches fires produced during Last itself.
+                FlushObservers(rt);
                 RunSystemsForStage(rt, which);
+            }
     }
 
-    private static void RunSystemsForStage(ModRuntime rt, ModSchedule which)
+    // Internal (not private): the lib tests drive one stage of one runtime directly to
+    // cover the interval gate without standing up a wasm runtime.
+    internal static void RunSystemsForStage(ModRuntime rt, ModSchedule which)
     {
         if (!rt.Ctx.SystemsByStage.TryGetValue(which, out var systems))
             return;
+        var now = HostTimeMs(rt.Ctx);
         foreach (var sys in systems)
         {
+            // Interval gate (SystemDecl.interval_ms) — checked BEFORE the backend
+            // evaluates any query, so a throttled system costs nothing at all. Unlike
+            // the idle-skip (which needs the empty-query signal), this is pure policy.
+            if (sys.IntervalMs > 0 && now - sys.LastRunTime < sys.IntervalMs)
+                continue;
+            sys.LastRunTime = now;
             try
             {
                 rt.Instance.RunSystem(sys);
             }
             catch (Exception e)
             {
-                Console.WriteLine("[ecs-mod] system '{0}' failed: {1}", sys.Name, e.Message);
+                NoteFailure(rt, $"system '{sys.Name}'", e);
             }
         }
     }
@@ -509,6 +558,39 @@ public readonly struct ModdingPlugin : IPlugin
     // piggyback on the call (~130ms at 60fps — tooltip-delay-scale latency).
     // Query-less systems (Commands-only) never skip — no signal to gate on.
     internal const int IdleSafetyRunPeriod = 8;
+
+    // Engine clock in ms (Res<Time>.Total). Absent in bare unit-test apps — 0 there,
+    // which makes every interval gate open on the first tick and then stay shut; tests
+    // that exercise the gate drive Time themselves.
+    internal static float HostTimeMs(ModHostContext ctx)
+        => ctx.App != null && ctx.App.HasResource<TinyEcs.Bevy.Time>()
+            ? ctx.App.GetResource<TinyEcs.Bevy.Time>().Total
+            : 0f;
+
+    /// Guest failures tolerated (cumulative until enable/reload) before a mod is
+    /// switched off.
+    internal const int MaxModFailures = 10;
+
+    // The FIRST failure logs the whole exception (stack included — that is the one
+    // worth debugging); later ones log only the message, because a trapping guest
+    // fails every frame and would flood the log.
+    internal static void NoteFailure(ModRuntime rt, string what, Exception e)
+    {
+        rt.LastError = e.Message;
+        if (rt.Info != null)
+            rt.Info.LastError = e.Message;
+        var first = rt.FailureCount == 0;
+        rt.FailureCount++;
+        Console.WriteLine("[ecs-mod] {0} '{1}' failed: {2}", what, rt.Manifest.Name, first ? e.ToString() : e.Message);
+
+        if (rt.FailureCount < MaxModFailures || !rt.Enabled)
+            return;
+        rt.Enabled = false;
+        if (rt.Info != null)
+            rt.Info.Enabled = false;
+        rt.ObserverFires.Clear();
+        Console.WriteLine("[ecs-mod] mod '{0}' disabled after {1} failures", rt.Manifest.Name, MaxModFailures);
+    }
 
     internal static bool ShouldSkipIdle(ModSystemSpec sys, bool hasQuery, bool anyRows)
     {
@@ -561,6 +643,7 @@ public readonly struct ModdingPlugin : IPlugin
             return;
         rt.Enabled = false;
         if (info != null) info.Enabled = false;
+        rt.ObserverFires.Clear();
         DespawnModEntities(rt.Ctx.World, rt.Slot);
     }
 
@@ -572,7 +655,16 @@ public readonly struct ModdingPlugin : IPlugin
             return;
         rt.Enabled = true;
         if (info != null) info.Enabled = true;
+        ResetFailures(rt, info);
         RunSystemsForStage(rt, ModSchedule.ModStartup);
+    }
+
+    // An explicit enable/reload is the host saying "try again" — forget the budget.
+    private static void ResetFailures(ModRuntime rt, ModInfo? info)
+    {
+        rt.FailureCount = 0;
+        rt.LastError = "";
+        if (info != null) info.LastError = "";
     }
 
     // Tear the mod down and re-instantiate it (picks up a rebuilt .wasm). Reuses the
@@ -595,11 +687,12 @@ public readonly struct ModdingPlugin : IPlugin
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
 
+        var observersBefore = ObserverSignatures(rt.Ctx.Observers);
+
         // Re-setup repopulates these from the fresh instance's setup() call.
         rt.Ctx.Systems.Clear();
         rt.Ctx.SystemsByStage.Clear();
         rt.Ctx.Observers.Clear();
-        rt.Ctx.ChildrenQuery = null;
 
         // Backend tears down + re-instantiates (reusing host imports where it applies)
         // and re-runs setup, which repopulates ctx.Systems via the guest.
@@ -608,10 +701,27 @@ public readonly struct ModdingPlugin : IPlugin
             : ReadModBytes(rt.Manifest.Name, rt.WasmPath);
         rt.Instance.Reload(in source);
 
+        // The CEILING above, made visible: the host globals wired at first load stay
+        // bound to the observer set the mod declared THEN. A reload declaring a
+        // different set silently loses the new ones, which reads as a dead mod.
+        if (!ObserverSignatures(rt.Ctx.Observers).SetEquals(observersBefore))
+            Console.WriteLine(
+                "[ecs-mod] '{0}': observer set changed on reload — observers added on reload are NOT wired until a restart",
+                rt.Manifest.Name);
+
         rt.Enabled = true;
         if (info != null) info.Enabled = true;
+        ResetFailures(rt, info);
 
         RunSystemsForStage(rt, ModSchedule.ModStartup);
+    }
+
+    private static HashSet<string> ObserverSignatures(List<ModObserverSpec> observers)
+    {
+        var set = new HashSet<string>();
+        foreach (var o in observers)
+            set.Add($"{o.Kind}|{o.TypePath}|{o.Name}");
+        return set;
     }
 
     // Delete every entity this mod spawned (ModEntity.Slot == slot). Deleting a root
@@ -635,33 +745,41 @@ public readonly struct ModdingPlugin : IPlugin
     // re-entrancy-safe; the guest is called later in FlushObservers).
     private static void RegisterModObservers(App app, ModRuntime rt)
     {
+        // A disabled mod's fire queue is cleared on disable and never drained, so both
+        // the enqueue AND the component serialization feeding it are dead work — ask
+        // rt.Enabled first (component mappers check it BEFORE serializing).
+        var wanted = () => rt.Enabled;
         foreach (var obs in rt.Ctx.Observers)
-            RegisterObserver(app, obs, rt.Ctx.Registry, (name, e, json) => rt.ObserverFires.Enqueue((name, e, json)));
+            RegisterObserver(app, obs, rt.Ctx.Registry, wanted,
+                (name, e, json) => rt.ObserverFires.Enqueue((name, e, json)));
     }
 
     // Internal + testable: maps one observer spec to the matching host global
     // observer. Component events resolve their type-path via the registry.
     internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Action<string, ulong, string> onFire)
+        => RegisterObserver(app, obs, registry, static () => true, onFire);
+
+    internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Func<bool> wanted, Action<string, ulong, string> onFire)
     {
         switch (obs.Kind)
         {
             case ModObserverKind.Spawn:
-                app.AddObserver<OnSpawn>(t => onFire(obs.Name, t.EntityId, ""));
+                app.AddObserver<OnSpawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, ""); });
                 break;
             case ModObserverKind.Despawn:
-                app.AddObserver<OnDespawn>(t => onFire(obs.Name, t.EntityId, ""));
+                app.AddObserver<OnDespawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, ""); });
                 break;
             case ModObserverKind.Insert:
                 if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var ci))
-                    ci.RegisterInsertObserver(app, (e, json) => onFire(obs.Name, e, json));
+                    ci.RegisterInsertObserver(app, wanted, (e, json) => onFire(obs.Name, e, json));
                 break;
             case ModObserverKind.Remove:
                 if (obs.TypePath != null && registry.TryGet(obs.TypePath, out var cr))
-                    cr.RegisterRemoveObserver(app, (e, json) => onFire(obs.Name, e, json));
+                    cr.RegisterRemoveObserver(app, wanted, (e, json) => onFire(obs.Name, e, json));
                 break;
             case ModObserverKind.Custom:
                 if (obs.TypePath != null && registry.TryGetEvent(obs.TypePath, out var ev))
-                    ev.RegisterObserver(app, (e, json) => onFire(obs.Name, e, json));
+                    ev.RegisterObserver(app, (e, json) => { if (wanted()) onFire(obs.Name, e, json); });
                 break;
         }
     }
@@ -680,7 +798,7 @@ public readonly struct ModdingPlugin : IPlugin
             }
             catch (Exception e)
             {
-                Console.WriteLine("[ecs-mod] observer '{0}' failed: {1}", name, e.Message);
+                NoteFailure(rt, $"observer '{name}'", e);
             }
         }
     }
@@ -689,15 +807,23 @@ public readonly struct ModdingPlugin : IPlugin
     // owns it: returned in the backend's RunSystem finally after the wasm Call).
     // Returns the buffer; `matched` is the valid prefix length. `candidates` is
     // method-scoped scratch (PooledList). Runtime-agnostic — used by every backend.
-    internal static ulong[] BuildSnapshot(ModHostContext ctx, ModQuerySpec q, out int matched)
+    internal static ulong[] BuildSnapshot(ModHostContext ctx, ModQuerySpec q, uint sinceTick, out int matched)
     {
         matched = 0;
 
-        // Driver = first present-required term (ref/mut/with) that is registered.
+        // Resolved once per spec — no type-path hashing per term per entity below.
+        var mappers = q.TermMappers(ctx.Registry);
+
+        // Driver = first present-required term (ref/mut/with/changed) that is registered.
         IModComponent? driver = null;
-        foreach (var (typePath, _, kind) in q.Terms)
-            if (kind != ModQueryTermKind.Without && ctx.Registry.TryGet(typePath, out driver))
+        var driverChanged = false;
+        for (var ti = 0; ti < mappers.Length; ti++)
+            if (mappers[ti].Kind != ModQueryTermKind.Without && mappers[ti].Comp != null)
+            {
+                driver = mappers[ti].Comp;
+                driverChanged = mappers[ti].Kind == ModQueryTermKind.Changed;
                 break;
+            }
         if (driver == null)
             return ArrayPool<ulong>.Shared.Rent(1);
 
@@ -706,7 +832,12 @@ public readonly struct ModdingPlugin : IPlugin
         var candidates = new PooledList<ulong>(16);
         try
         {
-            driver.CollectEntities(ctx.World, ref candidates);
+            // A Changed driver narrows the scan itself (tick-filtered collect); every
+            // other driver collects by presence and the per-term loop below filters.
+            if (driverChanged)
+                driver.CollectChangedEntities(ctx.World, sinceTick, ref candidates);
+            else
+                driver.CollectEntities(ctx.World, ref candidates);
 
             // matched ⊆ candidates, so a candidates-sized buffer never overflows.
             var result = ArrayPool<ulong>.Shared.Rent(candidates.Count == 0 ? 1 : candidates.Count);
@@ -714,14 +845,17 @@ public readonly struct ModdingPlugin : IPlugin
             {
                 var id = candidates[ci];
                 var ok = true;
-                foreach (var (typePath, _, kind) in q.Terms)
+                for (var ti = 0; ti < mappers.Length; ti++)
                 {
-                    if (!ctx.Registry.TryGet(typePath, out var comp))
+                    var (comp, kind) = mappers[ti];
+                    if (comp == null)
                     {
                         if (kind != ModQueryTermKind.Without) { ok = false; break; }
                         continue;
                     }
-                    var has = comp.Has(ctx.World, id);
+                    var has = kind == ModQueryTermKind.Changed
+                        ? comp.ChangedSince(ctx.World, id, sinceTick)
+                        : comp.Has(ctx.World, id);
                     if (kind == ModQueryTermKind.Without && has) { ok = false; break; }
                     if (kind != ModQueryTermKind.Without && !has) { ok = false; break; }
                 }

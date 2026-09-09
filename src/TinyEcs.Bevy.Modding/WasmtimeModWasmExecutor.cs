@@ -21,7 +21,31 @@ namespace TinyEcs.Bevy.Modding;
 
 internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
 {
-    private readonly Engine _engine = new();
+    // EXECUTION LIMITS: a guest that loops forever would otherwise hang the frame
+    // loop with no way out. Epoch interruption is the cheap escape (no per-block fuel
+    // accounting): a background timer bumps the engine epoch every EpochPeriodMs, and
+    // every guest call arms a relative deadline first, so an overrun TRAPS and surfaces
+    // as an exception in the caller's per-system catch (which counts it toward the
+    // mod's auto-disable budget).
+    private const int EpochPeriodMs = 10;
+    // ~1s of wall clock: orders of magnitude above a real per-frame call (tens of
+    // microseconds), still bounded.
+    private const ulong CallDeadlineTicks = 100;
+    // Instantiation + mod_setup do real work in a NativeAOT C# guest (static ctors,
+    // the whole registry handshake), so they get a much wider budget.
+    private const ulong SetupDeadlineTicks = 3000;
+    // 1 GiB linear memory ceiling: a runaway guest fails its memory.grow instead of
+    // taking the process's address space with it.
+    private const long MemoryLimitBytes = 1L << 30;
+
+    private readonly Engine _engine = new(new Config().WithEpochInterruption(true));
+    private readonly System.Threading.Timer _epochTimer;
+    private volatile bool _disposed;
+
+    public WasmtimeModWasmExecutor()
+        => _epochTimer = new System.Threading.Timer(
+            _ => { if (!_disposed) _engine.IncrementEpoch(); }, null, EpochPeriodMs, EpochPeriodMs);
+
     // Indexed by the caller-supplied slot (== ModHostContext.Slot); Load grows the
     // list as needed rather than relying on Count to already equal `slot` (a prior
     // mod's Load can fail without ever reaching this executor).
@@ -43,6 +67,10 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         public Func<int, int, int, long>? RunFn;
         public Func<int, long, int, int, long>? ObserverFn;
         public Func<int, int, int, int>? FilterFn;
+        public Action<int, int>? SpawnedFn;
+
+        // Grow-only copy-out buffer for the guest's packed reply — see CopyPackedOut.
+        public byte[] Reply = new byte[1024];
     }
 
     public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports)
@@ -64,29 +92,32 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         return slot;
     }
 
-    public byte[]? CallSetup(int handle, byte[] handshake)
+    public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake)
     {
         var slot = _slots[handle]!;
+        slot.Store.SetEpochDeadline(SetupDeadlineTicks);
         var ptr = WriteInputToArena(slot, handshake);
         var packed = (ulong)slot.SetupFn(ptr, handshake.Length);
         return CopyPackedOut(slot, packed);
     }
 
-    public byte[]? CallRun(int handle, uint sysId, byte[] input)
+    public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input)
     {
         var slot = _slots[handle]!;
         if (slot.RunFn == null)
-            return null;
+            return default;
+        slot.Store.SetEpochDeadline(CallDeadlineTicks);
         var ptr = WriteInputToArena(slot, input);
         var packed = (ulong)slot.RunFn((int)sysId, ptr, input.Length);
         return CopyPackedOut(slot, packed);
     }
 
-    public byte[]? CallObserver(int handle, uint obsId, ulong entity, byte[] input)
+    public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input)
     {
         var slot = _slots[handle]!;
         if (slot.ObserverFn == null)
-            return null;
+            return default;
+        slot.Store.SetEpochDeadline(CallDeadlineTicks);
         var ptr = WriteInputToArena(slot, input);
         var packed = (ulong)slot.ObserverFn((int)obsId, (long)entity, ptr, input.Length);
         return CopyPackedOut(slot, packed);
@@ -97,11 +128,22 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         var slot = _slots[handle]!;
         if (slot.FilterFn == null)
             return false;
+        slot.Store.SetEpochDeadline(CallDeadlineTicks);
         slot.ArenaReset();
         var ptr = slot.Alloc(data.Length);
         if (data.Length > 0)
             data.CopyTo(slot.Memory.GetSpan(ptr, data.Length)); // SPAN RULE: after alloc
         return slot.FilterFn(arg, ptr, data.Length) != 0;
+    }
+
+    public void CallSpawned(int handle, ReadOnlySpan<byte> input)
+    {
+        var slot = _slots[handle]!;
+        if (slot.SpawnedFn == null)
+            return;
+        slot.Store.SetEpochDeadline(CallDeadlineTicks);
+        var ptr = WriteInputToArena(slot, input);
+        slot.SpawnedFn(ptr, input.Length);
     }
 
     // Tear down + re-instantiate, REUSING the Linker (the host imports never
@@ -128,7 +170,17 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         _slots[handle] = null;
     }
 
-    public void Dispose() => _engine.Dispose();
+    public void Dispose()
+    {
+        // The timer callback calls into the native engine, and the non-blocking
+        // Timer.Dispose() returns while a callback may still be running — that
+        // window is a use-after-free. Wait for it.
+        _disposed = true;
+        using var done = new System.Threading.ManualResetEvent(false);
+        _epochTimer.Dispose(done);
+        done.WaitOne();
+        _engine.Dispose();
+    }
 
     internal static Store CreateStore(Engine engine)
     {
@@ -136,6 +188,10 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         store.SetWasiConfiguration(new WasiConfiguration()
             .WithInheritedStandardOutput()
             .WithInheritedStandardError());
+        store.SetLimits(memorySize: MemoryLimitBytes);
+        // Covers instantiate + the reactor's _initialize, which run before the first
+        // CallSetup gets to arm a deadline of its own.
+        store.SetEpochDeadline(SetupDeadlineTicks);
         return store;
     }
 
@@ -149,33 +205,39 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         slot.RunFn = instance.GetFunction<int, int, int, long>("mod_run");
         slot.ObserverFn = instance.GetFunction<int, long, int, int, long>("mod_observer");
         slot.FilterFn = instance.GetFunction<int, int, int, int>("mod_filter");
+        slot.SpawnedFn = instance.GetAction<int, int>("mod_spawned");
         // WASI reactor init (globals / component ctors) — before any other export.
         instance.GetAction("_initialize")?.Invoke();
     }
 
     // Reset the bump arena, allocate `len`, copy the input in. Returns the guest
     // pointer. SPAN RULE: memory is re-acquired AFTER alloc.
-    private static int WriteInputToArena(Slot slot, byte[] input)
+    private static int WriteInputToArena(Slot slot, ReadOnlySpan<byte> input)
     {
         slot.ArenaReset();
         var ptr = slot.Alloc(input.Length);
         if (input.Length > 0)
-            input.AsSpan().CopyTo(slot.Memory.GetSpan(ptr, input.Length));
+            input.CopyTo(slot.Memory.GetSpan(ptr, input.Length));
         return ptr;
     }
 
     // Packed guest return = len&lt;&lt;32 | ptr, 0 = none. The bytes live in the guest
-    // arena until the next arena_reset — copy out into a right-sized array before
-    // the caller (ModAbiRunner) parses it with FlatSharp.
-    private static byte[]? CopyPackedOut(Slot slot, ulong packed)
+    // arena until the next arena_reset, so they must be copied out before the caller
+    // (ModAbiRunner) parses them — into the slot's GROW-ONLY reply buffer, not a
+    // right-sized array: this runs per system per stage per frame. The returned slice
+    // is valid until the next call on this handle (the IModWasmExecutor contract).
+    private static Memory<byte> CopyPackedOut(Slot slot, ulong packed)
     {
         if (packed == 0)
-            return null;
+            return default;
         var ptr = (int)(packed & 0xFFFFFFFFUL);
         var len = (int)(packed >> 32);
         if (len <= 0)
-            return null;
-        return slot.Memory.GetSpan(ptr, len).ToArray();
+            return default;
+        if (slot.Reply.Length < len)
+            slot.Reply = new byte[Math.Max(slot.Reply.Length * 2, len)];
+        slot.Memory.GetSpan(ptr, len).CopyTo(slot.Reply);
+        return new Memory<byte>(slot.Reply, 0, len);
     }
 
     // The host imports (see abi/mod-abi.fbs header): mid-run RPCs. The generic ECS

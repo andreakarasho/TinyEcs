@@ -165,13 +165,17 @@ internal sealed class JcoModInstance : IModInstance
             }
             else
             {
-                var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, out var matched);
+                var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, sys.LastRunWorldTick, out var matched);
                 _snapshotScratch.Add(snapshot);
                 @params[i] = ModRunParam.Query(snapshot, matched, p.Query!.Components);
                 hasQuery = true;
                 anyRows |= matched > 0;
             }
         }
+
+        // The queries were evaluated above, so the Changed window closes HERE — even
+        // when the guest call is idle-skipped below.
+        sys.LastRunWorldTick = _ctx.World.CurrentTick;
 
         try
         {

@@ -63,6 +63,12 @@ internal interface IModInstance : IDisposable
     /// hook it must consult synchronously (outside the per-frame scheduler).
     bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data);
 
+    /// Whether this mod actually asked for the inline bool export (the core ABI's
+    /// wants_filter handshake bit), so a host can skip installing its hook entirely.
+    /// Defaults to true for a backend that only learns at call time whether the guest
+    /// exports it (Jco probes the export list per call).
+    bool WantsFilter => true;
+
     /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
     /// caller resets the shared ModHostContext first. Wasmtime instantiates fresh
     /// from source.Bytes; Jco is deferred-capable — it may kick an async recompile
