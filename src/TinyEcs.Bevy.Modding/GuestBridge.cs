@@ -252,21 +252,24 @@ internal struct CommandsImpl(ModHostContext ctx)
     public EntityCommandsImpl EntityById(ulong id) => new EntityCommandsImpl(ctx, id);
 
     // Singleton-resource access by type-path (the "change resource" capability).
+    // The calling mod's name rides along: a resource holding per-mod state serves
+    // this mod's slice (see IModResource.GetJsonFor / SetJsonFrom); every other
+    // mapper's default ignores it and keeps whole-resource semantics.
     public string ResourceGet(string resource)
         => ctx.App != null && ctx.Registry.TryGetResource(resource, out var r)
-            ? r.GetJson(ctx.App)
+            ? r.GetJsonFor(ctx.App, ctx.Name)
             : "null";
 
     public void ResourceSet(string resource, string value)
     {
         if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
-            r.SetJson(ctx.App, value);
+            r.SetJsonFrom(ctx.App, value, ctx.Name);
     }
 
     public void ResourceSet(string resource, ReadOnlySpan<byte> value)
     {
         if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
-            r.SetJsonUtf8(ctx.App, value);
+            r.SetJsonUtf8From(ctx.App, value, ctx.Name);
     }
 
     // Input override — consume a mouse button this frame. The lib owns no input

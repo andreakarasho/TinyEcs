@@ -185,6 +185,14 @@ public sealed class ModdingConfig
     /// (ctx.HostImportModule + ctx.HostImports descriptors — see ModHostImports.cs),
     /// a filter delegate. There is no separate linker hook.
     public readonly List<Action<ModHostContext>> PerModContext = new();
+
+    /// Per-mod hook run when a mod stops running: on DISABLE, and on RELOAD before the
+    /// fresh instance's setup. The argument is the manifest name. The lib already
+    /// despawns the mod's entities itself; this is for host state a mod publishes
+    /// OUTSIDE the World (its registered hotkeys, a cached binding table) which would
+    /// otherwise keep firing for a mod that is no longer running. Not called on enable
+    /// — the mod re-publishes from its own ModStartup.
+    public readonly List<Action<string>> OnModTeardown = new();
 }
 
 public readonly struct ModdingPlugin : IPlugin
@@ -631,7 +639,7 @@ public readonly struct ModdingPlugin : IPlugin
             {
                 switch (action)
                 {
-                    case ModAction.Disable: DisableMod(rt, info); break;
+                    case ModAction.Disable: DisableMod(rt, info, configRes.Value); break;
                     case ModAction.Enable: EnableMod(rt, info); break;
                     case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info, configRes.Value); break;
                 }
@@ -645,7 +653,7 @@ public readonly struct ModdingPlugin : IPlugin
 
     // Stop a mod ticking and remove everything it spawned. The wasm instance stays
     // loaded; re-enable re-runs its startup. Only its host entities are despawned.
-    private static void DisableMod(ModRuntime rt, ModInfo? info)
+    private static void DisableMod(ModRuntime rt, ModInfo? info, ModdingConfig config)
     {
         if (!rt.Enabled)
             return;
@@ -653,6 +661,19 @@ public readonly struct ModdingPlugin : IPlugin
         if (info != null) info.Enabled = false;
         rt.ObserverFires.Clear();
         DespawnModEntities(rt.Ctx.World, rt.Slot);
+        NotifyTeardown(config, rt.Manifest.Name);
+    }
+
+    // Let the host drop per-mod state it holds outside the World (see
+    // ModdingConfig.OnModTeardown). A throwing hook must not abort the
+    // disable/reload it is reacting to.
+    private static void NotifyTeardown(ModdingConfig config, string modName)
+    {
+        foreach (var hook in config.OnModTeardown)
+        {
+            try { hook(modName); }
+            catch (Exception e) { Console.WriteLine("[ecs-mod] teardown hook for '{0}' failed: {1}", modName, e); }
+        }
     }
 
     // Resume ticking and re-run the mod's startup so it rebuilds its UI. A mod whose
@@ -694,6 +715,7 @@ public readonly struct ModdingPlugin : IPlugin
     private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info, ModdingConfig config)
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
+        NotifyTeardown(config, rt.Manifest.Name);
 
         var observersBefore = ObserverSignatures(rt.Ctx.Observers);
 

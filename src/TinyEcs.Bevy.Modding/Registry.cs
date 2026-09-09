@@ -276,6 +276,22 @@ public interface IModResource
     /// diagnostic can name it. Default no-op: only ModResource&lt;T&gt; (read-only
     /// reporting) needs it; a host's own mapper can ignore it.
     void BindPath(string path) { }
+
+    // ── Per-mod slices ──────────────────────────────────────────────────────────
+    // The guest bridge names the mod whose read/write is being applied, so a host
+    // resource that holds PER-MOD state (a mod's own key bindings) can serve one
+    // mod's slice instead of a single global value every mod overwrites. Defaults
+    // ignore the caller, so every existing mapper keeps its whole-resource
+    // semantics unchanged.
+    //
+    // A per-mod mapper must override BOTH write overloads: the UTF8 default drops to
+    // SetJsonUtf8 (not to SetJsonFrom), because ModResource&lt;T&gt; overrides it to
+    // deserialize straight off the bytes and routing through the string overload would
+    // give that up for every whole-resource mapper. The bridge calls the UTF8 path.
+    string GetJsonFor(App app, string modName) => GetJson(app);
+    void SetJsonFrom(App app, string json, string modName) => SetJson(app, json);
+    void SetJsonUtf8From(App app, ReadOnlySpan<byte> json, string modName)
+        => SetJsonUtf8(app, json);
 }
 
 /// Plain struct/class resource (de)serialized whole via STJ. AOT-safe (closed
