@@ -242,6 +242,76 @@ public class ModHostHardeningTests
             .GetJson(world, world.Entity().Set(new WitTag()).ID));
     }
 
+    // ── stale entity ids from the guest ──────────────────────────────────────────
+
+    // The guest holds ids from a PUSHED query snapshot, so an id routinely outlives its
+    // entity (the host right-click-closes a mod window between two ticks). The point
+    // imports used to reach World.Has, which PANICS on a dead id — the trap aborted the
+    // calling guest system on every tick from then on.
+    [Fact]
+    public void Point_imports_on_a_despawned_entity_answer_empty_instead_of_trapping()
+    {
+        using var world = new World();
+        var app = new App();
+        var reg = new ModComponentRegistry();
+        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var ctx = new ModHostContext { World = world, Registry = reg, Name = "stale", App = app };
+
+        var state = new CoreModState();
+        state.PathToId["test/flag"] = 0;
+        state.IdToEntry[0] = ("test/flag", ModRegistryKind.Component);
+
+        var parent = world.Entity().ID;
+        var child = world.Entity().ID;
+        world.AddChild(parent, child);
+        world.Set(child, new HardFlag { On = true });
+
+        var backing = new ModAbiBacking(ctx, state, "stale");
+        var buf = new byte[256];
+
+        // Control: alive, the component comes back.
+        Assert.True(backing.ComponentGet(child, 0, buf) > 0);
+        Assert.Equal(1, backing.EntityChildren(parent, buf));
+        Assert.Equal(parent, backing.EntityParent(child));
+
+        world.Delete(child);
+        world.Delete(parent);
+
+        Assert.Equal(0, backing.ComponentGet(child, 0, buf));
+        Assert.Equal(0, backing.EntityChildren(parent, buf));
+        Assert.Equal(0UL, backing.EntityParent(child));
+
+        // A never-existing id is the same answer.
+        Assert.Equal(0, backing.ComponentGet(0xDEAD_BEEF, 0, buf));
+        Assert.Equal(0, backing.EntityChildren(0xDEAD_BEEF, buf));
+        Assert.Equal(0UL, backing.EntityParent(0xDEAD_BEEF));
+    }
+
+    [Fact]
+    public void Entity_bridge_reads_on_a_despawned_entity_answer_null_instead_of_trapping()
+    {
+        using var world = new World();
+        var reg = new ModComponentRegistry();
+        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var ctx = new ModHostContext { World = world, Registry = reg, Name = "stale" };
+
+        var parent = world.Entity().ID;
+        var child = world.Entity().ID;
+        world.AddChild(parent, child);
+        world.Set(child, new HardFlag { On = true });
+
+        Assert.Equal("{\"On\":true}", new EntityImpl(ctx, child).Get("test/flag"));
+
+        world.Delete(child);
+        world.Delete(parent);
+
+        Assert.Equal("null", new EntityImpl(ctx, child).Get("test/flag"));
+        Assert.Empty(new EntityImpl(ctx, parent).Children());
+        Assert.Null(new EntityImpl(ctx, child).Parent());
+        Assert.Equal("null", new ComponentImpl(ctx, child, "test/flag", true).Get());
+        new ComponentImpl(ctx, child, "test/flag", true).Set("{\"On\":false}"); // no throw
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────────────
 
     private static byte[] Bytes<T>(ISerializer<T> serializer, T value) where T : class

@@ -43,6 +43,9 @@ internal sealed class ModAbiBacking : IModImportSink
 
     public ulong EntityParent(ulong entity)
     {
+        if (!_ctx.World.Exists(entity))
+            return 0UL;
+
         var p = (ulong)_ctx.World.GetParent(entity);
         return p != 0 && _ctx.World.Exists(p) ? p : 0UL;
     }
@@ -55,7 +58,11 @@ internal sealed class ModAbiBacking : IModImportSink
     // no guest call between GetSpan() and this).
     public int EntityChildren(ulong entity, Span<byte> outBytes)
     {
-        if (!_ctx.World.Has<Children>(entity))
+        // A guest holds entity ids from a PUSHED snapshot, so they routinely outlive
+        // the entity (the host right-click-closes a mod window between two ticks).
+        // World.Has PANICS on a dead id, and that throw traps the guest mid-system —
+        // "no children" is the honest answer at this boundary.
+        if (!_ctx.World.Exists(entity) || !_ctx.World.Has<Children>(entity))
             return 0;
 
         var cap = outBytes.Length / 8;
@@ -72,7 +79,10 @@ internal sealed class ModAbiBacking : IModImportSink
 
     public int ComponentGet(ulong entity, ushort typeId, Span<byte> outBytes)
     {
-        if (!_state.IdToEntry.TryGetValue(typeId, out var e)
+        // Exists() FIRST — see EntityChildren: a stale id would panic inside
+        // IModComponent.Has and abort the calling guest system every tick.
+        if (!_ctx.World.Exists(entity)
+            || !_state.IdToEntry.TryGetValue(typeId, out var e)
             || !_ctx.Registry.TryGet(e.Path, out var comp)
             || !comp.Has(_ctx.World, entity))
             return 0;

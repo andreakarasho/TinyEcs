@@ -343,12 +343,18 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId)
 
     public EntityImpl? Parent()
     {
+        if (!ctx.World.Exists(ecsId))
+            return null;
+
         var p = (ulong)ctx.World.GetParent(ecsId);
         return p != 0 && ctx.World.Exists(p) ? new EntityImpl(ctx, p) : null;
     }
 
+    // Exists() first: a guest holds ids from a PUSHED snapshot, so they routinely
+    // outlive the entity, and World.Has panics on a dead one — that throw would trap
+    // the guest mid-system. "No component" is the honest answer at this boundary.
     public string Get(string component)
-        => ctx.Registry.TryGet(component, out var c) && c.Has(ctx.World, ecsId)
+        => ctx.World.Exists(ecsId) && ctx.Registry.TryGet(component, out var c) && c.Has(ctx.World, ecsId)
             ? c.GetJson(ctx.World, ecsId)
             : "null";
 
@@ -357,7 +363,7 @@ internal struct EntityImpl(ModHostContext ctx, ulong ecsId)
         // TinyEcs's relationship mapper keeps the ordered child list on the parent as
         // a `Children` component — read it instead of scanning every entity with a
         // Parent (which was O(all parented entities) per call).
-        if (!ctx.World.Has<TinyEcs.Children>(ecsId))
+        if (!ctx.World.Exists(ecsId) || !ctx.World.Has<TinyEcs.Children>(ecsId))
             return Array.Empty<EntityImpl>();
         var children = ctx.World.Get<TinyEcs.Children>(ecsId);
         var result = new EntityImpl[children.Count];
@@ -404,13 +410,15 @@ internal struct QueryResultImpl(ModHostContext ctx, ulong entity, List<(string t
 internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable)
 {
     public string Get()
-        => ctx.Registry.TryGet(typePath, out var comp) ? comp.GetJson(ctx.World, entity) : "null";
+        => ctx.World.Exists(entity) && ctx.Registry.TryGet(typePath, out var comp)
+            ? comp.GetJson(ctx.World, entity)
+            : "null";
 
     public void Set(string value)
     {
         if (!mutable)
             ThrowNotMutable(typePath);
-        if (ctx.Registry.TryGet(typePath, out var comp))
+        if (ctx.World.Exists(entity) && ctx.Registry.TryGet(typePath, out var comp))
             comp.SetJson(ctx.World, entity, value);
     }
 
