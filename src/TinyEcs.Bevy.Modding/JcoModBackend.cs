@@ -182,7 +182,7 @@ internal sealed class JcoModInstance : IModInstance
 
         // The queries were evaluated above, so the Changed window closes HERE — even
         // when the guest call is idle-skipped below.
-        sys.LastRunWorldTick = _ctx.World.CurrentTick;
+        sys.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
 
         try
         {

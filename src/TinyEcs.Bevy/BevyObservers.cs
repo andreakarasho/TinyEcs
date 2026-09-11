@@ -418,6 +418,11 @@ public static class ObserverExtensions
 	public static void EmitTriggerInner<TTrigger>(this TinyEcs.World world, TTrigger trigger)
 		where TTrigger : ITrigger
 	{
+		// No SystemTicks.Advance here, by design: a trigger fires synchronously
+		// inside an enclosing scope that already took a tick (the emitting
+		// system's run, or the stage's command/observer flush). Observers
+		// therefore INHERIT that tick, which is what makes an OnInsert handler's
+		// writes land in the same change window as the insert that caused them.
 		var state = world.GetObserverState();
 		var triggerType = typeof(TTrigger);
 
@@ -479,6 +484,14 @@ public static class ObserverExtensions
 	public static void FlushObservers(this TinyEcs.World world)
 	{
 		var state = world.GetObserverState();
+		if (state.PendingComponentActions.Count == 0)
+			return;
+
+		// The flush is its own scheduling unit (like the deferred-command
+		// merge): give it a fresh tick so writes made by observer handlers land
+		// after every system of the stage, and publish it so system params used
+		// by the handlers get a coherent window.
+		SystemTicks.Advance(world);
 
 		while (state.PendingComponentActions.TryDequeue(out var pending))
 		{

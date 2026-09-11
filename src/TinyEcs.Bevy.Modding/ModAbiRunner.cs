@@ -232,7 +232,7 @@ internal sealed class ModAbiRunner : IModInstance
 
         // The queries were evaluated above, so the Changed window closes HERE — even
         // when the guest call is idle-skipped below (the rows were still consumed).
-        sys.LastRunWorldTick = _ctx.World.CurrentTick;
+        sys.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
 
         try
         {
@@ -403,6 +403,13 @@ internal sealed class ModAbiRunner : IModInstance
 
     public void Dispose() => _executor.DisposeInstance(_handle);
 
+    // The guest-facing `SystemInput.tick` is HOST MILLISECONDS (Time.Total), not a
+    // world change tick and not a frame counter: guests use it as a monotonic clock
+    // (cuo-mod-sdk `Wait.Ms(ms)` / `Wait.Until(.., timeoutMs)` / per-tick memo
+    // invalidation). Deliberately unaffected by the change-tick redesign — exporting
+    // World.CurrentTick here would hand guests a counter that moves once per system
+    // run, and World.FrameCount would silently reinterpret every guest-side
+    // millisecond deadline as frames.
     private ulong CurrentTick()
         => _ctx.App != null && _ctx.App.HasResource<TinyEcs.Bevy.Time>()
             ? (ulong)_ctx.App.GetResource<TinyEcs.Bevy.Time>().Total

@@ -158,10 +158,63 @@ Add a `Filter<...>` for matching constraints:
 |---------------|----------------------------------------------------------------|
 | `With<T>`     | Entity must have `T` (component or tag).                       |
 | `Without<T>`  | Entity must NOT have `T`.                                      |
-| `Changed<T>`  | `T` modified since the system last ran.                        |
-| `Added<T>`    | `T` was added since the system last ran.                       |
+| `Changed<T>`  | `T` modified in `(lastRun, thisRun]` — since this system's previous run, including earlier this frame. |
+| `Added<T>`    | `T` was added in the same window.                              |
 | `Optional<T>` | Include matching entities; `Ptr<T>.IsValid()` indicates state. |
 | `MarkChanged<T>` | Manually flag `T` as changed.                                |
+
+An in-place write through `.Ref` does NOT bump the component's change tick.
+When a `Changed<T>` consumer must see it, mark the row explicitly (Bevy's
+`set_if_neq` companion — only after a real change, or the consumer never
+settles):
+
+```csharp
+foreach (var (e, hp) in q)
+{
+    if (hp.Ref.Value == next) continue;
+    hp.Ref.Value = next;
+    q.SetChanged<Health>(e.Ref);
+}
+```
+
+### The change-detection window
+
+`Changed<T>` / `Added<T>` report ticks in `(lastRun, thisRun]` — bevy_ecs
+semantics, with wrapping comparison (`ChangeTick.InWindow`).
+
+The world change tick (`World.CurrentTick`) advances **once per system run**,
+plus once per deferred-command flush and once per observer flush. It is not a
+frame counter; use `World.FrameCount` for that. Consequences:
+
+- **A change is visible the same frame it is made.** A producer in `Stage.Update`
+  is seen by a `Changed<T>` consumer in `Stage.PostUpdate` on that frame. Writes
+  a system defers (`Commands`, and `SetChanged` called from inside a system) are
+  stamped by the stage's command flush, which takes a tick of its own after
+  every system of the stage — so they too land in time for later stages.
+- **Exactly once.** The lower bound is exclusive and `lastRun` is stored per
+  system, so no consumer sees a change twice and no consumer consumes it on
+  another's behalf.
+- **Nothing is lost while a system is gated out.** A `RunIf`-skipped run does
+  not `Fetch`, so `lastRun` stays put and the next real run spans the gap.
+- **Same-stage ordering is on you.** Two systems in one stage may share a
+  parallel batch, in which case their tick order is not their source order. If a
+  consumer must see a same-frame producer, order them (`.After("producer")`) or
+  put them in different stages — the same requirement Bevy imposes.
+- **A direct `world.Set` is stamped with the global tick**, which a sibling
+  system of the same parallel batch may already have bumped. A system can
+  therefore see its own direct write as "changed" on its next run. Go through
+  `Commands` when that matters.
+
+Long-lived worlds: at ~300 systems and 1000 fps the 32-bit tick wraps in hours,
+so `App` runs Bevy's `check_change_ticks` pass (`World.CheckChangeTicks`) every
+`ChangeTick.CheckTickThreshold` ticks, clamping stored ticks that have aged past
+`ChangeTick.MaxChangeAge`. Changes older than that may be dropped — the same
+bound Bevy documents.
+
+The stateless `world.Query<Data<..>, Filter<..>>()` helpers cannot do this: with
+no per-consumer `lastRun` their window is the previous FRAME's tick span, so a
+same-frame producer is invisible to them. They are for reading state and for
+tests; same-frame wiring needs a real `Query<>` system param.
 
 ```csharp
 Query<Data<Position, Velocity>, Without<Mass>> q1;

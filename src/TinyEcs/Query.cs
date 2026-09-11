@@ -224,7 +224,7 @@ public sealed class Query
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private QueryIterator Iter(ReadOnlySpan<Archetype> archetypes, int start, int count)
 	{
-		return new(archetypes, _termIdsAccess, _indices, start, count, _hasOptional);
+		return new(archetypes, _termIdsAccess, _indices, start, count, _hasOptional, World.CurrentTick);
 	}
 }
 
@@ -237,10 +237,11 @@ public ref struct QueryIterator
 	private readonly Span<int> _indices;
 	private readonly int _start, _count;
 	private readonly bool _hasOptional;
+	private readonly uint _currentTick;
 
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<ulong> termIds, Span<int> indices, int start, int count, bool hasOptional)
+	internal QueryIterator(ReadOnlySpan<Archetype> archetypes, ReadOnlySpan<ulong> termIds, Span<int> indices, int start, int count, bool hasOptional, uint currentTick)
 	{
 		_archetypeIterator = archetypes.GetEnumerator();
 		_termIds = termIds;
@@ -248,6 +249,20 @@ public ref struct QueryIterator
 		_start = start;
 		_count = count;
 		_hasOptional = hasOptional;
+		_currentTick = currentTick;
+	}
+
+	/// <summary>
+	/// World change tick snapshotted when this iterator was created. Filters
+	/// that STAMP a tick (MarkChanged) use this rather than the read window's
+	/// upper bound: a window may deliberately end in the past (the ad-hoc
+	/// <c>World.Query&lt;&gt;()</c> helpers read the previous frame), but a
+	/// stamp must always mean "now" or the mark is invisible to everyone.
+	/// </summary>
+	public readonly uint CurrentTick
+	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		get => _currentTick;
 	}
 
 	public readonly bool HasOptional

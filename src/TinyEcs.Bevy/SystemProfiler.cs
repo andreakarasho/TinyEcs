@@ -35,13 +35,13 @@ public sealed class SystemProfiler
 	public int LayoutNodes;
 	public int LayoutCulled;
 
-	// Frames the layout pass skipped (input fingerprint unchanged) since the
-	// last dump. High skip counts on a static screen = the gate is working.
+	// Frames the layout pass skipped (no layout input changed) since the last
+	// dump. High skip counts on a static screen = the gate is working.
 	public int LayoutSkipped;
 
-	// Bit mask of the fingerprint groups that differed on the LAST relayout
-	// (bit index = group order in LayoutSystem.ComputeGroupHashes). A gate
-	// stuck open shows the flapping input here.
+	// Bit mask of the layout inputs that were dirty on the LAST relayout (bit
+	// index = probe order in UiLayoutChanged, then SurfaceBit / ForceBit). A
+	// gate stuck open shows the flapping input here.
 	public int LayoutDirtyMask;
 
 	// Split of the layout system's last-frame cost: the entity tree walk

@@ -97,47 +97,50 @@ public class StageDescriptor
 
 public static class WorldExtensions
 {
-	// Query helpers - create cached queries
+	// Ad-hoc, STATELESS query helpers. Unlike the Query<> system param they keep
+	// no per-consumer last_run, so they cannot do per-system change detection.
+	// The window is the PREVIOUS FRAME's tick span, (PreviousFrameTick,
+	// FrameTick]: frame-granular, reported exactly once, one frame behind. A
+	// write made earlier in the CURRENT frame is therefore NOT visible here —
+	// that is the one thing the Query<> system param does and these can't, so
+	// same-frame producer/consumer wiring must use a real system param.
+	// (MarkChanged<T> is unaffected: it stamps the iterator's live tick.)
+	private static (uint LastRun, uint ThisRun) AdHocWindow(TinyEcs.World world)
+		=> (world.PreviousFrameTick, world.FrameTick);
+
 	/// <summary>
-	/// Create a query with automatic tick tracking for Changed/Added filters
+	/// Create an ad-hoc query. See the note on <see cref="WorldExtensions"/>
+	/// for the frame-granular change-detection window these helpers use.
 	/// </summary>
 	public static BevyQueryIter<TQueryData, Empty> Query<TQueryData>(this TinyEcs.World world)
 		where TQueryData : struct, IData<TQueryData>, allows ref struct
 	{
-		// Use world's tick system for change detection
-		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
-		// We check for changes in the current frame: [currentTick-1, currentTick)
-		// This detects components modified with the current tick
-		uint currentTick = world.CurrentTick;
-		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
+		var (lastRun, thisRun) = AdHocWindow(world);
 
 		var builder = world.QueryBuilder();
 		TQueryData.Build(builder);
 		var query = builder.Build();
 
-		return new BevyQueryIter<TQueryData, Empty>(lastTick, currentTick, query.Iter());
+		return new BevyQueryIter<TQueryData, Empty>(lastRun, thisRun, query.Iter());
 	}
 
 	/// <summary>
-	/// Create a query with automatic tick tracking for Changed/Added filters
+	/// Create an ad-hoc filtered query. See the note on
+	/// <see cref="WorldExtensions"/> for the frame-granular change-detection
+	/// window these helpers use.
 	/// </summary>
 	public static BevyQueryIter<TQueryData, TQueryFilter> Query<TQueryData, TQueryFilter>(this TinyEcs.World world)
 		where TQueryData : struct, IData<TQueryData>, allows ref struct
 		where TQueryFilter : struct, IFilter<TQueryFilter>, allows ref struct
 	{
-		// Use world's tick system for change detection
-		// World.Update() is called at the start of Run()/RunStartup(), then systems execute with that tick
-		// We check for changes in the current frame: [currentTick-1, currentTick)
-		// This detects components modified with the current tick
-		uint currentTick = world.CurrentTick;
-		uint lastTick = currentTick > 0 ? currentTick - 1 : 0;
+		var (lastRun, thisRun) = AdHocWindow(world);
 
 		var builder = world.QueryBuilder();
 		TQueryData.Build(builder);
 		TQueryFilter.Build(builder);
 		var query = builder.Build();
 
-		return new BevyQueryIter<TQueryData, TQueryFilter>(lastTick, currentTick, query.Iter());
+		return new BevyQueryIter<TQueryData, TQueryFilter>(lastRun, thisRun, query.Iter());
 	}
 }
 
@@ -227,7 +230,7 @@ internal readonly struct QueuedStateTransition<TState> : IQueuedStateTransition 
 
 internal interface IEventChannel
 {
-	void Flush(uint currentTick);
+	void Flush(ulong frame);
 }
 
 internal sealed class EventChannel<T> : IEventChannel
@@ -237,7 +240,9 @@ internal sealed class EventChannel<T> : IEventChannel
 	private List<T> _writeBuffer = new();
 	private readonly List<Action<T>> _observers = new();
 	private ulong _epoch;
-	private uint _activeTick = uint.MaxValue;
+	// Frame identity, NOT a change tick: the world tick now moves per system run,
+	// so "same tick" stopped meaning "same frame".
+	private ulong _activeFrame = ulong.MaxValue;
 	private int _observerCursor;
 
 	internal void Enqueue(T evt)
@@ -280,7 +285,7 @@ internal sealed class EventChannel<T> : IEventChannel
 		}
 	}
 
-	public void Flush(uint currentTick)
+	public void Flush(ulong frame)
 	{
 		using var toNotify = new PooledList<T>(8);
 		using var observersSnapshot = new PooledList<Action<T>>(4);
@@ -288,11 +293,11 @@ internal sealed class EventChannel<T> : IEventChannel
 
 		lock (_lock)
 		{
-			var newFrame = _activeTick != currentTick;
+			var newFrame = _activeFrame != frame;
 
 			if (newFrame)
 			{
-				_activeTick = currentTick;
+				_activeFrame = frame;
 
 				// Drop last frame's events; observers already saw them via _observerCursor.
 				if (_readBuffer.Count > 0)
@@ -382,6 +387,17 @@ public class SystemDescriptor
 		// Func<Func<World,bool>,bool> — both allocated for EVERY system EVERY
 		// frame (~49 MB/s in profiling). This path is the hottest in the engine.
 		var conditions = RunConditions;
+		if (conditions.Count == 0)
+			return true;
+
+		// A run condition IS a system in bevy_ecs, with its own change tick. We
+		// are called BEFORE RunProfiled publishes the system's tick, so without
+		// this the condition's Query params would Fetch against whatever
+		// thread-static SystemTicks.Current the last system on this worker left
+		// — possibly OLDER than the condition's own stored _lastRun. Skipped for
+		// condition-less systems so their RunProfiled tick stays the only bump.
+		SystemTicks.Advance(world);
+
 		for (var i = 0; i < conditions.Count; i++)
 		{
 			if (!conditions[i](world))
@@ -410,6 +426,11 @@ public class SystemDescriptor
 	/// <summary>Runs the system, timing it when the SystemProfiler resource is Enabled. Resource fetch + bool check when off.</summary>
 	public void RunProfiled(TinyEcs.World world)
 	{
+		// One change tick per system RUN (bevy_ecs), captured atomically and
+		// published to this thread so every param of this run shares it. Must
+		// happen before the params Fetch, hence before System.Run.
+		SystemTicks.Advance(world);
+
 		// Plain Res: fetch the profiler resource per run (App always registers it).
 		var profiler = App?.GetResource<SystemProfiler>();
 		if (profiler is not { Enabled: true })
@@ -852,7 +873,7 @@ public class App
 		// never removed — so a count change is the only way the set can differ. Reading
 		// .Values every frame allocated an array + ReadOnlyCollection + enumerator, which
 		// measured as ~40% of the client's whole steady-state allocation.
-		var currentTick = _world.CurrentTick;
+		var frame = _world.FrameCount;
 		var registered = _appState.EventChannels;
 		if (_eventChannelsCache.Length != registered.Count)
 		{
@@ -868,7 +889,7 @@ public class App
 
 		foreach (var channel in _eventChannelsCache)
 		{
-			channel.Flush(currentTick);
+			channel.Flush(frame);
 		}
 	}
 
@@ -1286,6 +1307,12 @@ public class App
 		ProcessEvents();
 		ProfEventTicks += global::System.Diagnostics.Stopwatch.GetTimestamp() - t1;
 
+		// Per-system ticking moves the counter ~300x faster than per-frame did,
+		// so the 32-bit wrap is hours away, not years: age out stale stored
+		// ticks before they wrap into "newer than now". No-op (one subtraction)
+		// on all but one frame every ChangeTick.CheckTickThreshold ticks.
+		_world.CheckChangeTicks();
+
 		if (!startup)
 		{
 			var profiler = GetResource<SystemProfiler>();
@@ -1407,6 +1434,12 @@ public class App
 			// the deferred queues forever — the world silently stops applying changes
 			// while the app keeps ticking.
 			var t0 = global::System.Diagnostics.Stopwatch.GetTimestamp();
+			// The flush is its own "system" (Bevy's apply_deferred), so it gets
+			// its own tick: every write it applies — including the always-deferred
+			// SetChanged marks — lands STRICTLY AFTER every system of this stage.
+			// That is what makes a same-frame producer visible to later stages
+			// while still being reported exactly once per consumer.
+			SystemTicks.Advance(_world);
 			_world.EndDeferred();
 			ProfDeferredTicks += global::System.Diagnostics.Stopwatch.GetTimestamp() - t0;
 		}

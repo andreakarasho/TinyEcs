@@ -359,6 +359,9 @@ public sealed partial class World
 		ref var record = ref GetRecord(entity);
 		var index = record.Archetype.GetComponentIndex(component);
 		EcsAssert.Panic(index >= 0, "Component not found in the entity");
+		// Immediate path only (outside a deferred scope). Inside a system the
+		// world IS deferred, so the mark lands at the stage flush with a fresh
+		// tick instead — see SetChangedDeferred.
 		record.Archetype.MarkChanged(index, record.Row, _ticks);
 	}
 

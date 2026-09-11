@@ -44,8 +44,8 @@ internal enum ModQueryTermKind : byte
     With,
     Without,
     /// Read + change-filter: carries the component into the row like Ref, and matches
-    /// only entities whose changed-tick is at or after the system's last run (see
-    /// IModComponent.ChangedSince for why the bound is inclusive).
+    /// only entities whose changed-tick is strictly newer than the system's last run —
+    /// the same wrapping (lastRun, thisRun] window as Changed&lt;T&gt; on the host side.
     Changed,
 }
 

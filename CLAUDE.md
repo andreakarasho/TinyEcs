@@ -366,11 +366,40 @@ foreach (var health in query)
 ```
 
 ### Change Detection
-- Each component has a "changed tick"
-- `Changed<T>` filter checks if component modified since last system run
-- `Added<T>` filter checks if component just added
-- `MarkChanged<T>` manually marks component as changed
-- Tick management automatic per `World.Update()` call
+- Each component has a "changed tick" and an "added tick" per row.
+- The world change tick advances **once per system run**, plus once per
+  deferred-command flush and once per observer flush — bevy_ecs' model. It is
+  NOT a frame counter: use `World.FrameCount` for that (and export *that* to
+  scripting/modding guests, never `CurrentTick`).
+- `Changed<T>` / `Added<T>` match ticks in `(lastRun, thisRun]`, wrapping
+  (`ChangeTick.InWindow`, Bevy's `Tick::is_newer_than`). `lastRun` is stored per
+  system and only advances on a real run, so a `RunIf`-gated system never misses
+  a change. Each consumer sees each change exactly once.
+- **A change is visible the same frame it is made** — a `Stage.Update` producer
+  reaches a `Stage.PostUpdate` `Changed<T>` consumer on that frame. Deferred
+  writes (`Commands`, and `SetChanged` from inside a system) are stamped by the
+  stage's command flush, which takes its own tick after every system of the
+  stage.
+- **Two systems in one stage may share a parallel batch**, so their tick order
+  is not their source order. Same-frame producer→consumer wiring needs explicit
+  ordering (`.After("label")`) or separate stages.
+- Each system run captures its tick once, atomically, into `SystemTicks.Current`;
+  every `Query<>` param of that run reads the same value. Never read
+  `World.CurrentTick` from inside `ISystemParam.Fetch`.
+- **In-place `.Ref` writes do NOT bump the changed tick.** After mutating through
+  a query ref, call `query.SetChanged<T>(entityId)` — but only when the value
+  really changed (Bevy's `set_if_neq`), otherwise `Changed<T>` consumers never
+  settle.
+- `MarkChanged<T>` stamps the iterator's live world tick.
+- The stateless `world.Query<...>()` extension helpers keep no per-consumer
+  `lastRun`; their window is the PREVIOUS frame's tick span. Fine for reading
+  state and for tests, useless for same-frame wiring.
+- Long-running worlds: `App` runs `World.CheckChangeTicks()` once a frame; it
+  clamps stored ticks older than `ChangeTick.MaxChangeAge` every
+  `ChangeTick.CheckTickThreshold` ticks, which is what keeps the 32-bit tick
+  wrap (hours, at per-system ticking) from firing change detection spuriously.
+- The UI relayout gate (`UiLayoutChanged` in `TinyEcs.Bevy.UI`) is the reference
+  consumer — see `docs/ui.md` "The relayout gate".
 
 ### Deferred Commands Pattern
 - Commands queued during system execution

@@ -108,9 +108,16 @@ public class ModAbiV2Tests
         using var world = new World();
         var ctx = ChangedCtx(world);
 
+        // Leave tick 0 behind so "sinceTick 0" really does mean "everything".
+        world.Update();
         var stale = world.Entity().ID;
         world.Set(stale, new WitPos { X = 1 });
-        var since = world.Update(); // everything written above is now "before since"
+
+        // The window is EXCLUSIVE at the bottom — (since, now] — so `since` is
+        // the tick the stale write already carries, and the fresh write below
+        // has to land on a strictly newer one.
+        var since = world.CurrentTick;
+        world.Update();
 
         var fresh = world.Entity().ID;
         world.Set(fresh, new WitPos { X = 2 });
@@ -149,7 +156,8 @@ public class ModAbiV2Tests
         world.Set(b, new WitPos { X = 1 });
         world.Set(a, new WitTag());
         world.Set(b, new WitTag());
-        var since = world.Update();
+        var since = world.CurrentTick;
+        world.Update(); // the write below lands on a strictly newer tick
 
         world.Set(a, new WitPos { X = 9 }); // only `a` is dirty now
 

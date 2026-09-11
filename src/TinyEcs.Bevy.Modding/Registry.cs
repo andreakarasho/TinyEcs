@@ -92,14 +92,16 @@ public interface IModComponent
     // presence, so a host's hand-written IModComponent mapper (game registries define
     // their own) compiles and behaves unchanged — a Changed term over such a mapper is
     // just a With term. ModComponent<T> overrides both with real column tick reads.
-    /// True when this component's changed-tick on `entity` is AT OR AFTER `tick`.
-    /// Inclusive on purpose: the system stamps `tick` = the world tick it last ran at,
-    /// and a write made LATER in that same tick (a host system downstream of the mod
-    /// runner) carries exactly that tick. `&gt;` would drop it forever; `&gt;=` re-delivers
-    /// one already-seen change at most, and only when nothing else moved the tick on.
+    /// True when this component's changed-tick on `entity` is STRICTLY NEWER than
+    /// `tick`, under wrapping comparison (ChangeTick.IsNewerThan) — the same
+    /// `(lastRun, thisRun]` window Changed&lt;T&gt; uses. The bound used to be inclusive
+    /// to paper over per-frame ticking, where a host write downstream of the mod runner
+    /// carried the runner's own tick; ticks now advance per system run and the runner's
+    /// deferred/flush writes land on a strictly later tick, so exclusive is both correct
+    /// and free of the duplicate re-delivery the inclusive bound caused.
     bool ChangedSince(World world, ulong entity, uint tick) => Has(world, entity);
 
-    /// Every entity whose component changed at or after `sinceTick` (driver-term path).
+    /// Every entity whose component changed strictly after `sinceTick` (driver-term path).
     void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
         => CollectEntities(world, ref into);
 
@@ -193,15 +195,16 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
     public bool ChangedSince(World world, ulong entity, uint tick)
         => IsTag
             ? world.Has<T>(entity)
-            : world.Has<T>(entity) && world.GetChangedTick<T>(entity) >= tick;
+            : world.Has<T>(entity) && ChangeTick.IsNewerThan(world.GetChangedTick<T>(entity), tick, world.CurrentTick);
 
     public void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
     {
         var q = _query ??= world.QueryBuilder().With<T>().Build();
+        var now = world.CurrentTick;
         var it = q.Iter();
         while (it.Next())
             foreach (var ev in it.Entities())
-                if (IsTag || world.GetChangedTick<T>(ev.ID) >= sinceTick)
+                if (IsTag || ChangeTick.IsNewerThan(world.GetChangedTick<T>(ev.ID), sinceTick, now))
                     into.Add(ev.ID);
     }
 

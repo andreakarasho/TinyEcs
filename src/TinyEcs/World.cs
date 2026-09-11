@@ -24,6 +24,10 @@ public sealed partial class World : IDisposable
 	private readonly Dictionary<EcsID, int> _idToSlot = new();
 	private ulong _componentCounter;
 	private uint _ticks;
+	private uint _frameTick;
+	private uint _prevFrameTick;
+	private uint _lastCheckTick;
+	private ulong _frameCount;
 	private ulong _structuralChangeVersion;
 
 	private static readonly Comparison<ComponentInfo> _comparisonCmps = (a, b)
@@ -49,11 +53,113 @@ public sealed partial class World : IDisposable
 	public EcsID MaxComponentId => _maxCmpId;
 
 	/// <summary>
-	/// Current tick value used for change detection.
+	/// Current tick value used for change detection. Advances once per SYSTEM
+	/// RUN (plus once per deferred-command flush and once per observer flush),
+	/// so it is NOT a frame counter — see <see cref="FrameCount"/> for that.
 	/// </summary>
+	/// <remarks>
+	/// Plain read, deliberately: this sits on the query-iteration hot path and
+	/// aligned 32-bit reads are already atomic in .NET. Nothing spins on it —
+	/// the scheduler takes each system's tick from the Interlocked.Increment
+	/// return value, never from a re-read of this property.
+	/// </remarks>
 	public uint CurrentTick => _ticks;
 
-	public uint Update() => ++_ticks;
+	/// <summary>
+	/// <see cref="CurrentTick"/> as it stood when the current frame started.
+	/// Everything written during this frame carries a tick strictly greater
+	/// than this.
+	/// </summary>
+	public uint FrameTick => _frameTick;
+
+	/// <summary><see cref="FrameTick"/> of the previous frame.</summary>
+	public uint PreviousFrameTick => _prevFrameTick;
+
+	/// <summary>
+	/// Number of completed <see cref="Update"/> calls (frames). Monotonic and
+	/// frame-granular — this is the counter to export to scripting/modding
+	/// guests, never <see cref="CurrentTick"/>.
+	/// </summary>
+	public ulong FrameCount => _frameCount;
+
+	/// <summary>
+	/// Opens a new frame: records the frame tick boundary and advances the
+	/// change tick once. Per-system advancing happens in the scheduler.
+	/// </summary>
+	public uint Update()
+	{
+		_prevFrameTick = _frameTick;
+		_frameCount++;
+		_frameTick = BumpTick();
+		return _frameTick;
+	}
+
+	/// <summary>
+	/// Advance the change tick by one and return the new value. Atomic: stages
+	/// run systems in parallel, and each run must get its own tick.
+	/// </summary>
+	public uint BumpTick() => Interlocked.Increment(ref _ticks);
+
+	/// <summary>
+	/// Clamp every stored change/added tick (and report whether callers should
+	/// clamp their own cached <c>lastRun</c>) once the world tick has advanced
+	/// <see cref="ChangeTick.CheckTickThreshold"/> since the previous pass.
+	/// Bevy's <c>check_change_ticks</c>: without it a tick left untouched for
+	/// ~2^31 ticks wraps around into "newer than now" and change detection
+	/// starts firing spuriously forever.
+	/// </summary>
+	/// <returns>
+	/// <c>true</c> when a pass ran, meaning cached per-system <c>lastRun</c>
+	/// values must be clamped with <see cref="ChangeTick.ClampAge"/> too.
+	/// </returns>
+	public bool CheckChangeTicks()
+	{
+		var now = _ticks;
+		if (ChangeTick.Age(_lastCheckTick, now) < ChangeTick.CheckTickThreshold)
+			return false;
+
+		_lastCheckTick = now;
+
+		foreach (var archetype in _typeIndex.Values)
+		{
+			var columns = archetype.Columns;
+			if (columns == null)
+				continue;
+
+			var count = archetype.Count;
+			if (count <= 0)
+				continue;
+
+			foreach (var column in columns)
+			{
+				// Only live rows: a free slot holds a stale 0 that a clamp would
+				// turn into "recently changed" for whichever entity moves in.
+				var changed = column.ChangedTicks.AsSpan(0, Math.Min(count, column.ChangedTicks.Length));
+				for (var i = 0; i < changed.Length; i++)
+					changed[i] = ChangeTick.ClampAge(changed[i], now);
+
+				var added = column.AddedTicks.AsSpan(0, Math.Min(count, column.AddedTicks.Length));
+				for (var i = 0; i < added.Length; i++)
+					added[i] = ChangeTick.ClampAge(added[i], now);
+			}
+		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// Test hook: park the change tick near a chosen value so a test can drive
+	/// the counter across the 32-bit wrap in a handful of frames.
+	/// </summary>
+	internal void SetTicksForTesting(uint ticks)
+	{
+		_ticks = ticks;
+		_frameTick = ticks;
+		_prevFrameTick = ticks;
+		// _lastCheckTick is deliberately NOT moved: the jump stands in for a long
+		// real run, so the next CheckChangeTicks must come due exactly as it
+		// would have after that run.
+	}
 
 	internal ref EcsRecord NewId(out EcsID newId, ulong id = 0)
 	{
@@ -211,6 +317,13 @@ public sealed partial class World : IDisposable
 
 			if (size > 0)
 			{
+				// Stamped with the GLOBAL tick, not the calling system's run
+				// tick: the two differ when a sibling system of the same
+				// parallel batch bumped the counter in between, so a system can
+				// see its OWN direct (non-deferred) write as "changed" on its
+				// next run. Accepted — same trade Bevy makes for
+				// `&mut World` access; route through Commands (deferred, flushed
+				// with one tick for the whole batch) when that matters.
 				record.Archetype.MarkChanged(column, record.Row, _ticks);
 			}
 			return (size > 0 ? record.Archetype.Columns![column] : null, record.Row);

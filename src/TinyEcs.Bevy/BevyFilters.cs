@@ -195,7 +195,7 @@ public ref struct Changed<T> : IFilter<Changed<T>>, IQueryFilterAccess
 			_stateRow.Ref = ref Unsafe.AddByteOffset(ref _stateRow.Ref, _size);
 		}
 
-		return _size > 0 && _stateRow.Ref >= _lastRun && _stateRow.Ref < _thisRun;
+		return _size > 0 && ChangeTick.InWindow(_stateRow.Ref, _lastRun, _thisRun);
 	}
 
 	public void SetTicks(uint lastRun, uint thisRun)
@@ -279,7 +279,7 @@ public ref struct Added<T> : IFilter<Added<T>>, IQueryFilterAccess
 			_stateRow.Ref = ref Unsafe.AddByteOffset(ref _stateRow.Ref, _size);
 		}
 
-		return _size > 0 && _stateRow.Ref >= _lastRun && _stateRow.Ref < _thisRun;
+		return _size > 0 && ChangeTick.InWindow(_stateRow.Ref, _lastRun, _thisRun);
 	}
 
 	public void SetTicks(uint lastRun, uint thisRun)
@@ -303,14 +303,12 @@ public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 	private Ptr<uint> _stateRow;
 	private int _row, _count;
 	private nint _size;
-	private uint _thisRun;
 
 	private MarkChanged(QueryIterator iterator)
 	{
 		_iterator = iterator;
 		_row = -1;
 		_count = -1;
-		_thisRun = 0;
 	}
 
 	[UnscopedRef]
@@ -362,14 +360,14 @@ public ref struct MarkChanged<T> : IFilter<MarkChanged<T>>, IQueryFilterAccess
 
 		if (_size > 0)
 		{
-			_stateRow.Ref = _thisRun;
+			// "now", from the iterator, NOT the read window's thisRun: a stamp
+			// that lands before the next consumer's window opens is invisible.
+			_stateRow.Ref = _iterator.CurrentTick;
 		}
 
 		return true;
 	}
 
-	public void SetTicks(uint lastRun, uint thisRun)
-	{
-		_thisRun = thisRun;
-	}
+	// A stamping filter has no read window.
+	public void SetTicks(uint lastRun, uint thisRun) { }
 }

@@ -1218,10 +1218,10 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 {
 	private TinyEcs.Query? _lowLevelQuery;
 	private TinyEcs.World? _world;
-	// Per-system change-detection window. Advanced once per system run in
-	// Fetch (which only fires when the system actually runs), so the window
-	// spans every tick elapsed since THIS query last observed the world —
-	// Bevy's per-system last_run semantics.
+	// Per-system change-detection window (lastRun, thisRun], bevy_ecs
+	// semantics. Advanced once per system run in Fetch (which only fires when
+	// the system actually runs), so the window spans every tick elapsed since
+	// THIS query last observed the world.
 	private uint _lastRun;
 	private uint _thisRun;
 	private static readonly SystemParamAccess _access = BuildAccess();
@@ -1263,13 +1263,35 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 			_lowLevelQuery = builder.Build();
 		}
 
-		// Advance the change-detection window. RunIf-skipped frames don't
-		// Fetch, so _lastRun stays put and the next real run spans the gap —
-		// the system can't miss a change that landed while it was gated out.
-		// For an every-frame system this collapses to [CurrentTick-1,
-		// CurrentTick), identical to the previous global-window behaviour.
+		// Advance the change-detection window to (previous run, this run].
+		// RunIf-skipped frames don't Fetch, so _lastRun stays put and the next
+		// real run spans the gap — the system can't miss a change that landed
+		// while it was gated out.
+		//
+		// thisRun comes from the scheduler's per-run capture, NOT from
+		// world.CurrentTick: siblings in the same parallel batch bump the
+		// counter concurrently, and every param of one system must share one
+		// window. See SystemTicks.
 		_lastRun = _thisRun;
-		_thisRun = world.CurrentTick;
+		var thisRun = SystemTicks.Current;
+
+		// Defensive: SystemTicks.Current is a thread-static published by the
+		// enclosing run. If it reads OLDER than our own _lastRun — a stale value
+		// left on this worker by whoever ran last — an EMPTY window is the safe
+		// answer: letting thisRun go backwards inverts the wrapping compare in
+		// ChangeTick.InWindow, which then reports every row as changed.
+		// Both ages are measured from the world's authoritative tick (neither
+		// value can be ahead of it), which is what separates "handed a stale
+		// tick" from the legitimate "our _lastRun has simply aged out" case the
+		// ClampAge below handles.
+		if (ChangeTick.Age(thisRun, world.CurrentTick) > ChangeTick.Age(_lastRun, world.CurrentTick))
+			thisRun = _lastRun;
+		_thisRun = thisRun;
+
+		// Wrap-around safety: a long-idle system's stored _lastRun can age past
+		// MaxChangeAge, at which point the wrapping comparison flips and every
+		// row reads as changed. Bevy clamps SystemMeta.last_run the same way.
+		_lastRun = ChangeTick.ClampAge(_lastRun, _thisRun);
 	}
 
 	/// <summary>
@@ -1285,6 +1307,22 @@ public class Query<TQueryData, TQueryFilter> : ISystemParam
 	/// Returns the number of entities matching this query
 	/// </summary>
 	public int Count() => _lowLevelQuery!.Count();
+
+	/// <summary>
+	/// Bevy-style <c>set_if_neq</c> companion: after writing through
+	/// <c>.Ref</c>, call this when the value actually changed so
+	/// <c>Changed&lt;T&gt;</c> consumers (the UI relayout gate) see it. Plain
+	/// <c>.Ref</c> writes never bump ticks.
+	/// <para>
+	/// Called from inside a system the world is deferred, so the mark is queued
+	/// and applied at the stage's command flush with a FRESH tick — one greater
+	/// than every system that ran in that stage. Consequences: systems in later
+	/// stages see it the SAME frame, and every system (the author included) sees
+	/// it exactly once, on its next run.
+	/// </para>
+	/// </summary>
+	public void SetChanged<T>(ulong entityId) where T : struct
+		=> _world!.SetChanged<T>(entityId);
 
 	/// <summary>
 	/// Checks if an entity with the given ID matches this query

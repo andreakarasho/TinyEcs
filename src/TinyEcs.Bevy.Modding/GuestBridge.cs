@@ -91,9 +91,12 @@ internal sealed class ModSystemSpec
     // -inf so the FIRST tick always runs (a 0 default would gate the system out at
     // boot, when Time.Total is still ~0).
     public float LastRunTime = float.NegativeInfinity;
-    // World.CurrentTick at the last EVALUATION of this system (set even when the run
-    // was idle-skipped, since the queries were still evaluated). Changed query terms
-    // filter on "changed-tick newer than this".
+    // The runner system's own change tick at the last EVALUATION of this mod system
+    // (set even when the run was idle-skipped, since the queries were still evaluated).
+    // Changed query terms filter on "changed-tick strictly newer than this", wrapping.
+    // NOTE: the runner's OWN system tick, not World.CurrentTick — a sibling system of
+    // the same parallel batch may have moved the global counter past it, and adopting
+    // that higher value would silently swallow the sibling's writes.
     public uint LastRunWorldTick;
 }
 
