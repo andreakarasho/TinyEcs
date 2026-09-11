@@ -286,6 +286,8 @@ public sealed class TextFieldPlugin : IPlugin
 		if (!string.Equals(text.Ref.Value, value, System.StringComparison.Ordinal))
 		{
 			text.Ref.Value = value;
+			// In-place write: mark so the relayout gate re-solves the glyphs.
+			fields.SetChanged<Text>(ed.Entity);
 			commands.Entity(ed.Entity).EmitTrigger(new TextFieldChanged { Value = value }, propagate: true);
 		}
 	}

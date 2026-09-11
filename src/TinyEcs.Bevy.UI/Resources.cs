@@ -74,16 +74,25 @@ public sealed class UiClayContext
 	public Vector2 ScrollDelta;
 	public bool EnableDragScrolling;
 
-	// Per-group fingerprints of the last laid-out frame's layout inputs (see
-	// LayoutSystem.ComputeGroupHashes). When the current frame's fingerprints
-	// all match, the whole Clay relayout is skipped and consumers keep reading
-	// LastCommands / the retained Clay tree from the previous layout.
-	internal readonly ulong[] LastGroupHashes = new ulong[LayoutSystem.HashGroups];
+	// Surface size + UiScale of the last laid-out frame. These are host
+	// RESOURCES, not components, so the Changed<T> relayout gate can't see
+	// them — they get a stored-last compare instead.
+	internal Vector2 LastSurfaceSize;
+	internal float LastScale;
 	internal bool ForceRelayout = true;
 
+	// Incremented by LayoutSystem on every REAL relayout (never on a gated-out
+	// frame). Consumers that only have work to do when the tree was re-solved
+	// (ComputedNode writeback, render-command publish) remember the generation
+	// they last processed and no-op otherwise.
+	internal uint LayoutGeneration;
+	internal uint ComputedGeneration;
+	internal uint PublishedGeneration;
+
 	/// Force a full relayout on the next frame even if no layout-input component
-	/// changed. Escape hatch for inputs the fingerprint cannot see — e.g. a font
-	/// or text-measurer registered AFTER text nodes were spawned.
+	/// changed. Escape hatch for inputs the change ticks cannot see — e.g. a font
+	/// or text-measurer registered AFTER text nodes were spawned, a removed
+	/// component, or a (re)parented node.
 	public void MarkLayoutDirty() => ForceRelayout = true;
 
 	public ScrollContainerData GetScrollContainerData(uint clayId)
@@ -106,6 +115,10 @@ public sealed class UiClayContext
 	{
 		var clayId = UiClayId.Of(entityId);
 		Context.SetScrollPosition(clayId, offset);
+		// Retained Clay state, not a component: the relayout gate cannot see it,
+		// and without a relayout the offset never reaches the tree (nor the
+		// ScrollPosition writeback).
+		MarkLayoutDirty();
 	}
 }
 

@@ -99,21 +99,24 @@ public sealed class SliderPlugin : IPlugin
 			float t = Math.Clamp((slider.Value - slider.Min) / range, 0f, 1f);
 			float pos = t * MathF.Max(0f, trackLen - thumbLen);
 
-			thumbNode.Ref.PositionType = PositionType.Absolute;
-			if (vertical)
-			{
-				thumbNode.Ref.Top = Val.Px(pos);
-				thumbNode.Ref.Left = Val.Px(0);
-				thumbNode.Ref.Width = Val.Px(barComputed.Ref.Size.X);
-				thumbNode.Ref.Height = Val.Px(thumbLen);
-			}
-			else
-			{
-				thumbNode.Ref.Top = Val.Px(0);
-				thumbNode.Ref.Left = Val.Px(pos);
-				thumbNode.Ref.Width = Val.Px(thumbLen);
-				thumbNode.Ref.Height = Val.Px(barComputed.Ref.Size.Y);
-			}
+			var top    = vertical ? Val.Px(pos) : Val.Px(0);
+			var left   = vertical ? Val.Px(0) : Val.Px(pos);
+			var width  = vertical ? Val.Px(barComputed.Ref.Size.X) : Val.Px(thumbLen);
+			var height = vertical ? Val.Px(thumbLen) : Val.Px(barComputed.Ref.Size.Y);
+
+			// Runs every frame: write (and mark for the relayout gate) only when
+			// the thumb actually moved, otherwise the gate never closes.
+			ref var tn = ref thumbNode.Ref;
+			if (tn.PositionType == PositionType.Absolute
+				&& tn.Top == top && tn.Left == left && tn.Width == width && tn.Height == height)
+				continue;
+
+			tn.PositionType = PositionType.Absolute;
+			tn.Top = top;
+			tn.Left = left;
+			tn.Width = width;
+			tn.Height = height;
+			q.Nodes.SetChanged<Node>(thumbId);
 		}
 	}
 

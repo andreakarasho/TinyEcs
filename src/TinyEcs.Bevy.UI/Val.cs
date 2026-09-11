@@ -7,7 +7,7 @@ public enum ValType : byte
 	Percent = 2,
 }
 
-public struct Val
+public struct Val : IEquatable<Val>
 {
 	public ValType Type;
 	public float Value;
@@ -23,6 +23,15 @@ public struct Val
 	public static Val Percent(float v) => new(ValType.Percent, v);
 
 	public readonly bool IsAuto => Type == ValType.Auto;
+
+	// Exact (bitwise-ish) compare, not epsilon: callers use it to decide whether
+	// a layout write is a real change worth marking for the relayout gate, and a
+	// sub-epsilon drift that never converges would pin the gate open.
+	public readonly bool Equals(Val other) => Type == other.Type && Value == other.Value;
+	public readonly override bool Equals(object? obj) => obj is Val v && Equals(v);
+	public readonly override int GetHashCode() => HashCode.Combine((byte)Type, Value);
+	public static bool operator ==(Val a, Val b) => a.Equals(b);
+	public static bool operator !=(Val a, Val b) => !a.Equals(b);
 }
 
 public struct UiRect

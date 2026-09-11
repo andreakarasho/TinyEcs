@@ -46,18 +46,22 @@ public sealed class UiPlugin : IPlugin
 			Res<UiPointer> pointer,
 			Query<Data<Node>, Without<TinyEcs.Parent>> roots,
 			UiLayoutQueries q,
+			UiLayoutChanged changed,
 			Query<Data<ScrollPosition>> scrolls,
 			Local<HashSet<ulong>> liveIds,
 			Local<List<ulong>> pruneBuf,
 			ResMut<SystemProfiler> prof) =>
-			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, scrolls, liveIds, pruneBuf, prof.Value))
+			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, changed, scrolls, liveIds, pruneBuf, prof.Value))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
 			Res<Time> time,
 			Query<Data<Interaction>> q,
-			Query<Data<UiContainsByBounds>> boundsOnly) =>
-			InteractionSystem.PostLayout(cmd, p, c, time, q, boundsOnly))
+			Query<Data<UiContainsByBounds>> boundsOnly,
+			Query<Data<ComputedNode>> computed,
+			Query<Data<RelativeCursorPosition>> relCursor,
+			Local<HashSet<ulong>> computedSeen) =>
+			InteractionSystem.PostLayout(cmd, p, c, time, q, boundsOnly, computed, relCursor, computedSeen))
 			.InStage(UiPostLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, Res<UiPointer> p, Res<UiClayContext> c, Res<Time> time,
@@ -69,5 +73,30 @@ public sealed class UiPlugin : IPlugin
 		app.AddSystem((Res<UiClayContext> c, ResMut<UiRenderCommands> o) =>
 			RenderSystem.Publish(c, o))
 			.InStage(UiRenderStage).SingleThreaded().Build();
+
+		// Structural edits the Changed<T> gate cannot see. A tick only exists
+		// while the component does, so REMOVING one (or despawning its entity)
+		// leaves nothing to mark — yet the element, its rect, its border must
+		// disappear from the tree. Same for (re)parenting: it moves an existing
+		// Node between subtrees without touching any layout value.
+		ForceRelayoutOn<OnRemove<Node>>(app);
+		ForceRelayoutOn<OnInsert<TinyEcs.Parent>>(app);
+		ForceRelayoutOn<OnRemove<TinyEcs.Parent>>(app);
+		ForceRelayoutOn<OnRemove<BackgroundColor>>(app);
+		ForceRelayoutOn<OnRemove<BorderColor>>(app);
+		ForceRelayoutOn<OnRemove<BorderRadius>>(app);
+		ForceRelayoutOn<OnRemove<UiImage>>(app);
+		ForceRelayoutOn<OnRemove<Text>>(app);
+		ForceRelayoutOn<OnRemove<TextFont>>(app);
+		ForceRelayoutOn<OnRemove<TextColor>>(app);
+		ForceRelayoutOn<OnRemove<TextWrap>>(app);
+		ForceRelayoutOn<OnRemove<ZIndex>>(app);
+		ForceRelayoutOn<OnRemove<GlobalZIndex>>(app);
+		ForceRelayoutOn<OnRemove<BoxShadow>>(app);
+		ForceRelayoutOn<OnRemove<UiCustom>>(app);
+		ForceRelayoutOn<OnRemove<ScrollPosition>>(app);
 	}
+
+	private static void ForceRelayoutOn<TTrigger>(App app) where TTrigger : ITrigger
+		=> app.AddObserver<TTrigger, ResMut<UiClayContext>>((_, ctx) => ctx.Value.MarkLayoutDirty());
 }

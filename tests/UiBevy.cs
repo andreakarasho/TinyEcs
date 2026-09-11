@@ -475,11 +475,17 @@ public class UiBevyTests
 
 		app.Run(); // populate scroll containers + ScrollPosition
 
-		// Mutate ScrollPosition directly via a system on the next frame.
+		// Mutate ScrollPosition directly via a system on the next frame. The
+		// in-place write bumps no change tick, so it must be marked for the
+		// relayout gate to notice and push the offset into Clay.
 		app.AddSystem((Query<Data<ScrollPosition>> q) =>
 		{
 			foreach (var (_e, sp) in q)
+			{
+				if (sp.Ref.OffsetY == 30) continue;
 				sp.Ref.OffsetY = 30;
+				q.SetChanged<ScrollPosition>(_e.Ref);
+			}
 		})
 		.InStage(BevyStage.Update).SingleThreaded().Build();
 

@@ -38,6 +38,9 @@ public sealed class CheckboxPlugin : IPlugin
 				return;
 			var (_, cb) = boxes.Get(target);
 			cb.Ref.Checked = !cb.Ref.Checked;
+			// In-place write bumps no tick: mark it so host systems watching
+			// Changed<Checkbox> (a visual that follows the state) see the flip.
+			boxes.SetChanged<Checkbox>(target);
 			cmd.Entity(target).EmitTrigger(new CheckboxChanged { Checked = cb.Ref.Checked }, propagate: true);
 		});
 	}

@@ -145,6 +145,7 @@ public sealed class UiWindowPlugin : IPlugin
 				OriginY = p.Position.Y - hF / 2f,
 			};
 			zF.Ref.Value = zCounter.Value.Bump();
+			movables.SetChanged<GlobalZIndex>(ownerF);
 			forced.Value.Owner = 0;
 		}
 
@@ -168,6 +169,7 @@ public sealed class UiWindowPlugin : IPlugin
 				OriginY = oy,
 			};
 			z.Ref.Value = zCounter.Value.Bump();
+			movables.SetChanged<GlobalZIndex>(owner);
 		}
 
 		if (!anchor.Value.Active)
@@ -182,9 +184,17 @@ public sealed class UiWindowPlugin : IPlugin
 
 		var delta = p.Position - anchor.Value.Pointer;
 		var (_, ownerNode, _) = movables.Get(anchor.Value.Owner);
-		ownerNode.Ref.PositionType = PositionType.Absolute;
-		ownerNode.Ref.Left = Val.Px(anchor.Value.OriginX + delta.X);
-		ownerNode.Ref.Top = Val.Px(anchor.Value.OriginY + delta.Y);
+		var left = Val.Px(anchor.Value.OriginX + delta.X);
+		var top = Val.Px(anchor.Value.OriginY + delta.Y);
+		ref var n = ref ownerNode.Ref;
+		// Held-but-stationary frames must not mark the window changed, or the
+		// relayout gate stays open for the whole gesture.
+		if (n.PositionType == PositionType.Absolute && n.Left == left && n.Top == top)
+			return;
+		n.PositionType = PositionType.Absolute;
+		n.Left = left;
+		n.Top = top;
+		movables.SetChanged<Node>(anchor.Value.Owner);
 	}
 
 	// Walk from the pressed element up the Parent chain to the owning UiMovable

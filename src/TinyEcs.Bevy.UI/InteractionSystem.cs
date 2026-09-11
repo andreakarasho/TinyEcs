@@ -16,8 +16,11 @@ internal static class InteractionSystem
 		global::Clay.Clay.SetPointerState(p.Position, p.Down);
 
 		// Reset interactions; PostLayout re-applies Hovered/Pressed for the topmost entity.
+		// Compare first: an unconditional store dirties the whole Interaction
+		// column every frame for nothing.
 		foreach (var (_, interaction) in interactions)
-			interaction.Ref = Interaction.None;
+			if (interaction.Ref != Interaction.None)
+				interaction.Ref = Interaction.None;
 	}
 
 	public static void PostLayout(
@@ -26,7 +29,10 @@ internal static class InteractionSystem
 		ResMut<UiClayContext> ctx,
 		Res<Time> time,
 		Query<Data<Interaction>> interactives,
-		Query<Data<UiContainsByBounds>> boundsOnly)
+		Query<Data<UiContainsByBounds>> boundsOnly,
+		Query<Data<ComputedNode>> computed,
+		Query<Data<RelativeCursorPosition>> relCursor,
+		Local<HashSet<ulong>> computedSeen)
 	{
 		ref var p = ref pointer.Value;
 		var cmds = ctx.Value.LastCommands;
@@ -78,7 +84,9 @@ internal static class InteractionSystem
 		if (hovered != 0)
 		{
 			var (_, interaction) = interactives.Get(hovered);
-			interaction.Ref = p.Down ? Interaction.Pressed : Interaction.Hovered;
+			var want = p.Down ? Interaction.Pressed : Interaction.Hovered;
+			if (interaction.Ref != want)
+				interaction.Ref = want;
 
 			// Press edge: down began this frame over this entity.
 			if (p.Down && !p.WasDown)
@@ -111,11 +119,26 @@ internal static class InteractionSystem
 			if (prevHover != hovered)
 				commands.Entity(hovered).EmitTrigger(new UiOver(), propagate: true);
 
-			// Cursor relative position
+			// Cursor relative position. Written IN PLACE when the component is
+			// already there — an unconditional Insert re-queues a deferred
+			// command (and an OnInsert observer fan-out) every frame the pointer
+			// rests on an element.
 			var rel = new Vector2(
 				(p.Position.X - hoveredBox.X) / MathF.Max(1, hoveredBox.Width),
 				(p.Position.Y - hoveredBox.Y) / MathF.Max(1, hoveredBox.Height));
-			commands.Entity(hovered).Insert(new RelativeCursorPosition { Normalized = rel, InBounds = true });
+			if (relCursor.TryGet(hovered, out var relData))
+			{
+				var (_, relPtr) = relData;
+				if (relPtr.Ref.Normalized != rel || !relPtr.Ref.InBounds)
+				{
+					relPtr.Ref.Normalized = rel;
+					relPtr.Ref.InBounds = true;
+				}
+			}
+			else
+			{
+				commands.Entity(hovered).Insert(new RelativeCursorPosition { Normalized = rel, InBounds = true });
+			}
 
 			// Move: pointer displaced this frame while over the entity. Skip the
 			// first frame an entity becomes hovered (prevHover != hovered) — that's
@@ -143,30 +166,74 @@ internal static class InteractionSystem
 			ctx.Value.PressedEntity = 0;
 		}
 
-		// Write ComputedNode for all entities that had a render command this frame.
-		for (var i = 0; i < cmds.Length; i++)
+		// Write ComputedNode for all entities that had a render command this
+		// frame. Only when the tree was actually re-solved: on a gated-out frame
+		// the commands (and therefore every box) are byte-identical to the ones
+		// already written.
+		if (ctx.Value.ComputedGeneration != ctx.Value.LayoutGeneration)
 		{
-			ref readonly var cmd = ref cmds[i];
-			// ScissorStart: an Overflow.Scroll/Clip container that paints nothing
-			// of its own still needs a ComputedNode = its clip box, so hit-tests
-			// can clip overflowing children to the visible viewport (the scissor's
-			// BoundingBox IS that box, keyed by the element id).
-			if (cmd.CommandType != RenderCommandType.Rectangle &&
-			    cmd.CommandType != RenderCommandType.Image &&
-			    cmd.CommandType != RenderCommandType.Border &&
-			    cmd.CommandType != RenderCommandType.Text &&
-			    cmd.CommandType != RenderCommandType.Custom &&
-			    cmd.CommandType != RenderCommandType.ScissorStart)
-				continue;
-			if (!map.TryGetValue(cmd.Id, out var entityId))
-				continue;
-			commands.Entity(entityId).Insert(new ComputedNode
+			ctx.Value.ComputedGeneration = ctx.Value.LayoutGeneration;
+
+			// One element can emit several commands (Rectangle + Border, or
+			// Rectangle + ScissorStart). Walk BACKWARDS and keep the first hit
+			// per entity: that is the LAST command it emitted, preserving the
+			// old last-write-wins PaintOrder while writing each entity once —
+			// two writes per frame would make the neq-compare below flap
+			// forever and pin the relayout gate open.
+			var seen = computedSeen.Value;
+			seen.Clear();
+			for (var i = cmds.Length - 1; i >= 0; i--)
 			{
-				Size = new Vector2(cmd.BoundingBox.Width, cmd.BoundingBox.Height),
-				Position = new Vector2(cmd.BoundingBox.X, cmd.BoundingBox.Y),
-				ClayId = cmd.Id,
-				PaintOrder = i,
-			});
+				ref readonly var cmd = ref cmds[i];
+				// ScissorStart: an Overflow.Scroll/Clip container that paints nothing
+				// of its own still needs a ComputedNode = its clip box, so hit-tests
+				// can clip overflowing children to the visible viewport (the scissor's
+				// BoundingBox IS that box, keyed by the element id).
+				if (cmd.CommandType != RenderCommandType.Rectangle &&
+				    cmd.CommandType != RenderCommandType.Image &&
+				    cmd.CommandType != RenderCommandType.Border &&
+				    cmd.CommandType != RenderCommandType.Text &&
+				    cmd.CommandType != RenderCommandType.Custom &&
+				    cmd.CommandType != RenderCommandType.ScissorStart)
+					continue;
+				if (!map.TryGetValue(cmd.Id, out var entityId))
+					continue;
+				if (!seen.Add(entityId))
+					continue;
+
+				var size = new Vector2(cmd.BoundingBox.Width, cmd.BoundingBox.Height);
+				var pos = new Vector2(cmd.BoundingBox.X, cmd.BoundingBox.Y);
+				if (computed.TryGet(entityId, out var computedData))
+				{
+					var (_, cn) = computedData;
+					if (cn.Ref.Size != size || cn.Ref.Position != pos
+						|| cn.Ref.ClayId != cmd.Id || cn.Ref.PaintOrder != i)
+					{
+						cn.Ref.Size = size;
+						cn.Ref.Position = pos;
+						cn.Ref.ClayId = cmd.Id;
+						cn.Ref.PaintOrder = i;
+						computed.SetChanged<ComputedNode>(entityId);
+						// ComputedNode is layout OUTPUT, but BuildDecl reads the
+						// PARENT's ComputedNode for Right/Bottom anchoring — the
+						// solve must re-run until that feedback settles.
+						ctx.Value.ForceRelayout = true;
+					}
+				}
+				else
+				{
+					commands.Entity(entityId).Insert(new ComputedNode
+					{
+						Size = size,
+						Position = pos,
+						ClayId = cmd.Id,
+						PaintOrder = i,
+					});
+					// Same feedback loop: an anchored child laid out before its
+					// parent had a ComputedNode needs one more pass.
+					ctx.Value.ForceRelayout = true;
+				}
+			}
 		}
 
 		// Latch pointer edges for next frame

@@ -8,6 +8,13 @@ internal static class RenderSystem
 		Res<UiClayContext> ctx,
 		ResMut<UiRenderCommands> output)
 	{
+		// LastCommands only changes on a real relayout. Generation-gated rather
+		// than flag-gated so it does not matter whether this runs before or
+		// after the other post-layout consumers.
+		if (ctx.Value.PublishedGeneration == ctx.Value.LayoutGeneration)
+			return;
+		ctx.Value.PublishedGeneration = ctx.Value.LayoutGeneration;
+
 		var src = ctx.Value.LastCommands;
 		ref var dst = ref output.Value;
 		if (dst.Buffer.Length < src.Length)

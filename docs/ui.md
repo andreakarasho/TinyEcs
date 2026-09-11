@@ -35,6 +35,58 @@ app.AddPlugin(new UiPlugin
 Resources registered: `UiScale`, `UiSurface`, `UiPointer`, `UiRenderCommands`,
 `UiClayContext`, `UiTextureRegistry`, `UiFontRegistry`.
 
+## The relayout gate
+
+Clay is immediate-mode, but the tree only needs re-solving when a layout INPUT
+changed, so `UiLayoutStage` is gated. The signal is **change ticks**: one
+`Changed<T>` query per layout component (`Node`, `BackgroundColor`,
+`BorderColor`, `BorderRadius`, `UiImage`, `Text`, `TextFont`, `TextColor`,
+`TextWrap`, `ZIndex`, `GlobalZIndex`, `BoxShadow`, `UiCustom`,
+`ScrollPosition`), plus a stored-last compare for `UiSurface.LogicalSize` /
+`UiScale` (resources have no ticks).
+
+**Contract for producers**: `commands.Insert(...)` / `entity.Set(...)` bump the
+tick for you. An **in-place `.Ref` write does not** — Bevy's `set_if_neq`
+situation. After mutating a layout component through a query ref, mark it:
+
+```csharp
+foreach (var (e, node) in nodes)
+{
+    var left = Val.Px(x);
+    if (node.Ref.Left == left) continue;   // never mark a no-op write:
+    node.Ref.Left = left;                  // the gate would never close
+    nodes.SetChanged<Node>(e.Ref);
+}
+```
+
+Structural edits ticks cannot see are covered by observers the plugin
+registers: `OnRemove<Node>`, `OnRemove<T>` for every other layout component,
+and `OnInsert`/`OnRemove<Parent>` (add-child and reparent). Anything else
+invisible to both — a font or text-measurer registered after the text nodes
+exist, retained Clay state poked directly — calls
+`UiClayContext.MarkLayoutDirty()`.
+
+**Timing.** The gate's window is `(this system's previous run, this run]`, and
+the change tick advances per system run (see docs/bevy.md, "The
+change-detection window"). So a gameplay system that mutates a layout component
+earlier in the same frame opens the gate on **that** frame — the UI never lags a
+mutation — and it opens it **once**, so a one-shot marked write costs one Clay
+pass, not two.
+
+A pass that actually moves geometry still costs a second pass, for an unrelated
+reason: `ComputedNode` is layout OUTPUT, `BuildDecl` reads the PARENT's
+`ComputedNode` for `Right`/`Bottom` anchoring, so the writeback sets
+`ForceRelayout` until the feedback settles. That shows up as
+`SystemProfiler.LayoutDirtyMask` bit `UiLayoutChanged.ForceBit` on the follow-up
+frame, with the component's own probe bit clear.
+
+A skipped frame leaves the retained Clay tree, `LastCommands` and every
+`ComputedNode` untouched, so hit-testing and pointer events stay live;
+`RenderSystem.Publish` and the `ComputedNode` writeback are themselves gated on
+`UiClayContext.LayoutGeneration`, which only advances on a real relayout.
+`SystemProfiler.LayoutSkipped` / `LayoutDirtyMask` (enable with
+`TINYECS_PROFILE=1`) diagnose a gate stuck open.
+
 ## Anatomy of a UI element
 
 A node is an entity with at least:

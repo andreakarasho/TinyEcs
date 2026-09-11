@@ -116,21 +116,24 @@ public sealed class ScrollbarPlugin : IPlugin
 			float scrollPos = vertical ? data.ScrollPosition.Y : data.ScrollPosition.X;
 			float thumbPos  = maxScroll > 0f ? scrollPos / maxScroll * (trackLen - thumbLen) : 0f;
 
-			thumbNode.Ref.PositionType = PositionType.Absolute;
-			if (vertical)
-			{
-				thumbNode.Ref.Top = Val.Px(thumbPos);
-				thumbNode.Ref.Left = Val.Px(0);
-				thumbNode.Ref.Width = Val.Px(barComputed.Ref.Size.X);
-				thumbNode.Ref.Height = Val.Px(thumbLen);
-			}
-			else
-			{
-				thumbNode.Ref.Top = Val.Px(0);
-				thumbNode.Ref.Left = Val.Px(thumbPos);
-				thumbNode.Ref.Width = Val.Px(thumbLen);
-				thumbNode.Ref.Height = Val.Px(barComputed.Ref.Size.Y);
-			}
+			var top    = vertical ? Val.Px(thumbPos) : Val.Px(0);
+			var left   = vertical ? Val.Px(0) : Val.Px(thumbPos);
+			var width  = vertical ? Val.Px(barComputed.Ref.Size.X) : Val.Px(thumbLen);
+			var height = vertical ? Val.Px(thumbLen) : Val.Px(barComputed.Ref.Size.Y);
+
+			// Runs every frame: write (and mark for the relayout gate) only when
+			// the thumb actually moved, otherwise the gate never closes.
+			ref var tn = ref thumbNode.Ref;
+			if (tn.PositionType == PositionType.Absolute
+				&& tn.Top == top && tn.Left == left && tn.Width == width && tn.Height == height)
+				continue;
+
+			tn.PositionType = PositionType.Absolute;
+			tn.Top = top;
+			tn.Left = left;
+			tn.Width = width;
+			tn.Height = height;
+			q.Nodes.SetChanged<Node>(thumbEid);
 		}
 	}
 
