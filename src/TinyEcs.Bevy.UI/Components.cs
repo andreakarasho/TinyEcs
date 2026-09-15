@@ -76,6 +76,11 @@ public struct ZIndex       { public int Value; public ZIndex(int v)       => Val
 
 /// Global layering override. When present, wins over `ZIndex` and is treated as
 /// a global z order. Same Absolute-only caveat as `ZIndex`.
+/// <para>A NEGATIVE Value is a topmost request: the host's drag plugin resolves it
+/// to the current top of the z counter at insert time, so a (re)spawned requester
+/// (the mod context menu, completion popups) lands above every window that
+/// interaction has already bumped. Layout only ever sees the resolved positive
+/// value.</para>
 public struct GlobalZIndex { public int Value; public GlobalZIndex(int v) => Value = v; }
 
 public struct Text         { public string Value; public Text(string v) => Value = v; }

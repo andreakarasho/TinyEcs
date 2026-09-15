@@ -21,6 +21,13 @@ public sealed class UiPointer
 	public Vector2 Position;
 	public bool Down;
 	public bool WasDown;
+	// Right button, mirrored from the left: the host's own right-click gestures
+	// (window close, worldmap menu) run over the RAW mouse in WindowDragPlugin /
+	// UiPick, so the pointer resource stays left-only for layout interaction — but
+	// the interaction system needs the right edge to synthesize UiRightClick for the
+	// mod context-menu bridge (see InteractionSystem.PostLayout).
+	public bool RightDown;
+	public bool RightWasDown;
 	// Previous-frame cursor position, latched by InteractionSystem. Powers UiMove
 	// delta. Not host-fed.
 	public Vector2 LastPosition;
@@ -57,6 +64,16 @@ public sealed class UiClayContext
 	// Entity the pointer-down began on this gesture. Reset on release. Used to gate
 	// UiClick so a click only fires when press and release land on the same entity.
 	internal ulong PressedEntity;
+	// Right-button twin of PressedEntity: gates UiRightClick the same way (press and
+	// release on the same entity), for the mod right-click bridge.
+	internal ulong RightPressedEntity;
+	// The cursor position at the right-PRESS edge, latched with RightPressedEntity.
+	// UiRightClick carries THIS (not the release position): a human right-click holds
+	// the button while the cursor drifts, and the mod context menu must open where the
+	// button came down. The dto a mod reads instead is IsPressed-based (down in BOTH
+	// old and new states) and the host's window-close held-consume starves it on the
+	// very frames that matter, so the press point has no other route to the mod.
+	internal Vector2 RightPressedPosition;
 	// Last UiClick target + the Time.Total second it landed on. Powers
 	// UiDoubleClick synthesis: a second UiClick on the same entity within
 	// DoubleClickWindow seconds emits UiDoubleClick and clears the latch.

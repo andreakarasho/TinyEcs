@@ -7,6 +7,14 @@ namespace TinyEcs.Bevy.UI;
 // propagation up the parent chain (`trigger.Propagate(true)`).
 
 public struct UiClick       { public Vector2 Position; }
+// Right-button twin of UiClick: press AND release over the same entity, for the
+// mod right-click bridge (context menus). The host's own right-click gestures
+// never run through this — they use UiPick over the raw mouse (window close,
+// worldmap menu) and see the press edge directly.
+// Position is the right-PRESS point (UiPointer.RightPressedPosition), not the
+// release position: a human right-click holds the button while the cursor
+// drifts, and the menu must open where the button came down.
+public struct UiRightClick   { public Vector2 Position; }
 public struct UiDoubleClick { public Vector2 Position; }
 public struct UiOver        { }
 public struct UiOut         { }

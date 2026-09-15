@@ -39,6 +39,22 @@ public struct UiNoWindowDrag;
 public sealed class UiZCounter
 {
 	private int _next = 1;
+
+	/// <summary>
+	/// The value the next Bump() will issue. Ratchet: only ever moves up.
+	/// Windows that spawn declaring a GlobalZIndex ABOVE the counter (the mod
+	/// windows pick 50-100 to sit over the ordinary gump stack) would otherwise
+	/// leave the counter behind, so every bump-issuing call site returns values
+	/// that cannot beat their floor for dozens of presses and they look pinned
+	/// in spawn order. The host drag plugin's OnInsert observer ratchets this
+	/// to floor+1 on every insert.
+	/// </summary>
+	public int Next
+	{
+		get => _next;
+		set { if (value > _next) _next = value; }
+	}
+
 	public int Bump() => _next++;
 }
 
@@ -69,6 +85,107 @@ public static class UiHierarchy
 }
 
 /// <summary>
+/// The z-order bookkeeping every windowing layer needs: registers the
+/// <see cref="UiZCounter"/> and resolves declared <see cref="GlobalZIndex"/>
+/// values against it. A NON-NEGATIVE value is a floor the counter must respect:
+/// it ratchets up to floor+1 (never down). Windows that spawn declaring a z above
+/// the counter (the mod windows pick 50-100 to sit over the ordinary window
+/// stack) would otherwise leave the counter behind — every press/focus bump then
+/// returns a value that cannot beat the floor, the windows look pinned in spawn
+/// order, and the forced-drag path even demotes them. In-place bump writes never
+/// exceed the counter by construction, so no feedback loop.
+/// A NEGATIVE value is a topmost REQUEST: resolved here, at insert time, to the
+/// counter's current top. A fixed floor can never do that job — the counter climbs
+/// one per click, so any constant loses to the windows a player keeps clicking, and
+/// a freshly opened menu would draw UNDER the very window it was opened on.
+/// </summary>
+public sealed class UiZOrderPlugin : IPlugin
+{
+	public void Build(App app)
+	{
+		app.AddResource(new UiZCounter());
+
+		app.AddObserver((OnInsert<GlobalZIndex> trig, ResMut<UiZCounter> counter, Query<Data<GlobalZIndex>> zQ) =>
+		{
+			var v = trig.Component.Value;
+			if (v < 0)
+			{
+				var top = counter.Value.Bump();
+				var (_, gz) = zQ.Get(trig.EntityId);
+				gz.Ref.Value = top;   // in-place: OnInsert does not re-fire on updates
+				zQ.SetChanged<GlobalZIndex>(trig.EntityId);
+			}
+			else
+			{
+				counter.Value.Next = v + 1;
+			}
+		});
+	}
+}
+
+/// <summary>
+/// Keeps floating windows inside the UI surface when it SHRINKS (a ui-scale
+/// setting, the OS window resizing): stranding a window off-screen with no way
+/// to drag it back is the failure this corrects. Each <see cref="UiMovable"/>
+/// root's Left/Top is clamped to [0, surface - size], the rendered extent being
+/// read from the previous frame's ComputedNode (one frame of layout lag is
+/// acceptable here). A GROWING surface never moves anything. Runs only when the
+/// size actually changed, so it is quiet at steady state.
+/// </summary>
+public sealed class UiSurfaceBoundsPlugin : IPlugin
+{
+	public void Build(App app)
+	{
+		var fn = ClampToSurface;
+		app.AddSystem(fn).InStage(Stage.Update).Build();
+	}
+
+	private static void ClampToSurface(
+		Res<UiSurface> surface,
+		Local<Vector2> lastSize,
+		Query<Data<Node, ComputedNode>, Filter<With<UiMovable>>> movables)
+	{
+		var size = surface.Value.LogicalSize;
+		// Idempotent, but only walk the windows on an actual change. lastSize starts
+		// (0,0), so the first frame runs the pass once and then goes quiet.
+		if (MathF.Abs(size.X - lastSize.Value.X) < 0.5f
+			&& MathF.Abs(size.Y - lastSize.Value.Y) < 0.5f)
+			return;
+		lastSize.Value = size;
+
+		float sw = size.X;
+		float sh = size.Y;
+
+		foreach (var (ent, node, comp) in movables)
+		{
+			float w = comp.Ref.Size.X;
+			float h = comp.Ref.Size.Y;
+
+			if (node.Ref.Left.Type == ValType.Px)
+			{
+				float left = node.Ref.Left.Value;
+				float clamped = Math.Clamp(left, 0f, MathF.Max(0f, sw - w));
+				if (clamped != left)
+				{
+					node.Ref.Left = Val.Px(clamped);
+					movables.SetChanged<Node>(ent.Ref);
+				}
+			}
+			if (node.Ref.Top.Type == ValType.Px)
+			{
+				float top = node.Ref.Top.Value;
+				float clamped = Math.Clamp(top, 0f, MathF.Max(0f, sh - h));
+				if (clamped != top)
+				{
+					node.Ref.Top = Val.Px(clamped);
+					movables.SetChanged<Node>(ent.Ref);
+				}
+			}
+		}
+	}
+}
+
+/// <summary>
 /// Interaction-driven window drag + bring-to-front. The press must land on an
 /// Interaction-bearing element inside the window (the pointer pipeline only
 /// sees those); the system walks the Parent chain to the owning UiMovable
@@ -87,7 +204,7 @@ public sealed class UiWindowPlugin : IPlugin
 
 	public void Build(App app)
 	{
-		app.AddResource(new UiZCounter());
+		app.AddPlugin(new UiZOrderPlugin());
 		app.AddResource(new ForcedWindowDrag());
 
 		// Runs in UiPostLayoutStage after InteractionSystem.PostLayout

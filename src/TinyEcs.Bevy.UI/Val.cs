@@ -5,6 +5,9 @@ public enum ValType : byte
 	Auto = 0,
 	Px = 1,
 	Percent = 2,
+	/// <summary>Fill the space the parent has left after its fixed / fit siblings
+	/// (Clay Grow). Min/Max clamp it; several Grow siblings share equally.</summary>
+	Grow = 3,
 }
 
 public struct Val : IEquatable<Val>
@@ -21,6 +24,7 @@ public struct Val : IEquatable<Val>
 	public static readonly Val Auto = new(ValType.Auto, 0);
 	public static Val Px(float v) => new(ValType.Px, v);
 	public static Val Percent(float v) => new(ValType.Percent, v);
+	public static readonly Val Grow = new(ValType.Grow, 0);
 
 	public readonly bool IsAuto => Type == ValType.Auto;
 

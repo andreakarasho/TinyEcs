@@ -1854,4 +1854,112 @@ public class UiBevyTests
 		var cmds = app.GetResource<UiRenderCommands>().Span.ToArray();
 		Assert.Contains(cmds, c => c.CommandType == RenderCommandType.Text);
 	}
+
+	// Regression (2026-09-14): Clay.NET's grow pass only wrote a size when the parent
+	// had space LEFT OVER. With fixed siblings already overflowing the parent the grow
+	// child was skipped and kept its content-derived size from CloseElement — for a
+	// scroll container that is its whole scrolled content, so a Grow ScrollBody
+	// stopped clipping the moment the toolbar rows above it did not fit (the
+	// assistant's macro editor at min window height painted 60 lines of code past
+	// the frame). No space left = the grow child collapses to its minimum.
+	[Fact]
+	public void Grow_child_collapses_to_its_min_when_fixed_siblings_overflow_the_parent()
+	{
+		var app = MakeApp();
+		ulong growId = 0, growWithMinId = 0;
+		app.AddSystem((Commands c) =>
+		{
+			var root = c.Spawn()
+				.Insert(new UiNode
+				{
+					FlexDirection = FlexDirection.Column,
+					Width = Val.Px(200), Height = Val.Px(100),
+				})
+				.Insert(new BackgroundColor(ClayColor.White));
+
+			// Taller than the parent on its own: nothing is left for the grow children.
+			var fixedChild = c.Spawn().Insert(new UiNode { Width = Val.Px(200), Height = Val.Px(150) });
+
+			// Solid: only elements that emit a render command get a ComputedNode.
+			var grow = c.Spawn().Insert(new UiNode { Width = Val.Px(200), Height = Val.Grow })
+				.Insert(new BackgroundColor(ClayColor.Red));
+			// Its content is 400 tall — the size the old pass left it at.
+			var content = c.Spawn().Insert(new UiNode { Width = Val.Px(200), Height = Val.Px(400) });
+			c.AddChild(grow, content);
+
+			var growWithMin = c.Spawn().Insert(new UiNode
+			{
+				Width = Val.Px(200), Height = Val.Grow, MinHeight = Val.Px(30),
+			}).Insert(new BackgroundColor(ClayColor.Red));
+
+			c.AddChild(root, fixedChild);
+			c.AddChild(root, grow);
+			c.AddChild(root, growWithMin);
+			growId = grow.Id;
+			growWithMinId = growWithMin.Id;
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+		app.Run();
+
+		var world = app.GetWorld();
+		Assert.Equal(0f, world.Entity(growId).Get<ComputedNode>().Size.Y);
+		Assert.Equal(30f, world.Entity(growWithMinId).Get<ComputedNode>().Size.Y);
+	}
+
+	// The shape the assistant's code editor uses: a Grow scroll body whose single row
+	// carries a MinHeight floor taller than the body. The floor must make the body
+	// SCROLL (row taller than body), never grow the body to the floor — and with the
+	// header overflowing the parent the body collapses to 0 rather than to its content.
+	[Fact]
+	public void Grow_scroll_body_takes_the_remaining_space_not_its_content_height()
+	{
+		var app = MakeApp();
+		ulong bodyId = 0, rowId = 0, cramped = 0;
+		app.AddSystem((Commands c) =>
+		{
+			ulong Build(float headerHeight, out ulong row)
+			{
+				var root = c.Spawn()
+					.Insert(new UiNode
+					{
+						FlexDirection = FlexDirection.Column,
+						Width = Val.Px(200), Height = Val.Px(300),
+					})
+					.Insert(new BackgroundColor(ClayColor.White));
+				var header = c.Spawn().Insert(new UiNode { Width = Val.Px(200), Height = Val.Px(headerHeight) });
+				var body = c.Spawn()
+					.Insert(new UiNode
+					{
+						FlexDirection = FlexDirection.Column,
+						Overflow = Overflow.Scroll,
+						Width = Val.Px(200), Height = Val.Grow,
+					})
+					.Insert(new BackgroundColor(ClayColor.Red))
+					.Insert(new ScrollPosition());
+				var rowE = c.Spawn().Insert(new UiNode
+				{
+					Width = Val.Grow, Height = Val.Grow, MinHeight = Val.Px(1000),
+				}).Insert(new BackgroundColor(ClayColor.Red));
+				c.AddChild(body, rowE);
+				c.AddChild(root, header);
+				c.AddChild(root, body);
+				row = rowE.Id;
+				return body.Id;
+			}
+
+			bodyId = Build(50f, out rowId);
+			cramped = Build(350f, out _);
+		})
+		.InStage(BevyStage.Startup).SingleThreaded().Build();
+
+		app.Run();
+		app.Run();
+
+		var world = app.GetWorld();
+		Assert.Equal(250f, world.Entity(bodyId).Get<ComputedNode>().Size.Y);
+		Assert.Equal(1000f, world.Entity(rowId).Get<ComputedNode>().Size.Y);
+		Assert.Equal(0f, world.Entity(cramped).Get<ComputedNode>().Size.Y);
+	}
 }

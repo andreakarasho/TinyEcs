@@ -15,6 +15,7 @@ internal static class ClayMap
 		{
 			ValType.Px      => SizingAxis.Fixed(val.Value * scale),
 			ValType.Percent => new SizingAxis { Percent = val.Value * 0.01f, Type = SizingType.Percent },
+			ValType.Grow    => SizingAxis.Grow(minPx, maxPx),
 			_               => SizingAxis.Fit(minPx, maxPx),
 		};
 	}

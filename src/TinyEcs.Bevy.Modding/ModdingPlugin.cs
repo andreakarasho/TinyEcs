@@ -238,6 +238,23 @@ public readonly struct ModdingPlugin : IPlugin
                 commands.Entity(trigger.EntityId).Insert(new ModClicked());
         });
 
+        // Right-click bridge: the right-button twin (On<UiRightClick> — press and
+        // release over the same entity). This is the signal a mod context menu
+        // opens on (ecs-assistant's macro / agent Delete menu); the host's own
+        // right-click gestures (window close, worldmap menu) run over the raw
+        // mouse and never saw this trigger.
+        app.AddObserver<On<UiRightClick>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
+        {
+            if (modQ.Contains(trigger.EntityId))
+                // The trigger's payload Position is the right-PRESS point (latched in
+                // InteractionSystem); the mod menu opens there.
+                commands.Entity(trigger.EntityId).Insert(new ModRightClicked
+                {
+                    X = trigger.Event.Position.X,
+                    Y = trigger.Event.Position.Y,
+                });
+        });
+
         // Hover bridge: mirror Bevy.UI's single HoveredEntity onto a sparse marker
         // so mods stop scanning every interactive element's Interaction byte each
         // frame. UiOver/UiOut fire once per enter/leave on the topmost entity, so
@@ -287,10 +304,12 @@ public readonly struct ModdingPlugin : IPlugin
             .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
     }
 
-    private static void ClearClicks(Commands commands, Query<Data<ModClicked>> q)
+    private static void ClearClicks(Commands commands, Query<Data<ModClicked>> q, Query<Data<ModRightClicked>> rightQ)
     {
         foreach ((var e, var _) in q)
             commands.Entity(e.Ref).Remove<ModClicked>();
+        foreach ((var e, var _) in rightQ)
+            commands.Entity(e.Ref).Remove<ModRightClicked>();
     }
 
     private static void AddRunner(App app, Stage stage, ModSchedule which, string label)

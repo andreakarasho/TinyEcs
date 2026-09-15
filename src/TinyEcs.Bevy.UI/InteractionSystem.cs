@@ -81,6 +81,15 @@ internal static class InteractionSystem
 		if (p.Down && !p.WasDown)
 			ctx.Value.PressedEntity = hovered;
 
+		// Right-button twin: same latch for the UiRightClick gate. The press
+		// POSITION is latched here too — the trigger carries it (the menu must open
+		// where the button came down, not where the cursor is at release).
+		if (p.RightDown && !p.RightWasDown)
+		{
+			ctx.Value.RightPressedEntity = hovered;
+			ctx.Value.RightPressedPosition = p.Position;
+		}
+
 		if (hovered != 0)
 		{
 			var (_, interaction) = interactives.Get(hovered);
@@ -96,7 +105,6 @@ internal static class InteractionSystem
 			if (!p.Down && p.WasDown && ctx.Value.PressedEntity == hovered)
 			{
 				commands.Entity(hovered).EmitTrigger(new UiClick { Position = p.Position }, propagate: true);
-
 				// Double-click synthesis: second UiClick on the same entity
 				// within DoubleClickWindow seconds emits UiDoubleClick. Clears
 				// the latch on emit so a triple-click reads as click + dclick,
@@ -115,6 +123,12 @@ internal static class InteractionSystem
 					ctx.Value.LastClickTime = now;
 				}
 			}
+
+			// Right-click: the same press+release match as the left UiClick. This is the
+			// mod context-menu bridge's signal — the host's own right-click gestures
+		// (window close, worldmap menu) run over the raw mouse and never saw this.
+			if (!p.RightDown && p.RightWasDown && ctx.Value.RightPressedEntity == hovered)
+				commands.Entity(hovered).EmitTrigger(new UiRightClick { Position = ctx.Value.RightPressedPosition }, propagate: true);
 
 			if (prevHover != hovered)
 				commands.Entity(hovered).EmitTrigger(new UiOver(), propagate: true);
@@ -165,6 +179,8 @@ internal static class InteractionSystem
 				commands.Entity(ctx.Value.PressedEntity).EmitTrigger(new UiPointerUp { Position = p.Position }, propagate: true);
 			ctx.Value.PressedEntity = 0;
 		}
+		if (!p.RightDown && p.RightWasDown)
+			ctx.Value.RightPressedEntity = 0;
 
 		// Write ComputedNode for all entities that had a render command this
 		// frame. Only when the tree was actually re-solved: on a gated-out frame
@@ -238,6 +254,7 @@ internal static class InteractionSystem
 
 		// Latch pointer edges for next frame
 		p.WasDown = p.Down;
+		p.RightWasDown = p.RightDown;
 		p.LastPosition = p.Position;
 	}
 
