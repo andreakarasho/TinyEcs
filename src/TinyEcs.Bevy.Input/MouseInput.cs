@@ -76,6 +76,7 @@ public sealed class MouseInput
 		_newDown = _pendingDown;
 		_active = _pendingActive;
 		Wheel = _pendingWheel;
+		WheelRaw = _pendingWheel;
 		_pendingWheel = 0f;
 		_currentTime = totalTimeMs;
 
@@ -137,6 +138,11 @@ public sealed class MouseInput
 	public Vector2 DraggingOffset => _active ? _newPos - _lastClickPosition : Vector2.Zero;
 
 	public float Wheel { get; private set; }
+
+	/// <summary>This frame's wheel delta BEFORE any ConsumeWheel — for consumers that
+	/// must see the notch even when a scrollable under the cursor already claimed it
+	/// (a wheel hotkey binding, a rebind capture).</summary>
+	public float WheelRaw { get; private set; }
 
 	/// <summary>
 	/// Set when a UI handler has consumed this frame's scroll (e.g. a hovered
