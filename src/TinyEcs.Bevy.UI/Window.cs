@@ -41,7 +41,17 @@ public sealed class UiZCounter
 	private int _next = 1;
 
 	/// <summary>
-	/// The value the next Bump() will issue. Ratchet: only ever moves up.
+	/// GlobalZIndex values at or above this are PINNED overlays (tooltips,
+	/// death screen, drag previews, modal boxes) — outside the interactive
+	/// window stack. They never ratchet the counter: Clay's Floating.ZIndex is a
+	/// short, so a ratchet to e.g. short.MaxValue+1 would push every later bump
+	/// past the clamp, tie all windows at 32767 and freeze them in spawn order.
+	/// </summary>
+	public const int OverlayFloor = 10000;
+
+	/// <summary>
+	/// The value the next Bump() will issue. Ratchet: only ever moves up, and
+	/// only for floors below <see cref="OverlayFloor"/>.
 	/// Windows that spawn declaring a GlobalZIndex ABOVE the counter (the mod
 	/// windows pick 50-100 to sit over the ordinary gump stack) would otherwise
 	/// leave the counter behind, so every bump-issuing call site returns values
@@ -52,7 +62,7 @@ public sealed class UiZCounter
 	public int Next
 	{
 		get => _next;
-		set { if (value > _next) _next = value; }
+		set { if (value > _next && value < OverlayFloor) _next = value; }
 	}
 
 	public int Bump() => _next++;
@@ -119,6 +129,32 @@ public sealed class UiZOrderPlugin : IPlugin
 			{
 				counter.Value.Next = v + 1;
 			}
+		});
+
+		// A window ROOT spawning with a declared floor that some OTHER window
+		// already sits at or above (the mod's main frame at 60 got focus-bumped
+		// to 61+, then its detail frame spawned declaring 61) would tie with or
+		// sit under the window it was meant to cover — a tie makes Clay's stable
+		// sort pick tree order and the pixel pick resolve the wrong window. Give
+		// such a root the counter's top instead: never below its floor, and a
+		// freshly opened window landing on top is what gumps do anyway. A value
+		// taken from Bump() is already above every window, so host spawns are
+		// untouched. OnAdd (first insert only) so a mod re-sending the same
+		// GlobalZIndex every tick doesn't climb the counter or yank the window
+		// over the one the player just clicked. Pinned overlays are left alone.
+		app.AddObserver((OnAdd<GlobalZIndex> trig, ResMut<UiZCounter> counter, Query<Data<GlobalZIndex>, Filter<With<UiMovable>>> movZ) =>
+		{
+			var v = trig.Component.Value;
+			if (v < 0 || v >= UiZCounter.OverlayFloor) return;
+			if (!movZ.Contains(trig.EntityId)) return;
+			var covered = false;
+			foreach (var (e, z) in movZ)
+				if (e.Ref != trig.EntityId && z.Ref.Value >= v && z.Ref.Value < UiZCounter.OverlayFloor) { covered = true; break; }
+			if (!covered) return;
+			var top = counter.Value.Bump();
+			var (_, gz) = movZ.Get(trig.EntityId);
+			gz.Ref.Value = top;
+			movZ.SetChanged<GlobalZIndex>(trig.EntityId);
 		});
 	}
 }
