@@ -132,14 +132,24 @@ public sealed class ModInfo
 public sealed class ModControl
 {
     public readonly List<ModInfo> Mods = new();
-    internal readonly Queue<(int Index, ModAction Action)> Pending = new();
+    internal readonly Queue<(int Index, ModAction Action, string Dir)> Pending = new();
 
-    public void Enable(int index) => Pending.Enqueue((index, ModAction.Enable));
-    public void Disable(int index) => Pending.Enqueue((index, ModAction.Disable));
-    public void Reload(int index) => Pending.Enqueue((index, ModAction.Reload));
+    public void Enable(int index) => Pending.Enqueue((index, ModAction.Enable, ""));
+    public void Disable(int index) => Pending.Enqueue((index, ModAction.Disable, ""));
+    public void Reload(int index) => Pending.Enqueue((index, ModAction.Reload, ""));
+
+    /// Load a mod folder (`<dir>/mod.json` + the wasm it names) into the running app,
+    /// appending it to Mods/Runtimes. Same deferred point as the other actions — a mod
+    /// store installs a folder, then queues this.
+    public void Load(string modDir) => Pending.Enqueue((-1, ModAction.Load, modDir));
+
+    /// Tear a mod down completely (dispose the instance, despawn its entities) and
+    /// REMOVE it from Mods/Runtimes. Unlike Disable this shifts the indices of every
+    /// mod after it — a host UI keyed on index must rebuild from Mods afterwards.
+    public void Unload(int index) => Pending.Enqueue((index, ModAction.Unload, ""));
 }
 
-internal enum ModAction : byte { Enable, Disable, Reload }
+internal enum ModAction : byte { Enable, Disable, Reload, Load, Unload }
 
 /// Host-supplied configuration for the modding plugin. Register an instance with
 /// `app.AddResource(new ModdingConfig { ... })` BEFORE adding the plugin; the
@@ -208,6 +218,11 @@ public readonly struct ModdingPlugin : IPlugin
     /// The Startup system that discovers + loads + sets up the mods. A host orders its
     /// own Startup work (anything reading the loaded set) After this.
     public const string Loader = "tinyecs:mod_loader";
+
+    /// The mod wire-ABI version this host speaks (abi/mod-abi.fbs, stamped into every
+    /// Handshake by ModAbiRunner). Public so a host that installs mods from a registry
+    /// can refuse a module built against a different ABI BEFORE instantiating it.
+    public const uint AbiVersion = ModAbiRunner.AbiVersion;
 
     public void Build(App app)
     {
@@ -331,8 +346,28 @@ public readonly struct ModdingPlugin : IPlugin
         if (mods.Length == 0)
             return;
 
-        var world = appRes.Value.GetWorld();
         var runtimes = runtimesRes.Value;
+        EnsureBackend(runtimes, config);
+
+        var failedMods = new List<string>();
+        foreach (var (manifest, wasmPath) in mods)
+        {
+            if (!LoadOne(appRes.Value, runtimes, controlRes.Value, config, manifest, wasmPath, out var error))
+                failedMods.Add(manifest.Name);
+        }
+
+        Console.WriteLine("[ecs-mod] backend={0}: {1}/{2} mods loaded{3}",
+            config.Backend, runtimes.Runtimes.Count, mods.Length,
+            failedMods.Count > 0 ? $" — FAILED: {string.Join(", ", failedMods)}" : "");
+    }
+
+    // The wasm runtime is created lazily on the first load: a host with an empty mod
+    // folder at boot can still install one later (ModControl.Load) and needs a backend
+    // then. Idempotent — repeat calls keep the existing engine.
+    private static void EnsureBackend(ModRuntimes runtimes, ModdingConfig config)
+    {
+        if (runtimes.Backend != null)
+            return;
 #if !WASM_GUEST
         // Desktop hosts core-wasm module mods (CoreWasmModBackend) over the upstream
         // Wasmtime NuGet. Excluded from the browser guest build; there the only
@@ -363,14 +398,37 @@ public readonly struct ModdingPlugin : IPlugin
         {
             throw new NotSupportedException($"mod backend {config.Backend} is not implemented");
         }
+    }
 
-        var failedMods = new List<string>();
-        foreach (var (manifest, wasmPath) in mods)
+    // The lowest slot no live runtime holds. Slots are NOT list indices: Unload removes
+    // a runtime from the middle of the list while later mods keep the slot their
+    // entities (ModEntity.Slot) and the executor's instance table are keyed by, so a
+    // fresh load must claim a genuinely free one, not Runtimes.Count.
+    private static int FreeSlot(ModRuntimes runtimes)
+    {
+        for (var slot = 0; ; slot++)
+        {
+            var taken = false;
+            foreach (var rt in runtimes.Runtimes)
+                if (rt.Slot == slot) { taken = true; break; }
+            if (!taken)
+                return slot;
+        }
+    }
+
+    // Instantiate one discovered mod and register it (runtime + host-visible ModInfo).
+    // Shared by the boot scan and ModControl.Load so an installed-at-runtime mod goes
+    // through byte-identical setup. Returns false (and the message) on failure.
+    private static bool LoadOne(App app, ModRuntimes runtimes, ModControl control, ModdingConfig config,
+        ModManifest manifest, string wasmPath, out string error)
+    {
+        error = "";
+        var world = app.GetWorld();
         {
             try
             {
-                var slot = runtimes.Runtimes.Count;
-                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = appRes.Value, Slot = slot, Name = manifest.Name };
+                var slot = FreeSlot(runtimes);
+                var ctx = new ModHostContext { World = world, Registry = config.Registry, App = app, Slot = slot, Name = manifest.Name };
                 foreach (var hook in config.PerModContext)
                     hook(ctx);
 
@@ -394,27 +452,25 @@ public readonly struct ModdingPlugin : IPlugin
                 };
                 runtimes.Runtimes.Add(rt);
                 rt.Info = new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true };
-                controlRes.Value.Mods.Add(rt.Info);
+                control.Mods.Add(rt.Info);
 
                 Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
                     manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count);
 
                 // Wire the observers the mod registered during setup to host globals.
-                RegisterModObservers(appRes.Value, rt);
+                RegisterModObservers(app, rt);
 
                 // mod-startup systems run once, now.
                 RunSystemsForStage(rt, ModSchedule.ModStartup);
+                return true;
             }
             catch (Exception e)
             {
-                failedMods.Add(manifest.Name);
+                error = e.Message;
                 Console.WriteLine("[ecs-mod] failed to load {0}: {1}", manifest.Name, e);
+                return false;
             }
         }
-
-        Console.WriteLine("[ecs-mod] backend={0}: {1}/{2} mods loaded{3}",
-            config.Backend, runtimes.Runtimes.Count, mods.Length,
-            failedMods.Count > 0 ? $" — FAILED: {string.Join(", ", failedMods)}" : "");
     }
 
     // There is one backend (Core on desktop, Jco in the browser). The sniff survives
@@ -649,7 +705,15 @@ public readonly struct ModdingPlugin : IPlugin
         var runtimes = runtimesRes.Value;
         while (control.Pending.Count > 0)
         {
-            var (idx, action) = control.Pending.Dequeue();
+            var (idx, action, dir) = control.Pending.Dequeue();
+            // Load is index-free (the mod isn't in the list yet) — handle it before
+            // the index bounds check the in-place actions need.
+            if (action == ModAction.Load)
+            {
+                try { LoadFolder(runtimes, control, appRes.Value, configRes.Value, dir); }
+                catch (Exception e) { Console.WriteLine("[ecs-mod] load '{0}' failed: {1}", dir, e); }
+                continue;
+            }
             if (idx < 0 || idx >= runtimes.Runtimes.Count)
                 continue;
             var rt = runtimes.Runtimes[idx];
@@ -661,6 +725,7 @@ public readonly struct ModdingPlugin : IPlugin
                     case ModAction.Disable: DisableMod(rt, info, configRes.Value); break;
                     case ModAction.Enable: EnableMod(rt, info); break;
                     case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info, configRes.Value); break;
+                    case ModAction.Unload: UnloadMod(runtimes, control, rt, info, configRes.Value); break;
                 }
             }
             catch (Exception e)
@@ -668,6 +733,53 @@ public readonly struct ModdingPlugin : IPlugin
                 Console.WriteLine("[ecs-mod] {0} on '{1}' failed: {2}", action, rt.Manifest.Name, e);
             }
         }
+    }
+
+    // Load a mod folder into the running app (a mod store just installed it). Reads
+    // `<dir>/mod.json` the same way the boot scan does, so an installed mod is
+    // indistinguishable from one that was there at startup.
+#if CUO_HOST_FS
+    private static void LoadFolder(ModRuntimes runtimes, ModControl control, App app, ModdingConfig config, string dir)
+        => Console.WriteLine("[ecs-mod] load '{0}': disk-loaded mods are unavailable in a HostFs guest", dir);
+#else
+    private static void LoadFolder(ModRuntimes runtimes, ModControl control, App app, ModdingConfig config, string dir)
+    {
+        var found = LoadManifest(dir);
+        if (found == null)
+            return;
+        var (manifest, wasmPath) = found.Value;
+        if (control.Mods.Exists(m => string.Equals(m.Name, manifest.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.WriteLine("[ecs-mod] load '{0}': already loaded — unload it first", manifest.Name);
+            return;
+        }
+        EnsureBackend(runtimes, config);
+        LoadOne(app, runtimes, control, config, manifest, wasmPath, out _);
+    }
+#endif
+
+    // Full teardown: stop the mod, drop its entities, dispose the wasm instance and
+    // forget it. Disable keeps the instance alive for a cheap re-enable; this is the
+    // uninstall path, where the .wasm on disk is about to go away.
+    private static void UnloadMod(ModRuntimes runtimes, ModControl control, ModRuntime rt, ModInfo? info, ModdingConfig config)
+    {
+        // Enabled=false first: the mod's host global observers can't be unregistered
+        // (TinyEcs has no removal), and their `wanted` closure reads this flag — so a
+        // fire arriving after the runtime is gone is dropped instead of queued.
+        var wasEnabled = rt.Enabled;
+        rt.Enabled = false;
+        if (info != null) info.Enabled = false;
+        rt.ObserverFires.Clear();
+        DespawnModEntities(rt.Ctx.World, rt.Slot);
+        if (wasEnabled)
+            NotifyTeardown(config, rt.Manifest.Name);
+        try { rt.Instance.Dispose(); }
+        catch (Exception e) { Console.WriteLine("[ecs-mod] dispose '{0}': {1}", rt.Manifest.Name, e.Message); }
+        runtimes.Runtimes.Remove(rt);
+        if (info != null)
+            control.Mods.Remove(info);
+        rt.Info = null;
+        Console.WriteLine("[ecs-mod] unloaded {0}", rt.Manifest.Name);
     }
 
     // Stop a mod ticking and remove everything it spawned. The wasm instance stays
