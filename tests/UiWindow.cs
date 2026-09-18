@@ -169,11 +169,17 @@ public class UiWindowZOrderTests
 
 	private sealed class IdBox { public ulong Id; }
 
-	private static IdBox AddSpawn(App app, float x, float y, int z)
+	private static IdBox AddSpawn(App app, float x, float y, int z) => AddSpawn(app, x, y, z, BevyStage.Startup);
+
+	// `stage` Update = a runtime spawn (guarded to fire once): two roots spawned in
+	// the SAME flush see each other in an order the observers do not define, so a
+	// test about "which existed first" must put them in separate flushes.
+	private static IdBox AddSpawn(App app, float x, float y, int z, BevyStage stage)
 	{
 		var box = new IdBox();
 		app.AddSystem((Commands c) =>
 		{
+			if (box.Id != 0) return;
 			var e = c.Spawn()
 				.Insert(new UiNode
 				{
@@ -189,7 +195,7 @@ public class UiWindowZOrderTests
 				.Insert(new GlobalZIndex(z));
 			box.Id = e.Id;
 		})
-		.InStage(BevyStage.Startup).SingleThreaded().Build();
+		.InStage(stage).SingleThreaded().Build();
 		return box;
 	}
 
@@ -200,19 +206,40 @@ public class UiWindowZOrderTests
 		var counter = app.GetResource<UiZCounter>();
 		var world = app.GetWorld();
 
-		var high = AddSpawn(app, 10, 10, z: 60);
+		// Low first, then high in a later flush: neither spawn is covered by an
+		// existing window, so both keep their declared value and only the counter moves.
 		var low = AddSpawn(app, 30, 10, z: 30);
+		var high = AddSpawn(app, 10, 10, z: 60, BevyStage.Update);
 		app.RunStartup();
+		app.Update();
 
-		// Both floors ratcheted in one pass: the highest wins, and a lower floor
-		// never moves the counter back down.
 		Assert.Equal(61, counter.Next);
-
-		// The declared values themselves are never rewritten — only the counter
-		// moves.
 		Assert.Equal(60, world.Entity(high.Id).Get<GlobalZIndex>().Value);
 		Assert.Equal(30, world.Entity(low.Id).Get<GlobalZIndex>().Value);
+
+		// A lower floor never moves the counter back down.
+		counter.Next = 5;
 		Assert.Equal(61, counter.Next);
+	}
+
+	[Fact]
+	public void A_root_spawning_under_an_existing_window_is_lifted_to_the_top()
+	{
+		var app = MakeApp();
+		var counter = app.GetResource<UiZCounter>();
+		var world = app.GetWorld();
+
+		// High first, then a root declaring a floor some other window already sits
+		// above: a tie or an under-spawn would pick the wrong window in the pixel
+		// pick, so the newcomer takes the counter's top instead (what gumps do).
+		var high = AddSpawn(app, 10, 10, z: 60);
+		var low = AddSpawn(app, 30, 10, z: 30, BevyStage.Update);
+		app.RunStartup();
+		app.Update();
+
+		Assert.Equal(60, world.Entity(high.Id).Get<GlobalZIndex>().Value);
+		Assert.Equal(61, world.Entity(low.Id).Get<GlobalZIndex>().Value);
+		Assert.Equal(62, counter.Next);
 	}
 
 	[Fact]
