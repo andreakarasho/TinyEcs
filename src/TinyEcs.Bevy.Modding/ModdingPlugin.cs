@@ -121,7 +121,7 @@ public sealed class ModInfo
     public bool Enabled = true;
     /// Message of the most recent guest failure ("" when the mod never failed).
     public string LastError = "";
-    /// Host features this mod declared it replaces (mod.json's `ruleset.replaces`).
+    /// Host features this mod declared it replaces (mod.json's top-level `replaces`).
     /// See ModControl.IsReplaced.
     public string[] Replaces = Array.Empty<string>();
 }
@@ -137,8 +137,8 @@ public sealed class ModControl
     public readonly List<ModInfo> Mods = new();
     internal readonly Queue<(int Index, ModAction Action, string Dir)> Pending = new();
 
-    /// True when some ENABLED mod declared it replaces `feature` (mod.json's
-    /// `ruleset.replaces`). A host feature that has a mod-facing equivalent asks this
+    /// True when some ENABLED mod declared it replaces `feature` (mod.json's top-level
+    /// `replaces`). A host feature that has a mod-facing equivalent asks this
     /// before building its own UI, so installing the mod is all it takes — and
     /// disabling or unloading the mod brings the built-in one straight back.
     public bool IsReplaced(string feature)
@@ -479,7 +479,7 @@ public readonly struct ModdingPlugin : IPlugin
                     Name = manifest.Name,
                     Version = manifest.Version,
                     Enabled = true,
-                    Replaces = manifest.ReadReplaces(),
+                    Replaces = ModManifest.CleanFeatures(manifest.Replaces),
                 };
                 control.Mods.Add(rt.Info);
 

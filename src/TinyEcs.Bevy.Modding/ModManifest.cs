@@ -23,32 +23,37 @@ public sealed class ModManifest
     /// preamble and rejects component-model binaries outright.
     public string Abi { get; set; } = "";
 
-    /// Per-mod rules / capability grants. One rule is read today (`replaces`, see
-    /// ReadReplaces); the rest round-trips untouched.
+    /// Reserved per-mod rules / capability grants — what the HOST permits this mod to
+    /// do. Empty object for now.
     // ponytail: raw JsonElement placeholder so it round-trips any future shape
-    // with no model change; promote to a typed Ruleset class once there are
-    // enough rules to be worth one.
+    // with no model change; promote to a typed Ruleset class once the rules exist.
     public JsonElement Ruleset { get; set; }
 
-    /// Host features this mod declares it takes over: `"ruleset": { "replaces":
-    /// ["cuo:ui/system-log"] }`. A mod that replaces a built-in window is installed
-    /// INSTEAD of it — the host hides its own rather than leaving two stacked and
-    /// asking the player to find the toggle.
+    /// Host features this mod takes over: `"replaces": ["cuo:ui/system-log"]`. A host
+    /// feature that has a mod-facing equivalent stands down while such a mod is loaded
+    /// (see ModControl.IsReplaced) instead of leaving both stacked and asking the
+    /// player to go find the toggle.
     ///
-    /// Absent / malformed reads as "replaces nothing": a ruleset is a declaration,
-    /// and a typo in it must not stop the mod loading.
-    public string[] ReadReplaces()
+    /// Top level and deliberately NOT inside Ruleset: the trust direction is opposite.
+    /// A ruleset is authority handed DOWN to the mod; this is a claim the mod makes
+    /// about ITSELF. Keeping them apart stops a self-asserted claim from reading like
+    /// a granted capability once real grants land.
+    public string[] Replaces { get; set; } = Array.Empty<string>();
+
+    /// Drop the nulls and blanks a hand-written manifest can carry. A wrong-TYPE
+    /// `replaces` (a string, an object) instead fails the manifest parse outright and
+    /// the loader skips the mod with a message — the mods folder validates rather than
+    /// trusts, so the author sees the mistake immediately.
+    internal static string[] CleanFeatures(string[]? features)
     {
-        if (Ruleset.ValueKind != JsonValueKind.Object
-            || !Ruleset.TryGetProperty("replaces", out var arr)
-            || arr.ValueKind != JsonValueKind.Array)
+        if (features is null || features.Length == 0)
             return Array.Empty<string>();
 
-        var found = new List<string>();
-        foreach (var item in arr.EnumerateArray())
-            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } feature)
-                found.Add(feature);
-        return found.Count == 0 ? Array.Empty<string>() : found.ToArray();
+        var kept = new List<string>(features.Length);
+        foreach (var feature in features)
+            if (!string.IsNullOrWhiteSpace(feature))
+                kept.Add(feature);
+        return kept.Count == 0 ? Array.Empty<string>() : kept.ToArray();
     }
 }
 
