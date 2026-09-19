@@ -121,6 +121,9 @@ public sealed class ModInfo
     public bool Enabled = true;
     /// Message of the most recent guest failure ("" when the mod never failed).
     public string LastError = "";
+    /// Host features this mod declared it replaces (mod.json's `ruleset.replaces`).
+    /// See ModControl.IsReplaced.
+    public string[] Replaces = Array.Empty<string>();
 }
 
 /// Host-facing control surface for the loaded mods: the list to render (Mods, in
@@ -133,6 +136,26 @@ public sealed class ModControl
 {
     public readonly List<ModInfo> Mods = new();
     internal readonly Queue<(int Index, ModAction Action, string Dir)> Pending = new();
+
+    /// True when some ENABLED mod declared it replaces `feature` (mod.json's
+    /// `ruleset.replaces`). A host feature that has a mod-facing equivalent asks this
+    /// before building its own UI, so installing the mod is all it takes — and
+    /// disabling or unloading the mod brings the built-in one straight back.
+    public bool IsReplaced(string feature)
+    {
+        // Linear over a handful of mods, called from a spawn guard, not a hot loop.
+        for (var i = 0; i < Mods.Count; i++)
+        {
+            var mod = Mods[i];
+            if (!mod.Enabled)
+                continue;
+            var replaces = mod.Replaces;
+            for (var j = 0; j < replaces.Length; j++)
+                if (string.Equals(replaces[j], feature, StringComparison.Ordinal))
+                    return true;
+        }
+        return false;
+    }
 
     public void Enable(int index) => Pending.Enqueue((index, ModAction.Enable, ""));
     public void Disable(int index) => Pending.Enqueue((index, ModAction.Disable, ""));
@@ -451,7 +474,13 @@ public readonly struct ModdingPlugin : IPlugin
                     WasmPath = wasmPath,
                 };
                 runtimes.Runtimes.Add(rt);
-                rt.Info = new ModInfo { Name = manifest.Name, Version = manifest.Version, Enabled = true };
+                rt.Info = new ModInfo
+                {
+                    Name = manifest.Name,
+                    Version = manifest.Version,
+                    Enabled = true,
+                    Replaces = manifest.ReadReplaces(),
+                };
                 control.Mods.Add(rt.Info);
 
                 Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
