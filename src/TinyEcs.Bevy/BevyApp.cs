@@ -1139,26 +1139,36 @@ public class App
 			{
 				var exitKey = (type, (object)previousState.Value);
 				if (_app._onExitSystems.TryGetValue(exitKey, out var exitSystems))
-				{
-					foreach (var descriptor in exitSystems)
-					{
-						if (descriptor.ShouldRun(world))
-							descriptor.RunProfiled(world);
-					}
-				}
+					RunTransitionBatch(world, exitSystems);
 			}
 
 			if (currentState.HasValue)
 			{
 				var enterKey = (type, (object)currentState.Value);
 				if (_app._onEnterSystems.TryGetValue(enterKey, out var enterSystems))
+					RunTransitionBatch(world, enterSystems);
+			}
+		}
+
+		// One deferred scope per OnExit / OnEnter batch, flushed at its end (Bevy applies
+		// a transition schedule's commands after the whole schedule). Without it every
+		// system's Commands applied immediately, so an OnExit that snapshots windows
+		// (gump persistence) saw them already despawned by an earlier teardown system.
+		private static void RunTransitionBatch(TinyEcs.World world, List<SystemDescriptor> systems)
+		{
+			world.BeginDeferred();
+			try
+			{
+				foreach (var descriptor in systems)
 				{
-					foreach (var descriptor in enterSystems)
-					{
-						if (descriptor.ShouldRun(world))
-							descriptor.RunProfiled(world);
-					}
+					if (descriptor.ShouldRun(world))
+						descriptor.RunProfiled(world);
 				}
+			}
+			finally
+			{
+				SystemTicks.Advance(world);
+				world.EndDeferred();
 			}
 		}
 	}

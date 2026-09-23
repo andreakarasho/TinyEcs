@@ -149,6 +149,31 @@ namespace TinyEcs.Tests
 		}
 
 		[Fact]
+		public void OnExitCommandsApplyAfterTheWholeBatch()
+		{
+			using var world = new World();
+			var app = new App(world);
+			var target = world.Entity().Set(new Position { X = 1 }).ID;
+			var seenByLater = -1;
+
+			app.AddState(DetectorTestState.A);
+			app.AddSystem((Commands commands, Query<Data<Position>> q) =>
+			{
+				foreach (var (ent, _) in q)
+					commands.Entity(ent.Ref).Despawn();
+			}).OnExit(DetectorTestState.A).Build();
+			app.AddSystem((Query<Data<Position>> q) => seenByLater = q.Count())
+				.OnExit(DetectorTestState.A).Build();
+
+			app.Run();
+			app.SetState(DetectorTestState.B);
+			app.Run();
+
+			Assert.Equal(1, seenByLater);
+			Assert.False(world.Exists(target));
+		}
+
+		[Fact]
 		public void StateChangeDetectorRunsOnlyOnTransitionWithoutAllocations()
 		{
 			using var world = new World();
