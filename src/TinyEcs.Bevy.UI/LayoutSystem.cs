@@ -23,6 +23,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 	public readonly Query<Data<BoxShadow>> Shadows;
 	public readonly Query<Data<ComputedNode>> Computed;
 	public readonly Query<Data<UiCustom>> Customs;
+	public readonly Query<Empty, Filter<With<ClipToParent>>> ClipToParents;
 
 	public UiLayoutQueries()
 	{
@@ -41,6 +42,7 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 		Shadows         = Add(new Query<Data<BoxShadow>>());
 		Computed        = Add(new Query<Data<ComputedNode>>());
 		Customs         = Add(new Query<Data<UiCustom>>());
+		ClipToParents   = Add(new Query<Empty, Filter<With<ClipToParent>>>());
 	}
 }
 
@@ -526,6 +528,7 @@ internal static class LayoutSystem
 				AttachTo = FloatingAttachTo.Parent,
 				Offset = new Vector2(ox, oy),
 				ZIndex = (short)Math.Clamp(resolvedZ, short.MinValue, short.MaxValue),
+				ClipTo = q.ClipToParents.Contains(entityId) ? FloatingClipTo.AttachedParent : FloatingClipTo.None,
 			};
 		}
 

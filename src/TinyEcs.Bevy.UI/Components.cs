@@ -119,6 +119,12 @@ public struct UiName
 
 public struct Button { }
 
+/// An Absolute (floating) node is NOT clipped by an Overflow.Clip/Scroll ancestor
+/// by default — it draws over everything, like Clay's floats. With this marker it
+/// is clipped like an in-flow child: by the nearest clipping ancestor (intersected
+/// with that one's clipping ancestors), for both painting and pointer hits.
+public struct ClipToParent { }
+
 public struct RelativeCursorPosition
 {
 	public Vector2 Normalized;
