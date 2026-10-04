@@ -198,7 +198,7 @@ public sealed class ModdingConfig
     /// the GUEST_CORE guest supplies its ModRelayExecutor (flat env imports to JS)
     /// here; null (the default) means CoreWasmModBackend gets a WasmtimeModWasmExecutor
     /// (desktop). Internal: only a host within this assembly's InternalsVisibleTo
-    /// friend list (cuo-guest-core) constructs an IModWasmExecutor.
+    /// friend list (cuo) constructs an IModWasmExecutor.
     internal IModWasmExecutor? WasmExecutor;
 
     /// WasmBackend.Core mod DISCOVERY override — a JSON manifest-list provider

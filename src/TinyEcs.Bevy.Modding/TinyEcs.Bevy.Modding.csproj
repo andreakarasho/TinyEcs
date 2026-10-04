@@ -68,11 +68,11 @@
          way WasmtimeGuestAdapters.cs does on desktop. AssemblyName below, not the
          csproj/directory name (ClassicUO.Ecs.Wasm). -->
     <InternalsVisibleTo Include="cuo-guest" />
-    <!-- The CoreModule flavor renames the assembly to cuo-guest-core (see that
+    <!-- The CoreModule flavor renames the assembly to cuo (see that
          csproj); its guest-relay executor (Core/ModRelayExecutor.cs) constructs
          ModdingConfig.WasmExecutor/WasmManifestSource (internal) and implements
          IModWasmExecutor/IModImportSink (internal) directly. -->
-    <InternalsVisibleTo Include="cuo-guest-core" />
+    <InternalsVisibleTo Include="cuo" />
     <!-- Same guest, emscripten/browser-wasm flavor (-p:BrowserWasm=true) — another
          AssemblyName, same Core/ sources. -->
     <InternalsVisibleTo Include="cuo-guest-browser" />
