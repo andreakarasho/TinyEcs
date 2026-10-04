@@ -1536,7 +1536,7 @@ public class UiBevyTests
 	}
 
 	// --- Repro: centering a child inside a UiCustom (custom-render) parent ---
-	// ClassicUO server-gump / character rows are UiCustom nodes (gump sprites).
+	// Server-gump / character rows (custom-drawn sprites) are UiCustom nodes (gump sprites).
 	// A flex attempt to center a label inside such a row blanked the label. These
 	// tests isolate whether carrying a UiCustom config on the parent breaks its
 	// children's layout/centering (it should NOT — Clay lays out custom-element

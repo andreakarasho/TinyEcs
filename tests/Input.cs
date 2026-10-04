@@ -154,7 +154,7 @@ namespace TinyEcs.Tests
 			Assert.Equal(new Vector2(15, 8), m.DraggingOffset);
 
 			Frame(m, ref t, new Vector2(25, 18), MouseButtons.None);
-			// release resets the anchor to origin (legacy ClassicUO semantics)
+			// release resets the anchor to origin (legacy game-client semantics)
 			Assert.Equal(new Vector2(25, 18), m.DraggingOffset);
 		}
 

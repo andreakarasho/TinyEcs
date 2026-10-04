@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Guest publishes build this lib with WASM_GUEST / GUEST_CORE / CUO_HOST_FS, which
+  <!-- Guest publishes build this lib with WASM_GUEST / GUEST_CORE / MODDING_HOST_FS, which
        change what it compiles (no Wasmtime backend, no folder mod discovery). Keep those
-       out of the bin the desktop client links from — otherwise a `make publish-wasi*`
-       leaves cuo-ecs.exe loading a mod loader that can't see ecs-mods/ at all. -->
+       out of the bin a desktop host links from — otherwise a guest publish leaves the
+       desktop exe loading a mod loader that can't see its mods folder at all. -->
   <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
     <BaseOutputPath>$(MSBuildProjectDirectory)\bin\wasmguest\</BaseOutputPath>
   </PropertyGroup>
 
   <PropertyGroup>
-    <!-- net10.0 only: the sole consumers (cuo-ecs + tests) are net10.0, and a
+    <!-- net10.0 only: every consumer is net10.0, and a
          single TFM avoids dragging TinyEcs/Clay/Wasmtime into net9.0 inner builds
          they never otherwise exercise. Wasmtime resolves to its net9.0 asset. -->
     <TargetFramework>net10.0</TargetFramework>
@@ -20,7 +20,7 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
-  <!-- Browser guest build (cuo-guest.wasm, NativeAOT-LLVM WASI p2): the host itself
+  <!-- Browser guest build (NativeAOT-LLVM WASI p2): the host itself
        runs as a wasm component, so it cannot embed wasmtime in-process. This global
        CLI property (passed by the WASM_GUEST publish) strips every wasmtime-dotnet
        reference + the WIT source-gen wiring below, leaving only the Jco backend +
@@ -30,7 +30,7 @@
   </PropertyGroup>
 
   <!-- GUEST_CORE guest flavor (bare wasip1 core module, no jco) — propagates from
-       ClassicUO.Ecs.Wasm's publish -p:CoreModule=true (a global property, so it
+       the guest's publish -p:CoreModule=true (a global property, so it
        flows to this P2P reference exactly like WasmGuest does). Mods stay
        core-wasm modules on this path too (see abi/mod-abi.fbs), just relayed
        through flat env imports to JS instead of an embedded Wasmtime — so this
@@ -45,7 +45,7 @@
        leaving a single File.* reference behind would keep wasi's file syscalls in the
        module's import table, which is the whole point of the flavor. -->
   <PropertyGroup Condition="'$(HostFs)' == 'true'">
-    <DefineConstants>$(DefineConstants);CUO_HOST_FS</DefineConstants>
+    <DefineConstants>$(DefineConstants);MODDING_HOST_FS</DefineConstants>
   </PropertyGroup>
 
   <!-- FlatSharp (the ModAbi wire types + ModAbiRunner/CoreWasmModBackend, which
@@ -57,25 +57,12 @@
     <UseFlatSharp Condition="'$(WasmGuest)' != 'true' OR '$(CoreModule)' == 'true'">true</UseFlatSharp>
   </PropertyGroup>
 
-  <!-- The bridge impls + generated WIT types are internal; the cuo test drives
-       the bridge directly. (The lib's own tests use only the public surface.) -->
+  <!-- The bridge impls + executor seams are internal. A host that drives them directly
+     (its tests, a guest dispatcher/relay executor) lists its assembly names in
+     TinyEcsModdingFriends (';'-separated), e.g. from its own Directory.Build.props. -->
   <ItemGroup>
-    <InternalsVisibleTo Include="ClassicUO.Ecs.Tests" />
     <InternalsVisibleTo Include="TinyEcs.Bevy.Modding.Tests" />
-    <!-- The browser guest dispatcher (ClassicUO.Ecs.Wasm/Modding/ModBridge.cs) drives
-         the neutral GuestBridge structs (CommandsImpl/EntityCommandsImpl/EntityImpl/
-         QueryImpl/QueryResultImpl/ComponentImpl, all `internal`) directly, the same
-         way WasmtimeGuestAdapters.cs does on desktop. AssemblyName below, not the
-         csproj/directory name (ClassicUO.Ecs.Wasm). -->
-    <InternalsVisibleTo Include="cuo-guest" />
-    <!-- The CoreModule flavor renames the assembly to cuo (see that
-         csproj); its guest-relay executor (Core/ModRelayExecutor.cs) constructs
-         ModdingConfig.WasmExecutor/WasmManifestSource (internal) and implements
-         IModWasmExecutor/IModImportSink (internal) directly. -->
-    <InternalsVisibleTo Include="cuo" />
-    <!-- Same guest, emscripten/browser-wasm flavor (-p:BrowserWasm=true) — another
-         AssemblyName, same Core/ sources. -->
-    <InternalsVisibleTo Include="cuo-guest-browser" />
+    <InternalsVisibleTo Include="$(TinyEcsModdingFriends)" Condition="'$(TinyEcsModdingFriends)' != ''" />
   </ItemGroup>
 
   <ItemGroup>
@@ -172,7 +159,7 @@ $(_ModAbi)</_DerivedModAbi>
   <!-- Upstream Wasmtime native (core-module runtime). The win-x64 native wasmtime.dll
        does NOT flow through the PackageReference (no RID), so copy it from the NuGet
        cache ($(PkgWasmtime) via GeneratePathProperty) next to this lib's output.
-       Consumers (cuo-ecs + tests) then read it from here. Windows x64 for now; other
+       Consumers then read it from here. Windows x64 for now; other
        RIDs need their own runtimes/<rid>/native path. -->
   <ItemGroup Condition="'$(WasmGuest)' != 'true'">
     <_UpstreamWasmtimeNative Include="$(PkgWasmtime)\runtimes\win-x64\native\wasmtime.dll" />

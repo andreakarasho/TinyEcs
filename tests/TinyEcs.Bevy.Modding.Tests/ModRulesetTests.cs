@@ -23,13 +23,13 @@ public class ModRulesetTests
               "name": "journal",
               "version": "0.2.0",
               "wasm": "mod.wasm",
-              "replaces": ["cuo:ui/system-log"],
+              "replaces": ["game:ui/system-log"],
               "ruleset": {}
             }
             """);
 
         Assert.Equal("journal", manifest.Name);
-        Assert.Equal(new[] { "cuo:ui/system-log" }, ModManifest.CleanFeatures(manifest.Replaces));
+        Assert.Equal(new[] { "game:ui/system-log" }, ModManifest.CleanFeatures(manifest.Replaces));
         // A `replaces` claim must never be mistaken for a granted capability.
         Assert.Equal(JsonValueKind.Object, manifest.Ruleset.ValueKind);
         Assert.False(manifest.Ruleset.TryGetProperty("replaces", out _));
@@ -50,7 +50,7 @@ public class ModRulesetTests
         // two fields quietly merge again.
         var manifest = Parse("""
             { "name": "journal", "version": "0.2.0", "wasm": "mod.wasm",
-              "ruleset": { "replaces": ["cuo:ui/system-log"] } }
+              "ruleset": { "replaces": ["game:ui/system-log"] } }
             """);
         Assert.Empty(ModManifest.CleanFeatures(manifest.Replaces));
     }
@@ -66,8 +66,8 @@ public class ModRulesetTests
     [Fact]
     public void CleanFeatures_keeps_the_real_ids_and_drops_the_rest()
         => Assert.Equal(
-            new[] { "cuo:ui/system-log" },
-            ModManifest.CleanFeatures(Parse("""{ "replaces": [null, "cuo:ui/system-log", " "] }""").Replaces));
+            new[] { "game:ui/system-log" },
+            ModManifest.CleanFeatures(Parse("""{ "replaces": [null, "game:ui/system-log", " "] }""").Replaces));
 
     [Fact]
     public void A_wrong_typed_replaces_fails_the_whole_manifest()
@@ -75,28 +75,28 @@ public class ModRulesetTests
         // Deliberate: the mods folder validates rather than trusts, so a malformed
         // manifest is skipped with a message (ModdingPlugin.LoadManifest catches this)
         // and the author sees the mistake at once instead of silently losing the rule.
-        Assert.Throws<JsonException>(() => Parse("""{ "replaces": "cuo:ui/system-log" }"""));
-        Assert.Throws<JsonException>(() => Parse("""{ "replaces": { "0": "cuo:ui/system-log" } }"""));
+        Assert.Throws<JsonException>(() => Parse("""{ "replaces": "game:ui/system-log" }"""));
+        Assert.Throws<JsonException>(() => Parse("""{ "replaces": { "0": "game:ui/system-log" } }"""));
     }
 
     [Fact]
     public void IsReplaced_answers_for_enabled_mods_only()
     {
         var control = new ModControl();
-        control.Mods.Add(new ModInfo { Name = "journal", Replaces = new[] { "cuo:ui/system-log" } });
+        control.Mods.Add(new ModInfo { Name = "journal", Replaces = new[] { "game:ui/system-log" } });
 
-        Assert.True(control.IsReplaced("cuo:ui/system-log"));
+        Assert.True(control.IsReplaced("game:ui/system-log"));
         // Exact match: a feature id is an id, not a prefix, and not case-insensitive.
-        Assert.False(control.IsReplaced("cuo:ui/system"));
-        Assert.False(control.IsReplaced("CUO:UI/SYSTEM-LOG"));
+        Assert.False(control.IsReplaced("game:ui/system"));
+        Assert.False(control.IsReplaced("GAME:UI/SYSTEM-LOG"));
 
         // Disabling hands the feature straight back to the host — this is what makes
         // the host's per-frame guard reversible.
         control.Mods[0].Enabled = false;
-        Assert.False(control.IsReplaced("cuo:ui/system-log"));
+        Assert.False(control.IsReplaced("game:ui/system-log"));
     }
 
     [Fact]
     public void IsReplaced_is_false_with_no_mods()
-        => Assert.False(new ModControl().IsReplaced("cuo:ui/system-log"));
+        => Assert.False(new ModControl().IsReplaced("game:ui/system-log"));
 }

@@ -29,7 +29,7 @@ public sealed class ModManifest
     // with no model change; promote to a typed Ruleset class once the rules exist.
     public JsonElement Ruleset { get; set; }
 
-    /// Host features this mod takes over: `"replaces": ["cuo:ui/system-log"]`. A host
+    /// Host features this mod takes over: `"replaces": ["game:ui/system-log"]`. A host
     /// feature that has a mod-facing equivalent stands down while such a mod is loaded
     /// (see ModControl.IsReplaced) instead of leaving both stacked and asking the
     /// player to go find the toggle.

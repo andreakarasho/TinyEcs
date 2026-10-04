@@ -10,7 +10,7 @@ namespace TinyEcs.Bevy.Modding.Tests;
 // lib + TinyEcs (no game-specific glue, no wasm runtime), so a green run proves the
 // runtime's plugin wiring is reusable on its own. The full guest<->host round-trip
 // (loading a real core-wasm module and ticking its systems) is exercised by the
-// parent repo's ClassicUO.Ecs.Tests against the built ecs-mods.
+// consuming host's own test suite against its built mods.
 public class ModdingPluginTests
 {
     // The hover bridge: UiOver over a mod-owned entity sets the sparse ModHovered

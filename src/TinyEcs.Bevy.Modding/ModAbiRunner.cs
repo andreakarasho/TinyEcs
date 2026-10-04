@@ -405,7 +405,7 @@ internal sealed class ModAbiRunner : IModInstance
 
     // The guest-facing `SystemInput.tick` is HOST MILLISECONDS (Time.Total), not a
     // world change tick and not a frame counter: guests use it as a monotonic clock
-    // (cuo-mod-sdk `Wait.Ms(ms)` / `Wait.Until(.., timeoutMs)` / per-tick memo
+    // (mod SDK `Wait.Ms(ms)` / `Wait.Until(.., timeoutMs)` / per-tick memo
     // invalidation). Deliberately unaffected by the change-tick redesign — exporting
     // World.CurrentTick here would hand guests a counter that moves once per system
     // run, and World.FrameCount would silently reinterpret every guest-side

@@ -17,7 +17,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- ONLY the lib + TinyEcs core — NO ClassicUO.Ecs. This proves the modding
+  <!-- ONLY the lib + TinyEcs core — NO host game. This proves the modding
        runtime is usable standalone, with no game-specific glue. -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\TinyEcs\TinyEcs.csproj" />

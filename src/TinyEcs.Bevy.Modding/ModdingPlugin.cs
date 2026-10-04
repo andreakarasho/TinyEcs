@@ -197,8 +197,8 @@ public sealed class ModdingConfig
     /// WasmBackend.Core executor override for a host that can't embed Wasmtime —
     /// the GUEST_CORE guest supplies its ModRelayExecutor (flat env imports to JS)
     /// here; null (the default) means CoreWasmModBackend gets a WasmtimeModWasmExecutor
-    /// (desktop). Internal: only a host within this assembly's InternalsVisibleTo
-    /// friend list (cuo) constructs an IModWasmExecutor.
+    /// (desktop). Internal: only a host in this assembly's InternalsVisibleTo friend
+    /// list (TinyEcsModdingFriends) constructs an IModWasmExecutor.
     internal IModWasmExecutor? WasmExecutor;
 
     /// WasmBackend.Core mod DISCOVERY override — a JSON manifest-list provider
@@ -520,7 +520,7 @@ public readonly struct ModdingPlugin : IPlugin
     // The only two places mod BYTES are read off disk. Isolated behind one method so the
     // -p:HostFs=true guest (no System.IO) can compile it out; that guest always reaches
     // mods through JsChannel/WasmManifestSource, so neither caller's branch is taken.
-#if CUO_HOST_FS
+#if MODDING_HOST_FS
     private static ModSource ReadModBytes(string name, string wasmPath)
         => throw new NotSupportedException($"{name}: disk-loaded mods are unavailable in a HostFs guest ({wasmPath})");
 #else
@@ -532,7 +532,7 @@ public readonly struct ModdingPlugin : IPlugin
     // alongside the build) and in the working dir, so launch location doesn't
     // matter. Each mod is a subfolder with a mod.json manifest; dedup by manifest
     // name (exe dir wins over cwd).
-#if CUO_HOST_FS
+#if MODDING_HOST_FS
     private static (ModManifest Manifest, string WasmPath)[] DiscoverFolderMods(string modFolder)
         => Array.Empty<(ModManifest, string)>();
 #else
@@ -587,7 +587,7 @@ public readonly struct ModdingPlugin : IPlugin
             .ToArray();
     }
 
-#if !CUO_HOST_FS
+#if !MODDING_HOST_FS
     // Read `<dir>/mod.json` and resolve the WASM it names (relative to the mod's
     // own folder). Returns null (skipping the folder) if there is no manifest, it
     // doesn't parse, names no wasm, or the wasm is missing.
@@ -767,7 +767,7 @@ public readonly struct ModdingPlugin : IPlugin
     // Load a mod folder into the running app (a mod store just installed it). Reads
     // `<dir>/mod.json` the same way the boot scan does, so an installed mod is
     // indistinguishable from one that was there at startup.
-#if CUO_HOST_FS
+#if MODDING_HOST_FS
     private static void LoadFolder(ModRuntimes runtimes, ModControl control, App app, ModdingConfig config, string dir)
         => Console.WriteLine("[ecs-mod] load '{0}': disk-loaded mods are unavailable in a HostFs guest", dir);
 #else
