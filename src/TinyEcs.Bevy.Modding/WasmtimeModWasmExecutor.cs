@@ -38,13 +38,31 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     // taking the process's address space with it.
     private const long MemoryLimitBytes = 1L << 30;
 
-    private readonly Engine _engine = new(new Config().WithEpochInterruption(true));
-    private readonly System.Threading.Timer _epochTimer;
-    private volatile bool _disposed;
+    // ONE engine + epoch timer per process (Engine is built to be shared). A per-executor
+    // pair leaked: App has no dispose path, and the live Timer rooted the executor — its
+    // engine, compiled code and every guest Store — for the process lifetime. A test
+    // suite booting a 44 MB NativeAOT mod per test grew to 11 GB that way.
+    private static readonly Engine _engine = new(new Config().WithEpochInterruption(true));
+    private static readonly System.Threading.Timer _epochTimer =
+        new(_ => _engine.IncrementEpoch(), null, EpochPeriodMs, EpochPeriodMs);
 
-    public WasmtimeModWasmExecutor()
-        => _epochTimer = new System.Threading.Timer(
-            _ => { if (!_disposed) _engine.IncrementEpoch(); }, null, EpochPeriodMs, EpochPeriodMs);
+    // Compiled modules by mod name, reused while the bytes are unchanged: a cranelift
+    // compile of a large guest costs seconds, and every new App (a reboot, a test)
+    // would otherwise pay it again. A changed hash (hot reload) replaces the entry.
+    private static readonly Dictionary<string, (byte[] Hash, Module Module)> _modules = new();
+
+    private static Module Compile(string name, byte[] bytes)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        lock (_modules)
+        {
+            if (_modules.TryGetValue(name, out var hit) && hit.Hash.AsSpan().SequenceEqual(hash))
+                return hit.Module;
+            var module = Module.FromBytes(_engine, name, bytes);
+            _modules[name] = (hash, module);
+            return module;
+        }
+    }
 
     // Indexed by the caller-supplied slot (== ModHostContext.Slot); Load grows the
     // list as needed rather than relying on Count to already equal `slot` (a prior
@@ -59,6 +77,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         public required Instance Instance;
         public required string Name;
         public required IModImportSink Sink;
+        public required Imports Imports; // the strong ref the import callbacks only hold weakly
 
         public Memory Memory = null!;
         public Func<int, int> Alloc = null!;
@@ -78,13 +97,14 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     {
         var linker = new Linker(_engine);
         linker.DefineWasi();
-        DefineImports(linker, importModule, sink, hostImports);
+        var imports = new Imports(sink, hostImports);
+        DefineImports(linker, importModule, new WeakReference<Imports>(imports), hostImports);
 
         var store = CreateStore(_engine);
-        var module = Module.FromBytes(_engine, source.Name, source.Bytes!);
+        var module = Compile(source.Name, source.Bytes!);
         var instance = linker.Instantiate(store, module);
 
-        var entry = new Slot { Linker = linker, Store = store, Instance = instance, Name = source.Name, Sink = sink };
+        var entry = new Slot { Linker = linker, Store = store, Instance = instance, Name = source.Name, Sink = sink, Imports = imports };
         CacheExports(entry);
 
         while (_slots.Count <= slot)
@@ -163,7 +183,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         try { slot.Store.Dispose(); } catch { /* already torn down */ }
 
         slot.Store = CreateStore(_engine);
-        var module = Module.FromBytes(_engine, slot.Name, source.Bytes!);
+        var module = Compile(slot.Name, source.Bytes!);
         slot.Instance = slot.Linker.Instantiate(slot.Store, module);
         CacheExports(slot);
     }
@@ -177,16 +197,11 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         _slots[handle] = null;
     }
 
+    // The engine, timer and module cache are process-wide; only the stores are ours.
     public void Dispose()
     {
-        // The timer callback calls into the native engine, and the non-blocking
-        // Timer.Dispose() returns while a callback may still be running — that
-        // window is a use-after-free. Wait for it.
-        _disposed = true;
-        using var done = new System.Threading.ManualResetEvent(false);
-        _epochTimer.Dispose(done);
-        done.WaitOne();
-        _engine.Dispose();
+        for (var i = 0; i < _slots.Count; i++)
+            DisposeInstance(i);
     }
 
     internal static Store CreateStore(Engine engine)
@@ -253,67 +268,82 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     // ModHostImport descriptors matched to wasm signatures by Kind. All under the
     // host's import module, all resolving THIS mod's own ptr/len against the
     // Wasmtime Caller's memory.
-    private static void DefineImports(Linker linker, string module, IModImportSink sink, IReadOnlyList<ModHostImport> hostImports)
+    // Wasmtime-dotnet roots every import callback in a strong GCHandle that is freed only
+    // when the native linker goes. A callback capturing the sink (-> backend -> App) closed
+    // that cycle, so a dropped App — Store, guest linear memory and all — never became
+    // collectable. Callbacks reach the targets through this weak hop; the Slot holds the
+    // strong ref, so they stay live exactly as long as the executor does.
+    internal sealed class Imports(IModImportSink sink, IReadOnlyList<ModHostImport> host)
     {
-        CallerAction<int, int> log = (caller, ptr, len) => sink.Log(ReadUtf8(caller, ptr, len));
+        public readonly IModImportSink Sink = sink;
+        public readonly IReadOnlyList<ModHostImport> Host = host;
+    }
+
+    private static Imports Get(WeakReference<Imports> weak)
+        => weak.TryGetTarget(out var t) ? t : throw new ObjectDisposedException(nameof(Imports));
+
+    private static void DefineImports(Linker linker, string module, WeakReference<Imports> w, IReadOnlyList<ModHostImport> hostImports)
+    {
+        CallerAction<int, int> log = (caller, ptr, len) => Get(w).Sink.Log(ReadUtf8(caller, ptr, len));
         linker.DefineFunction(module, "log", log);
 
-        CallerFunc<long, long> entityParent = (caller, entity) => (long)sink.EntityParent((ulong)entity);
+        CallerFunc<long, long> entityParent = (caller, entity) => (long)Get(w).Sink.EntityParent((ulong)entity);
         linker.DefineFunction(module, "entity_parent", entityParent);
 
         CallerFunc<long, int, int, int> entityChildren = (caller, entity, outPtr, cap) =>
-            sink.EntityChildren((ulong)entity, caller.GetMemory("memory")!.GetSpan(outPtr, cap * 8));
+            Get(w).Sink.EntityChildren((ulong)entity, caller.GetMemory("memory")!.GetSpan(outPtr, cap * 8));
         linker.DefineFunction(module, "entity_children", entityChildren);
 
         CallerFunc<long, int, int, int, int> componentGet = (caller, entity, typeId, outPtr, cap) =>
-            sink.ComponentGet((ulong)entity, (ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
+            Get(w).Sink.ComponentGet((ulong)entity, (ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
         linker.DefineFunction(module, "component_get", componentGet);
 
         CallerFunc<int, int, int, int> resourceGet = (caller, typeId, outPtr, cap) =>
-            sink.ResourceGet((ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
+            Get(w).Sink.ResourceGet((ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
         linker.DefineFunction(module, "resource_get", resourceGet);
 
-        foreach (var import in hostImports)
+        for (var idx = 0; idx < hostImports.Count; idx++)
         {
-            var h = import;
-            switch (h.Kind)
+            var i = idx;
+            var name = hostImports[i].Name;
+            switch (hostImports[i].Kind)
             {
                 case ModHostImportKind.BytesIn:
                 {
                     CallerAction<int, int> fn = (caller, ptr, len) =>
-                        h.BytesIn!(len > 0 ? caller.GetMemory("memory")!.GetSpan(ptr, len) : default);
-                    linker.DefineFunction(module, h.Name, fn);
+                        Get(w).Host[i].BytesIn!(len > 0 ? caller.GetMemory("memory")!.GetSpan(ptr, len) : default);
+                    linker.DefineFunction(module, name, fn);
                     break;
                 }
                 case ModHostImportKind.U32ToU64:
                 {
-                    CallerFunc<int, long> fn = (caller, arg) => (long)h.U32ToU64!((uint)arg);
-                    linker.DefineFunction(module, h.Name, fn);
+                    CallerFunc<int, long> fn = (caller, arg) => (long)Get(w).Host[i].U32ToU64!((uint)arg);
+                    linker.DefineFunction(module, name, fn);
                     break;
                 }
                 case ModHostImportKind.U32ToU32:
                 {
-                    CallerFunc<int, int> fn = (caller, arg) => (int)h.U32ToU32!((uint)arg);
-                    linker.DefineFunction(module, h.Name, fn);
+                    CallerFunc<int, int> fn = (caller, arg) => (int)Get(w).Host[i].U32ToU32!((uint)arg);
+                    linker.DefineFunction(module, name, fn);
                     break;
                 }
                 case ModHostImportKind.U32TextToU32:
                 {
                     CallerFunc<int, int, int, int> fn = (caller, arg, ptr, len) =>
-                        (int)h.U32TextToU32!((uint)arg, ReadUtf8(caller, ptr, len));
-                    linker.DefineFunction(module, h.Name, fn);
+                        (int)Get(w).Host[i].U32TextToU32!((uint)arg, ReadUtf8(caller, ptr, len));
+                    linker.DefineFunction(module, name, fn);
                     break;
                 }
                 case ModHostImportKind.U32ToTextOut:
                 {
                     CallerFunc<int, int, int, int> fn = (caller, arg, outPtr, cap) =>
                     {
-                        var bytes = System.Text.Encoding.UTF8.GetBytes(h.U32ToTextOut!((uint)arg));
+                        var bytes = System.Text.Encoding.UTF8.GetBytes(Get(w).Host[i].U32ToTextOut!((uint)arg));
                         if (bytes.Length > 0 && bytes.Length <= cap)
                             bytes.CopyTo(caller.GetMemory("memory")!.GetSpan(outPtr, bytes.Length));
                         return bytes.Length;
                     };
-                    linker.DefineFunction(module, h.Name, fn);
+                    linker.DefineFunction(module, name, fn);
                     break;
                 }
             }

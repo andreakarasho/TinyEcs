@@ -251,19 +251,21 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 public static class ObserverExtensions
 {
 	// Lazy<T> ensures the state (and its one-time world-hook registration) is
-	// created exactly once per world even under concurrent access.
-	private static readonly ConcurrentDictionary<TinyEcs.World, Lazy<ObserverState>> _observerStates = new();
+	// created exactly once per world even under concurrent access. Weak-keyed: a
+	// dropped, never-disposed World (every short-lived App in a test suite) must not
+	// stay pinned here with all its observers — that held a suite at 11 GB.
+	private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TinyEcs.World, Lazy<ObserverState>> _observerStates = new();
 
 	/// <summary>
 	/// Test hook: true if an observer state is currently registered for the world.
 	/// Used to verify cleanup on world disposal.
 	/// </summary>
 	internal static bool HasObserverState(this TinyEcs.World world)
-		=> _observerStates.ContainsKey(world);
+		=> _observerStates.TryGetValue(world, out _);
 
 	internal static ObserverState GetObserverState(this TinyEcs.World world)
 	{
-		return _observerStates.GetOrAdd(world, static w => new Lazy<ObserverState>(() =>
+		return _observerStates.GetValue(world, static w => new Lazy<ObserverState>(() =>
 		{
 			var state = new ObserverState();
 			state.MaxComponentEntityId = w.MaxComponentId;
@@ -274,9 +276,8 @@ public static class ObserverExtensions
 
 	private static void RegisterWorldHooks(TinyEcs.World world, ObserverState state)
 	{
-		// Evict observer state when the world is disposed, otherwise the static
-		// _observerStates map pins the world (and all its observer callbacks) forever.
-		world.OnDisposed += static w => _observerStates.TryRemove(w, out _);
+		// Evict eagerly on dispose rather than waiting for the world to be collected.
+		world.OnDisposed += static w => _observerStates.Remove(w);
 
 		// Hook into entity creation - automatically emit OnSpawn
 		world.OnEntityCreated += (w, entityId) =>

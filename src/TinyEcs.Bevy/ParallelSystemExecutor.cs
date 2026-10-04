@@ -101,6 +101,12 @@ internal sealed class ParallelSystemExecutor : IDisposable
 		if (helpers > 0)
 			_done.Wait(); // always barrier before returning, even if the caller threw
 
+		// The worker threads root this pool for the process lifetime unless Dispose runs
+		// (App owns no Dispose path); holding the last batch/world here would pin a
+		// dropped App's whole World — a test suite of short-lived Apps grew to 11 GB.
+		_batch = null;
+		_world = null;
+
 		if (_error != null)
 		{
 			var e = _error;
