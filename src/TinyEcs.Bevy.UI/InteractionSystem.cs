@@ -192,15 +192,21 @@ internal static class InteractionSystem
 
 			// One element can emit several commands (Rectangle + Border, or
 			// Rectangle + ScissorStart). Walk BACKWARDS and keep the first hit
-			// per entity: that is the LAST command it emitted, preserving the
-			// old last-write-wins PaintOrder while writing each entity once —
-			// two writes per frame would make the neq-compare below flap
+			// per entity: that is the LAST command it emitted, writing each entity
+			// once — two writes per frame would make the neq-compare below flap
 			// forever and pin the relayout gate open.
+			// A Border is skipped on the first pass: it is emitted AFTER the
+			// element's children (it frames them), so ranking a bordered panel by it
+			// put the panel above its own flow content in every topmost-first hit
+			// test. Border-only elements get theirs on the second pass.
 			var seen = computedSeen.Value;
 			seen.Clear();
+			for (var pass = 0; pass < 2; pass++)
 			for (var i = cmds.Length - 1; i >= 0; i--)
 			{
 				ref readonly var cmd = ref cmds[i];
+				if ((cmd.CommandType == RenderCommandType.Border) != (pass == 1))
+					continue;
 				// ScissorStart: an Overflow.Scroll/Clip container that paints nothing
 				// of its own still needs a ComputedNode = its clip box, so hit-tests
 				// can clip overflowing children to the visible viewport (the scissor's

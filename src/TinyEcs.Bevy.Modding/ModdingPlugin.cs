@@ -53,10 +53,7 @@ internal sealed class ModRuntime
     public readonly Queue<(string Name, ulong Entity, string Json)> ObserverFires = new();
 }
 
-/// One loaded mod as a host sees it, for hosts that must call a guest export inline
-/// (outside the per-frame scheduler — e.g. a synchronous predicate hook). The lib owns
-/// normal per-stage dispatch; this is the escape hatch. Meaning-free: the host names the
-/// export and decides what a true return means.
+/// One loaded mod as a host sees it (name, enabled state, its host context).
 public readonly struct LoadedMod
 {
     private readonly ModRuntime _rt;
@@ -65,26 +62,12 @@ public readonly struct LoadedMod
     public bool Enabled => _rt.Enabled;
     public string Name => _rt.Manifest.Name;
 
-    /// True when this mod asked to receive the host's inline bool export (the core
-    /// ABI's wants_filter). A host installs its per-packet hook only when some
-    /// enabled mod wants it, so a filter-less set costs nothing per packet.
-    public bool WantsFilter => _rt.Instance.WantsFilter;
-
-    /// True when this mod asked to receive the host's SECOND inline bool export (the
-    /// core ABI's wants_filter_out). Same zero-cost gate as WantsFilter.
-    public bool WantsFilterOut => _rt.Instance.WantsFilterOut;
+    /// The mod's host context (what a host function receives as `mod`).
+    public ModHostContext Context => _rt.Ctx;
 
     /// Report a failed inline export call so it counts toward the auto-disable budget
     /// (the lib already does this for the systems + observers it drives itself).
     public void RecordFailure(string what, Exception e) => ModdingPlugin.NoteFailure(_rt, what, e);
-
-    /// Invoke `export(arg: u8, data: list&lt;u8&gt;) -> bool` on this mod; false if absent.
-    public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
-        => _rt.Instance.TryInvokeBoolExport(export, arg, data);
-
-    /// Slot-2 twin of TryInvokeBoolExport (the ABI's mod_filter_out).
-    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
-        => _rt.Instance.TryInvokeBoolExportOut(export, arg, data);
 }
 
 /// Loaded mod runtimes (public so a host can drive synchronous guest calls — see
@@ -95,6 +78,8 @@ public sealed class ModRuntimes
     // The wasm runtime hosting the mods: the core-wasm module backend
     // (CoreWasmModBackend) on desktop, or the browser Jco backend.
     internal IModBackend Backend = null!;
+    // Component-model (wasip2) mods, created on the first one found — see PickBackend.
+    internal IModBackend? ComponentBackend;
     internal readonly List<ModRuntime> Runtimes = new();
 
     // Dispose the backend's engine (instances are owned by the runtimes). No
@@ -104,6 +89,8 @@ public sealed class ModRuntimes
     {
         Backend?.Dispose();
         Backend = null!;
+        ComponentBackend?.Dispose();
+        ComponentBackend = null;
     }
 
     /// Loaded mods in load order (index stable, matches the control list). Iterate with
@@ -226,6 +213,13 @@ public sealed class ModdingConfig
     /// otherwise keep firing for a mod that is no longer running. Not called on enable
     /// — the mod re-publishes from its own ModStartup.
     public readonly List<Action<string>> OnModTeardown = new();
+
+#if !WASM_GUEST
+    /// Component-model mods only: run once when the component backend is created, to
+    /// define the host's own WIT interfaces on the shared component linker (see
+    /// Component/ComponentModImports.cs). The generic `tinyecs:modding/ecs` is built in.
+    public readonly List<Action<ComponentModImports>> ComponentImports = new();
+#endif
 }
 
 public readonly struct ModdingPlugin : IPlugin
@@ -253,8 +247,15 @@ public readonly struct ModdingPlugin : IPlugin
             app.AddResource(app);
         if (!app.HasResource<ModdingConfig>())
             app.AddResource(new ModdingConfig());
-        app.AddResource(new ModRuntimes());
+        var runtimesRes = new ModRuntimes();
+        app.AddResource(runtimesRes);
         app.AddResource(new ModControl());
+        // Host functions (env.mod_call): the host adds its own at build time.
+        if (!app.HasResource<ModHostFunctions>())
+            app.AddResource(new ModHostFunctions());
+        if (!app.HasResource<ModPacketChain>())
+            app.AddResource(new ModPacketChain());
+        app.GetResource<ModPacketChain>().Runtimes = runtimesRes;
 
         var setupFn = SetupEcsMods;
         app.AddSystem(setupFn).InStage(Stage.Startup).Label(Loader).Build();
@@ -268,53 +269,37 @@ public readonly struct ModdingPlugin : IPlugin
         AddRunner(app, Stage.PostUpdate, ModSchedule.PostUpdate, RunnerPostUpdate);
         AddRunner(app, Stage.Last, ModSchedule.Last, RunnerLast);
 
-        // Click bridge: Bevy.UI fires On<UiClick> (observer); mods poll. When a
-        // mod-owned entity is clicked, tag it ModClicked so a mod query sees it.
+        // Pointer bridges: Bevy.UI's click / right-click / enter / leave triggers on a
+        // MOD-OWNED entity are re-emitted as the mod-facing events (ModClick,
+        // ModRightClick, ModHover — Markers.cs) on that entity, so a mod observes them
+        // like any other event instead of polling a marker. Host entities are
+        // ignored: a mod-wide observer would otherwise wake on every host click.
         app.AddObserver<On<UiClick>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
         {
             if (modQ.Contains(trigger.EntityId))
-                commands.Entity(trigger.EntityId).Insert(new ModClicked());
+                commands.Entity(trigger.EntityId).EmitTrigger(new ModClick());
         });
-
-        // Right-click bridge: the right-button twin (On<UiRightClick> — press and
-        // release over the same entity). This is the signal a mod context menu
-        // opens on (ecs-assistant's macro / agent Delete menu); the host's own
-        // right-click gestures (window close, worldmap menu) run over the raw
-        // mouse and never saw this trigger.
+        // The trigger's payload Position is the right-PRESS point (latched in
+        // InteractionSystem); a mod context menu opens there.
         app.AddObserver<On<UiRightClick>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
         {
             if (modQ.Contains(trigger.EntityId))
-                // The trigger's payload Position is the right-PRESS point (latched in
-                // InteractionSystem); the mod menu opens there.
-                commands.Entity(trigger.EntityId).Insert(new ModRightClicked
+                commands.Entity(trigger.EntityId).EmitTrigger(new ModRightClick
                 {
                     X = trigger.Event.Position.X,
                     Y = trigger.Event.Position.Y,
                 });
         });
-
-        // Hover bridge: mirror Bevy.UI's single HoveredEntity onto a sparse marker
-        // so mods stop scanning every interactive element's Interaction byte each
-        // frame. UiOver/UiOut fire once per enter/leave on the topmost entity, so
-        // ModHovered lives on at most one entity at a time — no clear system, no
-        // refcount, no enter-before-leave ordering hazard (Over and Out target
-        // different entities). The mod walks ancestors itself (DOM mouseenter).
         app.AddObserver<On<UiOver>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
         {
             if (modQ.Contains(trigger.EntityId))
-                commands.Entity(trigger.EntityId).Insert(new ModHovered());
+                commands.Entity(trigger.EntityId).EmitTrigger(new ModHover { Over = true });
         });
-        app.AddObserver<On<UiOut>, Commands, Query<Data<ModHovered>>>((trigger, commands, hoveredQ) =>
+        app.AddObserver<On<UiOut>, Commands, Query<Data<ModEntity>>>((trigger, commands, modQ) =>
         {
-            if (hoveredQ.Contains(trigger.EntityId))
-                commands.Entity(trigger.EntityId).Remove<ModHovered>();
+            if (modQ.Contains(trigger.EntityId))
+                commands.Entity(trigger.EntityId).EmitTrigger(new ModHover { Over = false });
         });
-
-        // Clear ModClicked AFTER the Update runner (read-then-clear, same frame).
-        // NOT Stage.Last: UiClick fires after Update, so a Last clear would strip
-        // the tag before the mod's NEXT Update poll ever sees it.
-        var clearFn = ClearClicks;
-        app.AddSystem(clearFn).InStage(Stage.Update).After(RunnerUpdate).Build();
 
         // Drain buffered observer fires into the guest callbacks at end of frame,
         // after the Last runner — a safe single-threaded point (no mid-mutation
@@ -340,14 +325,6 @@ public readonly struct ModdingPlugin : IPlugin
         var processControlFn = ProcessModControl;
         app.AddSystem(processControlFn)
             .InStage(Stage.Last).After(RunnerLast).SingleThreaded().Build();
-    }
-
-    private static void ClearClicks(Commands commands, Query<Data<ModClicked>> q, Query<Data<ModRightClicked>> rightQ)
-    {
-        foreach ((var e, var _) in q)
-            commands.Entity(e.Ref).Remove<ModClicked>();
-        foreach ((var e, var _) in rightQ)
-            commands.Entity(e.Ref).Remove<ModRightClicked>();
     }
 
     private static void AddRunner(App app, Stage stage, ModSchedule which, string label)
@@ -461,7 +438,7 @@ public readonly struct ModdingPlugin : IPlugin
                 var source = config.JsChannel != null || config.WasmManifestSource != null
                     ? new ModSource(manifest.Name, null)
                     : ReadModBytes(manifest.Name, wasmPath);
-                var backend = PickBackend(runtimes, manifest, source.Bytes);
+                var backend = PickBackend(runtimes, config, manifest, source.Bytes);
                 var instance = backend.Load(in source, ctx);
                 instance.Setup();
 
@@ -502,18 +479,21 @@ public readonly struct ModdingPlugin : IPlugin
         }
     }
 
-    // There is one backend (Core on desktop, Jco in the browser). The sniff survives
-    // only as a GUARD: a Component Model binary has layer bytes 01 00 at offset 6-7 (a
-    // core module has 00 00). The component-model mod path was removed, so reject one
-    // with a clear, actionable error instead of feeding it to the core backend (which
-    // would fail deep inside FlatSharp with an opaque message). Jco has no bytes
-    // (mods are name-keyed), so the guard is a no-op there.
-    private static IModBackend PickBackend(ModRuntimes runtimes, ModManifest manifest, byte[]? bytes)
+    // Core modules go to the configured backend (Core on desktop, Jco in the browser).
+    // A Component Model binary (layer bytes 01 00 at offset 6-7; a core module has
+    // 00 00) goes to the component backend (Component/ComponentModBackend.cs, desktop
+    // only). Jco has no bytes (mods are name-keyed), so the sniff is a no-op there.
+    private static IModBackend PickBackend(ModRuntimes runtimes, ModdingConfig config, ModManifest manifest, byte[]? bytes)
     {
         if (bytes is { Length: >= 8 } && bytes[6] == 0x01 && bytes[7] == 0x00)
+        {
+#if WASM_GUEST
             throw new NotSupportedException(
-                $"mod '{manifest.Name}' is a component-model binary; that mod path was removed. " +
-                "Rebuild it against the core-wasm ABI (see abi/mod-abi.fbs).");
+                $"mod '{manifest.Name}' is a component-model binary; this host only runs core-wasm mods.");
+#else
+            return runtimes.ComponentBackend ??= new ComponentModBackend(config.ComponentImports);
+#endif
+        }
         return runtimes.Backend;
     }
 
@@ -649,15 +629,8 @@ public readonly struct ModdingPlugin : IPlugin
     {
         if (!rt.Ctx.SystemsByStage.TryGetValue(which, out var systems))
             return;
-        var now = HostTimeMs(rt.Ctx);
         foreach (var sys in systems)
         {
-            // Interval gate (SystemDecl.interval_ms) — checked BEFORE the backend
-            // evaluates any query, so a throttled system costs nothing at all. Unlike
-            // the idle-skip (which needs the empty-query signal), this is pure policy.
-            if (sys.IntervalMs > 0 && now - sys.LastRunTime < sys.IntervalMs)
-                continue;
-            sys.LastRunTime = now;
             try
             {
                 rt.Instance.RunSystem(sys);
@@ -678,14 +651,6 @@ public readonly struct ModdingPlugin : IPlugin
     // piggyback on the call (~130ms at 60fps — tooltip-delay-scale latency).
     // Query-less systems (Commands-only) never skip — no signal to gate on.
     internal const int IdleSafetyRunPeriod = 8;
-
-    // Engine clock in ms (Res<Time>.Total). Absent in bare unit-test apps — 0 there,
-    // which makes every interval gate open on the first tick and then stay shut; tests
-    // that exercise the gate drive Time themselves.
-    internal static float HostTimeMs(ModHostContext ctx)
-        => ctx.App != null && ctx.App.HasResource<TinyEcs.Bevy.Time>()
-            ? ctx.App.GetResource<TinyEcs.Bevy.Time>().Total
-            : 0f;
 
     /// Guest failures tolerated (cumulative until enable/reload) before a mod is
     /// switched off.
@@ -883,6 +848,10 @@ public readonly struct ModdingPlugin : IPlugin
         rt.Ctx.Systems.Clear();
         rt.Ctx.SystemsByStage.Clear();
         rt.Ctx.Observers.Clear();
+        Array.Clear(rt.Ctx.PacketInterest);
+        foreach (var buffer in rt.Ctx.EventBuffers)
+            buffer.Dead = true;
+        rt.Ctx.EventBuffers.Clear();
 
         // Backend tears down + re-instantiates (reusing host imports where it applies)
         // and re-runs setup, which repopulates ctx.Systems via the guest.
@@ -1004,18 +973,43 @@ public readonly struct ModdingPlugin : IPlugin
         // Resolved once per spec — no type-path hashing per term per entity below.
         var mappers = q.TermMappers(ctx.Registry);
 
-        // Driver = first present-required term (ref/mut/with/changed) that is registered.
+        if (!q.SnapshotPlanBuilt)
+        {
+            q.SnapshotPlan = ModSnapshotPlan.Build(ctx.World, mappers);
+            q.SnapshotPlanBuilt = true;
+        }
+        if (q.SnapshotPlan != null)
+            return q.SnapshotPlan.Run(ctx.World, mappers, sinceTick, out matched);
+
+        // Driver = first present-required term (ref/mut/with/changed/added) that is
+        // registered. An Added driver collects by presence; the term loop filters it.
         IModComponent? driver = null;
         var driverChanged = false;
+        var driverIndex = -1;
         for (var ti = 0; ti < mappers.Length; ti++)
             if (mappers[ti].Kind != ModQueryTermKind.Without && mappers[ti].Comp != null)
             {
                 driver = mappers[ti].Comp;
                 driverChanged = mappers[ti].Kind == ModQueryTermKind.Changed;
+                driverIndex = ti;
                 break;
             }
         if (driver == null)
             return ArrayPool<ulong>.Shared.Rent(1);
+
+        // Per-candidate term order: the tick-filtered terms (Changed / Added) first —
+        // they reject almost every candidate of a presence-collected scan, so the
+        // presence lookups after them run only for the few that changed. A presence
+        // driver (Ref / Mut / With) is skipped: collection already proved it.
+        Span<int> order = mappers.Length <= 32 ? stackalloc int[mappers.Length] : new int[mappers.Length];
+        var orderCount = 0;
+        for (var ti = 0; ti < mappers.Length; ti++)
+            if (mappers[ti].Kind is ModQueryTermKind.Changed or ModQueryTermKind.Added)
+                order[orderCount++] = ti;
+        for (var ti = 0; ti < mappers.Length; ti++)
+            if (mappers[ti].Kind is not (ModQueryTermKind.Changed or ModQueryTermKind.Added)
+                && !(ti == driverIndex && !driverChanged && mappers[ti].Comp != null))
+                order[orderCount++] = ti;
 
         // Not `using` — CollectEntities needs `candidates` by ref (Add may grow),
         // and a using-variable can't be passed by ref (CS1657). Dispose by hand.
@@ -1035,17 +1029,20 @@ public readonly struct ModdingPlugin : IPlugin
             {
                 var id = candidates[ci];
                 var ok = true;
-                for (var ti = 0; ti < mappers.Length; ti++)
+                for (var oi = 0; oi < orderCount; oi++)
                 {
-                    var (comp, kind) = mappers[ti];
+                    var (comp, kind) = mappers[order[oi]];
                     if (comp == null)
                     {
                         if (kind != ModQueryTermKind.Without) { ok = false; break; }
                         continue;
                     }
-                    var has = kind == ModQueryTermKind.Changed
-                        ? comp.ChangedSince(ctx.World, id, sinceTick)
-                        : comp.Has(ctx.World, id);
+                    var has = kind switch
+                    {
+                        ModQueryTermKind.Changed => comp.ChangedSince(ctx.World, id, sinceTick),
+                        ModQueryTermKind.Added => comp.AddedSince(ctx.World, id, sinceTick),
+                        _ => comp.Has(ctx.World, id),
+                    };
                     if (kind == ModQueryTermKind.Without && has) { ok = false; break; }
                     if (kind != ModQueryTermKind.Without && !has) { ok = false; break; }
                 }

@@ -12,7 +12,7 @@
 
 namespace TinyEcs.Bevy.Modding;
 
-/// The generic ECS mid-run RPC backing methods (see abi/mod-abi.fbs header),
+/// The generic mid-run host imports (see abi/mod-abi.fbs header),
 /// runtime-neutral: no wasm ptr/len, no Wasmtime Caller. Every executor's own
 /// guest-import glue narrows its ptr/len args into a Span (or reads/writes one
 /// that already lives in its own address space) BEFORE calling in here, so this
@@ -24,23 +24,16 @@ namespace TinyEcs.Bevy.Modding;
 internal interface IModImportSink
 {
     void Log(string message);
-    /// 0 = no parent (or the entity doesn't exist).
-    ulong EntityParent(ulong entity);
-    /// Writes up to (outBytes.Length / 8) matching child ids (each little-endian
-    /// u64) into outBytes; returns the TOTAL child count (may exceed the write
-    /// capacity — the caller recalls with a bigger buffer if so).
-    int EntityChildren(ulong entity, Span<byte> outBytes);
-    /// Returns the needed byte length (0 = component absent/unregistered); writes
-    /// the UTF8 JSON into outBytes only if it fits (length &lt;= outBytes.Length).
-    int ComponentGet(ulong entity, ushort typeId, Span<byte> outBytes);
-    /// Returns the needed byte length (0 = resource absent/unregistered); writes
-    /// the UTF8 JSON into outBytes only if it fits (length &lt;= outBytes.Length).
-    int ResourceGet(ushort typeId, Span<byte> outBytes);
+    /// `env.mod_call`: run the named host function (ModHostFunctions) with UTF-8 JSON
+    /// args. Returns the UTF-8 JSON result, EMPTY for a function without one; valid
+    /// until the next call. Throws ModCallException (= trap) on an unknown name or
+    /// malformed args.
+    ReadOnlySpan<byte> ModCall(ReadOnlySpan<byte> name, ReadOnlySpan<byte> args);
 }
 
 /// Wasm-mechanics seam: compiles/instantiates a mod module and drives its guest
-/// exports (mod_setup/run/observer/filter) + reload, entirely over
-/// byte[]-in/byte[]-out (or bool, for the filter predicate). Implementations
+/// exports (mod_setup/run/observer/on_packet) + reload, entirely over
+/// byte[]-in/byte[]-out. Implementations
 /// own arena allocation, span re-acquisition (the SPAN RULE — see
 /// WasmtimeModWasmExecutor.cs), and packed-return decoding internally; callers
 /// (ModAbiRunner) never see a wasm pointer or arena. One executor instance per
@@ -79,13 +72,14 @@ internal interface IModWasmExecutor : IDisposable
     /// Call mod_observer(obsId, entity, input) -> CommandBuffer bytes.
     Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input);
 
-    /// Call mod_filter(arg, data) -> bool; false when the guest exports none.
-    bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data);
-
-    /// Call the OPTIONAL second filter slot mod_filter_out(arg, data) -> bool; false
-    /// when the guest exports none. Defaulted so an executor that predates the slot
-    /// (or a test double) needs no edit — it simply never filters on it.
-    bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data) => false;
+    /// Call the OPTIONAL mod_on_packet(dir, data) -> verdict. Pass when the guest
+    /// exports none. For Replace, `replacement` is a slice of executor-owned memory
+    /// valid until the next call on this handle.
+    ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
+    {
+        replacement = default;
+        return ModPacketVerdict.Pass;
+    }
 
     /// Call the OPTIONAL mod_spawned(SpawnedInput) export — no return. Invoked right
     /// after the host applies a CommandBuffer that spawned at least one entity, so the

@@ -7,8 +7,8 @@ using Xunit;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
-// ABI v2 additions: real entity ids back to the guest (mod_spawned), the Changed query
-// term, and the per-system run interval. Drives the internal seams directly (via
+// ABI v2/v3: real entity ids back to the guest (mod_spawned), the Changed query term,
+// the mod_on_packet export. Drives the internal seams directly (via
 // InternalsVisibleTo) — no wasm runtime, no game glue.
 public class ModAbiV2Tests
 {
@@ -33,54 +33,6 @@ public class ModAbiV2Tests
         Assert.False(ModdingPlugin.ShouldSkipIdle(sys, hasQuery: true, anyRows: true));
         Assert.Equal(0, sys.EmptyStreak);
         Assert.False(ModdingPlugin.ShouldSkipIdle(sys, hasQuery: true, anyRows: false));
-    }
-
-    // ── per-system run interval ─────────────────────────────────────────────────
-
-    [Fact]
-    public void Interval_gate_throttles_by_host_time_and_zero_means_every_tick()
-    {
-        var app = new App(ThreadingMode.Single);
-        app.AddResource(new Time());
-
-        using var world = new World();
-        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry(), App = app };
-
-        var throttled = new ModSystemSpec { Name = "throttled", Stage = ModSchedule.Update, IntervalMs = 100 };
-        var everyTick = new ModSystemSpec { Name = "every", Stage = ModSchedule.Update };
-        ctx.SystemsByStage[ModSchedule.Update] = new List<ModSystemSpec> { throttled, everyTick };
-
-        var instance = new CountingInstance();
-        var rt = new ModRuntime { Manifest = new ModManifest(), Instance = instance, Ctx = ctx };
-
-        // t = 0: both run (LastRunTime starts at -inf so the first tick is never gated).
-        ModdingPlugin.RunSystemsForStage(rt, ModSchedule.Update);
-        Assert.Equal(1, instance.Runs["throttled"]);
-        Assert.Equal(1, instance.Runs["every"]);
-
-        // t = 50ms: inside the window — only the ungated system runs.
-        app.GetResourceRef<Time>().Total = 50f;
-        ModdingPlugin.RunSystemsForStage(rt, ModSchedule.Update);
-        Assert.Equal(1, instance.Runs["throttled"]);
-        Assert.Equal(2, instance.Runs["every"]);
-
-        // t = 100ms: window elapsed.
-        app.GetResourceRef<Time>().Total = 100f;
-        ModdingPlugin.RunSystemsForStage(rt, ModSchedule.Update);
-        Assert.Equal(2, instance.Runs["throttled"]);
-        Assert.Equal(3, instance.Runs["every"]);
-    }
-
-    private sealed class CountingInstance : IModInstance
-    {
-        public readonly Dictionary<string, int> Runs = new();
-        public void Setup() { }
-        public void RunSystem(ModSystemSpec sys) =>
-            Runs[sys.Name] = Runs.TryGetValue(sys.Name, out var n) ? n + 1 : 1;
-        public void CallObserver(string export, ulong entity, string json) { }
-        public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data) => false;
-        public void Reload(in ModSource source) { }
-        public void Dispose() { }
     }
 
     // ── Changed query term ──────────────────────────────────────────────────────
@@ -166,6 +118,67 @@ public class ModAbiV2Tests
         var snap = ModdingPlugin.BuildSnapshot(ctx, q, since, out var matched);
         Assert.Equal(1, matched);
         Assert.Equal(a, snap[0]);
+    }
+
+    // A projection: not one column, so the snapshot evaluates it per entity.
+    private sealed class OddX : IModComponent
+    {
+        public bool Has(World world, ulong entity) => world.Has<WitPos>(entity) && world.Get<WitPos>(entity).X % 2 == 1;
+        public void CollectEntities(World world, ref TinyEcs.Collections.PooledList<ulong> into)
+        {
+            var it = world.QueryBuilder().With<WitPos>().Build().Iter();
+            while (it.Next())
+                foreach (var e in it.Entities())
+                    if (Has(world, e.ID))
+                        into.Add(e.ID);
+        }
+        public string GetJson(World world, ulong entity) => "{}";
+        public void SetJson(World world, ulong entity, string json) { }
+        public void Remove(World world, ulong entity) { }
+        public void RegisterInsertObserver(App app, Action<ulong, string> onFire) { }
+        public void RegisterRemoveObserver(App app, Action<ulong, string> onFire) { }
+    }
+
+    [Fact]
+    public void Archetype_snapshot_combines_column_terms_ticks_and_projection_terms()
+    {
+        using var world = new World();
+        var ctx = ChangedCtx(world);
+        ctx.Registry.Register("test/tag", new ModPresence<WitTag>());
+        ctx.Registry.Register("test/odd", new OddX());
+
+        world.Update();
+        var tagged = new ulong[4];
+        for (var i = 0; i < 4; i++)
+        {
+            tagged[i] = world.Entity().ID;
+            world.Set(tagged[i], new WitPos { X = i });
+            world.Set(tagged[i], new WitTag());
+        }
+        var untagged = world.Entity().ID;
+        world.Set(untagged, new WitPos { X = 1 });
+        var since = world.CurrentTick;
+        world.Update();
+        world.Set(tagged[1], new WitPos { X = 5 });   // odd, changed, tagged
+        world.Set(tagged[2], new WitPos { X = 2 });   // even, changed, tagged
+        world.Set(untagged, new WitPos { X = 3 });    // odd, changed, NOT tagged
+
+        // With tag + Changed pos (columns) + a projection term.
+        var q = Query(("test/tag", ModQueryTermKind.With), ("test/pos", ModQueryTermKind.Changed), ("test/odd", ModQueryTermKind.With));
+        var snap = ModdingPlugin.BuildSnapshot(ctx, q, since, out var matched);
+        Assert.Equal(1, matched);
+        Assert.Equal(tagged[1], snap[0]);
+
+        // Without on a column term.
+        var q2 = Query(("test/pos", ModQueryTermKind.Changed), ("test/tag", ModQueryTermKind.Without));
+        snap = ModdingPlugin.BuildSnapshot(ctx, q2, since, out matched);
+        Assert.Equal(1, matched);
+        Assert.Equal(untagged, snap[0]);
+
+        // A required term naming nothing registered matches nothing.
+        var q3 = Query(("test/tag", ModQueryTermKind.With), ("test/nope", ModQueryTermKind.Ref));
+        _ = ModdingPlugin.BuildSnapshot(ctx, q3, 0, out matched);
+        Assert.Equal(0, matched);
     }
 
     [Fact]
@@ -279,27 +292,7 @@ public class ModAbiV2Tests
     }
 
     [Fact]
-    public void SystemDecl_interval_ms_reaches_the_spec()
-    {
-        using var world = new World();
-        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
-        var exec = new ScriptedExecutor
-        {
-            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply
-            {
-                Systems = new List<SystemDecl>
-                {
-                    new() { Id = 0, Name = "slow", Schedule = Schedule.Update, IntervalMs = 500 },
-                },
-            }),
-        };
-
-        new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
-        Assert.Equal(500u, ctx.Systems[0].IntervalMs);
-    }
-
-    [Fact]
-    public void Handshake_stamps_abi_version_2()
+    public void Handshake_stamps_abi_version_3()
     {
         using var world = new World();
         var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
@@ -311,98 +304,49 @@ public class ModAbiV2Tests
         new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
 
         var hs = Handshake.Serializer.Parse(exec.HandshakeBytes!);
-        Assert.Equal(2u, hs.AbiVersion);
+        Assert.Equal(3u, hs.AbiVersion);
     }
 
-    // ── the two filter slots (mod_filter / mod_filter_out) ─────────────────────
+    // ── mod_on_packet through the runner ────────────────────────────────────────
 
     [Fact]
-    public void Filter_slots_are_independent_and_gated_by_their_own_wants_flag()
-    {
-        using var world = new World();
-
-        // Only wants_filter: slot 1 calls through, slot 2 never does.
-        var inOnly = Runner(world, new SetupReply { WantsFilter = true }, out var execIn);
-        execIn.FilterResult = true;
-        execIn.FilterOutResult = true;
-        Assert.True(inOnly.WantsFilter);
-        Assert.False(inOnly.WantsFilterOut);
-        Assert.True(inOnly.TryInvokeBoolExport("in", 0x11, default));
-        Assert.False(inOnly.TryInvokeBoolExportOut("out", 0x02, default));
-        Assert.Equal(1, execIn.FilterCalls);
-        Assert.Equal(0, execIn.FilterOutCalls);
-
-        // Only wants_filter_out: the mirror image.
-        var outOnly = Runner(world, new SetupReply { WantsFilterOut = true }, out var execOut);
-        execOut.FilterResult = true;
-        execOut.FilterOutResult = true;
-        Assert.False(outOnly.WantsFilter);
-        Assert.True(outOnly.WantsFilterOut);
-        Assert.False(outOnly.TryInvokeBoolExport("in", 0x11, default));
-        Assert.True(outOnly.TryInvokeBoolExportOut("out", 0x02, default));
-        Assert.Equal(0, execOut.FilterCalls);
-        Assert.Equal(1, execOut.FilterOutCalls);
-
-        // The arg byte + payload reach the right slot untouched.
-        var both = Runner(world, new SetupReply { WantsFilter = true, WantsFilterOut = true }, out var execBoth);
-        both.TryInvokeBoolExportOut("out", 0x02, new byte[] { 0x02, 0xAB });
-        Assert.Equal(0x02, execBoth.LastOutArg);
-        Assert.Equal(new byte[] { 0x02, 0xAB }, execBoth.LastOutData);
-    }
-
-    [Fact]
-    public void Filter_out_defaults_to_absent_so_an_older_executor_never_filters()
+    public void OnPacket_passes_the_executor_verdict_and_replacement_through()
     {
         using var world = new World();
         var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
-        // ScriptedExecutor does NOT implement CallFilterOut — the interface default does.
         var exec = new ScriptedExecutor
         {
-            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply { WantsFilterOut = true }),
+            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply()),
+            PacketVerdict = ModPacketVerdict.Replace,
+            PacketReplacement = new byte[] { 0x22, 0x01 },
         };
         var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
         runner.Setup();
 
-        Assert.True(runner.WantsFilterOut);
-        Assert.False(runner.TryInvokeBoolExportOut("out", 0x02, default));
+        var verdict = runner.OnPacket(ModPacketDirection.Outgoing, new byte[] { 0x22, 0x00 }, out var replacement);
+
+        Assert.Equal(ModPacketVerdict.Replace, verdict);
+        Assert.Equal(new byte[] { 0x22, 0x01 }, replacement.ToArray());
+        Assert.Equal(ModPacketDirection.Outgoing, exec.LastPacketDir);
+        Assert.Equal(new byte[] { 0x22, 0x00 }, exec.LastPacket);
     }
 
-    private static ModAbiRunner Runner(World world, SetupReply reply, out FilterExecutor executor)
+    [Fact]
+    public void OnPacket_defaults_to_pass_for_an_executor_without_the_export()
     {
+        using var world = new World();
         var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
-        executor = new FilterExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, reply) };
-        var runner = new ModAbiRunner(executor, 0, new CoreModState(), ctx);
-        runner.Setup();
-        return runner;
+        IModWasmExecutor exec = new BareExecutor();
+        Assert.Equal(ModPacketVerdict.Pass, exec.CallOnPacket(0, ModPacketDirection.Incoming, new byte[] { 1 }, out var r));
+        Assert.True(r.IsEmpty);
     }
 
-    // Canned guest that records both filter slots separately.
-    private sealed class FilterExecutor : IModWasmExecutor
+    private sealed class BareExecutor : IModWasmExecutor
     {
-        public byte[]? SetupReplyBytes;
-        public bool FilterResult;
-        public bool FilterOutResult;
-        public int FilterCalls;
-        public int FilterOutCalls;
-        public byte LastOutArg;
-        public byte[] LastOutData = System.Array.Empty<byte>();
-
         public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
-        public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => SetupReplyBytes;
+        public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => default;
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => default;
         public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
-        public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data)
-        {
-            FilterCalls++;
-            return FilterResult;
-        }
-        public bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data)
-        {
-            FilterOutCalls++;
-            LastOutArg = arg;
-            LastOutData = data.ToArray();
-            return FilterOutResult;
-        }
         public void CallSpawned(int handle, ReadOnlySpan<byte> input) { }
         public void Reload(int handle, in ModSource source) { }
         public void DisposeInstance(int handle) { }
@@ -432,7 +376,17 @@ public class ModAbiV2Tests
         }
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => RunReplyBytes;
         public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
-        public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data) => false;
+        public ModPacketVerdict PacketVerdict;
+        public byte[] PacketReplacement = System.Array.Empty<byte>();
+        public ModPacketDirection LastPacketDir;
+        public byte[]? LastPacket;
+        public ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
+        {
+            LastPacketDir = dir;
+            LastPacket = data.ToArray();
+            replacement = PacketReplacement;
+            return PacketVerdict;
+        }
         public void CallSpawned(int handle, ReadOnlySpan<byte> input) => SpawnedBytes = input.ToArray();
         public void Reload(int handle, in ModSource source) { }
         public void DisposeInstance(int handle) { }

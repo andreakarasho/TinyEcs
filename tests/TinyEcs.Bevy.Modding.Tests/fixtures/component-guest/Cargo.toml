@@ -1,0 +1,23 @@
+[package]
+name = "component-guest"
+version = "0.1.0"
+edition = "2021"
+
+# Test fixture for ComponentModBackend: a wasm32-wasip2 component built against
+# abi/tinyecs-mod.wit (world `guest`). Rebuild with ./build.sh; the test loads the
+# checked-in ../component_guest.wasm.
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.57"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
+
+[workspace]

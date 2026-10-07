@@ -1,0 +1,178 @@
+/// The ECS a mod sees: a Bevy-style App you add systems and observers to, and the
+/// system parameters those run with (commands, queries, resources, events).
+///
+/// Everything in the world is named by a type path ("game:ent/graphic") and carried
+/// as JSON text. The host decides which paths exist; a mod only uses them.
+///
+/// This is the contract for BOTH mod targets: wasm32-wasip2 components implement
+/// the `guest` world below directly; wasm32-wasip1 core modules get the same
+/// functions through the SDK.
+package tinyecs:modding@0.1.0;
+
+interface ecs {
+    /// Names a host component, resource or event, e.g. "game:ent/graphic".
+    type type-path = string;
+
+    /// A value as JSON text.
+    type json = string;
+
+    /// An entity id. Valid as soon as `commands.spawn` returns it.
+    type entity = u64;
+
+    /// Components to spawn or insert, as (type path, value) pairs.
+    type bundle = list<tuple<type-path, json>>;
+
+    /// When a system runs, every frame, in this order. `startup` runs once, after the
+    /// mod is loaded.
+    enum schedule {
+        startup,
+        first,
+        pre-update,
+        update,
+        post-update,
+        last,
+    }
+
+    /// One part of a query. `ref` / `mut` / `changed` / `added` read the component
+    /// (row index = their order among these four); `with` / `without` only filter.
+    variant term {
+        /// Read the component.
+        %ref(type-path),
+        /// Read the component; the row may write it back with `row.set`.
+        mut(type-path),
+        /// The entity must have the component.
+        %with(type-path),
+        /// The entity must not have the component.
+        without(type-path),
+        /// Read the component; only entities where it changed since this system's
+        /// last run.
+        changed(type-path),
+        /// Read the component; only entities that got it since this system's last
+        /// run.
+        added(type-path),
+    }
+
+    /// What wakes an observer.
+    variant trigger {
+        /// The component was added to an entity.
+        on-add(type-path),
+        /// The component was removed from an entity (or the entity despawned).
+        on-remove(type-path),
+        /// The event was sent.
+        on-event(type-path),
+    }
+
+    /// A system, declared in `setup`. Name it, list its parameters in order, then add
+    /// it to a schedule (or use it as an observer).
+    resource system {
+        /// The name `run` / `observe` will be called with.
+        constructor(name: string);
+
+        /// Adds a `commands` parameter.
+        add-commands: func();
+
+        /// Adds a `query` parameter.
+        add-query: func(terms: list<term>);
+
+        /// Adds a read-only resource parameter.
+        add-res: func(path: type-path);
+
+        /// Adds a writable resource parameter.
+        add-res-mut: func(path: type-path);
+
+        /// Adds an event reader parameter: the events of that type sent since this
+        /// system's last run.
+        add-events: func(path: type-path);
+
+        /// Runs this system after `other` (same schedule).
+        after: func(other: borrow<system>);
+
+        /// Runs this system before `other` (same schedule).
+        before: func(other: borrow<system>);
+    }
+
+    /// Passed to `setup`: where systems and observers are registered.
+    resource app {
+        add-systems: func(schedule: schedule, systems: list<borrow<system>>);
+
+        /// Runs `system` (via `observe`) each time `trigger` fires.
+        add-observer: func(trigger: trigger, system: borrow<system>);
+    }
+
+    /// Structural changes, applied after the system returns, in order.
+    resource commands {
+        /// Spawns an entity with these components and returns its id.
+        spawn: func(bundle: bundle) -> entity;
+
+        /// Adds or overwrites components.
+        insert: func(entity: entity, bundle: bundle);
+
+        /// Removes components.
+        remove: func(entity: entity, types: list<type-path>);
+
+        /// Despawns the entity and its children.
+        despawn: func(entity: entity);
+
+        /// Sends an event (observers fire, event readers see it next).
+        send: func(event: type-path, value: json);
+    }
+
+    /// The entities matching a query, one row at a time.
+    resource query {
+        next: func() -> option<row>;
+    }
+
+    resource row {
+        entity: func() -> entity;
+
+        /// The value of the n-th reading term (`ref` / `mut` / `changed` / `added`).
+        get: func(index: u8) -> json;
+
+        /// Writes the n-th reading term back. Traps unless that term is `mut`.
+        set: func(index: u8, value: json);
+    }
+
+    /// A resource parameter.
+    resource res {
+        /// None when the host has no such resource right now.
+        get: func() -> option<json>;
+
+        /// Traps unless declared with `add-res-mut`.
+        set: func(value: json);
+    }
+
+    /// An event reader parameter.
+    resource events {
+        read: func() -> list<json>;
+    }
+
+    /// One system parameter, in the order the system declared them.
+    variant param {
+        commands(commands),
+        query(query),
+        res(res),
+        events(events),
+    }
+
+    /// What woke an observer: the entity (0 for events) and the component / event
+    /// value.
+    record trigger-data {
+        entity: entity,
+        value: json,
+    }
+}
+
+/// What a mod implements.
+world guest {
+    import ecs;
+    use ecs.{app, param, trigger-data};
+
+    /// Called once when the mod loads: declare systems and observers here.
+    export setup: func(app: app);
+
+    /// Runs the system named `system` with its parameters.
+    export run: func(system: string, params: list<param>);
+
+    /// Runs the observer system named `system` for one trigger.
+    export observe: func(system: string, trigger: trigger-data, params: list<param>);
+}

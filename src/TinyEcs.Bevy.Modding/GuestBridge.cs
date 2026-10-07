@@ -16,7 +16,38 @@ using TinyEcs.Bevy;
 
 namespace TinyEcs.Bevy.Modding;
 
-internal enum ModParamKind { Commands, Query }
+internal enum ModParamKind { Commands, Query, Res, ResMut, Events }
+
+/// Events of one type sent since the owning system's last run (an Events param). A
+/// host global observer registered when the param is declared pushes into Pending;
+/// each run swaps Pending into Current.
+internal sealed class ModEventBuffer
+{
+    // A guest that never runs (disabled, idle) must not grow this forever.
+    private const int Cap = 1024;
+
+    public readonly List<string> Pending = new();
+    public readonly List<string> Current = new();
+    // Set on reload: the old host observer can't be unregistered, so it keeps firing
+    // into a buffer nobody reads anymore.
+    public bool Dead;
+
+    public void Push(string json)
+    {
+        if (Dead)
+            return;
+        if (Pending.Count == Cap)
+            Pending.RemoveAt(0);
+        Pending.Add(json);
+    }
+
+    public void Swap()
+    {
+        Current.Clear();
+        Current.AddRange(Pending);
+        Pending.Clear();
+    }
+}
 
 internal sealed class ModQuerySpec
 {
@@ -31,6 +62,10 @@ internal sealed class ModQuerySpec
     // dictionary lookups per tick. A registry is built once per App and the wire id
     // space is interned in the mod's Handshake, so both are stable for the spec's life.
     private (IModComponent? Comp, ModQueryTermKind Kind)[]? _termMappers;
+    // BuildSnapshot's archetype-query plan, built on first use (null = no plain term
+    // to drive one: the per-entity path).
+    internal ModSnapshotPlan? SnapshotPlan;
+    internal bool SnapshotPlanBuilt;
     private (IModComponent Comp, ushort TypeId)[]? _rowMappers;
 
     // Parallel to Terms; null Comp = the path names nothing registered (BuildSnapshot
@@ -68,7 +103,9 @@ internal sealed class ModQuerySpec
 internal sealed class ModParam
 {
     public ModParamKind Kind;
-    public ModQuerySpec? Query; // set when Kind == Query
+    public ModQuerySpec? Query;     // set when Kind == Query
+    public string? TypePath;        // set when Kind == Res / ResMut / Events
+    public ModEventBuffer? Events;  // set when Kind == Events
 }
 
 internal sealed class ModSystemSpec
@@ -84,13 +121,6 @@ internal sealed class ModSystemSpec
     // component boundary for a no-row tick costs ~0.3ms/system on the jco
     // (JS-engine-in-wasm) backend.
     public int EmptyStreak;
-    // Minimum host-milliseconds between runs (SystemDecl.interval_ms); 0 = every tick.
-    // Checked BEFORE any query is evaluated — a throttled system costs nothing.
-    public uint IntervalMs;
-    // Time.Total (ms) at the last run; the interval gate's reference point. Starts at
-    // -inf so the FIRST tick always runs (a 0 default would gate the system out at
-    // boot, when Time.Total is still ~0).
-    public float LastRunTime = float.NegativeInfinity;
     // The runner system's own change tick at the last EVALUATION of this mod system
     // (set even when the run was idle-skipped, since the queries were still evaluated).
     // Changed query terms filter on "changed-tick strictly newer than this", wrapping.
@@ -105,6 +135,10 @@ internal sealed class ModObserverSpec
     public string Name = "";                       // guest export to call on fire
     public ModObserverKind Kind;
     public string? TypePath;                        // component/event path for Insert/Remove/Custom
+    // The observer's own system parameters after the trigger (queries / res / events),
+    // evaluated per fire like a system's. Same window bookkeeping as ModSystemSpec.
+    public readonly List<ModParam> Params = new();
+    public uint LastRunWorldTick;
 }
 
 /// Shared glue for one mod instance. Public so a host can configure per-mod
@@ -130,13 +164,18 @@ public sealed class ModHostContext
     public Action<uint>? ConsumeKeyboard;
     // Game-specific wasm host imports, described by the HOST (a ModdingConfig.
     // PerModContext hook) as meaning-free shape descriptors — see ModHostImports.cs.
-    // The generic lib defines only the ECS imports (log / entity_parent /
-    // entity_children / component_get / resource_get) and supplies no game imports
-    // of its own; it never learns their names or semantics. HostImportModule is the
+    // The generic lib defines only `log` here (plus `env.mod_call`, routed to the
+    // ModHostFunctions resource) and supplies no game imports of its own; it never
+    // learns their names or semantics. HostImportModule is the
     // wasm import module BOTH sets are defined under (fixed by the mod wire ABI the
     // host ships, so the host owns the string).
     public string HostImportModule = "host";
     public readonly List<ModHostImport> HostImports = new();
+    // Message ids this mod intercepts (ModPacketChain.Intercept): 256 bits per
+    // direction, Incoming words 0..3, Outgoing 4..7. Cleared on reload.
+    internal readonly ulong[] PacketInterest = new ulong[8];
+    // Every Events-param buffer this mod's setup wired; marked Dead on reload.
+    internal readonly List<ModEventBuffer> EventBuffers = new();
     internal readonly List<ModSystemSpec> Systems = new();
     // Systems bucketed by stage so the per-frame runner does a dict lookup
     // instead of scanning every system and filtering. Populated in AddSystems;
@@ -197,6 +236,7 @@ internal struct SystemImpl
                 // payload) — the guest sees it interleaved with Ref/Mut in declaration
                 // order, exactly like a Ref.
                 case ModQueryTermKind.Changed:
+                case ModQueryTermKind.Added:
                     q.Terms.Add((qf.TypePath, false, qf.Kind));
                     q.Components.Add((qf.TypePath, false));
                     break;
@@ -211,12 +251,28 @@ internal struct SystemImpl
         Spec.Params.Add(new ModParam { Kind = ModParamKind.Query, Query = q });
     }
 
+    public void AddRes(string path, bool mutable)
+        => Spec.Params.Add(new ModParam { Kind = mutable ? ModParamKind.ResMut : ModParamKind.Res, TypePath = path });
+
+    // The buffer is filled by a host global observer on the event, wired here.
+    public void AddEvents(ModHostContext ctx, string path)
+        => Spec.Params.Add(EventsParam(ctx, path));
+
+    internal static ModParam EventsParam(ModHostContext ctx, string path)
+    {
+        var buffer = new ModEventBuffer();
+        if (ctx.App != null && ctx.Registry.TryGetEvent(path, out var ev))
+            ev.RegisterObserver(ctx.App, (_, json) => buffer.Push(json));
+        ctx.EventBuffers.Add(buffer);
+        return new ModParam { Kind = ModParamKind.Events, TypePath = path, Events = buffer };
+    }
+
     public void After(SystemImpl other) => Spec.After.Add(other.Spec.Name);
     public void Before(SystemImpl other) => Spec.Before.Add(other.Spec.Name);
 }
 
 // Internal: the lib tests drive it directly via InternalsVisibleTo (see the csproj).
-internal struct CommandsImpl(ModHostContext ctx)
+internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = null)
 {
     public EntityCommandsImpl SpawnEmpty()
     {
@@ -245,14 +301,22 @@ internal struct CommandsImpl(ModHostContext ctx)
         var id = ent.ID;
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
-                comp.SetJsonUtf8(ctx.World, id, json.Span);
-        return new EntityCommandsImpl(ctx, id);
+                SetUtf8(comp, ctx.World, id, json.Span, resolve);
+        return new EntityCommandsImpl(ctx, id, resolve);
+    }
+
+    internal static void SetUtf8(IModComponent comp, World world, ulong id, ReadOnlySpan<byte> json, ModEntityResolver? resolve)
+    {
+        if (resolve != null)
+            comp.SetJsonUtf8(world, id, json, resolve);
+        else
+            comp.SetJsonUtf8(world, id, json);
     }
 
     public EntityCommandsImpl Entity(EntityImpl entity)
         => new EntityCommandsImpl(ctx, entity.EcsId);
 
-    public EntityCommandsImpl EntityById(ulong id) => new EntityCommandsImpl(ctx, id);
+    public EntityCommandsImpl EntityById(ulong id) => new EntityCommandsImpl(ctx, id, resolve);
 
     // Singleton-resource access by type-path (the "change resource" capability).
     // The calling mod's name rides along: a resource holding per-mod state serves
@@ -292,7 +356,7 @@ internal struct CommandsImpl(ModHostContext ctx)
     }
 }
 
-internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
+internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityResolver? resolve = null)
 {
     public EntityImpl Id() => new EntityImpl(ctx, entity);
 
@@ -317,7 +381,7 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity)
             return;
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
-                comp.SetJsonUtf8(ctx.World, entity, json.Span);
+                CommandsImpl.SetUtf8(comp, ctx.World, entity, json.Span, resolve);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)

@@ -57,26 +57,14 @@ internal interface IModInstance : IDisposable
     /// Call a guest observer callback `export(entity: u64, json: string)`.
     void CallObserver(string export, ulong entity, string json);
 
-    /// Invoke a guest export shaped `export(arg: u8, data: list&lt;u8&gt;) -> bool` if the
-    /// guest exports it; returns false (no call) when it is absent. Meaning-free — the lib
-    /// assigns no semantics; a host names the export and uses it for an inline predicate
-    /// hook it must consult synchronously (outside the per-frame scheduler).
-    bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data);
-
-    /// Whether this mod actually asked for the inline bool export (the core ABI's
-    /// wants_filter handshake bit), so a host can skip installing its hook entirely.
-    /// Defaults to true for a backend that only learns at call time whether the guest
-    /// exports it (Jco probes the export list per call).
-    bool WantsFilter => true;
-
-    /// The SECOND, independent inline bool export (the ABI's mod_filter_out, gated by
-    /// wants_filter_out) — a host that needs two synchronous predicate hooks (e.g. one
-    /// per traffic direction) drives them through the two slots. Defaults to "absent"
-    /// so an implementation that predates the slot needs no edit.
-    bool WantsFilterOut => false;
-
-    /// Slot-2 twin of TryInvokeBoolExport. Same contract; false (no call) when absent.
-    bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data) => false;
+    /// One intercepted message (ModPacketChain): the guest's on-packet verdict. For
+    /// Replace, `replacement` is valid until the next call on this instance. Defaults
+    /// to Pass for a backend without the export.
+    ModPacketVerdict OnPacket(ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
+    {
+        replacement = default;
+        return ModPacketVerdict.Pass;
+    }
 
     /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
     /// caller resets the shared ModHostContext first. Wasmtime instantiates fresh

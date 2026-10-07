@@ -105,6 +105,25 @@ public interface IModComponent
     void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
         => CollectEntities(world, ref into);
 
+    /// `Added` query term (component-model mods): true when the component was ADDED to
+    /// `entity` strictly after `tick`, same wrapping window as ChangedSince. The default
+    /// degrades to presence like ChangedSince's does.
+    bool AddedSince(World world, ulong entity, uint tick) => Has(world, entity);
+
+    /// Archetype-query fast path of the pushed snapshot (ModdingPlugin.BuildSnapshot):
+    /// a plain column-backed mapper adds its term (`with`, or `without`) to `qb` and
+    /// returns true, so the snapshot iterates only the archetypes that match every such
+    /// term. The DEFAULT (false) marks a projection - a mapper whose presence / change
+    /// is not one column - which the snapshot evaluates per entity through Has /
+    /// ChangedSince / AddedSince, as before.
+    bool AddQueryTerm(QueryBuilder qb, bool without) => false;
+
+    /// For a mapper that added a term: the iterator's current archetype's changed
+    /// (`added` = false) or added ticks of this component, in Entities() order. EMPTY =
+    /// tickless (a zero-size tag, a presence-only mapper): its Changed / Added mean
+    /// presence, which the archetype match already proved.
+    Span<uint> ColumnTicks(ref QueryIterator it, bool added) => default;
+
     /// UTF8 half of GetJson/SetJson, for the paths that run per row per tick (the
     /// pushed query snapshot) — a string + a byte[] per component per entity was the
     /// bulk of the modding host's per-tick garbage. DEFAULT implementations bounce off
@@ -116,6 +135,13 @@ public interface IModComponent
     void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
         => SetJson(world, entity, System.Text.Encoding.UTF8.GetString(json));
 
+    /// SetJsonUtf8 from a mod's command buffer: entity FIELDS in the payload may hold a
+    /// placeholder (ModEntityRef.IsPlaceholder: an entity the same buffer spawned,
+    /// known to the guest only by its temp id) — `resolve` maps one to the real id.
+    /// Only mappers with entity fields need to override this.
+    void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json, ModEntityResolver resolve)
+        => SetJsonUtf8(world, entity, json);
+
     public static void WriteUtf8(IBufferWriter<byte> writer, string json)
     {
         if (json.Length == 0)
@@ -125,7 +151,28 @@ public interface IModComponent
     }
 }
 
-public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent where T : struct
+/// Maps a placeholder entity id from a mod's command buffer to the real one (0 when the
+/// placeholder names nothing). Any other id is returned unchanged.
+public delegate ulong ModEntityResolver(ulong id);
+
+/// Rewrites a component's entity fields through `resolve` (see ModComponent's
+/// entityFields) — e.g. `(v, r) => { v.Parent = r(v.Parent); return v; }`.
+public delegate T ModEntityFields<T>(T value, ModEntityResolver resolve);
+
+/// Entity ids a guest writes into component JSON before it knows the real id: an
+/// entity spawned earlier in the same command buffer is `1 << 63 | temp_id`.
+public static class ModEntityRef
+{
+    public const ulong PlaceholderBit = 1UL << 63;
+
+    public static bool IsPlaceholder(ulong id) => (id & PlaceholderBit) != 0;
+
+    public static uint TempId(ulong id) => (uint)(id & 0xFFFF_FFFFUL);
+}
+
+/// `entityFields` (optional) names the component's entity-id fields, so a placeholder a
+/// mod wrote there resolves to the entity it spawned in the same command buffer.
+public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>? entityFields = null) : IModComponent where T : struct
 {
     // ponytail: cached on first use, not in the ctor — the ctor has no World.
     // Built once and reused; Query.Match() re-resolves archetypes lazily.
@@ -187,6 +234,16 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
     public void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
         => world.Set(entity, IsTag ? default : JsonSerializer.Deserialize(json, typeInfo)!);
 
+    public void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json, ModEntityResolver resolve)
+    {
+        if (IsTag || entityFields == null)
+        {
+            SetJsonUtf8(world, entity, json);
+            return;
+        }
+        world.Set(entity, entityFields(JsonSerializer.Deserialize(json, typeInfo)!, resolve));
+    }
+
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
 
     // A TAG has no column, hence no changed-tick — World.GetChangedTick returns 0 for
@@ -196,6 +253,28 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo) : IModComponent wh
         => IsTag
             ? world.Has<T>(entity)
             : world.Has<T>(entity) && ChangeTick.IsNewerThan(world.GetChangedTick<T>(entity), tick, world.CurrentTick);
+
+    public bool AddedSince(World world, ulong entity, uint tick)
+        => IsTag
+            ? world.Has<T>(entity)
+            : world.Has<T>(entity) && ChangeTick.IsNewerThan(world.GetAddedTick<T>(entity), tick, world.CurrentTick);
+
+    public bool AddQueryTerm(QueryBuilder qb, bool without)
+    {
+        if (without)
+            qb.Without<T>();
+        else
+            qb.With<T>();
+        return true;
+    }
+
+    public Span<uint> ColumnTicks(ref QueryIterator it, bool added)
+    {
+        if (IsTag)
+            return default;
+        var i = it.GetColumnIndexOf<T>();
+        return i < 0 ? default : added ? it.GetAddedTicks(i) : it.GetChangedTicks(i);
+    }
 
     public void CollectChangedEntities(World world, uint sinceTick, ref PooledList<ulong> into)
     {
@@ -239,6 +318,15 @@ public sealed class ModPresence<T> : IModComponent where T : struct
     private Query? _query;
 
     public bool Has(World world, ulong entity) => world.Has<T>(entity);
+
+    public bool AddQueryTerm(QueryBuilder qb, bool without)
+    {
+        if (without)
+            qb.Without<T>();
+        else
+            qb.With<T>();
+        return true;
+    }
 
     public void CollectEntities(World world, ref PooledList<ulong> into)
     {

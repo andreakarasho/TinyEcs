@@ -557,6 +557,22 @@ public sealed partial class World
 	}
 
 	/// <summary>
+	/// The tick at which <typeparamref name="T"/> was added to the entity — the column
+	/// tick the <c>Added&lt;T&gt;</c> filter compares. 0 under the same conditions as
+	/// <see cref="GetChangedTick{T}"/>.
+	/// </summary>
+	public uint GetAddedTick<T>(EcsID entity) where T : struct
+	{
+		ref readonly var cmp = ref Component<T>();
+		if (cmp.Size <= 0 || !Exists(entity))
+			return 0;
+
+		ref var record = ref GetRecord(entity);
+		var column = record.Archetype.GetComponentIndex(cmp.ID);
+		return column < 0 ? 0u : record.Archetype.GetAddedTick(column, record.Row);
+	}
+
+	/// <summary>
 	/// Get the name associated to the entity.
 	/// </summary>
 	/// <param name="id"></param>

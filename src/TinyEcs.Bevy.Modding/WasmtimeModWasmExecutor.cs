@@ -70,7 +70,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     private readonly List<Slot?> _slots = new();
 
     // Cached exports (re-resolved on reload); optional ones stay null when absent.
-    private sealed class Slot
+    internal sealed class Slot
     {
         public required Linker Linker;
         public required Store Store;
@@ -85,8 +85,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         public Func<int, int, long> SetupFn = null!;
         public Func<int, int, int, long>? RunFn;
         public Func<int, long, int, int, long>? ObserverFn;
-        public Func<int, int, int, int>? FilterFn;
-        public Func<int, int, int, int>? FilterOutFn;
+        public Func<int, int, int, long>? OnPacketFn;
         public Action<int, int>? SpawnedFn;
 
         // Grow-only copy-out buffer for the guest's packed reply — see CopyPackedOut.
@@ -105,6 +104,8 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         var instance = linker.Instantiate(store, module);
 
         var entry = new Slot { Linker = linker, Store = store, Instance = instance, Name = source.Name, Sink = sink, Imports = imports };
+        // Before CacheExports: the reactor's _initialize may already mod_call.
+        imports.Owner = entry;
         CacheExports(entry);
 
         while (_slots.Count <= slot)
@@ -144,23 +145,23 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         return CopyPackedOut(slot, packed);
     }
 
-    public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data)
-        => CallFilterSlot(_slots[handle]!.FilterFn, handle, arg, data);
-
-    public bool CallFilterOut(int handle, byte arg, ReadOnlySpan<byte> data)
-        => CallFilterSlot(_slots[handle]!.FilterOutFn, handle, arg, data);
-
-    private bool CallFilterSlot(Func<int, int, int, int>? fn, int handle, byte arg, ReadOnlySpan<byte> data)
+    // mod_on_packet(dir, ptr, len) -> i64: 0 pass, 1 block, else len<<32|ptr of the
+    // replacement bytes in the guest arena (copied out into the reply buffer).
+    public ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
     {
-        if (fn == null)
-            return false;
+        replacement = default;
         var slot = _slots[handle]!;
+        if (slot.OnPacketFn == null)
+            return ModPacketVerdict.Pass;
         slot.Store.SetEpochDeadline(CallDeadlineTicks);
-        slot.ArenaReset();
-        var ptr = slot.Alloc(data.Length);
-        if (data.Length > 0)
-            data.CopyTo(slot.Memory.GetSpan(ptr, data.Length)); // SPAN RULE: after alloc
-        return fn(arg, ptr, data.Length) != 0;
+        var ptr = WriteInputToArena(slot, data);
+        var packed = slot.OnPacketFn((int)dir, ptr, data.Length);
+        if (packed == 0)
+            return ModPacketVerdict.Pass;
+        if (packed == 1)
+            return ModPacketVerdict.Block;
+        replacement = CopyPackedOut(slot, (ulong)packed).Span;
+        return replacement.IsEmpty ? ModPacketVerdict.Pass : ModPacketVerdict.Replace;
     }
 
     public void CallSpawned(int handle, ReadOnlySpan<byte> input)
@@ -226,8 +227,7 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         slot.SetupFn = instance.GetFunction<int, int, long>("mod_setup") ?? throw new InvalidOperationException("core mod exports no 'mod_setup'");
         slot.RunFn = instance.GetFunction<int, int, int, long>("mod_run");
         slot.ObserverFn = instance.GetFunction<int, long, int, int, long>("mod_observer");
-        slot.FilterFn = instance.GetFunction<int, int, int, int>("mod_filter");
-        slot.FilterOutFn = instance.GetFunction<int, int, int, int>("mod_filter_out");
+        slot.OnPacketFn = instance.GetFunction<int, int, int, long>("mod_on_packet");
         slot.SpawnedFn = instance.GetAction<int, int>("mod_spawned");
         // WASI reactor init (globals / component ctors) — before any other export.
         instance.GetAction("_initialize")?.Invoke();
@@ -263,9 +263,9 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         return new Memory<byte>(slot.Reply, 0, len);
     }
 
-    // The host imports (see abi/mod-abi.fbs header): mid-run RPCs. The generic ECS
-    // ones route to `sink` (ModAbiBacking); the game-specific ones are host-described
-    // ModHostImport descriptors matched to wasm signatures by Kind. All under the
+    // The host imports (see abi/mod-abi.fbs header): mid-run RPCs. `log` and
+    // `env.mod_call` route to `sink` (ModAbiBacking); any legacy host-described
+    // ModHostImport descriptors are matched to wasm signatures by Kind. All under the
     // host's import module, all resolving THIS mod's own ptr/len against the
     // Wasmtime Caller's memory.
     // Wasmtime-dotnet roots every import callback in a strong GCHandle that is freed only
@@ -277,7 +277,15 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
     {
         public readonly IModImportSink Sink = sink;
         public readonly IReadOnlyList<ModHostImport> Host = host;
+        // The slot whose arena mod_call results are written into (set at Load).
+        public Slot? Owner;
     }
+
+    // The p1 host-function import: env.mod_call(name_ptr, name_len, args_ptr, args_len)
+    // -> i64 (0 = unit, else len<<32|ptr of UTF-8 JSON in the guest arena, valid until
+    // the next arena_reset). An unknown name / malformed args throws -> trap.
+    internal const string ModCallModule = "env";
+    internal const string ModCallName = "mod_call";
 
     private static Imports Get(WeakReference<Imports> weak)
         => weak.TryGetTarget(out var t) ? t : throw new ObjectDisposedException(nameof(Imports));
@@ -287,20 +295,23 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         CallerAction<int, int> log = (caller, ptr, len) => Get(w).Sink.Log(ReadUtf8(caller, ptr, len));
         linker.DefineFunction(module, "log", log);
 
-        CallerFunc<long, long> entityParent = (caller, entity) => (long)Get(w).Sink.EntityParent((ulong)entity);
-        linker.DefineFunction(module, "entity_parent", entityParent);
-
-        CallerFunc<long, int, int, int> entityChildren = (caller, entity, outPtr, cap) =>
-            Get(w).Sink.EntityChildren((ulong)entity, caller.GetMemory("memory")!.GetSpan(outPtr, cap * 8));
-        linker.DefineFunction(module, "entity_children", entityChildren);
-
-        CallerFunc<long, int, int, int, int> componentGet = (caller, entity, typeId, outPtr, cap) =>
-            Get(w).Sink.ComponentGet((ulong)entity, (ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
-        linker.DefineFunction(module, "component_get", componentGet);
-
-        CallerFunc<int, int, int, int> resourceGet = (caller, typeId, outPtr, cap) =>
-            Get(w).Sink.ResourceGet((ushort)typeId, caller.GetMemory("memory")!.GetSpan(outPtr, cap));
-        linker.DefineFunction(module, "resource_get", resourceGet);
+        CallerFunc<int, int, int, int, long> modCall = (caller, namePtr, nameLen, argsPtr, argsLen) =>
+        {
+            var imports = Get(w);
+            var memory = caller.GetMemory("memory")!;
+            // The host body never calls the guest, so these spans stay valid for it.
+            var result = imports.Sink.ModCall(
+                nameLen > 0 ? memory.GetSpan(namePtr, nameLen) : default,
+                argsLen > 0 ? memory.GetSpan(argsPtr, argsLen) : default);
+            if (result.IsEmpty)
+                return 0L;
+            var slot = imports.Owner ?? throw new InvalidOperationException("mod_call before the mod finished loading");
+            var len = result.Length;
+            var ptr = slot.Alloc(len);
+            result.CopyTo(slot.Memory.GetSpan(ptr, len)); // SPAN RULE: after alloc
+            return ((long)len << 32) | (uint)ptr;
+        };
+        linker.DefineFunction(ModCallModule, ModCallName, modCall);
 
         for (var idx = 0; idx < hostImports.Count; idx++)
         {

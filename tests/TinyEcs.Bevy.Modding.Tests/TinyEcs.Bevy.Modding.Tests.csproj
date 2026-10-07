@@ -26,6 +26,12 @@
     <ProjectReference Include="..\..\src\TinyEcs.Bevy.Modding\TinyEcs.Bevy.Modding.csproj" />
   </ItemGroup>
 
+  <!-- Checked-in component-model fixture (ComponentModBackendTests); source + build.sh in
+       fixtures/component-guest. -->
+  <ItemGroup>
+    <None Include="fixtures\component_guest.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest.wasm" />
+  </ItemGroup>
+
   <!-- Upstream Wasmtime native (core-wasm module backend) next to the test output — it
        does not flow via ProjectRef (RID-scoped). Read from the modding lib's output
        (which resolves it from the NuGet cache). Windows x64 only for now; other RIDs

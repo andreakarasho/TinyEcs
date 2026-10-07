@@ -20,20 +20,21 @@ internal sealed class ModAbiRunner : IModInstance
 {
     // Canonical ABI version stamped into every Handshake. Bumped only on a
     // breaking wire change; the guest asserts it matches its compiled schema.
-    internal const uint AbiVersion = 2;
+    internal const uint AbiVersion = 3;
 
     private readonly IModWasmExecutor _executor;
     private readonly int _handle;
     private readonly CoreModState _state;
     private readonly ModHostContext _ctx;
 
-    private bool _wantsFilter;
-    private bool _wantsFilterOut;
-
     // guest system id (SystemDecl.id) keyed by the neutral spec the runner passes back.
     private readonly Dictionary<ModSystemSpec, uint> _sysToId = new();
-    // observer token (ModObserverSpec.Name = obs id string) -> (obs id, value type id).
-    private readonly Dictionary<string, (uint ObsId, ushort TypeId)> _obsByName = new();
+    // observer token (ModObserverSpec.Name = obs id string) -> (obs id, value type id, spec).
+    private readonly Dictionary<string, (uint ObsId, ushort TypeId, ModObserverSpec Spec)> _obsByName = new();
+    // Per-observer param scratch (observers with params), keyed by token.
+    private readonly Dictionary<string, ParamsScratch> _obsScratch = new();
+    // Placeholder-id resolver handed to the command applier (cached delegate).
+    private readonly ModEntityResolver _resolver;
     // SpawnCmd.temp_id -> freshly spawned ecs id, per applied CommandBuffer.
     private readonly Dictionary<uint, ulong> _tempTable = new();
     // Same pairs in SpawnCmd order — the dictionary answers Resolve()'s lookups, this
@@ -50,6 +51,10 @@ internal sealed class ModAbiRunner : IModInstance
     private readonly List<string> _pathScratch = new();
     // Per-system reusable SystemInput object graph — see SysScratch.
     private readonly Dictionary<ModSystemSpec, SysScratch> _sysScratch = new();
+    private readonly Dictionary<ModSystemSpec, string> _profLabels = new();
+    // The guest keeps each Res param's last value (SetupReply.res_unchanged), so an
+    // unchanged one crosses as a flag instead of its bytes.
+    private bool _resUnchanged;
     // Reused ObserverInput graph + its payload buffer (one fire at a time).
     private readonly ModJsonBuffer _obsJson = new();
     private readonly CompValue _obsValue = new() { Encoding = ModAbi.Encoding.Json };
@@ -67,6 +72,7 @@ internal sealed class ModAbiRunner : IModInstance
         _ctx = ctx;
         _obsInput = new ObserverInput { Value = _obsValue };
         _spawnedInput = new SpawnedInput { Spawned = _spawnedLive };
+        _resolver = ResolvePlaceholder;
     }
 
     public void Setup()
@@ -75,6 +81,7 @@ internal sealed class ModAbiRunner : IModInstance
         _state.IdToEntry.Clear();
         _sysToId.Clear();
         _obsByName.Clear();
+        _obsScratch.Clear();
         // Reload replaces every ModSystemSpec (ReloadMod clears ctx.Systems), so the
         // per-spec scratch keyed on the old ones is dead weight.
         _sysScratch.Clear();
@@ -95,9 +102,8 @@ internal sealed class ModAbiRunner : IModInstance
         if (replyBytes.IsEmpty)
             throw new InvalidOperationException("mod_setup returned no SetupReply");
         var reply = SetupReply.Serializer.Parse(replyBytes);
+        _resUnchanged = reply.ResUnchanged;
         TranslateSetup(reply);
-        _wantsFilter = reply.WantsFilter;
-        _wantsFilterOut = reply.WantsFilterOut;
     }
 
     // SetupReply.systems -> ctx.Systems/SystemsByStage (via AppImpl.AddSystems, exactly
@@ -121,12 +127,7 @@ internal sealed class ModAbiRunner : IModInstance
                 var si = new SystemImpl(sd.Name ?? "");
                 if (sd.Params != null)
                     foreach (var pd in sd.Params)
-                    {
-                        if (pd.Kind == ParamKind.Commands)
-                            si.AddCommands();
-                        else
-                            si.AddQuery(BuildTerms(pd.Query, sd.Name ?? "?"));
-                    }
+                        AddParam(si, pd, sd.Name ?? "?");
                 if (sd.After != null)
                     foreach (var aid in sd.After)
                         if (idToName.TryGetValue(aid, out var n)) si.Spec.After.Add(n);
@@ -134,7 +135,6 @@ internal sealed class ModAbiRunner : IModInstance
                     foreach (var bid in sd.Before)
                         if (idToName.TryGetValue(bid, out var n)) si.Spec.Before.Add(n);
 
-                si.Spec.IntervalMs = sd.IntervalMs;
 
                 one[0] = si;
                 appImpl.AddSystems((ModSchedule)(byte)sd.Schedule, sd.CustomStage, one);
@@ -154,10 +154,46 @@ internal sealed class ModAbiRunner : IModInstance
                     _ => null,
                 };
                 var token = od.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                _ctx.Observers.Add(new ModObserverSpec { Name = token, Kind = kind, TypePath = typePath });
-                var valueType = kind is ModObserverKind.Insert or ModObserverKind.Remove ? od.TypeId : (ushort)0xFFFF;
-                _obsByName[token] = (od.Id, valueType);
+                var spec = new ModObserverSpec { Name = token, Kind = kind, TypePath = typePath };
+                if (od.Params != null && od.Params.Count > 0)
+                {
+                    var holder = new SystemImpl(token);
+                    foreach (var pd in od.Params)
+                        AddParam(holder, pd, "observer " + token);
+                    spec.Params.AddRange(holder.Spec.Params);
+                }
+                _ctx.Observers.Add(spec);
+                var valueType = kind is ModObserverKind.Insert or ModObserverKind.Remove ? od.TypeId
+                    : kind == ModObserverKind.Custom && od.EventName != null && _state.PathToId.TryGetValue(od.EventName, out var evId) ? evId
+                    : (ushort)0xFFFF;
+                _obsByName[token] = (od.Id, valueType, spec);
             }
+    }
+
+    // One declared parameter. A Res/ResMut/Events param whose type id names no
+    // registered resource/event is a setup failure (named), like a bad query term.
+    private void AddParam(SystemImpl si, ParamDecl pd, string ownerName)
+    {
+        switch (pd.Kind)
+        {
+            case ParamKind.Commands:
+                si.AddCommands();
+                break;
+            case ParamKind.Query:
+                si.AddQuery(BuildTerms(pd.Query, ownerName));
+                break;
+            case ParamKind.Res:
+            case ParamKind.ResMut:
+                if (!_state.IdToEntry.TryGetValue(pd.TypeId, out var re) || re.Kind != ModRegistryKind.Resource)
+                    throw new InvalidOperationException($"'{ownerName}' declares a resource param with unregistered type id {pd.TypeId}");
+                si.AddRes(re.Path, pd.Kind == ParamKind.ResMut);
+                break;
+            case ParamKind.Events:
+                if (!_state.IdToEntry.TryGetValue(pd.TypeId, out var ee) || ee.Kind != ModRegistryKind.Event)
+                    throw new InvalidOperationException($"'{ownerName}' declares an events param with unregistered type id {pd.TypeId}");
+                si.AddEvents(_ctx, ee.Path);
+                break;
+        }
     }
 
     // A term whose type id names nothing registered (or names a resource/event
@@ -183,63 +219,40 @@ internal sealed class ModAbiRunner : IModInstance
 
     public void RunSystem(ModSystemSpec sys)
     {
-        _snapshotScratch.Clear();
-        var scratch = ScratchFor(sys);
-        var liveQueries = scratch.LiveQueries;
-        liveQueries.Clear();
-        var hasQuery = false;
-        var anyRows = false;
-        var queryIndex = 0;
-
-        for (var pi = 0; pi < sys.Params.Count; pi++)
+        // ModProfiler census (TINYECS_MOD_PROFILE=1): timestamps only when on.
+        var prof = ModProfiler.Enabled;
+        ModProfiler.Stat? stat = null;
+        long t0 = 0;
+        if (prof)
         {
-            var p = sys.Params[pi];
-            if (p.Kind != ModParamKind.Query)
-                continue;
-            hasQuery = true;
-            var q = p.Query!;
-            var snapshot = ModdingPlugin.BuildSnapshot(_ctx, q, sys.LastRunWorldTick, out var matched);
-            _snapshotScratch.Add(snapshot);
-            anyRows |= matched > 0;
-
-            // Resolved once per spec, not per row: mapper + interned wire type id.
-            var mappers = q.RowMappers(_ctx.Registry, _state.PathToId, sys.Name);
-            var param = scratch.Param(queryIndex++, (uint)pi, mappers.Length);
-            var rows = param.LiveRows;
-            rows.Clear();
-
-            for (var r = 0; r < matched; r++)
-            {
-                var entId = snapshot[r];
-                if (!_ctx.World.Exists(entId))
-                    continue;
-                var slot = param.Rent(rows.Count);
-                slot.Row.Entity = entId;
-                for (var ci = 0; ci < mappers.Length; ci++)
-                {
-                    var (comp, typeId) = mappers[ci];
-                    var json = slot.Json[ci];
-                    json.Reset();
-                    comp.GetJsonUtf8(_ctx.World, entId, json);
-                    var cv = slot.Comps[ci];
-                    cv.TypeId = typeId;
-                    cv.Data = json.Written;
-                }
-                rows.Add(slot.Row);
-            }
-            liveQueries.Add(param.Out);
+            ModProfiler.Frame(_ctx.App != null && _ctx.App.HasResource<TinyEcs.Bevy.Time>() ? _ctx.App.GetResource<TinyEcs.Bevy.Time>().Total : 0);
+            if (!_profLabels.TryGetValue(sys, out var label))
+                _profLabels[sys] = label = ModProfiler.Label(sys);
+            stat = ModProfiler.Get(_ctx.Name, label);
+            t0 = ModProfiler.Now();
         }
 
-        // The queries were evaluated above, so the Changed window closes HERE — even
-        // when the guest call is idle-skipped below (the rows were still consumed).
+        _snapshotScratch.Clear();
+        var scratch = ScratchFor(sys);
+        var gated = BuildInputs(sys.Params, sys.LastRunWorldTick, sys.Name, scratch.Params, out var anyRows);
+
+        // The queries were evaluated above, so the Changed/Added window closes HERE -
+        // even when the guest call is idle-skipped below (the rows were still consumed).
         sys.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
 
         try
         {
-            // Idle-skip (same policy as every backend): every query empty this
-            // tick AND last — skip the guest call. The finally still returns snapshots.
-            if (ModdingPlugin.ShouldSkipIdle(sys, hasQuery, anyRows))
+            // Idle-skip (same policy as every backend): every query empty this tick AND
+            // last - skip the guest call. A resource param opts out (no signal to gate on).
+            if (ModdingPlugin.ShouldSkipIdle(sys, gated, anyRows))
+            {
+                if (stat != null)
+                {
+                    stat.Skipped++;
+                    stat.BuildTicks += ModProfiler.Now() - t0;
+                }
                 return;
+            }
 
             var sysId = scratch.SysId;
             var input = scratch.Input;
@@ -247,19 +260,173 @@ internal sealed class ModAbiRunner : IModInstance
             input.Tick = CurrentTick();
             // null, not an empty vector: a Commands-only system's wire shape must not
             // change (the guest distinguishes "no queries" from "an empty one").
-            input.Queries = liveQueries.Count > 0 ? liveQueries : null;
+            input.Queries = scratch.Params.LiveQueries.Count > 0 ? scratch.Params.LiveQueries : null;
+            input.Resources = scratch.Params.LiveResources.Count > 0 ? scratch.Params.LiveResources : null;
+            input.Events = scratch.Params.LiveEvents.Count > 0 ? scratch.Params.LiveEvents : null;
             var len = Serialize(SystemInput.Serializer, input);
-            var reply = _executor.CallRun(_handle, sysId, _writeScratch.AsSpan(0, len));
+            var t1 = prof ? ModProfiler.Now() : 0;
+            Memory<byte> reply;
+            try
+            {
+                reply = _executor.CallRun(_handle, sysId, _writeScratch.AsSpan(0, len));
+            }
+            catch
+            {
+                // The guest may not have taken this run's resource values in: the next
+                // run sends them in full.
+                scratch.Params.ForgetDelivered();
+                throw;
+            }
+            var t2 = prof ? ModProfiler.Now() : 0;
             if (!reply.IsEmpty)
                 ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
             NotifySpawned();
+            if (stat != null)
+            {
+                foreach (var q in scratch.Params.LiveQueries)
+                    stat.Rows += q.Rows?.Count ?? 0;
+                stat.Calls++;
+                stat.BytesIn += len;
+                stat.BytesOut += reply.Length;
+                stat.BuildTicks += t1 - t0;
+                stat.GuestTicks += t2 - t1;
+                stat.ApplyTicks += ModProfiler.Now() - t2;
+            }
         }
         finally
         {
-            foreach (var arr in _snapshotScratch)
-                ArrayPool<ulong>.Shared.Return(arr);
-            _snapshotScratch.Clear();
+            ReturnSnapshots();
         }
+    }
+
+    private void ReturnSnapshots()
+    {
+        foreach (var arr in _snapshotScratch)
+            ArrayPool<ulong>.Shared.Return(arr);
+        _snapshotScratch.Clear();
+    }
+
+    // Evaluates a system's / observer's params into scratch.Live*: query rows, resource
+    // values, the events since the last run. Returns whether the idle-skip may gate on
+    // it (has a query and no resource param); anyRows = some query matched or some
+    // events arrived.
+    private bool BuildInputs(List<ModParam> ps, uint sinceTick, string ownerName, ParamsScratch scratch, out bool anyRows)
+    {
+        scratch.LiveQueries.Clear();
+        scratch.LiveResources.Clear();
+        scratch.LiveEvents.Clear();
+        anyRows = false;
+        var hasQuery = false;
+        var hasRes = false;
+        var queryIndex = 0;
+        var resIndex = 0;
+        var eventsIndex = 0;
+
+        for (var pi = 0; pi < ps.Count; pi++)
+        {
+            var p = ps[pi];
+            switch (p.Kind)
+            {
+                case ModParamKind.Query:
+                {
+                    hasQuery = true;
+                    var q = p.Query!;
+                    var snapshot = ModdingPlugin.BuildSnapshot(_ctx, q, sinceTick, out var matched);
+                    _snapshotScratch.Add(snapshot);
+                    anyRows |= matched > 0;
+
+                    // Resolved once per spec, not per row: mapper + interned wire type id.
+                    var mappers = q.RowMappers(_ctx.Registry, _state.PathToId, ownerName);
+                    var param = scratch.Param(queryIndex++, (uint)pi, mappers.Length);
+                    var rows = param.LiveRows;
+                    rows.Clear();
+
+                    for (var r = 0; r < matched; r++)
+                    {
+                        var entId = snapshot[r];
+                        if (!_ctx.World.Exists(entId))
+                            continue;
+                        var slot = param.Rent(rows.Count);
+                        slot.Row.Entity = entId;
+                        for (var ci = 0; ci < mappers.Length; ci++)
+                        {
+                            var (comp, typeId) = mappers[ci];
+                            var json = slot.Json[ci];
+                            json.Reset();
+                            comp.GetJsonUtf8(_ctx.World, entId, json);
+                            var cv = slot.Comps[ci];
+                            cv.TypeId = typeId;
+                            cv.Data = json.Written;
+                        }
+                        rows.Add(slot.Row);
+                    }
+                    scratch.LiveQueries.Add(param.Out);
+                    break;
+                }
+                case ModParamKind.Res:
+                case ModParamKind.ResMut:
+                {
+                    hasRes = true;
+                    var slot = scratch.Res(resIndex++);
+                    slot.Out.ParamIndex = (uint)pi;
+                    slot.Out.Value = null;
+                    slot.Out.Unchanged = false;
+                    var present = false;
+                    if (_ctx.App != null && _ctx.Registry.TryGetResource(p.TypePath!, out var res))
+                    {
+                        // The calling mod's slice: a per-mod resource serves its own state.
+                        var json = res.GetJsonFor(_ctx.App, _ctx.Name);
+                        if (!string.IsNullOrEmpty(json) && json != "null")
+                        {
+                            present = true;
+                            slot.Json.Reset();
+                            IModComponent.WriteUtf8(slot.Json, json);
+                            slot.Value.TypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
+                            slot.Value.Data = slot.Json.Written;
+                            slot.Out.Value = slot.Value;
+                        }
+                    }
+                    // A guest that keeps each Res param's last value (SetupReply.res_unchanged)
+                    // is told "unchanged" instead of being re-sent the same bytes. Resources
+                    // carry no change ticks, so the signal is a byte compare against what
+                    // this param last delivered.
+                    if (_resUnchanged)
+                    {
+                        if (present && slot.Delivered && slot.WrittenEqualsLast())
+                        {
+                            slot.Out.Value = null;
+                            slot.Out.Unchanged = true;
+                        }
+                        else
+                        {
+                            slot.RememberDelivered(present);
+                        }
+                    }
+                    scratch.LiveResources.Add(slot.Out);
+                    break;
+                }
+                case ModParamKind.Events:
+                {
+                    var buffer = p.Events!;
+                    buffer.Swap();
+                    anyRows |= buffer.Current.Count > 0;
+                    var slot = scratch.Events(eventsIndex++);
+                    slot.Out.ParamIndex = (uint)pi;
+                    var typeId = _state.PathToId.TryGetValue(p.TypePath!, out var etid) ? etid : (ushort)0xFFFF;
+                    slot.Values.Clear();
+                    foreach (var json in buffer.Current)
+                        slot.Values.Add(new CompValue
+                        {
+                            TypeId = typeId,
+                            Encoding = ModAbi.Encoding.Json,
+                            Data = System.Text.Encoding.UTF8.GetBytes(json),
+                        });
+                    scratch.LiveEvents.Add(slot.Out);
+                    break;
+                }
+            }
+        }
+        return hasQuery && !hasRes;
     }
 
     private SysScratch ScratchFor(ModSystemSpec sys)
@@ -278,8 +445,17 @@ internal sealed class ModAbiRunner : IModInstance
     {
         public readonly uint SysId = sysId;
         public readonly SystemInput Input = new();
+        public readonly ParamsScratch Params = new();
+    }
+
+    private sealed class ParamsScratch
+    {
         public readonly List<QueryRows> LiveQueries = new();
+        public readonly List<ResValue> LiveResources = new();
+        public readonly List<EventValues> LiveEvents = new();
         private readonly List<ParamScratch> _params = new();
+        private readonly List<ResScratch> _res = new();
+        private readonly List<EventsScratch> _events = new();
 
         public ParamScratch Param(int index, uint paramIndex, int compCount)
         {
@@ -289,6 +465,59 @@ internal sealed class ModAbiRunner : IModInstance
             p.Out.ParamIndex = paramIndex;
             return p;
         }
+
+        public ResScratch Res(int index)
+        {
+            while (_res.Count <= index)
+                _res.Add(new ResScratch());
+            return _res[index];
+        }
+
+        /// Forget what every Res param delivered: the next run sends full values.
+        public void ForgetDelivered()
+        {
+            foreach (var r in _res)
+                r.Delivered = false;
+        }
+
+        public EventsScratch Events(int index)
+        {
+            while (_events.Count <= index)
+                _events.Add(new EventsScratch());
+            return _events[index];
+        }
+    }
+
+    private sealed class ResScratch
+    {
+        public readonly ResValue Out = new();
+        public readonly CompValue Value = new() { Encoding = ModAbi.Encoding.Json };
+        public readonly ModJsonBuffer Json = new();
+        // The bytes this param last delivered (valid while Delivered).
+        public bool Delivered;
+        private byte[] _last = Array.Empty<byte>();
+        private int _lastLen;
+
+        public bool WrittenEqualsLast() => Json.WrittenSpan.SequenceEqual(_last.AsSpan(0, _lastLen));
+
+        public void RememberDelivered(bool present)
+        {
+            Delivered = present;
+            if (!present)
+                return;
+            var src = Json.WrittenSpan;
+            if (_last.Length < src.Length)
+                _last = new byte[Math.Max(src.Length, _last.Length * 2)];
+            src.CopyTo(_last);
+            _lastLen = src.Length;
+        }
+    }
+
+    private sealed class EventsScratch
+    {
+        public readonly EventValues Out;
+        public readonly List<CompValue> Values = new();
+        public EventsScratch() => Out = new EventValues { Values = Values };
     }
 
     private sealed class ParamScratch
@@ -345,12 +574,58 @@ internal sealed class ModAbiRunner : IModInstance
         _obsInput.Entity = entity;
         _obsValue.TypeId = obs.TypeId;
         _obsValue.Data = _obsJson.Written;
+        _obsInput.Queries = null;
+        _obsInput.Resources = null;
+        _obsInput.Events = null;
 
-        var len = Serialize(ObserverInput.Serializer, _obsInput);
-        var reply = _executor.CallObserver(_handle, obs.ObsId, entity, _writeScratch.AsSpan(0, len));
-        if (!reply.IsEmpty)
-            ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
-        NotifySpawned();
+        _snapshotScratch.Clear();
+        try
+        {
+            // An observer's own params (queries / res / events) are evaluated per fire,
+            // exactly like a system's.
+            var spec = obs.Spec;
+            if (spec.Params.Count > 0)
+            {
+                if (!_obsScratch.TryGetValue(export, out var scratch))
+                    _obsScratch[export] = scratch = new ParamsScratch();
+                BuildInputs(spec.Params, spec.LastRunWorldTick, "observer " + export, scratch, out _);
+                spec.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
+                _obsInput.Queries = scratch.LiveQueries.Count > 0 ? scratch.LiveQueries : null;
+                _obsInput.Resources = scratch.LiveResources.Count > 0 ? scratch.LiveResources : null;
+                _obsInput.Events = scratch.LiveEvents.Count > 0 ? scratch.LiveEvents : null;
+            }
+
+            var len = Serialize(ObserverInput.Serializer, _obsInput);
+            var t1 = ModProfiler.Enabled ? ModProfiler.Now() : 0;
+            Memory<byte> reply;
+            try
+            {
+                reply = _executor.CallObserver(_handle, obs.ObsId, entity, _writeScratch.AsSpan(0, len));
+            }
+            catch
+            {
+                if (_obsScratch.TryGetValue(export, out var failed))
+                    failed.ForgetDelivered();
+                throw;
+            }
+            var t2 = ModProfiler.Enabled ? ModProfiler.Now() : 0;
+            if (!reply.IsEmpty)
+                ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
+            NotifySpawned();
+            if (ModProfiler.Enabled)
+            {
+                var stat = ModProfiler.Get(_ctx.Name, "obs:" + obs.Spec.Kind + ":" + (obs.Spec.TypePath ?? export));
+                stat.Calls++;
+                stat.BytesIn += len;
+                stat.BytesOut += reply.Length;
+                stat.GuestTicks += t2 - t1;
+                stat.ApplyTicks += ModProfiler.Now() - t2;
+            }
+        }
+        finally
+        {
+            ReturnSnapshots();
+        }
     }
 
     // Push the temp-id -> real-ecs-id pairs from the buffer just applied back into the
@@ -378,19 +653,16 @@ internal sealed class ModAbiRunner : IModInstance
         _executor.CallSpawned(_handle, _writeScratch.AsSpan(0, len));
     }
 
-    // The host picks the logical export name; the core backend maps any bool export
-    // onto the mod_filter guest export. Absent export (or the mod didn't ask
-    // to filter via wants_filter) = no call, returns false.
-    public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
-        => _wantsFilter && _executor.CallFilter(_handle, arg, data);
-
-    // Second, independent filter slot (mod_filter_out), gated by wants_filter_out.
-    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
-        => _wantsFilterOut && _executor.CallFilterOut(_handle, arg, data);
-
-    public bool WantsFilter => _wantsFilter;
-
-    public bool WantsFilterOut => _wantsFilterOut;
+    // mod_on_packet; absent export = Pass (the executor checks).
+    public ModPacketVerdict OnPacket(ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
+    {
+        if (!ModProfiler.Enabled)
+            return _executor.CallOnPacket(_handle, dir, packet, out replacement);
+        var t0 = ModProfiler.Now();
+        var verdict = _executor.CallOnPacket(_handle, dir, packet, out replacement);
+        ModProfiler.Packet(_ctx.Name, dir, packet.IsEmpty ? (byte)0 : packet[0], packet.Length, ModProfiler.Now() - t0);
+        return verdict;
+    }
 
     // Re-instantiate from fresh bytes (the executor reuses whatever host-import
     // wiring it built at Load), then re-run setup — ModdingPlugin.ReloadMod has
@@ -438,7 +710,7 @@ internal sealed class ModAbiRunner : IModInstance
         if (cmds == null || cmds.Count == 0)
             return;
 
-        var commands = new CommandsImpl(_ctx);
+        var commands = new CommandsImpl(_ctx, _resolver);
         _tempTable.Clear();
         _tempOrder.Clear();
 
@@ -529,6 +801,12 @@ internal sealed class ModAbiRunner : IModInstance
                 break;
         }
     }
+
+    // A placeholder (1<<63 | temp_id) in a component's entity field -> the entity this
+    // buffer spawned under that temp id (0 if none). Real ids pass through.
+    private ulong ResolvePlaceholder(ulong id)
+        => !ModEntityRef.IsPlaceholder(id) ? id
+            : _tempTable.TryGetValue(ModEntityRef.TempId(id), out var real) ? real : 0UL;
 
     private ulong Resolve(long entityRef)
     {

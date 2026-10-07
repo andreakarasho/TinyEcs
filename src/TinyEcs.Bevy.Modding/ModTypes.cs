@@ -47,6 +47,9 @@ internal enum ModQueryTermKind : byte
     /// only entities whose changed-tick is strictly newer than the system's last run —
     /// the same wrapping (lastRun, thisRun] window as Changed&lt;T&gt; on the host side.
     Changed,
+    /// Read + added-filter: carries the component like Ref, and matches only entities
+    /// that GOT the component since the system's last run (same window as Changed).
+    Added,
 }
 
 /// One query term: a ModQueryTermKind plus the type-path it names. SystemImpl.AddQuery

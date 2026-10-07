@@ -156,6 +156,20 @@ $(_ModAbi)</_DerivedModAbi>
     <PackageReference Include="Wasmtime" Version="44.0.0" GeneratePathProperty="true" />
   </ItemGroup>
 
+  <!-- Component-model (wasm32-wasip2) mod backend, Component/ComponentModBackend.cs: the
+       wasmtime-dotnet fork (external/wasmtime-dotnet, branch component-model). Its
+       assembly (WasmtimeCm.Dotnet) and native (wasmtime-cm.*) are renamed so it loads
+       side by side with the upstream package above, but it keeps the `Wasmtime`
+       namespace — hence the extern alias: inside this lib the fork is only reachable as
+       WasmtimeCm::Wasmtime. Pre-build the fork standalone once (`dotnet build` in its
+       folder) so its native download/extract step has run. Not in any guest flavour. -->
+  <ItemGroup Condition="'$(WasmGuest)' != 'true'">
+    <ProjectReference Include="..\..\external\wasmtime-dotnet\src\Wasmtime\Wasmtime.csproj" Aliases="WasmtimeCm" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(WasmGuest)' == 'true'">
+    <Compile Remove="Component\**" />
+  </ItemGroup>
+
   <!-- Upstream Wasmtime native (core-module runtime). The win-x64 native wasmtime.dll
        does NOT flow through the PackageReference (no RID), so copy it from the NuGet
        cache ($(PkgWasmtime) via GeneratePathProperty) next to this lib's output.

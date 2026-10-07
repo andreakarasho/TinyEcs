@@ -143,15 +143,8 @@ internal sealed class JcoModInstance : IModInstance
     public void CallObserver(string export, ulong entity, string json)
         => _channel.CallObserver(_handle, export, entity, json);
 
-    public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data)
-        => _channel.TryInvokeBoolExport(_handle, export, arg, data);
-
-    // The JS channel resolves a bool export BY NAME, so both slots ride the one
-    // method — the host passes a different logical name for slot 2.
-    public bool WantsFilterOut => true;
-
-    public bool TryInvokeBoolExportOut(string export, byte arg, ReadOnlySpan<byte> data)
-        => _channel.TryInvokeBoolExport(_handle, export, arg, data);
+    // OnPacket: not wired on the Jco path (web mods wait for the core-wasm
+    // migration) — the IModInstance default passes every message.
 
     public void RunSystem(ModSystemSpec sys)
     {

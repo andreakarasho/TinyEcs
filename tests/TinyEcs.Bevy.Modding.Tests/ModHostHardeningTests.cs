@@ -244,47 +244,24 @@ public class ModHostHardeningTests
 
     // ── stale entity ids from the guest ──────────────────────────────────────────
 
-    // The guest holds ids from a PUSHED query snapshot, so an id routinely outlives its
-    // entity (the host right-click-closes a mod window between two ticks). The point
-    // imports used to reach World.Has, which PANICS on a dead id — the trap aborted the
-    // calling guest system on every tick from then on.
+    // env.mod_call through the generic import backing: a registered host function gets
+    // the calling mod's context + the args; an unknown name is a ModCallException
+    // (= guest trap), never a silent zero.
     [Fact]
-    public void Point_imports_on_a_despawned_entity_answer_empty_instead_of_trapping()
+    public void ModCall_routes_to_the_host_function_table_and_unknown_names_trap()
     {
         using var world = new World();
         var app = new App();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
-        var ctx = new ModHostContext { World = world, Registry = reg, Name = "stale", App = app };
+        var fns = new ModHostFunctions();
+        app.AddResource(fns);
+        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry(), Name = "caller", App = app };
+        fns.Add("test:x/y#echo", (mod, args, w) => w.WriteStringValue(mod.Name + ":" + args[0].GetInt32()));
 
-        var state = new CoreModState();
-        state.PathToId["test/flag"] = 0;
-        state.IdToEntry[0] = ("test/flag", ModRegistryKind.Component);
+        var backing = new ModAbiBacking(ctx, new CoreModState(), "caller");
+        var result = backing.ModCall("test:x/y#echo"u8, "[7]"u8).ToArray();
+        Assert.Equal("\"caller:7\"", System.Text.Encoding.UTF8.GetString(result));
 
-        var parent = world.Entity().ID;
-        var child = world.Entity().ID;
-        world.AddChild(parent, child);
-        world.Set(child, new HardFlag { On = true });
-
-        var backing = new ModAbiBacking(ctx, state, "stale");
-        var buf = new byte[256];
-
-        // Control: alive, the component comes back.
-        Assert.True(backing.ComponentGet(child, 0, buf) > 0);
-        Assert.Equal(1, backing.EntityChildren(parent, buf));
-        Assert.Equal(parent, backing.EntityParent(child));
-
-        world.Delete(child);
-        world.Delete(parent);
-
-        Assert.Equal(0, backing.ComponentGet(child, 0, buf));
-        Assert.Equal(0, backing.EntityChildren(parent, buf));
-        Assert.Equal(0UL, backing.EntityParent(child));
-
-        // A never-existing id is the same answer.
-        Assert.Equal(0, backing.ComponentGet(0xDEAD_BEEF, 0, buf));
-        Assert.Equal(0, backing.EntityChildren(0xDEAD_BEEF, buf));
-        Assert.Equal(0UL, backing.EntityParent(0xDEAD_BEEF));
+        Assert.Throws<ModCallException>(() => backing.ModCall("test:x/y#nope"u8, "[]"u8).ToArray());
     }
 
     [Fact]
