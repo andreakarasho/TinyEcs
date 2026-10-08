@@ -338,10 +338,9 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     {
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Res).Obj!;
-        var json = m.ResGet(param);
-        results[0] = json == null
-            ? Cm.ComponentValue.CreateOption(null)
-            : Cm.ComponentValue.CreateOption(Cm.ComponentValue.CreateString(json, externallyOwned: true));
+        results[0] = m.ResGet(param, out var json)
+            ? Cm.ComponentValue.CreateOption(Utf8String(json))
+            : Cm.ComponentValue.CreateOption(null);
     }
 
     private static void ResSet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)

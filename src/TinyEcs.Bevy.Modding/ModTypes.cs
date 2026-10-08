@@ -58,4 +58,13 @@ internal readonly struct ModQueryTerm(ModQueryTermKind kind, string typePath)
 {
     public readonly ModQueryTermKind Kind = kind;
     public readonly string TypePath = typePath;
+
+    /// A Mut term on a read-only component (IModComponent.ReadOnly) fails setup: the
+    /// guest would write it back every time it changed it, and the host would either
+    /// drop the write silently or let a mod overwrite state the engine owns.
+    public static void RejectReadOnlyMut(ModHostContext ctx, string owner, IModComponent comp, string typePath)
+    {
+        if (comp.ReadOnly)
+            throw new InvalidOperationException($"mod '{ctx.Name}': {owner} declares Mut on read-only '{typePath}'");
+    }
 }

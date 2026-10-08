@@ -171,6 +171,8 @@ internal sealed class ComponentSystem
                 "changed" => ModQueryTermKind.Changed,
                 _ => throw new InvalidOperationException($"system '{Spec.Name}': unknown query term '{kind}'"),
             }, path);
+            if (kind == "mut" && ctx.Registry.TryGet(path, out var mutComp))
+                ModQueryTerm.RejectReadOnlyMut(ctx, $"system '{Spec.Name}'", mutComp, path);
             if (kind == "added")
             {
                 if (!ctx.Registry.TryGet(path, out var comp))
@@ -315,7 +317,7 @@ internal sealed class ComponentCommandBuffer
                     case Op.Send:
                     {
                         var (path, off, len) = _items[e.First];
-                        commands.EmitEvent(path, 0, System.Text.Encoding.UTF8.GetString(_payload, off, len));
+                        commands.EmitEvent(path, 0, _payload.AsSpan(off, len));
                         break;
                     }
                 }
@@ -447,12 +449,16 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             comp.SetJsonUtf8(Ctx.World, entity, json);
     }
 
-    internal string? ResGet(ComponentParam p)
+    // The value's UTF8 JSON (valid until the next RowGet/ResGet), or false when absent.
+    internal bool ResGet(ComponentParam p, out ReadOnlySpan<byte> json)
     {
+        json = default;
         if (Ctx.App == null || !Ctx.Registry.TryGetResource(p.Path, out var r))
-            return null;
-        var json = r.GetJsonFor(Ctx.App, Ctx.Name);
-        return json == "null" ? null : json;
+            return false;
+        _json.Reset();
+        r.GetJsonUtf8For(Ctx.App, Ctx.Name, _json);
+        json = _json.WrittenSpan;
+        return !json.SequenceEqual("null"u8);
     }
 
     internal void ResSet(ComponentParam p, ReadOnlySpan<byte> json)
@@ -497,7 +503,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         {
             if (ModdingPlugin.ShouldSkipIdle(spec, hasQuery, anyRows))
                 return;
-            Call(_run, sys, entity: null, json: null);
+            Call(_run, sys, entity: null, json: default);
         }
         finally
         {
@@ -506,6 +512,9 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     }
 
     public void CallObserver(string export, ulong entity, string json)
+        => CallObserver(export, entity, string.IsNullOrEmpty(json) ? default : System.Text.Encoding.UTF8.GetBytes(json));
+
+    public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
     {
         if (!_observers.TryGetValue(export, out var sys))
             return;
@@ -581,7 +590,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     }
 
     // run(system, params) / observe(system, trigger-data, params).
-    private void Call(Cm.ComponentInstanceFunction fn, ComponentSystem sys, ulong? entity, string? json)
+    private void Call(Cm.ComponentInstanceFunction fn, ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> json)
     {
         var prev = Enter();
         var cx = Cm.StoreContext.FromStore(_store);
@@ -592,7 +601,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         {
             var rec = new Cm.RecordBuilder(2, disposeNames: false);
             rec.Set(0, Backend.FieldEntity, Cm.ComponentValue.CreateUInt64(entity.Value));
-            rec.Set(1, Backend.FieldValue, Cm.ComponentValue.CreateString(string.IsNullOrEmpty(json) ? "{}" : json, externallyOwned: false));
+            rec.Set(1, Backend.FieldValue, ComponentModBackend.Utf8String(json.IsEmpty ? "{}"u8 : json));
             args[1] = new Cm.ComponentValue(rec, externallyOwned: false);
         }
         args[argc - 1] = BuildParams(sys, cx);

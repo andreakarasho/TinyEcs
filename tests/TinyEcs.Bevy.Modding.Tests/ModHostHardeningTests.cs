@@ -40,17 +40,17 @@ public class ModHostHardeningTests
             Ctx = ctx,
             Enabled = false,
         };
-        rt.ObserverFires.Enqueue(("obs", 1UL, "{}"));
+        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
         app.GetResource<ModRuntimes>().Runtimes.Add(rt);
 
         app.Update();
 
         Assert.Equal(0, instance.ObserverCalls);
-        Assert.Empty(rt.ObserverFires); // dropped, not buffered until re-enable
+        Assert.Equal(0, rt.ObserverFires.Count); // dropped, not buffered until re-enable
 
         // Control: enabled, the same fire reaches the guest.
         rt.Enabled = true;
-        rt.ObserverFires.Enqueue(("obs", 1UL, "{}"));
+        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
         app.Update();
         Assert.Equal(1, instance.ObserverCalls);
     }
@@ -75,7 +75,7 @@ public class ModHostHardeningTests
             Ctx = ctx,
             Info = info,
         };
-        rt.ObserverFires.Enqueue(("obs", 1UL, "{}"));
+        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
 
         for (var i = 0; i < ModdingPlugin.MaxModFailures - 1; i++)
             ModdingPlugin.RunSystemsForStage(rt, ModSchedule.Update);
@@ -86,7 +86,7 @@ public class ModHostHardeningTests
         Assert.False(rt.Enabled);
         Assert.False(info.Enabled);
         Assert.Equal(ModdingPlugin.MaxModFailures, rt.FailureCount);
-        Assert.Empty(rt.ObserverFires);
+        Assert.Equal(0, rt.ObserverFires.Count);
         Assert.Contains("guest trap", rt.LastError);
         Assert.Contains("guest trap", info.LastError);
     }
@@ -138,6 +138,70 @@ public class ModHostHardeningTests
         Assert.Contains("#1", e.Message);
         Assert.Empty(ctx.Systems); // the mod registered nothing -> the loader skips it
     }
+
+    // ── a Mut term on a read-only component fails setup, naming the path ─────────
+
+    private static SetupReply MutOn(ushort typeId, bool asObserver)
+    {
+        var query = new ParamDecl
+        {
+            Kind = ParamKind.Query,
+            Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Mut, TypeId = typeId } } },
+        };
+        return asObserver
+            ? new SetupReply
+            {
+                Observers = new List<ObserverDecl>
+                {
+                    new() { Id = 7, Kind = ObserverKind.Insert, TypeId = 0, Params = new List<ParamDecl> { query } },
+                },
+            }
+            : new SetupReply
+            {
+                Systems = new List<SystemDecl>
+                {
+                    new() { Id = 0, Name = "writes_flag", Schedule = Schedule.Update, Params = new List<ParamDecl> { query } },
+                },
+            };
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Setup_fails_when_a_mut_term_names_a_read_only_component(bool asObserver)
+    {
+        using var world = new World();
+        var reg = new ModComponentRegistry();
+        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag, readOnly: true));
+        var ctx = new ModHostContext { World = world, Registry = reg, Name = "rwmod" };
+        var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver)) };
+
+        var e = Assert.Throws<InvalidOperationException>(
+            () => new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup());
+        Assert.Contains("mod 'rwmod'", e.Message);
+        Assert.Contains(asObserver ? "observer 7" : "writes_flag", e.Message);
+        Assert.Contains("declares Mut on read-only 'test/flag'", e.Message);
+        Assert.Empty(ctx.Systems);
+        Assert.Empty(ctx.Observers);
+    }
+
+    [Fact]
+    public void A_mut_term_on_a_writable_component_still_sets_up()
+    {
+        using var world = new World();
+        var reg = new ModComponentRegistry();
+        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var ctx = new ModHostContext { World = world, Registry = reg, Name = "rwmod" };
+        var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver: false)) };
+
+        new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
+
+        Assert.Single(ctx.Systems);
+    }
+
+    [Fact]
+    public void Presence_mappers_are_read_only()
+        => Assert.True(((IModComponent)new ModPresence<HardFlag>()).ReadOnly);
 
     // ── one bad command doesn't take the rest of the buffer with it ──────────────
 

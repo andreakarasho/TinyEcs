@@ -354,6 +354,12 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
         if (ctx.Registry.TryGetEvent(name, out var ev))
             ev.Emit(ctx.World, entity, json);
     }
+
+    public void EmitEvent(string name, ulong entity, ReadOnlySpan<byte> json)
+    {
+        if (ctx.Registry.TryGetEvent(name, out var ev))
+            ev.EmitUtf8(ctx.World, entity, json);
+    }
 }
 
 internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityResolver? resolve = null)

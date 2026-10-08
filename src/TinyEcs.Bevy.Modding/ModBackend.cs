@@ -57,6 +57,11 @@ internal interface IModInstance : IDisposable
     /// Call a guest observer callback `export(entity: u64, json: string)`.
     void CallObserver(string export, ulong entity, string json);
 
+    /// UTF8 overload (what FlushObservers calls): `json` is valid for the call only.
+    /// Default bounces off the string one.
+    void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
+        => CallObserver(export, entity, System.Text.Encoding.UTF8.GetString(json));
+
     /// One intercepted message (ModPacketChain): the guest's on-packet verdict. For
     /// Replace, `replacement` is valid until the next call on this instance. Defaults
     /// to Pass for a backend without the export.

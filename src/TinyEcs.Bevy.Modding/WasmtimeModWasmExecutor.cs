@@ -184,6 +184,9 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         try { slot.Store.Dispose(); } catch { /* already torn down */ }
 
         slot.Store = CreateStore(_engine);
+        // The old store's memory is gone; mod_call falls back to the caller's until
+        // CacheExports binds the new one.
+        slot.Memory = null!;
         var module = Compile(slot.Name, source.Bytes!);
         slot.Instance = slot.Linker.Instantiate(slot.Store, module);
         CacheExports(slot);
@@ -298,14 +301,18 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         CallerFunc<int, int, int, int, long> modCall = (caller, namePtr, nameLen, argsPtr, argsLen) =>
         {
             var imports = Get(w);
-            var memory = caller.GetMemory("memory")!;
+            var slot = imports.Owner;
+            // The slot's cached export (set before _initialize can call in): a
+            // Caller.GetMemory per call is a fresh Memory wrapper on the heap.
+            var memory = slot?.Memory ?? caller.GetMemory("memory")!;
             // The host body never calls the guest, so these spans stay valid for it.
             var result = imports.Sink.ModCall(
                 nameLen > 0 ? memory.GetSpan(namePtr, nameLen) : default,
                 argsLen > 0 ? memory.GetSpan(argsPtr, argsLen) : default);
             if (result.IsEmpty)
                 return 0L;
-            var slot = imports.Owner ?? throw new InvalidOperationException("mod_call before the mod finished loading");
+            if (slot == null)
+                throw new InvalidOperationException("mod_call before the mod finished loading");
             var len = result.Length;
             var ptr = slot.Alloc(len);
             result.CopyTo(slot.Memory.GetSpan(ptr, len)); // SPAN RULE: after alloc

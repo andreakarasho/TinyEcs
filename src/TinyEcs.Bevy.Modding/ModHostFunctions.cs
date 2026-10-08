@@ -88,18 +88,24 @@ public sealed class ModHostFunctions
         return result.IsEmpty ? null : Encoding.UTF8.GetString(result);
     }
 
+    // Shared, never disposed: the argument list of every argument-less call.
+    private static readonly JsonDocument EmptyArgs = JsonDocument.Parse("[]");
+
     private ReadOnlySpan<byte> Invoke(ModHostContext mod, scoped ReadOnlySpan<char> name, ModHostFn fn, scoped ReadOnlySpan<byte> argsUtf8)
     {
+        if (argsUtf8.IsEmpty)
+        {
+            Run(mod, name, fn, EmptyArgs.RootElement);
+            return _out.WrittenSpan;
+        }
+
+        // A JsonDocument per call is the price of the JsonElement body contract; its
+        // copy of the args and its index are ArrayPool-rented and returned on Dispose.
         JsonDocument doc;
         try
         {
-            if (argsUtf8.IsEmpty)
-                doc = JsonDocument.Parse("[]");
-            else
-            {
-                var reader = new Utf8JsonReader(argsUtf8);
-                doc = JsonDocument.ParseValue(ref reader);
-            }
+            var reader = new Utf8JsonReader(argsUtf8);
+            doc = JsonDocument.ParseValue(ref reader);
         }
         catch (JsonException e)
         {
@@ -107,29 +113,32 @@ public sealed class ModHostFunctions
         }
 
         using (doc)
-        {
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
-                throw new ModCallException($"mod_call {name.ToString()}: args must be a JSON array");
-
-            _out.ResetWrittenCount();
-            _writer.Reset(_out);
-            try
-            {
-                fn(mod, doc.RootElement, _writer);
-                _writer.Flush();
-            }
-            catch (ModCallException)
-            {
-                throw;
-            }
-            // Reading a parameter of the wrong JSON kind / a missing index / a bad enum
-            // name surfaces here: that is a malformed call, so it traps the guest.
-            catch (Exception e) when (e is InvalidOperationException or FormatException
-                                          or IndexOutOfRangeException or ArgumentException or KeyNotFoundException)
-            {
-                throw new ModCallException($"mod_call {name.ToString()}: bad args ({e.Message})", e);
-            }
-        }
+            Run(mod, name, fn, doc.RootElement);
         return _out.WrittenSpan;
+    }
+
+    private void Run(ModHostContext mod, scoped ReadOnlySpan<char> name, ModHostFn fn, JsonElement args)
+    {
+        if (args.ValueKind != JsonValueKind.Array)
+            throw new ModCallException($"mod_call {name.ToString()}: args must be a JSON array");
+
+        _out.ResetWrittenCount();
+        _writer.Reset(_out);
+        try
+        {
+            fn(mod, args, _writer);
+            _writer.Flush();
+        }
+        catch (ModCallException)
+        {
+            throw;
+        }
+        // Reading a parameter of the wrong JSON kind / a missing index / a bad enum
+        // name surfaces here: that is a malformed call, so it traps the guest.
+        catch (Exception e) when (e is InvalidOperationException or FormatException
+                                      or IndexOutOfRangeException or ArgumentException or KeyNotFoundException)
+        {
+            throw new ModCallException($"mod_call {name.ToString()}: bad args ({e.Message})", e);
+        }
     }
 }

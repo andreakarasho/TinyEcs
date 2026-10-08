@@ -48,10 +48,10 @@ public sealed class ComponentModBackendTests : IDisposable
         try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
     }
 
-    private App NewApp()
+    private App NewApp(bool posReadOnly = false)
     {
         var reg = new ModComponentRegistry();
-        reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos));
+        reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos, readOnly: posReadOnly));
         reg.Register("test/vel", new ModComponent<CmVel>(CmJsonContext.Default.CmVel));
         reg.Register("test/frozen", new ModComponent<CmFrozen>(CmJsonContext.Default.CmFrozen));
         reg.Register("test/tag", new ModComponent<CmTag>(CmJsonContext.Default.CmTag));
@@ -131,6 +131,32 @@ public sealed class ComponentModBackendTests : IDisposable
         var info = Assert.Single(app.GetResource<ModControl>().Mods);
         Assert.True(info.Enabled, info.LastError);
         Assert.Equal("", info.LastError);
+    }
+
+    // The guest's `tick` system declares `mut test/pos`: with test/pos read-only the
+    // mod must not load at all (not load and silently drop its writes).
+    [Fact]
+    public void A_mut_term_on_a_read_only_component_fails_the_load()
+    {
+        var app = NewApp(posReadOnly: true);
+        app.RunStartup();
+
+        Assert.Empty(app.GetResource<ModRuntimes>().Runtimes);
+        Assert.Empty(app.GetResource<ModControl>().Mods);
+    }
+
+    [Fact]
+    public void A_mut_term_on_a_read_only_component_is_rejected_by_name()
+    {
+        var reg = new ModComponentRegistry();
+        reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos, readOnly: true));
+        var ctx = new ModHostContext { World = new World(), Registry = reg, Name = "cm" };
+        var sys = new ComponentSystem("tick");
+
+        var e = Assert.Throws<InvalidOperationException>(() => sys.AddQuery(ctx, [("mut", "test/pos")]));
+        Assert.Equal("mod 'cm': system 'tick' declares Mut on read-only 'test/pos'", e.Message);
+
+        sys.AddQuery(ctx, [("ref", "test/pos")]); // reading it is fine
     }
 
     [Fact]

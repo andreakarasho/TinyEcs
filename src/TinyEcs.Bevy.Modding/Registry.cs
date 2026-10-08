@@ -63,6 +63,72 @@ internal static class ModJsonWriter
     }
 }
 
+/// An observer fire carrying the component / event value as UTF8 JSON. The span is
+/// valid only for the duration of the call — a consumer that keeps it copies it.
+public delegate void ModJsonFire(ulong entity, ReadOnlySpan<byte> json);
+
+/// UTF8 JSON helpers for mapper implementations on the per-tick read paths (query
+/// rows, resource params): serialize straight into the caller's buffer through a
+/// reused writer instead of a string per value.
+public static class ModJson
+{
+    /// The absent-value payload ("null").
+    public static ReadOnlySpan<byte> Null => "null"u8;
+
+    public static void Write<T>(IBufferWriter<byte> writer, in T value, JsonTypeInfo<T> typeInfo)
+        => JsonSerializer.Serialize(ModJsonWriter.For(writer), value, typeInfo);
+
+    public static void WriteNull(IBufferWriter<byte> writer)
+    {
+        "null"u8.CopyTo(writer.GetSpan(4));
+        writer.Advance(4);
+    }
+
+    /// A tag's payload ("{}").
+    public static void WriteEmptyObject(IBufferWriter<byte> writer)
+    {
+        "{}"u8.CopyTo(writer.GetSpan(2));
+        writer.Advance(2);
+    }
+
+    // The per-fire serialization target of the UTF8 observer paths (thread-static like
+    // the writer: a fire's consumer copies the span before anything can fire again).
+    [ThreadStatic] private static ModJsonBuffer? _fireScratch;
+
+    public static void Fire<T>(ModJsonFire onFire, ulong entity, in T value, JsonTypeInfo<T> typeInfo)
+    {
+        var buf = _fireScratch ??= new ModJsonBuffer();
+        buf.Reset();
+        Write(buf, value, typeInfo);
+        onFire(entity, buf.WrittenSpan);
+    }
+
+    /// Bridges a string-producing mapper onto a UTF8 sink: encoded on the stack when
+    /// small, through ArrayPool otherwise.
+    public static void FireString(ModJsonFire onFire, ulong entity, string json)
+    {
+        var max = System.Text.Encoding.UTF8.GetMaxByteCount(json.Length);
+        if (max <= 512)
+        {
+            Span<byte> stack = stackalloc byte[512];
+            onFire(entity, stack[..System.Text.Encoding.UTF8.GetBytes(json, stack)]);
+            return;
+        }
+        var rented = ArrayPool<byte>.Shared.Rent(max);
+        try
+        {
+            onFire(entity, rented.AsSpan(0, System.Text.Encoding.UTF8.GetBytes(json, rented)));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// Absent per the resource contract: nothing written, or "null".
+    public static bool IsAbsent(ReadOnlySpan<byte> json) => json.IsEmpty || json.SequenceEqual("null"u8);
+}
+
 /// One registered component type, keyed by WIT type-path. All ECS access is
 /// through the closed generic so there is no runtime reflection.
 public interface IModComponent
@@ -87,6 +153,14 @@ public interface IModComponent
 
     void RegisterRemoveObserver(App app, Func<bool> wanted, Action<ulong, string> onFire)
         => RegisterRemoveObserver(app, onFire);
+
+    /// UTF8 variants (what the plugin wires): no string per fire. DEFAULT implementations
+    /// bounce off the string overloads, so a hand-written mapper behaves unchanged.
+    void RegisterInsertObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => RegisterInsertObserver(app, wanted, (e, json) => ModJson.FireString(onFire, e, json));
+
+    void RegisterRemoveObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => RegisterRemoveObserver(app, wanted, (e, json) => ModJson.FireString(onFire, e, json));
 
     // Change detection for the `Changed` query term. DEFAULT implementations degrade to
     // presence, so a host's hand-written IModComponent mapper (game registries define
@@ -142,6 +216,11 @@ public interface IModComponent
     void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json, ModEntityResolver resolve)
         => SetJsonUtf8(world, entity, json);
 
+    /// The host owns this component: a mod may read it but not declare it writable (a
+    /// `Mut` query term), which fails the mod's setup with the path named. DEFAULT false,
+    /// so a host's hand-written mapper stays writable unless it says otherwise.
+    bool ReadOnly => false;
+
     public static void WriteUtf8(IBufferWriter<byte> writer, string json)
     {
         if (json.Length == 0)
@@ -172,8 +251,11 @@ public static class ModEntityRef
 
 /// `entityFields` (optional) names the component's entity-id fields, so a placeholder a
 /// mod wrote there resolves to the entity it spawned in the same command buffer.
-public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>? entityFields = null) : IModComponent where T : struct
+/// `readOnly` marks a component the host owns (see IModComponent.ReadOnly).
+public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>? entityFields = null, bool readOnly = false) : IModComponent where T : struct
 {
+    public bool ReadOnly => readOnly;
+
     // ponytail: cached on first use, not in the ctor — the ctor has no World.
     // Built once and reused; Query.Match() re-resolves archetypes lazily.
     // Single-world assumption (one registry per App/World).
@@ -226,7 +308,7 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>
     public void GetJsonUtf8(World world, ulong entity, IBufferWriter<byte> writer)
     {
         if (IsTag)
-            IModComponent.WriteUtf8(writer, "{}");
+            ModJson.WriteEmptyObject(writer);
         else
             JsonSerializer.Serialize(ModJsonWriter.For(writer), world.Get<T>(entity), typeInfo);
     }
@@ -306,6 +388,20 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>
             if (wanted())
                 onFire(t.EntityId, JsonSerializer.Serialize(t.Component, typeInfo));
         });
+
+    public void RegisterInsertObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => app.AddObserver<OnInsert<T>>(t =>
+        {
+            if (wanted())
+                ModJson.Fire(onFire, t.EntityId, t.Component, typeInfo);
+        });
+
+    public void RegisterRemoveObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => app.AddObserver<OnRemove<T>>(t =>
+        {
+            if (wanted())
+                ModJson.Fire(onFire, t.EntityId, t.Component, typeInfo);
+        });
 }
 
 /// Presence-only component exposure: a mod queries `with <path>` to FIND the entity
@@ -316,6 +412,8 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>
 public sealed class ModPresence<T> : IModComponent where T : struct
 {
     private Query? _query;
+
+    public bool ReadOnly => true;
 
     public bool Has(World world, ulong entity) => world.Has<T>(entity);
 
@@ -340,7 +438,7 @@ public sealed class ModPresence<T> : IModComponent where T : struct
     public string GetJson(World world, ulong entity) => "{}";
     public void SetJson(World world, ulong entity, string json) { }
     public void GetJsonUtf8(World world, ulong entity, IBufferWriter<byte> writer)
-        => IModComponent.WriteUtf8(writer, "{}");
+        => ModJson.WriteEmptyObject(writer);
     public void SetJsonUtf8(World world, ulong entity, ReadOnlySpan<byte> json) { }
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
 
@@ -380,6 +478,13 @@ public interface IModResource
     // deserialize straight off the bytes and routing through the string overload would
     // give that up for every whole-resource mapper. The bridge calls the UTF8 path.
     string GetJsonFor(App app, string modName) => GetJson(app);
+
+    /// UTF8 half of GetJsonFor, for the per-tick resource-param read: write the value
+    /// (or "null" when absent) into `writer`. The default bounces off GetJsonFor, so a
+    /// hand-written mapper (whole or per-mod) behaves unchanged; a mapper overriding
+    /// this must honour `modName` itself if it serves per-mod slices.
+    void GetJsonUtf8For(App app, string modName, IBufferWriter<byte> writer)
+        => IModComponent.WriteUtf8(writer, GetJsonFor(app, modName));
     void SetJsonFrom(App app, string json, string modName) => SetJson(app, json);
     void SetJsonUtf8From(App app, ReadOnlySpan<byte> json, string modName)
         => SetJsonUtf8(app, json);
@@ -400,6 +505,14 @@ public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = fal
 
     public string GetJson(App app)
         => app.HasResource<T>() ? JsonSerializer.Serialize(app.GetResource<T>(), typeInfo) : "null";
+
+    public void GetJsonUtf8For(App app, string modName, IBufferWriter<byte> writer)
+    {
+        if (app.HasResource<T>())
+            ModJson.Write(writer, app.GetResource<T>(), typeInfo);
+        else
+            ModJson.WriteNull(writer);
+    }
 
     public void SetJson(App app, string json)
     {
@@ -436,6 +549,16 @@ public interface IModEvent
 {
     void RegisterObserver(App app, Action<ulong, string> onFire);
     void Emit(World world, ulong entity, string json);
+
+    /// UTF8 variant of RegisterObserver; `wanted` is asked before the value is
+    /// serialized. Default bounces off the string one.
+    void RegisterObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => RegisterObserver(app, (e, json) => { if (wanted()) ModJson.FireString(onFire, e, json); });
+
+    /// UTF8 half of Emit (a guest's command buffer carries the payload as bytes).
+    /// Default bounces off the string overload so a hand-written mapper compiles unchanged.
+    void EmitUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
+        => Emit(world, entity, System.Text.Encoding.UTF8.GetString(json));
 }
 
 public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent where T : struct
@@ -443,7 +566,17 @@ public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent where T : 
     public void RegisterObserver(App app, Action<ulong, string> onFire)
         => app.AddObserver<On<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Event, typeInfo)));
 
+    public void RegisterObserverUtf8(App app, Func<bool> wanted, ModJsonFire onFire)
+        => app.AddObserver<On<T>>(t =>
+        {
+            if (wanted())
+                ModJson.Fire(onFire, t.EntityId, t.Event, typeInfo);
+        });
+
     public void Emit(World world, ulong entity, string json)
+        => world.EmitTrigger(entity, JsonSerializer.Deserialize(json, typeInfo)!);
+
+    public void EmitUtf8(World world, ulong entity, ReadOnlySpan<byte> json)
         => world.EmitTrigger(entity, JsonSerializer.Deserialize(json, typeInfo)!);
 }
 

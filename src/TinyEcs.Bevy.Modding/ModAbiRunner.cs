@@ -209,9 +209,12 @@ internal sealed class ModAbiRunner : IModInstance
         for (var i = 0; i < q.Terms.Count; i++)
         {
             var t = q.Terms[i];
-            if (!_state.IdToEntry.TryGetValue(t.TypeId, out var e) || !_ctx.Registry.TryGet(e.Path, out _))
+            if (!_state.IdToEntry.TryGetValue(t.TypeId, out var e) || !_ctx.Registry.TryGet(e.Path, out var comp))
                 throw new InvalidOperationException(
                     $"system '{systemName}' query term #{i} names unregistered component type id {t.TypeId}");
+            if (t.Kind == QueryTermKind.Mut)
+                ModQueryTerm.RejectReadOnlyMut(_ctx,
+                    systemName.StartsWith("observer ", StringComparison.Ordinal) ? systemName : $"system '{systemName}'", comp, e.Path);
             terms[i] = new ModQueryTerm((ModQueryTermKind)(byte)t.Kind, e.Path);
         }
         return terms;
@@ -279,7 +282,7 @@ internal sealed class ModAbiRunner : IModInstance
             }
             var t2 = prof ? ModProfiler.Now() : 0;
             if (!reply.IsEmpty)
-                ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
+                ApplyCommandBuffer(ParseCommands(reply));
             NotifySpawned();
             if (stat != null)
             {
@@ -375,12 +378,11 @@ internal sealed class ModAbiRunner : IModInstance
                     if (_ctx.App != null && _ctx.Registry.TryGetResource(p.TypePath!, out var res))
                     {
                         // The calling mod's slice: a per-mod resource serves its own state.
-                        var json = res.GetJsonFor(_ctx.App, _ctx.Name);
-                        if (!string.IsNullOrEmpty(json) && json != "null")
+                        slot.Json.Reset();
+                        res.GetJsonUtf8For(_ctx.App, _ctx.Name, slot.Json);
+                        if (!ModJson.IsAbsent(slot.Json.WrittenSpan))
                         {
                             present = true;
-                            slot.Json.Reset();
-                            IModComponent.WriteUtf8(slot.Json, json);
                             slot.Value.TypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
                             slot.Value.Data = slot.Json.Written;
                             slot.Out.Value = slot.Value;
@@ -415,12 +417,7 @@ internal sealed class ModAbiRunner : IModInstance
                     var typeId = _state.PathToId.TryGetValue(p.TypePath!, out var etid) ? etid : (ushort)0xFFFF;
                     slot.Values.Clear();
                     foreach (var json in buffer.Current)
-                        slot.Values.Add(new CompValue
-                        {
-                            TypeId = typeId,
-                            Encoding = ModAbi.Encoding.Json,
-                            Data = System.Text.Encoding.UTF8.GetBytes(json),
-                        });
+                        slot.Values.Add(slot.Rent(slot.Values.Count, typeId, json));
                     scratch.LiveEvents.Add(slot.Out);
                     break;
                 }
@@ -450,6 +447,8 @@ internal sealed class ModAbiRunner : IModInstance
 
     private sealed class ParamsScratch
     {
+        // Diagnostic owner name (an observer's, built once instead of per fire).
+        public string Label = "";
         public readonly List<QueryRows> LiveQueries = new();
         public readonly List<ResValue> LiveResources = new();
         public readonly List<EventValues> LiveEvents = new();
@@ -517,7 +516,22 @@ internal sealed class ModAbiRunner : IModInstance
     {
         public readonly EventValues Out;
         public readonly List<CompValue> Values = new();
+        // Grow-only per-index CompValue + its own UTF8 buffer (see ModJsonBuffer: a
+        // shared arena would relocate under the Memory slices already handed out).
+        private readonly List<(CompValue Value, ModJsonBuffer Json)> _pool = new();
         public EventsScratch() => Out = new EventValues { Values = Values };
+
+        public CompValue Rent(int index, ushort typeId, string json)
+        {
+            while (_pool.Count <= index)
+                _pool.Add((new CompValue { Encoding = ModAbi.Encoding.Json }, new ModJsonBuffer()));
+            var (cv, buf) = _pool[index];
+            buf.Reset();
+            IModComponent.WriteUtf8(buf, json);
+            cv.TypeId = typeId;
+            cv.Data = buf.Written;
+            return cv;
+        }
     }
 
     private sealed class ParamScratch
@@ -566,10 +580,29 @@ internal sealed class ModAbiRunner : IModInstance
     {
         if (!_obsByName.TryGetValue(export, out var obs))
             return; // unknown observer token — no-op
-
         _obsJson.Reset();
         if (!string.IsNullOrEmpty(json))
             IModComponent.WriteUtf8(_obsJson, json);
+        CallObserverBuffered(export, entity, obs);
+    }
+
+    public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
+    {
+        if (!_obsByName.TryGetValue(export, out var obs))
+            return; // unknown observer token — no-op
+        _obsJson.Reset();
+        if (!json.IsEmpty)
+        {
+            json.CopyTo(_obsJson.GetSpan(json.Length));
+            _obsJson.Advance(json.Length);
+        }
+        CallObserverBuffered(export, entity, obs);
+    }
+
+    // The payload is already in _obsJson (copied out of the caller's span BEFORE the
+    // guest call, which may enqueue further fires into the arena it points at).
+    private void CallObserverBuffered(string export, ulong entity, (uint ObsId, ushort TypeId, ModObserverSpec Spec) obs)
+    {
         _obsInput.ObsId = obs.ObsId;
         _obsInput.Entity = entity;
         _obsValue.TypeId = obs.TypeId;
@@ -587,8 +620,8 @@ internal sealed class ModAbiRunner : IModInstance
             if (spec.Params.Count > 0)
             {
                 if (!_obsScratch.TryGetValue(export, out var scratch))
-                    _obsScratch[export] = scratch = new ParamsScratch();
-                BuildInputs(spec.Params, spec.LastRunWorldTick, "observer " + export, scratch, out _);
+                    _obsScratch[export] = scratch = new ParamsScratch { Label = "observer " + export };
+                BuildInputs(spec.Params, spec.LastRunWorldTick, scratch.Label, scratch, out _);
                 spec.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
                 _obsInput.Queries = scratch.LiveQueries.Count > 0 ? scratch.LiveQueries : null;
                 _obsInput.Resources = scratch.LiveResources.Count > 0 ? scratch.LiveResources : null;
@@ -610,7 +643,7 @@ internal sealed class ModAbiRunner : IModInstance
             }
             var t2 = ModProfiler.Enabled ? ModProfiler.Now() : 0;
             if (!reply.IsEmpty)
-                ApplyCommandBuffer(CommandBuffer.Serializer.Parse(reply));
+                ApplyCommandBuffer(ParseCommands(reply));
             NotifySpawned();
             if (ModProfiler.Enabled)
             {
@@ -701,6 +734,21 @@ internal sealed class ModAbiRunner : IModInstance
     }
 
     // ── CommandBuffer applier ─────────────────────────────────────────────────
+
+    // The reply is parsed LAZILY (payloads stay slices of the buffer; greedy parsing
+    // copied every component payload into a fresh byte[]) out of a runner-owned copy:
+    // the executor's reply buffer is only valid until its next call on this handle, and
+    // applying a command can re-enter it (an emitted action sends a packet -> the
+    // packet chain -> this mod's on-packet export) while the walk is still reading.
+    private byte[] _replyCopy = new byte[1024];
+
+    private CommandBuffer ParseCommands(Memory<byte> reply)
+    {
+        if (_replyCopy.Length < reply.Length)
+            _replyCopy = new byte[Math.Max(_replyCopy.Length * 2, reply.Length)];
+        reply.Span.CopyTo(_replyCopy);
+        return CommandBuffer.Serializer.Parse(_replyCopy.AsMemory(0, reply.Length), FlatBufferDeserializationOption.Lazy);
+    }
     // Walks the cmds in order through the neutral GuestBridge Impl structs. Entity
     // refs are int64: >=0 real ecs id, <0 temp ref (index = -(v)-1 into the temp-id
     // table established by SpawnCmd.temp_id entries of THIS buffer).
@@ -789,8 +837,7 @@ internal sealed class ModAbiRunner : IModInstance
             case Cmd.ItemKind.EmitEventCmd:
             {
                 var ee = cmd.EmitEventCmd;
-                commands.EmitEvent(ee.EventName ?? string.Empty, ee.Entity,
-                    System.Text.Encoding.UTF8.GetString(Utf8(ee.Data).Span));
+                commands.EmitEvent(ee.EventName ?? string.Empty, ee.Entity, Utf8(ee.Data).Span);
                 break;
             }
             case Cmd.ItemKind.ConsumeMouseCmd:
@@ -822,25 +869,27 @@ internal sealed class ModAbiRunner : IModInstance
     private ReadOnlySpan<(string, ReadOnlyMemory<byte>)> BuildBundle(IList<CompValue>? comps)
     {
         _bundleScratch.Clear();
-        if (comps != null)
-            foreach (var cv in comps)
-            {
-                if (!_state.IdToEntry.TryGetValue(cv.TypeId, out var e))
-                    continue;
-                if (!IsApplicable(cv.Encoding, e.Path))
-                    continue;
-                _bundleScratch.Add((e.Path, Utf8(cv.Data)));
-            }
+        // Index loops: foreach over the IList boxes an enumerator per command.
+        var count = comps?.Count ?? 0;
+        for (var i = 0; i < count; i++)
+        {
+            var cv = comps![i];
+            if (!_state.IdToEntry.TryGetValue(cv.TypeId, out var e))
+                continue;
+            if (!IsApplicable(cv.Encoding, e.Path))
+                continue;
+            _bundleScratch.Add((e.Path, Utf8(cv.Data)));
+        }
         return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_bundleScratch);
     }
 
     private ReadOnlySpan<string> BuildPaths(IList<ushort>? typeIds)
     {
         _pathScratch.Clear();
-        if (typeIds != null)
-            foreach (var id in typeIds)
-                if (_state.IdToEntry.TryGetValue(id, out var e))
-                    _pathScratch.Add(e.Path);
+        var count = typeIds?.Count ?? 0;
+        for (var i = 0; i < count; i++)
+            if (_state.IdToEntry.TryGetValue(typeIds![i], out var e))
+                _pathScratch.Add(e.Path);
         return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_pathScratch);
     }
 
