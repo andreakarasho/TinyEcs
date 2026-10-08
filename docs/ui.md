@@ -61,7 +61,8 @@ foreach (var (e, node) in nodes)
 
 Structural edits ticks cannot see are covered by observers the plugin
 registers: `OnRemove<Node>`, `OnRemove<T>` for every other layout component,
-and `OnInsert`/`OnRemove<Parent>` (add-child and reparent). Anything else
+and `OnInsert`/`OnRemove<Parent>` (add-child and reparent); each marks its
+entity. Anything else
 invisible to both — a font or text-measurer registered after the text nodes
 exist, retained Clay state poked directly — calls
 `UiClayContext.MarkLayoutDirty()`.
@@ -73,12 +74,21 @@ earlier in the same frame opens the gate on **that** frame — the UI never lags
 mutation — and it opens it **once**, so a one-shot marked write costs one Clay
 pass, not two.
 
-A pass that actually moves geometry still costs a second pass, for an unrelated
+A pass that resizes an element still costs a second pass, for an unrelated
 reason: `ComputedNode` is layout OUTPUT, `BuildDecl` reads the PARENT's
-`ComputedNode` for `Right`/`Bottom` anchoring, so the writeback sets
-`ForceRelayout` until the feedback settles. That shows up as
+`ComputedNode` for `Right`/`Bottom` anchoring, so the writeback marks every
+element whose size changed until the feedback settles. That shows up as
 `SystemProfiler.LayoutDirtyMask` bit `UiLayoutChanged.ForceBit` on the follow-up
 frame, with the component's own probe bit clear.
+
+**Per-root cache.** A relayout re-walks (ECS lookups + declaration build) only
+the roots that hold a dirty entity: one with a changed layout input, one an
+observer marked (removal, reparent, despawn — `UiClayContext.DirtyEntities`),
+or one whose size the writeback changed. A dirty entity also dirties the root it
+was last emitted under, so a node that moved or died leaves that root's stream.
+Every other root replays the declarations it recorded last time straight into
+Clay. `MarkLayoutDirty()` and a surface / `UiScale` change re-walk every root.
+`SystemProfiler.LayoutReplayed` counts the replayed roots.
 
 A skipped frame leaves the retained Clay tree, `LastCommands` and every
 `ComputedNode` untouched, so hit-testing and pointer events stay live;

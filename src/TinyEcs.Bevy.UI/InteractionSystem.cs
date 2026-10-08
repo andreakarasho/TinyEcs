@@ -231,6 +231,7 @@ internal static class InteractionSystem
 					if (cn.Ref.Size != size || cn.Ref.Position != pos
 						|| cn.Ref.ClayId != cmd.Id || cn.Ref.PaintOrder != i)
 					{
+						var resized = cn.Ref.Size != size;
 						cn.Ref.Size = size;
 						cn.Ref.Position = pos;
 						cn.Ref.ClayId = cmd.Id;
@@ -238,8 +239,10 @@ internal static class InteractionSystem
 						computed.SetChanged<ComputedNode>(entityId);
 						// ComputedNode is layout OUTPUT, but BuildDecl reads the
 						// PARENT's ComputedNode for Right/Bottom anchoring — the
-						// solve must re-run until that feedback settles.
-						ctx.Value.ForceRelayout = true;
+						// solve must re-run (this root) until that feedback settles.
+						// Position / paint order shifts feed nothing back.
+						if (resized)
+							ctx.Value.DirtyEntities.Add(entityId);
 					}
 				}
 				else
@@ -253,7 +256,7 @@ internal static class InteractionSystem
 					});
 					// Same feedback loop: an anchored child laid out before its
 					// parent had a ComputedNode needs one more pass.
-					ctx.Value.ForceRelayout = true;
+					ctx.Value.DirtyEntities.Add(entityId);
 				}
 			}
 		}

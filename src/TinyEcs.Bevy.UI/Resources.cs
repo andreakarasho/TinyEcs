@@ -112,6 +112,11 @@ public sealed class UiClayContext
 	/// component, or a (re)parented node.
 	public void MarkLayoutDirty() => ForceRelayout = true;
 
+	// Entities whose layout input changed in a way the Changed<T> gate can't see
+	// (a removed component, a (re)parent, a despawn, the ComputedNode feedback).
+	// Only the roots they belong to are re-walked; the rest replay their cache.
+	internal readonly HashSet<ulong> DirtyEntities = new();
+
 	public ScrollContainerData GetScrollContainerData(uint clayId)
 		=> Context.GetScrollContainerData(new ElementId { Id = clayId });
 
@@ -135,7 +140,7 @@ public sealed class UiClayContext
 		// Retained Clay state, not a component: the relayout gate cannot see it,
 		// and without a relayout the offset never reaches the tree (nor the
 		// ScrollPosition writeback).
-		MarkLayoutDirty();
+		DirtyEntities.Add(entityId);
 	}
 }
 

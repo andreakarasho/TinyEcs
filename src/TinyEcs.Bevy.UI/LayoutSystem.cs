@@ -63,7 +63,8 @@ public sealed class UiLayoutQueries : CompositeSystemParam
 /// layout component through a query ref must call
 /// <c>query.SetChanged&lt;T&gt;(entityId)</c> after a real change. Structural
 /// edits ticks cannot see (component/entity removal, (re)parenting) go through
-/// the observers UiPlugin registers onto <see cref="UiClayContext.ForceRelayout"/>.
+/// the observers UiPlugin registers, which mark the entity in
+/// <see cref="UiClayContext.DirtyEntities"/> so only its root is re-walked.
 public sealed class UiLayoutChanged : CompositeSystemParam
 {
 	// Bit index in SystemProfiler.LayoutDirtyMask of the surface-size/UiScale
@@ -73,9 +74,11 @@ public sealed class UiLayoutChanged : CompositeSystemParam
 	public const int ForceBit = 15;
 
 	private readonly Func<bool>[] _probes;
+	private readonly Action<HashSet<ulong>>[] _collectors;
 
 	public UiLayoutChanged()
 	{
+		var collectors = new List<Action<HashSet<ulong>>>();
 		_probes =
 		[
 			Probe<Node>(),
@@ -93,19 +96,25 @@ public sealed class UiLayoutChanged : CompositeSystemParam
 			Probe<UiCustom>(),
 			Probe<ScrollPosition>(),
 		];
-	}
+		_collectors = collectors.ToArray();
 
-	// Query.Count() ignores the filter AND counts every archetype row, so it
-	// can't answer "any changed row" — this stops at the first match.
-	private Func<bool> Probe<T>() where T : struct
-	{
-		var q = Add(new Query<Data<T>, Filter<Changed<T>>>());
-		return () =>
+		// Query.Count() ignores the filter AND counts every archetype row, so it
+		// can't answer "any changed row" — this stops at the first match.
+		Func<bool> Probe<T>() where T : struct
 		{
-			foreach (var _ in q)
-				return true;
-			return false;
-		};
+			var q = Add(new Query<Data<T>, Filter<Changed<T>>>());
+			collectors.Add(into =>
+			{
+				foreach (var (e, _) in q)
+					into.Add(e.Ref);
+			});
+			return () =>
+			{
+				foreach (var _ in q)
+					return true;
+				return false;
+			};
+		}
 	}
 
 	/// True as soon as one layout input has a changed row.
@@ -115,6 +124,13 @@ public sealed class UiLayoutChanged : CompositeSystemParam
 			if (_probes[i]())
 				return true;
 		return false;
+	}
+
+	/// Every entity with a changed layout input.
+	public void Collect(HashSet<ulong> into)
+	{
+		for (var i = 0; i < _collectors.Length; i++)
+			_collectors[i](into);
 	}
 
 	/// Bit i = i-th probe non-empty. Diagnostics only — evaluates every probe.
@@ -156,6 +172,41 @@ internal static class UiClayId
 		=> ElementId.HashNumber((uint)entityId);
 }
 
+/// Per-root record of the declarations the last walk handed Clay. A relayout
+/// re-walks (ECS lookups + BuildDecl) only the roots holding a changed entity
+/// and replays the rest: Clay is immediate-mode, so every root is re-declared
+/// every relayout, but a clean root's declarations are identical to last time.
+public sealed class LayoutCache
+{
+	internal enum OpKind : byte { Open, Text, Close }
+
+	internal struct Op
+	{
+		public OpKind Kind;
+		public ulong Entity;
+		public bool Scroll;
+		public ElementDeclaration Decl;
+		public string? Text;
+		public TextConfig TextConfig;
+	}
+
+	internal sealed class Root
+	{
+		public readonly List<Op> Ops = new();
+		public uint Seen;
+	}
+
+	internal readonly Dictionary<ulong, Root> Roots = new();
+	// Entity -> the root its last walk emitted it under. A dirty entity also
+	// dirties that root: a despawned or re-parented node must leave the stream it
+	// is still recorded in, or Clay would see its id twice.
+	internal readonly Dictionary<ulong, ulong> RootOf = new();
+	internal readonly HashSet<ulong> Dirty = new();
+	internal readonly HashSet<ulong> DirtyRoots = new();
+	internal readonly List<ulong> Prune = new();
+	internal uint Pass;
+}
+
 internal static class LayoutSystem
 {
 
@@ -171,8 +222,11 @@ internal static class LayoutSystem
 		Query<Data<ScrollPosition>> scrollPositions,
 		Local<HashSet<ulong>> liveScrollIds,
 		Local<List<ulong>> scrollPruneBuffer,
+		Query<Data<TinyEcs.Parent>> parents,
+		Local<LayoutCache> cacheLocal,
 		SystemProfiler profiler)
 	{
+		var cache = cacheLocal.Value;
 		ref var c = ref ctx.Value;
 		var s = MathF.Max(0.01f, scale.Value.Value);
 
@@ -188,7 +242,11 @@ internal static class LayoutSystem
 		// InteractionSystem.PostLayout (hover/click) and RenderSystem.Publish
 		// read those every frame regardless, so pointer picking stays live.
 		var surfaceDirty = c.LastSurfaceSize != surface.Value.LogicalSize || c.LastScale != s;
+		// Scroll frames only need Clay to run (every root can replay); ForceRelayout
+		// (host escape hatch) and surface / scale re-walk every root.
+		var rewalkAll = c.ForceRelayout || surfaceDirty;
 		var force = c.ForceRelayout
+			|| c.DirtyEntities.Count > 0
 			|| c.ScrollDelta != Vector2.Zero
 			|| (c.EnableDragScrolling && (pointer.Value.Down || pointer.Value.WasDown));
 
@@ -213,6 +271,16 @@ internal static class LayoutSystem
 			return;
 		}
 		c.ForceRelayout = false;
+		if (rewalkAll)
+		{
+			cache.Roots.Clear();
+			cache.RootOf.Clear();
+		}
+		else
+		{
+			MarkDirtyRoots(cache, c.DirtyEntities, changed, parents);
+		}
+		c.DirtyEntities.Clear();
 		c.LastSurfaceSize = surface.Value.LogicalSize;
 		c.LastScale = s;
 		if (profiler.Enabled)
@@ -244,15 +312,46 @@ internal static class LayoutSystem
 			profiler.LayoutCulled = 0;
 			profiler.LayoutBuildTicks = 0;
 			profiler.LayoutConfigTicks = 0;
+			profiler.LayoutReplayed = 0;
 		}
 
 		var walkStart = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
 
+		var pass = ++cache.Pass;
 		foreach (var (entityId, node) in roots)
 		{
+			var rootId = entityId.Ref;
 			if (profiler.Enabled)
 				profiler.LayoutRoots++;
-			EmitNode(entityId.Ref, parentId: 0, in node.Ref, c, q, s, inheritedZ: 0, profiler);
+			if (cache.Roots.TryGetValue(rootId, out var rec) && !cache.DirtyRoots.Contains(rootId))
+			{
+				Replay(rec.Ops, c);
+				rec.Seen = pass;
+				if (profiler.Enabled)
+					profiler.LayoutReplayed++;
+				continue;
+			}
+			if (rec == null)
+				cache.Roots[rootId] = rec = new LayoutCache.Root();
+			else
+				Forget(cache, rec, rootId);
+			rec.Ops.Clear();
+			rec.Seen = pass;
+			EmitNode(rootId, parentId: 0, in node.Ref, c, q, s, inheritedZ: 0, rec.Ops, profiler);
+			foreach (var op in rec.Ops)
+				if (op.Kind == LayoutCache.OpKind.Open)
+					cache.RootOf[op.Entity] = rootId;
+		}
+		cache.DirtyRoots.Clear();
+
+		cache.Prune.Clear();
+		foreach (var (rootId, rec) in cache.Roots)
+			if (rec.Seen != pass)
+				cache.Prune.Add(rootId);
+		foreach (var dead in cache.Prune)
+		{
+			Forget(cache, cache.Roots[dead], dead);
+			cache.Roots.Remove(dead);
 		}
 
 		var solveStart = profiler.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -310,7 +409,59 @@ internal static class LayoutSystem
 		}
 	}
 
-	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ, SystemProfiler profiler)
+	private static void MarkDirtyRoots(LayoutCache cache, HashSet<ulong> structural, UiLayoutChanged changed, Query<Data<TinyEcs.Parent>> parents)
+	{
+		var dirty = cache.Dirty;
+		dirty.Clear();
+		foreach (var e in structural)
+			dirty.Add(e);
+		changed.Collect(dirty);
+		foreach (var e in dirty)
+		{
+			var root = e;
+			for (var i = 0; i < 256 && parents.TryGet(root, out var pd); i++)
+			{
+				var (_, p) = pd;
+				root = p.Ref.Id;
+			}
+			cache.DirtyRoots.Add(root);
+			if (cache.RootOf.TryGetValue(e, out var was))
+				cache.DirtyRoots.Add(was);
+		}
+	}
+
+	private static void Forget(LayoutCache cache, LayoutCache.Root rec, ulong rootId)
+	{
+		foreach (var op in rec.Ops)
+			if (op.Kind == LayoutCache.OpKind.Open && cache.RootOf.TryGetValue(op.Entity, out var r) && r == rootId)
+				cache.RootOf.Remove(op.Entity);
+	}
+
+	private static void Replay(List<LayoutCache.Op> ops, UiClayContext c)
+	{
+		var ctx = Clay.Clay.Context!;
+		foreach (var op in ops)
+		{
+			switch (op.Kind)
+			{
+				case LayoutCache.OpKind.Open:
+					ctx.OpenElement();
+					ctx.ConfigureOpenElement(op.Decl);
+					c.ClayToEntity[op.Decl.Id.Id] = op.Entity;
+					if (op.Scroll)
+						c.ScrollClayToEntity[op.Decl.Id.Id] = op.Entity;
+					break;
+				case LayoutCache.OpKind.Text:
+					ctx.AddText(op.Text!, op.TextConfig);
+					break;
+				default:
+					ctx.CloseElement();
+					break;
+			}
+		}
+	}
+
+	private static void EmitNode(ulong entityId, ulong parentId, in Node node, UiClayContext c, UiLayoutQueries q, float scale, int inheritedZ, List<LayoutCache.Op> rec, SystemProfiler profiler)
 	{
 		if (node.Display == Display.None)
 		{
@@ -346,6 +497,7 @@ internal static class LayoutSystem
 		c.ClayToEntity[decl.Id.Id] = entityId;
 		if (node.Overflow == Overflow.Scroll)
 			c.ScrollClayToEntity[decl.Id.Id] = entityId;
+		rec.Add(new LayoutCache.Op { Kind = LayoutCache.OpKind.Open, Entity = entityId, Scroll = node.Overflow == Overflow.Scroll, Decl = decl });
 
 		if (q.Texts.TryGet(entityId, out var textData))
 		{
@@ -371,7 +523,9 @@ internal static class LayoutSystem
 			// Pass the string directly (not .AsSpan()): Clay's string overload
 			// stores the reference instead of copying the span into a fresh
 			// string every frame (immediate-mode runs this per text node/frame).
-			ctx.AddText(textPtr.Ref.Value ?? string.Empty, tcfg);
+			var text = textPtr.Ref.Value ?? string.Empty;
+			ctx.AddText(text, tcfg);
+			rec.Add(new LayoutCache.Op { Kind = LayoutCache.OpKind.Text, Text = text, TextConfig = tcfg });
 		}
 
 		if (q.Children.TryGet(entityId, out var childrenData))
@@ -383,11 +537,12 @@ internal static class LayoutSystem
 				if (!q.Nodes.TryGet(childId, out var childNodeData))
 					continue;
 				var (_, childNodePtr) = childNodeData;
-				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale, resolvedZ, profiler);
+				EmitNode(childId, entityId, in childNodePtr.Ref, c, q, scale, resolvedZ, rec, profiler);
 			}
 		}
 
 		ctx.CloseElement();
+		rec.Add(new LayoutCache.Op { Kind = LayoutCache.OpKind.Close });
 	}
 
 	// Own z wins; absent z inherits the ancestor's (threaded down the walk).

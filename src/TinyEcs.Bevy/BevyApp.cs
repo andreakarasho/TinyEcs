@@ -1404,6 +1404,7 @@ public class App
 			profiler.FramesOver16 = profiler.FramesOver33 = profiler.FramesOver100 = 0;
 		}
 		sb.Append("  layout: roots=").Append(profiler.LayoutRoots)
+		  .Append(" replayed=").Append(profiler.LayoutReplayed)
 		  .Append(" nodes=").Append(profiler.LayoutNodes)
 		  .Append(" culled(Display.None)=").Append(profiler.LayoutCulled)
 		  .Append(" skipped=").Append(profiler.LayoutSkipped)

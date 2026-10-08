@@ -50,8 +50,10 @@ public sealed class UiPlugin : IPlugin
 			Query<Data<ScrollPosition>> scrolls,
 			Local<HashSet<ulong>> liveIds,
 			Local<List<ulong>> pruneBuf,
+			Query<Data<TinyEcs.Parent>> parents,
+			Local<LayoutCache> cache,
 			ResMut<SystemProfiler> prof) =>
-			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, changed, scrolls, liveIds, pruneBuf, prof.Value))
+			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, changed, scrolls, liveIds, pruneBuf, parents, cache, prof.Value))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
@@ -78,25 +80,26 @@ public sealed class UiPlugin : IPlugin
 		// while the component does, so REMOVING one (or despawning its entity)
 		// leaves nothing to mark — yet the element, its rect, its border must
 		// disappear from the tree. Same for (re)parenting: it moves an existing
-		// Node between subtrees without touching any layout value.
-		ForceRelayoutOn<OnRemove<Node>>(app);
-		ForceRelayoutOn<OnInsert<TinyEcs.Parent>>(app);
-		ForceRelayoutOn<OnRemove<TinyEcs.Parent>>(app);
-		ForceRelayoutOn<OnRemove<BackgroundColor>>(app);
-		ForceRelayoutOn<OnRemove<BorderColor>>(app);
-		ForceRelayoutOn<OnRemove<BorderRadius>>(app);
-		ForceRelayoutOn<OnRemove<UiImage>>(app);
-		ForceRelayoutOn<OnRemove<Text>>(app);
-		ForceRelayoutOn<OnRemove<TextFont>>(app);
-		ForceRelayoutOn<OnRemove<TextColor>>(app);
-		ForceRelayoutOn<OnRemove<TextWrap>>(app);
-		ForceRelayoutOn<OnRemove<ZIndex>>(app);
-		ForceRelayoutOn<OnRemove<GlobalZIndex>>(app);
-		ForceRelayoutOn<OnRemove<BoxShadow>>(app);
-		ForceRelayoutOn<OnRemove<UiCustom>>(app);
-		ForceRelayoutOn<OnRemove<ScrollPosition>>(app);
+		// Node between subtrees without touching any layout value. Each marks its
+		// entity; LayoutSystem re-walks the root(s) it is and was under.
+		DirtyOn<OnRemove<Node>>(app);
+		DirtyOn<OnInsert<TinyEcs.Parent>>(app);
+		DirtyOn<OnRemove<TinyEcs.Parent>>(app);
+		DirtyOn<OnRemove<BackgroundColor>>(app);
+		DirtyOn<OnRemove<BorderColor>>(app);
+		DirtyOn<OnRemove<BorderRadius>>(app);
+		DirtyOn<OnRemove<UiImage>>(app);
+		DirtyOn<OnRemove<Text>>(app);
+		DirtyOn<OnRemove<TextFont>>(app);
+		DirtyOn<OnRemove<TextColor>>(app);
+		DirtyOn<OnRemove<TextWrap>>(app);
+		DirtyOn<OnRemove<ZIndex>>(app);
+		DirtyOn<OnRemove<GlobalZIndex>>(app);
+		DirtyOn<OnRemove<BoxShadow>>(app);
+		DirtyOn<OnRemove<UiCustom>>(app);
+		DirtyOn<OnRemove<ScrollPosition>>(app);
 	}
 
-	private static void ForceRelayoutOn<TTrigger>(App app) where TTrigger : ITrigger
-		=> app.AddObserver<TTrigger, ResMut<UiClayContext>>((_, ctx) => ctx.Value.MarkLayoutDirty());
+	private static void DirtyOn<TTrigger>(App app) where TTrigger : ITrigger, IEntityTrigger
+		=> app.AddObserver<TTrigger, ResMut<UiClayContext>>((t, ctx) => ctx.Value.DirtyEntities.Add(t.EntityId));
 }

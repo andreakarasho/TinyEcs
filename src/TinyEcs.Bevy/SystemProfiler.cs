@@ -34,6 +34,8 @@ public sealed class SystemProfiler
 	public int LayoutRoots;
 	public int LayoutNodes;
 	public int LayoutCulled;
+	// Roots replayed from the layout cache (not re-walked) on the last relayout.
+	public int LayoutReplayed;
 
 	// Frames the layout pass skipped (no layout input changed) since the last
 	// dump. High skip counts on a static screen = the gate is working.
