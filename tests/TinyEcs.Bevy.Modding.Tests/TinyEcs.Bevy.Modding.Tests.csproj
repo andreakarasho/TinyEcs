@@ -32,15 +32,4 @@
     <None Include="fixtures\component_guest.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest.wasm" />
   </ItemGroup>
 
-  <!-- Upstream Wasmtime native (core-wasm module backend) next to the test output — it
-       does not flow via ProjectRef (RID-scoped). Read from the modding lib's output
-       (which resolves it from the NuGet cache). Windows x64 only for now; other RIDs
-       need the matching runtimes/<rid>/native name. -->
-  <ItemGroup>
-    <_UpstreamWasmtimeNative Include="..\..\src\TinyEcs.Bevy.Modding\bin\$(Configuration)\net10.0\wasmtime.dll" />
-  </ItemGroup>
-  <Target Name="CopyWasmtimeNative" AfterTargets="Build">
-    <Copy SourceFiles="@(_UpstreamWasmtimeNative)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('@(_UpstreamWasmtimeNative)')" />
-  </Target>
-
 </Project>

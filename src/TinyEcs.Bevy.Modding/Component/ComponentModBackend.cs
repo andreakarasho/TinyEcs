@@ -14,7 +14,9 @@
 
 extern alias WasmtimeCm;
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using Cm = WasmtimeCm::Wasmtime;
 
@@ -33,11 +35,17 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     public const uint TypeApp = TypeIdBase + 2;
     public const uint TypeCommands = TypeIdBase + 3;
     public const uint TypeQuery = TypeIdBase + 4;
-    public const uint TypeRow = TypeIdBase + 5;
     public const uint TypeRes = TypeIdBase + 6;
     public const uint TypeEvents = TypeIdBase + 7;
 
-    private readonly Cm.Engine _engine;
+    // One engine per process, and every compiled component cached by content: compiling
+    // is the dominant load cost (seconds for a large component), and the same bytes are
+    // loaded again by every App a process builds (tests) and by a reload that didn't
+    // change the file. A changed file compiles once more; the old entry stays (a reload
+    // is a dev action, the cost is bounded by how often you rebuild).
+    private static readonly Cm.Engine Engine = new();
+    private static readonly ConcurrentDictionary<string, Lazy<Cm.Component>> Compiled = new();
+
     internal readonly Cm.Linker Linker;
     private readonly Dictionary<ModHostContext, ComponentModInstance> _byCtx = new();
 
@@ -61,8 +69,7 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     public ComponentModBackend(IReadOnlyList<Action<ComponentModImports>> hostImports)
     {
         _pathLookup = _paths.GetAlternateLookup<ReadOnlySpan<char>>();
-        _engine = new Cm.Engine();
-        Linker = new Cm.Linker(_engine);
+        Linker = new Cm.Linker(Engine);
         Linker.AddWasiP2();
         DefineEcs();
 
@@ -78,12 +85,16 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     {
         if (source.Bytes == null)
             throw new InvalidOperationException($"component mod '{source.Name}' needs its bytes");
-        var inst = new ComponentModInstance(this, _engine, source.Bytes, ctx);
+        var inst = new ComponentModInstance(this, Engine, source.Bytes, ctx);
         _byCtx[ctx] = inst;
         return inst;
     }
 
     internal void Forget(ModHostContext ctx) => _byCtx.Remove(ctx);
+
+    internal static Cm.Component Compile(byte[] bytes)
+        => Compiled.GetOrAdd(Convert.ToHexString(SHA256.HashData(bytes)),
+            _ => new Lazy<Cm.Component>(() => Cm.Component.Compile(Engine, bytes))).Value;
 
     internal bool TryCallExport(ModHostContext ctx, string name, ReadOnlySpan<Cm.ComponentValue> args,
         int resultCount, ComponentResultsReader? onResults)
@@ -98,7 +109,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     public void Dispose()
     {
         Linker.Dispose();
-        _engine.Dispose();
     }
 
     // ── type paths ────────────────────────────────────────────────────────────
@@ -144,7 +154,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineResource("app", TypeApp, drop);
         ecs.DefineResource("commands", TypeCommands, drop);
         ecs.DefineResource("query", TypeQuery, drop);
-        ecs.DefineResource("row", TypeRow, drop);
         ecs.DefineResource("res", TypeRes, drop);
         ecs.DefineResource("events", TypeEvents, drop);
 
@@ -166,11 +175,8 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineFunction("[method]commands.despawn", CommandsDespawn, this);
         ecs.DefineFunction("[method]commands.send", CommandsSend, this);
 
-        ecs.DefineFunction("[method]query.next", QueryNext, this);
-
-        ecs.DefineFunction("[method]row.entity", RowEntity, this);
-        ecs.DefineFunction("[method]row.get", RowGet, this);
-        ecs.DefineFunction("[method]row.set", RowSet, this);
+        ecs.DefineFunction("[method]query.rows", QueryRows, this);
+        ecs.DefineFunction("[method]query.set", QuerySet, this);
 
         ecs.DefineFunction("[method]res.get", ResGet, this);
         ecs.DefineFunction("[method]res.set", ResSet, this);
@@ -313,33 +319,18 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         m.Commands.Send(m.Backend.Path(args[1]), args[2].ToUtf8Span());
     }
 
-    private static void QueryNext(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    private static void QueryRows(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
     {
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
-        results[0] = m.NextRow(param, out var rep)
-            ? Cm.ComponentValue.CreateOption(Cm.ComponentValue.CreateOwnResource(cx, rep, TypeRow))
-            : Cm.ComponentValue.CreateOption(null);
+        results[0] = m.Rows(param);
     }
 
-    private static void RowEntity(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    private static void QuerySet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
     {
         var m = Mod(state);
-        results[0] = Cm.ComponentValue.CreateUInt64(m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Row).Entity);
-    }
-
-    private static void RowGet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        ref readonly var row = ref m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Row);
-        results[0] = Utf8String(m.RowGet((ComponentParam)row.Obj!, row.Entity, args[1].ToByte()));
-    }
-
-    private static void RowSet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        ref readonly var row = ref m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Row);
-        m.RowSet((ComponentParam)row.Obj!, row.Entity, args[1].ToByte(), args[2].ToUtf8Span());
+        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
+        m.QuerySet(param, args[1].ToUInt64(), args[2].ToByte(), args[3].ToUtf8Span());
     }
 
     private static void ResGet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)

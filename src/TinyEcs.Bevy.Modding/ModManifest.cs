@@ -18,9 +18,9 @@ public sealed class ModManifest
     /// The WASM file to load, relative to the mod's own folder.
     public string Wasm { get; set; } = "";
 
-    /// Reserved. Mods are core-wasm modules (abi/mod-abi.fbs); the field is kept for
-    /// manifest forward-compat but is no longer read — the loader sniffs the wasm
-    /// preamble and rejects component-model binaries outright.
+    /// Reserved. Mods are wasm32-wasip2 components; the field is kept for manifest
+    /// forward-compat but is no longer read — the loader sniffs the wasm preamble and
+    /// rejects core-wasm modules outright.
     public string Abi { get; set; } = "";
 
     /// Reserved per-mod rules / capability grants — what the HOST permits this mod to

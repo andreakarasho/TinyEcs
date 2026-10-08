@@ -80,7 +80,7 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.True(info.Enabled, info.LastError);
 
         var runtimes = app.GetResource<ModRuntimes>();
-        Assert.IsType<ComponentModBackend>(runtimes.ComponentBackend);
+        Assert.IsType<ComponentModBackend>(runtimes.Backend);
         var ctx = runtimes.Runtimes[0].Ctx;
         Assert.Equal(new[] { "tick", "count_added" }, ctx.Systems.Select(s => s.Name));
         Assert.All(ctx.Systems, s => Assert.Equal(ModSchedule.Update, s.Stage));
@@ -99,7 +99,7 @@ public sealed class ComponentModBackendTests : IDisposable
         var frozen = world.Entity().Set(new CmPos { X = 5, Y = 5 }).Set(new CmVel { X = 1, Y = 1 }).Set(new CmFrozen()).ID;
         app.RunStartup();
 
-        // Frame 1: tick moves `mover` (row.set on a `mut` term; `frozen` is excluded by
+        // Frame 1: tick moves `mover` (query.set on a `mut` term; `frozen` is excluded by
         // `without`), bumps the res-mut score to 1, and — since it is the first run —
         // spawns a frozen entity and sends a ping. count_added (after tick) matches
         // nothing: mover/frozen got test/pos at tick 0 (before any run), and the spawn's
@@ -210,6 +210,27 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(2, ctx.PacketObservers.Count); // re-declared, not doubled
         Assert.Equal(ModPacketVerdict.Replace, app.GetResource<ModPacketChain>().Run(ModPacketDirection.Outgoing, new byte[] { 1 }, null, out _));
         Assert.Equal(3, world.Get<CmPos>(mover).X);
+    }
+
+    [Fact]
+    public void Core_module_mod_is_rejected_at_load()
+    {
+        var dir = Path.Combine(_modFolder, "old-core");
+        Directory.CreateDirectory(dir);
+        // The smallest valid core module: magic + version 1, layer 00 00.
+        File.WriteAllBytes(Path.Combine(dir, "mod.wasm"), [0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]);
+        File.WriteAllText(Path.Combine(dir, "mod.json"), """{ "name": "old-core", "version": "0.1.0", "wasm": "mod.wasm" }""");
+
+        var app = NewApp();
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try { app.RunStartup(); }
+        finally { Console.SetOut(stdout); }
+
+        var info = Assert.Single(app.GetResource<ModControl>().Mods);
+        Assert.Equal("component-guest", info.Name);
+        Assert.Contains("old-core is a core-wasm (p1) module; mods must be wasm32-wasip2 components", output.ToString());
     }
 
     private static ulong SpawnedByMod(World world)

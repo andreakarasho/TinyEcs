@@ -65,14 +65,13 @@ impl Guest for Fixture {
                     panic!("tick: unexpected params")
                 };
 
-                while let Some(row) = q.next() {
-                    let pos = row.get(0);
-                    let vel = row.get(1);
-                    let x = num(&pos, "X") + num(&vel, "X");
-                    let y = num(&pos, "Y") + num(&vel, "Y");
-                    row.set(0, &format!("{{\"X\":{},\"Y\":{}}}", x, y));
+                for row in q.rows() {
+                    let (pos, vel) = (&row.values[0], &row.values[1]);
+                    let x = num(pos, "X") + num(vel, "X");
+                    let y = num(pos, "Y") + num(vel, "Y");
+                    q.set(row.entity, 0, &format!("{{\"X\":{},\"Y\":{}}}", x, y));
                     if x >= 3 {
-                        cmds.insert(row.entity(), &[("test/tag".into(), "{}".into())]);
+                        cmds.insert(row.entity, &[("test/tag".into(), "{}".into())]);
                     }
                 }
 
@@ -91,10 +90,7 @@ impl Guest for Fixture {
                 let [Param::Query(q), Param::Res(added)] = &params[..] else {
                     panic!("count_added: unexpected params")
                 };
-                let mut n = 0;
-                while q.next().is_some() {
-                    n += 1;
-                }
+                let n = q.rows().len() as i64;
                 let total = added.get().map(|s| num(&s, "Value")).unwrap_or(0) + n;
                 added.set(&format!("{{\"Value\":{}}}", total));
             }

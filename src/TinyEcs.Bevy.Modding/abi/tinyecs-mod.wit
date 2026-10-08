@@ -4,9 +4,7 @@
 /// Everything in the world is named by a type path ("game:ent/graphic") and carried
 /// as JSON text. The host decides which paths exist; a mod only uses them.
 ///
-/// This is the contract for BOTH mod targets: wasm32-wasip2 components implement
-/// the `guest` world below directly; wasm32-wasip1 core modules get the same
-/// functions through the SDK.
+/// A mod is a wasm32-wasip2 component implementing the `guest` world below.
 package tinyecs:modding@0.1.0;
 
 interface ecs {
@@ -34,11 +32,11 @@ interface ecs {
     }
 
     /// One part of a query. `ref` / `mut` / `changed` / `added` read the component
-    /// (row index = their order among these four); `with` / `without` only filter.
+    /// (value index = their order among these four); `with` / `without` only filter.
     variant term {
         /// Read the component.
         %ref(type-path),
-        /// Read the component; the row may write it back with `row.set`.
+        /// Read the component; the system may write it back with `query.set`.
         mut(type-path),
         /// The entity must have the component.
         %with(type-path),
@@ -148,19 +146,21 @@ interface ecs {
         send: func(event: type-path, value: json);
     }
 
-    /// The entities matching a query, one row at a time.
-    resource query {
-        next: func() -> option<row>;
+    /// One matching entity: the values of the reading terms (`ref` / `mut` /
+    /// `changed` / `added`), in their declaration order.
+    record row {
+        entity: entity,
+        values: list<json>,
     }
 
-    resource row {
-        entity: func() -> entity;
+    /// The entities matching a query.
+    resource query {
+        /// Every matching row, in one call.
+        rows: func() -> list<row>;
 
-        /// The value of the n-th reading term (`ref` / `mut` / `changed` / `added`).
-        get: func(index: u8) -> json;
-
-        /// Writes the n-th reading term back. Traps unless that term is `mut`.
-        set: func(index: u8, value: json);
+        /// Writes the n-th reading term of `entity` back. Traps unless that term is
+        /// `mut`.
+        set: func(entity: entity, index: u8, value: json);
     }
 
     /// A resource parameter.

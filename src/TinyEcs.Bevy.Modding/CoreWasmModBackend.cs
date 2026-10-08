@@ -1,9 +1,8 @@
-// Core-wasm mod backend: hosts core-module (NOT Component Model) mods via the
-// IModWasmExecutor seam. Executor-agnostic by construction — WasmtimeModWasmExecutor
-// (upstream Wasmtime NuGet) on desktop, a GUEST_CORE guest-relay executor (flat env
-// imports to JS instead of an embedded runtime, supplied by the embedding host's
-// guest build) in the browser core-module guest. Either way the wire
-// contract is the FlatSharp ModAbi graph derived from abi/mod-abi.fbs — a fixed
+// Relay mod backend: drives mods through the IModWasmExecutor seam — today only the
+// GUEST_CORE guest's relay executor (ModdingConfig.WasmExecutor: flat env imports to
+// the native host, which runs the real wasm32-wasip2 component mods and translates).
+// Desktop hosts mods directly (Component/ComponentModBackend.cs); mods themselves are
+// components only. The wire contract is the FlatSharp ModAbi graph derived from abi/mod-abi.fbs — a fixed
 // set of guest exports (mod_setup/run/observer/filter + alloc/arena_reset
 // over a bump arena) and host imports (mid-run RPCs; module name + game-specific
 // entries come from the host via ModHostContext).
@@ -11,8 +10,7 @@
 // This file is now just the glue: take an executor, build the per-mod codec
 // (ModAbiBacking = the generic import backing, ModAbiRunner = the FlatSharp
 // build/parse + CommandBuffer applier), and hand IModInstance to the scheduler.
-// See ModWasmExecutor.cs for the seam itself and WasmtimeModWasmExecutor.cs for
-// the wasm mechanics this used to inline.
+// See ModWasmExecutor.cs for the seam itself.
 //
 // Needs FlatSharp (ModAbiRunner) — see the csproj's UseFlatSharp: desktop AND the
 // GUEST_CORE guest, never the plain Jco guest (Component Model mods, no FlatSharp).

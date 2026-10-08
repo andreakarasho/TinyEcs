@@ -6,8 +6,8 @@
 //  - queries are the same ModQuerySpec + ModdingPlugin.BuildSnapshot, evaluated
 //    BEFORE the call with the system's own (lastRun, thisRun] change window, the same
 //    idle-skip, despawned rows skipped;
-//  - `mut` rows write back through the registry on `row.set` (the snapshot is a copy
-//    of ids, so in-call writes can't disturb iteration);
+//  - `query.rows` hands the guest every live row in ONE call (entity + the reading
+//    terms' JSON); `query.set` writes a `mut` term back through the registry;
 //  - commands apply in order AFTER the export returns (spawn hands out the id at once);
 //  - observers ride the same host global observers (ModdingPlugin.RegisterModObservers),
 //    buffered and flushed at the same points; packet observers are called
@@ -23,25 +23,24 @@ using Cm = WasmtimeCm::Wasmtime;
 
 namespace TinyEcs.Bevy.Modding;
 
-internal enum HandleKind : byte { Free, System, App, Commands, Query, Row, Res, Events }
+internal enum HandleKind : byte { Free, System, App, Commands, Query, Res, Events }
 
 internal struct HandleSlot
 {
     public HandleKind Kind;
     public object? Obj;
-    public ulong Entity;
     public int NextFree;
 }
 
 /// rep = slot index + 1. Freed by the resource destructor when the guest drops the
-/// handle, so per-call handles (params, rows) recycle their slots every call.
+/// handle, so per-call handles (params) recycle their slots every call.
 internal sealed class HandleTable
 {
     private HandleSlot[] _slots = new HandleSlot[32];
     private int _count;
     private int _free = -1;
 
-    public uint Alloc(HandleKind kind, object? obj, ulong entity = 0)
+    public uint Alloc(HandleKind kind, object? obj)
     {
         int index;
         if (_free >= 0)
@@ -55,7 +54,7 @@ internal sealed class HandleTable
                 Array.Resize(ref _slots, _slots.Length * 2);
             index = _count++;
         }
-        _slots[index] = new HandleSlot { Kind = kind, Obj = obj, Entity = entity };
+        _slots[index] = new HandleSlot { Kind = kind, Obj = obj };
         return (uint)index + 1;
     }
 
@@ -125,9 +124,11 @@ internal sealed class ComponentParam
     // Query
     public ModQuerySpec? Query;
     public IModComponent[]? Added;
+    // The reading terms' components (declaration order), resolved on first `rows`;
+    // null entries are unregistered paths (their value reads as null).
+    public IModComponent?[]? Reads;
     public ulong[]? Snapshot;
     public int Count;
-    public int Cursor;
     // Res / Events
     public string Path = "";
     public bool Mutable;
@@ -374,7 +375,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     {
         _store = new Cm.Store(_engine);
         _store.AddWasiP2(inheritStdout: true, inheritStderr: true);
-        _component = Cm.Component.Compile(_engine, bytes);
+        _component = ComponentModBackend.Compile(bytes);
         _instance = _store.GetComponentInstance(_component, Backend.Linker);
         _exports.Clear();
         _setup = _instance.GetFunction("setup");
@@ -422,48 +423,70 @@ internal sealed unsafe class ComponentModInstance : IModInstance
 
     // ── call-time callbacks ───────────────────────────────────────────────────
 
-    internal bool NextRow(ComponentParam q, out uint rep)
+    // query.rows: one list<row { entity, values: list<json> }>. Every value is copied
+    // straight from the shared JSON scratch into its native string (no managed
+    // allocation per row or value); wasmtime owns the whole tree once it is returned.
+    internal Cm.ComponentValue Rows(ComponentParam q)
     {
         var world = Ctx.World;
-        while (q.Cursor < q.Count)
+        var snap = q.Snapshot;
+        // A row can only die between the snapshot and here through an earlier observer's
+        // commands; compact those out so the list can be sized up front.
+        var live = 0;
+        for (var i = 0; i < q.Count; i++)
+            if (world.Exists(snap![i]))
+                snap[live++] = snap[i];
+        q.Count = live;
+
+        var reads = q.Reads ??= ResolveReads(q.Query!);
+        var list = new Cm.ListBuilder(live);
+        for (var i = 0; i < live; i++)
         {
-            var id = q.Snapshot![q.Cursor++];
-            if (world.Exists(id))
+            var id = snap![i];
+            var values = new Cm.ListBuilder(reads.Length);
+            for (var k = 0; k < reads.Length; k++)
             {
-                rep = Handles.Alloc(HandleKind.Row, q, id);
-                return true;
+                _json.Reset();
+                var comp = reads[k];
+                if (comp != null && comp.Has(world, id))
+                    comp.GetJsonUtf8(world, id, _json);
+                else
+                    IModComponent.WriteUtf8(_json, "null");
+                values[k] = ComponentModBackend.Utf8String(_json.WrittenSpan);
             }
+            // A returned value tree is wasmtime's to free, record field names included,
+            // so each record gets its own copies (unlike call ARGS, whose names we own).
+            var rec = new Cm.RecordBuilder(2, disposeNames: false);
+            rec.Set(0, new Cm.ByteVector("entity"u8), Cm.ComponentValue.CreateUInt64(id));
+            rec.Set(1, new Cm.ByteVector("values"u8), new Cm.ComponentValue(values, externallyOwned: true));
+            list[i] = new Cm.ComponentValue(rec, externallyOwned: true);
         }
-        rep = 0;
-        return false;
+        return new Cm.ComponentValue(list, externallyOwned: true);
     }
 
-    internal ReadOnlySpan<byte> RowGet(ComponentParam q, ulong entity, byte index)
+    private IModComponent?[] ResolveReads(ModQuerySpec query)
+    {
+        var comps = query.Components;
+        var reads = new IModComponent?[comps.Count];
+        for (var i = 0; i < reads.Length; i++)
+            reads[i] = Ctx.Registry.TryGet(comps[i].typePath, out var c) ? c : null;
+        return reads;
+    }
+
+    internal void QuerySet(ComponentParam q, ulong entity, byte index, ReadOnlySpan<byte> json)
     {
         var comps = q.Query!.Components;
         if (index >= comps.Count)
-            throw new InvalidOperationException($"row.get({index}): the query reads {comps.Count} components");
-        _json.Reset();
-        if (Ctx.Registry.TryGet(comps[index].typePath, out var comp) && Ctx.World.Exists(entity) && comp.Has(Ctx.World, entity))
-            comp.GetJsonUtf8(Ctx.World, entity, _json);
-        else
-            IModComponent.WriteUtf8(_json, "null");
-        return _json.WrittenSpan;
-    }
-
-    internal void RowSet(ComponentParam q, ulong entity, byte index, ReadOnlySpan<byte> json)
-    {
-        var comps = q.Query!.Components;
-        if (index >= comps.Count)
-            throw new InvalidOperationException($"row.set({index}): the query reads {comps.Count} components");
+            throw new InvalidOperationException($"query.set({index}): the query reads {comps.Count} components");
         var (path, mutable) = comps[index];
         if (!mutable)
-            throw new InvalidOperationException($"row.set({index}): {path} is not a `mut` term");
-        if (Ctx.World.Exists(entity) && Ctx.Registry.TryGet(path, out var comp))
+            throw new InvalidOperationException($"query.set({index}): {path} is not a `mut` term");
+        var comp = (q.Reads ??= ResolveReads(q.Query))[index];
+        if (comp != null && Ctx.World.Exists(entity))
             comp.SetJsonUtf8(Ctx.World, entity, json);
     }
 
-    // The value's UTF8 JSON (valid until the next RowGet/ResGet), or false when absent.
+    // The value's UTF8 JSON (valid until the next ResGet / rows), or false when absent.
     internal bool ResGet(ComponentParam p, out ReadOnlySpan<byte> json)
     {
         json = default;
@@ -625,7 +648,6 @@ internal sealed unsafe class ComponentModInstance : IModInstance
                         matched = FilterAdded(snap, matched, p.Added, spec.LastRunWorldTick);
                     p.Snapshot = snap;
                     p.Count = matched;
-                    p.Cursor = 0;
                     any |= matched > 0;
                     break;
                 }
@@ -663,7 +685,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             {
                 ArrayPool<ulong>.Shared.Return(p.Snapshot);
                 p.Snapshot = null;
-                p.Count = p.Cursor = 0;
+                p.Count = 0;
             }
     }
 
@@ -785,7 +807,6 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         try
         {
             _store.Dispose();
-            _component.Dispose();
         }
         finally
         {

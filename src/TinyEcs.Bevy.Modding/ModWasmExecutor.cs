@@ -2,10 +2,9 @@
 // its 4 guest exports, arena/span marshalling) from the ABI CODEC (FlatSharp
 // build/parse, SetupReply translation, CommandBuffer application, host import
 // backing) — see ModAbiRunner.cs / ModAbiBacking.cs, which are byte[]-level and
-// therefore identical for every executor. WasmtimeModWasmExecutor.cs (desktop,
-// upstream Wasmtime) is the only implementation today; a browser GUEST_CORE
-// guest-relay executor (flat env imports to JS instead of an embedded runtime) is
-// the planned second one — see CoreWasmModBackend.cs's header comment.
+// therefore identical for every executor. The implementation is a GUEST_CORE
+// guest-relay executor (flat env imports to the native host instead of an embedded
+// runtime) — see CoreWasmModBackend.cs's header comment.
 //
 // This file itself has ZERO wasm-runtime references (no Wasmtime, no wasm ptr/len)
 // so it compiles under every flavor, including GUEST_CORE.
@@ -35,7 +34,7 @@ internal interface IModImportSink
 /// exports (mod_setup/run/observer/spawned) + reload, entirely over
 /// byte[]-in/byte[]-out. Implementations
 /// own arena allocation, span re-acquisition (the SPAN RULE — see
-/// WasmtimeModWasmExecutor.cs), and packed-return decoding internally; callers
+/// executor's own docs), and packed-return decoding internally; callers
 /// (ModAbiRunner) never see a wasm pointer or arena. One executor instance per
 /// process (owns the engine/runtime); Load() returns a per-mod handle threaded
 /// through every subsequent call — mirrors ModSource/ModHostContext's shape so a
@@ -53,7 +52,7 @@ internal interface IModWasmExecutor : IDisposable
     /// failed Load for an earlier mod would otherwise desync "Nth successful load"
     /// (ctx.Slot) from "Nth Load call" (an internally-counted handle). Returns the
     /// handle passed to every other method below (implementations may just echo
-    /// `slot` back, as WasmtimeModWasmExecutor does).
+    /// `slot` back).
     int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports);
 
     /// Every Call* below is span-IN (the caller's FlatSharp write buffer is reused
@@ -79,7 +78,7 @@ internal interface IModWasmExecutor : IDisposable
     void CallSpawned(int handle, ReadOnlySpan<byte> input);
 
     /// Tear down + re-instantiate this handle from fresh bytes, reusing the same
-    /// host imports (see WasmtimeModWasmExecutor's Reload doc comment for why).
+    /// host imports.
     void Reload(int handle, in ModSource source);
 
     /// Dispose this handle's per-instance runtime resources. The executor itself

@@ -16,10 +16,11 @@ public enum WasmBackend : byte
     /// Browser: host runs as a wasm component (NativeAOT-LLVM), mods are jco-transpiled
     /// and brokered by the JS glue. Requires ModdingConfig.JsChannel. See JcoModBackend.cs.
     Jco,
-    /// Native core-wasm module mods (desktop default) via the upstream Wasmtime NuGet +
-    /// the FlatSharp ModAbi wire contract (abi/mod-abi.fbs). See CoreWasmModBackend.cs.
-    /// The component-model mod path (wasmtime-dotnet fork) was removed — a component
-    /// binary is now rejected by ModdingPlugin's sniff guard.
+    /// Native (default). Desktop: wasm32-wasip2 component mods on the embedded
+    /// wasmtime (Component/ComponentModBackend.cs); a core-wasm module is rejected at
+    /// load. A guest that sets ModdingConfig.WasmExecutor instead relays every mod to
+    /// its native host over the FlatSharp wire (abi/mod-abi.fbs, CoreWasmModBackend.cs)
+    /// — internal to that guest/host pair, mods never see it.
     Core,
 }
 
@@ -74,7 +75,7 @@ internal interface IModInstance : IDisposable
     }
 
     /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
-    /// caller resets the shared ModHostContext first. Wasmtime instantiates fresh
+    /// caller resets the shared ModHostContext first. The component backend instantiates fresh
     /// from source.Bytes; Jco is deferred-capable — it may kick an async recompile
     /// and swap the instance on a LATER call (fire-and-forget from this call's POV).
     void Reload(in ModSource source);

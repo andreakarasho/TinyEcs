@@ -1,8 +1,8 @@
 // The `app` bridge a WASM guest/mod calls back into (spawn / component get-set /
 // query iter / emit-event / resource get-set). Every type here is neutral — no
 // wasmtime types, no generated bindings — so it compiles unchanged under both the
-// desktop core-wasm backend (CoreWasmModBackend applies a mod's CommandBuffer through
-// these Impl structs) and the browser Jco backend, and under WasmGuest. Each Impl
+// component backend, the relay backend (CoreWasmModBackend applies a mod's CommandBuffer
+// through these Impl structs) and the browser Jco backend, and under WasmGuest. Each Impl
 // struct exposes the guest-facing operations as concrete methods over neutral/BCL
 // types (ModSchedule/ModObserverKind/ModQueryTerm, plain strings/spans).
 //

@@ -1,15 +1,17 @@
 // Generic modding plugin. Loads WASM mods, runs their `setup`, then dispatches the
 // systems they registered into the matching Bevy Stage each frame. Runtime-agnostic:
-// this file has ZERO wasmtime references (compiles under WasmGuest) — CoreWasmModBackend.cs
-// (desktop core-wasm modules) / JcoModBackend.cs (browser) own the concrete runtime,
-// selected via ModdingConfig.Backend.
+// this file has ZERO wasmtime references (compiles under WasmGuest) — the backends own the
+// concrete runtime: Component/ComponentModBackend.cs (desktop: wasm32-wasip2 component
+// mods on an embedded wasmtime), CoreWasmModBackend.cs over ModdingConfig.WasmExecutor
+// (a guest relaying mods to its native host over abi/mod-abi.fbs), JcoModBackend.cs
+// (browser). See EnsureBackend.
 //
 // Game-agnostic: the host supplies a ModComponentRegistry and per-mod hooks
 // through ModdingConfig (registered before this plugin's Startup runs). The lib
 // knows no concrete game component, no networking, no input device — only the
 // generic ECS + registry contract.
 //
-// Mods live in the ModFolder (in the working dir / next to the exe) for the core-wasm
+// Mods live in the ModFolder (in the working dir / next to the exe) for the component
 // backend — one folder per mod: `<ModFolder>/<mod>/{mod.json, *.wasm}`. The Jco backend
 // has no filesystem on this path: discovery comes from ModdingConfig.JsChannel.ListMods()
 // instead (see SetupEcsMods). Either way, if no mods are found the plugin is a no-op, so
@@ -123,11 +125,8 @@ public readonly struct LoadedMod
 /// here re-enter a mod instance, so drive them ONLY from a SingleThreaded host system.
 public sealed class ModRuntimes
 {
-    // The wasm runtime hosting the mods: the core-wasm module backend
-    // (CoreWasmModBackend) on desktop, or the browser Jco backend.
+    // The wasm runtime hosting the mods — see ModdingPlugin.EnsureBackend.
     internal IModBackend Backend = null!;
-    // Component-model (wasip2) mods, created on the first one found — see PickBackend.
-    internal IModBackend? ComponentBackend;
     internal readonly List<ModRuntime> Runtimes = new();
 
     // Dispose the backend's engine (instances are owned by the runtimes). No
@@ -137,8 +136,6 @@ public sealed class ModRuntimes
     {
         Backend?.Dispose();
         Backend = null!;
-        ComponentBackend?.Dispose();
-        ComponentBackend = null;
     }
 
     /// Loaded mods in load order (index stable, matches the control list). Iterate with
@@ -218,10 +215,9 @@ public sealed class ModdingConfig
     /// Components + resources the host exposes to mods, keyed by WIT type-path.
     public ModComponentRegistry Registry = new();
 
-    /// Which wasm runtime hosts the mods. Core (native core-wasm modules) is the
-    /// desktop default; the browser host sets Jco. The GUEST_CORE guest ALSO uses
-    /// Core (same FlatSharp ModAbi wire format, core-wasm mods) but supplies
-    /// WasmExecutor + WasmManifestSource instead of a filesystem scan.
+    /// Which wasm runtime hosts the mods. Core (the default) = the native path: the
+    /// embedded component backend on desktop, or — when WasmExecutor is set (the
+    /// GUEST_CORE guest) — the relay to the native host. The browser host sets Jco.
     public WasmBackend Backend = WasmBackend.Core;
 
     /// host->guest transport for WasmBackend.Jco — supplied by the WASM_GUEST host
@@ -229,11 +225,12 @@ public sealed class ModdingConfig
     /// When set, mod DISCOVERY also switches from the filesystem scan to JsChannel.ListMods().
     public IJsModChannel? JsChannel;
 
-    /// WasmBackend.Core executor override for a host that can't embed Wasmtime —
-    /// the GUEST_CORE guest supplies its ModRelayExecutor (flat env imports to JS)
-    /// here; null (the default) means CoreWasmModBackend gets a WasmtimeModWasmExecutor
-    /// (desktop). Internal: only a host in this assembly's InternalsVisibleTo friend
-    /// list (TinyEcsModdingFriends) constructs an IModWasmExecutor.
+    /// WasmBackend.Core relay for a host that can't embed wasmtime — the GUEST_CORE
+    /// guest supplies its ModRelayExecutor here, and its native host runs the actual
+    /// component mods behind the abi/mod-abi.fbs wire. Null (the default) on desktop
+    /// means the embedded component backend. Internal: only a host in this assembly's
+    /// InternalsVisibleTo friend list (TinyEcsModdingFriends) constructs an
+    /// IModWasmExecutor.
     internal IModWasmExecutor? WasmExecutor;
 
     /// WasmBackend.Core mod DISCOVERY override — a JSON manifest-list provider
@@ -242,7 +239,7 @@ public sealed class ModdingConfig
     /// Null (the default) means the filesystem scan (DiscoverFolderMods) is used.
     internal Func<string>? WasmManifestSource;
 
-    /// Folder (relative to the exe + cwd) scanned for *.wasm component mods.
+    /// Folder (relative to the exe + cwd) scanned for wasm32-wasip2 component mods.
     /// Ignored when JsChannel or WasmManifestSource is set (discovery comes from
     /// that channel instead).
     public string ModFolder = "ecs-mods";
@@ -263,7 +260,7 @@ public sealed class ModdingConfig
     public readonly List<Action<string>> OnModTeardown = new();
 
 #if !WASM_GUEST
-    /// Component-model mods only: run once when the component backend is created, to
+    /// Run once when the component backend is created, to
     /// define the host's own WIT interfaces on the shared component linker (see
     /// Component/ComponentModImports.cs). The generic `tinyecs:modding/ecs` is built in.
     public readonly List<Action<ComponentModImports>> ComponentImports = new();
@@ -416,27 +413,25 @@ public readonly struct ModdingPlugin : IPlugin
     {
         if (runtimes.Backend != null)
             return;
-#if !WASM_GUEST
-        // Desktop hosts core-wasm module mods (CoreWasmModBackend) over the upstream
-        // Wasmtime NuGet. Excluded from the browser guest build; there the only
-        // Core-backend option is the GUEST_CORE guest-relay executor below (WASM_GUEST
-        // without GUEST_CORE has no IModWasmExecutor at all — Jco is the only backend).
+        // Core: a relay executor when the host supplies one (the GUEST_CORE guest, whose
+        // native host runs the component mods), else the embedded component backend
+        // (desktop). FlatSharp-free plain Jco guests have neither.
         if (config.Backend == WasmBackend.Core)
         {
-            runtimes.Backend = new CoreWasmModBackend(new WasmtimeModWasmExecutor());
-        }
-        else
-#elif GUEST_CORE
-        // GUEST_CORE guest: same FlatSharp ModAbi wire format as desktop, relayed
-        // through flat env imports to JS instead of an embedded Wasmtime — the
-        // host (BootWasm) supplies the executor via ModdingConfig.WasmExecutor.
-        if (config.Backend == WasmBackend.Core)
-        {
-            runtimes.Backend = new CoreWasmModBackend(config.WasmExecutor
-                ?? throw new InvalidOperationException("WasmBackend.Core under GUEST_CORE requires ModdingConfig.WasmExecutor"));
-        }
-        else
+#if !WASM_GUEST || GUEST_CORE
+            if (config.WasmExecutor != null)
+            {
+                runtimes.Backend = new CoreWasmModBackend(config.WasmExecutor);
+                return;
+            }
 #endif
+#if !WASM_GUEST
+            runtimes.Backend = new ComponentModBackend(config.ComponentImports);
+            return;
+#else
+            throw new InvalidOperationException("WasmBackend.Core in a guest requires ModdingConfig.WasmExecutor");
+#endif
+        }
         if (config.Backend == WasmBackend.Jco)
         {
             runtimes.Backend = new JcoModBackend(config.JsChannel
@@ -486,8 +481,8 @@ public readonly struct ModdingPlugin : IPlugin
                 var source = config.JsChannel != null || config.WasmManifestSource != null
                     ? new ModSource(manifest.Name, null)
                     : ReadModBytes(manifest.Name, wasmPath);
-                var backend = PickBackend(runtimes, config, manifest, source.Bytes);
-                var instance = backend.Load(in source, ctx);
+                RejectCoreModule(manifest, source.Bytes);
+                var instance = runtimes.Backend.Load(in source, ctx);
                 instance.Setup();
 
                 var rt = new ModRuntime
@@ -527,22 +522,15 @@ public readonly struct ModdingPlugin : IPlugin
         }
     }
 
-    // Core modules go to the configured backend (Core on desktop, Jco in the browser).
-    // A Component Model binary (layer bytes 01 00 at offset 6-7; a core module has
-    // 00 00) goes to the component backend (Component/ComponentModBackend.cs, desktop
-    // only). Jco has no bytes (mods are name-keyed), so the sniff is a no-op there.
-    private static IModBackend PickBackend(ModRuntimes runtimes, ModdingConfig config, ModManifest manifest, byte[]? bytes)
+    // Mods are wasm32-wasip2 components only. Bytes are read off disk only for the
+    // embedded component backend (a relay / Jco channel is name-keyed, bytes null), so
+    // that is where a core module (layer bytes 00 00 at offset 6-7; a component has
+    // 01 00) is turned away — before wasmtime gives a less helpful compile error.
+    private static void RejectCoreModule(ModManifest manifest, byte[]? bytes)
     {
-        if (bytes is { Length: >= 8 } && bytes[6] == 0x01 && bytes[7] == 0x00)
-        {
-#if WASM_GUEST
+        if (bytes is { Length: >= 8 } && bytes[6] == 0x00 && bytes[7] == 0x00)
             throw new NotSupportedException(
-                $"mod '{manifest.Name}' is a component-model binary; this host only runs core-wasm mods.");
-#else
-            return runtimes.ComponentBackend ??= new ComponentModBackend(config.ComponentImports);
-#endif
-        }
-        return runtimes.Backend;
+                $"{manifest.Name} is a core-wasm (p1) module; mods must be wasm32-wasip2 components — rebuild against the current SDK");
     }
 
     // The only two places mod BYTES are read off disk. Isolated behind one method so the
@@ -872,10 +860,9 @@ public readonly struct ModdingPlugin : IPlugin
     // Tear the mod down and re-instantiate it (picks up a rebuilt .wasm). Reuses the
     // same ModRuntime + ModHostContext AND the existing Linker + bridge (wasmtime): the
     // host import functions never change between loads, and the fork registers every
-    // linker.Define'd function in a STATIC, process-global, never-freed table capped
-    // at 1024 (ComponentExport.RegisterFunction). Re-Define'ing on reload leaked a full
-    // set of slots each time and overflowed almost immediately, so we do NOT build a
-    // new Linker — we only recompile the component and instantiate it on a fresh Store
+    // linker.Define'd function in a STATIC, process-global, never-freed table
+    // (ComponentExport.RegisterFunction). Re-Define'ing on reload would leak a full set
+    // of slots each time, so we do NOT build a new Linker — we only recompile the component and instantiate it on a fresh Store
     // with the original linker. Zero new function registrations. Under the Jco backend
     // there is no Linker or bytes at all: the channel re-instantiates by manifest name
     // (deferred-capable — see IJsModChannel.Reload).
@@ -884,8 +871,7 @@ public readonly struct ModdingPlugin : IPlugin
     // so observers wired at first load persist (packet observers are exempt: the packet
     // chain reads ctx.PacketObservers live, so a reload rewires them fully). Same-named exports on the new
     // instance still receive them, but observers a mod registers ONLY on reload are
-    // not wired. (The 1024-function cap still bounds how many mods can be LOADED at
-    // once — Define count scales with mod count — but reload no longer consumes it.)
+    // not wired.
     private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info, ModdingConfig config)
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
@@ -908,6 +894,7 @@ public readonly struct ModdingPlugin : IPlugin
         var source = config.JsChannel != null || config.WasmManifestSource != null
             ? new ModSource(rt.Manifest.Name, null)
             : ReadModBytes(rt.Manifest.Name, rt.WasmPath);
+        RejectCoreModule(rt.Manifest, source.Bytes);
         rt.Instance.Reload(in source);
 
         // The CEILING above, made visible: the host globals wired at first load stay

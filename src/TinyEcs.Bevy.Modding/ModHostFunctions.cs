@@ -1,10 +1,10 @@
 // Host functions a mod calls by name: everything outside the ECS contract (data
 // files, game actions, raw messages, storage, ...). The HOST registers them; the lib
 // only routes a call to the body. One wire for every target:
-//   - p1 core modules: the single `env.mod_call(name_ptr, name_len, args_ptr,
-//     args_len) -> i64` import (WasmtimeModWasmExecutor / a relay executor); args
-//     and result are UTF-8 JSON, the result written into the guest arena.
-//   - p2 components / tests: call Call(...) directly, or call the host's typed
+//   - the guest relay (abi/mod-abi.fbs): the single `env.mod_call(name_ptr, name_len,
+//     args_ptr, args_len) -> i64` import of a relay executor; args and result are
+//     UTF-8 JSON, the result written into the guest arena.
+//   - components / tests: call Call(...) directly, or call the host's typed
 //     methods behind the adapters without JSON at all.
 //
 // Names are "<package>/<interface>#<function>" without the version (the WIT names the
