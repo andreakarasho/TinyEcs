@@ -10,7 +10,8 @@
 //    of ids, so in-call writes can't disturb iteration);
 //  - commands apply in order AFTER the export returns (spawn hands out the id at once);
 //  - observers ride the same host global observers (ModdingPlugin.RegisterModObservers),
-//    buffered and flushed at the same points.
+//    buffered and flushed at the same points; packet observers are called
+//    synchronously by ModPacketChain through `observe-packet`.
 // Two term kinds have no core-ABI twin and are handled here: `added` (a read term
 // post-filtered on IModComponent.AddedSince) and the res / events parameters.
 
@@ -348,6 +349,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     private Cm.ComponentInstanceFunction _setup;
     private Cm.ComponentInstanceFunction _run;
     private Cm.ComponentInstanceFunction _observe;
+    private Cm.ComponentInstanceFunction _observePacket;
 
     private readonly Dictionary<ModSystemSpec, ComponentSystem> _systems = new();
     private readonly Dictionary<string, ComponentSystem> _observers = new();
@@ -355,6 +357,9 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     private readonly Dictionary<string, Cm.ComponentInstanceFunction?> _exports = new();
     private readonly List<ComponentEventBuffer> _eventBuffers = new();
     private readonly ModJsonBuffer _json = new();
+    // The last packet observer's replacement (valid until the next call).
+    private byte[] _packetReplacement = new byte[512];
+    private int _packetReplacementLength;
 
     public ComponentModInstance(ComponentModBackend backend, Cm.Engine engine, byte[] bytes, ModHostContext ctx)
     {
@@ -375,6 +380,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         _setup = _instance.GetFunction("setup");
         _run = _instance.GetFunction("run");
         _observe = _instance.GetFunction("observe");
+        _observePacket = _instance.GetFunction("observe-packet");
     }
 
     // ── setup-time callbacks (from ComponentModBackend's host functions) ──────
@@ -396,6 +402,14 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         var token = "c" + _observers.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _observers[token] = sys;
         new AppImpl(Ctx).AddObserver(token, kind, path);
+        TrackEvents(sys);
+    }
+
+    internal void AddPacketObserver(ModPacketDirection dir, ReadOnlySpan<byte> ids, ComponentSystem sys)
+    {
+        var token = "c" + _observers.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _observers[token] = sys;
+        new AppImpl(Ctx).AddPacketObserver(token, dir, ids);
         TrackEvents(sys);
     }
 
@@ -528,6 +542,70 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         {
             Release(sys);
         }
+    }
+
+    // observe-packet(system, direction, packet, params) -> verdict.
+    public ModPacketVerdict CallPacketObserver(string export, ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
+    {
+        replacement = default;
+        if (!_observers.TryGetValue(export, out var sys))
+            return ModPacketVerdict.Pass;
+        var hasQuery = false;
+        Evaluate(sys, ref hasQuery);
+        var verdict = ModPacketVerdict.Pass;
+        var prev = Enter();
+        var cx = Cm.StoreContext.FromStore(_store);
+        var args = stackalloc Cm.ComponentValue[4];
+        args[0] = ComponentModBackend.Utf8String(sys.NameUtf8);
+        args[1] = Cm.ComponentValue.CreateEnum(dir, &ComponentModBackend.PacketDirectionName);
+        var bytes = new Cm.ListBuilder(packet.Length);
+        for (var i = 0; i < packet.Length; i++)
+            bytes[i] = Cm.ComponentValue.CreateByte(packet[i]);
+        args[2] = new Cm.ComponentValue(bytes, externallyOwned: false);
+        args[3] = BuildParams(sys, cx);
+
+        var ok = false;
+        try
+        {
+            using (var results = _instance.Call(_observePacket, 1, args, 4))
+                verdict = ReadVerdict(results[0]);
+            ok = true;
+        }
+        finally
+        {
+            for (var i = 0; i < 4; i++)
+                args[i].Dispose(_store);
+            Exit(prev);
+            if (ok)
+                Commands.Apply();
+            else
+                Commands.Discard();
+            Release(sys);
+        }
+        if (verdict == ModPacketVerdict.Replace)
+            replacement = _packetReplacement.AsSpan(0, _packetReplacementLength);
+        return verdict;
+    }
+
+    // Copied out while the results are alive (the commands applied next may re-enter).
+    private ModPacketVerdict ReadVerdict(in Cm.ComponentValue value)
+    {
+        var (disc, payload) = value.ToVariantRaw();
+        var name = disc.Span;
+        if (name.SequenceEqual("pass"u8))
+            return ModPacketVerdict.Pass;
+        if (name.SequenceEqual("block"u8))
+            return ModPacketVerdict.Block;
+        if (!name.SequenceEqual("replace"u8))
+            throw new InvalidOperationException($"observe-packet: unknown verdict '{System.Text.Encoding.UTF8.GetString(name)}'");
+        var list = payload!.Value.ToListBuilder();
+        if (list.Length == 0)
+            return ModPacketVerdict.Pass;
+        if (_packetReplacement.Length < list.Length)
+            _packetReplacement = new byte[Math.Max(list.Length, _packetReplacement.Length * 2)];
+        Cm.ComponentValue.ReadListOfPrimitives(list, _packetReplacement.AsSpan(0, list.Length));
+        _packetReplacementLength = list.Length;
+        return ModPacketVerdict.Replace;
     }
 
     // Snapshot every query, swap event buffers. Returns whether anything has rows/events.
@@ -687,14 +765,6 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     }
 
     private void Exit(ComponentModInstance? prev) => Backend.Current = prev;
-
-    public ModPacketVerdict OnPacket(ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
-    {
-        if (Backend.PacketHook is { } hook)
-            return hook(Ctx, dir, packet, out replacement);
-        replacement = default;
-        return ModPacketVerdict.Pass;
-    }
 
     public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data) => false;
 

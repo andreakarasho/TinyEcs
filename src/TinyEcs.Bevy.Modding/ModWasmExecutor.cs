@@ -32,7 +32,7 @@ internal interface IModImportSink
 }
 
 /// Wasm-mechanics seam: compiles/instantiates a mod module and drives its guest
-/// exports (mod_setup/run/observer/on_packet) + reload, entirely over
+/// exports (mod_setup/run/observer/spawned) + reload, entirely over
 /// byte[]-in/byte[]-out. Implementations
 /// own arena allocation, span re-acquisition (the SPAN RULE — see
 /// WasmtimeModWasmExecutor.cs), and packed-return decoding internally; callers
@@ -71,15 +71,6 @@ internal interface IModWasmExecutor : IDisposable
 
     /// Call mod_observer(obsId, entity, input) -> CommandBuffer bytes.
     Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input);
-
-    /// Call the OPTIONAL mod_on_packet(dir, data) -> verdict. Pass when the guest
-    /// exports none. For Replace, `replacement` is a slice of executor-owned memory
-    /// valid until the next call on this handle.
-    ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
-    {
-        replacement = default;
-        return ModPacketVerdict.Pass;
-    }
 
     /// Call the OPTIONAL mod_spawned(SpawnedInput) export — no return. Invoked right
     /// after the host applies a CommandBuffer that spawned at least one entity, so the

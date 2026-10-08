@@ -85,7 +85,6 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         public Func<int, int, long> SetupFn = null!;
         public Func<int, int, int, long>? RunFn;
         public Func<int, long, int, int, long>? ObserverFn;
-        public Func<int, int, int, long>? OnPacketFn;
         public Action<int, int>? SpawnedFn;
 
         // Grow-only copy-out buffer for the guest's packed reply — see CopyPackedOut.
@@ -143,25 +142,6 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         var ptr = WriteInputToArena(slot, input);
         var packed = (ulong)slot.ObserverFn((int)obsId, (long)entity, ptr, input.Length);
         return CopyPackedOut(slot, packed);
-    }
-
-    // mod_on_packet(dir, ptr, len) -> i64: 0 pass, 1 block, else len<<32|ptr of the
-    // replacement bytes in the guest arena (copied out into the reply buffer).
-    public ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
-    {
-        replacement = default;
-        var slot = _slots[handle]!;
-        if (slot.OnPacketFn == null)
-            return ModPacketVerdict.Pass;
-        slot.Store.SetEpochDeadline(CallDeadlineTicks);
-        var ptr = WriteInputToArena(slot, data);
-        var packed = slot.OnPacketFn((int)dir, ptr, data.Length);
-        if (packed == 0)
-            return ModPacketVerdict.Pass;
-        if (packed == 1)
-            return ModPacketVerdict.Block;
-        replacement = CopyPackedOut(slot, (ulong)packed).Span;
-        return replacement.IsEmpty ? ModPacketVerdict.Pass : ModPacketVerdict.Replace;
     }
 
     public void CallSpawned(int handle, ReadOnlySpan<byte> input)
@@ -230,7 +210,6 @@ internal sealed class WasmtimeModWasmExecutor : IModWasmExecutor
         slot.SetupFn = instance.GetFunction<int, int, long>("mod_setup") ?? throw new InvalidOperationException("core mod exports no 'mod_setup'");
         slot.RunFn = instance.GetFunction<int, int, int, long>("mod_run");
         slot.ObserverFn = instance.GetFunction<int, long, int, int, long>("mod_observer");
-        slot.OnPacketFn = instance.GetFunction<int, int, int, long>("mod_on_packet");
         slot.SpawnedFn = instance.GetAction<int, int>("mod_spawned");
         // WASI reactor init (globals / component ctors) — before any other export.
         instance.GetAction("_initialize")?.Invoke();

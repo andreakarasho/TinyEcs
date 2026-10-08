@@ -62,10 +62,12 @@ internal interface IModInstance : IDisposable
     void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
         => CallObserver(export, entity, System.Text.Encoding.UTF8.GetString(json));
 
-    /// One intercepted message (ModPacketChain): the guest's on-packet verdict. For
-    /// Replace, `replacement` is valid until the next call on this instance. Defaults
-    /// to Pass for a backend without the export.
-    ModPacketVerdict OnPacket(ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
+    /// Run the packet observer `export` (a Packet ModObserverSpec.Name) on one message
+    /// (ModPacketChain) and return its verdict; its params are evaluated and its
+    /// commands applied like any observer's. For Replace, `replacement` is valid until
+    /// the next call on this instance. Defaults to Pass for a backend without packet
+    /// observers.
+    ModPacketVerdict CallPacketObserver(string export, ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
     {
         replacement = default;
         return ModPacketVerdict.Pass;

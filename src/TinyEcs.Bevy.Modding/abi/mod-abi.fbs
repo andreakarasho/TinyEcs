@@ -20,15 +20,14 @@
 //   mod_setup(ptr, len) -> u64           in: Handshake, out (guest return): SetupReply
 //   mod_run(sys_id, ptr, len) -> u64     in: SystemInput, out: CommandBuffer or 0
 //   mod_observer(obs_id, entity: u64, ptr, len) -> u64
-//                                        in: ObserverInput, out: CommandBuffer or 0
+//                                        in: ObserverInput, out: CommandBuffer or 0.
+//                                        A Packet observer runs synchronously inside
+//                                        ModPacketChain; its verdict rides the returned
+//                                        CommandBuffer (0 = pass).
 //   mod_spawned(ptr, len)                in: SpawnedInput, no return. Called right after
 //                                        the host applies a CommandBuffer that contained
 //                                        >= 1 SpawnCmd, so the guest can map its temp ids
 //                                        onto real ecs ids.
-//   mod_on_packet(dir, ptr, len) -> u64  OPTIONAL. An intercepted message (ModPacketChain),
-//                                        full wire bytes in the arena; dir 0 = incoming,
-//                                        1 = outgoing. Returns 0 pass, 1 block, else
-//                                        len<<32|ptr of the replacement bytes.
 //
 // Host imports: `env.mod_call(name_ptr, name_len, args_ptr, args_len) -> u64` only —
 // name = UTF-8 "<package>/<interface>#<function>", args = UTF-8 JSON array; returns 0
@@ -105,7 +104,19 @@ enum ObserverKind : ubyte {
   Despawn = 1,
   Insert = 2,   // tinyecs-mod `on-add`
   Remove = 3,   // tinyecs-mod `on-remove`
-  Custom = 4    // tinyecs-mod `on-event`; event_name = the event's type path
+  Custom = 4,   // tinyecs-mod `on-event`; event_name = the event's type path
+  Packet = 5    // tinyecs-mod `on-packet`; ObserverDecl.packet_direction / packet_ids
+}
+
+enum PacketDirection : ubyte {
+  Incoming = 0,
+  Outgoing = 1
+}
+
+enum PacketVerdict : ubyte {
+  Pass = 0,
+  Block = 1,
+  Replace = 2   // CommandBuffer.replacement
 }
 
 table QueryTerm {
@@ -140,6 +151,8 @@ table ObserverDecl {
   type_id: uint16;        // Insert/Remove target; 0xFFFF otherwise
   event_name: string;     // set when kind == Custom
   params: [ParamDecl];    // the observer's parameters after the trigger
+  packet_direction: PacketDirection;   // Packet only
+  packet_ids: [ubyte];    // Packet only: the message ids (byte 0) it sees; empty = every id
 }
 
 table SetupReply {
@@ -255,6 +268,8 @@ union Cmd {
 
 table CommandBuffer {
   cmds: [Cmd];
+  verdict: PacketVerdict;   // Packet observers only; ignored elsewhere
+  replacement: [ubyte];     // verdict == Replace: the bytes to forward instead
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +282,8 @@ table ObserverInput {
   queries: [QueryRows];      // the observer's params (ObserverDecl.params), as SystemInput
   resources: [ResValue];
   events: [EventValues];
+  packet_direction: PacketDirection;   // Packet observers: the message, full wire bytes,
+  packet: [ubyte];                     // id first (value is absent)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 // ComponentModBackend test fixture: a tinyecs:modding `guest` component exercising every
 // system parameter kind (commands, query terms, res / res-mut, events) plus an
-// on-add observer. ComponentModBackendTests asserts the effects host-side.
+// on-add observer and two on-packet observers. ComponentModBackendTests asserts the effects host-side.
 
 wit_bindgen::generate!({ world: "guest", path: "../../../../src/TinyEcs.Bevy.Modding/abi/tinyecs-mod.wit" });
 
-use tinyecs::modding::ecs::{Schedule, System, Term, Trigger};
+use tinyecs::modding::ecs::{PacketFilter, Schedule, System, Term, Trigger};
 
 struct Fixture;
 
@@ -41,6 +41,19 @@ impl Guest for Fixture {
         let on_tag = System::new("on_tag");
         on_tag.add_commands();
         app.add_observer(&Trigger::OnAdd("test/tag".into()), &on_tag);
+
+        let on_in = System::new("on_in");
+        on_in.add_res_mut("test/score");
+        app.add_observer(
+            &Trigger::OnPacket(PacketFilter { direction: PacketDirection::Incoming, ids: vec![0x10] }),
+            &on_in,
+        );
+
+        let on_out = System::new("on_out");
+        app.add_observer(
+            &Trigger::OnPacket(PacketFilter { direction: PacketDirection::Outgoing, ids: vec![] }),
+            &on_out,
+        );
     }
 
     fn run(system: String, params: Vec<Param>) {
@@ -98,6 +111,32 @@ impl Guest for Fixture {
             trigger.entity,
             &[("test/seen".into(), format!("{{\"Value\":{}}}", trigger.entity))],
         );
+    }
+
+    // on_in (incoming 0x10): adds 1000 to the score, blocks [0x10, 0], else appends 0x42.
+    // on_out (every outgoing id): replaces with [0x99].
+    fn observe_packet(system: String, direction: PacketDirection, packet: Vec<u8>, params: Vec<Param>) -> Verdict {
+        match system.as_str() {
+            "on_in" => {
+                assert!(matches!(direction, PacketDirection::Incoming));
+                let [Param::Res(score)] = &params[..] else {
+                    panic!("on_in: unexpected params")
+                };
+                let value = score.get().map(|s| num(&s, "Value")).unwrap_or(0) + 1000;
+                score.set(&format!("{{\"Value\":{}}}", value));
+                if packet.get(1) == Some(&0) {
+                    return Verdict::Block;
+                }
+                let mut out = packet;
+                out.push(0x42);
+                Verdict::Replace(out)
+            }
+            "on_out" => {
+                assert!(matches!(direction, PacketDirection::Outgoing));
+                Verdict::Replace(vec![0x99])
+            }
+            other => panic!("unknown packet observer {other}"),
+        }
     }
 }
 

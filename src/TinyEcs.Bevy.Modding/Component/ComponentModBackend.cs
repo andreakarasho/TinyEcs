@@ -58,9 +58,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     /// The instance whose guest export is executing (null between calls).
     internal ComponentModInstance? Current;
 
-    /// The host's packet hook (ComponentModImports.OnPacket).
-    internal ComponentPacketHook? PacketHook;
-
     public ComponentModBackend(IReadOnlyList<Action<ComponentModImports>> hostImports)
     {
         _pathLookup = _paths.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -259,6 +256,17 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         var m = Mod(state);
         m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.App);
         var (kind, payload) = args[1].ToVariant();
+        if (kind == "on-packet")
+        {
+            // packet-filter { direction, ids }
+            var filter = payload!.Value.ToRecordBuilder();
+            var dir = filter.Get(0).ToEnum<ModPacketDirection>(&PacketDirectionOf);
+            var idList = filter.Get(1).ToListBuilder();
+            Span<byte> ids = idList.Length <= 256 ? stackalloc byte[idList.Length] : new byte[idList.Length];
+            Cm.ComponentValue.ReadListOfPrimitives(idList, ids);
+            m.AddPacketObserver(dir, ids, m.SystemOf(args[2].ToResourceRep(cx)));
+            return;
+        }
         var path = payload is { } p ? m.Backend.Path(p) : "";
         var obsKind = kind switch
         {
@@ -360,6 +368,21 @@ internal sealed unsafe class ComponentModBackend : IModBackend
             list[i] = Cm.ComponentValue.CreateString(current[i], externallyOwned: true);
         results[0] = new Cm.ComponentValue(list, externallyOwned: true);
     }
+
+    // packet-direction enum names, as WIT spells them. Constants: the fork never frees
+    // an enum value's name.
+    private static readonly Cm.ByteVector DirIncoming = Cm.ByteVector.Constant("incoming");
+    private static readonly Cm.ByteVector DirOutgoing = Cm.ByteVector.Constant("outgoing");
+
+    internal static Cm.ByteVector PacketDirectionName(ModPacketDirection dir)
+        => dir == ModPacketDirection.Incoming ? DirIncoming : DirOutgoing;
+
+    private static ModPacketDirection PacketDirectionOf(Cm.ByteVector name) => name.GetString() switch
+    {
+        "incoming" => ModPacketDirection.Incoming,
+        "outgoing" => ModPacketDirection.Outgoing,
+        var other => throw new InvalidOperationException($"unknown packet direction '{other}'"),
+    };
 
     private static ModSchedule ScheduleOf(Cm.ByteVector name) => name.GetString() switch
     {

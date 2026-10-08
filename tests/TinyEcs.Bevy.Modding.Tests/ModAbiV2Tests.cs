@@ -7,8 +7,8 @@ using Xunit;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
-// ABI v2/v3: real entity ids back to the guest (mod_spawned), the Changed query term,
-// the mod_on_packet export. Drives the internal seams directly (via
+// ABI v2-v4: real entity ids back to the guest (mod_spawned), the Changed query term,
+// packet observers (ObserverKind.Packet through mod_observer). Drives the internal seams directly (via
 // InternalsVisibleTo) — no wasm runtime, no game glue.
 public class ModAbiV2Tests
 {
@@ -304,53 +304,85 @@ public class ModAbiV2Tests
         new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
 
         var hs = Handshake.Serializer.Parse(exec.HandshakeBytes!);
-        Assert.Equal(3u, hs.AbiVersion);
+        Assert.Equal(4u, hs.AbiVersion);
     }
 
-    // ── mod_on_packet through the runner ────────────────────────────────────────
+    // ── packet observers through the runner ─────────────────────────────────────
 
-    [Fact]
-    public void OnPacket_passes_the_executor_verdict_and_replacement_through()
+    private static (ModAbiRunner Runner, ScriptedExecutor Exec, ModHostContext Ctx) PacketRunner(World world, CommandBuffer? reply)
     {
-        using var world = new World();
         var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
         var exec = new ScriptedExecutor
         {
-            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply()),
-            PacketVerdict = ModPacketVerdict.Replace,
-            PacketReplacement = new byte[] { 0x22, 0x01 },
+            SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply
+            {
+                Observers = new List<ObserverDecl>
+                {
+                    new()
+                    {
+                        Id = 7,
+                        Kind = ObserverKind.Packet,
+                        TypeId = 0xFFFF,
+                        PacketDirection = PacketDirection.Outgoing,
+                        PacketIds = new byte[] { 0x22 },
+                    },
+                },
+            }),
+            ObserverReplyBytes = reply == null ? null : Bytes(CommandBuffer.Serializer, reply),
         };
         var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
         runner.Setup();
-
-        var verdict = runner.OnPacket(ModPacketDirection.Outgoing, new byte[] { 0x22, 0x00 }, out var replacement);
-
-        Assert.Equal(ModPacketVerdict.Replace, verdict);
-        Assert.Equal(new byte[] { 0x22, 0x01 }, replacement.ToArray());
-        Assert.Equal(ModPacketDirection.Outgoing, exec.LastPacketDir);
-        Assert.Equal(new byte[] { 0x22, 0x00 }, exec.LastPacket);
+        return (runner, exec, ctx);
     }
 
     [Fact]
-    public void OnPacket_defaults_to_pass_for_an_executor_without_the_export()
+    public void A_packet_observer_decl_registers_its_filter_and_interest()
     {
         using var world = new World();
-        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry() };
-        IModWasmExecutor exec = new BareExecutor();
-        Assert.Equal(ModPacketVerdict.Pass, exec.CallOnPacket(0, ModPacketDirection.Incoming, new byte[] { 1 }, out var r));
-        Assert.True(r.IsEmpty);
+        var (_, _, ctx) = PacketRunner(world, null);
+
+        var obs = Assert.Single(ctx.PacketObservers);
+        Assert.Empty(ctx.Observers); // never wired to a host ECS observer
+        Assert.Equal("7", obs.Name);
+        Assert.True(obs.SeesPacket(ModPacketDirection.Outgoing, 0x22));
+        Assert.False(obs.SeesPacket(ModPacketDirection.Incoming, 0x22));
+        Assert.False(obs.SeesPacket(ModPacketDirection.Outgoing, 0x23));
+        Assert.True(ModPacketChain.Interested(ctx, ModPacketDirection.Outgoing, 0x22));
+        Assert.False(ModPacketChain.Interested(ctx, ModPacketDirection.Outgoing, 0x23));
     }
 
-    private sealed class BareExecutor : IModWasmExecutor
+    [Fact]
+    public void A_packet_observer_gets_the_message_and_its_verdict_rides_the_command_buffer()
     {
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
-        public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => default;
-        public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => default;
-        public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
-        public void CallSpawned(int handle, ReadOnlySpan<byte> input) { }
-        public void Reload(int handle, in ModSource source) { }
-        public void DisposeInstance(int handle) { }
-        public void Dispose() { }
+        using var world = new World();
+        var (runner, exec, _) = PacketRunner(world, new CommandBuffer
+        {
+            Verdict = PacketVerdict.Replace,
+            Replacement = new byte[] { 0x22, 0x01 },
+        });
+
+        var verdict = runner.CallPacketObserver("7", ModPacketDirection.Outgoing, new byte[] { 0x22, 0x00 }, out var replacement);
+
+        Assert.Equal(ModPacketVerdict.Replace, verdict);
+        Assert.Equal(new byte[] { 0x22, 0x01 }, replacement.ToArray());
+        Assert.Equal(7u, exec.LastObsId);
+        Assert.Equal(0ul, exec.LastObsEntity);
+        var input = ObserverInput.Serializer.Parse(exec.LastObserverInput!);
+        Assert.Equal(PacketDirection.Outgoing, input.PacketDirection);
+        Assert.Equal(new byte[] { 0x22, 0x00 }, input.Packet!.Value.ToArray());
+        Assert.Null(input.Value);
+    }
+
+    [Fact]
+    public void A_packet_observer_without_a_reply_passes_and_block_blocks()
+    {
+        using var world = new World();
+        var (passRunner, _, _) = PacketRunner(world, null);
+        Assert.Equal(ModPacketVerdict.Pass, passRunner.CallPacketObserver("7", ModPacketDirection.Outgoing, new byte[] { 0x22 }, out var r));
+        Assert.True(r.IsEmpty);
+
+        var (blockRunner, _, _) = PacketRunner(world, new CommandBuffer { Verdict = PacketVerdict.Block });
+        Assert.Equal(ModPacketVerdict.Block, blockRunner.CallPacketObserver("7", ModPacketDirection.Outgoing, new byte[] { 0x22 }, out _));
     }
 
     private static byte[] Bytes<T>(ISerializer<T> serializer, T value) where T : class
@@ -375,17 +407,16 @@ public class ModAbiV2Tests
             return SetupReplyBytes;
         }
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => RunReplyBytes;
-        public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
-        public ModPacketVerdict PacketVerdict;
-        public byte[] PacketReplacement = System.Array.Empty<byte>();
-        public ModPacketDirection LastPacketDir;
-        public byte[]? LastPacket;
-        public ModPacketVerdict CallOnPacket(int handle, ModPacketDirection dir, ReadOnlySpan<byte> data, out ReadOnlySpan<byte> replacement)
+        public byte[]? ObserverReplyBytes;
+        public uint LastObsId;
+        public ulong LastObsEntity;
+        public byte[]? LastObserverInput;
+        public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input)
         {
-            LastPacketDir = dir;
-            LastPacket = data.ToArray();
-            replacement = PacketReplacement;
-            return PacketVerdict;
+            LastObsId = obsId;
+            LastObsEntity = entity;
+            LastObserverInput = input.ToArray();
+            return ObserverReplyBytes;
         }
         public void CallSpawned(int handle, ReadOnlySpan<byte> input) => SpawnedBytes = input.ToArray();
         public void Reload(int handle, in ModSource source) { }

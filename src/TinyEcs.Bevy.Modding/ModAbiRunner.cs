@@ -20,7 +20,7 @@ internal sealed class ModAbiRunner : IModInstance
 {
     // Canonical ABI version stamped into every Handshake. Bumped only on a
     // breaking wire change; the guest asserts it matches its compiled schema.
-    internal const uint AbiVersion = 3;
+    internal const uint AbiVersion = 4;
 
     private readonly IModWasmExecutor _executor;
     private readonly int _handle;
@@ -59,6 +59,11 @@ internal sealed class ModAbiRunner : IModInstance
     private readonly ModJsonBuffer _obsJson = new();
     private readonly CompValue _obsValue = new() { Encoding = ModAbi.Encoding.Json };
     private readonly ObserverInput _obsInput;
+    // Packet observer scratch: the message (FlatSharp serializes from Memory, the chain
+    // hands a span) and the verdict's replacement (valid until the next call).
+    private byte[] _packetInput = new byte[512];
+    private byte[] _packetReplacement = new byte[512];
+    private int _packetReplacementLength;
     // Reused SpawnedInput graph; the pair list is grown, cleared and refilled.
     private readonly List<SpawnResolved> _spawnedLive = new();
     private readonly List<SpawnResolved> _spawnedPool = new();
@@ -107,7 +112,7 @@ internal sealed class ModAbiRunner : IModInstance
     }
 
     // SetupReply.systems -> ctx.Systems/SystemsByStage (via AppImpl.AddSystems, exactly
-    // as the component path does) + observers -> ctx.Observers. Declaration order is the
+    // as the component path does) + observers -> ctx.Observers / PacketObservers. Declaration order is the
     // list order; after/before are recorded on the spec (the runner uses declaration
     // order, matching how the generic scheduler dispatches).
     private void TranslateSetup(SetupReply reply)
@@ -155,6 +160,9 @@ internal sealed class ModAbiRunner : IModInstance
                 };
                 var token = od.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var spec = new ModObserverSpec { Name = token, Kind = kind, TypePath = typePath };
+                if (kind == ModObserverKind.Packet)
+                    spec.SetPacketFilter((ModPacketDirection)(byte)od.PacketDirection,
+                        od.PacketIds is { } ids ? ids.Span : default);
                 if (od.Params != null && od.Params.Count > 0)
                 {
                     var holder = new SystemImpl(token);
@@ -162,7 +170,7 @@ internal sealed class ModAbiRunner : IModInstance
                         AddParam(holder, pd, "observer " + token);
                     spec.Params.AddRange(holder.Spec.Params);
                 }
-                _ctx.Observers.Add(spec);
+                _ctx.AddObserver(spec);
                 var valueType = kind is ModObserverKind.Insert or ModObserverKind.Remove ? od.TypeId
                     : kind == ModObserverKind.Custom && od.EventName != null && _state.PathToId.TryGetValue(od.EventName, out var evId) ? evId
                     : (ushort)0xFFFF;
@@ -610,7 +618,18 @@ internal sealed class ModAbiRunner : IModInstance
         _obsInput.Queries = null;
         _obsInput.Resources = null;
         _obsInput.Events = null;
+        _obsInput.Packet = null;
+        _obsInput.PacketDirection = default;
+        CallObserverInput(export, entity, obs);
+    }
 
+    // Serializes _obsInput (the caller filled the trigger half) plus the observer's own
+    // params, calls the guest and applies the returned commands. A packet observer's
+    // verdict + replacement are taken out of the reply before anything else can call
+    // into this instance.
+    private ModPacketVerdict CallObserverInput(string export, ulong entity, (uint ObsId, ushort TypeId, ModObserverSpec Spec) obs)
+    {
+        var verdict = ModPacketVerdict.Pass;
         _snapshotScratch.Clear();
         try
         {
@@ -643,9 +662,14 @@ internal sealed class ModAbiRunner : IModInstance
             }
             var t2 = ModProfiler.Enabled ? ModProfiler.Now() : 0;
             if (!reply.IsEmpty)
-                ApplyCommandBuffer(ParseCommands(reply));
+            {
+                var cb = ParseCommands(reply);
+                if (obs.Spec.Kind == ModObserverKind.Packet)
+                    verdict = TakeVerdict(cb);
+                ApplyCommandBuffer(cb);
+            }
             NotifySpawned();
-            if (ModProfiler.Enabled)
+            if (ModProfiler.Enabled && obs.Spec.Kind != ModObserverKind.Packet)
             {
                 var stat = ModProfiler.Get(_ctx.Name, "obs:" + obs.Spec.Kind + ":" + (obs.Spec.TypePath ?? export));
                 stat.Calls++;
@@ -659,6 +683,24 @@ internal sealed class ModAbiRunner : IModInstance
         {
             ReturnSnapshots();
         }
+        return verdict;
+    }
+
+    // Copies the replacement out of the parsed reply: it aliases _replyCopy, which the
+    // commands applied next (or NotifySpawned) may re-enter and overwrite.
+    private ModPacketVerdict TakeVerdict(CommandBuffer cb)
+    {
+        var verdict = (ModPacketVerdict)(byte)cb.Verdict;
+        if (verdict != ModPacketVerdict.Replace)
+            return verdict == ModPacketVerdict.Block ? verdict : ModPacketVerdict.Pass;
+        var bytes = cb.Replacement is { } r ? r.Span : default;
+        if (bytes.IsEmpty)
+            return ModPacketVerdict.Pass;
+        if (_packetReplacement.Length < bytes.Length)
+            _packetReplacement = new byte[Math.Max(bytes.Length, _packetReplacement.Length * 2)];
+        bytes.CopyTo(_packetReplacement);
+        _packetReplacementLength = bytes.Length;
+        return ModPacketVerdict.Replace;
     }
 
     // Push the temp-id -> real-ecs-id pairs from the buffer just applied back into the
@@ -686,14 +728,36 @@ internal sealed class ModAbiRunner : IModInstance
         _executor.CallSpawned(_handle, _writeScratch.AsSpan(0, len));
     }
 
-    // mod_on_packet; absent export = Pass (the executor checks).
-    public ModPacketVerdict OnPacket(ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
+    // mod_observer with the message in ObserverInput.packet (entity 0, no value); the
+    // verdict rides the returned CommandBuffer, 0 / no reply = Pass.
+    public ModPacketVerdict CallPacketObserver(string export, ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
     {
-        if (!ModProfiler.Enabled)
-            return _executor.CallOnPacket(_handle, dir, packet, out replacement);
-        var t0 = ModProfiler.Now();
-        var verdict = _executor.CallOnPacket(_handle, dir, packet, out replacement);
-        ModProfiler.Packet(_ctx.Name, dir, packet.IsEmpty ? (byte)0 : packet[0], packet.Length, ModProfiler.Now() - t0);
+        replacement = default;
+        if (!_obsByName.TryGetValue(export, out var obs))
+            return ModPacketVerdict.Pass;
+        if (_packetInput.Length < packet.Length)
+            _packetInput = new byte[Math.Max(packet.Length, _packetInput.Length * 2)];
+        packet.CopyTo(_packetInput);
+        _obsInput.ObsId = obs.ObsId;
+        _obsInput.Entity = 0;
+        _obsInput.Value = null;
+        _obsInput.Queries = null;
+        _obsInput.Resources = null;
+        _obsInput.Events = null;
+        _obsInput.PacketDirection = (PacketDirection)(byte)dir;
+        _obsInput.Packet = _packetInput.AsMemory(0, packet.Length);
+        ModPacketVerdict verdict;
+        try
+        {
+            verdict = CallObserverInput(export, 0, obs);
+        }
+        finally
+        {
+            _obsInput.Value = _obsValue;
+            _obsInput.Packet = null;
+        }
+        if (verdict == ModPacketVerdict.Replace)
+            replacement = _packetReplacement.AsSpan(0, _packetReplacementLength);
         return verdict;
     }
 
@@ -739,7 +803,7 @@ internal sealed class ModAbiRunner : IModInstance
     // copied every component payload into a fresh byte[]) out of a runner-owned copy:
     // the executor's reply buffer is only valid until its next call on this handle, and
     // applying a command can re-enter it (an emitted action sends a packet -> the
-    // packet chain -> this mod's on-packet export) while the walk is still reading.
+    // packet chain -> this mod's packet observer) while the walk is still reading.
     private byte[] _replyCopy = new byte[1024];
 
     private CommandBuffer ParseCommands(Memory<byte> reply)

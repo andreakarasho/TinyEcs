@@ -139,6 +139,22 @@ internal sealed class ModObserverSpec
     // evaluated per fire like a system's. Same window bookkeeping as ModSystemSpec.
     public readonly List<ModParam> Params = new();
     public uint LastRunWorldTick;
+    // Packet only: the direction it sees and the message ids (byte 0) as a 256-bit set.
+    public ModPacketDirection PacketDirection;
+    public readonly ulong[] PacketIds = new ulong[4];
+
+    /// No ids = every id.
+    public void SetPacketFilter(ModPacketDirection dir, ReadOnlySpan<byte> ids)
+    {
+        PacketDirection = dir;
+        if (ids.IsEmpty)
+            PacketIds.AsSpan().Fill(ulong.MaxValue);
+        foreach (var id in ids)
+            PacketIds[id >> 6] |= 1UL << (id & 63);
+    }
+
+    public bool SeesPacket(ModPacketDirection dir, byte id)
+        => PacketDirection == dir && (PacketIds[id >> 6] & (1UL << (id & 63))) != 0;
 }
 
 /// Shared glue for one mod instance. Public so a host can configure per-mod
@@ -171,8 +187,8 @@ public sealed class ModHostContext
     // host ships, so the host owns the string).
     public string HostImportModule = "host";
     public readonly List<ModHostImport> HostImports = new();
-    // Message ids this mod intercepts (ModPacketChain.Intercept): 256 bits per
-    // direction, Incoming words 0..3, Outgoing 4..7. Cleared on reload.
+    // Union of the PacketObservers' id sets — ModPacketChain's cheap pre-check: 256
+    // bits per direction, Incoming words 0..3, Outgoing 4..7. Cleared on reload.
     internal readonly ulong[] PacketInterest = new ulong[8];
     // Every Events-param buffer this mod's setup wired; marked Dead on reload.
     internal readonly List<ModEventBuffer> EventBuffers = new();
@@ -184,6 +200,22 @@ public sealed class ModHostContext
     // Observers the mod registered during setup; wired to host global observers
     // after setup (see ModdingPlugin.RegisterModObservers).
     internal readonly List<ModObserverSpec> Observers = new();
+    // Packet observers in declaration order — never wired to host observers; the
+    // packet chain calls them directly.
+    internal readonly List<ModObserverSpec> PacketObservers = new();
+
+    internal void AddObserver(ModObserverSpec spec)
+    {
+        if (spec.Kind != ModObserverKind.Packet)
+        {
+            Observers.Add(spec);
+            return;
+        }
+        PacketObservers.Add(spec);
+        var baseWord = (int)spec.PacketDirection * 4;
+        for (var i = 0; i < 4; i++)
+            PacketInterest[baseWord + i] |= spec.PacketIds[i];
+    }
 }
 
 internal struct AppImpl(ModHostContext ctx)
@@ -203,8 +235,13 @@ internal struct AppImpl(ModHostContext ctx)
     }
 
     public void AddObserver(string name, ModObserverKind kind, string? typePath)
+        => ctx.AddObserver(new ModObserverSpec { Name = name, Kind = kind, TypePath = typePath });
+
+    public void AddPacketObserver(string name, ModPacketDirection dir, ReadOnlySpan<byte> ids)
     {
-        ctx.Observers.Add(new ModObserverSpec { Name = name, Kind = kind, TypePath = typePath });
+        var spec = new ModObserverSpec { Name = name, Kind = ModObserverKind.Packet };
+        spec.SetPacketFilter(dir, ids);
+        ctx.AddObserver(spec);
     }
 }
 

@@ -26,7 +26,8 @@ internal enum ModSchedule : byte
 }
 
 /// Observer event kind. Insert/Remove/Custom carry a type-path / event-name payload
-/// separately — see ModObserverSpec.TypePath.
+/// separately — see ModObserverSpec.TypePath; Packet carries its filter in
+/// ModObserverSpec.PacketDirection / PacketIds.
 internal enum ModObserverKind : byte
 {
     Spawn,
@@ -34,6 +35,8 @@ internal enum ModObserverKind : byte
     Insert,
     Remove,
     Custom,
+    /// Not a host ECS observer: ModPacketChain calls it synchronously per message.
+    Packet,
 }
 
 /// Query term kind. Every case names a type-path — see ModQueryTerm.TypePath.

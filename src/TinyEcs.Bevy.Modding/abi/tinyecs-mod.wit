@@ -52,6 +52,31 @@ interface ecs {
         added(type-path),
     }
 
+    /// Which way a packet travels.
+    enum packet-direction {
+        /// Into the app (e.g. server to client).
+        incoming,
+        /// Out of the app (e.g. client to server).
+        outgoing,
+    }
+
+    /// The packets an `on-packet` observer sees: one direction, and the packet ids
+    /// (byte 0 of the packet) it cares about. No ids = every packet.
+    record packet-filter {
+        direction: packet-direction,
+        ids: list<u8>,
+    }
+
+    /// What an `on-packet` observer decides.
+    variant verdict {
+        /// Let it through unchanged.
+        pass,
+        /// Drop it.
+        block,
+        /// Let these bytes through instead.
+        replace(list<u8>),
+    }
+
     /// What wakes an observer.
     variant trigger {
         /// The component was added to an entity.
@@ -60,6 +85,12 @@ interface ecs {
         on-remove(type-path),
         /// The event was sent.
         on-event(type-path),
+        /// A packet matching the filter is about to be handled (incoming) or sent
+        /// (outgoing). Runs through `observe-packet`, before the host acts on it.
+        /// Observers run in mod load order, then declaration order; each sees the
+        /// previous one's replacement, and a block stops the chain. A packet a mod
+        /// sent itself skips that mod's observers.
+        on-packet(packet-filter),
     }
 
     /// A system, declared in `setup`. Name it, list its parameters in order, then add
@@ -165,7 +196,7 @@ interface ecs {
 /// What a mod implements.
 world guest {
     import ecs;
-    use ecs.{app, param, trigger-data};
+    use ecs.{app, param, trigger-data, packet-direction, verdict};
 
     /// Called once when the mod loads: declare systems and observers here.
     export setup: func(app: app);
@@ -175,4 +206,8 @@ world guest {
 
     /// Runs the observer system named `system` for one trigger.
     export observe: func(system: string, trigger: trigger-data, params: list<param>);
+
+    /// Runs the `on-packet` observer system named `system` for one packet (the full
+    /// wire bytes, id first) and returns what to do with it.
+    export observe-packet: func(system: string, direction: packet-direction, packet: list<u8>, params: list<param>) -> verdict;
 }

@@ -509,7 +509,7 @@ public readonly struct ModdingPlugin : IPlugin
                 control.Mods.Add(rt.Info);
 
                 Console.WriteLine("[ecs-mod] loaded {0} v{1} ({2} systems, {3} observers)",
-                    manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count);
+                    manifest.Name, manifest.Version, ctx.Systems.Count, ctx.Observers.Count + ctx.PacketObservers.Count);
 
                 // Wire the observers the mod registered during setup to host globals.
                 RegisterModObservers(app, rt);
@@ -881,7 +881,8 @@ public readonly struct ModdingPlugin : IPlugin
     // (deferred-capable — see IJsModChannel.Reload).
     //
     // CEILING (inherent, no clean fix here): TinyEcs has no global-observer removal,
-    // so observers wired at first load persist. Same-named exports on the new
+    // so observers wired at first load persist (packet observers are exempt: the packet
+    // chain reads ctx.PacketObservers live, so a reload rewires them fully). Same-named exports on the new
     // instance still receive them, but observers a mod registers ONLY on reload are
     // not wired. (The 1024-function cap still bounds how many mods can be LOADED at
     // once — Define count scales with mod count — but reload no longer consumes it.)
@@ -896,6 +897,7 @@ public readonly struct ModdingPlugin : IPlugin
         rt.Ctx.Systems.Clear();
         rt.Ctx.SystemsByStage.Clear();
         rt.Ctx.Observers.Clear();
+        rt.Ctx.PacketObservers.Clear();
         Array.Clear(rt.Ctx.PacketInterest);
         foreach (var buffer in rt.Ctx.EventBuffers)
             buffer.Dead = true;

@@ -38,28 +38,14 @@ public sealed class ComponentModImports
     /// must keep its ids out of [ComponentModBackend.TypeIdBase, ReservedTypeIdEnd).
     public const uint ReservedTypeIdEnd = ComponentModBackend.TypeIdBase + 0x100;
 
-    /// Calls a game-specific export (one the generic world doesn't know, e.g. a packet
-    /// hook) on the component mod behind `ctx`. Returns false when that mod isn't a
+    /// Calls a game-specific export (one the generic world doesn't know) on the
+    /// component mod behind `ctx`. Returns false when that mod isn't a
     /// component or doesn't export `name`. `args` are disposed either way;
     /// `onResults` (optional) reads the results before they are released.
     public bool TryCallExport(ModHostContext ctx, string name, ReadOnlySpan<Cm.ComponentValue> args,
         int resultCount = 0, ComponentResultsReader? onResults = null)
         => _backend.TryCallExport(ctx, name, args, resultCount, onResults);
-
-    /// Where ModPacketChain's IModInstance.OnPacket lands for a component mod. The
-    /// generic world has no packet export, so the host maps it onto its own (typically
-    /// via TryCallExport). Unset = every component mod passes.
-    public ComponentPacketHook? OnPacket
-    {
-        get => _backend.PacketHook;
-        set => _backend.PacketHook = value;
-    }
 }
-
-/// A component mod's verdict on one intercepted message (see ModPacketChain.Run).
-/// For Replace, `replacement` must stay valid until the next call.
-public delegate ModPacketVerdict ComponentPacketHook(ModHostContext ctx, ModPacketDirection dir,
-    ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement);
 
 /// Reads the results of ComponentModImports.TryCallExport (valid only inside the call).
 public delegate void ComponentResultsReader(Cm.ComponentCallResults results);

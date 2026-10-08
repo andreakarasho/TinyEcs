@@ -133,6 +133,36 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal("", info.LastError);
     }
 
+    // The guest's on-packet observers run synchronously in the packet chain through
+    // `observe-packet`, with their params evaluated per call: on_in (incoming 0x10,
+    // res-mut score) blocks or appends 0x42; on_out (every outgoing id) replaces.
+    [Fact]
+    public void Packet_observers_filter_and_return_verdicts_through_observe_packet()
+    {
+        var app = NewApp();
+        app.RunStartup();
+        var ctx = app.GetResource<ModRuntimes>().Runtimes[0].Ctx;
+        Assert.Equal(2, ctx.PacketObservers.Count);
+        var chain = app.GetResource<ModPacketChain>();
+        Assert.True(chain.Wants(ModPacketDirection.Incoming, 0x10));
+        Assert.False(chain.Wants(ModPacketDirection.Incoming, 0x11));
+        Assert.True(chain.Wants(ModPacketDirection.Outgoing, 0xEF));
+
+        Assert.Equal(ModPacketVerdict.Replace, chain.Run(ModPacketDirection.Incoming, new byte[] { 0x10, 1 }, null, out var repl));
+        Assert.Equal(new byte[] { 0x10, 1, 0x42 }, repl.ToArray());
+        Assert.Equal(1000, app.GetResource<CmScore>().Value);
+
+        Assert.Equal(ModPacketVerdict.Block, chain.Run(ModPacketDirection.Incoming, new byte[] { 0x10, 0 }, null, out _));
+        Assert.Equal(ModPacketVerdict.Pass, chain.Run(ModPacketDirection.Incoming, new byte[] { 0x11, 0 }, null, out _));
+        Assert.Equal(2000, app.GetResource<CmScore>().Value);
+
+        Assert.Equal(ModPacketVerdict.Replace, chain.Run(ModPacketDirection.Outgoing, new byte[] { 0x05, 7 }, null, out var outRepl));
+        Assert.Equal(new byte[] { 0x99 }, outRepl.ToArray());
+
+        var info = Assert.Single(app.GetResource<ModControl>().Mods);
+        Assert.True(info.Enabled, info.LastError);
+    }
+
     // The guest's `tick` system declares `mut test/pos`: with test/pos read-only the
     // mod must not load at all (not load and silently drop its writes).
     [Fact]
@@ -175,7 +205,10 @@ public sealed class ComponentModBackendTests : IDisposable
 
         var info = Assert.Single(control.Mods);
         Assert.True(info.Enabled, info.LastError);
-        Assert.Equal(2, app.GetResource<ModRuntimes>().Runtimes[0].Ctx.Systems.Count);
+        var ctx = app.GetResource<ModRuntimes>().Runtimes[0].Ctx;
+        Assert.Equal(2, ctx.Systems.Count);
+        Assert.Equal(2, ctx.PacketObservers.Count); // re-declared, not doubled
+        Assert.Equal(ModPacketVerdict.Replace, app.GetResource<ModPacketChain>().Run(ModPacketDirection.Outgoing, new byte[] { 1 }, null, out _));
         Assert.Equal(3, world.Get<CmPos>(mover).X);
     }
 

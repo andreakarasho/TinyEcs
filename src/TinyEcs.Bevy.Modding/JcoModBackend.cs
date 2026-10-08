@@ -143,7 +143,7 @@ internal sealed class JcoModInstance : IModInstance
     public void CallObserver(string export, ulong entity, string json)
         => _channel.CallObserver(_handle, export, entity, json);
 
-    // OnPacket: not wired on the Jco path (web mods wait for the core-wasm
+    // Packet observers: not wired on the Jco path (web mods wait for the core-wasm
     // migration) — the IModInstance default passes every message.
 
     public void RunSystem(ModSystemSpec sys)
