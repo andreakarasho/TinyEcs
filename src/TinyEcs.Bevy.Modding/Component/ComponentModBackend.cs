@@ -56,10 +56,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     // Variant case names / record field names, encoded once. Variant discriminants are
     // COPIED into each value (the value frees its copy); record names are never freed by
     // a value, so these must outlive every call — they live as long as the backend.
-    internal readonly Cm.ByteVector CaseCommands = Cm.ByteVector.Constant("commands");
-    internal readonly Cm.ByteVector CaseQuery = Cm.ByteVector.Constant("query");
-    internal readonly Cm.ByteVector CaseRes = Cm.ByteVector.Constant("res");
-    internal readonly Cm.ByteVector CaseEvents = Cm.ByteVector.Constant("events");
     internal readonly Cm.ByteVector FieldEntity = Cm.ByteVector.Constant("entity");
     internal readonly Cm.ByteVector FieldValue = Cm.ByteVector.Constant("value");
 

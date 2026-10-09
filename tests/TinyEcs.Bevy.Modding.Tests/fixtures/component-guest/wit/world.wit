@@ -1,0 +1,17 @@
+package test:fixture;
+
+// One export per system declared in `setup`, named like it; params in declaration order.
+world fixture {
+    use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, trigger-data, packet-direction, verdict};
+
+    export tick: func(commands: commands, movers: query, score: res, pings: events);
+    export count-added: func(added: query, total: res);
+    export watch: func(commands: commands, watched: query, knob: res, pokes: events);
+    export beat: func(commands: commands);
+
+    export on-tag: func(trigger: trigger-data, commands: commands);
+    export on-in: func(direction: packet-direction, packet: list<u8>, score: res) -> verdict;
+    export on-out: func(direction: packet-direction, packet: list<u8>) -> verdict;
+
+    include tinyecs:modding/guest@0.1.0;
+}

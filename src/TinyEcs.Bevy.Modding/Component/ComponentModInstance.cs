@@ -11,7 +11,10 @@
 //  - commands apply in order AFTER the export returns (spawn hands out the id at once);
 //  - observers ride the same host global observers (ModdingPlugin.RegisterModObservers),
 //    buffered and flushed at the same points; packet observers are called
-//    synchronously by ModPacketChain through `observe-packet`.
+//    synchronously by ModPacketChain.
+// Every system is called through the mod's own export named like it (wasvy-style),
+// its params as typed arguments: <name>(params...), observers <name>(trigger-data,
+// params...), packet observers <name>(direction, packet, params...) -> verdict.
 // Two term kinds have no core-ABI twin and are handled here: `added` (a read term
 // post-filtered on IModComponent.AddedSince) and the res / events parameters.
 
@@ -143,13 +146,15 @@ internal sealed class ComponentParam
 internal sealed class ComponentSystem
 {
     public readonly SystemImpl Impl;
-    public readonly byte[] NameUtf8;
+    public readonly string Name;
     public readonly List<ComponentParam> Params = new();
+    // The mod's export named like the system (bound after `setup`).
+    public Cm.ComponentInstanceFunction Export;
 
     public ComponentSystem(string name)
     {
         Impl = new SystemImpl(name);
-        NameUtf8 = System.Text.Encoding.UTF8.GetBytes(name);
+        Name = name;
     }
 
     public ModSystemSpec Spec => Impl.Spec;
@@ -370,9 +375,6 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     private Cm.Component _component = null!;
     private Cm.ComponentInstance _instance = null!;
     private Cm.ComponentInstanceFunction _setup;
-    private Cm.ComponentInstanceFunction _run;
-    private Cm.ComponentInstanceFunction _observe;
-    private Cm.ComponentInstanceFunction _observePacket;
 
     private readonly Dictionary<ModSystemSpec, ComponentSystem> _systems = new();
     private readonly Dictionary<string, ComponentSystem> _observers = new();
@@ -401,9 +403,6 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         _instance = _store.GetComponentInstance(_component, Backend.Linker);
         _exports.Clear();
         _setup = _instance.GetFunction("setup");
-        _run = _instance.GetFunction("run");
-        _observe = _instance.GetFunction("observe");
-        _observePacket = _instance.GetFunction("observe-packet");
     }
 
     // ── setup-time callbacks (from ComponentModBackend's host functions) ──────
@@ -569,6 +568,24 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             args[0].Dispose(_store);
             Exit(prev);
         }
+        foreach (var sys in _systems.Values)
+            BindExport(sys);
+        foreach (var sys in _observers.Values)
+            BindExport(sys);
+    }
+
+    // Every declared system is an export of the mod's world named like the system.
+    private void BindExport(ComponentSystem sys)
+    {
+        try
+        {
+            sys.Export = _instance.GetFunction(sys.Name);
+        }
+        catch (Cm.WasmtimeException)
+        {
+            throw new InvalidOperationException(
+                $"system '{sys.Name}' is declared in setup but the mod exports no '{sys.Name}' function");
+        }
     }
 
     public void RunSystem(ModSystemSpec spec)
@@ -581,7 +598,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         {
             if (ModdingPlugin.ShouldSkipRun(spec, hasQuery, hasInputs, anyRows, resChanged))
                 return;
-            Call(_run, sys, entity: null, json: default);
+            Call(sys, entity: null, json: default);
         }
         finally
         {
@@ -600,7 +617,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         Evaluate(sys, ref hasQuery, out _, out _);
         try
         {
-            Call(_observe, sys, entity, json);
+            Call(sys, entity, json);
         }
         finally
         {
@@ -608,7 +625,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         }
     }
 
-    // observe-packet(system, direction, packet, params) -> verdict.
+    // <export>(direction, packet, params...) -> verdict.
     public ModPacketVerdict CallPacketObserver(string export, ModPacketDirection dir, ReadOnlySpan<byte> packet, out ReadOnlySpan<byte> replacement)
     {
         replacement = default;
@@ -619,25 +636,25 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         var verdict = ModPacketVerdict.Pass;
         var prev = Enter();
         var cx = Cm.StoreContext.FromStore(_store);
-        var args = stackalloc Cm.ComponentValue[4];
-        args[0] = ComponentModBackend.Utf8String(sys.NameUtf8);
-        args[1] = Cm.ComponentValue.CreateEnum(dir, &ComponentModBackend.PacketDirectionName);
+        var argc = 2 + sys.Params.Count;
+        var args = stackalloc Cm.ComponentValue[argc];
+        args[0] = Cm.ComponentValue.CreateEnum(dir, &ComponentModBackend.PacketDirectionName);
         var bytes = new Cm.ListBuilder(packet.Length);
         for (var i = 0; i < packet.Length; i++)
             bytes[i] = Cm.ComponentValue.CreateByte(packet[i]);
-        args[2] = new Cm.ComponentValue(bytes, externallyOwned: false);
-        args[3] = BuildParams(sys, cx);
+        args[1] = new Cm.ComponentValue(bytes, externallyOwned: false);
+        BuildParams(sys, cx, new Span<Cm.ComponentValue>(args + 2, sys.Params.Count));
 
         var ok = false;
         try
         {
-            using (var results = _instance.Call(_observePacket, 1, args, 4))
+            using (var results = _instance.Call(sys.Export, 1, args, argc))
                 verdict = ReadVerdict(results[0]);
             ok = true;
         }
         finally
         {
-            for (var i = 0; i < 4; i++)
+            for (var i = 0; i < argc; i++)
                 args[i].Dispose(_store);
             Exit(prev);
             if (ok)
@@ -664,7 +681,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         if (name.SequenceEqual("block"u8))
             return ModPacketVerdict.Block;
         if (!name.SequenceEqual("replace"u8))
-            throw new InvalidOperationException($"observe-packet: unknown verdict '{System.Text.Encoding.UTF8.GetString(name)}'");
+            throw new InvalidOperationException($"packet observer: unknown verdict '{System.Text.Encoding.UTF8.GetString(name)}'");
         var list = payload!.Value.ToListBuilder();
         if (list.Length == 0)
             return ModPacketVerdict.Pass;
@@ -756,27 +773,27 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             }
     }
 
-    // run(system, params) / observe(system, trigger-data, params).
-    private void Call(Cm.ComponentInstanceFunction fn, ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> json)
+    // A system's export: <export>(params...); an observer's: <export>(trigger-data, params...).
+    private void Call(ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> json)
     {
         var prev = Enter();
         var cx = Cm.StoreContext.FromStore(_store);
-        var argc = entity.HasValue ? 3 : 2;
-        var args = stackalloc Cm.ComponentValue[3];
-        args[0] = ComponentModBackend.Utf8String(sys.NameUtf8);
+        var lead = entity.HasValue ? 1 : 0;
+        var argc = lead + sys.Params.Count;
+        var args = stackalloc Cm.ComponentValue[argc];
         if (entity.HasValue)
         {
             var rec = new Cm.RecordBuilder(2, disposeNames: false);
             rec.Set(0, Backend.FieldEntity, Cm.ComponentValue.CreateUInt64(entity.Value));
             rec.Set(1, Backend.FieldValue, ComponentModBackend.Utf8String(json.IsEmpty ? "{}"u8 : json));
-            args[1] = new Cm.ComponentValue(rec, externallyOwned: false);
+            args[0] = new Cm.ComponentValue(rec, externallyOwned: false);
         }
-        args[argc - 1] = BuildParams(sys, cx);
+        BuildParams(sys, cx, new Span<Cm.ComponentValue>(args + lead, sys.Params.Count));
 
         var ok = false;
         try
         {
-            using (_instance.Call(fn, 0, args, argc)) { }
+            using (_instance.Call(sys.Export, 0, args, argc)) { }
             ok = true;
         }
         finally
@@ -794,23 +811,21 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         }
     }
 
-    private Cm.ComponentValue BuildParams(ComponentSystem sys, Cm.StoreContext cx)
+    // Each parameter is its own typed argument: an owned commands / query / res / events.
+    private void BuildParams(ComponentSystem sys, Cm.StoreContext cx, Span<Cm.ComponentValue> into)
     {
-        var list = new Cm.ListBuilder(sys.Params.Count);
         for (var i = 0; i < sys.Params.Count; i++)
         {
             var p = sys.Params[i];
-            var (kind, type, name) = p.Kind switch
+            var (kind, type) = p.Kind switch
             {
-                ComponentParamKind.Commands => (HandleKind.Commands, ComponentModBackend.TypeCommands, Backend.CaseCommands),
-                ComponentParamKind.Query => (HandleKind.Query, ComponentModBackend.TypeQuery, Backend.CaseQuery),
-                ComponentParamKind.Res => (HandleKind.Res, ComponentModBackend.TypeRes, Backend.CaseRes),
-                _ => (HandleKind.Events, ComponentModBackend.TypeEvents, Backend.CaseEvents),
+                ComponentParamKind.Commands => (HandleKind.Commands, ComponentModBackend.TypeCommands),
+                ComponentParamKind.Query => (HandleKind.Query, ComponentModBackend.TypeQuery),
+                ComponentParamKind.Res => (HandleKind.Res, ComponentModBackend.TypeRes),
+                _ => (HandleKind.Events, ComponentModBackend.TypeEvents),
             };
-            var handle = Cm.ComponentValue.CreateOwnResource(cx, Handles.Alloc(kind, p), type);
-            list[i] = Cm.ComponentValue.CreateVariant(name, handle, copyDiscriminant: true);
+            into[i] = Cm.ComponentValue.CreateOwnResource(cx, Handles.Alloc(kind, p), type);
         }
-        return new Cm.ComponentValue(list, externallyOwned: false);
     }
 
     internal bool TryCallExport(string name, ReadOnlySpan<Cm.ComponentValue> args, int resultCount, ComponentResultsReader? onResults)

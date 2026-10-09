@@ -4,7 +4,25 @@
 /// Everything in the world is named by a type path ("game:ent/graphic") and carried
 /// as JSON text. The host decides which paths exist; a mod only uses them.
 ///
-/// A mod is a wasm32-wasip2 component implementing the `guest` world below.
+/// A mod is a wasm32-wasip2 component of its OWN world, which includes `guest` below
+/// and exports one function per system it declares in `setup`:
+///
+///     world my-mod {
+///         use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, trigger-data, packet-direction, verdict};
+///         export spin: func(q: query, commands: commands);
+///         export on-click: func(trigger: trigger-data);
+///         export filter: func(direction: packet-direction, packet: list<u8>) -> verdict;
+///         include tinyecs:modding/guest@0.1.0;
+///     }
+///
+/// The host calls the export named like the system, passing the system's parameters
+/// as typed arguments in the order they were added:
+///   - a scheduled system:   func(<params>)
+///   - an observer:          func(trigger: trigger-data, <params>)
+///   - an on-packet observer: func(direction: packet-direction, packet: list<u8>, <params>) -> verdict
+/// where `add-commands` -> `commands`, `add-query` -> `query`, `add-res` / `add-res-mut`
+/// -> `res`, `add-events` -> `events`. A declared system without a matching export
+/// fails the mod's load.
 package tinyecs:modding@0.1.0;
 
 interface ecs {
@@ -94,7 +112,8 @@ interface ecs {
     /// A system, declared in `setup`. Name it, list its parameters in order, then add
     /// it to a schedule (or use it as an observer).
     resource system {
-        /// The name `run` / `observe` will be called with.
+        /// The name of the mod's export that implements this system (kebab-case, as in
+        /// the mod's world: "spin-cube" -> `export spin-cube: func(...)`).
         constructor(name: string);
 
         /// Adds a `commands` parameter.
@@ -132,7 +151,7 @@ interface ecs {
     resource app {
         add-systems: func(schedule: schedule, systems: list<borrow<system>>);
 
-        /// Runs `system` (via `observe`) each time `trigger` fires.
+        /// Calls `system`'s export each time `trigger` fires.
         add-observer: func(trigger: trigger, system: borrow<system>);
     }
 
@@ -193,14 +212,6 @@ interface ecs {
         read: func() -> list<json>;
     }
 
-    /// One system parameter, in the order the system declared them.
-    variant param {
-        commands(commands),
-        query(query),
-        res(res),
-        events(events),
-    }
-
     /// What woke an observer: the entity (0 for events) and the component / event
     /// value.
     record trigger-data {
@@ -209,21 +220,12 @@ interface ecs {
     }
 }
 
-/// What a mod implements.
+/// What every mod implements; a mod's own world includes it and adds one export per
+/// system (see the top of this file).
 world guest {
     import ecs;
-    use ecs.{app, param, trigger-data, packet-direction, verdict};
+    use ecs.{app};
 
     /// Called once when the mod loads: declare systems and observers here.
     export setup: func(app: app);
-
-    /// Runs the system named `system` with its parameters.
-    export run: func(system: string, params: list<param>);
-
-    /// Runs the observer system named `system` for one trigger.
-    export observe: func(system: string, trigger: trigger-data, params: list<param>);
-
-    /// Runs the `on-packet` observer system named `system` for one packet (the full
-    /// wire bytes, id first) and returns what to do with it.
-    export observe-packet: func(system: string, direction: packet-direction, packet: list<u8>, params: list<param>) -> verdict;
 }

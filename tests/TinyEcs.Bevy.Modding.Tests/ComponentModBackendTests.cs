@@ -114,7 +114,7 @@ public sealed class ComponentModBackendTests : IDisposable
         var runtimes = app.GetResource<ModRuntimes>();
         Assert.IsType<ComponentModBackend>(runtimes.Backend);
         var ctx = runtimes.Runtimes[0].Ctx;
-        Assert.Equal(new[] { "tick", "count_added", "watch", "beat" }, ctx.Systems.Select(s => s.Name));
+        Assert.Equal(new[] { "tick", "count-added", "watch", "beat" }, ctx.Systems.Select(s => s.Name));
         Assert.Equal(new[] { ModSchedule.Update, ModSchedule.Update, ModSchedule.PostUpdate, ModSchedule.PostUpdate }, ctx.Systems.Select(s => s.Stage));
         Assert.Equal(new[] { false, false, true, true }, ctx.Systems.Select(s => s.RunOnChange));
         Assert.Equal(new[] { "tick" }, ctx.Systems[1].After);
@@ -134,7 +134,7 @@ public sealed class ComponentModBackendTests : IDisposable
 
         // Frame 1: tick moves `mover` (query.set on a `mut` term; `frozen` is excluded by
         // `without`), bumps the res-mut score to 1, and — since it is the first run —
-        // spawns a frozen entity and sends a ping. count_added (after tick) matches
+        // spawns a frozen entity and sends a ping. count-added (after tick) matches
         // mover + frozen: a first run sees every change made before it (they got test/pos
         // before any system ran).
         app.Update();
@@ -167,8 +167,8 @@ public sealed class ComponentModBackendTests : IDisposable
     }
 
     // The guest's on-packet observers run synchronously in the packet chain through
-    // `observe-packet`, with their params evaluated per call: on_in (incoming 0x10,
-    // res-mut score) blocks or appends 0x42; on_out (every outgoing id) replaces.
+    // their exports, with their params evaluated per call: on-in (incoming 0x10,
+    // res-mut score) blocks or appends 0x42; on-out (every outgoing id) replaces.
     [Fact]
     public void Packet_observers_filter_and_return_verdicts_through_observe_packet()
     {
@@ -350,23 +350,25 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(0, app.GetResource<CmClock>().Value);
     }
 
-    // A component built against the WIT before run-on-change / set-resource / unchanged
-    // still links: the host defining extra functions is invisible to it.
+    // A component built before per-system exports (it exports the generic `run` /
+    // `observe` dispatchers, not one function per system) fails at load, naming the
+    // first system it has no export for, instead of running with nothing wired.
     [Fact]
-    public void A_guest_built_against_the_older_wit_still_loads_and_runs()
+    public void A_guest_without_per_system_exports_fails_to_load_naming_the_missing_export()
     {
         InstallFixture("component_guest_v0.wasm");
         var app = NewApp();
-        var world = app.GetWorld();
-        var mover = world.Entity().Set(new CmPos()).Set(new CmVel { X = 2, Y = 1 }).ID;
-        app.RunStartup();
-        app.Update();
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try
+        {
+            app.RunStartup();
+            app.Update();
+        }
+        finally { Console.SetOut(stdout); }
 
-        var info = Assert.Single(app.GetResource<ModControl>().Mods);
-        Assert.True(info.Enabled, info.LastError);
-        Assert.Equal(new[] { "tick", "count_added" }, app.GetResource<ModRuntimes>().Runtimes[0].Ctx.Systems.Select(s => s.Name));
-        Assert.Equal(new CmPos { X = 2, Y = 1 }, world.Get<CmPos>(mover));
-        Assert.Equal(1, app.GetResource<CmScore>().Value);
+        Assert.Contains("system 'tick' is declared in setup but the mod exports no 'tick' function", output.ToString());
     }
 
     private static void Poke(App app, int n)
