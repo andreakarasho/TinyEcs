@@ -189,7 +189,8 @@ interface ecs {
         rows: func() -> list<row>;
 
         /// Writes the n-th reading term of `entity` back. Traps unless that term is
-        /// `mut`.
+        /// `mut`. Deferred like `commands`: applied after the system returns, in order
+        /// with its commands (`rows` is a snapshot and does not see the write).
         set: func(entity: entity, index: u8, value: json);
     }
 

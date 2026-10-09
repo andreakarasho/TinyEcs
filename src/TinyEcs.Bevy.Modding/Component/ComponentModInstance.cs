@@ -258,6 +258,13 @@ internal sealed class ComponentCommandBuffer
         _entries.Add(new Entry { Op = Op.Insert, Entity = entity, First = first, Count = list.Length });
     }
 
+    // One component (query.set's write-back), queued like any insert.
+    public void InsertOne(ulong entity, string path, ReadOnlySpan<byte> json)
+    {
+        _items.Add((path, Copy(json), json.Length));
+        _entries.Add(new Entry { Op = Op.Insert, Entity = entity, First = _items.Count - 1, Count = 1 });
+    }
+
     public void Remove(ulong entity, in Cm.ComponentValue paths)
     {
         var list = paths.ToListBuilder();
@@ -502,9 +509,9 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         var (path, mutable) = comps[index];
         if (!mutable)
             throw new InvalidOperationException($"query.set({index}): {path} is not a `mut` term");
-        var comp = (q.Reads ??= ResolveReads(q.Query))[index];
-        if (comp != null && Ctx.World.Exists(entity))
-            comp.SetJsonUtf8(Ctx.World, entity, json);
+        // Deferred, in order with the call's other commands (applied when the export
+        // returns) — the same as the guest hosts, which relay it as an insert.
+        Commands.InsertOne(entity, path, json);
     }
 
     // Serializes the param's value once per run (lazily for a system that reads it only
