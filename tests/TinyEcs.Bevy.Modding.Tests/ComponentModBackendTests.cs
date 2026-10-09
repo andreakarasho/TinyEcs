@@ -20,6 +20,20 @@ public struct CmSeen { public long Value { get; set; } }
 public sealed class CmScore { public long Value { get; set; } }
 public sealed class CmAdded { public long Value { get; set; } }
 public struct CmPing { public int N { get; set; } }
+// The run-on-change systems' inputs / outputs (see the fixture's `watch` and `beat`).
+public struct CmWatched { public int V { get; set; } }
+public sealed class CmKnob { public long Value { get; set; } }
+public struct CmPoke { public int N { get; set; } }
+public sealed class CmClock { public long Value { get; set; } }
+public sealed class CmProbe
+{
+    public long Runs { get; set; }
+    public long Unchanged { get; set; }
+    public long Knob { get; set; }
+    public long Rows { get; set; }
+    public long Pokes { get; set; }
+}
+public sealed class CmBeats { public long Value { get; set; } }
 
 [JsonSerializable(typeof(CmPos))]
 [JsonSerializable(typeof(CmVel))]
@@ -29,17 +43,25 @@ public struct CmPing { public int N { get; set; } }
 [JsonSerializable(typeof(CmScore))]
 [JsonSerializable(typeof(CmAdded))]
 [JsonSerializable(typeof(CmPing))]
+[JsonSerializable(typeof(CmWatched))]
+[JsonSerializable(typeof(CmKnob))]
+[JsonSerializable(typeof(CmPoke))]
+[JsonSerializable(typeof(CmClock))]
+[JsonSerializable(typeof(CmProbe))]
+[JsonSerializable(typeof(CmBeats))]
 internal partial class CmJsonContext : JsonSerializerContext { }
 
 public sealed class ComponentModBackendTests : IDisposable
 {
     private readonly string _modFolder = Path.Combine(Path.GetTempPath(), "tinyecs-cm-" + Guid.NewGuid().ToString("N"));
 
-    public ComponentModBackendTests()
+    public ComponentModBackendTests() => InstallFixture("component_guest.wasm");
+
+    private void InstallFixture(string file)
     {
         var dir = Path.Combine(_modFolder, "component-guest");
         Directory.CreateDirectory(dir);
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "fixtures", "component_guest.wasm"), Path.Combine(dir, "mod.wasm"));
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "fixtures", file), Path.Combine(dir, "mod.wasm"), overwrite: true);
         File.WriteAllText(Path.Combine(dir, "mod.json"), """{ "name": "component-guest", "version": "0.1.0", "wasm": "mod.wasm" }""");
     }
 
@@ -59,10 +81,20 @@ public sealed class ComponentModBackendTests : IDisposable
         reg.RegisterResource("test/score", new ModResource<CmScore>(CmJsonContext.Default.CmScore));
         reg.RegisterResource("test/added", new ModResource<CmAdded>(CmJsonContext.Default.CmAdded));
         reg.RegisterEvent("test/ping", new ModEvent<CmPing>(CmJsonContext.Default.CmPing));
+        reg.Register("test/watched", new ModComponent<CmWatched>(CmJsonContext.Default.CmWatched));
+        reg.RegisterResource("test/knob", new ModResource<CmKnob>(CmJsonContext.Default.CmKnob));
+        reg.RegisterEvent("test/poke", new ModEvent<CmPoke>(CmJsonContext.Default.CmPoke));
+        reg.RegisterResource("test/clock", new ModResource<CmClock>(CmJsonContext.Default.CmClock, readOnly: true));
+        reg.RegisterResource("test/probe", new ModResource<CmProbe>(CmJsonContext.Default.CmProbe));
+        reg.RegisterResource("test/beats", new ModResource<CmBeats>(CmJsonContext.Default.CmBeats));
 
         var app = new App(ThreadingMode.Single);
         app.AddResource(new CmScore());
         app.AddResource(new CmAdded());
+        app.AddResource(new CmKnob());
+        app.AddResource(new CmClock());
+        app.AddResource(new CmProbe());
+        app.AddResource(new CmBeats());
         app.AddResource(new ModdingConfig { Registry = reg, ModFolder = _modFolder });
         app.AddPlugin<ModdingPlugin>();
         return app;
@@ -82,8 +114,9 @@ public sealed class ComponentModBackendTests : IDisposable
         var runtimes = app.GetResource<ModRuntimes>();
         Assert.IsType<ComponentModBackend>(runtimes.Backend);
         var ctx = runtimes.Runtimes[0].Ctx;
-        Assert.Equal(new[] { "tick", "count_added" }, ctx.Systems.Select(s => s.Name));
-        Assert.All(ctx.Systems, s => Assert.Equal(ModSchedule.Update, s.Stage));
+        Assert.Equal(new[] { "tick", "count_added", "watch", "beat" }, ctx.Systems.Select(s => s.Name));
+        Assert.Equal(new[] { ModSchedule.Update, ModSchedule.Update, ModSchedule.PostUpdate, ModSchedule.PostUpdate }, ctx.Systems.Select(s => s.Stage));
+        Assert.Equal(new[] { false, false, true, true }, ctx.Systems.Select(s => s.RunOnChange));
         Assert.Equal(new[] { "tick" }, ctx.Systems[1].After);
         var obs = Assert.Single(ctx.Observers);
         Assert.Equal(ModObserverKind.Insert, obs.Kind);
@@ -102,13 +135,13 @@ public sealed class ComponentModBackendTests : IDisposable
         // Frame 1: tick moves `mover` (query.set on a `mut` term; `frozen` is excluded by
         // `without`), bumps the res-mut score to 1, and — since it is the first run —
         // spawns a frozen entity and sends a ping. count_added (after tick) matches
-        // nothing: mover/frozen got test/pos at tick 0 (before any run), and the spawn's
-        // components land at the stage's deferred flush, after the runner.
+        // mover + frozen: a first run sees every change made before it (they got test/pos
+        // before any system ran).
         app.Update();
         Assert.Equal(new CmPos { X = 2, Y = 1 }, world.Get<CmPos>(mover));
         Assert.Equal(new CmPos { X = 5, Y = 5 }, world.Get<CmPos>(frozen));
         Assert.Equal(1, app.GetResource<CmScore>().Value);
-        Assert.Equal(0, app.GetResource<CmAdded>().Value);
+        Assert.Equal(2, app.GetResource<CmAdded>().Value);
 
         var spawned = SpawnedByMod(world);
         Assert.Equal(new CmPos { X = 100, Y = 0 }, world.Get<CmPos>(spawned));
@@ -118,11 +151,11 @@ public sealed class ComponentModBackendTests : IDisposable
         // Frame 2: the ping sent last frame arrives through the events param (+100),
         // mover crosses x >= 3 so tick inserts test/tag via commands, which fires the
         // guest's on-add observer; it answers with test/seen = the entity id. The `added`
-        // term now matches the guest's spawn and the host-side add (2).
+        // term now matches the guest's spawn and the host-side add (2 more).
         app.Update();
         Assert.Equal(new CmPos { X = 4, Y = 2 }, world.Get<CmPos>(mover));
         Assert.Equal(102, app.GetResource<CmScore>().Value);
-        Assert.Equal(2, app.GetResource<CmAdded>().Value);
+        Assert.Equal(4, app.GetResource<CmAdded>().Value);
         Assert.True(world.Has<CmTag>(mover));
         Assert.True(world.Has<CmSeen>(mover), "on-add observer did not run");
         Assert.Equal((long)mover, world.Get<CmSeen>(mover).Value);
@@ -206,7 +239,7 @@ public sealed class ComponentModBackendTests : IDisposable
         var info = Assert.Single(control.Mods);
         Assert.True(info.Enabled, info.LastError);
         var ctx = app.GetResource<ModRuntimes>().Runtimes[0].Ctx;
-        Assert.Equal(2, ctx.Systems.Count);
+        Assert.Equal(4, ctx.Systems.Count);
         Assert.Equal(2, ctx.PacketObservers.Count); // re-declared, not doubled
         Assert.Equal(ModPacketVerdict.Replace, app.GetResource<ModPacketChain>().Run(ModPacketDirection.Outgoing, new byte[] { 1 }, null, out _));
         Assert.Equal(3, world.Get<CmPos>(mover).X);
@@ -231,6 +264,116 @@ public sealed class ComponentModBackendTests : IDisposable
         var info = Assert.Single(app.GetResource<ModControl>().Mods);
         Assert.Equal("component-guest", info.Name);
         Assert.Contains("old-core is a core-wasm (p1) module; mods must be wasm32-wasip2 components", output.ToString());
+    }
+
+    // `watch` (run-on-change: changed test/watched, res test/knob, events test/poke) runs
+    // only when an input changed; `beat` (commands only) runs every frame.
+    [Fact]
+    public void Run_on_change_system_runs_only_when_an_input_changed()
+    {
+        var app = NewApp();
+        var world = app.GetWorld();
+        app.RunStartup();
+
+        app.Update(); // the first run never skips
+        var probe = app.GetResource<CmProbe>();
+        Assert.Equal((1L, 0L, 0L, 0L, 0L), (probe.Runs, probe.Unchanged, probe.Knob, probe.Rows, probe.Pokes));
+        app.Update();
+        app.Update();
+        Assert.Equal(1, app.GetResource<CmProbe>().Runs);
+        Assert.Equal(3, app.GetResource<CmBeats>().Value); // no input params: never skips
+
+        Poke(app, 1); // an event: runs; the knob is unchanged since its last get
+        app.Update();
+        probe = app.GetResource<CmProbe>();
+        Assert.Equal((2L, 1L, -1L, 0L, 1L), (probe.Runs, probe.Unchanged, probe.Knob, probe.Rows, probe.Pokes));
+        app.Update(); // the event was consumed
+        Assert.Equal(2, app.GetResource<CmProbe>().Runs);
+
+        world.Entity().Set(new CmWatched { V = 1 }); // a changed row: runs, once
+        app.Update();
+        probe = app.GetResource<CmProbe>();
+        Assert.Equal((3L, 1L, 1L), (probe.Runs, probe.Unchanged, probe.Rows));
+        app.Update();
+        Assert.Equal(3, app.GetResource<CmProbe>().Runs);
+
+        app.GetResource<CmKnob>().Value = 5; // a resource change: runs, reports changed
+        app.Update();
+        probe = app.GetResource<CmProbe>();
+        Assert.Equal((4L, 0L, 5L, 0L), (probe.Runs, probe.Unchanged, probe.Knob, probe.Rows));
+        app.Update();
+        app.Update();
+        Assert.Equal(4, app.GetResource<CmProbe>().Runs);
+        Assert.Equal(10, app.GetResource<CmBeats>().Value);
+
+        var info = Assert.Single(app.GetResource<ModControl>().Mods);
+        Assert.Equal("", info.LastError);
+    }
+
+    // The first run of a run-on-change system sees the rows changed before it.
+    [Fact]
+    public void Run_on_change_first_run_sees_earlier_changes()
+    {
+        var app = NewApp();
+        app.GetWorld().Entity().Set(new CmWatched { V = 1 });
+        app.RunStartup();
+        app.Update();
+        var probe = app.GetResource<CmProbe>();
+        Assert.Equal((1L, 1L), (probe.Runs, probe.Rows));
+        app.Update();
+        Assert.Equal(1, app.GetResource<CmProbe>().Runs);
+    }
+
+    // commands.set-resource traps on a read-only or unregistered path, and the call's
+    // other commands are dropped. (A trapped component instance can't be re-entered, so
+    // every later call of the mod fails until it is reloaded.)
+    [Theory]
+    [InlineData(13, "commands.set-resource: 'test/clock' is read-only")]
+    [InlineData(14, "commands.set-resource: 'test/nope' is not a registered resource")]
+    public void Set_resource_traps_on_read_only_and_unknown_paths(int poke, string message)
+    {
+        var app = NewApp();
+        app.RunStartup();
+        app.Update();
+        Assert.Equal(1, app.GetResource<CmProbe>().Runs);
+
+        Poke(app, poke);
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try { app.Update(); }
+        finally { Console.SetOut(stdout); }
+
+        Assert.Contains("system 'watch' 'component-guest' failed", output.ToString());
+        Assert.Contains(message, output.ToString());
+        Assert.Equal(1, app.GetResource<CmProbe>().Runs); // its set-resource was discarded
+        Assert.Equal(0, app.GetResource<CmClock>().Value);
+    }
+
+    // A component built against the WIT before run-on-change / set-resource / unchanged
+    // still links: the host defining extra functions is invisible to it.
+    [Fact]
+    public void A_guest_built_against_the_older_wit_still_loads_and_runs()
+    {
+        InstallFixture("component_guest_v0.wasm");
+        var app = NewApp();
+        var world = app.GetWorld();
+        var mover = world.Entity().Set(new CmPos()).Set(new CmVel { X = 2, Y = 1 }).ID;
+        app.RunStartup();
+        app.Update();
+
+        var info = Assert.Single(app.GetResource<ModControl>().Mods);
+        Assert.True(info.Enabled, info.LastError);
+        Assert.Equal(new[] { "tick", "count_added" }, app.GetResource<ModRuntimes>().Runtimes[0].Ctx.Systems.Select(s => s.Name));
+        Assert.Equal(new CmPos { X = 2, Y = 1 }, world.Get<CmPos>(mover));
+        Assert.Equal(1, app.GetResource<CmScore>().Value);
+    }
+
+    private static void Poke(App app, int n)
+    {
+        var reg = app.GetResource<ModdingConfig>().Registry;
+        Assert.True(reg.TryGetEvent("test/poke", out var ev));
+        ev.Emit(app.GetWorld(), 0, "{\"N\":" + n + "}");
     }
 
     private static ulong SpawnedByMod(World world)

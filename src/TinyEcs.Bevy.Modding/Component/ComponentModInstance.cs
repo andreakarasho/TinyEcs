@@ -133,6 +133,11 @@ internal sealed class ComponentParam
     public string Path = "";
     public bool Mutable;
     public ComponentEventBuffer? Events;
+    // Res: the value across runs, and whether this run already serialized it (Same =
+    // that run's "equal to the previous observation").
+    public ModResValue? Res;
+    public bool Fetched;
+    public bool Same;
 }
 
 internal sealed class ComponentSystem
@@ -192,7 +197,7 @@ internal sealed class ComponentSystem
     }
 
     public void AddRes(string path, bool mutable)
-        => Params.Add(new ComponentParam { Kind = ComponentParamKind.Res, Path = path, Mutable = mutable });
+        => Params.Add(new ComponentParam { Kind = ComponentParamKind.Res, Path = path, Mutable = mutable, Res = new ModResValue() });
 
     public void AddEvents(ModHostContext ctx, string path)
     {
@@ -206,7 +211,7 @@ internal sealed class ComponentSystem
 /// Commands recorded during one guest call, applied in order once it returns.
 internal sealed class ComponentCommandBuffer
 {
-    private enum Op : byte { Insert, Remove, Despawn, Send }
+    private enum Op : byte { Insert, Remove, Despawn, Send, SetResource }
 
     private struct Entry
     {
@@ -266,6 +271,17 @@ internal sealed class ComponentCommandBuffer
         _entries.Add(new Entry { Op = Op.Send, First = _items.Count - 1, Count = 1 });
     }
 
+    // Checked at the call (a throw here traps the guest), applied with the rest.
+    public void SetResource(string path, ReadOnlySpan<byte> json)
+    {
+        if (!_owner.Ctx.Registry.TryGetResource(path, out var r))
+            throw new InvalidOperationException($"commands.set-resource: '{path}' is not a registered resource");
+        if (r.ReadOnly)
+            throw new InvalidOperationException($"commands.set-resource: '{path}' is read-only");
+        _items.Add((path, Copy(json), json.Length));
+        _entries.Add(new Entry { Op = Op.SetResource, First = _items.Count - 1, Count = 1 });
+    }
+
     private int Copy(ReadOnlySpan<byte> bytes)
     {
         if (_payloadLen + bytes.Length > _payload.Length)
@@ -320,6 +336,12 @@ internal sealed class ComponentCommandBuffer
                     {
                         var (path, off, len) = _items[e.First];
                         commands.EmitEvent(path, 0, _payload.AsSpan(off, len));
+                        break;
+                    }
+                    case Op.SetResource:
+                    {
+                        var (path, off, len) = _items[e.First];
+                        commands.ResourceSet(path, _payload.AsSpan(off, len));
                         break;
                     }
                 }
@@ -486,16 +508,33 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             comp.SetJsonUtf8(Ctx.World, entity, json);
     }
 
-    // The value's UTF8 JSON (valid until the next ResGet / rows), or false when absent.
+    // Serializes the param's value once per run (lazily for a system that reads it only
+    // through `get` / `unchanged`, up front for a run-on-change one) and records it.
+    private bool FetchRes(ComponentParam p)
+    {
+        if (p.Fetched)
+            return p.Same;
+        _json.Reset();
+        if (Ctx.App != null && Ctx.Registry.TryGetResource(p.Path, out var r))
+            r.GetJsonUtf8For(Ctx.App, Ctx.Name, _json);
+        p.Same = p.Res!.Observe(_json.WrittenSpan);
+        p.Fetched = true;
+        return p.Same;
+    }
+
+    // The value's UTF8 JSON (valid until the param's next fetch), or false when absent.
     internal bool ResGet(ComponentParam p, out ReadOnlySpan<byte> json)
     {
-        json = default;
-        if (Ctx.App == null || !Ctx.Registry.TryGetResource(p.Path, out var r))
-            return false;
-        _json.Reset();
-        r.GetJsonUtf8For(Ctx.App, Ctx.Name, _json);
-        json = _json.WrittenSpan;
-        return !json.SequenceEqual("null"u8);
+        FetchRes(p);
+        p.Res!.MarkGot();
+        json = p.Res.Value;
+        return p.Res.Present;
+    }
+
+    internal bool ResUnchanged(ComponentParam p)
+    {
+        FetchRes(p);
+        return p.Res!.UnchangedSinceGot;
     }
 
     internal void ResSet(ComponentParam p, ReadOnlySpan<byte> json)
@@ -504,6 +543,8 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             throw new InvalidOperationException($"res.set: {p.Path} was declared with add-res, not add-res-mut");
         if (Ctx.App != null && Ctx.Registry.TryGetResource(p.Path, out var r))
             r.SetJsonUtf8From(Ctx.App, json, Ctx.Name);
+        // A `get` after the write reads the new value.
+        p.Fetched = false;
     }
 
     // ── IModInstance ──────────────────────────────────────────────────────────
@@ -535,10 +576,10 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         if (!_systems.TryGetValue(spec, out var sys))
             return;
         var hasQuery = false;
-        var anyRows = Evaluate(sys, ref hasQuery);
+        var anyRows = Evaluate(sys, ref hasQuery, out var hasInputs, out var resChanged);
         try
         {
-            if (ModdingPlugin.ShouldSkipIdle(spec, hasQuery, anyRows))
+            if (ModdingPlugin.ShouldSkipRun(spec, hasQuery, hasInputs, anyRows, resChanged))
                 return;
             Call(_run, sys, entity: null, json: default);
         }
@@ -556,7 +597,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         if (!_observers.TryGetValue(export, out var sys))
             return;
         var hasQuery = false;
-        Evaluate(sys, ref hasQuery);
+        Evaluate(sys, ref hasQuery, out _, out _);
         try
         {
             Call(_observe, sys, entity, json);
@@ -574,7 +615,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         if (!_observers.TryGetValue(export, out var sys))
             return ModPacketVerdict.Pass;
         var hasQuery = false;
-        Evaluate(sys, ref hasQuery);
+        Evaluate(sys, ref hasQuery, out _, out _);
         var verdict = ModPacketVerdict.Pass;
         var prev = Enter();
         var cx = Cm.StoreContext.FromStore(_store);
@@ -602,7 +643,10 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             if (ok)
                 Commands.Apply();
             else
+            {
                 Commands.Discard();
+                Forget(sys);
+            }
             Release(sys);
         }
         if (verdict == ModPacketVerdict.Replace)
@@ -631,34 +675,48 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         return ModPacketVerdict.Replace;
     }
 
-    // Snapshot every query, swap event buffers. Returns whether anything has rows/events.
-    private bool Evaluate(ComponentSystem sys, ref bool hasQuery)
+    // Snapshot every query, swap event buffers, and — for a run-on-change system —
+    // serialize every resource. Returns whether anything has rows/events; hasInputs =
+    // some query / res / events param, resChanged = some resource differs from its
+    // previous run's (only computed for run-on-change: the others fetch lazily).
+    private bool Evaluate(ComponentSystem sys, ref bool hasQuery, out bool hasInputs, out bool resChanged)
     {
         var any = false;
+        hasInputs = false;
+        resChanged = false;
         var spec = sys.Spec;
+        var since = spec.Window.Since;
         foreach (var p in sys.Params)
         {
             switch (p.Kind)
             {
+                case ComponentParamKind.Res:
+                    hasInputs = true;
+                    p.Fetched = false;
+                    if (spec.RunOnChange)
+                        resChanged |= !FetchRes(p);
+                    break;
                 case ComponentParamKind.Query:
                 {
                     hasQuery = true;
-                    var snap = ModdingPlugin.BuildSnapshot(Ctx, p.Query!, spec.LastRunWorldTick, out var matched);
+                    hasInputs = true;
+                    var snap = ModdingPlugin.BuildSnapshot(Ctx, p.Query!, since, out var matched);
                     if (p.Added != null)
-                        matched = FilterAdded(snap, matched, p.Added, spec.LastRunWorldTick);
+                        matched = FilterAdded(snap, matched, p.Added, since);
                     p.Snapshot = snap;
                     p.Count = matched;
                     any |= matched > 0;
                     break;
                 }
                 case ComponentParamKind.Events:
+                    hasInputs = true;
                     p.Events!.Swap();
                     any |= p.Events.Current.Count > 0;
                     break;
             }
         }
         // The Changed/Added window closes here, as on the core ABI — even if idle-skipped.
-        spec.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
+        spec.Window.Close();
         return any;
     }
 
@@ -676,6 +734,15 @@ internal sealed unsafe class ComponentModInstance : IModInstance
                 snap[kept++] = id;
         }
         return kept;
+    }
+
+    // After a failed guest call: it may not have taken this run's values in, so the next
+    // run neither skips nor reports a resource unchanged.
+    private static void Forget(ComponentSystem sys)
+    {
+        sys.Spec.HasRun = false;
+        foreach (var p in sys.Params)
+            p.Res?.Forget();
     }
 
     private static void Release(ComponentSystem sys)
@@ -720,7 +787,10 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             if (ok)
                 Commands.Apply();
             else
+            {
                 Commands.Discard();
+                Forget(sys);
+            }
         }
     }
 

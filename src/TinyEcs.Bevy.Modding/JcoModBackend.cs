@@ -165,7 +165,7 @@ internal sealed class JcoModInstance : IModInstance
             }
             else
             {
-                var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, sys.LastRunWorldTick, out var matched);
+                var snapshot = ModdingPlugin.BuildSnapshot(_ctx, p.Query!, sys.Window.Since, out var matched);
                 _snapshotScratch.Add(snapshot);
                 @params[i] = ModRunParam.Query(snapshot, matched, p.Query!.Components);
                 hasQuery = true;
@@ -175,7 +175,7 @@ internal sealed class JcoModInstance : IModInstance
 
         // The queries were evaluated above, so the Changed window closes HERE — even
         // when the guest call is idle-skipped below.
-        sys.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
+        sys.Window.Close();
 
         try
         {

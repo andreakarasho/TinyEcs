@@ -139,7 +139,7 @@ internal sealed class ModAbiRunner : IModInstance
                 if (sd.Before != null)
                     foreach (var bid in sd.Before)
                         if (idToName.TryGetValue(bid, out var n)) si.Spec.Before.Add(n);
-
+                si.Spec.RunOnChange = sd.RunOnChange;
 
                 one[0] = si;
                 appImpl.AddSystems((ModSchedule)(byte)sd.Schedule, sd.CustomStage, one);
@@ -245,17 +245,17 @@ internal sealed class ModAbiRunner : IModInstance
 
         _snapshotScratch.Clear();
         var scratch = ScratchFor(sys);
-        var gated = BuildInputs(sys.Params, sys.LastRunWorldTick, sys.Name, scratch.Params, out var anyRows);
+        var gated = BuildInputs(sys.Params, sys.Window.Since, sys.Name, scratch.Params, out var anyRows, out var hasInputs, out var resChanged);
 
         // The queries were evaluated above, so the Changed/Added window closes HERE -
         // even when the guest call is idle-skipped below (the rows were still consumed).
-        sys.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
+        sys.Window.Close();
 
         try
         {
-            // Idle-skip (same policy as every backend): every query empty this tick AND
-            // last - skip the guest call. A resource param opts out (no signal to gate on).
-            if (ModdingPlugin.ShouldSkipIdle(sys, gated, anyRows))
+            // The shared skip (run-on-change, else the idle-skip: every query empty this
+            // tick AND last, a resource param opting out).
+            if (ModdingPlugin.ShouldSkipRun(sys, gated, hasInputs, anyRows, resChanged))
             {
                 if (stat != null)
                 {
@@ -284,8 +284,9 @@ internal sealed class ModAbiRunner : IModInstance
             catch
             {
                 // The guest may not have taken this run's resource values in: the next
-                // run sends them in full.
+                // run sends them in full, and is not skipped.
                 scratch.Params.ForgetDelivered();
+                sys.HasRun = false;
                 throw;
             }
             var t2 = prof ? ModProfiler.Now() : 0;
@@ -320,13 +321,17 @@ internal sealed class ModAbiRunner : IModInstance
     // Evaluates a system's / observer's params into scratch.Live*: query rows, resource
     // values, the events since the last run. Returns whether the idle-skip may gate on
     // it (has a query and no resource param); anyRows = some query matched or some
-    // events arrived.
-    private bool BuildInputs(List<ModParam> ps, uint sinceTick, string ownerName, ParamsScratch scratch, out bool anyRows)
+    // events arrived; hasInputs = some query / res / events param; resChanged = some
+    // resource differs from what that param observed on the previous run.
+    private bool BuildInputs(List<ModParam> ps, uint sinceTick, string ownerName, ParamsScratch scratch,
+        out bool anyRows, out bool hasInputs, out bool resChanged)
     {
         scratch.LiveQueries.Clear();
         scratch.LiveResources.Clear();
         scratch.LiveEvents.Clear();
         anyRows = false;
+        hasInputs = false;
+        resChanged = false;
         var hasQuery = false;
         var hasRes = false;
         var queryIndex = 0;
@@ -341,6 +346,7 @@ internal sealed class ModAbiRunner : IModInstance
                 case ModParamKind.Query:
                 {
                     hasQuery = true;
+                    hasInputs = true;
                     var q = p.Query!;
                     var snapshot = ModdingPlugin.BuildSnapshot(_ctx, q, sinceTick, out var matched);
                     _snapshotScratch.Add(snapshot);
@@ -378,38 +384,33 @@ internal sealed class ModAbiRunner : IModInstance
                 case ModParamKind.ResMut:
                 {
                     hasRes = true;
+                    hasInputs = true;
                     var slot = scratch.Res(resIndex++);
                     slot.Out.ParamIndex = (uint)pi;
                     slot.Out.Value = null;
                     slot.Out.Unchanged = false;
-                    var present = false;
+                    slot.Json.Reset();
                     if (_ctx.App != null && _ctx.Registry.TryGetResource(p.TypePath!, out var res))
-                    {
                         // The calling mod's slice: a per-mod resource serves its own state.
-                        slot.Json.Reset();
                         res.GetJsonUtf8For(_ctx.App, _ctx.Name, slot.Json);
-                        if (!ModJson.IsAbsent(slot.Json.WrittenSpan))
-                        {
-                            present = true;
-                            slot.Value.TypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
-                            slot.Value.Data = slot.Json.Written;
-                            slot.Out.Value = slot.Value;
-                        }
-                    }
-                    // A guest that keeps each Res param's last value (SetupReply.res_unchanged)
-                    // is told "unchanged" instead of being re-sent the same bytes. Resources
-                    // carry no change ticks, so the signal is a byte compare against what
-                    // this param last delivered.
-                    if (_resUnchanged)
+                    // Resources carry no change ticks, so "unchanged" is a byte compare
+                    // against what this param observed on its previous run.
+                    var same = slot.Last.Observe(slot.Json.WrittenSpan);
+                    resChanged |= !same;
+                    if (slot.Last.Present)
                     {
-                        if (present && slot.Delivered && slot.WrittenEqualsLast())
+                        // A guest that keeps each Res param's last value
+                        // (SetupReply.res_unchanged) is told "unchanged" instead of being
+                        // re-sent the same bytes.
+                        if (_resUnchanged && same)
                         {
-                            slot.Out.Value = null;
                             slot.Out.Unchanged = true;
                         }
                         else
                         {
-                            slot.RememberDelivered(present);
+                            slot.Value.TypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
+                            slot.Value.Data = slot.Json.Written;
+                            slot.Out.Value = slot.Value;
                         }
                     }
                     scratch.LiveResources.Add(slot.Out);
@@ -417,6 +418,7 @@ internal sealed class ModAbiRunner : IModInstance
                 }
                 case ModParamKind.Events:
                 {
+                    hasInputs = true;
                     var buffer = p.Events!;
                     buffer.Swap();
                     anyRows |= buffer.Current.Count > 0;
@@ -484,7 +486,7 @@ internal sealed class ModAbiRunner : IModInstance
         public void ForgetDelivered()
         {
             foreach (var r in _res)
-                r.Delivered = false;
+                r.Last.Forget();
         }
 
         public EventsScratch Events(int index)
@@ -500,24 +502,8 @@ internal sealed class ModAbiRunner : IModInstance
         public readonly ResValue Out = new();
         public readonly CompValue Value = new() { Encoding = ModAbi.Encoding.Json };
         public readonly ModJsonBuffer Json = new();
-        // The bytes this param last delivered (valid while Delivered).
-        public bool Delivered;
-        private byte[] _last = Array.Empty<byte>();
-        private int _lastLen;
-
-        public bool WrittenEqualsLast() => Json.WrittenSpan.SequenceEqual(_last.AsSpan(0, _lastLen));
-
-        public void RememberDelivered(bool present)
-        {
-            Delivered = present;
-            if (!present)
-                return;
-            var src = Json.WrittenSpan;
-            if (_last.Length < src.Length)
-                _last = new byte[Math.Max(src.Length, _last.Length * 2)];
-            src.CopyTo(_last);
-            _lastLen = src.Length;
-        }
+        // What this param observed on its previous run (= what the guest holds).
+        public readonly ModResValue Last = new();
     }
 
     private sealed class EventsScratch
@@ -640,8 +626,8 @@ internal sealed class ModAbiRunner : IModInstance
             {
                 if (!_obsScratch.TryGetValue(export, out var scratch))
                     _obsScratch[export] = scratch = new ParamsScratch { Label = "observer " + export };
-                BuildInputs(spec.Params, spec.LastRunWorldTick, scratch.Label, scratch, out _);
-                spec.LastRunWorldTick = TinyEcs.Bevy.SystemTicks.Current;
+                BuildInputs(spec.Params, spec.Window.Since, scratch.Label, scratch, out _, out _, out _);
+                spec.Window.Close();
                 _obsInput.Queries = scratch.LiveQueries.Count > 0 ? scratch.LiveQueries : null;
                 _obsInput.Resources = scratch.LiveResources.Count > 0 ? scratch.LiveResources : null;
                 _obsInput.Events = scratch.LiveEvents.Count > 0 ? scratch.LiveEvents : null;
@@ -891,11 +877,16 @@ internal sealed class ModAbiRunner : IModInstance
             case Cmd.ItemKind.ResourceSetCmd:
             {
                 var v = cmd.ResourceSetCmd.Value;
-                if (v != null && _state.IdToEntry.TryGetValue(v.TypeId, out var e))
-                {
-                    if (IsApplicable(v.Encoding, e.Path))
-                        commands.ResourceSet(e.Path, Utf8(v.Data).Span);
-                }
+                if (v == null)
+                    break;
+                // The guest-side shim can't tell a resource path from any other, so that
+                // check happens here (logged by the per-command guard: the guest call has
+                // already returned). A read-only target is the mapper's to refuse.
+                if (!_state.IdToEntry.TryGetValue(v.TypeId, out var e) || e.Kind != ModRegistryKind.Resource
+                    || !_ctx.Registry.TryGetResource(e.Path, out _))
+                    throw new InvalidOperationException($"resource set: type id {v.TypeId} is not a resource");
+                if (IsApplicable(v.Encoding, e.Path))
+                    commands.ResourceSet(e.Path, Utf8(v.Data).Span);
                 break;
             }
             case Cmd.ItemKind.EmitEventCmd:

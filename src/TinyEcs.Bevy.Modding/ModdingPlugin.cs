@@ -678,7 +678,8 @@ public readonly struct ModdingPlugin : IPlugin
         }
     }
 
-    // Idle-skip (used by the backends' RunSystem AFTER snapshots are built, so
+    // Idle-skip for systems that did not opt into run-on-change (see ShouldSkipRun;
+    // used by the backends' RunSystem AFTER snapshots are built, so
     // the query evaluation is never paid twice): don't cross the component
     // boundary for a system whose every query matched zero entities LAST tick
     // too. The first all-empty tick always runs so the guest sees one empty
@@ -711,6 +712,24 @@ public readonly struct ModdingPlugin : IPlugin
             rt.Info.Enabled = false;
         rt.ObserverFires.Clear();
         Console.WriteLine("[ecs-mod] mod '{0}' disabled after {1} failures", rt.Manifest.Name, MaxModFailures);
+    }
+
+    /// The one skip decision every backend makes, AFTER it built the run's inputs
+    /// (query snapshots, resource values, event swap) and BEFORE it crosses into the
+    /// guest. A run-on-change system (`system.run-on-change`) is skipped when it has at
+    /// least one input parameter (query / res / events — commands don't count), every
+    /// query matched zero rows, no event arrived and every resource equals what its
+    /// previous run saw; its first run never skips. Every other system keeps the
+    /// idle-skip. Skipping never loses a change: the Changed / Added window closes only
+    /// over a zero-row evaluation, and events are only consumed when there are none.
+    internal static bool ShouldSkipRun(ModSystemSpec sys, bool idleGated, bool hasInputs, bool anyRows, bool resChanged)
+    {
+        if (!sys.RunOnChange)
+            return ShouldSkipIdle(sys, idleGated, anyRows);
+        if (sys.HasRun && hasInputs && !anyRows && !resChanged)
+            return true;
+        sys.HasRun = true;
+        return false;
     }
 
     internal static bool ShouldSkipIdle(ModSystemSpec sys, bool hasQuery, bool anyRows)

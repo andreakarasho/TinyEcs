@@ -165,6 +165,7 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineFunction("[method]system.add-events", SystemAddEvents, this);
         ecs.DefineFunction("[method]system.after", SystemAfter, this);
         ecs.DefineFunction("[method]system.before", SystemBefore, this);
+        ecs.DefineFunction("[method]system.run-on-change", SystemRunOnChange, this);
 
         ecs.DefineFunction("[method]app.add-systems", AppAddSystems, this);
         ecs.DefineFunction("[method]app.add-observer", AppAddObserver, this);
@@ -174,12 +175,14 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineFunction("[method]commands.remove", CommandsRemove, this);
         ecs.DefineFunction("[method]commands.despawn", CommandsDespawn, this);
         ecs.DefineFunction("[method]commands.send", CommandsSend, this);
+        ecs.DefineFunction("[method]commands.set-resource", CommandsSetResource, this);
 
         ecs.DefineFunction("[method]query.rows", QueryRows, this);
         ecs.DefineFunction("[method]query.set", QuerySet, this);
 
         ecs.DefineFunction("[method]res.get", ResGet, this);
         ecs.DefineFunction("[method]res.set", ResSet, this);
+        ecs.DefineFunction("[method]res.unchanged", ResUnchanged, this);
 
         ecs.DefineFunction("[method]events.read", EventsRead, this);
     }
@@ -245,6 +248,12 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     {
         var m = Mod(state);
         m.SystemOf(args[0].ToResourceRep(cx)).Impl.Before(m.SystemOf(args[1].ToResourceRep(cx)).Impl);
+    }
+
+    private static void SystemRunOnChange(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    {
+        var m = Mod(state);
+        m.SystemOf(args[0].ToResourceRep(cx)).Spec.RunOnChange = true;
     }
 
     private static void AppAddSystems(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
@@ -319,6 +328,13 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         m.Commands.Send(m.Backend.Path(args[1]), args[2].ToUtf8Span());
     }
 
+    private static void CommandsSetResource(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    {
+        var m = Mod(state);
+        m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Commands);
+        m.Commands.SetResource(m.Backend.Path(args[1]), args[2].ToUtf8Span());
+    }
+
     private static void QueryRows(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
     {
         var m = Mod(state);
@@ -347,6 +363,13 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Res).Obj!;
         m.ResSet(param, args[1].ToUtf8Span());
+    }
+
+    private static void ResUnchanged(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    {
+        var m = Mod(state);
+        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Res).Obj!;
+        results[0] = Cm.ComponentValue.CreateBoolean(m.ResUnchanged(param));
     }
 
     private static void EventsRead(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)

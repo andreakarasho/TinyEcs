@@ -466,6 +466,10 @@ public interface IModResource
     /// reporting) needs it; a host's own mapper can ignore it.
     void BindPath(string path) { }
 
+    /// A resource the host owns: a mod may read it but not set it (`set-resource` traps).
+    /// Default false, so a hand-written mapper stays writable unless it says otherwise.
+    bool ReadOnly => false;
+
     // ── Per-mod slices ──────────────────────────────────────────────────────────
     // The guest bridge names the mod whose read/write is being applied, so a host
     // resource that holds PER-MOD state (a mod's own key bindings) can serve one
@@ -502,6 +506,8 @@ public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = fal
     private bool _reported;
 
     public void BindPath(string path) => _path = path;
+
+    public bool ReadOnly => readOnly;
 
     public string GetJson(App app)
         => app.HasResource<T>() ? JsonSerializer.Serialize(app.GetResource<T>(), typeInfo) : "null";

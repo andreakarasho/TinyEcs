@@ -121,13 +121,99 @@ internal sealed class ModSystemSpec
     // component boundary for a no-row tick costs ~0.3ms/system on the jco
     // (JS-engine-in-wasm) backend.
     public int EmptyStreak;
-    // The runner system's own change tick at the last EVALUATION of this mod system
-    // (set even when the run was idle-skipped, since the queries were still evaluated).
-    // Changed query terms filter on "changed-tick strictly newer than this", wrapping.
-    // NOTE: the runner's OWN system tick, not World.CurrentTick — a sibling system of
-    // the same parallel batch may have moved the global counter past it, and adopting
-    // that higher value would silently swallow the sibling's writes.
-    public uint LastRunWorldTick;
+    // The Changed / Added window of this mod system's query terms (see ModRunWindow).
+    public ModRunWindow Window;
+    // tinyecs-mod `system.run-on-change`: ModdingPlugin.ShouldSkipRun skips a run whose
+    // inputs are all unchanged instead of applying the idle-skip.
+    public bool RunOnChange;
+    // The guest was called since setup (or since a failed call): the first run of a
+    // run-on-change system is never skipped.
+    public bool HasRun;
+}
+
+/// The (lastRun, thisRun] window a mod system's / observer's Changed and Added terms
+/// filter on. lastRun = the runner system's own change tick at the previous EVALUATION
+/// (closed even when the run was then skipped: the queries were still evaluated). NOTE:
+/// the runner's OWN system tick, not World.CurrentTick — a sibling system of the same
+/// parallel batch may have moved the global counter past it, and adopting that higher
+/// value would silently swallow the sibling's writes. Before the first evaluation the
+/// window reaches back the maximum comparable age, so the first run sees every change
+/// made before it (Bevy initializes a system's last_run the same way).
+internal struct ModRunWindow
+{
+    private uint _lastRun;
+    private bool _closed;
+
+    public readonly uint Since
+        => _closed ? _lastRun : TinyEcs.Bevy.SystemTicks.Current - ChangeTick.MaxChangeAge;
+
+    public void Close()
+    {
+        _lastRun = TinyEcs.Bevy.SystemTicks.Current;
+        _closed = true;
+    }
+}
+
+/// One Res / ResMut parameter's value across runs: the bytes it last observed, so a
+/// backend can tell "unchanged since the previous run" (the run-on-change gate, the
+/// relay's ResValue.unchanged) and answer `res.unchanged` (the value equals the one
+/// `get` last returned). Grow-only, so steady state allocates nothing.
+internal sealed class ModResValue
+{
+    private byte[] _bytes = Array.Empty<byte>();
+    private int _length;
+    private bool _known;
+    private uint _gen;
+    private uint _gotGen;
+    private bool _got;
+
+    public bool Present { get; private set; }
+
+    /// Valid while Present, until the next Observe.
+    public ReadOnlySpan<byte> Value => _bytes.AsSpan(0, _length);
+
+    /// Records `json` ("null" / empty = absent) as the current value; true when it equals
+    /// the previously observed one (absent == absent).
+    public bool Observe(ReadOnlySpan<byte> json)
+    {
+        var present = !ModJson.IsAbsent(json);
+        if (_known && present == Present && (!present || json.SequenceEqual(Value)))
+            return true;
+        if (present)
+        {
+            if (_bytes.Length < json.Length)
+                _bytes = new byte[Math.Max(json.Length, _bytes.Length * 2)];
+            json.CopyTo(_bytes);
+            _length = json.Length;
+        }
+        else
+        {
+            _length = 0;
+        }
+        Present = present;
+        _known = true;
+        _gen++;
+        return false;
+    }
+
+    /// The guest took the current value (`res.get`).
+    public void MarkGot()
+    {
+        _gotGen = _gen;
+        _got = true;
+    }
+
+    /// `res.unchanged`: the current value is the one `get` last returned. Generation-
+    /// based, so a change the guest never fetched (A -> B unseen -> A) still reads as
+    /// changed — never a stale cache, at worst one extra parse.
+    public bool UnchangedSinceGot => _got && _gotGen == _gen;
+
+    /// After a failed guest call: nothing is assumed delivered any more.
+    public void Forget()
+    {
+        _known = false;
+        _got = false;
+    }
 }
 
 internal sealed class ModObserverSpec
@@ -138,7 +224,7 @@ internal sealed class ModObserverSpec
     // The observer's own system parameters after the trigger (queries / res / events),
     // evaluated per fire like a system's. Same window bookkeeping as ModSystemSpec.
     public readonly List<ModParam> Params = new();
-    public uint LastRunWorldTick;
+    public ModRunWindow Window;
     // Packet only: the direction it sees and the message ids (byte 0) as a 256-bit set.
     public ModPacketDirection PacketDirection;
     public readonly ulong[] PacketIds = new ulong[4];

@@ -400,4 +400,156 @@ public class ModAbiV3Tests
         var e = Assert.Throws<InvalidOperationException>(() => new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup());
         Assert.Contains("bad", e.Message);
     }
+
+    // ── run-on-change (SystemDecl.run_on_change) over the relay ──────────────────────
+
+    private static CaptureExecutor OnChangeSystem(ModComponentRegistry reg, bool runOnChange, params ParamDecl[] ps) => new()
+    {
+        SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply
+        {
+            ResUnchanged = true,
+            Systems = new List<SystemDecl>
+            {
+                new() { Id = 0, Name = "s", Schedule = Schedule.Update, RunOnChange = runOnChange, Params = ps.ToList() },
+            },
+        }),
+    };
+
+    private static ParamDecl[] WatchParams(ModComponentRegistry reg) =>
+    [
+        new() { Kind = ParamKind.Res, TypeId = Id(reg, "t:score") },
+        new() { Kind = ParamKind.Query, Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Ref, TypeId = Id(reg, "t:tag") } } } },
+        new() { Kind = ParamKind.Events, TypeId = Id(reg, "t:ping") },
+        new() { Kind = ParamKind.Res, TypeId = Id(reg, "t:missing") },
+    ];
+
+    [Fact]
+    public void Run_on_change_skips_the_guest_call_until_an_input_changes()
+    {
+        var (app, ctx, reg) = Host();
+        app.AddResource(new V3Score { Value = 7 });
+        var exec = OnChangeSystem(reg, runOnChange: true, WatchParams(reg));
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+        var sys = Assert.Single(ctx.Systems);
+        Assert.True(sys.RunOnChange);
+
+        runner.RunSystem(sys); // the first run never skips
+        runner.RunSystem(sys); // nothing changed (an absent resource stays absent)
+        Assert.Single(exec.RunInputs);
+
+        app.GetResourceRef<V3Score>().Value = 8; // a resource change
+        runner.RunSystem(sys);
+        Assert.Equal(2, exec.RunInputs.Count);
+        Assert.Equal("{\"Value\":8}", Json(SystemInput.Serializer.Parse(exec.RunInputs[^1]).Resources![0].Value));
+        runner.RunSystem(sys);
+        Assert.Equal(2, exec.RunInputs.Count);
+
+        Assert.True(reg.TryGetEvent("t:ping", out var ping)); // an event
+        ping.Emit(app.GetWorld(), 0, "{\"N\":1}");
+        runner.RunSystem(sys);
+        Assert.Equal(3, exec.RunInputs.Count);
+        var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
+        Assert.True(input.Resources![0].Unchanged); // the unchanged value still crosses as a flag
+        Assert.Single(input.Events![0].Values!);
+        runner.RunSystem(sys); // the event was consumed
+        Assert.Equal(3, exec.RunInputs.Count);
+
+        app.GetWorld().Entity().Set(new V3Tag { X = 1 }); // a matching row, on every run
+        runner.RunSystem(sys);
+        runner.RunSystem(sys);
+        Assert.Equal(5, exec.RunInputs.Count);
+    }
+
+    [Fact]
+    public void Without_run_on_change_the_same_system_keeps_running()
+    {
+        var (app, ctx, reg) = Host();
+        app.AddResource(new V3Score { Value = 7 });
+        var exec = OnChangeSystem(reg, runOnChange: false, WatchParams(reg));
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+
+        for (var i = 0; i < 3; i++)
+            runner.RunSystem(ctx.Systems[0]);
+        Assert.Equal(3, exec.RunInputs.Count); // a resource param opts out of the idle-skip
+    }
+
+    [Fact]
+    public void Run_on_change_never_skips_a_system_without_input_params()
+    {
+        var (_, ctx, reg) = Host();
+        var exec = OnChangeSystem(reg, runOnChange: true, new ParamDecl { Kind = ParamKind.Commands });
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+
+        for (var i = 0; i < 3; i++)
+            runner.RunSystem(ctx.Systems[0]);
+        Assert.Equal(3, exec.RunInputs.Count);
+    }
+
+    [Fact]
+    public void Run_on_change_runs_again_after_a_failed_call()
+    {
+        var (app, ctx, reg) = Host();
+        app.AddResource(new V3Score { Value = 7 });
+        var exec = new ThrowingExecutor(OnChangeSystem(reg, runOnChange: true, WatchParams(reg))) { Throw = true };
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+        var sys = ctx.Systems[0];
+
+        Assert.Throws<InvalidOperationException>(() => runner.RunSystem(sys));
+        exec.Throw = false;
+        runner.RunSystem(sys); // nothing changed, but the guest never took the last run in
+        Assert.Single(exec.Inner.RunInputs);
+        Assert.Equal("{\"Value\":7}", Json(SystemInput.Serializer.Parse(exec.Inner.RunInputs[^1]).Resources![0].Value));
+        runner.RunSystem(sys);
+        Assert.Single(exec.Inner.RunInputs);
+    }
+
+    // Bevy's first run of a system sees every earlier change; so does a mod system's,
+    // even for a component stamped before any system ran (world tick 0).
+    [Fact]
+    public void A_first_run_sees_changes_made_before_it()
+    {
+        var (app, ctx, reg) = Host();
+        var early = app.GetWorld().Entity().Set(new V3Tag { X = 1 }).ID;
+        var exec = OnChangeSystem(reg, runOnChange: true,
+            new ParamDecl { Kind = ParamKind.Query, Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Changed, TypeId = Id(reg, "t:tag") } } } },
+            new ParamDecl { Kind = ParamKind.Query, Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Added, TypeId = Id(reg, "t:tag") } } } });
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+
+        runner.RunSystem(ctx.Systems[0]);
+        var input = SystemInput.Serializer.Parse(Assert.Single(exec.RunInputs));
+        Assert.Equal(early, Assert.Single(input.Queries![0].Rows!).Entity);
+        Assert.Equal(early, Assert.Single(input.Queries[1].Rows!).Entity);
+    }
+
+    [Fact]
+    public void Resource_set_naming_a_non_resource_is_refused()
+    {
+        var (app, ctx, reg) = Host();
+        app.AddResource(new V3Score { Value = 7 });
+        var exec = OnChangeSystem(reg, runOnChange: false, new ParamDecl { Kind = ParamKind.Commands });
+        exec.RunReplyBytes = Bytes(CommandBuffer.Serializer, new CommandBuffer
+        {
+            Cmds = new List<Cmd>
+            {
+                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:tag"), Data = "{\"X\":1}"u8.ToArray() } }),
+                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Data = "{\"Value\":9}"u8.ToArray() } }),
+            },
+        });
+        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        runner.Setup();
+
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try { runner.RunSystem(ctx.Systems[0]); }
+        finally { Console.SetOut(stdout); }
+
+        Assert.Contains($"type id {Id(reg, "t:tag")} is not a resource", output.ToString());
+        Assert.Equal(9, app.GetResource<V3Score>().Value); // the next command still applied
+    }
 }

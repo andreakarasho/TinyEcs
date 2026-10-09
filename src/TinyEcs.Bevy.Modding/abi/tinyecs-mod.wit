@@ -118,6 +118,14 @@ interface ecs {
 
         /// Runs this system before `other` (same schedule).
         before: func(other: borrow<system>);
+
+        /// Skip a run when nothing it reads changed: every resource parameter is
+        /// unchanged since its previous run, no event arrived, and every query
+        /// matched no rows (only queries with `changed` / `added` terms can be
+        /// empty on an idle frame, so a plain query keeps the system running). A
+        /// system without parameters always runs. Off by default: timers and
+        /// state machines driven by the mod's own state must keep running.
+        run-on-change: func();
     }
 
     /// Passed to `setup`: where systems and observers are registered.
@@ -144,6 +152,9 @@ interface ecs {
 
         /// Sends an event (observers fire, event readers see it next).
         send: func(event: type-path, value: json);
+
+        /// Sets a writable resource. No `add-res-mut` parameter needed.
+        set-resource: func(path: type-path, value: json);
     }
 
     /// One matching entity: the values of the reading terms (`ref` / `mut` /
@@ -167,6 +178,11 @@ interface ecs {
     resource res {
         /// None when the host has no such resource right now.
         get: func() -> option<json>;
+
+        /// True when the value equals the one this parameter received on this
+        /// system's previous run: a value parsed then can be reused instead of
+        /// calling `get`.
+        unchanged: func() -> bool;
 
         /// Traps unless declared with `add-res-mut`.
         set: func(value: json);

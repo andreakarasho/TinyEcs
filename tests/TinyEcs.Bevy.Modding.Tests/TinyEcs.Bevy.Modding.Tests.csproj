@@ -30,6 +30,7 @@
        fixtures/component-guest. -->
   <ItemGroup>
     <None Include="fixtures\component_guest.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest.wasm" />
+    <None Include="fixtures\component_guest_v0.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest_v0.wasm" />
   </ItemGroup>
 
 </Project>

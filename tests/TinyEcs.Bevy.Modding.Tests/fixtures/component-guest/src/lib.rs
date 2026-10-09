@@ -1,12 +1,21 @@
 // ComponentModBackend test fixture: a tinyecs:modding `guest` component exercising every
 // system parameter kind (commands, query terms, res / res-mut, events) plus an
-// on-add observer and two on-packet observers. ComponentModBackendTests asserts the effects host-side.
+// on-add observer and two on-packet observers, and two run-on-change systems (`watch`,
+// `beat`) using res.unchanged / commands.set-resource. ComponentModBackendTests asserts
+// the effects host-side. ../component_guest_v0.wasm is this fixture built against the
+// WIT before run-on-change / set-resource / unchanged existed (kept to prove an older
+// guest still links against the newer host).
+
+use std::sync::atomic::{AtomicI64, Ordering};
 
 wit_bindgen::generate!({ world: "guest", path: "../../../../src/TinyEcs.Bevy.Modding/abi/tinyecs-mod.wit" });
 
 use tinyecs::modding::ecs::{PacketFilter, Schedule, System, Term, Trigger};
 
 struct Fixture;
+
+static WATCH_RUNS: AtomicI64 = AtomicI64::new(0);
+static BEATS: AtomicI64 = AtomicI64::new(0);
 
 // Reads the integer after `"key":` — enough JSON for the fixture's flat payloads.
 fn num(json: &str, key: &str) -> i64 {
@@ -37,6 +46,20 @@ impl Guest for Fixture {
         added.after(&tick);
 
         app.add_systems(Schedule::Update, &[&tick, &added]);
+
+        let watch = System::new("watch");
+        watch.add_commands();
+        watch.add_query(&[Term::Changed("test/watched".into())]);
+        watch.add_res("test/knob");
+        watch.add_events("test/poke");
+        watch.run_on_change();
+
+        // Commands only: no input parameter, so it never skips.
+        let beat = System::new("beat");
+        beat.add_commands();
+        beat.run_on_change();
+
+        app.add_systems(Schedule::PostUpdate, &[&watch, &beat]);
 
         let on_tag = System::new("on_tag");
         on_tag.add_commands();
@@ -93,6 +116,45 @@ impl Guest for Fixture {
                 let n = q.rows().len() as i64;
                 let total = added.get().map(|s| num(&s, "Value")).unwrap_or(0) + n;
                 added.set(&format!("{{\"Value\":{}}}", total));
+            }
+            // Reports each run into test/probe: how many runs so far, whether the knob
+            // was unchanged since the value `get` last returned, the rows and pokes seen.
+            // Poke 13 / 14 set a read-only / unknown resource (both trap).
+            "watch" => {
+                let [Param::Commands(cmds), Param::Query(q), Param::Res(knob), Param::Events(pokes)] = &params[..]
+                else {
+                    panic!("watch: unexpected params")
+                };
+                let runs = WATCH_RUNS.fetch_add(1, Ordering::Relaxed) + 1;
+                let unchanged = knob.unchanged();
+                let knob_value = if unchanged { -1 } else { knob.get().map(|s| num(&s, "Value")).unwrap_or(0) };
+                let rows = q.rows().len();
+                let pokes = pokes.read();
+                for p in &pokes {
+                    match num(p, "N") {
+                        13 => cmds.set_resource("test/clock", "{\"Value\":1}"),
+                        14 => cmds.set_resource("test/nope", "{}"),
+                        _ => {}
+                    }
+                }
+                cmds.set_resource(
+                    "test/probe",
+                    &format!(
+                        "{{\"Runs\":{},\"Unchanged\":{},\"Knob\":{},\"Rows\":{},\"Pokes\":{}}}",
+                        runs,
+                        unchanged as i64,
+                        knob_value,
+                        rows,
+                        pokes.len()
+                    ),
+                );
+            }
+            "beat" => {
+                let [Param::Commands(cmds)] = &params[..] else {
+                    panic!("beat: unexpected params")
+                };
+                let n = BEATS.fetch_add(1, Ordering::Relaxed) + 1;
+                cmds.set_resource("test/beats", &format!("{{\"Value\":{}}}", n));
             }
             other => panic!("unknown system {other}"),
         }

@@ -143,6 +143,7 @@ table SystemDecl {
   after: [uint32];        // system ids (ordering constraints)
   before: [uint32];
   interval_ms: uint32;    // DEPRECATED (unused by the v3 SDK)
+  run_on_change: bool;    // tinyecs-mod `system.run-on-change`: skip a run whose inputs are all unchanged
 }
 
 table ObserverDecl {
