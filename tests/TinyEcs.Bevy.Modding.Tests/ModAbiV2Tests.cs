@@ -39,9 +39,7 @@ public class ModAbiV2Tests
 
     private static ModHostContext ChangedCtx(World world)
     {
-        var reg = new ModComponentRegistry();
-        reg.Register("test/pos", new ModComponent<WitPos>(WitJsonContext.Default.WitPos));
-        return new ModHostContext { World = world, Registry = reg };
+        return new ModHostContext { World = world, Registry = new ModComponentRegistry().Pos() };
     }
 
     private static ModQuerySpec Query(params (string Path, ModQueryTermKind Kind)[] terms)
@@ -132,11 +130,7 @@ public class ModAbiV2Tests
                     if (Has(world, e.ID))
                         into.Add(e.ID);
         }
-        public string GetJson(World world, ulong entity) => "{}";
-        public void SetJson(World world, ulong entity, string json) { }
         public void Remove(World world, ulong entity) { }
-        public void RegisterInsertObserver(App app, Action<ulong, string> onFire) { }
-        public void RegisterRemoveObserver(App app, Action<ulong, string> onFire) { }
     }
 
     [Fact]
@@ -400,7 +394,7 @@ public class ModAbiV2Tests
         public byte[]? SpawnedBytes;
         public byte[]? HandshakeBytes;
 
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public int Load(in ModSource source, int slot, IModImportSink sink) => slot;
         public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake)
         {
             HandshakeBytes = handshake.ToArray();

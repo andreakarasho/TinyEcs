@@ -26,7 +26,7 @@ internal sealed class ModRelayBackend : IModBackend
     {
         var state = new ModRelayState();
         var sink = new ModAbiBacking(ctx, state, source.Name);
-        var handle = _executor.Load(in source, ctx.Slot, sink, ctx.HostImportModule, ctx.HostImports);
+        var handle = _executor.Load(in source, ctx.Slot, sink);
         return new ModAbiRunner(_executor, handle, state, ctx);
     }
 

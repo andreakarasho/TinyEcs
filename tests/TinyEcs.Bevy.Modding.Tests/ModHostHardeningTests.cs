@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using FlatSharp;
 using ModAbi;
 using TinyEcs;
@@ -13,12 +12,6 @@ namespace TinyEcs.Bevy.Modding.Tests;
 // the internal seams directly (InternalsVisibleTo) with a canned executor — no wasm
 // runtime, no game glue. The limits that need a real guest (epoch deadlines) and the
 // host-side packet-filter gate are covered by the parent repo's tests.
-public struct HardFlag { public bool On; }
-
-[JsonSourceGenerationOptions(IncludeFields = true)]
-[JsonSerializable(typeof(HardFlag))]
-internal partial class HardeningJsonContext : JsonSerializerContext { }
-
 public class ModHostHardeningTests
 {
     // ── a disabled mod is really off ─────────────────────────────────────────────
@@ -40,7 +33,7 @@ public class ModHostHardeningTests
             Ctx = ctx,
             Enabled = false,
         };
-        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
+        rt.ObserverFires.Enqueue("obs", 1UL, ReadOnlySpan<byte>.Empty);
         app.GetResource<ModRuntimes>().Runtimes.Add(rt);
 
         app.Update();
@@ -50,7 +43,7 @@ public class ModHostHardeningTests
 
         // Control: enabled, the same fire reaches the guest.
         rt.Enabled = true;
-        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
+        rt.ObserverFires.Enqueue("obs", 1UL, ReadOnlySpan<byte>.Empty);
         app.Update();
         Assert.Equal(1, instance.ObserverCalls);
     }
@@ -75,7 +68,7 @@ public class ModHostHardeningTests
             Ctx = ctx,
             Info = info,
         };
-        rt.ObserverFires.Enqueue("obs", 1UL, "{}"u8);
+        rt.ObserverFires.Enqueue("obs", 1UL, ReadOnlySpan<byte>.Empty);
 
         for (var i = 0; i < ModdingPlugin.MaxModFailures - 1; i++)
             ModdingPlugin.RunSystemsForStage(rt, ModSchedule.Update);
@@ -97,8 +90,7 @@ public class ModHostHardeningTests
     public void Setup_fails_naming_the_system_when_a_query_term_type_is_unregistered()
     {
         using var world = new World();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var reg = new ModComponentRegistry().Flag();
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "ghostmod" };
 
         var exec = new CannedExecutor
@@ -171,8 +163,7 @@ public class ModHostHardeningTests
     public void Setup_fails_when_a_mut_term_names_a_read_only_component(bool asObserver)
     {
         using var world = new World();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag, readOnly: true));
+        var reg = new ModComponentRegistry().Flag(readOnly: true);
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "rwmod" };
         var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver)) };
 
@@ -189,8 +180,7 @@ public class ModHostHardeningTests
     public void A_mut_term_on_a_writable_component_still_sets_up()
     {
         using var world = new World();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var reg = new ModComponentRegistry().Flag();
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "rwmod" };
         var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver: false)) };
 
@@ -209,8 +199,7 @@ public class ModHostHardeningTests
     public void A_failing_command_does_not_drop_the_commands_after_it()
     {
         using var world = new World();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var reg = new ModComponentRegistry().Flag();
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "sloppy" };
         var victim = world.Entity().ID;
 
@@ -234,19 +223,12 @@ public class ModHostHardeningTests
                 Cmds = new List<Cmd>
                 {
                     new(new SpawnCmd { TempId = 0 }),
-                    // Registered component, unparseable payload -> SetJson throws.
+                    // Registered component, truncated payload (a bool needs 1 byte) -> the
+                    // codec throws.
                     new(new InsertCmd
                     {
                         Entity = (long)victim,
-                        Comps = new List<CompValue>
-                        {
-                            new()
-                            {
-                                TypeId = 0,
-                                Encoding = ModAbi.Encoding.Json,
-                                Data = System.Text.Encoding.UTF8.GetBytes("{ this is not json"),
-                            },
-                        },
+                        Comps = new List<CompValue> { new() { TypeId = 0, Encoding = ModAbi.Encoding.Typed, Data = Array.Empty<byte>() } },
                     }),
                     new(new SpawnCmd { TempId = 1 }),
                 },
@@ -271,17 +253,21 @@ public class ModHostHardeningTests
         var app = new App();
         app.AddResource(new WitScore { Value = 10 });
 
-        var reg = new ModComponentRegistry();
-        reg.RegisterResource("test/ro", new ModResource<WitScore>(WitJsonContext.Default.WitScore, readOnly: true));
-        reg.RegisterResource("test/rw", new ModResource<WitScore>(WitJsonContext.Default.WitScore));
+        var reg = new ModComponentRegistry()
+            .Resource("test/ro", new ModResource<WitScore>(readOnly: true), Codecs.WriteScore, Codecs.ReadScore)
+            .Resource("test/rw", new ModResource<WitScore>(), Codecs.WriteScore, Codecs.ReadScore);
 
-        Assert.True(reg.TryGetResource("test/ro", out var ro));
-        ro.SetJson(app, "{\"Value\":42}");
+        var ro = reg.BinaryResource("test/ro");
+        Assert.True(ro.ReadOnly);
+        ro.Set(app, Bin.S32(42), "m");
         Assert.Equal(10, app.GetResource<WitScore>().Value);
-        Assert.Contains("\"Value\":10", ro.GetJson(app)); // reads still work
+        var read = new System.Buffers.ArrayBufferWriter<byte>();
+        Assert.True(ro.TryWrite(app, "m", read)); // reads still work
+        Assert.Equal(Bin.S32(10), read.WrittenSpan.ToArray());
 
-        Assert.True(reg.TryGetResource("test/rw", out var rw));
-        rw.SetJson(app, "{\"Value\":42}");
+        var rw = reg.BinaryResource("test/rw");
+        Assert.False(rw.ReadOnly);
+        rw.Set(app, Bin.S32(42), "m");
         Assert.Equal(42, app.GetResource<WitScore>().Value);
     }
 
@@ -291,66 +277,58 @@ public class ModHostHardeningTests
     public void Single_bool_field_struct_round_trips_instead_of_being_read_as_a_tag()
     {
         using var world = new World();
-        var comp = (IModComponent)new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag);
+        var codec = new ModComponentRegistry().Flag().Binary("test/flag");
 
         var a = world.Entity().ID;
         world.Set(a, new HardFlag { On = true });
-        Assert.Equal("{\"On\":true}", comp.GetJson(world, a));
+        var w = new System.Buffers.ArrayBufferWriter<byte>();
+        Assert.True(codec.TryWrite(world, a, w));
+        Assert.Equal(new byte[] { 1 }, w.WrittenSpan.ToArray());
 
         var b = world.Entity().ID;
-        comp.SetJson(world, b, "{\"On\":true}");
+        codec.Set(world, b, [1], null);
         Assert.True(world.Get<HardFlag>(b).On);
 
-        // ...and a truly fieldless struct still is one (World.Get would panic on it).
-        Assert.Equal("{}", ((IModComponent)new ModComponent<WitTag>(WitJsonContext.Default.WitTag))
-            .GetJson(world, world.Entity().Set(new WitTag()).ID));
+        // ...and a truly fieldless struct still is one (World.Get would panic on it): its
+        // value is empty bytes.
+        var tag = new ModComponentRegistry().Tag<WitTag>("test/tag", new ModComponent<WitTag>()).Binary("test/tag");
+        var t = world.Entity().Set(new WitTag()).ID;
+        var tw = new System.Buffers.ArrayBufferWriter<byte>();
+        Assert.True(tag.TryWrite(world, t, tw));
+        Assert.Equal(0, tw.WrittenCount);
+        var u = world.Entity().ID;
+        tag.Set(world, u, [], null);
+        Assert.True(world.Has<WitTag>(u));
     }
 
     // ── stale entity ids from the guest ──────────────────────────────────────────
 
-    // env.mod_call through the generic import backing: a registered host function gets
-    // the calling mod's context + the args; an unknown name is a ModCallException
-    // (= guest trap), never a silent zero.
+    // A guest's command routinely names an entity that died since its snapshot: the
+    // entity commands are no-ops, never a trap. (Reads never see a dead id: both backends
+    // drop dead snapshot rows before writing a column.)
     [Fact]
-    public void ModCall_routes_to_the_host_function_table_and_unknown_names_trap()
+    public void Commands_and_reads_on_a_despawned_entity_are_no_ops_instead_of_trapping()
     {
         using var world = new World();
-        var app = new App();
-        var fns = new ModHostFunctions();
-        app.AddResource(fns);
-        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry(), Name = "caller", App = app };
-        fns.Add("test:x/y#echo", (mod, args, w) => w.WriteStringValue(mod.Name + ":" + args[0].GetInt32()));
-
-        var backing = new ModAbiBacking(ctx, new ModRelayState(), "caller");
-        var result = backing.ModCall("test:x/y#echo"u8, "[7]"u8).ToArray();
-        Assert.Equal("\"caller:7\"", System.Text.Encoding.UTF8.GetString(result));
-
-        Assert.Throws<ModCallException>(() => backing.ModCall("test:x/y#nope"u8, "[]"u8).ToArray());
-    }
-
-    [Fact]
-    public void Entity_bridge_reads_on_a_despawned_entity_answer_null_instead_of_trapping()
-    {
-        using var world = new World();
-        var reg = new ModComponentRegistry();
-        reg.Register("test/flag", new ModComponent<HardFlag>(HardeningJsonContext.Default.HardFlag));
+        var reg = new ModComponentRegistry().Flag();
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "stale" };
 
         var parent = world.Entity().ID;
         var child = world.Entity().ID;
         world.AddChild(parent, child);
         world.Set(child, new HardFlag { On = true });
-
-        Assert.Equal("{\"On\":true}", new EntityImpl(ctx, child).Get("test/flag"));
+        var codec = reg.Binary("test/flag");
+        Assert.True(codec.TryWrite(world, child, new System.Buffers.ArrayBufferWriter<byte>()));
 
         world.Delete(child);
         world.Delete(parent);
 
-        Assert.Equal("null", new EntityImpl(ctx, child).Get("test/flag"));
-        Assert.Empty(new EntityImpl(ctx, parent).Children());
-        Assert.Null(new EntityImpl(ctx, child).Parent());
-        Assert.Equal("null", new ComponentImpl(ctx, child, "test/flag", true).Get());
-        new ComponentImpl(ctx, child, "test/flag", true).Set("{\"On\":false}"); // no throw
+        var commands = new CommandsImpl(ctx);
+        commands.EntityById(child).Insert([new ModPayload("test/flag", new byte[] { 0 }, codec)]);
+        commands.EntityById(child).Remove(["test/flag"]);
+        commands.EntityById(parent).AddChild(child, 0);
+        commands.EntityById(child).Despawn();
+        Assert.False(world.Exists(child));
     }
 
     // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -367,8 +345,7 @@ public class ModHostHardeningTests
         public int ObserverCalls;
         public void Setup() { }
         public void RunSystem(ModSystemSpec sys) { }
-        public void CallObserver(string export, ulong entity, string json) => ObserverCalls++;
-        public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data) => false;
+        public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> value) => ObserverCalls++;
         public void Reload(in ModSource source) { }
         public void Dispose() { }
     }
@@ -377,8 +354,7 @@ public class ModHostHardeningTests
     {
         public void Setup() { }
         public void RunSystem(ModSystemSpec sys) => throw new InvalidOperationException("guest trap");
-        public void CallObserver(string export, ulong entity, string json) => throw new InvalidOperationException("guest trap");
-        public bool TryInvokeBoolExport(string export, byte arg, ReadOnlySpan<byte> data) => false;
+        public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> value) => throw new InvalidOperationException("guest trap");
         public void Reload(in ModSource source) { }
         public void Dispose() { }
     }
@@ -390,11 +366,10 @@ public class ModHostHardeningTests
         public byte[]? RunReplyBytes;
         public byte[]? SpawnedBytes;
 
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public int Load(in ModSource source, int slot, IModImportSink sink) => slot;
         public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => SetupReplyBytes;
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input) => RunReplyBytes;
         public Memory<byte> CallObserver(int handle, uint obsId, ulong entity, ReadOnlySpan<byte> input) => default;
-        public bool CallFilter(int handle, byte arg, ReadOnlySpan<byte> data) => false;
         public void CallSpawned(int handle, ReadOnlySpan<byte> input) => SpawnedBytes = input.ToArray();
         public void Reload(int handle, in ModSource source) { }
         public void DisposeInstance(int handle) { }

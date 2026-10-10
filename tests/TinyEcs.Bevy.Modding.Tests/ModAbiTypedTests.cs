@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Buffers.Binary;
 using FlatSharp;
 using ModAbi;
 using TinyEcs;
@@ -9,10 +8,11 @@ using Xunit;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
-// Encoding.Typed over the relay: the host offers the type ids it has a binary codec for
-// (Handshake.typed_types), the guest accepts a subset (SetupReply.typed_types); exactly
-// those cross as bytes, both ways. Everything else, and a guest that accepts nothing,
-// stays JSON. Canned guest replies, real World.
+// Encoding.Typed over the relay: the one value encoding. Every registered path is listed
+// typed in the Handshake (SetupReply.typed_types is ignored), every value crosses as its
+// binary encoding both ways, a tag as empty bytes; a Json-encoded value in a command
+// buffer is rejected (that command only), and a path with no codec fails where it is
+// used. Canned guest replies, real World.
 public class ModAbiTypedTests
 {
     private sealed class CaptureExecutor : IModWasmExecutor
@@ -22,7 +22,7 @@ public class ModAbiTypedTests
         public byte[]? Handshake;
         public readonly List<byte[]> RunInputs = new();
 
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public int Load(in ModSource source, int slot, IModImportSink sink) => slot;
         public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake)
         {
             Handshake = handshake.ToArray();
@@ -47,26 +47,17 @@ public class ModAbiTypedTests
         return buf.AsSpan(0, n).ToArray();
     }
 
-    // The binary codecs a host would generate from its WIT records.
-    private static void WriteTag(in V3Tag v, IBufferWriter<byte> w) => ModBinary.S32(w, v.X);
-    private static V3Tag ReadTag(ref ModBinaryReader r, ModEntityResolver? resolve) => new() { X = r.S32() };
-    private static void WriteLink(in V3Link v, IBufferWriter<byte> w) => ModBinary.U64(w, v.Target);
-    private static V3Link ReadLink(ref ModBinaryReader r, ModEntityResolver? resolve) => new() { Target = r.Entity(resolve) };
-    private static void WriteScore(in V3Score v, IBufferWriter<byte> w) => ModBinary.S32(w, v.Value);
-    private static V3Score ReadScore(ref ModBinaryReader r, ModEntityResolver? resolve) => new() { Value = r.S32() };
-
     private static (App App, ModHostContext Ctx, ModComponentRegistry Reg) Host()
     {
         var app = new App(ThreadingMode.Single);
-        var reg = new ModComponentRegistry();
-        reg.Register("t:tag", new ModComponent<V3Tag>(V3JsonContext.Default.V3Tag));
-        reg.Register("t:link", new ModComponent<V3Link>(V3JsonContext.Default.V3Link,
-            static (v, resolve) => { v.Target = resolve(v.Target); return v; }));
-        reg.Register("t:ping-comp", new ModComponent<V3Ping>(V3JsonContext.Default.V3Ping)); // no codec
-        reg.RegisterResource("t:score", new ModResource<V3Score>(V3JsonContext.Default.V3Score));
-        reg.RegisterBinaryComponent<V3Tag>("t:tag", WriteTag, ReadTag);
-        reg.RegisterBinaryComponent<V3Link>("t:link", WriteLink, ReadLink);
-        reg.RegisterBinaryResource<V3Score>("t:score", WriteScore, ReadScore);
+        var reg = new ModComponentRegistry()
+            .Component("t:tag", new ModComponent<V3Tag>(), Codecs.WriteV3Tag, Codecs.ReadV3Tag)
+            .Component("t:link", new ModComponent<V3Link>(static (v, resolve) => { v.Target = resolve(v.Target); return v; }),
+                Codecs.WriteV3Link, Codecs.ReadV3Link)
+            .Tag<WitTag>("t:marker", new ModComponent<WitTag>())
+            .Resource("t:score", new ModResource<V3Score>(), Codecs.WriteV3Score, Codecs.ReadV3Score)
+            .Event<V3Ping>("t:ping", Codecs.WriteV3Ping, Codecs.ReadV3Ping);
+        reg.Register("t:ping-comp", new ModComponent<V3Ping>()); // no codec
         var ctx = new ModHostContext { World = app.GetWorld(), Registry = reg, App = app, Name = "typed" };
         return (app, ctx, reg);
     }
@@ -83,11 +74,12 @@ public class ModAbiTypedTests
         throw new KeyNotFoundException(path);
     }
 
-    private static CaptureExecutor Guest(ModComponentRegistry reg, List<ushort>? accepted, CommandBuffer? reply = null) => new()
+    private static QueryTerm Ref(ModComponentRegistry reg, string path) => new() { Kind = QueryTermKind.Ref, TypeId = Id(reg, path) };
+
+    private static CaptureExecutor Guest(ModComponentRegistry reg, CommandBuffer? reply = null, params QueryTerm[] terms) => new()
     {
         SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply
         {
-            TypedTypes = accepted,
             ResUnchanged = true,
             Systems = new List<SystemDecl>
             {
@@ -99,14 +91,7 @@ public class ModAbiTypedTests
                         new()
                         {
                             Kind = ParamKind.Query,
-                            Query = new QueryDecl
-                            {
-                                Terms = new List<QueryTerm>
-                                {
-                                    new() { Kind = QueryTermKind.Ref, TypeId = Id(reg, "t:tag") },
-                                    new() { Kind = QueryTermKind.Ref, TypeId = Id(reg, "t:ping-comp") },
-                                },
-                            },
+                            Query = new QueryDecl { Terms = terms.Length > 0 ? terms.ToList() : [Ref(reg, "t:tag")] },
                         },
                         new() { Kind = ParamKind.Res, TypeId = Id(reg, "t:score") },
                         new() { Kind = ParamKind.Commands },
@@ -117,76 +102,65 @@ public class ModAbiTypedTests
         RunReplyBytes = reply != null ? Bytes(CommandBuffer.Serializer, reply) : null,
     };
 
-    private static byte[] S32(int v)
+    private static CompValue Typed(ModComponentRegistry reg, string path, byte[] data)
+        => new() { TypeId = Id(reg, path), Encoding = ModAbi.Encoding.Typed, Data = data };
+
+    // Runs the one system, returning what it logged.
+    private static string Run(ModAbiRunner runner, ModHostContext ctx)
     {
-        var b = new byte[4];
-        BinaryPrimitives.WriteInt32LittleEndian(b, v);
-        return b;
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try { runner.RunSystem(ctx.Systems[0]); }
+        finally { Console.SetOut(stdout); }
+        return output.ToString();
     }
 
-    private static string Utf8(CompValue v) => System.Text.Encoding.UTF8.GetString(v.Data!.Value.Span);
-
     [Fact]
-    public void Handshake_offers_exactly_the_paths_with_a_binary_codec()
+    public void Handshake_lists_every_registered_path_typed()
     {
         var (_, ctx, reg) = Host();
-        var exec = Guest(reg, accepted: null);
+        var exec = Guest(reg);
         new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup();
         var hs = Handshake.Serializer.Parse(exec.Handshake!);
-        Assert.Equal(new[] { Id(reg, "t:tag"), Id(reg, "t:link"), Id(reg, "t:score") }.OrderBy(x => x), hs.TypedTypes!.OrderBy(x => x));
+        var ids = hs.TypePaths!.Select(t => t.Id).OrderBy(x => x).ToArray();
+        Assert.Equal(reg.Entries.Count(), ids.Length);
+        Assert.Equal(ids, hs.TypedTypes!.OrderBy(x => x));
+        Assert.Equal(Id(reg, "t:ping"), hs.TypePaths!.Single(t => t.Path == "t:ping").Id);
     }
 
     [Fact]
-    public void Accepted_type_ids_cross_typed_and_the_rest_stays_json()
+    public void Rows_and_resources_cross_typed_and_a_tag_is_empty_bytes()
     {
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
-        app.GetWorld().Entity().Set(new V3Tag { X = -5 }).Set(new V3Ping { N = 3 });
-        var exec = Guest(reg, [Id(reg, "t:tag"), Id(reg, "t:score"), Id(reg, "t:ping-comp")]);
+        app.GetWorld().Entity().Set(new V3Tag { X = -5 }).Set(new WitTag());
+        var exec = Guest(reg, null, Ref(reg, "t:tag"), Ref(reg, "t:marker"));
         var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
         var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
         var row = Assert.Single(input.Queries![0].Rows!);
-        Assert.Equal(ModAbi.Encoding.Typed, row.Comps![0].Encoding);
-        Assert.Equal(S32(-5), row.Comps[0].Data!.Value.ToArray());
-        // Accepted, but the host has no codec for it (never offered): JSON.
-        Assert.Equal(ModAbi.Encoding.Json, row.Comps[1].Encoding);
-        Assert.Equal("{\"N\":3}", Utf8(row.Comps[1]));
+        Assert.All(row.Comps!, c => Assert.Equal(ModAbi.Encoding.Typed, c.Encoding));
+        Assert.Equal(Bin.S32(-5), row.Comps![0].Data!.Value.ToArray());
+        Assert.Equal(Id(reg, "t:marker"), row.Comps[1].TypeId);
+        Assert.Equal(0, row.Comps[1].Data?.Length ?? 0);
         Assert.Equal(ModAbi.Encoding.Typed, input.Resources![0].Value!.Encoding);
-        Assert.Equal(S32(7), input.Resources[0].Value!.Data!.Value.ToArray());
+        Assert.Equal(Bin.S32(7), input.Resources[0].Value!.Data!.Value.ToArray());
 
-        // An unchanged typed resource is still just the flag.
+        // An unchanged resource is just the flag.
         runner.RunSystem(ctx.Systems[0]);
         var second = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
         Assert.Null(second.Resources![0].Value);
+        Assert.True(second.Resources[0].Unchanged);
     }
 
     [Fact]
-    public void A_guest_that_accepts_nothing_keeps_getting_json()
-    {
-        var (app, ctx, reg) = Host();
-        app.AddResource(new V3Score { Value = 7 });
-        app.GetWorld().Entity().Set(new V3Tag { X = -5 }).Set(new V3Ping { N = 3 });
-        var exec = Guest(reg, accepted: null);
-        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
-        runner.Setup();
-        runner.RunSystem(ctx.Systems[0]);
-
-        var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
-        var row = Assert.Single(input.Queries![0].Rows!);
-        Assert.Equal(ModAbi.Encoding.Json, row.Comps![0].Encoding);
-        Assert.Equal("{\"X\":-5}", Utf8(row.Comps[0]));
-        Assert.Equal(ModAbi.Encoding.Json, input.Resources![0].Value!.Encoding);
-        Assert.Equal("{\"Value\":7}", Utf8(input.Resources[0].Value!));
-    }
-
-    [Fact]
-    public void An_absent_typed_resource_is_absent_not_bytes()
+    public void An_absent_resource_is_absent_not_bytes()
     {
         var (_, ctx, reg) = Host();
-        var exec = Guest(reg, [Id(reg, "t:score")]);
+        var exec = Guest(reg);
         var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
@@ -195,40 +169,54 @@ public class ModAbiTypedTests
         Assert.False(input.Resources[0].Unchanged);
     }
 
+    // A reading term on a path the host gave no codec fails the run, naming the path.
+    [Fact]
+    public void A_reading_term_without_a_codec_fails_the_run_by_name()
+    {
+        var (app, ctx, reg) = Host();
+        Assert.Equal(new[] { "t:ping-comp" }, reg.MissingCodecs());
+        app.GetWorld().Entity().Set(new V3Ping { N = 3 });
+        var exec = Guest(reg, null, Ref(reg, "t:ping-comp"));
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
+        runner.Setup();
+
+        var e = Assert.Throws<InvalidOperationException>(() => runner.RunSystem(ctx.Systems[0]));
+        Assert.Contains("'t:ping-comp' has no binary codec", e.Message);
+        Assert.Empty(exec.RunInputs);
+    }
+
     [Fact]
     public void Typed_commands_apply_through_the_codec_and_resolve_placeholders()
     {
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 1 });
-        var target = new byte[8];
-        BinaryPrimitives.WriteUInt64LittleEndian(target, ModEntityRef.PlaceholderBit | 0UL);
+        var hostSaw = new List<int>();
+        app.AddObserver<On<V3Ping>>(t => hostSaw.Add(t.Event.N));
         var reply = new CommandBuffer
         {
             Cmds = new List<Cmd>
             {
-                new(new SpawnCmd
-                {
-                    TempId = 0,
-                    Comps = new List<CompValue> { new() { TypeId = Id(reg, "t:tag"), Encoding = ModAbi.Encoding.Typed, Data = S32(42) } },
-                }),
+                new(new SpawnCmd { TempId = 0, Comps = new List<CompValue> { Typed(reg, "t:tag", Bin.S32(42)) } }),
                 new(new SpawnCmd
                 {
                     TempId = 1,
                     Comps = new List<CompValue>
                     {
-                        new() { TypeId = Id(reg, "t:link"), Encoding = ModAbi.Encoding.Typed, Data = target },
-                        // Typed for a path with no codec: skipped, the rest still applies.
-                        new() { TypeId = Id(reg, "t:ping-comp"), Encoding = ModAbi.Encoding.Typed, Data = S32(1) },
-                        new() { TypeId = Id(reg, "t:tag"), Encoding = ModAbi.Encoding.Json, Data = System.Text.Encoding.UTF8.GetBytes("{\"X\":9}") },
+                        Typed(reg, "t:link", Bin.U64(ModEntityRef.PlaceholderBit | 0UL)),
+                        Typed(reg, "t:tag", Bin.S32(9)),
+                        Typed(reg, "t:marker", []),
                     },
                 }),
-                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Encoding = ModAbi.Encoding.Typed, Data = S32(77) } }),
+                // A path with no codec: this command fails, the rest still apply.
+                new(new InsertCmd { Entity = -2, Comps = new List<CompValue> { Typed(reg, "t:ping-comp", Bin.S32(1)) } }),
+                new(new ResourceSetCmd { Value = Typed(reg, "t:score", Bin.S32(77)) }),
+                new(new EmitEventCmd { EventName = "t:ping", Encoding = ModAbi.Encoding.Typed, Data = Bin.S32(5) }),
             },
         };
-        var exec = Guest(reg, [Id(reg, "t:tag"), Id(reg, "t:link")], reply);
+        var exec = Guest(reg, reply);
         var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
-        runner.RunSystem(ctx.Systems[0]);
+        var log = Run(runner, ctx);
 
         var world = app.GetWorld();
         var tags = new Dictionary<ulong, int>();
@@ -238,8 +226,71 @@ public class ModAbiTypedTests
         var first = tags.Single(kv => kv.Value == 42).Key;
         var second = tags.Single(kv => kv.Value == 9).Key;
         Assert.Equal(first, world.Get<V3Link>(second).Target);
+        Assert.True(world.Has<WitTag>(second));
         Assert.False(world.Has<V3Ping>(second));
+        Assert.Contains("cmd #2 (InsertCmd) failed: component 't:ping-comp' has no binary codec", log);
         Assert.Equal(77, app.GetResource<V3Score>().Value);
+        Assert.Equal(new[] { 5 }, hostSaw);
+    }
+
+    // Encoding.Json is retired: a Json value in a command buffer is rejected and logged
+    // per command, and the commands after it still apply.
+    [Fact]
+    public void Json_encoding_in_a_command_buffer_is_rejected_and_the_next_command_still_applies()
+    {
+        var (app, ctx, reg) = Host();
+        app.AddResource(new V3Score { Value = 1 });
+        var hostSaw = new List<int>();
+        app.AddObserver<On<V3Ping>>(t => hostSaw.Add(t.Event.N));
+        var target = app.GetWorld().Entity().ID;
+        var json = "{\"X\":9}"u8.ToArray();
+        var reply = new CommandBuffer
+        {
+            Cmds = new List<Cmd>
+            {
+                new(new InsertCmd { Entity = (long)target, Comps = new List<CompValue> { new() { TypeId = Id(reg, "t:tag"), Encoding = ModAbi.Encoding.Json, Data = json } } }),
+                // Json is the wire default: an encoding left unset is rejected too.
+                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Data = Bin.S32(50) } }),
+                new(new EmitEventCmd { EventName = "t:ping", Encoding = ModAbi.Encoding.Json, Data = Bin.S32(4) }),
+                new(new InsertCmd { Entity = (long)target, Comps = new List<CompValue> { Typed(reg, "t:tag", Bin.S32(3)) } }),
+                new(new EmitEventCmd { EventName = "t:ping", Encoding = ModAbi.Encoding.Typed, Data = Bin.S32(6) }),
+            },
+        };
+        var exec = Guest(reg, reply);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
+        runner.Setup();
+        var log = Run(runner, ctx);
+
+        Assert.Contains("cmd #0 (InsertCmd) failed: t:tag: value encoding Json (only Typed is accepted)", log);
+        Assert.Contains("cmd #1 (ResourceSetCmd) failed: t:score: value encoding Json", log);
+        Assert.Contains("cmd #2 (EmitEventCmd) failed: t:ping: value encoding Json", log);
+        Assert.Equal(3, app.GetWorld().Get<V3Tag>(target).X);
+        Assert.Equal(1, app.GetResource<V3Score>().Value);
+        Assert.Equal(new[] { 6 }, hostSaw);
+    }
+
+    // A truncated value fails its own command only (the per-command guard).
+    [Fact]
+    public void A_truncated_value_fails_its_command_only()
+    {
+        var (app, ctx, reg) = Host();
+        var target = app.GetWorld().Entity().ID;
+        var reply = new CommandBuffer
+        {
+            Cmds = new List<Cmd>
+            {
+                new(new InsertCmd { Entity = (long)target, Comps = new List<CompValue> { Typed(reg, "t:link", [1, 2, 3]) } }),
+                new(new InsertCmd { Entity = (long)target, Comps = new List<CompValue> { Typed(reg, "t:tag", Bin.S32(8)) } }),
+            },
+        };
+        var exec = Guest(reg, reply);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
+        runner.Setup();
+        var log = Run(runner, ctx);
+
+        Assert.Contains("cmd #0 (InsertCmd) failed: typed value truncated", log);
+        Assert.False(app.GetWorld().Has<V3Link>(target));
+        Assert.Equal(8, app.GetWorld().Get<V3Tag>(target).X);
     }
 
     [Fact]
@@ -266,8 +317,20 @@ public class ModAbiTypedTests
     public void A_codec_needs_a_typed_mapper_of_its_payload()
     {
         var reg = new ModComponentRegistry();
-        reg.Register("t:tag", new ModComponent<V3Tag>(V3JsonContext.Default.V3Tag));
-        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryComponent<V3Link>("t:tag", WriteLink, ReadLink));
-        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryComponent<V3Tag>("t:none", WriteTag, ReadTag));
+        reg.Register("t:tag", new ModComponent<V3Tag>());
+        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryComponent<V3Link>("t:tag", Codecs.WriteV3Link, Codecs.ReadV3Link));
+        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryComponent<V3Tag>("t:none", Codecs.WriteV3Tag, Codecs.ReadV3Tag));
+        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryResource<V3Score>("t:tag", Codecs.WriteV3Score, Codecs.ReadV3Score));
+        Assert.Throws<InvalidOperationException>(() => reg.RegisterBinaryEvent<V3Ping>("t:tag", Codecs.WriteV3Ping, Codecs.ReadV3Ping));
+    }
+
+    [Fact]
+    public void Binary_lookups_name_an_unregistered_path_and_a_missing_codec()
+    {
+        var (_, _, reg) = Host();
+        Assert.Contains("unregistered component 't:nope'", Assert.Throws<InvalidOperationException>(() => reg.Binary("t:nope")).Message);
+        Assert.Contains("'t:ping-comp' has no binary codec", Assert.Throws<InvalidOperationException>(() => reg.Binary("t:ping-comp")).Message);
+        Assert.Contains("unregistered resource 't:nope'", Assert.Throws<InvalidOperationException>(() => reg.BinaryResource("t:nope")).Message);
+        Assert.Contains("unregistered event 't:nope'", Assert.Throws<InvalidOperationException>(() => reg.BinaryEvent("t:nope")).Message);
     }
 }

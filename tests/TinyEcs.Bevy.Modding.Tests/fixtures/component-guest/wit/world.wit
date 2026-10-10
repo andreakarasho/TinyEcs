@@ -1,22 +1,50 @@
-package test:fixture;
+package test:fixture@0.1.0;
+
+// The test host's value interface (ComponentModBackendTests' TestValuesHost): the generic
+// tinyecs:modding/ecs carries no values, so a host defines its own typed interface on the
+// call's handles. This one is deliberately untyped: every value is its Encoding.Typed
+// bytes (abi/mod-abi.fbs header), which the guest encodes / decodes by hand.
+interface values {
+    use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, entity, type-path};
+
+    /// A value in Encoding.Typed (little-endian, fields in declaration order).
+    type value = list<u8>;
+
+    /// Reading term `term`'s value of every entity of `query.entities`, in that order.
+    column: func(q: borrow<query>, term: u8, path: type-path) -> list<value>;
+    /// Writes back a `mut` term.
+    set: func(q: borrow<query>, e: entity, term: u8, path: type-path, v: value);
+    insert: func(c: borrow<commands>, e: entity, path: type-path, v: value);
+    set-resource: func(c: borrow<commands>, path: type-path, v: value);
+    send: func(c: borrow<commands>, path: type-path, v: value);
+    get: func(r: borrow<res>, path: type-path) -> option<value>;
+    put: func(r: borrow<res>, path: type-path, v: value);
+    read: func(e: borrow<events>, path: type-path) -> list<value>;
+}
 
 // One export per system declared in `setup`, named like it; params in declaration order.
 world fixture {
-    use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, trigger-data, packet-direction, verdict};
+    use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, packet-direction, verdict};
+    import values;
 
     export tick: func(commands: commands, movers: query, score: res, pings: events);
     export count-added: func(added: query, total: res);
     export watch: func(commands: commands, watched: query, knob: res, pokes: events);
     export beat: func(commands: commands);
 
-    export on-tag: func(trigger: trigger-data, commands: commands);
-    // Typed triggers: the value as a record (lowered by the host's TypedTrigger hook), or
-    // no value at all.
+    // Observer triggers: the value as a record (lowered by the host's TypedTrigger hook),
+    // or no value at all.
     record tag-value { v: s32 }
     export on-tag-typed: func(entity: u64, value: tag-value, commands: commands);
     export on-tag-bare: func(entity: u64, commands: commands);
     export on-in: func(direction: packet-direction, packet: list<u8>, score: res) -> verdict;
     export on-out: func(direction: packet-direction, packet: list<u8>) -> verdict;
 
+    include tinyecs:modding/guest@0.1.0;
+}
+
+// The same `setup` declaring `tick`, but no per-system export: must fail to load, naming
+// the missing export (built with --features missing-export).
+world missing-export {
     include tinyecs:modding/guest@0.1.0;
 }

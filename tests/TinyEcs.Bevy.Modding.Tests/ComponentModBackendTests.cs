@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+using System.Buffers;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.Modding;
@@ -16,8 +16,7 @@ public struct CmVel { public int X { get; set; } public int Y { get; set; } }
 public struct CmFrozen { }
 // Not a zero-size tag: TinyEcs fires no OnInsert for tags, and the guest observes this one.
 public struct CmTag { public int V { get; set; } }
-public struct CmSeen { public long Value { get; set; } }
-// What the typed observers saw (fixture on-tag-typed / on-tag-bare).
+// What the typed / bare observers saw (fixture on-tag-typed / on-tag-bare).
 public struct CmSeenTyped { public long Value { get; set; } }
 public struct CmSeenBare { public long Value { get; set; } }
 public sealed class CmScore { public long Value { get; set; } }
@@ -38,23 +37,47 @@ public sealed class CmProbe
 }
 public sealed class CmBeats { public long Value { get; set; } }
 
-[JsonSerializable(typeof(CmPos))]
-[JsonSerializable(typeof(CmVel))]
-[JsonSerializable(typeof(CmFrozen))]
-[JsonSerializable(typeof(CmTag))]
-[JsonSerializable(typeof(CmSeen))]
-[JsonSerializable(typeof(CmSeenTyped))]
-[JsonSerializable(typeof(CmSeenBare))]
-[JsonSerializable(typeof(CmScore))]
-[JsonSerializable(typeof(CmAdded))]
-[JsonSerializable(typeof(CmPing))]
-[JsonSerializable(typeof(CmWatched))]
-[JsonSerializable(typeof(CmKnob))]
-[JsonSerializable(typeof(CmPoke))]
-[JsonSerializable(typeof(CmClock))]
-[JsonSerializable(typeof(CmProbe))]
-[JsonSerializable(typeof(CmBeats))]
-internal partial class CmJsonContext : JsonSerializerContext { }
+// Encoding.Typed codecs of the fixture's values (the guest encodes them by hand: pos/vel =
+// two s32, tag/ping/watched/poke = one s32, the rest s64).
+internal static class CmCodecs
+{
+    public static void WriteXY(in CmPos v, IBufferWriter<byte> w) { ModBinary.S32(w, v.X); ModBinary.S32(w, v.Y); }
+    public static CmPos ReadXY(ref ModBinaryReader r, ModEntityResolver? _) => new() { X = r.S32(), Y = r.S32() };
+    public static void WriteVel(in CmVel v, IBufferWriter<byte> w) { ModBinary.S32(w, v.X); ModBinary.S32(w, v.Y); }
+    public static CmVel ReadVel(ref ModBinaryReader r, ModEntityResolver? _) => new() { X = r.S32(), Y = r.S32() };
+    public static void WriteTag(in CmTag v, IBufferWriter<byte> w) => ModBinary.S32(w, v.V);
+    public static CmTag ReadTag(ref ModBinaryReader r, ModEntityResolver? _) => new() { V = r.S32() };
+    public static void WriteSeenTyped(in CmSeenTyped v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmSeenTyped ReadSeenTyped(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteSeenBare(in CmSeenBare v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmSeenBare ReadSeenBare(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WritePing(in CmPing v, IBufferWriter<byte> w) => ModBinary.S32(w, v.N);
+    public static CmPing ReadPing(ref ModBinaryReader r, ModEntityResolver? _) => new() { N = r.S32() };
+    public static void WriteWatched(in CmWatched v, IBufferWriter<byte> w) => ModBinary.S32(w, v.V);
+    public static CmWatched ReadWatched(ref ModBinaryReader r, ModEntityResolver? _) => new() { V = r.S32() };
+    public static void WritePoke(in CmPoke v, IBufferWriter<byte> w) => ModBinary.S32(w, v.N);
+    public static CmPoke ReadPoke(ref ModBinaryReader r, ModEntityResolver? _) => new() { N = r.S32() };
+    public static void WriteScore(in CmScore v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmScore ReadScore(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteAdded(in CmAdded v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmAdded ReadAdded(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteKnob(in CmKnob v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmKnob ReadKnob(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteClock(in CmClock v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmClock ReadClock(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteBeats(in CmBeats v, IBufferWriter<byte> w) => ModBinary.S64(w, v.Value);
+    public static CmBeats ReadBeats(ref ModBinaryReader r, ModEntityResolver? _) => new() { Value = r.S64() };
+    public static void WriteProbe(in CmProbe v, IBufferWriter<byte> w)
+    {
+        ModBinary.S64(w, v.Runs);
+        ModBinary.S64(w, v.Unchanged);
+        ModBinary.S64(w, v.Knob);
+        ModBinary.S64(w, v.Rows);
+        ModBinary.S64(w, v.Pokes);
+    }
+    public static CmProbe ReadProbe(ref ModBinaryReader r, ModEntityResolver? _)
+        => new() { Runs = r.S64(), Unchanged = r.S64(), Knob = r.S64(), Rows = r.S64(), Pokes = r.S64() };
+}
 
 public sealed class ComponentModBackendTests : IDisposable
 {
@@ -81,23 +104,23 @@ public sealed class ComponentModBackendTests : IDisposable
 
     private App NewApp(bool posReadOnly = false, bool typedTriggers = true)
     {
-        var reg = new ModComponentRegistry();
-        reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos, readOnly: posReadOnly));
-        reg.Register("test/vel", new ModComponent<CmVel>(CmJsonContext.Default.CmVel));
-        reg.Register("test/frozen", new ModComponent<CmFrozen>(CmJsonContext.Default.CmFrozen));
-        reg.Register("test/tag", new ModComponent<CmTag>(CmJsonContext.Default.CmTag));
-        reg.Register("test/seen", new ModComponent<CmSeen>(CmJsonContext.Default.CmSeen));
-        reg.Register("test/seen-typed", new ModComponent<CmSeenTyped>(CmJsonContext.Default.CmSeenTyped));
-        reg.Register("test/seen-bare", new ModComponent<CmSeenBare>(CmJsonContext.Default.CmSeenBare));
-        reg.RegisterResource("test/score", new ModResource<CmScore>(CmJsonContext.Default.CmScore));
-        reg.RegisterResource("test/added", new ModResource<CmAdded>(CmJsonContext.Default.CmAdded));
-        reg.RegisterEvent("test/ping", new ModEvent<CmPing>(CmJsonContext.Default.CmPing));
-        reg.Register("test/watched", new ModComponent<CmWatched>(CmJsonContext.Default.CmWatched));
-        reg.RegisterResource("test/knob", new ModResource<CmKnob>(CmJsonContext.Default.CmKnob));
-        reg.RegisterEvent("test/poke", new ModEvent<CmPoke>(CmJsonContext.Default.CmPoke));
-        reg.RegisterResource("test/clock", new ModResource<CmClock>(CmJsonContext.Default.CmClock, readOnly: true));
-        reg.RegisterResource("test/probe", new ModResource<CmProbe>(CmJsonContext.Default.CmProbe));
-        reg.RegisterResource("test/beats", new ModResource<CmBeats>(CmJsonContext.Default.CmBeats));
+        var reg = new ModComponentRegistry()
+            .Component("test/pos", new ModComponent<CmPos>(readOnly: posReadOnly), CmCodecs.WriteXY, CmCodecs.ReadXY)
+            .Component("test/vel", new ModComponent<CmVel>(), CmCodecs.WriteVel, CmCodecs.ReadVel)
+            .Tag<CmFrozen>("test/frozen", new ModComponent<CmFrozen>())
+            .Component("test/tag", new ModComponent<CmTag>(), CmCodecs.WriteTag, CmCodecs.ReadTag)
+            .Component("test/seen-typed", new ModComponent<CmSeenTyped>(), CmCodecs.WriteSeenTyped, CmCodecs.ReadSeenTyped)
+            .Component("test/seen-bare", new ModComponent<CmSeenBare>(), CmCodecs.WriteSeenBare, CmCodecs.ReadSeenBare)
+            .Resource("test/score", new ModResource<CmScore>(), CmCodecs.WriteScore, CmCodecs.ReadScore)
+            .Resource("test/added", new ModResource<CmAdded>(), CmCodecs.WriteAdded, CmCodecs.ReadAdded)
+            .Event<CmPing>("test/ping", CmCodecs.WritePing, CmCodecs.ReadPing)
+            .Component("test/watched", new ModComponent<CmWatched>(), CmCodecs.WriteWatched, CmCodecs.ReadWatched)
+            .Resource("test/knob", new ModResource<CmKnob>(), CmCodecs.WriteKnob, CmCodecs.ReadKnob)
+            .Event<CmPoke>("test/poke", CmCodecs.WritePoke, CmCodecs.ReadPoke)
+            .Resource("test/clock", new ModResource<CmClock>(readOnly: true), CmCodecs.WriteClock, CmCodecs.ReadClock)
+            .Resource("test/probe", new ModResource<CmProbe>(), CmCodecs.WriteProbe, CmCodecs.ReadProbe)
+            .Resource("test/beats", new ModResource<CmBeats>(), CmCodecs.WriteBeats, CmCodecs.ReadBeats);
+        Assert.Empty(reg.MissingCodecs());
 
         var app = new App(ThreadingMode.Single);
         app.AddResource(new CmScore());
@@ -107,6 +130,7 @@ public sealed class ComponentModBackendTests : IDisposable
         app.AddResource(new CmProbe());
         app.AddResource(new CmBeats());
         var config = new ModdingConfig { Registry = reg, ModFolder = _modFolder };
+        config.ComponentImports.Add(TestValuesHost.Define);
         if (typedTriggers)
             config.ComponentImports.Add(imports => imports.TypedTrigger = LowerTag);
         app.AddResource(config);
@@ -132,7 +156,7 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(new[] { ModSchedule.Update, ModSchedule.Update, ModSchedule.PostUpdate, ModSchedule.PostUpdate }, ctx.Systems.Select(s => s.Stage));
         Assert.Equal(new[] { false, false, true, true }, ctx.Systems.Select(s => s.RunOnChange));
         Assert.Equal(new[] { "tick" }, ctx.Systems[1].After);
-        Assert.Equal(3, ctx.Observers.Count);
+        Assert.Equal(2, ctx.Observers.Count);
         Assert.All(ctx.Observers, obs =>
         {
             Assert.Equal(ModObserverKind.Insert, obs.Kind);
@@ -167,15 +191,17 @@ public sealed class ComponentModBackendTests : IDisposable
 
         // Frame 2: the ping sent last frame arrives through the events param (+100),
         // mover crosses x >= 3 so tick inserts test/tag via commands, which fires the
-        // guest's on-add observer; it answers with test/seen = the entity id. The `added`
+        // guest's on-add observers; on-tag-bare answers with test/seen-bare = the entity
+        // id, on-tag-typed with test/seen-typed = the tag's V (0). The `added`
         // term now matches the guest's spawn and the host-side add (2 more).
         app.Update();
         Assert.Equal(new CmPos { X = 4, Y = 2 }, world.Get<CmPos>(mover));
         Assert.Equal(102, app.GetResource<CmScore>().Value);
         Assert.Equal(4, app.GetResource<CmAdded>().Value);
         Assert.True(world.Has<CmTag>(mover));
-        Assert.True(world.Has<CmSeen>(mover), "on-add observer did not run");
-        Assert.Equal((long)mover, world.Get<CmSeen>(mover).Value);
+        Assert.True(world.Has<CmSeenBare>(mover), "on-add observer did not run");
+        Assert.Equal((long)mover, world.Get<CmSeenBare>(mover).Value);
+        Assert.Equal(0, world.Get<CmSeenTyped>(mover).Value);
         Assert.False(world.Has<CmTag>(frozen));
 
         var info = Assert.Single(app.GetResource<ModControl>().Mods);
@@ -228,8 +254,7 @@ public sealed class ComponentModBackendTests : IDisposable
     [Fact]
     public void A_mut_term_on_a_read_only_component_is_rejected_by_name()
     {
-        var reg = new ModComponentRegistry();
-        reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos, readOnly: true));
+        var reg = new ModComponentRegistry().Component("test/pos", new ModComponent<CmPos>(readOnly: true), CmCodecs.WriteXY, CmCodecs.ReadXY);
         var ctx = new ModHostContext { World = new World(), Registry = reg, Name = "cm" };
         var sys = new ComponentSystem("tick");
 
@@ -341,12 +366,12 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(1, app.GetResource<CmProbe>().Runs);
     }
 
-    // commands.set-resource traps on a read-only or unregistered path, and the call's
+    // set-resource traps on a read-only or unregistered path, and the call's
     // other commands are dropped. (A trapped component instance can't be re-entered, so
     // every later call of the mod fails until it is reloaded.)
     [Theory]
-    [InlineData(13, "commands.set-resource: 'test/clock' is read-only")]
-    [InlineData(14, "commands.set-resource: 'test/nope' is not a registered resource")]
+    [InlineData(13, "set-resource: 'test/clock' is read-only")]
+    [InlineData(14, "unregistered resource 'test/nope'")]
     public void Set_resource_traps_on_read_only_and_unknown_paths(int poke, string message)
     {
         var app = NewApp();
@@ -367,13 +392,13 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(0, app.GetResource<CmClock>().Value);
     }
 
-    // A component built before per-system exports (it exports the generic `run` /
-    // `observe` dispatchers, not one function per system) fails at load, naming the
-    // first system it has no export for, instead of running with nothing wired.
+    // A component whose `setup` declares a system it doesn't export (the fixture built
+    // with --features missing-export) fails at load, naming that system, instead of
+    // running with nothing wired.
     [Fact]
     public void A_guest_without_per_system_exports_fails_to_load_naming_the_missing_export()
     {
-        InstallFixture("component_guest_v0.wasm");
+        InstallFixture("component_guest_missing_export.wasm");
         var app = NewApp();
         var output = new StringWriter();
         var stdout = Console.Out;
@@ -389,18 +414,17 @@ public sealed class ComponentModBackendTests : IDisposable
     }
 
     // The fixture's typed observers take test/tag as `record tag-value { v: s32 }`.
-    private Wasmtime.ComponentValue LowerTag(string path, ReadOnlySpan<byte> json)
+    private Wasmtime.ComponentValue LowerTag(string path, ReadOnlySpan<byte> value)
     {
         _lowered.Add(path);
-        var tag = System.Text.Json.JsonSerializer.Deserialize(json, CmJsonContext.Default.CmTag);
+        var tag = Bin.Decode<CmTag>(CmCodecs.ReadTag, value);
         var rec = new Wasmtime.RecordBuilder(1, disposeNames: false);
         rec.Set(0, new Wasmtime.ByteVector(FieldV), Wasmtime.ComponentValue.CreateInt32(tag.V));
         return Wasmtime.ComponentValue.CreateRecord(rec, externallyOwned: true);
     }
 
-    // An observer export may take its trigger typed: `(entity, record, ..)` gets the value
-    // lowered by ComponentModImports.TypedTrigger, `(entity, ..)` none; `trigger-data`
-    // observers of the same trigger keep their JSON.
+    // An observer export takes its trigger typed: `(entity, record, ..)` gets the value
+    // (Encoding.Typed) lowered by ComponentModImports.TypedTrigger, `(entity, ..)` none.
     [Fact]
     public void Typed_observer_exports_get_the_trigger_value_as_a_record()
     {
@@ -408,14 +432,13 @@ public sealed class ComponentModBackendTests : IDisposable
         var world = app.GetWorld();
         app.RunStartup();
         var ctx = app.GetResource<ModRuntimes>().Runtimes[0].Ctx;
-        Assert.Equal(3, ctx.Observers.Count);
+        Assert.Equal(2, ctx.Observers.Count);
 
         var e = world.Entity().Set(new CmTag { V = 7 }).ID;
         app.Update();
 
         Assert.Equal(7, world.Get<CmSeenTyped>(e).Value);
         Assert.Equal((long)e, world.Get<CmSeenBare>(e).Value);
-        Assert.Equal((long)e, world.Get<CmSeen>(e).Value);
         Assert.Equal(new[] { "test/tag" }, _lowered);
         var info = Assert.Single(app.GetResource<ModControl>().Mods);
         Assert.True(info.Enabled, info.LastError);
@@ -433,14 +456,14 @@ public sealed class ComponentModBackendTests : IDisposable
         finally { Console.SetOut(stdout); }
 
         Assert.DoesNotContain(app.GetResource<ModControl>().Mods, m => m.Enabled);
-        Assert.Contains("takes its trigger typed, but the host defines no typed triggers", output.ToString());
+        Assert.Contains("observer 'on-tag-typed' takes a trigger value, but the host defines no trigger lowering", output.ToString());
     }
 
     private static void Poke(App app, int n)
     {
         var reg = app.GetResource<ModdingConfig>().Registry;
-        Assert.True(reg.TryGetEvent("test/poke", out var ev));
-        ev.Emit(app.GetWorld(), 0, "{\"N\":" + n + "}");
+        Assert.True(reg.TryGetBinaryEvent("test/poke", out var ev));
+        ev.Emit(app.GetWorld(), 0, Bin.Encode(CmCodecs.WritePoke, new CmPoke { N = n }), null);
     }
 
     private static ulong SpawnedByMod(World world)

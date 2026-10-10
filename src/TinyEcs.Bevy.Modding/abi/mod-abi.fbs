@@ -3,8 +3,8 @@
 // wasm32-wasip2 component mods and translates. Internal to that guest/host pair —
 // mods never see it.
 // The same contract as abi/tinyecs-mod.wit, carried as FlatBuffers. Host functions
-// outside the ECS do NOT ride this schema: they go through the `env.mod_call` JSON
-// import (ModHostFunctions).
+// outside the ECS do NOT ride this schema: the native host relays them to the guest
+// separately, typed.
 //
 // RULES (wire contract):
 // - This file is ATTRIBUTE-FREE: planus 1.3.0 rejects user attributes. The FlatSharp
@@ -33,22 +33,15 @@
 //                                        >= 1 SpawnCmd, so the guest can map its temp ids
 //                                        onto real ecs ids.
 //
-// Host imports: `env.mod_call(name_ptr, name_len, args_ptr, args_len) -> u64` only —
-// name = UTF-8 "<package>/<interface>#<function>", args = UTF-8 JSON array; returns 0
-// for no result, else len<<32|ptr of UTF-8 JSON in the arena (mod_alloc). Unknown
-// name / malformed args = trap. Everything ECS rides the buffers below — a mod reads
-// only what its system parameters declared.
+// Everything ECS rides the buffers below — a mod reads only what its system parameters
+// declared.
 //
-// VALUE ENCODINGS (CompValue.encoding):
-// - Json: data = UTF-8 JSON of the value.
-// - Typed: data = the value in the compact binary encoding below, defined by the
-//   value's WIT type (the record the host's typed interface declares for that type
-//   path). Used ONLY for type ids both sides announced (Handshake.typed_types ∩
-//   SetupReply.typed_types), and even then per value: either side may still send Json
-//   for one of them (e.g. a row whose component is gone, a trigger whose mapper hands
-//   no typed value), so a reader always switches on `encoding`. Type ids cover
-//   components, resources and events: event values (EventValues, EmitEventCmd) and
-//   observer trigger values (ObserverInput.value) of a negotiated id are Typed too.
+// VALUES (CompValue.encoding, EmitEventCmd.encoding): always Typed — data = the value in
+// the compact binary encoding below, defined by the value's WIT type (the record the
+// host's typed interface declares for that type path); a tag's data is empty. Json (0)
+// is retired: never sent, rejected on read. Type ids cover components, resources and
+// events: rows, resource values, event values (EventValues, EmitEventCmd) and observer
+// trigger values (ObserverInput.value).
 //   Binary encoding, little-endian, no padding, no alignment, no field names:
 //     bool                  1 byte (0 / 1)
 //     u8 s8 u16 s16 u32 s32 u64 s64
@@ -64,7 +57,7 @@
 //     record                its fields in declaration order
 //     tuple                 its items in order
 //     entity (u64 alias)    as u64; inside a CommandBuffer it may hold the 1<<63 |
-//                           temp_id placeholder, like a JSON entity field
+//                           temp_id placeholder (an entity the same buffer spawned)
 //   A host-computed member that the WIT record leaves out is not encoded; the
 //   reader recomputes it. A reader treats an enum index past the last case as case 0.
 
@@ -74,8 +67,8 @@ namespace ModAbi;
 // Shared
 
 enum Encoding : ubyte {
-  Json = 0,   // data = utf8 JSON
-  Typed = 1   // data = the binary value encoding (header); negotiated per type id
+  Json = 0,   // retired: never sent, rejected on read
+  Typed = 1   // data = the binary value encoding (header)
 }
 
 // A component / resource / event payload. type_id interned via Handshake; 0xFFFF = none.
@@ -96,7 +89,7 @@ table TypePath {
 table Handshake {
   abi_version: uint32;
   type_paths: [TypePath];   // every registered component + resource + event path
-  typed_types: [uint16];    // type ids the host reads and writes as Encoding.Typed
+  typed_types: [uint16];    // every type id (every value is Typed); kept for the wire
 }
 
 // ---------------------------------------------------------------------------
@@ -196,9 +189,7 @@ table SetupReply {
   wants_filter: bool;       // DEPRECATED (packets.intercept replaces it)
   wants_filter_out: bool;   // DEPRECATED
   res_unchanged: bool;      // the guest keeps each Res param's last value (ResValue.unchanged)
-  // The subset of Handshake.typed_types the guest reads and writes as Encoding.Typed;
-  // absent / empty = Json only (a guest that predates it keeps getting Json).
-  typed_types: [uint16];
+  typed_types: [uint16];    // DEPRECATED (every value is Typed)
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +270,7 @@ table EmitEventCmd {
   event_name: string;     // the event's type path
   entity: uint64;
   data: [ubyte];          // the event payload, in `encoding`
-  encoding: Encoding;     // Json (default) or Typed (a negotiated event type id)
+  encoding: Encoding;     // Typed
 }
 
 // DEPRECATED: a host expresses input consumption as a request event. Kept for the union tags.
@@ -317,7 +308,7 @@ table CommandBuffer {
 table ObserverInput {
   obs_id: uint32;
   entity: uint64;
-  value: CompValue;          // insert/remove: component payload; custom: event json
+  value: CompValue;          // insert/remove: component value; custom: event value
   queries: [QueryRows];      // the observer's params (ObserverDecl.params), as SystemInput
   resources: [ResValue];
   events: [EventValues];

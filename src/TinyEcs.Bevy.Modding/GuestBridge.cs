@@ -1,5 +1,5 @@
-// The `app` bridge a WASM guest/mod calls back into (spawn / component get-set /
-// query iter / emit-event / resource get-set). Every type here is neutral — no
+// The `app` bridge a WASM guest/mod calls back into (spawn / insert / remove / despawn,
+// emit-event, resource set). Every type here is neutral — no
 // wasmtime types, no generated bindings — so it compiles unchanged under the
 // component backend, the relay backend (ModRelayBackend applies a mod's CommandBuffer
 // through these Impl structs), and under WasmGuest. Each Impl
@@ -26,35 +26,22 @@ internal sealed class ModEventBuffer
     // A guest that never runs (disabled, idle) must not grow this forever.
     private const int Cap = 1024;
 
-    public readonly List<string> Pending = new();
-    public readonly List<string> Current = new();
-    // Binary mode (the relay, an event the guest reads as Encoding.Typed): the payloads as
-    // bytes instead of JSON.
-    public readonly List<byte[]> PendingBytes = new();
-    public readonly List<byte[]> CurrentBytes = new();
-    public bool Binary;
+    // Each event's value (Encoding.Typed).
+    public readonly List<byte[]> Pending = new();
+    public readonly List<byte[]> Current = new();
     // Set on reload: the old host observer can't be unregistered, so it keeps firing
     // into a buffer nobody reads anymore.
     public bool Dead;
 
-    public int Count => Binary ? CurrentBytes.Count : Current.Count;
+    public int Count => Current.Count;
 
-    public void Push(string json)
+    public void Push(ReadOnlySpan<byte> value)
     {
         if (Dead)
             return;
         if (Pending.Count == Cap)
             Pending.RemoveAt(0);
-        Pending.Add(json);
-    }
-
-    public void Push(ReadOnlySpan<byte> bytes)
-    {
-        if (Dead)
-            return;
-        if (PendingBytes.Count == Cap)
-            PendingBytes.RemoveAt(0);
-        PendingBytes.Add(bytes.ToArray());
+        Pending.Add(value.ToArray());
     }
 
     public void Swap()
@@ -62,9 +49,6 @@ internal sealed class ModEventBuffer
         Current.Clear();
         Current.AddRange(Pending);
         Pending.Clear();
-        CurrentBytes.Clear();
-        CurrentBytes.AddRange(PendingBytes);
-        PendingBytes.Clear();
     }
 }
 
@@ -190,21 +174,18 @@ internal sealed class ModResValue
     /// Valid while Present, until the next Observe.
     public ReadOnlySpan<byte> Value => _bytes.AsSpan(0, _length);
 
-    /// Records `json` ("null" / empty = absent) as the current value; true when it equals
-    /// the previously observed one (absent == absent).
-    public bool Observe(ReadOnlySpan<byte> json) => Observe(json, !ModJson.IsAbsent(json));
-
-    /// Observe with presence given (a binary value has no "null" spelling).
-    public bool Observe(ReadOnlySpan<byte> json, bool present)
+    /// Records `value` (Encoding.Typed; ignored when absent) as the current value; true
+    /// when it equals the previously observed one (absent == absent).
+    public bool Observe(ReadOnlySpan<byte> value, bool present)
     {
-        if (_known && present == Present && (!present || json.SequenceEqual(Value)))
+        if (_known && present == Present && (!present || value.SequenceEqual(Value)))
             return true;
         if (present)
         {
-            if (_bytes.Length < json.Length)
-                _bytes = new byte[Math.Max(json.Length, _bytes.Length * 2)];
-            json.CopyTo(_bytes);
-            _length = json.Length;
+            if (_bytes.Length < value.Length)
+                _bytes = new byte[Math.Max(value.Length, _bytes.Length * 2)];
+            value.CopyTo(_bytes);
+            _length = value.Length;
         }
         else
         {
@@ -216,7 +197,7 @@ internal sealed class ModResValue
         return false;
     }
 
-    /// The guest took the current value (`res.get`).
+    /// The guest took the current value (a typed `get`).
     public void MarkGot()
     {
         _gotGen = _gen;
@@ -241,9 +222,6 @@ internal sealed class ModObserverSpec
     public string Name = "";                       // guest export to call on fire
     public ModObserverKind Kind;
     public string? TypePath;                        // component/event path for Insert/Remove/Custom
-    // Fire the trigger value as Encoding.Typed bytes when the registry has a typed fire for
-    // TypePath (the relay, for a type id the guest reads Typed); JSON otherwise.
-    public bool Binary;
     // The observer's own system parameters after the trigger (queries / res / events),
     // evaluated per fire like a system's. Same window bookkeeping as ModSystemSpec.
     public readonly List<ModParam> Params = new();
@@ -287,15 +265,6 @@ public sealed class ModHostContext
     public Action<byte>? ConsumeMouse;
     // Keyboard half of the input-override capability (consume a key this frame).
     public Action<uint>? ConsumeKeyboard;
-    // Game-specific wasm host imports, described by the HOST (a ModdingConfig.
-    // PerModContext hook) as meaning-free shape descriptors — see ModHostImports.cs.
-    // The generic lib defines only `log` here (plus `env.mod_call`, routed to the
-    // ModHostFunctions resource) and supplies no game imports of its own; it never
-    // learns their names or semantics. HostImportModule is the
-    // wasm import module BOTH sets are defined under (fixed by the mod wire ABI the
-    // host ships, so the host owns the string).
-    public string HostImportModule = "host";
-    public readonly List<ModHostImport> HostImports = new();
     // Union of the PacketObservers' id sets — ModPacketChain's cheap pre-check: 256
     // bits per direction, Incoming words 0..3, Outgoing 4..7. Cleared on reload.
     internal readonly ulong[] PacketInterest = new ulong[8];
@@ -401,24 +370,14 @@ internal struct SystemImpl
         => Spec.Params.Add(new ModParam { Kind = mutable ? ModParamKind.ResMut : ModParamKind.Res, TypePath = path });
 
     // The buffer is filled by a host global observer on the event, wired here.
-    public void AddEvents(ModHostContext ctx, string path, bool binary = false)
-        => Spec.Params.Add(EventsParam(ctx, path, binary));
+    public void AddEvents(ModHostContext ctx, string path)
+        => Spec.Params.Add(EventsParam(ctx, path));
 
-    // `binary`: buffer the payloads as Encoding.Typed bytes when the registry has a binary
-    // codec for the event (the relay, for an event the guest reads Typed).
-    internal static ModParam EventsParam(ModHostContext ctx, string path, bool binary = false)
+    internal static ModParam EventsParam(ModHostContext ctx, string path)
     {
         var buffer = new ModEventBuffer();
         if (ctx.App != null)
-        {
-            if (binary && ctx.Registry.TryGetBinaryEvent(path, out var codec))
-            {
-                buffer.Binary = true;
-                codec.Observe(ctx.App, static () => true, (_, bytes) => buffer.Push(bytes));
-            }
-            else if (ctx.Registry.TryGetEvent(path, out var ev))
-                ev.RegisterObserver(ctx.App, (_, json) => buffer.Push(json));
-        }
+            ctx.Registry.BinaryEvent(path).Observe(ctx.App, static () => true, (_, value) => buffer.Push(value));
         ctx.EventBuffers.Add(buffer);
         return new ModParam { Kind = ModParamKind.Events, TypePath = path, Events = buffer };
     }
@@ -427,9 +386,9 @@ internal struct SystemImpl
     public void Before(SystemImpl other) => Spec.Before.Add(other.Spec.Name);
 }
 
-/// One component of a relayed spawn / insert: UTF8 JSON, or an Encoding.Typed value
-/// applied through `Binary`.
-internal readonly record struct ModPayload(string Path, ReadOnlyMemory<byte> Data, IModBinaryComponent? Binary);
+/// One component of a spawn / insert: its Encoding.Typed value (empty for a tag), applied
+/// through the path's binary view.
+internal readonly record struct ModPayload(string Path, ReadOnlyMemory<byte> Data, IModBinaryComponent Binary);
 
 // Internal: the lib tests drive it directly via InternalsVisibleTo (see the csproj).
 internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = null)
@@ -438,90 +397,25 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
     {
         var ent = ctx.World.Entity();
         ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
-        return new EntityCommandsImpl(ctx, ent.ID);
+        return new EntityCommandsImpl(ctx, ent.ID, resolve);
     }
 
-    public EntityCommandsImpl Spawn(ReadOnlySpan<(string, string)> bundle)
-    {
-        var ent = ctx.World.Entity();
-        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
-        var id = ent.ID;
-        foreach (var (typePath, json) in bundle)
-            if (ctx.Registry.TryGet(typePath, out var comp))
-                comp.SetJson(ctx.World, id, json);
-        return new EntityCommandsImpl(ctx, id);
-    }
-
-    // UTF8 overload for the core-ABI apply path: payloads are slices of the guest's
-    // reply buffer and go straight into the registry, so no string per component.
-    public EntityCommandsImpl Spawn(ReadOnlySpan<(string, ReadOnlyMemory<byte>)> bundle)
-    {
-        var ent = ctx.World.Entity();
-        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
-        var id = ent.ID;
-        foreach (var (typePath, json) in bundle)
-            if (ctx.Registry.TryGet(typePath, out var comp))
-                SetUtf8(comp, ctx.World, id, json.Span, resolve);
-        return new EntityCommandsImpl(ctx, id, resolve);
-    }
-
-    // Relay overload: each payload is JSON, or Encoding.Typed when Binary is set.
     public EntityCommandsImpl Spawn(ReadOnlySpan<ModPayload> bundle)
     {
-        var ent = ctx.World.Entity();
-        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
-        var id = ent.ID;
-        foreach (var p in bundle)
-            Set(ctx, id, p, resolve);
-        return new EntityCommandsImpl(ctx, id, resolve);
+        var e = SpawnEmpty();
+        e.Insert(bundle);
+        return e;
     }
-
-    internal static void Set(ModHostContext ctx, ulong id, in ModPayload p, ModEntityResolver? resolve)
-    {
-        if (p.Binary != null)
-            p.Binary.Set(ctx.World, id, p.Data.Span, resolve);
-        else if (ctx.Registry.TryGet(p.Path, out var comp))
-            SetUtf8(comp, ctx.World, id, p.Data.Span, resolve);
-    }
-
-    public void ResourceSetBinary(IModBinaryResource codec, ReadOnlySpan<byte> value)
-    {
-        if (ctx.App != null)
-            codec.Set(ctx.App, value, ctx.Name);
-    }
-
-    internal static void SetUtf8(IModComponent comp, World world, ulong id, ReadOnlySpan<byte> json, ModEntityResolver? resolve)
-    {
-        if (resolve != null)
-            comp.SetJsonUtf8(world, id, json, resolve);
-        else
-            comp.SetJsonUtf8(world, id, json);
-    }
-
-    public EntityCommandsImpl Entity(EntityImpl entity)
-        => new EntityCommandsImpl(ctx, entity.EcsId);
 
     public EntityCommandsImpl EntityById(ulong id) => new EntityCommandsImpl(ctx, id, resolve);
 
-    // Singleton-resource access by type-path (the "change resource" capability).
-    // The calling mod's name rides along: a resource holding per-mod state serves
-    // this mod's slice (see IModResource.GetJsonFor / SetJsonFrom); every other
-    // mapper's default ignores it and keeps whole-resource semantics.
-    public string ResourceGet(string resource)
-        => ctx.App != null && ctx.Registry.TryGetResource(resource, out var r)
-            ? r.GetJsonFor(ctx.App, ctx.Name)
-            : "null";
-
-    public void ResourceSet(string resource, string value)
+    // Singleton-resource write by type-path (the "change resource" capability). The
+    // calling mod's name rides along: a resource holding per-mod state serves this mod's
+    // slice (see IModResourceOf); every other mapper ignores it.
+    public void ResourceSet(IModBinaryResource codec, ReadOnlySpan<byte> value)
     {
-        if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
-            r.SetJsonFrom(ctx.App, value, ctx.Name);
-    }
-
-    public void ResourceSet(string resource, ReadOnlySpan<byte> value)
-    {
-        if (ctx.App != null && ctx.Registry.TryGetResource(resource, out var r))
-            r.SetJsonUtf8From(ctx.App, value, ctx.Name);
+        if (ctx.App != null)
+            codec.Set(ctx.App, value, ctx.Name);
     }
 
     // Input override — consume a mouse button this frame. The lib owns no input
@@ -531,60 +425,27 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
     // Keyboard half of the input override — same routing (no-op if unwired).
     public void InputConsumeKeyboard(uint key) => ctx.ConsumeKeyboard?.Invoke(key);
 
-    // Emit a host-registered custom event by name. Fires as a typed host trigger
-    // (On<T>), so host systems and any mod observing `custom(name)` both receive
-    // it. No-op if the name isn't registered.
-    public void EmitEvent(string name, ulong entity, string json)
-    {
-        if (ctx.Registry.TryGetEvent(name, out var ev))
-            ev.Emit(ctx.World, entity, json);
-    }
-
-    public void EmitEvent(string name, ulong entity, ReadOnlySpan<byte> json)
-    {
-        if (ctx.Registry.TryGetEvent(name, out var ev))
-            ev.EmitUtf8(ctx.World, entity, json);
-    }
-
-    // An Encoding.Typed payload (the relay).
-    public void EmitEventBinary(IModBinaryEvent codec, ulong entity, ReadOnlySpan<byte> data)
-        => codec.Emit(ctx.World, entity, data, resolve);
+    // Emit a host-registered event. Fires as a typed host trigger (On<T>), so host
+    // systems and any mod observing it both receive it.
+    public void EmitEvent(IModBinaryEvent codec, ulong entity, ReadOnlySpan<byte> value)
+        => codec.Emit(ctx.World, entity, value, resolve);
 }
 
 internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityResolver? resolve = null)
 {
-    public EntityImpl Id() => new EntityImpl(ctx, entity);
+    public ulong Id => entity;
 
-    // Exists-guarded like Remove/AddChild/Despawn: a guest's InsertCmd routinely
-    // names an entity that died between the pushed query snapshot and this apply
-    // (or an unresolvable temp ref, which ModAbiRunner.Resolve maps to 0). World.Set
-    // panics on a dead id, and that throw escapes the whole CommandBuffer — every
-    // later command in the buffer would be silently dropped.
-    public void Insert(ReadOnlySpan<(string, string)> bundle)
-    {
-        if (!ctx.World.Exists(entity))
-            return;
-        foreach (var (typePath, json) in bundle)
-            if (ctx.Registry.TryGet(typePath, out var comp))
-                comp.SetJson(ctx.World, entity, json);
-    }
-
-    // UTF8 overload — see CommandsImpl.Spawn(ReadOnlySpan<(string, ReadOnlyMemory<byte>)>).
-    public void Insert(ReadOnlySpan<(string, ReadOnlyMemory<byte>)> bundle)
-    {
-        if (!ctx.World.Exists(entity))
-            return;
-        foreach (var (typePath, json) in bundle)
-            if (ctx.Registry.TryGet(typePath, out var comp))
-                CommandsImpl.SetUtf8(comp, ctx.World, entity, json.Span, resolve);
-    }
-
+    // Exists-guarded like Remove/AddChild/Despawn: a guest's insert routinely names an
+    // entity that died between the pushed query snapshot and this apply (or an
+    // unresolvable temp ref, which ModAbiRunner.Resolve maps to 0). World.Set panics on a
+    // dead id, and that throw escapes the whole CommandBuffer — every later command in
+    // the buffer would be silently dropped.
     public void Insert(ReadOnlySpan<ModPayload> bundle)
     {
         if (!ctx.World.Exists(entity))
             return;
         foreach (var p in bundle)
-            CommandsImpl.Set(ctx, entity, p, resolve);
+            p.Binary.Set(ctx.World, entity, p.Data.Span, resolve);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)
@@ -595,104 +456,11 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityRe
     }
 
     // `entity` is the parent (this entity-commands' entity); add `child` under it.
-    public void AddChild(EntityImpl child, uint index)
+    public void AddChild(ulong child, uint index)
     {
-        var childId = child.EcsId;
-        if (ctx.World.Exists(entity) && ctx.World.Exists(childId))
-            ctx.World.AddChild(entity, childId, index >= int.MaxValue ? -1 : (int)index);
+        if (ctx.World.Exists(entity) && ctx.World.Exists(child))
+            ctx.World.AddChild(entity, child, index >= int.MaxValue ? -1 : (int)index);
     }
 
     public void Despawn() { if (ctx.World.Exists(entity)) ctx.World.Delete(entity); }
-}
-
-internal struct EntityImpl(ModHostContext ctx, ulong ecsId)
-{
-    public ulong EcsId => ecsId;
-
-    public ulong Id() => ecsId;
-
-    public EntityImpl? Parent()
-    {
-        if (!ctx.World.Exists(ecsId))
-            return null;
-
-        var p = (ulong)ctx.World.GetParent(ecsId);
-        return p != 0 && ctx.World.Exists(p) ? new EntityImpl(ctx, p) : null;
-    }
-
-    // Exists() first: a guest holds ids from a PUSHED snapshot, so they routinely
-    // outlive the entity, and World.Has panics on a dead one — that throw would trap
-    // the guest mid-system. "No component" is the honest answer at this boundary.
-    public string Get(string component)
-        => ctx.World.Exists(ecsId) && ctx.Registry.TryGet(component, out var c) && c.Has(ctx.World, ecsId)
-            ? c.GetJson(ctx.World, ecsId)
-            : "null";
-
-    public EntityImpl[] Children()
-    {
-        // TinyEcs's relationship mapper keeps the ordered child list on the parent as
-        // a `Children` component — read it instead of scanning every entity with a
-        // Parent (which was O(all parented entities) per call).
-        if (!ctx.World.Exists(ecsId) || !ctx.World.Has<TinyEcs.Children>(ecsId))
-            return Array.Empty<EntityImpl>();
-        var children = ctx.World.Get<TinyEcs.Children>(ecsId);
-        var result = new EntityImpl[children.Count];
-        var i = 0;
-        foreach (var child in children)
-            result[i++] = new EntityImpl(ctx, (ulong)child);
-        return result;
-    }
-}
-
-// snapshot is an ArrayPool-rented buffer owned by CallSystem (returned in its
-// finally after the wasm Call); only [0, count) is valid. We never return it here
-// — the buffer outlives this resource's Dispose and is reclaimed post-Call. The
-// wasmtime adapter boxes this struct once on RegisterQuery, so _cursor persists
-// across Iter().
-internal struct QueryImpl(ModHostContext ctx, ulong[] snapshot, int count, List<(string typePath, bool mut)> components)
-{
-    private int _cursor;
-
-    public QueryResultImpl? Iter()
-    {
-        // Skip entities despawned mid-iteration (snapshot is taken up front).
-        while (_cursor < count)
-        {
-            var id = snapshot[_cursor++];
-            if (ctx.World.Exists(id))
-                return new QueryResultImpl(ctx, id, components);
-        }
-        return null;
-    }
-}
-
-internal struct QueryResultImpl(ModHostContext ctx, ulong entity, List<(string typePath, bool mut)> components)
-{
-    public EntityImpl Entity() => new EntityImpl(ctx, entity);
-
-    public ComponentImpl Component(byte index)
-    {
-        var (typePath, mut) = components[index];
-        return new ComponentImpl(ctx, entity, typePath, mut);
-    }
-}
-
-internal struct ComponentImpl(ModHostContext ctx, ulong entity, string typePath, bool mutable)
-{
-    public string Get()
-        => ctx.World.Exists(entity) && ctx.Registry.TryGet(typePath, out var comp)
-            ? comp.GetJson(ctx.World, entity)
-            : "null";
-
-    public void Set(string value)
-    {
-        if (!mutable)
-            ThrowNotMutable(typePath);
-        if (ctx.World.Exists(entity) && ctx.Registry.TryGet(typePath, out var comp))
-            comp.SetJson(ctx.World, entity, value);
-    }
-
-    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
-    private static void ThrowNotMutable(string typePath)
-        => throw new InvalidOperationException($"component {typePath} was not declared mutable");
 }

@@ -26,11 +26,11 @@
     <ProjectReference Include="..\..\src\TinyEcs.Bevy.Modding\TinyEcs.Bevy.Modding.csproj" />
   </ItemGroup>
 
-  <!-- Checked-in component-model fixture (ComponentModBackendTests); source + build.sh in
+  <!-- Checked-in component-model fixtures (ComponentModBackendTests); source + build.sh in
        fixtures/component-guest. -->
   <ItemGroup>
     <None Include="fixtures\component_guest.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest.wasm" />
-    <None Include="fixtures\component_guest_v0.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest_v0.wasm" />
+    <None Include="fixtures\component_guest_missing_export.wasm" CopyToOutputDirectory="PreserveNewest" Link="fixtures\component_guest_missing_export.wasm" />
   </ItemGroup>
 
 </Project>

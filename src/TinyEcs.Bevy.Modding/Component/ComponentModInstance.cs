@@ -6,14 +6,14 @@
 //  - queries are the same ModQuerySpec + ModdingPlugin.BuildSnapshot, evaluated
 //    BEFORE the call with the system's own (lastRun, thisRun] change window, the same
 //    idle-skip, despawned rows skipped;
-//  - `query.rows` hands the guest every live row in ONE call (entity + the reading
-//    terms' JSON); `query.set` writes a `mut` term back through the registry;
+//  - `query.entities` hands the guest the live rows; the host app's typed interface
+//    (ComponentModImports) reads their columns and queues write-backs;
 //  - commands apply in order AFTER the export returns (spawn hands out the id at once);
 //  - observers ride the same host global observers (ModdingPlugin.RegisterModObservers),
 //    buffered and flushed at the same points; packet observers are called
 //    synchronously by ModPacketChain.
 // Every system is called through the mod's own export named like it (wasvy-style),
-// its params as typed arguments: <name>(params...), observers <name>(trigger-data,
+// its params as typed arguments: <name>(params...), observers <name>(entity, [value,]
 // params...), packet observers <name>(direction, packet, params...) -> verdict.
 // Two term kinds have no core-ABI twin and are handled here: `added` (a read term
 // post-filtered on IModComponent.AddedSince) and the res / events parameters.
@@ -98,19 +98,20 @@ internal sealed class ComponentEventBuffer
     // A guest that never runs (disabled, throttled out) must not grow this forever.
     private const int Cap = 1024;
 
-    public readonly List<string> Pending = new();
-    public readonly List<string> Current = new();
+    // Each event's value (Encoding.Typed).
+    public readonly List<byte[]> Pending = new();
+    public readonly List<byte[]> Current = new();
     // Set when the mod reloads: the old host observer can't be unregistered, so it
     // keeps firing into a buffer nobody reads anymore.
     public bool Dead;
 
-    public void Push(string json)
+    public void Push(ReadOnlySpan<byte> value)
     {
         if (Dead)
             return;
         if (Pending.Count == Cap)
             Pending.RemoveAt(0);
-        Pending.Add(json);
+        Pending.Add(value.ToArray());
     }
 
     public void Swap()
@@ -127,8 +128,8 @@ internal sealed class ComponentParam
     // Query
     public ModQuerySpec? Query;
     public IModComponent[]? Added;
-    // The reading terms' components (declaration order), resolved on first `rows`;
-    // null entries are unregistered paths (their value reads as null).
+    // The reading terms' components (declaration order), resolved on first typed read;
+    // null entries are unregistered paths.
     public IModComponent?[]? Reads;
     public ulong[]? Snapshot;
     public int Count;
@@ -136,8 +137,8 @@ internal sealed class ComponentParam
     public string Path = "";
     public bool Mutable;
     public ComponentEventBuffer? Events;
-    // Res: the value across runs, and whether this run already serialized it (Same =
-    // that run's "equal to the previous observation").
+    // Res: the value across runs, and whether this run already encoded it (Same = that
+    // run's "equal to the previous observation").
     public ModResValue? Res;
     public bool Fetched;
     public bool Same;
@@ -150,10 +151,9 @@ internal sealed class ComponentSystem
     public readonly List<ComponentParam> Params = new();
     // The mod's export named like the system (bound after `setup`).
     public Cm.ComponentInstanceFunction Export;
-    // An observer: its trigger, and how its export takes the value — `trigger-data` (JSON),
-    // or typed: `entity` then the value record (TriggerValue) or nothing more (a tag).
+    // An observer: its trigger, and whether its export takes a value record after the
+    // entity (TriggerValue) or nothing more (a tag, spawn / despawn).
     public ModObserverSpec? Observer;
-    public bool TypedTrigger;
     public bool TriggerValue;
 
     public ComponentSystem(string name)
@@ -212,8 +212,8 @@ internal sealed class ComponentSystem
     public void AddEvents(ModHostContext ctx, string path)
     {
         var buffer = new ComponentEventBuffer();
-        if (ctx.App != null && ctx.Registry.TryGetEvent(path, out var ev))
-            ev.RegisterObserver(ctx.App, (_, json) => buffer.Push(json));
+        if (ctx.App != null)
+            ctx.Registry.BinaryEvent(path).Observe(ctx.App, static () => true, (_, value) => buffer.Push(value));
         Params.Add(new ComponentParam { Kind = ComponentParamKind.Events, Path = path, Events = buffer });
     }
 }
@@ -221,7 +221,7 @@ internal sealed class ComponentSystem
 /// Commands recorded during one guest call, applied in order once it returns.
 internal sealed class ComponentCommandBuffer
 {
-    private enum Op : byte { Insert, Remove, Despawn, Send, SetResource, Typed }
+    private enum Op : byte { Remove, Despawn, Typed, Insert, SetResource, Send }
 
     private struct Entry
     {
@@ -231,11 +231,13 @@ internal sealed class ComponentCommandBuffer
         public int Count;
         // Op.Typed: the slot holding the value (index First).
         public TypedSlot? Slot;
+        // Insert / SetResource / Send: index of the path in _paths.
+        public int Path;
     }
 
-    // Typed writes (a game's typed imports, ComponentModImports): the struct is kept as
-    // is, one list per payload type reused across calls, so a typed insert neither
-    // serializes nor allocates in the steady state.
+    // Value writes (a game's typed imports, ComponentModImports): the struct is kept as
+    // is, one list per payload type reused across calls, so an insert neither encodes nor
+    // allocates in the steady state.
     private abstract class TypedSlot
     {
         public abstract void Apply(int index, ModHostContext ctx, ulong entity);
@@ -291,58 +293,48 @@ internal sealed class ComponentCommandBuffer
 
     private readonly ComponentModInstance _owner;
     private readonly List<Entry> _entries = new();
-    // Bundle items / removed paths / the event name; Len = -1 for a path-only item.
-    private readonly List<(string Path, int Off, int Len)> _items = new();
-    private byte[] _payload = new byte[1024];
-    private int _payloadLen;
-
-    private readonly List<(string, ReadOnlyMemory<byte>)> _bundleScratch = new();
+    // Removed paths; for Insert / SetResource / Send the one path of the value.
+    private readonly List<string> _paths = new();
     private readonly List<string> _pathScratch = new();
+    // Encoding.Typed values of Insert / SetResource / Send (Entry.First = offset, Count =
+    // length), applied through the path's binary view.
+    private byte[] _values = new byte[256];
+    private int _valuesLen;
+    private readonly List<ModPayload> _payloadScratch = new();
 
     public ComponentCommandBuffer(ComponentModInstance owner) => _owner = owner;
-
-    public ulong Spawn(in Cm.ComponentValue bundle)
-    {
-        var id = new CommandsImpl(_owner.Ctx).SpawnEmpty().Id().EcsId;
-        Insert(id, bundle);
-        return id;
-    }
-
-    public void Insert(ulong entity, in Cm.ComponentValue bundle)
-    {
-        var list = bundle.ToListBuilder();
-        var first = _items.Count;
-        for (var i = 0; i < list.Length; i++)
-        {
-            var pair = list[i].ToTuple();
-            var json = pair[1].ToUtf8Span();
-            _items.Add((_owner.Backend.Path(pair[0]), Copy(json), json.Length));
-        }
-        _entries.Add(new Entry { Op = Op.Insert, Entity = entity, First = first, Count = list.Length });
-    }
-
-    // One component (query.set's write-back), queued like any insert.
-    public void InsertOne(ulong entity, string path, ReadOnlySpan<byte> json)
-    {
-        _items.Add((path, Copy(json), json.Length));
-        _entries.Add(new Entry { Op = Op.Insert, Entity = entity, First = _items.Count - 1, Count = 1 });
-    }
 
     public void Remove(ulong entity, in Cm.ComponentValue paths)
     {
         var list = paths.ToListBuilder();
-        var first = _items.Count;
+        var first = _paths.Count;
         for (var i = 0; i < list.Length; i++)
-            _items.Add((_owner.Backend.Path(list[i]), 0, -1));
+            _paths.Add(_owner.Backend.Path(list[i]));
         _entries.Add(new Entry { Op = Op.Remove, Entity = entity, First = first, Count = list.Length });
     }
 
     public void Despawn(ulong entity)
         => _entries.Add(new Entry { Op = Op.Despawn, Entity = entity });
 
-    // An entity with no components yet, its id valid at once (like `spawn` of an empty
-    // bundle); typed inserts follow.
-    public ulong SpawnEmpty() => new CommandsImpl(_owner.Ctx).SpawnEmpty().Id().EcsId;
+    // An entity with no components yet, its id valid at once; typed inserts follow.
+    public ulong SpawnEmpty() => new CommandsImpl(_owner.Ctx).SpawnEmpty().Id;
+
+    /// An insert / resource write / send carrying its value as Encoding.Typed bytes.
+    public void InsertBytes(ulong entity, string path, ReadOnlySpan<byte> value) => AddValue(Op.Insert, entity, path, value);
+
+    public void SetResourceBytes(string path, ReadOnlySpan<byte> value) => AddValue(Op.SetResource, 0, path, value);
+
+    public void SendBytes(string path, ReadOnlySpan<byte> value) => AddValue(Op.Send, 0, path, value);
+
+    private void AddValue(Op op, ulong entity, string path, ReadOnlySpan<byte> value)
+    {
+        if (_valuesLen + value.Length > _values.Length)
+            Array.Resize(ref _values, Math.Max(_values.Length * 2, _valuesLen + value.Length));
+        value.CopyTo(_values.AsSpan(_valuesLen));
+        _paths.Add(path);
+        _entries.Add(new Entry { Op = op, Entity = entity, First = _valuesLen, Count = value.Length, Slot = null, Path = _paths.Count - 1 });
+        _valuesLen += value.Length;
+    }
 
     public void InsertTyped<T>(ulong entity, IModComponentOf<T> target, in T value) where T : struct
     {
@@ -372,44 +364,17 @@ internal sealed class ComponentCommandBuffer
         return (TSlot)slot;
     }
 
-    public void Send(string eventPath, ReadOnlySpan<byte> json)
-    {
-        _items.Add((eventPath, Copy(json), json.Length));
-        _entries.Add(new Entry { Op = Op.Send, First = _items.Count - 1, Count = 1 });
-    }
-
-    // Checked at the call (a throw here traps the guest), applied with the rest.
-    public void SetResource(string path, ReadOnlySpan<byte> json)
-    {
-        if (!_owner.Ctx.Registry.TryGetResource(path, out var r))
-            throw new InvalidOperationException($"commands.set-resource: '{path}' is not a registered resource");
-        if (r.ReadOnly)
-            throw new InvalidOperationException($"commands.set-resource: '{path}' is read-only");
-        _items.Add((path, Copy(json), json.Length));
-        _entries.Add(new Entry { Op = Op.SetResource, First = _items.Count - 1, Count = 1 });
-    }
-
-    private int Copy(ReadOnlySpan<byte> bytes)
-    {
-        if (_payloadLen + bytes.Length > _payload.Length)
-            Array.Resize(ref _payload, Math.Max(_payload.Length * 2, _payloadLen + bytes.Length));
-        var off = _payloadLen;
-        bytes.CopyTo(_payload.AsSpan(off));
-        _payloadLen += bytes.Length;
-        return off;
-    }
-
     public void Discard()
     {
         _entries.Clear();
-        _items.Clear();
-        _payloadLen = 0;
+        _paths.Clear();
+        _valuesLen = 0;
         foreach (var slot in _typed.Values)
             slot.Clear();
     }
 
-    // Per-entry guard like ModAbiRunner.ApplyCommandBuffer: one bad payload (a JSON
-    // body the registry refuses) must not drop every command after it.
+    // Per-entry guard like ModAbiRunner.ApplyCommandBuffer: one bad command (a mapper
+    // that refuses its value) must not drop every command after it.
     public void Apply()
     {
         if (_entries.Count == 0)
@@ -423,38 +388,31 @@ internal sealed class ComponentCommandBuffer
             {
                 switch (e.Op)
                 {
-                    case Op.Insert:
-                        _bundleScratch.Clear();
-                        for (var k = 0; k < e.Count; k++)
-                        {
-                            var (path, off, len) = _items[e.First + k];
-                            _bundleScratch.Add((path, len == 0 ? EmptyObject : _payload.AsMemory(off, len)));
-                        }
-                        commands.EntityById(e.Entity).Insert(CollectionsMarshal.AsSpan(_bundleScratch));
-                        break;
                     case Op.Remove:
                         _pathScratch.Clear();
                         for (var k = 0; k < e.Count; k++)
-                            _pathScratch.Add(_items[e.First + k].Path);
+                            _pathScratch.Add(_paths[e.First + k]);
                         commands.EntityById(e.Entity).Remove(CollectionsMarshal.AsSpan(_pathScratch));
                         break;
                     case Op.Despawn:
                         commands.EntityById(e.Entity).Despawn();
                         break;
-                    case Op.Send:
+                    case Op.Typed:
+                        e.Slot!.Apply(e.First, ctx, e.Entity);
+                        break;
+                    case Op.Insert:
                     {
-                        var (path, off, len) = _items[e.First];
-                        commands.EmitEvent(path, 0, _payload.AsSpan(off, len));
+                        var path = _paths[e.Path];
+                        _payloadScratch.Clear();
+                        _payloadScratch.Add(new ModPayload(path, _values.AsMemory(e.First, e.Count), ctx.Registry.Binary(path)));
+                        commands.EntityById(e.Entity).Insert(CollectionsMarshal.AsSpan(_payloadScratch));
                         break;
                     }
                     case Op.SetResource:
-                    {
-                        var (path, off, len) = _items[e.First];
-                        commands.ResourceSet(path, _payload.AsSpan(off, len));
+                        commands.ResourceSet(ctx.Registry.BinaryResource(_paths[e.Path]), _values.AsSpan(e.First, e.Count));
                         break;
-                    }
-                    case Op.Typed:
-                        e.Slot!.Apply(e.First, ctx, e.Entity);
+                    case Op.Send:
+                        commands.EmitEvent(ctx.Registry.BinaryEvent(_paths[e.Path]), 0, _values.AsSpan(e.First, e.Count));
                         break;
                 }
             }
@@ -465,9 +423,6 @@ internal sealed class ComponentCommandBuffer
         }
         Discard();
     }
-
-    // An empty payload IS "{}" (a tag carries no data), as on the relay ABI.
-    private static readonly ReadOnlyMemory<byte> EmptyObject = "{}"u8.ToArray();
 }
 
 internal sealed unsafe class ComponentModInstance : IModInstance
@@ -488,7 +443,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     // Host-called exports (TryCallExport), looked up once per instance; null = not exported.
     private readonly Dictionary<string, Cm.ComponentInstanceFunction?> _exports = new();
     private readonly List<ComponentEventBuffer> _eventBuffers = new();
-    private readonly ModJsonBuffer _json = new();
+    private readonly ModByteBuffer _res = new();
     // The last packet observer's replacement (valid until the next call).
     private byte[] _packetReplacement = new byte[512];
     private int _packetReplacementLength;
@@ -553,44 +508,9 @@ internal sealed unsafe class ComponentModInstance : IModInstance
 
     // ── call-time callbacks ───────────────────────────────────────────────────
 
-    // query.rows: one list<row { entity, values: list<json> }>. Every value is copied
-    // straight from the shared JSON scratch into its native string (no managed
-    // allocation per row or value); wasmtime owns the whole tree once it is returned.
-    internal Cm.ComponentValue Rows(ComponentParam q)
-    {
-        var world = Ctx.World;
-        var live = Live(q).Length;
-        var snap = q.Snapshot;
-
-        var reads = q.Reads ??= ResolveReads(q.Query!);
-        var list = new Cm.ListBuilder(live);
-        for (var i = 0; i < live; i++)
-        {
-            var id = snap![i];
-            var values = new Cm.ListBuilder(reads.Length);
-            for (var k = 0; k < reads.Length; k++)
-            {
-                _json.Reset();
-                var comp = reads[k];
-                if (comp != null && comp.Has(world, id))
-                    comp.GetJsonUtf8(world, id, _json);
-                else
-                    IModComponent.WriteUtf8(_json, "null");
-                values[k] = ComponentModBackend.Utf8String(_json.WrittenSpan);
-            }
-            // A returned value tree is wasmtime's to free, record field names included,
-            // so each record gets its own copies (unlike call ARGS, whose names we own).
-            var rec = new Cm.RecordBuilder(2, disposeNames: false);
-            rec.Set(0, new Cm.ByteVector("entity"u8), Cm.ComponentValue.CreateUInt64(id));
-            rec.Set(1, new Cm.ByteVector("values"u8), new Cm.ComponentValue(values, externallyOwned: true));
-            list[i] = new Cm.ComponentValue(rec, externallyOwned: true);
-        }
-        return new Cm.ComponentValue(list, externallyOwned: true);
-    }
-
     // The snapshot's rows still alive. A row can only die between the snapshot and here
-    // through an earlier observer's commands; those are compacted out, so `rows`,
-    // `entities` and every typed column agree on the order.
+    // through an earlier observer's commands; those are compacted out, so `entities` and
+    // every typed column agree on the order.
     internal ReadOnlySpan<ulong> Live(ComponentParam q)
     {
         var world = Ctx.World;
@@ -603,7 +523,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         return snap.AsSpan(0, live);
     }
 
-    // query.entities: list<entity>, the order of `rows`.
+    // query.entities: list<entity>, the order of every typed column.
     internal Cm.ComponentValue Entities(ComponentParam q)
     {
         var live = Live(q);
@@ -615,15 +535,17 @@ internal sealed unsafe class ComponentModInstance : IModInstance
 
     internal IModComponent?[] ReadsOf(ComponentParam q) => q.Reads ??= ResolveReads(q.Query!);
 
-    // A typed `get` (a game import) hands the guest the current value without the JSON
-    // `get` serializes. When this run already observed the JSON (run-on-change, or an
-    // `unchanged` call), that is the value taken; otherwise `unchanged` keeps answering
-    // against the last JSON `get`, which is never a stale "unchanged".
+    // A typed `get` (a game import) hands the guest the current value. When this run
+    // already encoded it (run-on-change, or an `unchanged` call), that is the value taken;
+    // otherwise encode it now, so `unchanged` next run compares against what was read.
     internal void MarkResGot(ComponentParam p)
     {
-        if (p.Fetched)
-            p.Res!.MarkGot();
+        FetchRes(p);
+        p.Res!.MarkGot();
     }
+
+    // A typed `put`: a later get / unchanged re-reads the new value.
+    internal void ResWritten(ComponentParam p) => p.Fetched = false;
 
     private IModComponent?[] ResolveReads(ModQuerySpec query)
     {
@@ -634,56 +556,24 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         return reads;
     }
 
-    internal void QuerySet(ComponentParam q, ulong entity, byte index, ReadOnlySpan<byte> json)
-    {
-        var comps = q.Query!.Components;
-        if (index >= comps.Count)
-            throw new InvalidOperationException($"query.set({index}): the query reads {comps.Count} components");
-        var (path, mutable) = comps[index];
-        if (!mutable)
-            throw new InvalidOperationException($"query.set({index}): {path} is not a `mut` term");
-        // Deferred, in order with the call's other commands (applied when the export
-        // returns) — the same as the guest hosts, which relay it as an insert.
-        Commands.InsertOne(entity, path, json);
-    }
-
-    // Serializes the param's value once per run (lazily for a system that reads it only
-    // through `get` / `unchanged`, up front for a run-on-change one) and records it.
+    // Encodes the param's value once per run (lazily for a system that reads it only
+    // through `get` / `unchanged`, up front for a run-on-change one) and records it, so
+    // "unchanged since the previous run" is a byte compare.
     private bool FetchRes(ComponentParam p)
     {
         if (p.Fetched)
             return p.Same;
-        _json.Reset();
-        if (Ctx.App != null && Ctx.Registry.TryGetResource(p.Path, out var r))
-            r.GetJsonUtf8For(Ctx.App, Ctx.Name, _json);
-        p.Same = p.Res!.Observe(_json.WrittenSpan);
+        _res.Reset();
+        var present = Ctx.App != null && Ctx.Registry.BinaryResource(p.Path).TryWrite(Ctx.App, Ctx.Name, _res);
+        p.Same = p.Res!.Observe(_res.WrittenSpan, present);
         p.Fetched = true;
         return p.Same;
-    }
-
-    // The value's UTF8 JSON (valid until the param's next fetch), or false when absent.
-    internal bool ResGet(ComponentParam p, out ReadOnlySpan<byte> json)
-    {
-        FetchRes(p);
-        p.Res!.MarkGot();
-        json = p.Res.Value;
-        return p.Res.Present;
     }
 
     internal bool ResUnchanged(ComponentParam p)
     {
         FetchRes(p);
         return p.Res!.UnchangedSinceGot;
-    }
-
-    internal void ResSet(ComponentParam p, ReadOnlySpan<byte> json)
-    {
-        if (!p.Mutable)
-            throw new InvalidOperationException($"res.set: {p.Path} was declared with add-res, not add-res-mut");
-        if (Ctx.App != null && Ctx.Registry.TryGetResource(p.Path, out var r))
-            r.SetJsonUtf8From(Ctx.App, json, Ctx.Name);
-        // A `get` after the write reads the new value.
-        p.Fetched = false;
     }
 
     // ── IModInstance ──────────────────────────────────────────────────────────
@@ -717,19 +607,19 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         }
     }
 
-    // A typed observer export leads with `entity: entity` (u64) instead of the
-    // `trigger-data` record; a record next is the value.
+    // An observer export leads with `entity: entity` (u64); a record next is the value.
     private void BindTrigger(ComponentSystem sys)
     {
         if (sys.Observer is not { Kind: not ModObserverKind.Packet } obs)
             return;
         var kinds = _instance.GetParamKinds(sys.Export);
-        sys.TypedTrigger = kinds.Length > 0 && kinds[0] == Cm.ComponentTypeKind.U64;
-        sys.TriggerValue = sys.TypedTrigger && kinds.Length > 1 && kinds[1] != Cm.ComponentTypeKind.Own;
-        if (sys.TypedTrigger && Backend.TypedTrigger == null)
-            throw new InvalidOperationException($"observer '{sys.Name}' takes its trigger typed, but the host defines no typed triggers");
-        if (sys.TypedTrigger && obs.TypePath == null && sys.TriggerValue)
-            throw new InvalidOperationException($"observer '{sys.Name}': a typed value for a trigger without one");
+        if (kinds.Length == 0 || kinds[0] != Cm.ComponentTypeKind.U64)
+            throw new InvalidOperationException($"observer '{sys.Name}' must take `entity: entity` first");
+        sys.TriggerValue = kinds.Length > 1 && kinds[1] != Cm.ComponentTypeKind.Own;
+        if (sys.TriggerValue && Backend.TypedTrigger == null)
+            throw new InvalidOperationException($"observer '{sys.Name}' takes a trigger value, but the host defines no trigger lowering");
+        if (sys.TriggerValue && obs.TypePath == null)
+            throw new InvalidOperationException($"observer '{sys.Name}': a value for a trigger without one");
     }
 
     // Every declared system is an export of the mod's world named like the system.
@@ -756,7 +646,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         {
             if (ModdingPlugin.ShouldSkipRun(spec, hasQuery, hasInputs, anyRows, resChanged))
                 return;
-            Call(sys, entity: null, json: default);
+            Call(sys, entity: null, value: default);
         }
         finally
         {
@@ -764,10 +654,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         }
     }
 
-    public void CallObserver(string export, ulong entity, string json)
-        => CallObserver(export, entity, string.IsNullOrEmpty(json) ? default : System.Text.Encoding.UTF8.GetBytes(json));
-
-    public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
+    public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> value)
     {
         if (!_observers.TryGetValue(export, out var sys))
             return;
@@ -775,7 +662,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         Evaluate(sys, ref hasQuery, out _, out _);
         try
         {
-            Call(sys, entity, json);
+            Call(sys, entity, value);
         }
         finally
         {
@@ -931,27 +818,18 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             }
     }
 
-    // A system's export: <export>(params...); an observer's: <export>(trigger-data, params...),
-    // or typed <export>(entity, [value,] params...).
-    private void Call(ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> json)
+    // A system's export: <export>(params...); an observer's: <export>(entity, [value,] params...).
+    private void Call(ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> value)
     {
-        var lead = !entity.HasValue ? 0 : sys.TypedTrigger ? (sys.TriggerValue ? 2 : 1) : 1;
+        var lead = !entity.HasValue ? 0 : sys.TriggerValue ? 2 : 1;
         var argc = lead + sys.Params.Count;
         var args = stackalloc Cm.ComponentValue[argc];
-        var payload = json.IsEmpty ? "{}"u8 : json;
-        if (entity.HasValue && sys.TypedTrigger)
+        if (entity.HasValue)
         {
             args[0] = Cm.ComponentValue.CreateUInt64(entity.Value);
             // Lowered before Enter: the hook runs host code only.
             if (sys.TriggerValue)
-                args[1] = Backend.TypedTrigger!(sys.Observer!.TypePath!, payload);
-        }
-        else if (entity.HasValue)
-        {
-            var rec = new Cm.RecordBuilder(2, disposeNames: false);
-            rec.Set(0, Backend.FieldEntity, Cm.ComponentValue.CreateUInt64(entity.Value));
-            rec.Set(1, Backend.FieldValue, ComponentModBackend.Utf8String(payload));
-            args[0] = new Cm.ComponentValue(rec, externallyOwned: false);
+                args[1] = Backend.TypedTrigger!(sys.Observer!.TypePath!, value);
         }
         var prev = Enter();
         var cx = Cm.StoreContext.FromStore(_store);

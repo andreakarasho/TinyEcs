@@ -1,16 +1,20 @@
 /// The ECS a mod sees: a Bevy-style App you add systems and observers to, and the
 /// system parameters those run with (commands, queries, resources, events).
 ///
-/// Everything in the world is named by a type path ("game:ent/graphic") and carried
-/// as JSON text. The host decides which paths exist; a mod only uses them.
+/// Everything in the world is named by a type path ("game:ent/graphic"). The host
+/// decides which paths exist; a mod only uses them. This interface carries no VALUES:
+/// the game defines a typed interface next to it (one function family per path: read a
+/// query term's column, write it back, insert through an entity builder, get / put a
+/// resource, send / read an event) that works on these handles.
 ///
 /// A mod is a wasm32-wasip2 component of its OWN world, which includes `guest` below
 /// and exports one function per system it declares in `setup`:
 ///
 ///     world my-mod {
-///         use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, trigger-data, packet-direction, verdict};
+///         use tinyecs:modding/ecs@0.1.0.{commands, query, res, events, entity, packet-direction, verdict};
+///         use game:modding/types@0.1.0.{click};
 ///         export spin: func(q: query, commands: commands);
-///         export on-click: func(trigger: trigger-data);
+///         export on-click: func(entity: entity, value: click);
 ///         export filter: func(direction: packet-direction, packet: list<u8>) -> verdict;
 ///         include tinyecs:modding/guest@0.1.0;
 ///     }
@@ -18,7 +22,9 @@
 /// The host calls the export named like the system, passing the system's parameters
 /// as typed arguments in the order they were added:
 ///   - a scheduled system:   func(<params>)
-///   - an observer:          func(trigger: trigger-data, <params>)
+///   - an observer:          func(entity: entity, value: <record>, <params>), where
+///                           <record> is the game's record of the trigger's path, or
+///                           func(entity: entity, <params>) for a path with no value
 ///   - an on-packet observer: func(direction: packet-direction, packet: list<u8>, <params>) -> verdict
 /// where `add-commands` -> `commands`, `add-query` -> `query`, `add-res` / `add-res-mut`
 /// -> `res`, `add-events` -> `events`. A declared system without a matching export
@@ -29,14 +35,8 @@ interface ecs {
     /// Names a host component, resource or event, e.g. "game:ent/graphic".
     type type-path = string;
 
-    /// A value as JSON text.
-    type json = string;
-
     /// An entity id. Valid as soon as `commands.spawn` returns it.
     type entity = u64;
-
-    /// Components to spawn or insert, as (type path, value) pairs.
-    type bundle = list<tuple<type-path, json>>;
 
     /// When a system runs, every frame, in this order. `startup` runs once, after the
     /// mod is loaded.
@@ -157,71 +157,35 @@ interface ecs {
 
     /// Structural changes, applied after the system returns, in order.
     resource commands {
-        /// Spawns an entity with these components and returns its id.
-        spawn: func(bundle: bundle) -> entity;
-
-        /// Adds or overwrites components.
-        insert: func(entity: entity, bundle: bundle);
+        /// Spawns an empty entity and returns its id (components go on through the
+        /// game's typed builder).
+        spawn: func() -> entity;
 
         /// Removes components.
         remove: func(entity: entity, types: list<type-path>);
 
         /// Despawns the entity and its children.
         despawn: func(entity: entity);
-
-        /// Sends an event (observers fire, event readers see it next).
-        send: func(event: type-path, value: json);
-
-        /// Sets a writable resource. No `add-res-mut` parameter needed.
-        set-resource: func(path: type-path, value: json);
-    }
-
-    /// One matching entity: the values of the reading terms (`ref` / `mut` /
-    /// `changed` / `added`), in their declaration order.
-    record row {
-        entity: entity,
-        values: list<json>,
     }
 
     /// The entities matching a query.
     resource query {
-        /// Every matching row, in one call.
-        rows: func() -> list<row>;
-
-        /// The matching entities, in the same order as `rows` (and as any typed column a
-        /// game interface reads from this query).
+        /// The matching entities, in the same order as every typed column the game's
+        /// interface reads from this query.
         entities: func() -> list<entity>;
-
-        /// Writes the n-th reading term of `entity` back. Traps unless that term is
-        /// `mut`. Deferred like `commands`: applied after the system returns, in order
-        /// with its commands (`rows` is a snapshot and does not see the write).
-        set: func(entity: entity, index: u8, value: json);
     }
 
     /// A resource parameter.
     resource res {
-        /// None when the host has no such resource right now.
-        get: func() -> option<json>;
-
-        /// True when the value equals the one this parameter received on this
-        /// system's previous run: a value parsed then can be reused instead of
-        /// calling `get`.
+        /// True when the value equals the one this parameter had on this system's
+        /// previous run: a value read then can be reused instead of reading again.
         unchanged: func() -> bool;
-
-        /// Traps unless declared with `add-res-mut`.
-        set: func(value: json);
     }
 
-    /// An event reader parameter.
+    /// An event reader parameter (the game's typed interface reads its events).
     resource events {
-        read: func() -> list<json>;
-    }
-
-    /// What woke an observer: the entity (0 for events) and the component / event
-    /// value.
-    record trigger-data {
-        entity: entity,
-        value: json,
+        /// How many events of its type were sent since this system's last run.
+        len: func() -> u32;
     }
 }
 

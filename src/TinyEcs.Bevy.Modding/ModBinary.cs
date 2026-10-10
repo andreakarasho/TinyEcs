@@ -1,9 +1,9 @@
-// The relay's Encoding.Typed value encoding (abi/mod-abi.fbs header): compact
-// little-endian binary, laid out by the value's WIT type. The primitives live here; a
-// host supplies the per-type codecs (usually generated from its WIT records) and
-// registers them on its ModComponentRegistry (RegisterBinaryComponent /
-// RegisterBinaryResource). ModAbiRunner then sends and accepts those type paths as
-// Typed instead of JSON, for a guest that announced it reads them.
+// Encoding.Typed, the one value encoding of the modding runtime (abi/mod-abi.fbs header):
+// compact little-endian binary, laid out by the value's WIT type. The primitives live
+// here; a host supplies the per-type codecs (usually generated from its WIT records) and
+// registers them on its ModComponentRegistry (RegisterBinary* / RegisterTag*). Every
+// value the runtime holds (event buffers, resource change detection, observer fires,
+// command payloads) and every value the relay carries is in this encoding.
 
 using System.Buffers;
 using System.Buffers.Binary;
@@ -135,40 +135,42 @@ public ref struct ModBinaryReader(ReadOnlySpan<byte> data)
     }
 }
 
-/// Encoding.Typed access to one registered component (see ModComponentRegistry.
-/// RegisterBinaryComponent).
+/// Encoding.Typed access to one registered component (ModComponentRegistry.
+/// RegisterBinaryComponent / RegisterTagComponent).
 public interface IModBinaryComponent
 {
+    /// Presence, change detection, ReadOnly.
+    IModComponent Component { get; }
+
     /// Writes `entity`'s value; false (nothing written) when it has none.
     bool TryWrite(World world, ulong entity, IBufferWriter<byte> writer);
 
     /// Inserts / overwrites the component from a value.
     void Set(World world, ulong entity, ReadOnlySpan<byte> data, ModEntityResolver? resolve);
+
+    /// A host observer of the component's insert / remove, firing the value as bytes;
+    /// `wanted` is asked first. Throws when the mapper can't hand its payload over
+    /// (IModComponentObserverOf).
+    void ObserveInsert(App app, Func<bool> wanted, ModValueFire onFire);
+
+    void ObserveRemove(App app, Func<bool> wanted, ModValueFire onFire);
 }
 
-/// Encoding.Typed access to one registered component's insert / remove triggers: a host
-/// observer firing the payload as bytes. False (nothing registered) when the mapper hands
-/// no typed trigger (IModComponentObserverOf) — that observer keeps its JSON.
-public interface IModBinaryTrigger
-{
-    bool TryObserveInsert(App app, Func<bool> wanted, ModJsonFire onFire);
-
-    bool TryObserveRemove(App app, Func<bool> wanted, ModJsonFire onFire);
-}
-
-/// Encoding.Typed access to one registered event (see ModComponentRegistry.RegisterBinaryEvent).
+/// Encoding.Typed access to one registered event (RegisterBinaryEvent / RegisterTagEvent).
 public interface IModBinaryEvent
 {
     /// Emits the event from a value.
     void Emit(World world, ulong entity, ReadOnlySpan<byte> data, ModEntityResolver? resolve);
 
     /// A host observer firing each payload as bytes; `wanted` is asked first.
-    void Observe(App app, Func<bool> wanted, ModJsonFire onFire);
+    void Observe(App app, Func<bool> wanted, ModValueFire onFire);
 }
 
-/// Encoding.Typed access to one registered resource. `modName` as in IModResource.GetJsonFor.
+/// Encoding.Typed access to one registered resource. `modName` as in IModResourceOf.
 public interface IModBinaryResource
 {
+    bool ReadOnly { get; }
+
     /// Writes the value; false (nothing written) when the host has none right now.
     bool TryWrite(App app, string modName, IBufferWriter<byte> writer);
 
@@ -176,28 +178,24 @@ public interface IModBinaryResource
 }
 
 internal sealed class ModBinaryComponent<T>(IModComponent presence, IModComponentOf<T> typed, ModBinaryWrite<T> write, ModBinaryRead<T> read)
-    : IModBinaryComponent, IModBinaryTrigger where T : struct
+    : IModBinaryComponent where T : struct
 {
     // One fire at a time (the observers run on the scheduler thread; the receiver copies).
-    private readonly ModJsonBuffer _fire = new();
+    private readonly ModByteBuffer _fire = new();
 
-    public bool TryObserveInsert(App app, Func<bool> wanted, ModJsonFire onFire)
-    {
-        if (presence is not IModComponentObserverOf<T> observed)
-            return false;
-        observed.ObserveInsert(app, wanted, (e, v) => Fire(onFire, e, v));
-        return true;
-    }
+    public IModComponent Component => presence;
 
-    public bool TryObserveRemove(App app, Func<bool> wanted, ModJsonFire onFire)
-    {
-        if (presence is not IModComponentObserverOf<T> observed)
-            return false;
-        observed.ObserveRemove(app, wanted, (e, v) => Fire(onFire, e, v));
-        return true;
-    }
+    public void ObserveInsert(App app, Func<bool> wanted, ModValueFire onFire)
+        => Observed().ObserveInsert(app, wanted, (e, v) => Fire(onFire, e, v));
 
-    private void Fire(ModJsonFire onFire, ulong entity, in T value)
+    public void ObserveRemove(App app, Func<bool> wanted, ModValueFire onFire)
+        => Observed().ObserveRemove(app, wanted, (e, v) => Fire(onFire, e, v));
+
+    private IModComponentObserverOf<T> Observed()
+        => presence as IModComponentObserverOf<T>
+            ?? throw new InvalidOperationException($"{presence.GetType().Name} can't be observed: no IModComponentObserverOf<{typeof(T).Name}>");
+
+    private void Fire(ModValueFire onFire, ulong entity, in T value)
     {
         _fire.Reset();
         write(value, _fire);
@@ -206,7 +204,7 @@ internal sealed class ModBinaryComponent<T>(IModComponent presence, IModComponen
 
     public bool TryWrite(World world, ulong entity, IBufferWriter<byte> writer)
     {
-        if (!presence.Has(world, entity))
+        if (!world.Exists(entity) || !presence.Has(world, entity))
             return false;
         write(typed.Get(world, entity), writer);
         return true;
@@ -219,8 +217,10 @@ internal sealed class ModBinaryComponent<T>(IModComponent presence, IModComponen
     }
 }
 
-internal sealed class ModBinaryResource<T>(IModResourceOf<T> typed, ModBinaryWrite<T> write, ModBinaryRead<T> read) : IModBinaryResource
+internal sealed class ModBinaryResource<T>(IModResource mapper, IModResourceOf<T> typed, ModBinaryWrite<T> write, ModBinaryRead<T> read) : IModBinaryResource
 {
+    public bool ReadOnly => mapper.ReadOnly;
+
     public bool TryWrite(App app, string modName, IBufferWriter<byte> writer)
     {
         if (!typed.TryGet(app, modName, out var value))
@@ -238,7 +238,7 @@ internal sealed class ModBinaryResource<T>(IModResourceOf<T> typed, ModBinaryWri
 
 internal sealed class ModBinaryEvent<T>(IModEventOf<T> typed, ModBinaryWrite<T> write, ModBinaryRead<T> read) : IModBinaryEvent where T : struct
 {
-    private readonly ModJsonBuffer _fire = new();
+    private readonly ModByteBuffer _fire = new();
 
     public void Emit(World world, ulong entity, ReadOnlySpan<byte> data, ModEntityResolver? resolve)
     {
@@ -246,7 +246,7 @@ internal sealed class ModBinaryEvent<T>(IModEventOf<T> typed, ModBinaryWrite<T> 
         typed.Emit(world, entity, read(ref r, resolve));
     }
 
-    public void Observe(App app, Func<bool> wanted, ModJsonFire onFire)
+    public void Observe(App app, Func<bool> wanted, ModValueFire onFire)
         => typed.Observe(app, wanted, (e, v) =>
         {
             _fire.Reset();

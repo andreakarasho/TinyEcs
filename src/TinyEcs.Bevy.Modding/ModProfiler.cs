@@ -1,6 +1,6 @@
 // Opt-in per-mod cost census (env TINYECS_MOD_PROFILE=1): per mod and per system /
 // observer / packet direction / host function — calls, rows and bytes pushed, host-side
-// build time (query snapshot + JSON + FlatBuffers), guest call time (includes any
+// build time (query snapshot + value encoding + FlatBuffers), guest call time (includes any
 // re-entrant host function work), command apply time. Printed every ~5 s as per-frame
 // averages, then reset. Off = one static bool test per call site.
 

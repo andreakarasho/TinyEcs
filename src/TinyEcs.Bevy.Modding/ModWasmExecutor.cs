@@ -11,23 +11,12 @@
 
 namespace TinyEcs.Bevy.Modding;
 
-/// The generic mid-run host imports (see abi/mod-abi.fbs header),
-/// runtime-neutral: no wasm ptr/len, no Wasmtime Caller. Every executor's own
-/// guest-import glue narrows its ptr/len args into a Span (or reads/writes one
-/// that already lives in its own address space) BEFORE calling in here, so this
-/// interface — and ModAbiBacking, its one implementation — needs no wasm types
-/// at all and is identical for the wasmtime executor and a guest-relay executor.
-/// Game-specific imports (networking, asset lookups, …) are NOT here: the host
-/// describes those as ModHostImport shape descriptors (ModHostImports.cs) and
-/// each executor defines them alongside these into the same import module.
+/// The generic mid-run host import (log), runtime-neutral: no wasm ptr/len. Game host
+/// calls (networking, asset lookups, …) are NOT here: the host serves them through its
+/// own typed dispatch.
 internal interface IModImportSink
 {
     void Log(string message);
-    /// `env.mod_call`: run the named host function (ModHostFunctions) with UTF-8 JSON
-    /// args. Returns the UTF-8 JSON result, EMPTY for a function without one; valid
-    /// until the next call. Throws ModCallException (= trap) on an unknown name or
-    /// malformed args.
-    ReadOnlySpan<byte> ModCall(ReadOnlySpan<byte> name, ReadOnlySpan<byte> args);
 }
 
 /// Wasm-mechanics seam: compiles/instantiates a mod module and drives its guest
@@ -41,10 +30,8 @@ internal interface IModImportSink
 /// backend can construct one executor and Load() every mod through it.
 internal interface IModWasmExecutor : IDisposable
 {
-    /// Compile + instantiate from source.Bytes, defining the host imports — the
-    /// generic ECS ones routed to `sink` plus the host-described `hostImports`
-    /// descriptors, all under import module `importModule` — for the lifetime of
-    /// this handle (reused across Reload). `slot` is the mod's
+    /// Compile + instantiate from source.Bytes, defining the generic imports routed to
+    /// `sink` for the lifetime of this handle (reused across Reload). `slot` is the mod's
     /// ModHostContext.Slot (assigned by ModdingPlugin.SetupEcsMods in load order)
     /// — the caller passes it through explicitly rather than letting each
     /// executor mint its own handle, because a guest-relay executor's handle
@@ -53,7 +40,7 @@ internal interface IModWasmExecutor : IDisposable
     /// (ctx.Slot) from "Nth Load call" (an internally-counted handle). Returns the
     /// handle passed to every other method below (implementations may just echo
     /// `slot` back).
-    int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports);
+    int Load(in ModSource source, int slot, IModImportSink sink);
 
     /// Every Call* below is span-IN (the caller's FlatSharp write buffer is reused
     /// and over-sized, so an exact-length copy would be pure garbage) and

@@ -21,3 +21,7 @@ codegen-units = 1
 panic = "abort"
 
 [workspace]
+
+[features]
+# Builds the `missing-export` world instead (see build.sh).
+missing-export = []

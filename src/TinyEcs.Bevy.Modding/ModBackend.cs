@@ -13,6 +13,10 @@
 
 namespace TinyEcs.Bevy.Modding;
 
+/// A host call a mod made that can't be served (unknown function, malformed args): the
+/// mod traps with this message.
+public sealed class ModCallException(string message, Exception? inner = null) : Exception(message, inner);
+
 /// A mod component to load: the component backend instantiates from raw bytes
 /// (Bytes required); the relay is name/slot-keyed (Bytes is null — the native host
 /// holds the component). Name is always the manifest name, so logging/errors can
@@ -44,18 +48,9 @@ internal interface IModInstance : IDisposable
     /// Marshal a system's params (commands / query snapshots) and call its export.
     void RunSystem(ModSystemSpec sys);
 
-    /// Call a guest observer callback `export(entity: u64, json: string)`.
-    void CallObserver(string export, ulong entity, string json);
-
-    /// UTF8 overload (what FlushObservers calls): `json` is valid for the call only.
-    /// Default bounces off the string one.
-    void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
-        => CallObserver(export, entity, System.Text.Encoding.UTF8.GetString(json));
-
-    /// The trigger value as Encoding.Typed bytes: only for an observer whose spec asked
-    /// for it (ModObserverSpec.Binary), so only a backend that sets it overrides this.
-    void CallObserverBinary(string export, ulong entity, ReadOnlySpan<byte> data)
-        => throw new NotSupportedException("this backend takes no Encoding.Typed trigger values");
+    /// Call a guest observer: `value` is the trigger's value (Encoding.Typed; empty for a
+    /// tag or a despawn), valid for the call only.
+    void CallObserver(string export, ulong entity, ReadOnlySpan<byte> value);
 
     /// Run the packet observer `export` (a Packet ModObserverSpec.Name) on one message
     /// (ModPacketChain) and return its verdict; its params are evaluated and its

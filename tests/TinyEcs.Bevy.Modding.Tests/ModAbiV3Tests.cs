@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using FlatSharp;
 using ModAbi;
 using TinyEcs;
@@ -8,20 +7,9 @@ using Xunit;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
-public struct V3Score { public int Value; }
-public struct V3Ping { public int N; }
-public struct V3Link { public ulong Target; }
-public struct V3Tag { public int X; }
-
-[JsonSourceGenerationOptions(IncludeFields = true)]
-[JsonSerializable(typeof(V3Score))]
-[JsonSerializable(typeof(V3Ping))]
-[JsonSerializable(typeof(V3Link))]
-[JsonSerializable(typeof(V3Tag))]
-internal partial class V3JsonContext : JsonSerializerContext { }
-
 // ABI v3: Res / ResMut / Events params, the Added term, observers with params, and
-// placeholder entity ids in component JSON. Canned guest replies, real World.
+// placeholder entity ids inside typed values. Canned guest replies, real World; every
+// value is Encoding.Typed (TestCodecs.cs).
 public class ModAbiV3Tests
 {
     private sealed class CaptureExecutor : IModWasmExecutor
@@ -31,7 +19,7 @@ public class ModAbiV3Tests
         public readonly List<byte[]> RunInputs = new();
         public readonly List<byte[]> ObserverInputs = new();
 
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public int Load(in ModSource source, int slot, IModImportSink sink) => slot;
         public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => SetupReplyBytes;
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input)
         {
@@ -59,13 +47,13 @@ public class ModAbiV3Tests
     private static (App App, ModHostContext Ctx, ModComponentRegistry Reg) Host()
     {
         var app = new App(ThreadingMode.Single);
-        var reg = new ModComponentRegistry();
-        reg.Register("t:tag", new ModComponent<V3Tag>(V3JsonContext.Default.V3Tag));
-        reg.Register("t:link", new ModComponent<V3Link>(V3JsonContext.Default.V3Link,
-            static (v, resolve) => { v.Target = resolve(v.Target); return v; }));
-        reg.RegisterResource("t:score", new ModResource<V3Score>(V3JsonContext.Default.V3Score));
-        reg.RegisterResource("t:missing", new ModResource<V3Ping>(V3JsonContext.Default.V3Ping));
-        reg.RegisterEvent("t:ping", new ModEvent<V3Ping>(V3JsonContext.Default.V3Ping));
+        var reg = new ModComponentRegistry()
+            .Component("t:tag", new ModComponent<V3Tag>(), Codecs.WriteV3Tag, Codecs.ReadV3Tag)
+            .Component("t:link", new ModComponent<V3Link>(static (v, resolve) => { v.Target = resolve(v.Target); return v; }),
+                Codecs.WriteV3Link, Codecs.ReadV3Link)
+            .Resource("t:score", new ModResource<V3Score>(), Codecs.WriteV3Score, Codecs.ReadV3Score)
+            .Resource("t:missing", new ModResource<V3Ping>(), Codecs.WriteV3Ping, Codecs.ReadV3Ping)
+            .Event<V3Ping>("t:ping", Codecs.WriteV3Ping, Codecs.ReadV3Ping);
         var ctx = new ModHostContext { World = app.GetWorld(), Registry = reg, App = app, Name = "v3" };
         return (app, ctx, reg);
     }
@@ -83,7 +71,14 @@ public class ModAbiV3Tests
         throw new KeyNotFoundException(path);
     }
 
-    private static string Json(CompValue? v) => v?.Data is { } d ? System.Text.Encoding.UTF8.GetString(d.Span) : "<absent>";
+    // A value's bytes; null = absent.
+    private static byte[]? Val(CompValue? v)
+    {
+        if (v == null)
+            return null;
+        Assert.Equal(ModAbi.Encoding.Typed, v.Encoding);
+        return v.Data?.ToArray() ?? [];
+    }
 
     private static CaptureExecutor ResSystem(ModComponentRegistry reg, bool resUnchanged) => new()
     {
@@ -116,7 +111,7 @@ public class ModAbiV3Tests
 
         runner.RunSystem(ctx.Systems[0]);
         var first = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
-        Assert.Equal("{\"Value\":7}", Json(first.Resources![0].Value));
+        Assert.Equal(Bin.S32(7), Val(first.Resources![0].Value));
         Assert.False(first.Resources[0].Unchanged);
         // Absent stays absent, never "unchanged".
         Assert.Null(first.Resources[1].Value);
@@ -131,7 +126,7 @@ public class ModAbiV3Tests
         app.GetResourceRef<V3Score>().Value = 8;
         runner.RunSystem(ctx.Systems[0]);
         var third = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
-        Assert.Equal("{\"Value\":8}", Json(third.Resources![0].Value));
+        Assert.Equal(Bin.S32(8), Val(third.Resources![0].Value));
         Assert.False(third.Resources[0].Unchanged);
     }
 
@@ -147,7 +142,7 @@ public class ModAbiV3Tests
         runner.RunSystem(ctx.Systems[0]);
         runner.RunSystem(ctx.Systems[0]);
         var second = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
-        Assert.Equal("{\"Value\":7}", Json(second.Resources![0].Value));
+        Assert.Equal(Bin.S32(7), Val(second.Resources![0].Value));
         Assert.False(second.Resources[0].Unchanged);
     }
 
@@ -165,7 +160,7 @@ public class ModAbiV3Tests
         exec.Throw = false;
         runner.RunSystem(ctx.Systems[0]);
         var input = SystemInput.Serializer.Parse(exec.Inner.RunInputs[^1]);
-        Assert.Equal("{\"Value\":7}", Json(input.Resources![0].Value));
+        Assert.Equal(Bin.S32(7), Val(input.Resources![0].Value));
         Assert.False(input.Resources[0].Unchanged);
     }
 
@@ -173,7 +168,7 @@ public class ModAbiV3Tests
     {
         public readonly CaptureExecutor Inner = inner;
         public bool Throw;
-        public int Load(in ModSource source, int slot, IModImportSink sink, string importModule, IReadOnlyList<ModHostImport> hostImports) => slot;
+        public int Load(in ModSource source, int slot, IModImportSink sink) => slot;
         public Memory<byte> CallSetup(int handle, ReadOnlySpan<byte> handshake) => Inner.CallSetup(handle, handshake);
         public Memory<byte> CallRun(int handle, uint sysId, ReadOnlySpan<byte> input)
             => Throw ? throw new InvalidOperationException("trap") : Inner.CallRun(handle, sysId, input);
@@ -218,12 +213,12 @@ public class ModAbiV3Tests
         var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
         Assert.Equal(2, input.Resources!.Count);
         Assert.Equal(0u, input.Resources[0].ParamIndex);
-        Assert.Equal("{\"Value\":7}", Json(input.Resources[0].Value));
+        Assert.Equal(Bin.S32(7), Val(input.Resources[0].Value));
         Assert.Equal(1u, input.Resources[1].ParamIndex);
         Assert.Null(input.Resources[1].Value);
         var events = Assert.Single(input.Events!);
         Assert.Equal(2u, events.ParamIndex);
-        Assert.Equal(new[] { "{\"N\":1}", "{\"N\":2}" }, events.Values!.Select(Json).ToArray());
+        Assert.Equal(new[] { Bin.S32(1), Bin.S32(2) }, events.Values!.Select(Val).ToArray());
 
         // Consumed: the next run sees no events.
         runner.RunSystem(ctx.Systems[0]);
@@ -310,19 +305,19 @@ public class ModAbiV3Tests
         var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
-        runner.CallObserver("4", 0, "{\"N\":3}");
+        runner.CallObserver("4", 0, Bin.S32(3));
 
         var input = ObserverInput.Serializer.Parse(exec.ObserverInputs[^1]);
-        Assert.Equal("{\"N\":3}", Json(input.Value));
+        Assert.Equal(Bin.S32(3), Val(input.Value));
         Assert.Equal(Id(reg, "t:ping"), input.Value!.TypeId);
         var row = Assert.Single(input.Queries![0].Rows!);
         Assert.Equal(tagged, row.Entity);
-        Assert.Equal("{\"X\":5}", Json(row.Comps![0]));
-        Assert.Equal("{\"Value\":9}", Json(input.Resources![0].Value));
+        Assert.Equal(Bin.S32(5), Val(row.Comps![0]));
+        Assert.Equal(Bin.S32(9), Val(input.Resources![0].Value));
     }
 
     [Fact]
-    public void Placeholder_entity_ids_in_component_json_resolve_to_this_buffers_spawns()
+    public void Placeholder_entity_ids_in_typed_values_resolve_to_this_buffers_spawns()
     {
         var (app, ctx, reg) = Host();
         var placeholder = ModEntityRef.PlaceholderBit | 0UL;
@@ -349,7 +344,7 @@ public class ModAbiV3Tests
                         TempId = 1,
                         Comps = new List<CompValue>
                         {
-                            new() { TypeId = Id(reg, "t:link"), Data = System.Text.Encoding.UTF8.GetBytes($"{{\"Target\":{placeholder}}}") },
+                            new() { TypeId = Id(reg, "t:link"), Encoding = ModAbi.Encoding.Typed, Data = Bin.U64(placeholder) },
                         },
                     }),
                     // A placeholder nothing in this buffer spawned resolves to 0.
@@ -358,7 +353,7 @@ public class ModAbiV3Tests
                         Entity = -1, // temp 0
                         Comps = new List<CompValue>
                         {
-                            new() { TypeId = Id(reg, "t:link"), Data = System.Text.Encoding.UTF8.GetBytes($"{{\"Target\":{ModEntityRef.PlaceholderBit | 9UL}}}") },
+                            new() { TypeId = Id(reg, "t:link"), Encoding = ModAbi.Encoding.Typed, Data = Bin.U64(ModEntityRef.PlaceholderBit | 9UL) },
                         },
                     }),
                 },
@@ -441,12 +436,12 @@ public class ModAbiV3Tests
         app.GetResourceRef<V3Score>().Value = 8; // a resource change
         runner.RunSystem(sys);
         Assert.Equal(2, exec.RunInputs.Count);
-        Assert.Equal("{\"Value\":8}", Json(SystemInput.Serializer.Parse(exec.RunInputs[^1]).Resources![0].Value));
+        Assert.Equal(Bin.S32(8), Val(SystemInput.Serializer.Parse(exec.RunInputs[^1]).Resources![0].Value));
         runner.RunSystem(sys);
         Assert.Equal(2, exec.RunInputs.Count);
 
-        Assert.True(reg.TryGetEvent("t:ping", out var ping)); // an event
-        ping.Emit(app.GetWorld(), 0, "{\"N\":1}");
+        Assert.True(reg.TryGetBinaryEvent("t:ping", out var ping)); // an event
+        ping.Emit(app.GetWorld(), 0, Bin.S32(1), null);
         runner.RunSystem(sys);
         Assert.Equal(3, exec.RunInputs.Count);
         var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
@@ -502,7 +497,7 @@ public class ModAbiV3Tests
         exec.Throw = false;
         runner.RunSystem(sys); // nothing changed, but the guest never took the last run in
         Assert.Single(exec.Inner.RunInputs);
-        Assert.Equal("{\"Value\":7}", Json(SystemInput.Serializer.Parse(exec.Inner.RunInputs[^1]).Resources![0].Value));
+        Assert.Equal(Bin.S32(7), Val(SystemInput.Serializer.Parse(exec.Inner.RunInputs[^1]).Resources![0].Value));
         runner.RunSystem(sys);
         Assert.Single(exec.Inner.RunInputs);
     }
@@ -536,8 +531,8 @@ public class ModAbiV3Tests
         {
             Cmds = new List<Cmd>
             {
-                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:tag"), Data = "{\"X\":1}"u8.ToArray() } }),
-                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Data = "{\"Value\":9}"u8.ToArray() } }),
+                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:tag"), Encoding = ModAbi.Encoding.Typed, Data = Bin.S32(1) } }),
+                new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Encoding = ModAbi.Encoding.Typed, Data = Bin.S32(9) } }),
             },
         });
         var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);

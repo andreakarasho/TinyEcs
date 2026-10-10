@@ -4,8 +4,9 @@
 // module (preamble bytes 6-7 = 00 00) is rejected before it gets this far. Same
 // scheduler, registry, snapshot (ModdingPlugin.BuildSnapshot) and command semantics as
 // the relay ABI (ModRelayBackend) — only the wire differs: instead of a
-// FlatBuffers SystemInput/CommandBuffer pair per call, the guest pulls rows and pushes
-// commands through the `tinyecs:modding/ecs` host resources, defined here.
+// FlatBuffers SystemInput/CommandBuffer pair per call, the guest holds the
+// `tinyecs:modding/ecs` host resources defined here (structure only) and reads / writes
+// values through the host app's typed interfaces on them (ComponentModImports).
 //
 // One engine + one linker per backend. The ecs imports are defined once and find the
 // mod they serve through `Current` (the instance whose export is on the stack; every
@@ -52,12 +53,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     // Interned type paths, looked up straight from the guest's UTF8 (no string per call).
     private readonly Dictionary<string, string> _paths = new();
     private readonly Dictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> _pathLookup;
-
-    // Variant case names / record field names, encoded once. Variant discriminants are
-    // COPIED into each value (the value frees its copy); record names are never freed by
-    // a value, so these must outlive every call — they live as long as the backend.
-    internal readonly Cm.ByteVector FieldEntity = Cm.ByteVector.Constant("entity");
-    internal readonly Cm.ByteVector FieldValue = Cm.ByteVector.Constant("value");
 
     /// The instance whose guest export is executing (null between calls).
     internal ComponentModInstance? Current;
@@ -125,21 +120,6 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         return s;
     }
 
-    // ── values ────────────────────────────────────────────────────────────────
-
-    /// A WIT `string` value straight from UTF8 (one native copy, no managed string).
-    /// The fork only builds strings from System.String, so this writes the native
-    /// wasmtime_component_val { u8 kind; union of @ 8 } layout itself: kind 12, a
-    /// wasm_byte_vec_t {size, data} — exactly what ByteVector wraps — in the union.
-    internal static Cm.ComponentValue Utf8String(ReadOnlySpan<byte> utf8)
-    {
-        Cm.ComponentValue value = default;
-        var p = (byte*)Unsafe.AsPointer(ref value);
-        p[0] = 12;
-        *(Cm.ByteVector*)(p + 8) = new Cm.ByteVector(utf8);
-        return value;
-    }
-
     // ── tinyecs:modding/ecs host side ─────────────────────────────────────────────
 
     private void DefineEcs()
@@ -170,21 +150,14 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineFunction("[method]app.add-observer", AppAddObserver, this);
 
         ecs.DefineFunction("[method]commands.spawn", CommandsSpawn, this);
-        ecs.DefineFunction("[method]commands.insert", CommandsInsert, this);
         ecs.DefineFunction("[method]commands.remove", CommandsRemove, this);
         ecs.DefineFunction("[method]commands.despawn", CommandsDespawn, this);
-        ecs.DefineFunction("[method]commands.send", CommandsSend, this);
-        ecs.DefineFunction("[method]commands.set-resource", CommandsSetResource, this);
 
-        ecs.DefineFunction("[method]query.rows", QueryRows, this);
         ecs.DefineFunction("[method]query.entities", QueryEntities, this);
-        ecs.DefineFunction("[method]query.set", QuerySet, this);
 
-        ecs.DefineFunction("[method]res.get", ResGet, this);
-        ecs.DefineFunction("[method]res.set", ResSet, this);
         ecs.DefineFunction("[method]res.unchanged", ResUnchanged, this);
 
-        ecs.DefineFunction("[method]events.read", EventsRead, this);
+        ecs.DefineFunction("[method]events.len", EventsLen, this);
     }
 
     private static ComponentModInstance Mod(object? state)
@@ -297,14 +270,7 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     {
         var m = Mod(state);
         m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Commands);
-        results[0] = Cm.ComponentValue.CreateUInt64(m.Commands.Spawn(args[1]));
-    }
-
-    private static void CommandsInsert(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Commands);
-        m.Commands.Insert(args[1].ToUInt64(), args[2]);
+        results[0] = Cm.ComponentValue.CreateUInt64(m.Commands.SpawnEmpty());
     }
 
     private static void CommandsRemove(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
@@ -321,55 +287,11 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         m.Commands.Despawn(args[1].ToUInt64());
     }
 
-    private static void CommandsSend(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Commands);
-        m.Commands.Send(m.Backend.Path(args[1]), args[2].ToUtf8Span());
-    }
-
-    private static void CommandsSetResource(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Commands);
-        m.Commands.SetResource(m.Backend.Path(args[1]), args[2].ToUtf8Span());
-    }
-
-    private static void QueryRows(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
-        results[0] = m.Rows(param);
-    }
-
     private static void QueryEntities(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
     {
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
         results[0] = m.Entities(param);
-    }
-
-    private static void QuerySet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
-        m.QuerySet(param, args[1].ToUInt64(), args[2].ToByte(), args[3].ToUtf8Span());
-    }
-
-    private static void ResGet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Res).Obj!;
-        results[0] = m.ResGet(param, out var json)
-            ? Cm.ComponentValue.CreateOption(Utf8String(json))
-            : Cm.ComponentValue.CreateOption(null);
-    }
-
-    private static void ResSet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
-    {
-        var m = Mod(state);
-        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Res).Obj!;
-        m.ResSet(param, args[1].ToUtf8Span());
     }
 
     private static void ResUnchanged(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
@@ -379,15 +301,11 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         results[0] = Cm.ComponentValue.CreateBoolean(m.ResUnchanged(param));
     }
 
-    private static void EventsRead(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    private static void EventsLen(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
     {
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Events).Obj!;
-        var current = param.Events!.Current;
-        var list = new Cm.ListBuilder(current.Count);
-        for (var i = 0; i < current.Count; i++)
-            list[i] = Cm.ComponentValue.CreateString(current[i], externallyOwned: true);
-        results[0] = new Cm.ComponentValue(list, externallyOwned: true);
+        results[0] = Cm.ComponentValue.CreateUInt32((uint)param.Events!.Current.Count);
     }
 
     // packet-direction enum names, as WIT spells them. Constants: the fork never frees

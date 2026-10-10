@@ -1,4 +1,3 @@
-using System.Text.Json;
 using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.Modding;
@@ -6,9 +5,8 @@ using Xunit;
 
 namespace TinyEcs.Bevy.Modding.Tests;
 
-// The generic message interception chain (ModPacketChain) over packet observers, and
-// the host-function table (ModHostFunctions). Fake IModInstances stand in for guests —
-// no wasm runtime.
+// The generic message interception chain (ModPacketChain) over packet observers. Fake
+// IModInstances stand in for guests — no wasm runtime.
 public class ModPacketChainTests
 {
     private sealed class PacketMod(string name, Func<string, byte[], (ModPacketVerdict, byte[]?)> onPacket) : IModInstance
@@ -22,7 +20,7 @@ public class ModPacketChainTests
 
         public void Setup() { }
         public void RunSystem(ModSystemSpec sys) { }
-        public void CallObserver(string export, ulong entity, string json) { }
+        public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> value) { }
         public void Reload(in ModSource source) { }
         public void Dispose() { }
 
@@ -174,29 +172,5 @@ public class ModPacketChainTests
         Assert.Equal(ModPacketVerdict.Pass, chain.Run(ModPacketDirection.Incoming, new byte[] { 0x11 }, null, out _));
         Assert.Single(good.Seen);
         Assert.Equal(1, rts.Runtimes[0].FailureCount);
-    }
-
-    // ── ModHostFunctions ────────────────────────────────────────────────────────
-
-    [Fact]
-    public void Host_function_round_trip_unit_result_and_traps()
-    {
-        using var world = new World();
-        var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry(), Name = "m" };
-        var fns = new ModHostFunctions();
-        fns.Add("t:a/b#add", (mod, a, w) => w.WriteNumberValue(a[0].GetInt32() + a[1].GetInt32()));
-        var sideEffect = "";
-        fns.Add("t:a/b#note", (mod, a, w) => sideEffect = a[0].GetString()!);
-
-        Assert.Equal("5", fns.Call(ctx, "t:a/b#add", "[2,3]"));
-        Assert.Null(fns.Call(ctx, "t:a/b#note", "[\"hi\"]"));
-        Assert.Equal("hi", sideEffect);
-        Assert.True(fns.Call(ctx, "t:a/b#add"u8, "[1,1]"u8).SequenceEqual("2"u8));
-
-        Assert.Throws<ModCallException>(() => fns.Call(ctx, "t:a/b#missing", "[]"));
-        Assert.Throws<ModCallException>(() => fns.Call(ctx, "t:a/b#add", "{not json"));
-        Assert.Throws<ModCallException>(() => fns.Call(ctx, "t:a/b#add", "{}"));
-        Assert.Throws<ModCallException>(() => fns.Call(ctx, "t:a/b#add", "[\"x\",1]"));
-        Assert.Throws<ModCallException>(() => fns.Call(ctx, "t:a/b#add", "[1]"));
     }
 }

@@ -10,12 +10,13 @@
 // Handlers run synchronously inside a guest call; `Current` names the mod making it,
 // so one linker serves every loaded mod.
 //
-// Typed game imports: a game interface can take the call's own `commands` / `query` /
-// `res` handles (`borrow<commands>` etc. of tinyecs:modding/ecs) and work on them with
-// structs instead of JSON — Commands / Query / Res below resolve a borrowed handle's rep
-// to the current call's parameter, read a query's snapshot (entities + reading terms,
-// IModComponentOf<T> columns) and queue typed inserts / resource sets in order with the
-// call's other commands.
+// Typed game imports: the generic interface carries no values, so a game interface takes
+// the call's own `commands` / `query` / `res` / `events` handles (`borrow<commands>` etc.
+// of tinyecs:modding/ecs) and reads / writes values on them as structs — Commands /
+// Query / Res / Events below resolve a borrowed handle's rep to the current call's
+// parameter, read a query's snapshot (entities + reading terms, IModComponentOf<T>
+// columns) and queue typed inserts / resource sets in order with the call's other
+// commands.
 
 extern alias WasmtimeCm;
 
@@ -53,13 +54,12 @@ public sealed class ComponentModImports
         int resultCount = 0, ComponentResultsReader? onResults = null)
         => _backend.TryCallExport(ctx, name, args, resultCount, onResults);
 
-    /// Typed observer triggers: an observer export may take its trigger value typed —
-    /// `(entity: entity, value: <record>, params...)`, or `(entity: entity, params...)` for
-    /// a trigger that carries no value — instead of `(trigger: trigger-data, ...)`; the
-    /// backend tells which by the export's first parameter when it binds it. For a typed
-    /// export it hands the trigger's JSON (`json` = "{}" for a payload-less one) to this
-    /// hook, which lowers it to the record the export takes. Unset = no typed triggers (a
-    /// typed export fails the mod's load).
+    /// Observer triggers: an observer export takes its trigger as `(entity: entity, value:
+    /// <record>, params...)`, or `(entity: entity, params...)` for a trigger that carries
+    /// no value; the backend tells which by the export's second parameter when it binds
+    /// it. For a valued one it hands the trigger's value (Encoding.Typed) to this hook,
+    /// which lowers it to the record the export takes. Unset = a valued observer fails
+    /// the mod's load.
     public ComponentTriggerLowering? TypedTrigger
     {
         get => _backend.TypedTrigger;
@@ -111,9 +111,9 @@ public readonly struct ComponentModCommands
     public ulong Spawn() => _mod.Commands.SpawnEmpty();
 
     /// Queues an insert of the component registered as `path` (its mapper must implement
-    /// IModComponentOf&lt;T&gt;).
+    /// IModComponentOf&lt;T&gt;). Traps on a read-only one.
     public void Insert<T>(ulong entity, string path, in T value) where T : struct
-        => _mod.Commands.InsertTyped(entity, Typed<T>(_mod.Ctx, path), value);
+        => _mod.Commands.InsertTyped(entity, Writable<T>(_mod.Ctx, path, "insert"), value);
 
     /// Queues a write of the resource registered as `path` (IModResourceOf&lt;T&gt;); traps
     /// on a read-only one, like `commands.set-resource`.
@@ -139,17 +139,44 @@ public readonly struct ComponentModCommands
         _mod.Commands.SendTyped(typed, value);
     }
 
-    internal static IModComponentOf<T> Typed<T>(ModHostContext ctx, string path) where T : struct
+    /// Queues an insert of the component registered as `path` from its value as
+    /// Encoding.Typed bytes (the path's binary codec decodes it at apply). Traps on a
+    /// read-only or unregistered one.
+    public void InsertBytes(ulong entity, string path, ReadOnlySpan<byte> value)
+    {
+        if (_mod.Ctx.Registry.Binary(path).Component.ReadOnly)
+            throw new InvalidOperationException($"insert: '{path}' is read-only");
+        _mod.Commands.InsertBytes(entity, path, value);
+    }
+
+    /// SetResource from Encoding.Typed bytes.
+    public void SetResourceBytes(string path, ReadOnlySpan<byte> value)
+    {
+        if (_mod.Ctx.Registry.BinaryResource(path).ReadOnly)
+            throw new InvalidOperationException($"set-resource: '{path}' is read-only");
+        _mod.Commands.SetResourceBytes(path, value);
+    }
+
+    /// Send from Encoding.Typed bytes.
+    public void SendBytes(string path, ReadOnlySpan<byte> value)
+    {
+        _mod.Ctx.Registry.BinaryEvent(path);
+        _mod.Commands.SendBytes(path, value);
+    }
+
+    internal static IModComponentOf<T> Writable<T>(ModHostContext ctx, string path, string what) where T : struct
     {
         if (!ctx.Registry.TryGet(path, out var comp))
-            throw new InvalidOperationException($"'{path}' is not a registered component");
+            throw new InvalidOperationException($"{what}: '{path}' is not a registered component");
+        if (comp.ReadOnly)
+            throw new InvalidOperationException($"{what}: '{path}' is read-only");
         return comp as IModComponentOf<T>
-            ?? throw new InvalidOperationException($"'{path}' has no typed {typeof(T).Name} mapper");
+            ?? throw new InvalidOperationException($"{what}: '{path}' has no typed {typeof(T).Name} mapper");
     }
 }
 
-/// A guest call's `query` parameter, for typed game imports: the snapshot `rows` reads,
-/// as entities + typed columns.
+/// A guest call's `query` parameter, for typed game imports: the snapshot, as entities +
+/// typed columns.
 public readonly struct ComponentModQuery
 {
     private readonly ComponentModInstance _mod;
@@ -163,7 +190,7 @@ public readonly struct ComponentModQuery
 
     public World World => _mod.Ctx.World;
 
-    /// The live matched entities, in `rows` / `entities` order.
+    /// The live matched entities, in `entities` order.
     public ReadOnlySpan<ulong> Entities => _mod.Live(_param);
 
     /// The mapper of reading term `term` (ref / mut / changed / added, in declaration
@@ -175,13 +202,48 @@ public readonly struct ComponentModQuery
             ?? throw new InvalidOperationException($"column: '{path}' has no typed {typeof(T).Name} mapper");
     }
 
-    /// Queues a write-back of reading term `term` (`query.set`, typed). Traps unless that
-    /// term is a `mut` term reading `path`.
+    /// Queues a write-back of reading term `term` (deferred, in order with the call's
+    /// commands). Traps unless that term is a `mut` term reading `path`.
     public void Set<T>(ulong entity, int term, string path, in T value) where T : struct
     {
         if (!Term(term, path, "set"))
             throw new InvalidOperationException($"set({term}): {path} is not a `mut` term");
-        _mod.Commands.InsertTyped(entity, ComponentModCommands.Typed<T>(_mod.Ctx, path), value);
+        _mod.Commands.InsertTyped(entity, ComponentModCommands.Writable<T>(_mod.Ctx, path, "set"), value);
+    }
+
+    /// Reading term `term`'s value of each live entity, as Encoding.Typed bytes appended to
+    /// `into` one after another; `ends[i]` = the end offset of entity i's value. Traps
+    /// unless that term reads `path`.
+    public void ColumnBytes(int term, string path, System.Buffers.IBufferWriter<byte> into, Span<int> ends)
+    {
+        Term(term, path, "column");
+        var codec = _mod.Ctx.Registry.Binary(path);
+        var world = World;
+        var ids = Entities;
+        if (ends.Length < ids.Length)
+            throw new ArgumentException("ends is shorter than Entities", nameof(ends));
+        var counting = new CountingWriter(into);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            codec.TryWrite(world, ids[i], counting);
+            ends[i] = counting.Written;
+        }
+    }
+
+    /// A write-back of reading term `term` from Encoding.Typed bytes (see Set).
+    public void SetBytes(ulong entity, int term, string path, ReadOnlySpan<byte> value)
+    {
+        if (!Term(term, path, "set"))
+            throw new InvalidOperationException($"set({term}): {path} is not a `mut` term");
+        _mod.Commands.InsertBytes(entity, path, value);
+    }
+
+    private sealed class CountingWriter(System.Buffers.IBufferWriter<byte> inner) : System.Buffers.IBufferWriter<byte>
+    {
+        public int Written;
+        public void Advance(int count) { inner.Advance(count); Written += count; }
+        public Memory<byte> GetMemory(int sizeHint = 0) => inner.GetMemory(sizeHint);
+        public Span<byte> GetSpan(int sizeHint = 0) => inner.GetSpan(sizeHint);
     }
 
     // Validates term `term` reads `path`; returns whether it is `mut`.
@@ -228,17 +290,65 @@ public readonly struct ComponentModRes
         value = default!;
         return false;
     }
+
+    /// The resource's current value as Encoding.Typed bytes written to `into`; false (nothing
+    /// written) when the host has none. Traps unless the parameter names `path`.
+    public bool TryGetBytes(string path, System.Buffers.IBufferWriter<byte> into)
+    {
+        if (_param.Path != path)
+            throw new InvalidOperationException($"get: the parameter is {_param.Path}, not {path}");
+        var ctx = _mod.Ctx;
+        var codec = ctx.Registry.BinaryResource(path);
+        _mod.MarkResGot(_param);
+        return ctx.App != null && codec.TryWrite(ctx.App, ctx.Name, into);
+    }
+
+    /// Put from Encoding.Typed bytes.
+    public void PutBytes(string path, ReadOnlySpan<byte> value)
+    {
+        if (_param.Path != path)
+            throw new InvalidOperationException($"put: the parameter is {_param.Path}, not {path}");
+        if (!_param.Mutable)
+            throw new InvalidOperationException($"put: {path} was declared with add-res, not add-res-mut");
+        var ctx = _mod.Ctx;
+        var codec = ctx.Registry.BinaryResource(path);
+        if (codec.ReadOnly)
+            throw new InvalidOperationException($"put: '{path}' is read-only");
+        if (ctx.App != null)
+            codec.Set(ctx.App, value, ctx.Name);
+        _mod.ResWritten(_param);
+    }
+
+    /// Writes the resource now (an `add-res-mut` parameter; a `TryGet` after it reads the
+    /// new value). Traps unless the parameter names `path` and is writable.
+    public void Put<T>(string path, in T value)
+    {
+        if (_param.Path != path)
+            throw new InvalidOperationException($"put: the parameter is {_param.Path}, not {path}");
+        if (!_param.Mutable)
+            throw new InvalidOperationException($"put: {path} was declared with add-res, not add-res-mut");
+        var ctx = _mod.Ctx;
+        if (!ctx.Registry.TryGetResource(path, out var r))
+            throw new InvalidOperationException($"put: '{path}' is not a registered resource");
+        if (r.ReadOnly)
+            throw new InvalidOperationException($"put: '{path}' is read-only");
+        if (r is not IModResourceOf<T> typed)
+            throw new InvalidOperationException($"put: '{path}' has no typed {typeof(T).Name} mapper");
+        if (ctx.App != null)
+            typed.Set(ctx.App, value, ctx.Name);
+        _mod.ResWritten(_param);
+    }
 }
 
-/// Lowers a typed observer's trigger value (ComponentModImports.TypedTrigger): the payload
-/// registered as `path`, as its JSON, to the record the export takes.
-public delegate Cm.ComponentValue ComponentTriggerLowering(string path, ReadOnlySpan<byte> json);
+/// Lowers an observer's trigger value (ComponentModImports.TypedTrigger): the payload
+/// registered as `path`, Encoding.Typed, to the record the export takes.
+public delegate Cm.ComponentValue ComponentTriggerLowering(string path, ReadOnlySpan<byte> value);
 
 /// Reads the results of ComponentModImports.TryCallExport (valid only inside the call).
 public delegate void ComponentResultsReader(Cm.ComponentCallResults results);
 
 /// A guest call's `events` parameter, for typed game imports: the events of its type sent
-/// since the system's last run, as their JSON (what `events.read` hands out).
+/// since the system's last run, each as its value (Encoding.Typed).
 public readonly struct ComponentModEvents
 {
     private readonly ComponentParam _param;
@@ -248,7 +358,7 @@ public readonly struct ComponentModEvents
     public string Path => _param.Path;
 
     /// The events, in send order. Traps unless the parameter names `path`.
-    public IReadOnlyList<string> Read(string path)
+    public IReadOnlyList<byte[]> Read(string path)
     {
         if (_param.Path != path)
             throw new InvalidOperationException($"read: the parameter is {_param.Path}, not {path}");

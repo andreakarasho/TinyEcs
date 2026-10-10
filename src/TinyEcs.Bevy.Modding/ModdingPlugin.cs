@@ -54,49 +54,43 @@ internal sealed class ModRuntime
     public readonly ModObserverQueue ObserverFires = new();
 }
 
-/// FIFO of observer fires whose JSON payloads live in one grow-only byte arena (a
-/// string per fire was the old shape). Reset once drained.
+/// FIFO of observer fires whose values (Encoding.Typed) live in one grow-only byte
+/// arena. Reset once drained.
 internal sealed class ModObserverQueue
 {
-    private readonly List<(string Name, ulong Entity, int Off, int Len, bool Binary)> _fires = new();
+    private readonly List<(string Name, ulong Entity, int Off, int Len)> _fires = new();
     private byte[] _bytes = new byte[512];
     private int _len;
     private int _head;
 
     public int Count => _fires.Count - _head;
 
-    public void Enqueue(string name, ulong entity, ReadOnlySpan<byte> json, bool binary = false)
+    public void Enqueue(string name, ulong entity, ReadOnlySpan<byte> value)
     {
-        if (_len + json.Length > _bytes.Length)
-            Array.Resize(ref _bytes, Math.Max(_bytes.Length * 2, _len + json.Length));
-        json.CopyTo(_bytes.AsSpan(_len));
-        _fires.Add((name, entity, _len, json.Length, binary));
-        _len += json.Length;
+        if (_len + value.Length > _bytes.Length)
+            Array.Resize(ref _bytes, Math.Max(_bytes.Length * 2, _len + value.Length));
+        value.CopyTo(_bytes.AsSpan(_len));
+        _fires.Add((name, entity, _len, value.Length));
+        _len += value.Length;
     }
 
-    /// The JSON span stays valid until the next TryDequeue — fires enqueued meanwhile
+    /// The value span stays valid until the next TryDequeue — fires enqueued meanwhile
     /// (the guest call it feeds may trigger more) append past it; the arena is only
     /// rewound by the TryDequeue that finds the queue drained.
-    public bool TryDequeue(out string name, out ulong entity, out ReadOnlySpan<byte> json)
-        => TryDequeue(out name, out entity, out json, out _);
-
-    /// `binary`: the payload is Encoding.Typed bytes (ModObserverSpec.Binary), not JSON.
-    public bool TryDequeue(out string name, out ulong entity, out ReadOnlySpan<byte> json, out bool binary)
+    public bool TryDequeue(out string name, out ulong entity, out ReadOnlySpan<byte> value)
     {
         if (_head == _fires.Count)
         {
             Clear();
             name = null!;
             entity = 0;
-            json = default;
-            binary = false;
+            value = default;
             return false;
         }
         var f = _fires[_head++];
         name = f.Name;
         entity = f.Entity;
-        json = _bytes.AsSpan(f.Off, f.Len);
-        binary = f.Binary;
+        value = _bytes.AsSpan(f.Off, f.Len);
         return true;
     }
 
@@ -239,9 +233,8 @@ public sealed class ModdingConfig
 
     /// Per-mod hook run once per loaded mod right after its ModHostContext is created
     /// (before Load), for EVERY backend. Use to wire host capabilities onto the ctx —
-    /// e.g. ConsumeMouse/ConsumeKeyboard, the game-specific host imports
-    /// (ctx.HostImportModule + ctx.HostImports descriptors — see ModHostImports.cs),
-    /// a filter delegate. There is no separate linker hook.
+    /// e.g. ConsumeMouse/ConsumeKeyboard, a filter delegate. There is no separate linker
+    /// hook.
     public readonly List<Action<ModHostContext>> PerModContext = new();
 
     /// Per-mod hook run when a mod stops running: on DISABLE, and on RELOAD before the
@@ -288,9 +281,6 @@ public readonly struct ModdingPlugin : IPlugin
         var runtimesRes = new ModRuntimes();
         app.AddResource(runtimesRes);
         app.AddResource(new ModControl());
-        // Host functions (env.mod_call): the host adds its own at build time.
-        if (!app.HasResource<ModHostFunctions>())
-            app.AddResource(new ModHostFunctions());
         if (!app.HasResource<ModPacketChain>())
             app.AddResource(new ModPacketChain());
         app.GetResource<ModPacketChain>().Runtimes = runtimesRes;
@@ -910,81 +900,52 @@ public readonly struct ModdingPlugin : IPlugin
     private static void RegisterModObservers(App app, ModRuntime rt)
     {
         // A disabled mod's fire queue is cleared on disable and never drained, so both
-        // the enqueue AND the component serialization feeding it are dead work — ask
-        // rt.Enabled first (component mappers check it BEFORE serializing).
+        // the enqueue AND the encoding feeding it are dead work — ask rt.Enabled first
+        // (the mappers check it BEFORE encoding).
         var wanted = () => rt.Enabled;
         foreach (var obs in rt.Ctx.Observers)
             RegisterObserver(app, obs, rt.Ctx.Registry, wanted,
-                (string name, ulong e, ReadOnlySpan<byte> json, bool binary) => rt.ObserverFires.Enqueue(name, e, json, binary));
+                (string name, ulong e, ReadOnlySpan<byte> value) => rt.ObserverFires.Enqueue(name, e, value));
     }
 
-    /// A buffered observer fire (payload valid for the call only): UTF8 JSON, or
-    /// Encoding.Typed bytes when `binary`.
-    internal delegate void ModObserverFire(string name, ulong entity, ReadOnlySpan<byte> json, bool binary);
+    /// A buffered observer fire (the value, Encoding.Typed, valid for the call only).
+    internal delegate void ModObserverFire(string name, ulong entity, ReadOnlySpan<byte> value);
 
     // Internal + testable: maps one observer spec to the matching host global
-    // observer. Component events resolve their type-path via the registry.
-    internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Action<string, ulong, string> onFire)
-        => RegisterObserver(app, obs, registry, static () => true, onFire);
-
-    internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Func<bool> wanted, Action<string, ulong, string> onFire)
-        => RegisterObserver(app, obs, registry, wanted,
-            (string name, ulong e, ReadOnlySpan<byte> json, bool _) => onFire(name, e, System.Text.Encoding.UTF8.GetString(json)));
-
+    // observer. Component / event paths resolve through the registry's binary views.
     internal static void RegisterObserver(App app, ModObserverSpec obs, ModComponentRegistry registry, Func<bool> wanted, ModObserverFire onFire)
     {
         switch (obs.Kind)
         {
             case ModObserverKind.Spawn:
-                app.AddObserver<OnSpawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, default, false); });
+                app.AddObserver<OnSpawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, default); });
                 break;
             case ModObserverKind.Despawn:
-                app.AddObserver<OnDespawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, default, false); });
+                app.AddObserver<OnDespawn>(t => { if (wanted()) onFire(obs.Name, t.EntityId, default); });
                 break;
             case ModObserverKind.Insert:
-                if (obs.TypePath == null)
-                    break;
-                // Typed when asked for and the mapper hands the payload typed; else its JSON.
-                if (obs.Binary && registry.TryGetBinary(obs.TypePath, out var bi) && bi is IModBinaryTrigger ti
-                    && ti.TryObserveInsert(app, wanted, (e, bytes) => onFire(obs.Name, e, bytes, true)))
-                    break;
-                if (registry.TryGet(obs.TypePath, out var ci))
-                    ci.RegisterInsertObserverUtf8(app, wanted, (e, json) => onFire(obs.Name, e, json, false));
+                if (obs.TypePath != null)
+                    registry.Binary(obs.TypePath).ObserveInsert(app, wanted, (e, value) => onFire(obs.Name, e, value));
                 break;
             case ModObserverKind.Remove:
-                if (obs.TypePath == null)
-                    break;
-                if (obs.Binary && registry.TryGetBinary(obs.TypePath, out var br) && br is IModBinaryTrigger tr
-                    && tr.TryObserveRemove(app, wanted, (e, bytes) => onFire(obs.Name, e, bytes, true)))
-                    break;
-                if (registry.TryGet(obs.TypePath, out var cr))
-                    cr.RegisterRemoveObserverUtf8(app, wanted, (e, json) => onFire(obs.Name, e, json, false));
+                if (obs.TypePath != null)
+                    registry.Binary(obs.TypePath).ObserveRemove(app, wanted, (e, value) => onFire(obs.Name, e, value));
                 break;
             case ModObserverKind.Custom:
-                if (obs.TypePath == null)
-                    break;
-                // `wanted` first, so a disabled mod's fire costs no serialization.
-                if (obs.Binary && registry.TryGetBinaryEvent(obs.TypePath, out var be))
-                    be.Observe(app, wanted, (e, bytes) => onFire(obs.Name, e, bytes, true));
-                else if (registry.TryGetEvent(obs.TypePath, out var ev))
-                    ev.RegisterObserverUtf8(app, wanted, (e, json) => onFire(obs.Name, e, json, false));
+                if (obs.TypePath != null)
+                    registry.BinaryEvent(obs.TypePath).Observe(app, wanted, (e, value) => onFire(obs.Name, e, value));
                 break;
         }
     }
 
-    // Dispatch buffered observer fires to the guest. Each fire calls the guest
-    // export `name` with (entity: u64, json: string). Not yet exercised by a test
-    // fixture — needs a mod that exports an observer callback.
+    // Dispatch buffered observer fires to the guest.
     private static void FlushObservers(ModRuntime rt)
     {
-        while (rt.ObserverFires.TryDequeue(out var name, out var entity, out var json, out var binary))
+        while (rt.ObserverFires.TryDequeue(out var name, out var entity, out var value))
         {
             try
             {
-                if (binary)
-                    rt.Instance.CallObserverBinary(name, entity, json);
-                else
-                    rt.Instance.CallObserver(name, entity, json);
+                rt.Instance.CallObserver(name, entity, value);
             }
             catch (Exception e)
             {
