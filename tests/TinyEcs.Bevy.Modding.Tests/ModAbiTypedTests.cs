@@ -131,7 +131,7 @@ public class ModAbiTypedTests
     {
         var (_, ctx, reg) = Host();
         var exec = Guest(reg, accepted: null);
-        new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
+        new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup();
         var hs = Handshake.Serializer.Parse(exec.Handshake!);
         Assert.Equal(new[] { Id(reg, "t:tag"), Id(reg, "t:link"), Id(reg, "t:score") }.OrderBy(x => x), hs.TypedTypes!.OrderBy(x => x));
     }
@@ -143,7 +143,7 @@ public class ModAbiTypedTests
         app.AddResource(new V3Score { Value = 7 });
         app.GetWorld().Entity().Set(new V3Tag { X = -5 }).Set(new V3Ping { N = 3 });
         var exec = Guest(reg, [Id(reg, "t:tag"), Id(reg, "t:score"), Id(reg, "t:ping-comp")]);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
@@ -170,7 +170,7 @@ public class ModAbiTypedTests
         app.AddResource(new V3Score { Value = 7 });
         app.GetWorld().Entity().Set(new V3Tag { X = -5 }).Set(new V3Ping { N = 3 });
         var exec = Guest(reg, accepted: null);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
@@ -187,7 +187,7 @@ public class ModAbiTypedTests
     {
         var (_, ctx, reg) = Host();
         var exec = Guest(reg, [Id(reg, "t:score")]);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
         var input = SystemInput.Serializer.Parse(exec.RunInputs[^1]);
@@ -226,7 +226,7 @@ public class ModAbiTypedTests
             },
         };
         var exec = Guest(reg, [Id(reg, "t:tag"), Id(reg, "t:link")], reply);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 

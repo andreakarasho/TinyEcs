@@ -3,31 +3,20 @@
 // snapshotting are runtime-agnostic; everything that touches a concrete wasm
 // runtime (engine/store/linker/component instance + canonical-ABI value
 // marshalling + the generated WIT bindings) lives behind IModBackend /
-// IModInstance. Select the backend with ModdingConfig.Backend.
+// IModInstance. Two backends: the embedded component backend
+// (Component/ComponentModBackend.cs, wasm32-wasip2 component mods on wasmtime) and,
+// when ModdingConfig.WasmExecutor is set, the relay (ModRelayBackend.cs) a wasm guest
+// uses to hand its mods to its native host over abi/mod-abi.fbs.
 //
 // The WIT contracts and the mods themselves are unaffected by the choice — the
 // seam is purely internal to this library.
 
 namespace TinyEcs.Bevy.Modding;
 
-/// Which wasm runtime hosts the mods.
-public enum WasmBackend : byte
-{
-    /// Browser: host runs as a wasm component (NativeAOT-LLVM), mods are jco-transpiled
-    /// and brokered by the JS glue. Requires ModdingConfig.JsChannel. See JcoModBackend.cs.
-    Jco,
-    /// Native (default). Desktop: wasm32-wasip2 component mods on the embedded
-    /// wasmtime (Component/ComponentModBackend.cs); a core-wasm module is rejected at
-    /// load. A guest that sets ModdingConfig.WasmExecutor instead relays every mod to
-    /// its native host over the FlatSharp wire (abi/mod-abi.fbs, CoreWasmModBackend.cs)
-    /// — internal to that guest/host pair, mods never see it.
-    Core,
-}
-
-/// A mod component to load, backend-shaped: wasmtime instantiates from raw bytes
-/// (Bytes required); Jco instantiates a pre-compiled, pre-transpiled component by
-/// name (Bytes is null — sync instantiate-from-bytes is impossible in the browser).
-/// Name is always the manifest name, so logging/errors can name the mod either way.
+/// A mod component to load: the component backend instantiates from raw bytes
+/// (Bytes required); the relay is name/slot-keyed (Bytes is null — the native host
+/// holds the component). Name is always the manifest name, so logging/errors can
+/// name the mod either way.
 internal readonly struct ModSource(string name, byte[]? bytes)
 {
     public readonly string Name = name;
@@ -81,7 +70,6 @@ internal interface IModInstance : IDisposable
 
     /// Tear down + re-instantiate, reusing the host imports, then re-run setup. The
     /// caller resets the shared ModHostContext first. The component backend instantiates fresh
-    /// from source.Bytes; Jco is deferred-capable — it may kick an async recompile
-    /// and swap the instance on a LATER call (fire-and-forget from this call's POV).
+    /// from source.Bytes; the relay asks the native host to re-instantiate by slot.
     void Reload(in ModSource source);
 }

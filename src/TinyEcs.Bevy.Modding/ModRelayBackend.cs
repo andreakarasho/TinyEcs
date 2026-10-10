@@ -1,10 +1,9 @@
-// Relay mod backend: drives mods through the IModWasmExecutor seam — today only the
-// GUEST_CORE guest's relay executor (ModdingConfig.WasmExecutor: flat env imports to
-// the native host, which runs the real wasm32-wasip2 component mods and translates).
+// Relay mod backend: drives mods through the IModWasmExecutor seam — a wasm guest's
+// relay executor (ModdingConfig.WasmExecutor, MOD_RELAY_GUEST build: imports to the
+// native host, which runs the real wasm32-wasip2 component mods and translates).
 // Desktop hosts mods directly (Component/ComponentModBackend.cs); mods themselves are
 // components only. The wire contract is the FlatSharp ModAbi graph derived from abi/mod-abi.fbs — a fixed
-// set of guest exports (mod_setup/run/observer/filter + alloc/arena_reset
-// over a bump arena) and host imports (mid-run RPCs; module name + game-specific
+// set of per-mod calls (mod_setup/run/observer/spawned) and host imports (mid-run RPCs; module name + game-specific
 // entries come from the host via ModHostContext).
 //
 // This file is now just the glue: take an executor, build the per-mod codec
@@ -13,19 +12,19 @@
 // See ModWasmExecutor.cs for the seam itself.
 //
 // Needs FlatSharp (ModAbiRunner) — see the csproj's UseFlatSharp: desktop AND the
-// GUEST_CORE guest, never the plain Jco guest (Component Model mods, no FlatSharp).
+// relay guest.
 
 namespace TinyEcs.Bevy.Modding;
 
-internal sealed class CoreWasmModBackend : IModBackend
+internal sealed class ModRelayBackend : IModBackend
 {
     private readonly IModWasmExecutor _executor;
 
-    public CoreWasmModBackend(IModWasmExecutor executor) => _executor = executor;
+    public ModRelayBackend(IModWasmExecutor executor) => _executor = executor;
 
     public IModInstance Load(in ModSource source, ModHostContext ctx)
     {
-        var state = new CoreModState();
+        var state = new ModRelayState();
         var sink = new ModAbiBacking(ctx, state, source.Name);
         var handle = _executor.Load(in source, ctx.Slot, sink, ctx.HostImportModule, ctx.HostImports);
         return new ModAbiRunner(_executor, handle, state, ctx);

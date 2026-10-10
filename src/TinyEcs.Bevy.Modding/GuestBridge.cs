@@ -1,8 +1,8 @@
 // The `app` bridge a WASM guest/mod calls back into (spawn / component get-set /
 // query iter / emit-event / resource get-set). Every type here is neutral — no
-// wasmtime types, no generated bindings — so it compiles unchanged under both the
-// component backend, the relay backend (CoreWasmModBackend applies a mod's CommandBuffer
-// through these Impl structs) and the browser Jco backend, and under WasmGuest. Each Impl
+// wasmtime types, no generated bindings — so it compiles unchanged under the
+// component backend, the relay backend (ModRelayBackend applies a mod's CommandBuffer
+// through these Impl structs), and under WasmGuest. Each Impl
 // struct exposes the guest-facing operations as concrete methods over neutral/BCL
 // types (ModSchedule/ModObserverKind/ModQueryTerm, plain strings/spans).
 //
@@ -137,8 +137,7 @@ internal sealed class ModSystemSpec
     public readonly List<string> Before = new();
     // Consecutive scheduler ticks every query param matched zero entities.
     // Drives the idle-skip in ModdingPlugin.RunSystemsForStage — crossing the
-    // component boundary for a no-row tick costs ~0.3ms/system on the jco
-    // (JS-engine-in-wasm) backend.
+    // component boundary for a no-row tick is a wasted guest call per system.
     public int EmptyStreak;
     // The Changed / Added window of this mod system's query terms (see ModRunWindow).
     public ModRunWindow Window;

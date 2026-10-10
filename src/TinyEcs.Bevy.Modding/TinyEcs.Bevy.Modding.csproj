@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Guest publishes build this lib with WASM_GUEST / GUEST_CORE / MODDING_HOST_FS, which
-       change what it compiles (no Wasmtime backend, no folder mod discovery). Keep those
-       out of the bin a desktop host links from — otherwise a guest publish leaves the
-       desktop exe loading a mod loader that can't see its mods folder at all. -->
+  <!-- Guest publishes build this lib with WASM_GUEST / MOD_RELAY_GUEST, which change
+       what it compiles (no Wasmtime backend). Keep those out of the bin a desktop host
+       links from, so a guest publish never leaves the desktop exe on a guest build. -->
   <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
     <BaseOutputPath>$(MSBuildProjectDirectory)\bin\wasmguest\</BaseOutputPath>
   </PropertyGroup>
@@ -20,40 +19,26 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
-  <!-- Browser guest build (NativeAOT-LLVM WASI p2): the host itself
-       runs as a wasm component, so it cannot embed wasmtime in-process. This global
-       CLI property (passed by the WASM_GUEST publish) strips every wasmtime-dotnet
-       reference + the WIT source-gen wiring below, leaving only the Jco backend +
-       the runtime-neutral scheduler. -->
+  <!-- Guest build (-p:WasmGuest=true, a global property so it flows to this P2P
+       reference): the host itself runs as a wasm component and cannot embed wasmtime,
+       so every wasmtime-dotnet reference + the Component/ backend are stripped. -->
   <PropertyGroup Condition="'$(WasmGuest)' == 'true'">
     <DefineConstants>$(DefineConstants);WASM_GUEST</DefineConstants>
   </PropertyGroup>
 
-  <!-- GUEST_CORE guest flavor (bare wasip1 core module, no jco) — propagates from
-       the guest's publish -p:CoreModule=true (a global property, so it
-       flows to this P2P reference exactly like WasmGuest does). The guest relays
-       every mod to its native host over abi/mod-abi.fbs (the host runs the real
-       component mods) — so this flavor needs FlatSharp (below) but never wasmtime. -->
-  <PropertyGroup Condition="'$(CoreModule)' == 'true'">
-    <DefineConstants>$(DefineConstants);GUEST_CORE</DefineConstants>
+  <!-- -p:ModRelayGuest=true (with WasmGuest): the guest relays every mod to its native
+       host over abi/mod-abi.fbs (ModRelayBackend + ModAbiRunner; the host runs the real
+       component mods), so it needs FlatSharp (below) but never wasmtime. -->
+  <PropertyGroup Condition="'$(ModRelayGuest)' == 'true'">
+    <DefineConstants>$(DefineConstants);MOD_RELAY_GUEST</DefineConstants>
   </PropertyGroup>
 
-  <!-- -p:HostFs=true guest: no System.IO at all (the host serves files over flat env
-       fs_* imports). Mods reach that guest through the manifest-JSON / relay path,
-       never off disk, so the folder-discovery half of this plugin is compiled out —
-       leaving a single File.* reference behind would keep wasi's file syscalls in the
-       module's import table, which is the whole point of the flavor. -->
-  <PropertyGroup Condition="'$(HostFs)' == 'true'">
-    <DefineConstants>$(DefineConstants);MODDING_HOST_FS</DefineConstants>
-  </PropertyGroup>
-
-  <!-- FlatSharp (the ModAbi wire types + ModAbiRunner/CoreWasmModBackend, which
-       speak them) is needed by the GUEST_CORE guest's relay. Desktop compiles it too
-       (no runtime use: a host may still hand ModdingConfig.WasmExecutor a relay, and
-       the tests drive the runner through stub executors). Only the plain Jco guest
-       has no use for it. -->
+  <!-- FlatSharp (the ModAbi wire types + ModAbiRunner/ModRelayBackend, which speak
+       them) is needed by the relay guest. Desktop compiles it too (no runtime use: a
+       host may still hand ModdingConfig.WasmExecutor a relay, and the tests drive the
+       runner through stub executors). A WasmGuest build without the relay has no mods. -->
   <PropertyGroup>
-    <UseFlatSharp Condition="'$(WasmGuest)' != 'true' OR '$(CoreModule)' == 'true'">true</UseFlatSharp>
+    <UseFlatSharp Condition="'$(WasmGuest)' != 'true' OR '$(ModRelayGuest)' == 'true'">true</UseFlatSharp>
   </PropertyGroup>
 
   <!-- The bridge impls + executor seams are internal. A host that drives them directly
@@ -72,21 +57,20 @@
   </ItemGroup>
 
   <!-- ModWasmExecutor.cs (the executor/sink seam interfaces) and ModAbiBacking.cs
-       (the generic import backing + CoreModState) have NEITHER a wasmtime nor a
+       (the generic import backing + ModRelayState) have NEITHER a wasmtime nor a
        FlatSharp dependency and stay compiled everywhere. ModAbiRunner.cs +
-       CoreWasmModBackend.cs (FlatSharp) drop out with the plain Jco guest. -->
+       ModRelayBackend.cs (FlatSharp) drop out without UseFlatSharp. -->
   <ItemGroup Condition="'$(UseFlatSharp)' != 'true'">
-    <Compile Remove="CoreWasmModBackend.cs" />
+    <Compile Remove="ModRelayBackend.cs" />
     <Compile Remove="ModAbiRunner.cs" />
   </ItemGroup>
 
-  <!-- Core-wasm mod ABI (FlatSharp). The canonical schema abi/mod-abi.fbs is
+  <!-- Mod relay ABI (FlatSharp). The canonical schema abi/mod-abi.fbs is
        ATTRIBUTE-FREE (planus rejects user attributes); FlatSharp needs an annotated
        copy, so DeriveFlatSharpSchema copies it into obj/, prepends the fs_serializer
        attribute decl, and tags the 5 boundary root tables — annotating a root pulls
        its whole graph. Generated C# lands in namespace ModAbi (from the .fbs).
-       Needed by desktop AND the GUEST_CORE guest (see UseFlatSharp above); the plain
-       Jco guest pushes JSON instead and never touches this. -->
+       Needed by desktop AND the relay guest (see UseFlatSharp above). -->
   <ItemGroup Condition="'$(UseFlatSharp)' == 'true'">
     <PackageReference Include="FlatSharp.Compiler" Version="7.9.0">
       <PrivateAssets>all</PrivateAssets>

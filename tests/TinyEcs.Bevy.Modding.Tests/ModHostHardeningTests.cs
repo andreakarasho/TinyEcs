@@ -133,7 +133,7 @@ public class ModHostHardeningTests
         };
 
         var e = Assert.Throws<InvalidOperationException>(
-            () => new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup());
+            () => new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup());
         Assert.Contains("reads_a_ghost", e.Message);
         Assert.Contains("#1", e.Message);
         Assert.Empty(ctx.Systems); // the mod registered nothing -> the loader skips it
@@ -177,7 +177,7 @@ public class ModHostHardeningTests
         var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver)) };
 
         var e = Assert.Throws<InvalidOperationException>(
-            () => new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup());
+            () => new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup());
         Assert.Contains("mod 'rwmod'", e.Message);
         Assert.Contains(asObserver ? "observer 7" : "writes_flag", e.Message);
         Assert.Contains("declares Mut on read-only 'test/flag'", e.Message);
@@ -194,7 +194,7 @@ public class ModHostHardeningTests
         var ctx = new ModHostContext { World = world, Registry = reg, Name = "rwmod" };
         var exec = new CannedExecutor { SetupReplyBytes = Bytes(SetupReply.Serializer, MutOn(0, asObserver: false)) };
 
-        new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
+        new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup();
 
         Assert.Single(ctx.Systems);
     }
@@ -253,7 +253,7 @@ public class ModHostHardeningTests
             }),
         };
 
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
@@ -321,7 +321,7 @@ public class ModHostHardeningTests
         var ctx = new ModHostContext { World = world, Registry = new ModComponentRegistry(), Name = "caller", App = app };
         fns.Add("test:x/y#echo", (mod, args, w) => w.WriteStringValue(mod.Name + ":" + args[0].GetInt32()));
 
-        var backing = new ModAbiBacking(ctx, new CoreModState(), "caller");
+        var backing = new ModAbiBacking(ctx, new ModRelayState(), "caller");
         var result = backing.ModCall("test:x/y#echo"u8, "[7]"u8).ToArray();
         Assert.Equal("\"caller:7\"", System.Text.Encoding.UTF8.GetString(result));
 

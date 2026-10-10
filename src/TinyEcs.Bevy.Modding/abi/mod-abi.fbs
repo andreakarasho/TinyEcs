@@ -1,4 +1,7 @@
-// Canonical mod ABI schema — the ECS half of the wasm32-wasip1 (core module) mod target.
+// Canonical mod relay ABI schema: the wire a wasm guest host (ModRelayBackend +
+// ModAbiRunner) uses to drive its mods through its native host, which runs the real
+// wasm32-wasip2 component mods and translates. Internal to that guest/host pair —
+// mods never see it.
 // The same contract as abi/tinyecs-mod.wit, carried as FlatBuffers. Host functions
 // outside the ECS do NOT ride this schema: they go through the `env.mod_call` JSON
 // import (ModHostFunctions).
@@ -13,7 +16,8 @@
 // - Packed guest returns are `len<<32 | ptr` (u64), 0 = none — not encoded here, but
 //   every table below that says "guest return" crosses that way.
 //
-// Guest exports (core module):
+// Per-mod entry points (named after the original guest exports; the relay peer serves
+// them by calling the mod component's WIT exports):
 //   memory
 //   mod_alloc(size: u32) -> u32          bump arena; host writes inputs here
 //   mod_arena_reset()

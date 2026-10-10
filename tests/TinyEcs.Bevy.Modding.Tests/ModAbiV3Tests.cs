@@ -111,7 +111,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = ResSystem(reg, resUnchanged: true);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         runner.RunSystem(ctx.Systems[0]);
@@ -141,7 +141,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = ResSystem(reg, resUnchanged: false);
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         runner.RunSystem(ctx.Systems[0]);
@@ -157,7 +157,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = new ThrowingExecutor(ResSystem(reg, resUnchanged: true));
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         exec.Throw = true;
@@ -208,7 +208,7 @@ public class ModAbiV3Tests
                 },
             }),
         };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         app.GetWorld().EmitTrigger(0, new V3Ping { N = 1 });
@@ -257,7 +257,7 @@ public class ModAbiV3Tests
                 },
             }),
         };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         SystemTicks.Advance(world);              // a host system writes...
@@ -307,7 +307,7 @@ public class ModAbiV3Tests
                 },
             }),
         };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         runner.CallObserver("4", 0, "{\"N\":3}");
@@ -364,7 +364,7 @@ public class ModAbiV3Tests
                 },
             }),
         };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
@@ -397,7 +397,7 @@ public class ModAbiV3Tests
                 },
             }),
         };
-        var e = Assert.Throws<InvalidOperationException>(() => new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup());
+        var e = Assert.Throws<InvalidOperationException>(() => new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup());
         Assert.Contains("bad", e.Message);
     }
 
@@ -429,7 +429,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = OnChangeSystem(reg, runOnChange: true, WatchParams(reg));
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         var sys = Assert.Single(ctx.Systems);
         Assert.True(sys.RunOnChange);
@@ -467,7 +467,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = OnChangeSystem(reg, runOnChange: false, WatchParams(reg));
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         for (var i = 0; i < 3; i++)
@@ -480,7 +480,7 @@ public class ModAbiV3Tests
     {
         var (_, ctx, reg) = Host();
         var exec = OnChangeSystem(reg, runOnChange: true, new ParamDecl { Kind = ParamKind.Commands });
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         for (var i = 0; i < 3; i++)
@@ -494,7 +494,7 @@ public class ModAbiV3Tests
         var (app, ctx, reg) = Host();
         app.AddResource(new V3Score { Value = 7 });
         var exec = new ThrowingExecutor(OnChangeSystem(reg, runOnChange: true, WatchParams(reg))) { Throw = true };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         var sys = ctx.Systems[0];
 
@@ -517,7 +517,7 @@ public class ModAbiV3Tests
         var exec = OnChangeSystem(reg, runOnChange: true,
             new ParamDecl { Kind = ParamKind.Query, Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Changed, TypeId = Id(reg, "t:tag") } } } },
             new ParamDecl { Kind = ParamKind.Query, Query = new QueryDecl { Terms = new List<QueryTerm> { new() { Kind = QueryTermKind.Added, TypeId = Id(reg, "t:tag") } } } });
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         runner.RunSystem(ctx.Systems[0]);
@@ -540,7 +540,7 @@ public class ModAbiV3Tests
                 new(new ResourceSetCmd { Value = new CompValue { TypeId = Id(reg, "t:score"), Data = "{\"Value\":9}"u8.ToArray() } }),
             },
         });
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
 
         var output = new StringWriter();

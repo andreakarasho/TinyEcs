@@ -1,6 +1,6 @@
 // Runtime-neutral mod instance: FlatSharp build/parse, SetupReply -> ModSystemSpec
 // translation, CommandBuffer application — identical for every IModWasmExecutor.
-// This is the former CoreWasmModInstance minus the wasm mechanics (arena/span/
+// This is the former ModRelayInstance minus the wasm mechanics (arena/span/
 // packed-return decode), which now live behind the executor. ModAbiRunner drives
 // the executor purely over byte[] (or bool); FlatSharp serialize/parse happens
 // here, on the byte[] the executor handed back — the executor never touches a
@@ -12,7 +12,7 @@ using ModAbi;
 
 namespace TinyEcs.Bevy.Modding;
 
-// CoreModState lives in ModAbiBacking.cs — it's shared between that class (the
+// ModRelayState lives in ModAbiBacking.cs — it's shared between that class (the
 // host import backing, compiled everywhere) and this runner (FlatSharp, desktop
 // only), and must compile everywhere too.
 
@@ -24,7 +24,7 @@ internal sealed class ModAbiRunner : IModInstance
 
     private readonly IModWasmExecutor _executor;
     private readonly int _handle;
-    private readonly CoreModState _state;
+    private readonly ModRelayState _state;
     private readonly ModHostContext _ctx;
 
     // guest system id (SystemDecl.id) keyed by the neutral spec the runner passes back.
@@ -72,7 +72,7 @@ internal sealed class ModAbiRunner : IModInstance
     private readonly List<SpawnResolved> _spawnedPool = new();
     private readonly SpawnedInput _spawnedInput;
 
-    public ModAbiRunner(IModWasmExecutor executor, int handle, CoreModState state, ModHostContext ctx)
+    public ModAbiRunner(IModWasmExecutor executor, int handle, ModRelayState state, ModHostContext ctx)
     {
         _executor = executor;
         _handle = handle;

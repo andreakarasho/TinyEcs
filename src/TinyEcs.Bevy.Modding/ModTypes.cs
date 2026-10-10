@@ -1,7 +1,7 @@
 // Runtime-neutral schedule / observer-event / query-term enums the modding surface
 // speaks. GuestBridge.cs, the scheduler in ModdingPlugin.cs, and both backends
-// (CoreWasmModBackend translates the FlatBuffers ModAbi enums onto these; JcoModBackend
-// consumes them directly) talk ONLY these neutral types — no generated bindings, so the
+// (ModRelayBackend translates the FlatBuffers ModAbi enums onto these; the component
+// backend maps the WIT variants onto them) talk ONLY these neutral types — no generated bindings, so the
 // lib compiles unchanged under WasmGuest.
 //
 // A case that carries a payload (Insert(type-path), Custom(string), ...) splits into

@@ -1,9 +1,9 @@
 // Component-model mod backend: hosts wasm32-wasip2 COMPONENTS built against
 // abi/tinyecs-mod.wit (world `guest`) on the wasmtime-dotnet fork (aliased
-// WasmtimeCm — see the csproj). ModdingPlugin routes a mod here when its bytes carry
-// the component layer (preamble bytes 6-7 = 01 00); core modules keep going to
-// CoreWasmModBackend. Same scheduler, registry, snapshot (ModdingPlugin.BuildSnapshot)
-// and command semantics as the core ABI — only the wire differs: instead of a
+// WasmtimeCm — see the csproj). ModdingPlugin loads every desktop mod here; a core
+// module (preamble bytes 6-7 = 00 00) is rejected before it gets this far. Same
+// scheduler, registry, snapshot (ModdingPlugin.BuildSnapshot) and command semantics as
+// the relay ABI (ModRelayBackend) — only the wire differs: instead of a
 // FlatBuffers SystemInput/CommandBuffer pair per call, the guest pulls rows and pushes
 // commands through the `tinyecs:modding/ecs` host resources, defined here.
 //

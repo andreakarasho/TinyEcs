@@ -9,7 +9,7 @@ namespace TinyEcs.Bevy.Modding.Tests;
 // Host-side coverage of the generic modding plugin's bridges. References only the
 // lib + TinyEcs (no game-specific glue, no wasm runtime), so a green run proves the
 // runtime's plugin wiring is reusable on its own. The full guest<->host round-trip
-// (loading a real core-wasm module and ticking its systems) is exercised by the
+// (loading a real component mod and ticking its systems) is exercised by the
 // consuming host's own test suite against its built mods.
 public class ModdingPluginTests
 {

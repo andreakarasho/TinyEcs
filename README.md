@@ -673,6 +673,12 @@ through the bridge — spawn/despawn entities, query, get/set registered compone
 exposed resources. The plugin is a no-op when the mod folder is absent, so it is always safe to
 install.
 
+Mods must be `wasm32-wasip2` components; a core-wasm module is rejected at load ("rebuild against
+the current SDK"). A host that itself runs as a wasm guest (no embedded wasmtime) builds the lib with
+`-p:WasmGuest=true -p:ModRelayGuest=true` and sets `ModdingConfig.WasmExecutor`: every mod call is then
+relayed over the FlatBuffers wire in `abi/mod-abi.fbs` (`ModRelayBackend` + `ModAbiRunner`) to its
+native host, which runs the component mods.
+
 > Requires `net10.0` and the `external/wasmtime-dotnet` submodule
 > (`git submodule update --init --recursive`).
 

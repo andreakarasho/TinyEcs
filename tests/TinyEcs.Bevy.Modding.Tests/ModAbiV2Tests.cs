@@ -240,7 +240,7 @@ public class ModAbiV2Tests
             }),
         };
 
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         Assert.Single(ctx.Systems);
 
@@ -283,7 +283,7 @@ public class ModAbiV2Tests
             }),
         };
 
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         runner.RunSystem(ctx.Systems[0]);
 
@@ -301,7 +301,7 @@ public class ModAbiV2Tests
             SetupReplyBytes = Bytes(SetupReply.Serializer, new SetupReply()),
         };
 
-        new ModAbiRunner(exec, 0, new CoreModState(), ctx).Setup();
+        new ModAbiRunner(exec, 0, new ModRelayState(), ctx).Setup();
 
         var hs = Handshake.Serializer.Parse(exec.HandshakeBytes!);
         Assert.Equal(4u, hs.AbiVersion);
@@ -330,7 +330,7 @@ public class ModAbiV2Tests
             }),
             ObserverReplyBytes = reply == null ? null : Bytes(CommandBuffer.Serializer, reply),
         };
-        var runner = new ModAbiRunner(exec, 0, new CoreModState(), ctx);
+        var runner = new ModAbiRunner(exec, 0, new ModRelayState(), ctx);
         runner.Setup();
         return (runner, exec, ctx);
     }

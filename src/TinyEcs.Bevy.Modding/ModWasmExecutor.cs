@@ -2,12 +2,12 @@
 // its 4 guest exports, arena/span marshalling) from the ABI CODEC (FlatSharp
 // build/parse, SetupReply translation, CommandBuffer application, host import
 // backing) — see ModAbiRunner.cs / ModAbiBacking.cs, which are byte[]-level and
-// therefore identical for every executor. The implementation is a GUEST_CORE
-// guest-relay executor (flat env imports to the native host instead of an embedded
-// runtime) — see CoreWasmModBackend.cs's header comment.
+// therefore identical for every executor. The implementation is a wasm guest's
+// relay executor (flat env imports to the native host instead of an embedded
+// runtime) — see ModRelayBackend.cs's header comment.
 //
 // This file itself has ZERO wasm-runtime references (no Wasmtime, no wasm ptr/len)
-// so it compiles under every flavor, including GUEST_CORE.
+// so it compiles under every flavor, including MOD_RELAY_GUEST.
 
 namespace TinyEcs.Bevy.Modding;
 

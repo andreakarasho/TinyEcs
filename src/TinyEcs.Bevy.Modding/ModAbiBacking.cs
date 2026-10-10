@@ -1,5 +1,5 @@
-// IModImportSink over one mod's ModHostContext + CoreModState — the exact
-// logic CoreWasmModBackend's import glue used to inline against a Wasmtime
+// IModImportSink over one mod's ModHostContext + ModRelayState — the exact
+// logic ModRelayBackend's import glue used to inline against a Wasmtime
 // Caller, now runtime-neutral (see ModWasmExecutor.cs's doc comment): every
 // executor's own guest-import glue resolves its own ptr/len into a Span (or
 // already has one, in the guest-relay case) BEFORE calling in here. Only the
@@ -16,7 +16,7 @@ namespace TinyEcs.Bevy.Modding;
 // SystemInput). One object per loaded mod, reused across reloads. Lives here (not
 // ModAbiRunner.cs, which is FlatSharp/desktop-only) because it must compile
 // everywhere — a guest-relay executor's backing needs it too.
-internal sealed class CoreModState
+internal sealed class ModRelayState
 {
     // Shared u16 id space over every registered path (components + resources +
     // events), interned from ModComponentRegistry.Entries in the Handshake.
@@ -29,7 +29,7 @@ internal sealed class ModAbiBacking : IModImportSink
     private readonly ModHostContext _ctx;
     private readonly string _modName;
 
-    public ModAbiBacking(ModHostContext ctx, CoreModState state, string modName)
+    public ModAbiBacking(ModHostContext ctx, ModRelayState state, string modName)
     {
         _ctx = ctx;
         _modName = modName;

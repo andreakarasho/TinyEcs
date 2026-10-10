@@ -2,7 +2,7 @@
 // `setup`, the host-resource handle table backing every `tinyecs:modding/ecs` handle it
 // holds, and the command buffer its `commands` params fill during a call.
 //
-// Semantics mirror the core ABI runner (ModAbiRunner) term for term:
+// Semantics mirror the relay ABI runner (ModAbiRunner) term for term:
 //  - queries are the same ModQuerySpec + ModdingPlugin.BuildSnapshot, evaluated
 //    BEFORE the call with the system's own (lastRun, thisRun] change window, the same
 //    idle-skip, despawned rows skipped;
@@ -466,7 +466,7 @@ internal sealed class ComponentCommandBuffer
         Discard();
     }
 
-    // An empty payload IS "{}" (a tag carries no data), as on the core ABI.
+    // An empty payload IS "{}" (a tag carries no data), as on the relay ABI.
     private static readonly ReadOnlyMemory<byte> EmptyObject = "{}"u8.ToArray();
 }
 
@@ -890,7 +890,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
                     break;
             }
         }
-        // The Changed/Added window closes here, as on the core ABI — even if idle-skipped.
+        // The Changed/Added window closes here, as on the relay ABI — even if idle-skipped.
         spec.Window.Close();
         return any;
     }
