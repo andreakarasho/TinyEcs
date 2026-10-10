@@ -1,8 +1,9 @@
 // ComponentModBackend test fixture: a tinyecs:modding component exercising every
-// system parameter kind (commands, query terms, res / res-mut, events) plus an
-// on-add observer and two on-packet observers, and two run-on-change systems (`watch`,
-// `beat`) using res.unchanged / commands.set-resource. Every system is its own export
-// (wit/world.wit), called by the host with typed params. ComponentModBackendTests
+// system parameter kind (commands, query terms, res / res-mut, events) plus on-add
+// observers (trigger-data, typed record, typed without a value), two on-packet
+// observers, and two run-on-change systems (`watch`, `beat`) using res.unchanged /
+// commands.set-resource. Every system is its own export (wit/world.wit), called by the
+// host with typed params. ComponentModBackendTests
 // asserts the effects host-side. ../component_guest_v0.wasm is a guest built before
 // per-system exports (the generic `run` dispatcher): it must fail to load, loudly.
 
@@ -71,6 +72,13 @@ impl Guest for Fixture {
         on_tag.add_commands();
         app.add_observer(&Trigger::OnAdd("test/tag".into()), &on_tag);
 
+        let typed = System::new("on-tag-typed");
+        typed.add_commands();
+        app.add_observer(&Trigger::OnAdd("test/tag".into()), &typed);
+        let bare = System::new("on-tag-bare");
+        bare.add_commands();
+        app.add_observer(&Trigger::OnAdd("test/tag".into()), &bare);
+
         let on_in = System::new("on-in");
         on_in.add_res_mut("test/score");
         app.add_observer(
@@ -109,7 +117,11 @@ impl Guest for Fixture {
     }
 
     fn count_added(added: Query, total: Res) {
-        let n = added.rows().len() as i64;
+        // `entities` is `rows`' entity column, in the same order.
+        let rows = added.rows();
+        let ids: Vec<u64> = rows.iter().map(|r| r.entity).collect();
+        assert_eq!(ids, added.entities(), "query.entities disagrees with query.rows");
+        let n = rows.len() as i64;
         let sum = total.get().map(|s| num(&s, "Value")).unwrap_or(0) + n;
         total.set(&format!("{{\"Value\":{}}}", sum));
     }
@@ -153,6 +165,15 @@ impl Guest for Fixture {
             trigger.entity,
             &[("test/seen".into(), format!("{{\"Value\":{}}}", trigger.entity))],
         );
+    }
+
+    // test/seen-typed = the tag's V as the typed record carried it.
+    fn on_tag_typed(entity: u64, value: TagValue, cmds: Commands) {
+        cmds.insert(entity, &[("test/seen-typed".into(), format!("{{\"Value\":{}}}", value.v))]);
+    }
+
+    fn on_tag_bare(entity: u64, cmds: Commands) {
+        cmds.insert(entity, &[("test/seen-bare".into(), format!("{{\"Value\":{}}}", entity))]);
     }
 
     // Incoming 0x10: adds 1000 to the score, blocks [0x10, 0], else appends 0x42.

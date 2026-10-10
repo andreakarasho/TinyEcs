@@ -150,6 +150,11 @@ internal sealed class ComponentSystem
     public readonly List<ComponentParam> Params = new();
     // The mod's export named like the system (bound after `setup`).
     public Cm.ComponentInstanceFunction Export;
+    // An observer: its trigger, and how its export takes the value — `trigger-data` (JSON),
+    // or typed: `entity` then the value record (TriggerValue) or nothing more (a tag).
+    public ModObserverSpec? Observer;
+    public bool TypedTrigger;
+    public bool TriggerValue;
 
     public ComponentSystem(string name)
     {
@@ -216,7 +221,7 @@ internal sealed class ComponentSystem
 /// Commands recorded during one guest call, applied in order once it returns.
 internal sealed class ComponentCommandBuffer
 {
-    private enum Op : byte { Insert, Remove, Despawn, Send, SetResource }
+    private enum Op : byte { Insert, Remove, Despawn, Send, SetResource, Typed }
 
     private struct Entry
     {
@@ -224,7 +229,65 @@ internal sealed class ComponentCommandBuffer
         public ulong Entity;
         public int First;
         public int Count;
+        // Op.Typed: the slot holding the value (index First).
+        public TypedSlot? Slot;
     }
+
+    // Typed writes (a game's typed imports, ComponentModImports): the struct is kept as
+    // is, one list per payload type reused across calls, so a typed insert neither
+    // serializes nor allocates in the steady state.
+    private abstract class TypedSlot
+    {
+        public abstract void Apply(int index, ModHostContext ctx, ulong entity);
+        public abstract void Clear();
+    }
+
+    private sealed class ComponentSlot<T> : TypedSlot where T : struct
+    {
+        public readonly List<(IModComponentOf<T> Target, T Value)> Items = new();
+
+        public override void Apply(int index, ModHostContext ctx, ulong entity)
+        {
+            if (ctx.World.Exists(entity))
+            {
+                var (target, value) = Items[index];
+                target.Set(ctx.World, entity, value);
+            }
+        }
+
+        public override void Clear() => Items.Clear();
+    }
+
+    private sealed class ResourceSlot<T> : TypedSlot
+    {
+        public readonly List<(IModResourceOf<T> Target, T Value)> Items = new();
+
+        public override void Apply(int index, ModHostContext ctx, ulong entity)
+        {
+            if (ctx.App != null)
+            {
+                var (target, value) = Items[index];
+                target.Set(ctx.App, value, ctx.Name);
+            }
+        }
+
+        public override void Clear() => Items.Clear();
+    }
+
+    private sealed class EventSlot<T> : TypedSlot where T : struct
+    {
+        public readonly List<(IModEventOf<T> Target, T Value)> Items = new();
+
+        public override void Apply(int index, ModHostContext ctx, ulong entity)
+        {
+            var (target, value) = Items[index];
+            target.Emit(ctx.World, entity, value);
+        }
+
+        public override void Clear() => Items.Clear();
+    }
+
+    private readonly Dictionary<Type, TypedSlot> _typed = new();
 
     private readonly ComponentModInstance _owner;
     private readonly List<Entry> _entries = new();
@@ -277,6 +340,38 @@ internal sealed class ComponentCommandBuffer
     public void Despawn(ulong entity)
         => _entries.Add(new Entry { Op = Op.Despawn, Entity = entity });
 
+    // An entity with no components yet, its id valid at once (like `spawn` of an empty
+    // bundle); typed inserts follow.
+    public ulong SpawnEmpty() => new CommandsImpl(_owner.Ctx).SpawnEmpty().Id().EcsId;
+
+    public void InsertTyped<T>(ulong entity, IModComponentOf<T> target, in T value) where T : struct
+    {
+        var slot = Slot<ComponentSlot<T>>();
+        slot.Items.Add((target, value));
+        _entries.Add(new Entry { Op = Op.Typed, Entity = entity, First = slot.Items.Count - 1, Slot = slot });
+    }
+
+    public void SetResourceTyped<T>(IModResourceOf<T> target, in T value)
+    {
+        var slot = Slot<ResourceSlot<T>>();
+        slot.Items.Add((target, value));
+        _entries.Add(new Entry { Op = Op.Typed, First = slot.Items.Count - 1, Slot = slot });
+    }
+
+    public void SendTyped<T>(IModEventOf<T> target, in T value) where T : struct
+    {
+        var slot = Slot<EventSlot<T>>();
+        slot.Items.Add((target, value));
+        _entries.Add(new Entry { Op = Op.Typed, First = slot.Items.Count - 1, Slot = slot });
+    }
+
+    private TSlot Slot<TSlot>() where TSlot : TypedSlot, new()
+    {
+        if (!_typed.TryGetValue(typeof(TSlot), out var slot))
+            _typed[typeof(TSlot)] = slot = new TSlot();
+        return (TSlot)slot;
+    }
+
     public void Send(string eventPath, ReadOnlySpan<byte> json)
     {
         _items.Add((eventPath, Copy(json), json.Length));
@@ -309,6 +404,8 @@ internal sealed class ComponentCommandBuffer
         _entries.Clear();
         _items.Clear();
         _payloadLen = 0;
+        foreach (var slot in _typed.Values)
+            slot.Clear();
     }
 
     // Per-entry guard like ModAbiRunner.ApplyCommandBuffer: one bad payload (a JSON
@@ -356,6 +453,9 @@ internal sealed class ComponentCommandBuffer
                         commands.ResourceSet(path, _payload.AsSpan(off, len));
                         break;
                     }
+                    case Op.Typed:
+                        e.Slot!.Apply(e.First, ctx, e.Entity);
+                        break;
                 }
             }
             catch (Exception ex)
@@ -430,7 +530,9 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     {
         var token = "c" + _observers.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _observers[token] = sys;
-        new AppImpl(Ctx).AddObserver(token, kind, path);
+        var spec = new ModObserverSpec { Name = token, Kind = kind, TypePath = path };
+        sys.Observer = spec;
+        Ctx.AddObserver(spec);
         TrackEvents(sys);
     }
 
@@ -457,14 +559,8 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     internal Cm.ComponentValue Rows(ComponentParam q)
     {
         var world = Ctx.World;
+        var live = Live(q).Length;
         var snap = q.Snapshot;
-        // A row can only die between the snapshot and here through an earlier observer's
-        // commands; compact those out so the list can be sized up front.
-        var live = 0;
-        for (var i = 0; i < q.Count; i++)
-            if (world.Exists(snap![i]))
-                snap[live++] = snap[i];
-        q.Count = live;
 
         var reads = q.Reads ??= ResolveReads(q.Query!);
         var list = new Cm.ListBuilder(live);
@@ -490,6 +586,43 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             list[i] = new Cm.ComponentValue(rec, externallyOwned: true);
         }
         return new Cm.ComponentValue(list, externallyOwned: true);
+    }
+
+    // The snapshot's rows still alive. A row can only die between the snapshot and here
+    // through an earlier observer's commands; those are compacted out, so `rows`,
+    // `entities` and every typed column agree on the order.
+    internal ReadOnlySpan<ulong> Live(ComponentParam q)
+    {
+        var world = Ctx.World;
+        var snap = q.Snapshot;
+        var live = 0;
+        for (var i = 0; i < q.Count; i++)
+            if (world.Exists(snap![i]))
+                snap[live++] = snap[i];
+        q.Count = live;
+        return snap.AsSpan(0, live);
+    }
+
+    // query.entities: list<entity>, the order of `rows`.
+    internal Cm.ComponentValue Entities(ComponentParam q)
+    {
+        var live = Live(q);
+        var list = new Cm.ListBuilder(live.Length);
+        for (var i = 0; i < live.Length; i++)
+            list[i] = Cm.ComponentValue.CreateUInt64(live[i]);
+        return new Cm.ComponentValue(list, externallyOwned: true);
+    }
+
+    internal IModComponent?[] ReadsOf(ComponentParam q) => q.Reads ??= ResolveReads(q.Query!);
+
+    // A typed `get` (a game import) hands the guest the current value without the JSON
+    // `get` serializes. When this run already observed the JSON (run-on-change, or an
+    // `unchanged` call), that is the value taken; otherwise `unchanged` keeps answering
+    // against the last JSON `get`, which is never a stale "unchanged".
+    internal void MarkResGot(ComponentParam p)
+    {
+        if (p.Fetched)
+            p.Res!.MarkGot();
     }
 
     private IModComponent?[] ResolveReads(ModQuerySpec query)
@@ -578,7 +711,25 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         foreach (var sys in _systems.Values)
             BindExport(sys);
         foreach (var sys in _observers.Values)
+        {
             BindExport(sys);
+            BindTrigger(sys);
+        }
+    }
+
+    // A typed observer export leads with `entity: entity` (u64) instead of the
+    // `trigger-data` record; a record next is the value.
+    private void BindTrigger(ComponentSystem sys)
+    {
+        if (sys.Observer is not { Kind: not ModObserverKind.Packet } obs)
+            return;
+        var kinds = _instance.GetParamKinds(sys.Export);
+        sys.TypedTrigger = kinds.Length > 0 && kinds[0] == Cm.ComponentTypeKind.U64;
+        sys.TriggerValue = sys.TypedTrigger && kinds.Length > 1 && kinds[1] != Cm.ComponentTypeKind.Own;
+        if (sys.TypedTrigger && Backend.TypedTrigger == null)
+            throw new InvalidOperationException($"observer '{sys.Name}' takes its trigger typed, but the host defines no typed triggers");
+        if (sys.TypedTrigger && obs.TypePath == null && sys.TriggerValue)
+            throw new InvalidOperationException($"observer '{sys.Name}': a typed value for a trigger without one");
     }
 
     // Every declared system is an export of the mod's world named like the system.
@@ -780,21 +931,30 @@ internal sealed unsafe class ComponentModInstance : IModInstance
             }
     }
 
-    // A system's export: <export>(params...); an observer's: <export>(trigger-data, params...).
+    // A system's export: <export>(params...); an observer's: <export>(trigger-data, params...),
+    // or typed <export>(entity, [value,] params...).
     private void Call(ComponentSystem sys, ulong? entity, scoped ReadOnlySpan<byte> json)
     {
-        var prev = Enter();
-        var cx = Cm.StoreContext.FromStore(_store);
-        var lead = entity.HasValue ? 1 : 0;
+        var lead = !entity.HasValue ? 0 : sys.TypedTrigger ? (sys.TriggerValue ? 2 : 1) : 1;
         var argc = lead + sys.Params.Count;
         var args = stackalloc Cm.ComponentValue[argc];
-        if (entity.HasValue)
+        var payload = json.IsEmpty ? "{}"u8 : json;
+        if (entity.HasValue && sys.TypedTrigger)
+        {
+            args[0] = Cm.ComponentValue.CreateUInt64(entity.Value);
+            // Lowered before Enter: the hook runs host code only.
+            if (sys.TriggerValue)
+                args[1] = Backend.TypedTrigger!(sys.Observer!.TypePath!, payload);
+        }
+        else if (entity.HasValue)
         {
             var rec = new Cm.RecordBuilder(2, disposeNames: false);
             rec.Set(0, Backend.FieldEntity, Cm.ComponentValue.CreateUInt64(entity.Value));
-            rec.Set(1, Backend.FieldValue, ComponentModBackend.Utf8String(json.IsEmpty ? "{}"u8 : json));
+            rec.Set(1, Backend.FieldValue, ComponentModBackend.Utf8String(payload));
             args[0] = new Cm.ComponentValue(rec, externallyOwned: false);
         }
+        var prev = Enter();
+        var cx = Cm.StoreContext.FromStore(_store);
         BuildParams(sys, cx, new Span<Cm.ComponentValue>(args + lead, sys.Params.Count));
 
         var ok = false;
@@ -805,8 +965,15 @@ internal sealed unsafe class ComponentModInstance : IModInstance
         }
         finally
         {
+            // A typed trigger value is built like a result (names owned): freed whole.
+            var owned = entity.HasValue && sys.TriggerValue ? 1 : -1;
             for (var i = 0; i < argc; i++)
-                args[i].Dispose(_store);
+            {
+                if (i == owned)
+                    args[i].DisposeOwned();
+                else
+                    args[i].Dispose(_store);
+            }
             Exit(prev);
             if (ok)
                 Commands.Apply();

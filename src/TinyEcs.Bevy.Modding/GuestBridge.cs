@@ -28,9 +28,16 @@ internal sealed class ModEventBuffer
 
     public readonly List<string> Pending = new();
     public readonly List<string> Current = new();
+    // Binary mode (the relay, an event the guest reads as Encoding.Typed): the payloads as
+    // bytes instead of JSON.
+    public readonly List<byte[]> PendingBytes = new();
+    public readonly List<byte[]> CurrentBytes = new();
+    public bool Binary;
     // Set on reload: the old host observer can't be unregistered, so it keeps firing
     // into a buffer nobody reads anymore.
     public bool Dead;
+
+    public int Count => Binary ? CurrentBytes.Count : Current.Count;
 
     public void Push(string json)
     {
@@ -41,11 +48,23 @@ internal sealed class ModEventBuffer
         Pending.Add(json);
     }
 
+    public void Push(ReadOnlySpan<byte> bytes)
+    {
+        if (Dead)
+            return;
+        if (PendingBytes.Count == Cap)
+            PendingBytes.RemoveAt(0);
+        PendingBytes.Add(bytes.ToArray());
+    }
+
     public void Swap()
     {
         Current.Clear();
         Current.AddRange(Pending);
         Pending.Clear();
+        CurrentBytes.Clear();
+        CurrentBytes.AddRange(PendingBytes);
+        PendingBytes.Clear();
     }
 }
 
@@ -174,9 +193,11 @@ internal sealed class ModResValue
 
     /// Records `json` ("null" / empty = absent) as the current value; true when it equals
     /// the previously observed one (absent == absent).
-    public bool Observe(ReadOnlySpan<byte> json)
+    public bool Observe(ReadOnlySpan<byte> json) => Observe(json, !ModJson.IsAbsent(json));
+
+    /// Observe with presence given (a binary value has no "null" spelling).
+    public bool Observe(ReadOnlySpan<byte> json, bool present)
     {
-        var present = !ModJson.IsAbsent(json);
         if (_known && present == Present && (!present || json.SequenceEqual(Value)))
             return true;
         if (present)
@@ -221,6 +242,9 @@ internal sealed class ModObserverSpec
     public string Name = "";                       // guest export to call on fire
     public ModObserverKind Kind;
     public string? TypePath;                        // component/event path for Insert/Remove/Custom
+    // Fire the trigger value as Encoding.Typed bytes when the registry has a typed fire for
+    // TypePath (the relay, for a type id the guest reads Typed); JSON otherwise.
+    public bool Binary;
     // The observer's own system parameters after the trigger (queries / res / events),
     // evaluated per fire like a system's. Same window bookkeeping as ModSystemSpec.
     public readonly List<ModParam> Params = new();
@@ -378,14 +402,24 @@ internal struct SystemImpl
         => Spec.Params.Add(new ModParam { Kind = mutable ? ModParamKind.ResMut : ModParamKind.Res, TypePath = path });
 
     // The buffer is filled by a host global observer on the event, wired here.
-    public void AddEvents(ModHostContext ctx, string path)
-        => Spec.Params.Add(EventsParam(ctx, path));
+    public void AddEvents(ModHostContext ctx, string path, bool binary = false)
+        => Spec.Params.Add(EventsParam(ctx, path, binary));
 
-    internal static ModParam EventsParam(ModHostContext ctx, string path)
+    // `binary`: buffer the payloads as Encoding.Typed bytes when the registry has a binary
+    // codec for the event (the relay, for an event the guest reads Typed).
+    internal static ModParam EventsParam(ModHostContext ctx, string path, bool binary = false)
     {
         var buffer = new ModEventBuffer();
-        if (ctx.App != null && ctx.Registry.TryGetEvent(path, out var ev))
-            ev.RegisterObserver(ctx.App, (_, json) => buffer.Push(json));
+        if (ctx.App != null)
+        {
+            if (binary && ctx.Registry.TryGetBinaryEvent(path, out var codec))
+            {
+                buffer.Binary = true;
+                codec.Observe(ctx.App, static () => true, (_, bytes) => buffer.Push(bytes));
+            }
+            else if (ctx.Registry.TryGetEvent(path, out var ev))
+                ev.RegisterObserver(ctx.App, (_, json) => buffer.Push(json));
+        }
         ctx.EventBuffers.Add(buffer);
         return new ModParam { Kind = ModParamKind.Events, TypePath = path, Events = buffer };
     }
@@ -393,6 +427,10 @@ internal struct SystemImpl
     public void After(SystemImpl other) => Spec.After.Add(other.Spec.Name);
     public void Before(SystemImpl other) => Spec.Before.Add(other.Spec.Name);
 }
+
+/// One component of a relayed spawn / insert: UTF8 JSON, or an Encoding.Typed value
+/// applied through `Binary`.
+internal readonly record struct ModPayload(string Path, ReadOnlyMemory<byte> Data, IModBinaryComponent? Binary);
 
 // Internal: the lib tests drive it directly via InternalsVisibleTo (see the csproj).
 internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = null)
@@ -426,6 +464,31 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
             if (ctx.Registry.TryGet(typePath, out var comp))
                 SetUtf8(comp, ctx.World, id, json.Span, resolve);
         return new EntityCommandsImpl(ctx, id, resolve);
+    }
+
+    // Relay overload: each payload is JSON, or Encoding.Typed when Binary is set.
+    public EntityCommandsImpl Spawn(ReadOnlySpan<ModPayload> bundle)
+    {
+        var ent = ctx.World.Entity();
+        ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
+        var id = ent.ID;
+        foreach (var p in bundle)
+            Set(ctx, id, p, resolve);
+        return new EntityCommandsImpl(ctx, id, resolve);
+    }
+
+    internal static void Set(ModHostContext ctx, ulong id, in ModPayload p, ModEntityResolver? resolve)
+    {
+        if (p.Binary != null)
+            p.Binary.Set(ctx.World, id, p.Data.Span, resolve);
+        else if (ctx.Registry.TryGet(p.Path, out var comp))
+            SetUtf8(comp, ctx.World, id, p.Data.Span, resolve);
+    }
+
+    public void ResourceSetBinary(IModBinaryResource codec, ReadOnlySpan<byte> value)
+    {
+        if (ctx.App != null)
+            codec.Set(ctx.App, value, ctx.Name);
     }
 
     internal static void SetUtf8(IModComponent comp, World world, ulong id, ReadOnlySpan<byte> json, ModEntityResolver? resolve)
@@ -483,6 +546,10 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
         if (ctx.Registry.TryGetEvent(name, out var ev))
             ev.EmitUtf8(ctx.World, entity, json);
     }
+
+    // An Encoding.Typed payload (the relay).
+    public void EmitEventBinary(IModBinaryEvent codec, ulong entity, ReadOnlySpan<byte> data)
+        => codec.Emit(ctx.World, entity, data, resolve);
 }
 
 internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityResolver? resolve = null)
@@ -511,6 +578,14 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityRe
         foreach (var (typePath, json) in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp))
                 CommandsImpl.SetUtf8(comp, ctx.World, entity, json.Span, resolve);
+    }
+
+    public void Insert(ReadOnlySpan<ModPayload> bundle)
+    {
+        if (!ctx.World.Exists(entity))
+            return;
+        foreach (var p in bundle)
+            CommandsImpl.Set(ctx, entity, p, resolve);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)

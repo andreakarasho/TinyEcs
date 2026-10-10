@@ -17,6 +17,9 @@ public struct CmFrozen { }
 // Not a zero-size tag: TinyEcs fires no OnInsert for tags, and the guest observes this one.
 public struct CmTag { public int V { get; set; } }
 public struct CmSeen { public long Value { get; set; } }
+// What the typed observers saw (fixture on-tag-typed / on-tag-bare).
+public struct CmSeenTyped { public long Value { get; set; } }
+public struct CmSeenBare { public long Value { get; set; } }
 public sealed class CmScore { public long Value { get; set; } }
 public sealed class CmAdded { public long Value { get; set; } }
 public struct CmPing { public int N { get; set; } }
@@ -40,6 +43,8 @@ public sealed class CmBeats { public long Value { get; set; } }
 [JsonSerializable(typeof(CmFrozen))]
 [JsonSerializable(typeof(CmTag))]
 [JsonSerializable(typeof(CmSeen))]
+[JsonSerializable(typeof(CmSeenTyped))]
+[JsonSerializable(typeof(CmSeenBare))]
 [JsonSerializable(typeof(CmScore))]
 [JsonSerializable(typeof(CmAdded))]
 [JsonSerializable(typeof(CmPing))]
@@ -70,7 +75,11 @@ public sealed class ComponentModBackendTests : IDisposable
         try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
     }
 
-    private App NewApp(bool posReadOnly = false)
+    // The paths the TypedTrigger hook lowered, in order.
+    private readonly List<string> _lowered = new();
+    private static readonly Wasmtime.ByteVector FieldV = Wasmtime.ByteVector.Constant("v");
+
+    private App NewApp(bool posReadOnly = false, bool typedTriggers = true)
     {
         var reg = new ModComponentRegistry();
         reg.Register("test/pos", new ModComponent<CmPos>(CmJsonContext.Default.CmPos, readOnly: posReadOnly));
@@ -78,6 +87,8 @@ public sealed class ComponentModBackendTests : IDisposable
         reg.Register("test/frozen", new ModComponent<CmFrozen>(CmJsonContext.Default.CmFrozen));
         reg.Register("test/tag", new ModComponent<CmTag>(CmJsonContext.Default.CmTag));
         reg.Register("test/seen", new ModComponent<CmSeen>(CmJsonContext.Default.CmSeen));
+        reg.Register("test/seen-typed", new ModComponent<CmSeenTyped>(CmJsonContext.Default.CmSeenTyped));
+        reg.Register("test/seen-bare", new ModComponent<CmSeenBare>(CmJsonContext.Default.CmSeenBare));
         reg.RegisterResource("test/score", new ModResource<CmScore>(CmJsonContext.Default.CmScore));
         reg.RegisterResource("test/added", new ModResource<CmAdded>(CmJsonContext.Default.CmAdded));
         reg.RegisterEvent("test/ping", new ModEvent<CmPing>(CmJsonContext.Default.CmPing));
@@ -95,7 +106,10 @@ public sealed class ComponentModBackendTests : IDisposable
         app.AddResource(new CmClock());
         app.AddResource(new CmProbe());
         app.AddResource(new CmBeats());
-        app.AddResource(new ModdingConfig { Registry = reg, ModFolder = _modFolder });
+        var config = new ModdingConfig { Registry = reg, ModFolder = _modFolder };
+        if (typedTriggers)
+            config.ComponentImports.Add(imports => imports.TypedTrigger = LowerTag);
+        app.AddResource(config);
         app.AddPlugin<ModdingPlugin>();
         return app;
     }
@@ -118,9 +132,12 @@ public sealed class ComponentModBackendTests : IDisposable
         Assert.Equal(new[] { ModSchedule.Update, ModSchedule.Update, ModSchedule.PostUpdate, ModSchedule.PostUpdate }, ctx.Systems.Select(s => s.Stage));
         Assert.Equal(new[] { false, false, true, true }, ctx.Systems.Select(s => s.RunOnChange));
         Assert.Equal(new[] { "tick" }, ctx.Systems[1].After);
-        var obs = Assert.Single(ctx.Observers);
-        Assert.Equal(ModObserverKind.Insert, obs.Kind);
-        Assert.Equal("test/tag", obs.TypePath);
+        Assert.Equal(3, ctx.Observers.Count);
+        Assert.All(ctx.Observers, obs =>
+        {
+            Assert.Equal(ModObserverKind.Insert, obs.Kind);
+            Assert.Equal("test/tag", obs.TypePath);
+        });
     }
 
     [Fact]
@@ -369,6 +386,54 @@ public sealed class ComponentModBackendTests : IDisposable
         finally { Console.SetOut(stdout); }
 
         Assert.Contains("system 'tick' is declared in setup but the mod exports no 'tick' function", output.ToString());
+    }
+
+    // The fixture's typed observers take test/tag as `record tag-value { v: s32 }`.
+    private Wasmtime.ComponentValue LowerTag(string path, ReadOnlySpan<byte> json)
+    {
+        _lowered.Add(path);
+        var tag = System.Text.Json.JsonSerializer.Deserialize(json, CmJsonContext.Default.CmTag);
+        var rec = new Wasmtime.RecordBuilder(1, disposeNames: false);
+        rec.Set(0, new Wasmtime.ByteVector(FieldV), Wasmtime.ComponentValue.CreateInt32(tag.V));
+        return Wasmtime.ComponentValue.CreateRecord(rec, externallyOwned: true);
+    }
+
+    // An observer export may take its trigger typed: `(entity, record, ..)` gets the value
+    // lowered by ComponentModImports.TypedTrigger, `(entity, ..)` none; `trigger-data`
+    // observers of the same trigger keep their JSON.
+    [Fact]
+    public void Typed_observer_exports_get_the_trigger_value_as_a_record()
+    {
+        var app = NewApp();
+        var world = app.GetWorld();
+        app.RunStartup();
+        var ctx = app.GetResource<ModRuntimes>().Runtimes[0].Ctx;
+        Assert.Equal(3, ctx.Observers.Count);
+
+        var e = world.Entity().Set(new CmTag { V = 7 }).ID;
+        app.Update();
+
+        Assert.Equal(7, world.Get<CmSeenTyped>(e).Value);
+        Assert.Equal((long)e, world.Get<CmSeenBare>(e).Value);
+        Assert.Equal((long)e, world.Get<CmSeen>(e).Value);
+        Assert.Equal(new[] { "test/tag" }, _lowered);
+        var info = Assert.Single(app.GetResource<ModControl>().Mods);
+        Assert.True(info.Enabled, info.LastError);
+    }
+
+    // A typed observer on a host without the hook: the mod fails to load, loudly.
+    [Fact]
+    public void A_typed_observer_without_the_hook_fails_the_load()
+    {
+        var app = NewApp(typedTriggers: false);
+        var output = new StringWriter();
+        var stdout = Console.Out;
+        Console.SetOut(output);
+        try { app.RunStartup(); }
+        finally { Console.SetOut(stdout); }
+
+        Assert.DoesNotContain(app.GetResource<ModControl>().Mods, m => m.Enabled);
+        Assert.Contains("takes its trigger typed, but the host defines no typed triggers", output.ToString());
     }
 
     private static void Poke(App app, int n)

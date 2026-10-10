@@ -230,6 +230,50 @@ public interface IModComponent
     }
 }
 
+/// Typed access to a component mapper's payload: the value a mod reads and writes, as
+/// the struct itself instead of its JSON. A game's typed import functions (defined
+/// through ComponentModImports) read a query column and queue writes through it.
+/// ModComponent&lt;T&gt; implements it; a hand-written mapper implements it for its DTO.
+public interface IModComponentOf<T> where T : struct
+{
+    /// The payload of `entity` (which has the component).
+    T Get(World world, ulong entity);
+
+    /// Inserts / overwrites the component from its payload.
+    void Set(World world, ulong entity, in T value);
+}
+
+/// Typed access to a resource mapper's payload (see IModComponentOf). `modName` is the
+/// mod reading / writing, as in IModResource.GetJsonFor.
+public interface IModResourceOf<T>
+{
+    /// False when the host has no such resource right now.
+    bool TryGet(App app, string modName, out T value);
+
+    void Set(App app, in T value, string modName);
+}
+
+/// Typed access to an event mapper's payload (see IModComponentOf): a game's typed
+/// import emits the struct, and a typed observer / event reader takes each fire's payload
+/// as the struct. ModEvent&lt;T&gt; implements it.
+public interface IModEventOf<T> where T : struct
+{
+    /// Emits the event (the host trigger), as Emit does from JSON.
+    void Emit(World world, ulong entity, in T value);
+
+    /// A host observer handed each fire's payload; `wanted` is asked first.
+    void Observe(App app, Func<bool> wanted, Action<ulong, T> onFire);
+}
+
+/// A component mapper whose insert / remove triggers hand over the payload as the struct
+/// (ModComponent&lt;T&gt;). A typed observer of a mapper without it gets the trigger's JSON.
+public interface IModComponentObserverOf<T> where T : struct
+{
+    void ObserveInsert(App app, Func<bool> wanted, Action<ulong, T> onFire);
+
+    void ObserveRemove(App app, Func<bool> wanted, Action<ulong, T> onFire);
+}
+
 /// Maps a placeholder entity id from a mod's command buffer to the real one (0 when the
 /// placeholder names nothing). Any other id is returned unchanged.
 public delegate ulong ModEntityResolver(ulong id);
@@ -252,7 +296,7 @@ public static class ModEntityRef
 /// `entityFields` (optional) names the component's entity-id fields, so a placeholder a
 /// mod wrote there resolves to the entity it spawned in the same command buffer.
 /// `readOnly` marks a component the host owns (see IModComponent.ReadOnly).
-public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>? entityFields = null, bool readOnly = false) : IModComponent where T : struct
+public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>? entityFields = null, bool readOnly = false) : IModComponent, IModComponentOf<T>, IModComponentObserverOf<T> where T : struct
 {
     public bool ReadOnly => readOnly;
 
@@ -328,6 +372,10 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>
 
     public void Remove(World world, ulong entity) => world.Entity(entity).Unset<T>();
 
+    public T Get(World world, ulong entity) => IsTag ? default : world.Get<T>(entity);
+
+    public void Set(World world, ulong entity, in T value) => world.Set(entity, IsTag ? default : value);
+
     // A TAG has no column, hence no changed-tick — World.GetChangedTick returns 0 for
     // one, which would make a Changed term over a tag match nothing. Degrade to
     // presence there (same contract as the interface default).
@@ -401,6 +449,20 @@ public sealed class ModComponent<T>(JsonTypeInfo<T> typeInfo, ModEntityFields<T>
         {
             if (wanted())
                 ModJson.Fire(onFire, t.EntityId, t.Component, typeInfo);
+        });
+
+    public void ObserveInsert(App app, Func<bool> wanted, Action<ulong, T> onFire)
+        => app.AddObserver<OnInsert<T>>(t =>
+        {
+            if (wanted())
+                onFire(t.EntityId, IsTag ? default : t.Component);
+        });
+
+    public void ObserveRemove(App app, Func<bool> wanted, Action<ulong, T> onFire)
+        => app.AddObserver<OnRemove<T>>(t =>
+        {
+            if (wanted())
+                onFire(t.EntityId, IsTag ? default : t.Component);
         });
 }
 
@@ -500,7 +562,7 @@ public interface IModResource
 /// (the clock, a packet-fed action cache) is not a mod's to overwrite — a write would
 /// silently desync the host until the next packet rewrote it. The write is dropped and
 /// reported once per path (a mod that does it does it every tick).
-public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = false) : IModResource where T : notnull
+public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = false) : IModResource, IModResourceOf<T> where T : notnull
 {
     private string _path = "";
     private bool _reported;
@@ -532,6 +594,24 @@ public sealed class ModResource<T>(JsonTypeInfo<T> typeInfo, bool readOnly = fal
         if (RejectWrite() || !app.HasResource<T>())
             return;
         app.GetResourceRef<T>() = JsonSerializer.Deserialize(json, typeInfo)!;
+    }
+
+    public bool TryGet(App app, string modName, out T value)
+    {
+        if (!app.HasResource<T>())
+        {
+            value = default!;
+            return false;
+        }
+        value = app.GetResource<T>();
+        return true;
+    }
+
+    public void Set(App app, in T value, string modName)
+    {
+        if (RejectWrite() || !app.HasResource<T>())
+            return;
+        app.GetResourceRef<T>() = value;
     }
 
     private bool RejectWrite()
@@ -567,8 +647,17 @@ public interface IModEvent
         => Emit(world, entity, System.Text.Encoding.UTF8.GetString(json));
 }
 
-public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent where T : struct
+public sealed class ModEvent<T>(JsonTypeInfo<T> typeInfo) : IModEvent, IModEventOf<T> where T : struct
 {
+    public void Emit(World world, ulong entity, in T value) => world.EmitTrigger(entity, value);
+
+    public void Observe(App app, Func<bool> wanted, Action<ulong, T> onFire)
+        => app.AddObserver<On<T>>(t =>
+        {
+            if (wanted())
+                onFire(t.EntityId, t.Event);
+        });
+
     public void RegisterObserver(App app, Action<ulong, string> onFire)
         => app.AddObserver<On<T>>(t => onFire(t.EntityId, JsonSerializer.Serialize(t.Event, typeInfo)));
 
@@ -632,6 +721,46 @@ public sealed class ModComponentRegistry
     public IReadOnlyList<string> Actions => _actions;
 
     public bool TryGetEvent(string name, [MaybeNullWhen(false)] out IModEvent ev) => _evByName.TryGetValue(name, out ev);
+
+    private readonly Dictionary<string, IModBinaryComponent> _binByPath = new();
+    private readonly Dictionary<string, IModBinaryResource> _binResByPath = new();
+
+    /// Gives the registered component at `typePath` a binary codec (the relay's
+    /// Encoding.Typed, abi/mod-abi.fbs): the relay then carries it as bytes instead of
+    /// JSON to a guest that reads them. Its mapper must implement IModComponentOf&lt;T&gt;.
+    public void RegisterBinaryComponent<T>(string typePath, ModBinaryWrite<T> write, ModBinaryRead<T> read) where T : struct
+    {
+        if (!_byPath.TryGetValue(typePath, out var comp) || comp is not IModComponentOf<T> typed)
+            throw new InvalidOperationException($"binary codec for {typePath}: no registered component of payload {typeof(T).Name}");
+        _binByPath[typePath] = new ModBinaryComponent<T>(comp, typed, write, read);
+    }
+
+    /// Resource half of RegisterBinaryComponent; its mapper must implement IModResourceOf&lt;T&gt;.
+    public void RegisterBinaryResource<T>(string typePath, ModBinaryWrite<T> write, ModBinaryRead<T> read)
+    {
+        if (!_resByPath.TryGetValue(typePath, out var res) || res is not IModResourceOf<T> typed)
+            throw new InvalidOperationException($"binary codec for {typePath}: no registered resource of payload {typeof(T).Name}");
+        _binResByPath[typePath] = new ModBinaryResource<T>(typed, write, read);
+    }
+
+    private readonly Dictionary<string, IModBinaryEvent> _binEvByName = new();
+
+    /// Event half of RegisterBinaryComponent; its mapper must implement IModEventOf&lt;T&gt;.
+    public void RegisterBinaryEvent<T>(string name, ModBinaryWrite<T> write, ModBinaryRead<T> read) where T : struct
+    {
+        if (!_evByName.TryGetValue(name, out var ev) || ev is not IModEventOf<T> typed)
+            throw new InvalidOperationException($"binary codec for {name}: no registered event of payload {typeof(T).Name}");
+        _binEvByName[name] = new ModBinaryEvent<T>(typed, write, read);
+    }
+
+    public bool TryGetBinaryEvent(string name, [MaybeNullWhen(false)] out IModBinaryEvent codec) => _binEvByName.TryGetValue(name, out codec);
+
+    public bool TryGetBinary(string typePath, [MaybeNullWhen(false)] out IModBinaryComponent codec) => _binByPath.TryGetValue(typePath, out codec);
+
+    public bool TryGetBinaryResource(string typePath, [MaybeNullWhen(false)] out IModBinaryResource codec) => _binResByPath.TryGetValue(typePath, out codec);
+
+    /// Whether `typePath` (a component, resource or event) has a binary codec.
+    public bool HasBinary(string typePath) => _binByPath.ContainsKey(typePath) || _binResByPath.ContainsKey(typePath) || _binEvByName.ContainsKey(typePath);
 
     /// Every registered path with its kind, in a stable order (components, then
     /// resources, then events). Reflection-free — just walks the three dicts. The

@@ -63,6 +63,11 @@ internal interface IModInstance : IDisposable
     void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
         => CallObserver(export, entity, System.Text.Encoding.UTF8.GetString(json));
 
+    /// The trigger value as Encoding.Typed bytes: only for an observer whose spec asked
+    /// for it (ModObserverSpec.Binary), so only a backend that sets it overrides this.
+    void CallObserverBinary(string export, ulong entity, ReadOnlySpan<byte> data)
+        => throw new NotSupportedException("this backend takes no Encoding.Typed trigger values");
+
     /// Run the packet observer `export` (a Packet ModObserverSpec.Name) on one message
     /// (ModPacketChain) and return its verdict; its params are evaluated and its
     /// commands applied like any observer's. For Replace, `replacement` is valid until

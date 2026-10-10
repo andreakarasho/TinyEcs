@@ -188,6 +188,10 @@ interface ecs {
         /// Every matching row, in one call.
         rows: func() -> list<row>;
 
+        /// The matching entities, in the same order as `rows` (and as any typed column a
+        /// game interface reads from this query).
+        entities: func() -> list<entity>;
+
         /// Writes the n-th reading term of `entity` back. Traps unless that term is
         /// `mut`. Deferred like `commands`: applied after the system returns, in order
         /// with its commands (`rows` is a snapshot and does not see the write).

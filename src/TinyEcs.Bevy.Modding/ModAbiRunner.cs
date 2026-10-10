@@ -47,7 +47,7 @@ internal sealed class ModAbiRunner : IModInstance
     // span, so there is no exact-length copy.
     private byte[] _writeScratch = new byte[1024];
     // Reused command-apply scratch (bundles/paths are tiny and consumed synchronously).
-    private readonly List<(string, ReadOnlyMemory<byte>)> _bundleScratch = new();
+    private readonly List<ModPayload> _bundleScratch = new();
     private readonly List<string> _pathScratch = new();
     // Per-system reusable SystemInput object graph — see SysScratch.
     private readonly Dictionary<ModSystemSpec, SysScratch> _sysScratch = new();
@@ -55,6 +55,9 @@ internal sealed class ModAbiRunner : IModInstance
     // The guest keeps each Res param's last value (SetupReply.res_unchanged), so an
     // unchanged one crosses as a flag instead of its bytes.
     private bool _resUnchanged;
+    // By type id: the guest reads and writes it as Encoding.Typed (Handshake.typed_types
+    // offered, SetupReply.typed_types accepted).
+    private bool[] _typed = [];
     // Reused ObserverInput graph + its payload buffer (one fire at a time).
     private readonly ModJsonBuffer _obsJson = new();
     private readonly CompValue _obsValue = new() { Encoding = ModAbi.Encoding.Json };
@@ -92,11 +95,13 @@ internal sealed class ModAbiRunner : IModInstance
         _sysScratch.Clear();
 
         // Handshake: intern every registered path into one u16 id space.
-        var handshake = new Handshake { AbiVersion = AbiVersion, TypePaths = new List<TypePath>() };
+        var handshake = new Handshake { AbiVersion = AbiVersion, TypePaths = new List<TypePath>(), TypedTypes = new List<ushort>() };
         ushort next = 0;
         foreach (var (path, kind) in _ctx.Registry.Entries)
         {
             handshake.TypePaths.Add(new TypePath { Id = next, Path = path });
+            if (_ctx.Registry.HasBinary(path))
+                handshake.TypedTypes.Add(next);
             _state.PathToId[path] = next;
             _state.IdToEntry[next] = (path, kind);
             next++;
@@ -108,6 +113,11 @@ internal sealed class ModAbiRunner : IModInstance
             throw new InvalidOperationException("mod_setup returned no SetupReply");
         var reply = SetupReply.Serializer.Parse(replyBytes);
         _resUnchanged = reply.ResUnchanged;
+        _typed = new bool[next];
+        if (reply.TypedTypes is { } accepted)
+            foreach (var id in accepted)
+                if (handshake.TypedTypes.Contains(id))
+                    _typed[id] = true;
         TranslateSetup(reply);
     }
 
@@ -170,10 +180,12 @@ internal sealed class ModAbiRunner : IModInstance
                         AddParam(holder, pd, "observer " + token);
                     spec.Params.AddRange(holder.Spec.Params);
                 }
-                _ctx.AddObserver(spec);
                 var valueType = kind is ModObserverKind.Insert or ModObserverKind.Remove ? od.TypeId
                     : kind == ModObserverKind.Custom && od.EventName != null && _state.PathToId.TryGetValue(od.EventName, out var evId) ? evId
                     : (ushort)0xFFFF;
+                // The trigger value crosses Typed when the guest reads that type id Typed.
+                spec.Binary = valueType < _typed.Length && _typed[valueType];
+                _ctx.AddObserver(spec);
                 _obsByName[token] = (od.Id, valueType, spec);
             }
     }
@@ -199,7 +211,7 @@ internal sealed class ModAbiRunner : IModInstance
             case ParamKind.Events:
                 if (!_state.IdToEntry.TryGetValue(pd.TypeId, out var ee) || ee.Kind != ModRegistryKind.Event)
                     throw new InvalidOperationException($"'{ownerName}' declares an events param with unregistered type id {pd.TypeId}");
-                si.AddEvents(_ctx, ee.Path);
+                si.AddEvents(_ctx, ee.Path, binary: pd.TypeId < _typed.Length && _typed[pd.TypeId]);
                 break;
         }
     }
@@ -355,6 +367,7 @@ internal sealed class ModAbiRunner : IModInstance
                     // Resolved once per spec, not per row: mapper + interned wire type id.
                     var mappers = q.RowMappers(_ctx.Registry, _state.PathToId, ownerName);
                     var param = scratch.Param(queryIndex++, (uint)pi, mappers.Length);
+                    var binary = param.Binary ??= BinaryColumns(mappers);
                     var rows = param.LiveRows;
                     rows.Clear();
 
@@ -370,8 +383,17 @@ internal sealed class ModAbiRunner : IModInstance
                             var (comp, typeId) = mappers[ci];
                             var json = slot.Json[ci];
                             json.Reset();
-                            comp.GetJsonUtf8(_ctx.World, entId, json);
                             var cv = slot.Comps[ci];
+                            // Typed when the guest reads it and the entity still has it;
+                            // otherwise the JSON (its "null" for a component gone since
+                            // the snapshot).
+                            if (binary[ci] is { } codec && codec.TryWrite(_ctx.World, entId, json))
+                                cv.Encoding = ModAbi.Encoding.Typed;
+                            else
+                            {
+                                comp.GetJsonUtf8(_ctx.World, entId, json);
+                                cv.Encoding = ModAbi.Encoding.Json;
+                            }
                             cv.TypeId = typeId;
                             cv.Data = json.Written;
                         }
@@ -390,12 +412,29 @@ internal sealed class ModAbiRunner : IModInstance
                     slot.Out.Value = null;
                     slot.Out.Unchanged = false;
                     slot.Json.Reset();
-                    if (_ctx.App != null && _ctx.Registry.TryGetResource(p.TypePath!, out var res))
-                        // The calling mod's slice: a per-mod resource serves its own state.
-                        res.GetJsonUtf8For(_ctx.App, _ctx.Name, slot.Json);
+                    var resTypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
+                    if (!slot.BinaryResolved)
+                    {
+                        slot.BinaryResolved = true;
+                        slot.Binary = resTypeId < _typed.Length && _typed[resTypeId]
+                            && _ctx.Registry.TryGetBinaryResource(p.TypePath!, out var codec) ? codec : null;
+                        slot.Value.Encoding = slot.Binary != null ? ModAbi.Encoding.Typed : ModAbi.Encoding.Json;
+                    }
                     // Resources carry no change ticks, so "unchanged" is a byte compare
                     // against what this param observed on its previous run.
-                    var same = slot.Last.Observe(slot.Json.WrittenSpan);
+                    bool same;
+                    if (slot.Binary != null)
+                    {
+                        var present = _ctx.App != null && slot.Binary.TryWrite(_ctx.App, _ctx.Name, slot.Json);
+                        same = slot.Last.Observe(slot.Json.WrittenSpan, present);
+                    }
+                    else
+                    {
+                        if (_ctx.App != null && _ctx.Registry.TryGetResource(p.TypePath!, out var res))
+                            // The calling mod's slice: a per-mod resource serves its own state.
+                            res.GetJsonUtf8For(_ctx.App, _ctx.Name, slot.Json);
+                        same = slot.Last.Observe(slot.Json.WrittenSpan);
+                    }
                     resChanged |= !same;
                     if (slot.Last.Present)
                     {
@@ -408,7 +447,7 @@ internal sealed class ModAbiRunner : IModInstance
                         }
                         else
                         {
-                            slot.Value.TypeId = _state.PathToId.TryGetValue(p.TypePath!, out var tid) ? tid : (ushort)0xFFFF;
+                            slot.Value.TypeId = resTypeId;
                             slot.Value.Data = slot.Json.Written;
                             slot.Out.Value = slot.Value;
                         }
@@ -426,8 +465,12 @@ internal sealed class ModAbiRunner : IModInstance
                     slot.Out.ParamIndex = (uint)pi;
                     var typeId = _state.PathToId.TryGetValue(p.TypePath!, out var etid) ? etid : (ushort)0xFFFF;
                     slot.Values.Clear();
-                    foreach (var json in buffer.Current)
-                        slot.Values.Add(slot.Rent(slot.Values.Count, typeId, json));
+                    if (buffer.Binary)
+                        foreach (var bytes in buffer.CurrentBytes)
+                            slot.Values.Add(slot.Rent(slot.Values.Count, typeId, bytes));
+                    else
+                        foreach (var json in buffer.Current)
+                            slot.Values.Add(slot.Rent(slot.Values.Count, typeId, json));
                     scratch.LiveEvents.Add(slot.Out);
                     break;
                 }
@@ -441,6 +484,20 @@ internal sealed class ModAbiRunner : IModInstance
         if (_sysScratch.TryGetValue(sys, out var s))
             return s;
         return _sysScratch[sys] = new SysScratch(_sysToId.TryGetValue(sys, out var sid) ? sid : 0u);
+    }
+
+    // Per reading term: the binary codec when the guest reads that type Typed.
+    private IModBinaryComponent?[] BinaryColumns((IModComponent Comp, ushort TypeId)[] mappers)
+    {
+        var codecs = new IModBinaryComponent?[mappers.Length];
+        for (var i = 0; i < mappers.Length; i++)
+        {
+            var id = mappers[i].TypeId;
+            if (id < _typed.Length && _typed[id] && _state.IdToEntry.TryGetValue(id, out var e)
+                && _ctx.Registry.TryGetBinary(e.Path, out var codec))
+                codecs[i] = codec;
+        }
+        return codecs;
     }
 
     // FlatSharp serializes FROM the object model, so reusing the SystemInput graph
@@ -504,6 +561,9 @@ internal sealed class ModAbiRunner : IModInstance
         public readonly ModJsonBuffer Json = new();
         // What this param observed on its previous run (= what the guest holds).
         public readonly ModResValue Last = new();
+        // The resource's binary codec when the guest reads it Typed (resolved on first use).
+        public IModBinaryResource? Binary;
+        public bool BinaryResolved;
     }
 
     private sealed class EventsScratch
@@ -517,14 +577,33 @@ internal sealed class ModAbiRunner : IModInstance
 
         public CompValue Rent(int index, ushort typeId, string json)
         {
-            while (_pool.Count <= index)
-                _pool.Add((new CompValue { Encoding = ModAbi.Encoding.Json }, new ModJsonBuffer()));
-            var (cv, buf) = _pool[index];
-            buf.Reset();
+            var (cv, buf) = Slot(index);
             IModComponent.WriteUtf8(buf, json);
+            cv.Encoding = ModAbi.Encoding.Json;
             cv.TypeId = typeId;
             cv.Data = buf.Written;
             return cv;
+        }
+
+        // An Encoding.Typed payload (a binary events buffer).
+        public CompValue Rent(int index, ushort typeId, byte[] bytes)
+        {
+            var (cv, buf) = Slot(index);
+            bytes.CopyTo(buf.GetSpan(bytes.Length));
+            buf.Advance(bytes.Length);
+            cv.Encoding = ModAbi.Encoding.Typed;
+            cv.TypeId = typeId;
+            cv.Data = buf.Written;
+            return cv;
+        }
+
+        private (CompValue Value, ModJsonBuffer Json) Slot(int index)
+        {
+            while (_pool.Count <= index)
+                _pool.Add((new CompValue { Encoding = ModAbi.Encoding.Json }, new ModJsonBuffer()));
+            var slot = _pool[index];
+            slot.Json.Reset();
+            return slot;
         }
     }
 
@@ -532,6 +611,8 @@ internal sealed class ModAbiRunner : IModInstance
     {
         public readonly QueryRows Out;
         public readonly List<Row> LiveRows = new();
+        // Per reading term: its binary codec, or null = JSON (resolved on first use).
+        public IModBinaryComponent?[]? Binary;
         private readonly List<RowScratch> _pool = new();
         private readonly int _compCount;
 
@@ -577,19 +658,28 @@ internal sealed class ModAbiRunner : IModInstance
         _obsJson.Reset();
         if (!string.IsNullOrEmpty(json))
             IModComponent.WriteUtf8(_obsJson, json);
+        _obsValue.Encoding = ModAbi.Encoding.Json;
         CallObserverBuffered(export, entity, obs);
     }
 
     public void CallObserver(string export, ulong entity, ReadOnlySpan<byte> json)
+        => CallObserverBytes(export, entity, json, ModAbi.Encoding.Json);
+
+    // A trigger value fired as Encoding.Typed (ModObserverSpec.Binary).
+    public void CallObserverBinary(string export, ulong entity, ReadOnlySpan<byte> data)
+        => CallObserverBytes(export, entity, data, ModAbi.Encoding.Typed);
+
+    private void CallObserverBytes(string export, ulong entity, ReadOnlySpan<byte> data, ModAbi.Encoding encoding)
     {
         if (!_obsByName.TryGetValue(export, out var obs))
             return; // unknown observer token — no-op
         _obsJson.Reset();
-        if (!json.IsEmpty)
+        if (!data.IsEmpty)
         {
-            json.CopyTo(_obsJson.GetSpan(json.Length));
-            _obsJson.Advance(json.Length);
+            data.CopyTo(_obsJson.GetSpan(data.Length));
+            _obsJson.Advance(data.Length);
         }
+        _obsValue.Encoding = encoding;
         CallObserverBuffered(export, entity, obs);
     }
 
@@ -885,14 +975,20 @@ internal sealed class ModAbiRunner : IModInstance
                 if (!_state.IdToEntry.TryGetValue(v.TypeId, out var e) || e.Kind != ModRegistryKind.Resource
                     || !_ctx.Registry.TryGetResource(e.Path, out _))
                     throw new InvalidOperationException($"resource set: type id {v.TypeId} is not a resource");
-                if (IsApplicable(v.Encoding, e.Path))
+                if (v.Encoding == ModAbi.Encoding.Typed && _ctx.Registry.TryGetBinaryResource(e.Path, out var codec))
+                    commands.ResourceSetBinary(codec, v.Data is { } d ? d.Span : default);
+                else if (IsApplicable(v.Encoding, e.Path))
                     commands.ResourceSet(e.Path, Utf8(v.Data).Span);
                 break;
             }
             case Cmd.ItemKind.EmitEventCmd:
             {
                 var ee = cmd.EmitEventCmd;
-                commands.EmitEvent(ee.EventName ?? string.Empty, ee.Entity, Utf8(ee.Data).Span);
+                var name = ee.EventName ?? string.Empty;
+                if (ee.Encoding == ModAbi.Encoding.Typed && _ctx.Registry.TryGetBinaryEvent(name, out var codec))
+                    commands.EmitEventBinary(codec, ee.Entity, ee.Data is { } d ? d.Span : default);
+                else if (IsApplicable(ee.Encoding, name))
+                    commands.EmitEvent(name, ee.Entity, Utf8(ee.Data).Span);
                 break;
             }
             case Cmd.ItemKind.ConsumeMouseCmd:
@@ -921,7 +1017,7 @@ internal sealed class ModAbiRunner : IModInstance
     // Reused scratch — the returned span is consumed synchronously by the Impl call.
     // Payloads stay as UTF8 slices of the reply buffer: the registry deserializes
     // straight off the span (SetJsonUtf8), so no string per component per command.
-    private ReadOnlySpan<(string, ReadOnlyMemory<byte>)> BuildBundle(IList<CompValue>? comps)
+    private ReadOnlySpan<ModPayload> BuildBundle(IList<CompValue>? comps)
     {
         _bundleScratch.Clear();
         // Index loops: foreach over the IList boxes an enumerator per command.
@@ -931,9 +1027,14 @@ internal sealed class ModAbiRunner : IModInstance
             var cv = comps![i];
             if (!_state.IdToEntry.TryGetValue(cv.TypeId, out var e))
                 continue;
+            if (cv.Encoding == ModAbi.Encoding.Typed && _ctx.Registry.TryGetBinary(e.Path, out var codec))
+            {
+                _bundleScratch.Add(new ModPayload(e.Path, cv.Data ?? default, codec));
+                continue;
+            }
             if (!IsApplicable(cv.Encoding, e.Path))
                 continue;
-            _bundleScratch.Add((e.Path, Utf8(cv.Data)));
+            _bundleScratch.Add(new ModPayload(e.Path, Utf8(cv.Data), null));
         }
         return System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_bundleScratch);
     }
@@ -954,7 +1055,7 @@ internal sealed class ModAbiRunner : IModInstance
     private static ReadOnlyMemory<byte> Utf8(Memory<byte>? data)
         => data is { Length: > 0 } d ? d : EmptyObject;
 
-    // Encoding.Typed (the phase-2 registry SetFlat path) is not implemented yet. Wire
+    // Encoding.Typed for a path with no binary codec (or an unknown encoding). Wire
     // input is a boundary: SKIP the one payload and log it rather than throwing —
     // a throw here escapes ApplyCommandBuffer and silently drops every remaining
     // command in the guest's buffer (half-built UI, no diagnostic beyond one line).
@@ -962,7 +1063,7 @@ internal sealed class ModAbiRunner : IModInstance
     {
         if (encoding == ModAbi.Encoding.Json)
             return true;
-        Console.WriteLine("[ecs-mod] skipped {0}: CompValue encoding {1} is not implemented", path, encoding);
+        Console.WriteLine("[ecs-mod] skipped {0}: CompValue encoding {1} is not supported for it", path, encoding);
         return false;
     }
 }

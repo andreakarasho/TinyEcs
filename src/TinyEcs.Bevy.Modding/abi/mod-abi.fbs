@@ -34,6 +34,35 @@
 // for no result, else len<<32|ptr of UTF-8 JSON in the arena (mod_alloc). Unknown
 // name / malformed args = trap. Everything ECS rides the buffers below — a mod reads
 // only what its system parameters declared.
+//
+// VALUE ENCODINGS (CompValue.encoding):
+// - Json: data = UTF-8 JSON of the value.
+// - Typed: data = the value in the compact binary encoding below, defined by the
+//   value's WIT type (the record the host's typed interface declares for that type
+//   path). Used ONLY for type ids both sides announced (Handshake.typed_types ∩
+//   SetupReply.typed_types), and even then per value: either side may still send Json
+//   for one of them (e.g. a row whose component is gone, a trigger whose mapper hands
+//   no typed value), so a reader always switches on `encoding`. Type ids cover
+//   components, resources and events: event values (EventValues, EmitEventCmd) and
+//   observer trigger values (ObserverInput.value) of a negotiated id are Typed too.
+//   Binary encoding, little-endian, no padding, no alignment, no field names:
+//     bool                  1 byte (0 / 1)
+//     u8 s8 u16 s16 u32 s32 u64 s64
+//                           fixed width, two's complement
+//     f32 f64               IEEE-754
+//     char                  u32 (Unicode scalar value)
+//     string                u32 byte length + UTF-8 bytes
+//     list<T>               u32 item count + items
+//     option<T>             u8 tag (0 = none, 1 = some) + the value when some
+//     enum                  case index: u8, or u16 when the enum has > 255 cases
+//     flags                 bitmask, bit i = flag i: 1 / 2 / 4 / 8 bytes for <= 8 / 16 /
+//                           32 / 64 flags
+//     record                its fields in declaration order
+//     tuple                 its items in order
+//     entity (u64 alias)    as u64; inside a CommandBuffer it may hold the 1<<63 |
+//                           temp_id placeholder, like a JSON entity field
+//   A host-computed member that the WIT record leaves out is not encoded; the
+//   reader recomputes it. A reader treats an enum index past the last case as case 0.
 
 namespace ModAbi;
 
@@ -42,7 +71,7 @@ namespace ModAbi;
 
 enum Encoding : ubyte {
   Json = 0,   // data = utf8 JSON
-  Typed = 1   // RESERVED (no host support)
+  Typed = 1   // data = the binary value encoding (header); negotiated per type id
 }
 
 // A component / resource / event payload. type_id interned via Handshake; 0xFFFF = none.
@@ -63,6 +92,7 @@ table TypePath {
 table Handshake {
   abi_version: uint32;
   type_paths: [TypePath];   // every registered component + resource + event path
+  typed_types: [uint16];    // type ids the host reads and writes as Encoding.Typed
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +192,9 @@ table SetupReply {
   wants_filter: bool;       // DEPRECATED (packets.intercept replaces it)
   wants_filter_out: bool;   // DEPRECATED
   res_unchanged: bool;      // the guest keeps each Res param's last value (ResValue.unchanged)
+  // The subset of Handshake.typed_types the guest reads and writes as Encoding.Typed;
+  // absent / empty = Json only (a guest that predates it keeps getting Json).
+  typed_types: [uint16];
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +274,8 @@ table ResourceSetCmd {
 table EmitEventCmd {
   event_name: string;     // the event's type path
   entity: uint64;
-  data: [ubyte];          // utf8 JSON event payload
+  data: [ubyte];          // the event payload, in `encoding`
+  encoding: Encoding;     // Json (default) or Typed (a negotiated event type id)
 }
 
 // DEPRECATED: a host expresses input consumption as a request event. Kept for the union tags.

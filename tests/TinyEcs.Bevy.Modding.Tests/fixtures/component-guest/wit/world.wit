@@ -10,6 +10,11 @@ world fixture {
     export beat: func(commands: commands);
 
     export on-tag: func(trigger: trigger-data, commands: commands);
+    // Typed triggers: the value as a record (lowered by the host's TypedTrigger hook), or
+    // no value at all.
+    record tag-value { v: s32 }
+    export on-tag-typed: func(entity: u64, value: tag-value, commands: commands);
+    export on-tag-bare: func(entity: u64, commands: commands);
     export on-in: func(direction: packet-direction, packet: list<u8>, score: res) -> verdict;
     export on-out: func(direction: packet-direction, packet: list<u8>) -> verdict;
 

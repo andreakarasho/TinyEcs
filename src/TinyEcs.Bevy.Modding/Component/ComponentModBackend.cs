@@ -62,6 +62,9 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     /// The instance whose guest export is executing (null between calls).
     internal ComponentModInstance? Current;
 
+    // ComponentModImports.TypedTrigger.
+    internal ComponentTriggerLowering? TypedTrigger;
+
     public ComponentModBackend(IReadOnlyList<Action<ComponentModImports>> hostImports)
     {
         _pathLookup = _paths.GetAlternateLookup<ReadOnlySpan<char>>();
@@ -174,6 +177,7 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         ecs.DefineFunction("[method]commands.set-resource", CommandsSetResource, this);
 
         ecs.DefineFunction("[method]query.rows", QueryRows, this);
+        ecs.DefineFunction("[method]query.entities", QueryEntities, this);
         ecs.DefineFunction("[method]query.set", QuerySet, this);
 
         ecs.DefineFunction("[method]res.get", ResGet, this);
@@ -336,6 +340,13 @@ internal sealed unsafe class ComponentModBackend : IModBackend
         var m = Mod(state);
         var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
         results[0] = m.Rows(param);
+    }
+
+    private static void QueryEntities(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
+    {
+        var m = Mod(state);
+        var param = (ComponentParam)m.Handles.Get(args[0].ToResourceRep(cx), HandleKind.Query).Obj!;
+        results[0] = m.Entities(param);
     }
 
     private static void QuerySet(object? state, Cm.ComponentCallResults args, Cm.ComponentValue* results, Cm.StoreContext cx)
