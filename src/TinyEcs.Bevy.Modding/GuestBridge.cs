@@ -260,6 +260,15 @@ public sealed class ModHostContext
     // The host App — used to resolve singleton resources lazily at call time.
     // Absent in bare unit-test apps, so every use is guarded by HasResource.
     public App? App;
+    // Which entities this mod may insert into / remove from / despawn / reparent besides
+    // its own (ModEntity.Slot == Slot). Null = any entity. Another mod's entities are
+    // never writable. See ModWriteGuard.
+    public Func<ulong, bool>? HostEntityWritable;
+    // Ids this mod spawned. Not ModEntity: that stamp is deferred while the mod's
+    // commands apply, so a same-frame spawn wouldn't be recognised yet.
+    // ponytail: ids the host despawns stay listed; ids are generational, so a stale
+    // one never matches a new entity — only memory, cleared on reload.
+    internal readonly HashSet<ulong> Spawned = new();
     // Optional host hook to consume a mouse button (the input-override capability).
     // The generic lib has no input model of its own; the host wires this.
     public Action<byte>? ConsumeMouse;
@@ -397,6 +406,7 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
     {
         var ent = ctx.World.Entity();
         ent.Set(new ModEntity { Slot = (byte)ctx.Slot });
+        ctx.Spawned.Add(ent.ID);
         return new EntityCommandsImpl(ctx, ent.ID, resolve);
     }
 
@@ -431,6 +441,20 @@ internal struct CommandsImpl(ModHostContext ctx, ModEntityResolver? resolve = nu
         => codec.Emit(ctx.World, entity, value, resolve);
 }
 
+internal static class ModWriteGuard
+{
+    // Throws (the per-command guards log it with the mod's name) when `entity` is neither
+    // this mod's own nor allowed by the host.
+    public static void Require(ModHostContext ctx, ulong entity)
+    {
+        if (ctx.HostEntityWritable is not { } host || !ctx.World.Exists(entity))
+            return;
+        var allowed = ctx.Spawned.Contains(entity) || (!ctx.World.Has<ModEntity>(entity) && host(entity));
+        if (!allowed)
+            throw new InvalidOperationException($"mod '{ctx.Name}' may not modify entity {entity}");
+    }
+}
+
 internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityResolver? resolve = null)
 {
     public ulong Id => entity;
@@ -444,12 +468,14 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityRe
     {
         if (!ctx.World.Exists(entity))
             return;
+        ModWriteGuard.Require(ctx, entity);
         foreach (var p in bundle)
             p.Binary.Set(ctx.World, entity, p.Data.Span, resolve);
     }
 
     public void Remove(ReadOnlySpan<string> bundle)
     {
+        ModWriteGuard.Require(ctx, entity);
         foreach (var typePath in bundle)
             if (ctx.Registry.TryGet(typePath, out var comp) && ctx.World.Exists(entity))
                 comp.Remove(ctx.World, entity);
@@ -458,9 +484,19 @@ internal struct EntityCommandsImpl(ModHostContext ctx, ulong entity, ModEntityRe
     // `entity` is the parent (this entity-commands' entity); add `child` under it.
     public void AddChild(ulong child, uint index)
     {
-        if (ctx.World.Exists(entity) && ctx.World.Exists(child))
-            ctx.World.AddChild(entity, child, index >= int.MaxValue ? -1 : (int)index);
+        if (!ctx.World.Exists(entity) || !ctx.World.Exists(child))
+            return;
+        ModWriteGuard.Require(ctx, entity);
+        ModWriteGuard.Require(ctx, child);
+        ctx.World.AddChild(entity, child, index >= int.MaxValue ? -1 : (int)index);
     }
 
-    public void Despawn() { if (ctx.World.Exists(entity)) ctx.World.Delete(entity); }
+    public void Despawn()
+    {
+        if (!ctx.World.Exists(entity))
+            return;
+        ModWriteGuard.Require(ctx, entity);
+        ctx.Spawned.Remove(entity);
+        ctx.World.Delete(entity);
+    }
 }

@@ -331,6 +331,31 @@ public class ModHostHardeningTests
         Assert.False(world.Exists(child));
     }
 
+    // A mod writes its own entities and whatever the host allows — never another mod's.
+    [Fact]
+    public void Entity_writes_are_limited_to_own_entities_and_host_allowed_ones()
+    {
+        using var world = new World();
+        var reg = new ModComponentRegistry().Flag();
+        var hostUi = world.Entity().ID;
+        var hostGame = world.Entity().ID;
+        Func<ulong, bool> writable = id => id == hostUi;
+        var a = new CommandsImpl(new ModHostContext { World = world, Registry = reg, Name = "a", Slot = 0, HostEntityWritable = writable });
+        var b = new CommandsImpl(new ModHostContext { World = world, Registry = reg, Name = "b", Slot = 1, HostEntityWritable = writable });
+        var own = a.SpawnEmpty().Id;
+        var other = b.SpawnEmpty().Id;
+
+        Assert.Throws<InvalidOperationException>(() => a.EntityById(hostGame).Despawn());
+        Assert.Throws<InvalidOperationException>(() => a.EntityById(other).Remove(["test/flag"]));
+        Assert.Throws<InvalidOperationException>(() => a.EntityById(hostGame).AddChild(own, 0));
+        Assert.True(world.Exists(hostGame) && world.Exists(other));
+
+        a.EntityById(hostUi).AddChild(own, 0);
+        a.EntityById(own).Despawn();
+        a.EntityById(hostUi).Despawn();
+        Assert.False(world.Exists(own) || world.Exists(hostUi));
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────────────
 
     private static byte[] Bytes<T>(ISerializer<T> serializer, T value) where T : class

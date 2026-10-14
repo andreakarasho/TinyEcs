@@ -760,6 +760,7 @@ public readonly struct ModdingPlugin : IPlugin
         if (info != null) info.Enabled = false;
         rt.ObserverFires.Clear();
         DespawnModEntities(rt.Ctx.World, rt.Slot);
+        rt.Ctx.Spawned.Clear();
         if (wasEnabled)
             NotifyTeardown(config, rt.Manifest.Name);
         try { rt.Instance.Dispose(); }
@@ -781,6 +782,7 @@ public readonly struct ModdingPlugin : IPlugin
         if (info != null) info.Enabled = false;
         rt.ObserverFires.Clear();
         DespawnModEntities(rt.Ctx.World, rt.Slot);
+        rt.Ctx.Spawned.Clear();
         NotifyTeardown(config, rt.Manifest.Name);
     }
 
@@ -833,6 +835,7 @@ public readonly struct ModdingPlugin : IPlugin
     private static void ReloadMod(ModRuntimes runtimes, ModRuntime rt, App app, ModInfo? info, ModdingConfig config)
     {
         DespawnModEntities(rt.Ctx.World, rt.Slot);
+        rt.Ctx.Spawned.Clear();
         NotifyTeardown(config, rt.Manifest.Name);
 
         var observersBefore = ObserverSignatures(rt.Ctx.Observers);

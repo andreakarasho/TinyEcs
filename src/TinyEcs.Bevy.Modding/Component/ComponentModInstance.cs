@@ -252,6 +252,7 @@ internal sealed class ComponentCommandBuffer
         {
             if (ctx.World.Exists(entity))
             {
+                ModWriteGuard.Require(ctx, entity);
                 var (target, value) = Items[index];
                 target.Set(ctx.World, entity, value);
             }
