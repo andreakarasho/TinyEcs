@@ -57,6 +57,7 @@ internal sealed class ModSnapshotPlan
             return new ModSnapshotPlan(null, Array.Empty<int>(), Array.Empty<int>());
         if (plainRequired == 0)
             return null;
+        qb.Without<ModHidden>();
         slowFirst.AddRange(slowRest);
         return new ModSnapshotPlan(qb.Build(), ticks.ToArray(), slowFirst.ToArray());
     }

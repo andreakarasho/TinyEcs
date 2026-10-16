@@ -9,6 +9,11 @@ namespace TinyEcs.Bevy.Modding;
 /// can scope mod-owned entities — e.g. the click bridge below).
 public struct ModEntity { public byte Slot; }
 
+/// Host-only marker: an entity carrying it is invisible to mods. Snapshots (queries),
+/// observer fires and write access all skip it, so a host can keep secrets (a
+/// credential field) or internals out of every mod, whatever components it carries.
+public struct ModHidden { public byte Reserved; }
+
 /// Event fired on a mod-owned entity when it is clicked (Bevy.UI On&lt;UiClick&gt;:
 /// press and release over the same entity).
 public struct ModClick { }

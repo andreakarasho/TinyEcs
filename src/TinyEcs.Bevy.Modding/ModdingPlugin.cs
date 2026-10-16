@@ -908,7 +908,11 @@ public readonly struct ModdingPlugin : IPlugin
         var wanted = () => rt.Enabled;
         foreach (var obs in rt.Ctx.Observers)
             RegisterObserver(app, obs, rt.Ctx.Registry, wanted,
-                (string name, ulong e, ReadOnlySpan<byte> value) => rt.ObserverFires.Enqueue(name, e, value));
+                (string name, ulong e, ReadOnlySpan<byte> value) =>
+                {
+                    if (!rt.Ctx.World.Exists(e) || !rt.Ctx.World.Has<ModHidden>(e))
+                        rt.ObserverFires.Enqueue(name, e, value);
+                });
     }
 
     /// A buffered observer fire (the value, Encoding.Typed, valid for the call only).
@@ -1023,6 +1027,8 @@ public readonly struct ModdingPlugin : IPlugin
             for (var ci = 0; ci < candidates.Count; ci++)
             {
                 var id = candidates[ci];
+                if (ctx.World.Has<ModHidden>(id))
+                    continue;
                 var ok = true;
                 for (var oi = 0; oi < orderCount; oi++)
                 {

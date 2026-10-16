@@ -449,6 +449,8 @@ internal static class ModWriteGuard
     {
         if (ctx.HostEntityWritable is not { } host || !ctx.World.Exists(entity))
             return;
+        if (ctx.World.Has<ModHidden>(entity))
+            throw new InvalidOperationException($"mod '{ctx.Name}' may not modify entity {entity}");
         var allowed = ctx.Spawned.Contains(entity) || (!ctx.World.Has<ModEntity>(entity) && host(entity));
         if (!allowed)
             throw new InvalidOperationException($"mod '{ctx.Name}' may not modify entity {entity}");
