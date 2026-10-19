@@ -115,6 +115,11 @@ public readonly struct ComponentModCommands
     public void Insert<T>(ulong entity, string path, in T value) where T : struct
         => _mod.Commands.InsertTyped(entity, Writable<T>(_mod.Ctx, path, "insert"), value);
 
+    /// Insert with the mapper already resolved by Writable (a caller inserting one path
+    /// many times resolves it once).
+    public void Insert<T>(ulong entity, IModComponentOf<T> component, in T value) where T : struct
+        => _mod.Commands.InsertTyped(entity, component, value);
+
     /// Queues a write of the resource registered as `path` (IModResourceOf&lt;T&gt;); traps
     /// on a read-only one, like `commands.set-resource`.
     public void SetResource<T>(string path, in T value)
@@ -164,7 +169,9 @@ public readonly struct ComponentModCommands
         _mod.Commands.SendBytes(path, value);
     }
 
-    internal static IModComponentOf<T> Writable<T>(ModHostContext ctx, string path, string what) where T : struct
+    /// The writable typed mapper of the component registered as `path`; traps on a
+    /// read-only or untyped one. `what` names the operation in the trap.
+    public static IModComponentOf<T> Writable<T>(ModHostContext ctx, string path, string what) where T : struct
     {
         if (!ctx.Registry.TryGet(path, out var comp))
             throw new InvalidOperationException($"{what}: '{path}' is not a registered component");
@@ -209,6 +216,14 @@ public readonly struct ComponentModQuery
         if (!Term(term, path, "set"))
             throw new InvalidOperationException($"set({term}): {path} is not a `mut` term");
         _mod.Commands.InsertTyped(entity, ComponentModCommands.Writable<T>(_mod.Ctx, path, "set"), value);
+    }
+
+    /// Set with the mapper already resolved by ComponentModCommands.Writable.
+    public void Set<T>(ulong entity, int term, string path, IModComponentOf<T> component, in T value) where T : struct
+    {
+        if (!Term(term, path, "set"))
+            throw new InvalidOperationException($"set({term}): {path} is not a `mut` term");
+        _mod.Commands.InsertTyped(entity, component, value);
     }
 
     /// Reading term `term`'s value of each live entity, as Encoding.Typed bytes appended to
