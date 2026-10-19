@@ -208,9 +208,8 @@ internal static class InteractionSystem
 				if ((cmd.CommandType == RenderCommandType.Border) != (pass == 1))
 					continue;
 				// ScissorStart: an Overflow.Scroll/Clip container that paints nothing
-				// of its own still needs a ComputedNode = its clip box, so hit-tests
-				// can clip overflowing children to the visible viewport (the scissor's
-				// BoundingBox IS that box, keyed by the element id).
+				// of its own still needs a ComputedNode = its box, so hit-tests can
+				// clip overflowing children to the visible viewport.
 				if (cmd.CommandType != RenderCommandType.Rectangle &&
 				    cmd.CommandType != RenderCommandType.Image &&
 				    cmd.CommandType != RenderCommandType.Border &&
@@ -218,13 +217,28 @@ internal static class InteractionSystem
 				    cmd.CommandType != RenderCommandType.Custom &&
 				    cmd.CommandType != RenderCommandType.ScissorStart)
 					continue;
+				var box = cmd.BoundingBox;
 				if (!map.TryGetValue(cmd.Id, out var entityId))
-					continue;
+				{
+					// A text run carries its own child id: credit it to the element,
+					// with the element's box (the run is only the glyph extent).
+					if (cmd.CommandType != RenderCommandType.Text
+					    || !ctx.Value.TextClayToEntity.TryGetValue(cmd.Id, out entityId)
+					    || !ctx.Value.TryGetElementBoundingBox(entityId, out box))
+						continue;
+				}
 				if (!seen.Add(entityId))
 					continue;
+				// The scissor rect is the CLIP, not the element: for a ClipToParent
+				// float it is the parent's whole viewport, which would turn the
+				// float into a page-sized hit box. Ancestor clips are the hit
+				// test's job (it walks the parent chain).
+				if (cmd.CommandType == RenderCommandType.ScissorStart
+				    && ctx.Value.TryGetElementBoundingBox(entityId, out var own))
+					box = own;
 
-				var size = new Vector2(cmd.BoundingBox.Width, cmd.BoundingBox.Height);
-				var pos = new Vector2(cmd.BoundingBox.X, cmd.BoundingBox.Y);
+				var size = new Vector2(box.Width, box.Height);
+				var pos = new Vector2(box.X, box.Y);
 				if (computed.TryGet(entityId, out var computedData))
 				{
 					var (_, cn) = computedData;

@@ -304,6 +304,7 @@ internal static class LayoutSystem
 
 		c.ClayToEntity.Clear();
 		c.ScrollClayToEntity.Clear();
+		c.TextClayToEntity.Clear();
 
 		if (profiler.Enabled)
 		{
@@ -437,9 +438,14 @@ internal static class LayoutSystem
 				cache.RootOf.Remove(op.Entity);
 	}
 
+	// Clay ids a text run by its index among the element's children; the text is
+	// added before any child element, so it is always child 0.
+	private static uint TextId(uint elementId) => ElementId.HashNumber(0, elementId).Id;
+
 	private static void Replay(List<LayoutCache.Op> ops, UiClayContext c)
 	{
 		var ctx = Clay.Clay.Context!;
+		LayoutCache.Op open = default;
 		foreach (var op in ops)
 		{
 			switch (op.Kind)
@@ -450,9 +456,12 @@ internal static class LayoutSystem
 					c.ClayToEntity[op.Decl.Id.Id] = op.Entity;
 					if (op.Scroll)
 						c.ScrollClayToEntity[op.Decl.Id.Id] = op.Entity;
+					open = op;
 					break;
 				case LayoutCache.OpKind.Text:
+					// A Text op always directly follows its element's Open.
 					ctx.AddText(op.Text!, op.TextConfig);
+					c.TextClayToEntity[TextId(open.Decl.Id.Id)] = open.Entity;
 					break;
 				default:
 					ctx.CloseElement();
@@ -525,6 +534,7 @@ internal static class LayoutSystem
 			// string every frame (immediate-mode runs this per text node/frame).
 			var text = textPtr.Ref.Value ?? string.Empty;
 			ctx.AddText(text, tcfg);
+			c.TextClayToEntity[TextId(decl.Id.Id)] = entityId;
 			rec.Add(new LayoutCache.Op { Kind = LayoutCache.OpKind.Text, Text = text, TextConfig = tcfg });
 		}
 

@@ -51,6 +51,11 @@ public sealed class UiClayContext
 	internal int LastCommandsCount;
 	public ReadOnlySpan<RenderCommand> LastCommands => LastCommandsBuffer.AsSpan(0, LastCommandsCount);
 	internal readonly Dictionary<uint, ulong> ClayToEntity = new();
+	// Clay id of an element's text run -> the element's entity. Clay gives the
+	// text its own child id, so without this a text-only node's Text command maps
+	// to nothing and the node never gets a ComputedNode (invisible to hit tests).
+	// Kept apart from ClayToEntity so pointer routing is unchanged.
+	internal readonly Dictionary<uint, ulong> TextClayToEntity = new();
 	// Clay ElementId -> entity for elements declared with Overflow.Scroll.
 	// Renderers consult this each frame to draw scrollbar overlays.
 	public readonly Dictionary<uint, ulong> ScrollClayToEntity = new();
