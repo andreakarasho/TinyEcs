@@ -42,9 +42,10 @@ sealed class UiDemoPlugin : IPlugin
 
 	public void Build(App app)
 	{
-		app.AddPlugin(new ScrollbarPlugin());
-		app.AddPlugin(new CheckboxPlugin());
-		app.AddPlugin(new SliderPlugin());
+		app.AddPlugin(new UiScrollbarPlugin());
+		app.AddPlugin(new UiWindowPlugin()); // UiPopup dismissal for the menu
+		app.AddPlugin(new UiWidgetsPlugin());
+		app.AddPlugin(new UiHoverTintPlugin());
 		app.AddResource(new FruitSelection());
 
 		app.AddSystem((Commands commands) =>
@@ -82,7 +83,7 @@ sealed class UiDemoPlugin : IPlugin
 				.Insert(new TextFont { Size = 18 })
 				.Insert(new TextColor(ClayColor.White));
 
-			// Row that holds the scroll list and its scrollbar side by side.
+			// Row that holds the scroll list.
 			var listRow = commands.Spawn()
 				.Insert(new Node
 				{
@@ -101,7 +102,7 @@ sealed class UiDemoPlugin : IPlugin
 					Display = Display.Flex,
 					FlexDirection = FlexDirection.Column,
 					AlignItems = AlignItems.Start,
-					Width = Val.Px(232),
+					Width = Val.Px(256),
 					Height = Val.Px(280),
 					Padding = UiRect.All(4),
 					Gap = Val.Px(2),
@@ -109,43 +110,15 @@ sealed class UiDemoPlugin : IPlugin
 				})
 				.Insert(new BackgroundColor(ClayColor.Rgba(12, 14, 20, 255)))
 				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 })
-				.Insert(new ScrollPosition());
-
-			// Scrollbar track + thumb. ScrollbarPlugin sizes/positions the thumb each frame.
-			// Track carries Interaction + FocusPolicy so clicking the rail jumps scroll.
-			var bar = commands.Spawn()
-				.Insert(new Node
-				{
-					Display = Display.Flex,
-					Width = Val.Px(12),
-					Height = Val.Px(280),
-				})
-				.Insert(new BackgroundColor(ClayColor.Rgba(0, 0, 0, 80)))
-				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 })
-				.Insert(new Interaction())
-				.Insert(new FocusPolicy { Block = true })
-				.Insert(new Scrollbar
-				{
-					Target = list.Id,
-					Orientation = ScrollbarOrientation.Vertical,
-					MinThumbLength = 24,
-				});
-
-			var thumb = commands.Spawn()
-				.Insert(new Node())
-				.Insert(new ScrollbarThumb())
-				.Insert(new Interaction())
-				.Insert(new FocusPolicy { Block = true })
-				.Insert(new ScrollbarDragState())
-				.Insert(new BackgroundColor(ClayColor.Rgba(180, 200, 230, 220)))
-				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 });
+				.Insert(new ScrollPosition())
+				// Overlay bar on the right edge: UiScrollbarPlugin reserves its lane,
+				// computes the geometry and drives the drag; RaylibUiPlugin paints it.
+				.Insert(new UiScrollbar { Style = UiScrollbarStyle.Flat, Width = 10 });
 
 			commands.AddChild(root, panel);
 			commands.AddChild(panel, title);
 			commands.AddChild(panel, listRow);
 			commands.AddChild(listRow, list);
-			commands.AddChild(listRow, bar);
-			commands.AddChild(bar, thumb);
 
 			foreach (var fruit in Fruits)
 			{
@@ -206,7 +179,8 @@ sealed class UiDemoPlugin : IPlugin
 
 			var checkbox = commands.Spawn()
 				.Insert(new Node { Display = Display.Flex, Width = Val.Px(20), Height = Val.Px(20) })
-				.Insert(new Checkbox { Checked = false })
+				.Insert(new Checkbox())
+				.Insert(new SelfUpdate())
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
 				.Insert(new BackgroundColor(ClayColor.Rgba(40, 48, 64, 255)))
@@ -243,10 +217,12 @@ sealed class UiDemoPlugin : IPlugin
 				})
 				.Insert(new Slider
 				{
-					Min = 0, Max = 100, Value = 50,
 					ThumbLength = 18,
 					Orientation = ScrollbarOrientation.Horizontal,
 				})
+				.Insert(new SliderValue(50))
+				.Insert(new SliderRange(0, 100))
+				.Insert(new SelfUpdate())
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
 				.Insert(new BackgroundColor(ClayColor.Rgba(40, 48, 64, 255)))
@@ -257,7 +233,6 @@ sealed class UiDemoPlugin : IPlugin
 				.Insert(new SliderThumb())
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
-				.Insert(new SliderDragState())
 				.Insert(new BackgroundColor(ClayColor.Rgba(180, 200, 230, 240)))
 				.Insert(new BorderRadius { TopLeft = 6, TopRight = 6, BottomLeft = 6, BottomRight = 6 });
 
@@ -314,6 +289,30 @@ sealed class UiDemoPlugin : IPlugin
 			commands.AddChild(panel, buttonRow);
 			commands.AddChild(buttonRow, button);
 			commands.AddChild(button, buttonText);
+
+			// Headless menu: MenuButton asks for its popup (MenuOpen, observed
+			// below); items emit Activate and close it; outside press dismisses.
+			var menuButton = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					Width = Val.Px(110),
+					Height = Val.Px(28),
+					JustifyContent = JustifyContent.Center,
+					AlignItems = AlignItems.Center,
+				})
+				.Insert(new MenuButton())
+				.Insert(new Interaction())
+				.Insert(new BackgroundColor(RowBase))
+				.Insert(new UiHoverTint { Normal = RowBase, Hover = RowHover })
+				.Insert(new BorderRadius { TopLeft = 4, TopRight = 4, BottomLeft = 4, BottomRight = 4 });
+			var menuText = commands.Spawn()
+				.Insert(new Node())
+				.Insert(new Text("Pick fruit"))
+				.Insert(new TextFont { Size = 14 })
+				.Insert(new TextColor(ClayColor.White));
+			commands.AddChild(buttonRow, menuButton);
+			commands.AddChild(menuButton, menuText);
 
 			// Entity-targeted observers (one per ancestor) — fired in bubble order.
 			button.Observe<On<UiClick>>((trigger) =>
@@ -447,14 +446,52 @@ sealed class UiDemoPlugin : IPlugin
 		.SingleThreaded()
 		.Build();
 
-		// Recolor checkbox by Checked state.
-		app.AddSystem((Query<Data<Checkbox, BackgroundColor>> boxes) =>
+		app.AddObserver<On<MenuOpen>, Commands>((trigger, commands) =>
 		{
-			foreach (var (_, cb, bg) in boxes)
+			var popup = commands.Spawn()
+				.Insert(new Node
+				{
+					Display = Display.Flex,
+					FlexDirection = FlexDirection.Column,
+					PositionType = PositionType.Absolute,
+					Width = Val.Px(140),
+					Padding = UiRect.All(4),
+				})
+				.Insert(new BackgroundColor(PanelBg))
+				.Insert(new GlobalZIndex(100))
+				.Insert(new MenuPopup { Owner = trigger.EntityId })
+				.Insert(new Popover { Anchor = trigger.EntityId, Side = PopoverSide.Bottom, Gap = 2 });
+			foreach (var fruit in new[] { "Apple", "Banana", "Cherry" })
 			{
-				bg.Ref.Value = cb.Ref.Checked
+				var name = fruit;
+				var item = commands.Spawn()
+					.Insert(new Node { Display = Display.Flex, Width = Val.Percent(100), Height = Val.Px(24), Padding = UiRect.Horizontal(6), AlignItems = AlignItems.Center })
+					.Insert(new MenuItem())
+					.Insert(new Interaction())
+					.Insert(new BackgroundColor(RowBase))
+					.Insert(new UiHoverTint { Normal = RowBase, Hover = RowHover })
+					.Observe((On<Activate> _, ResMut<FruitSelection> sel) => sel.Value.Selected = name);
+				var label = commands.Spawn()
+					.Insert(new Node())
+					.Insert(new Text(name))
+					.Insert(new TextFont { Size = 14 })
+					.Insert(new TextColor(ClayColor.White));
+				commands.AddChild(item, label);
+				commands.AddChild(popup, item);
+			}
+		});
+
+		// Recolor checkbox by Checked state.
+		app.AddSystem((Query<Data<BackgroundColor>, Filter<With<Checkbox>>> boxes, Query<Data<Checked>> isChecked) =>
+		{
+			foreach (var (ent, bg) in boxes)
+			{
+				var want = isChecked.Contains(ent.Ref)
 					? ClayColor.Rgba(80, 180, 120, 255)
 					: ClayColor.Rgba(40, 48, 64, 255);
+				if (bg.Ref.Value.R == want.R && bg.Ref.Value.G == want.G) continue;
+				bg.Ref.Value = want;
+				boxes.SetChanged<BackgroundColor>(ent.Ref);
 			}
 		})
 		.InStage(Stage.Update)
@@ -462,11 +499,14 @@ sealed class UiDemoPlugin : IPlugin
 		.Build();
 
 		// Update slider value label.
-		app.AddSystem((Query<Data<Slider>> sliders, Query<Data<Text>, Filter<With<SliderValueLabel>>> labels) =>
+		app.AddSystem((Query<Data<SliderValue>, Filter<Changed<SliderValue>>> sliders, Query<Data<Text>, Filter<With<SliderValueLabel>>> labels) =>
 		{
-			float value = 0;
-			foreach (var (_, s) in sliders) value = s.Ref.Value;
-			foreach (var (_, t) in labels) t.Ref.Value = ((int)value).ToString();
+			foreach (var (_, s) in sliders)
+				foreach (var (ent, t) in labels)
+				{
+					t.Ref.Value = ((int)s.Ref.Value).ToString();
+					labels.SetChanged<Text>(ent.Ref);
+				}
 		})
 		.InStage(Stage.Update)
 		.SingleThreaded()

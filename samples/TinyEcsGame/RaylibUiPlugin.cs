@@ -2,6 +2,7 @@ using System.Numerics;
 using Clay;
 using Raylib_cs;
 using TinyEcs.Bevy;
+using TinyEcs.Bevy.Input;
 using TinyEcs.Bevy.UI;
 using ClayColor = Clay.Color;
 using RColor = Raylib_cs.Color;
@@ -30,12 +31,21 @@ sealed class RaylibUiPlugin : IPlugin
 			LogicalSize = LogicalSize,
 		});
 
-		// Feed pointer + the shared Time clock + wheel into UI state before
-		// layout runs (the library never reads a wall clock itself).
-		app.AddSystem((ResMut<UiPointer> pointer, ResMut<UiClayContext> ctx, ResMut<UiSurface> surf, ResMut<Time> time) =>
+		app.AddPlugin(new InputPlugin());
+
+		// Feed pointer + raw mouse + the shared Time clock + wheel into UI state
+		// before any gesture or layout runs (the library never reads a device or a
+		// wall clock itself). Stage.First: the gestures (scrollbar drag, window
+		// drag) read MouseInput from PreUpdate on.
+		app.AddSystem((ResMut<UiPointer> pointer, ResMut<MouseInput> mouse, ResMut<UiClayContext> ctx, ResMut<UiSurface> surf, ResMut<Time> time) =>
 		{
-			pointer.Value.Position = Raylib.GetMousePosition();
-			pointer.Value.Down = Raylib.IsMouseButtonDown(MouseButton.Left);
+			var pos = Raylib.GetMousePosition();
+			var down = MouseButtons.None;
+			if (Raylib.IsMouseButtonDown(Raylib_cs.MouseButton.Left)) down |= MouseButtons.Left;
+			if (Raylib.IsMouseButtonDown(Raylib_cs.MouseButton.Right)) down |= MouseButtons.Right;
+			mouse.Value.SetSnapshot(pos, down);
+			pointer.Value.Position = pos;
+			pointer.Value.Down = Raylib.IsMouseButtonDown(Raylib_cs.MouseButton.Left);
 			time.Value.Frame = Raylib.GetFrameTime();
 			time.Value.Total += time.Value.Frame * 1000f;
 			// Clay multiplies the delta by 30 internally inside UpdateScrollContainers.
@@ -44,20 +54,26 @@ sealed class RaylibUiPlugin : IPlugin
 			ctx.Value.ScrollDelta = wheel;
 			ctx.Value.EnableDragScrolling = false;
 			surf.Value.LogicalSize = new Vector2(Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+			mouse.Value.Update(time.Value.Total);
 		})
-		.InStage(Stage.PreUpdate)
+		.InStage(Stage.First)
 		.SingleThreaded()
 		.RunIf(_ => Raylib.IsWindowReady())
 		.Build();
 
 		// Draw the UI inside the main BeginDrawing/EndDrawing block.
-		app.AddSystem((Res<UiRenderCommands> cmds) =>
+		app.AddSystem((Res<UiRenderCommands> cmds, Res<ScrollbarOverlays> bars) =>
 		{
 			var span = cmds.Value.Span;
 			for (var i = 0; i < span.Length; i++)
 			{
 				ref readonly var cmd = ref span[i];
 				DrawCommand(in cmd);
+				// A scroll container's bar paints right after its content, so it
+				// sorts with its window instead of over everything drawn later.
+				if (cmd.CommandType == RenderCommandType.ScissorEnd
+					&& bars.Value.ByClayId.TryGetValue(cmd.Id, out var bar))
+					DrawScrollbar(in bar);
 			}
 		})
 		.InStage(Stage.Last)
@@ -123,6 +139,15 @@ sealed class RaylibUiPlugin : IPlugin
 				Raylib.EndScissorMode();
 				break;
 		}
+	}
+
+	private static void DrawScrollbar(in ScrollbarBar bar)
+	{
+		var track = new Rectangle(bar.TrackX, bar.TrackY, bar.TrackWidth, bar.TrackHeight);
+		var thumb = new Rectangle(bar.TrackX, bar.ThumbTop, bar.TrackWidth, bar.ThumbHeight);
+		Raylib.DrawRectangleRounded(track, 1f, 6, new RColor(0, 0, 0, 80));
+		Raylib.DrawRectangleRounded(thumb, 1f, 6,
+			bar.ThumbHovered ? new RColor(210, 225, 245, 240) : new RColor(180, 200, 230, 220));
 	}
 
 	private static RColor ToRaylib(ClayColor c)

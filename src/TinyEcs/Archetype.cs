@@ -114,6 +114,17 @@ public sealed class Archetype : IComparable<Archetype>
 	public EcsID Id { get; }
 
 	internal Column[]? Columns => _columns;
+
+	/// <summary>Entity id stored at <paramref name="row"/> (0 &lt;= row &lt; <see cref="Count"/>).</summary>
+	public EcsID EntityIdAt(int row) => _entities[row].ID;
+
+	/// <summary>
+	/// Boxed copy of the value at <paramref name="row"/> of the data column
+	/// <paramref name="column"/> (an index into <see cref="Components"/>).
+	/// Allocates: meant for inspectors / debug tooling, not hot paths.
+	/// </summary>
+	public object GetBoxed(int column, int row) => _columns![column].GetUntyped(row);
+
 	internal ReadOnlySpan<EntityView> Entities => _entities.AsSpan(0, _count);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]

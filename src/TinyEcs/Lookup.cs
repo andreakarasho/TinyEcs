@@ -25,6 +25,13 @@ internal static class Lookup
 	private static readonly FastIdLookup<Func<int, Array?>> _arrayCreator = new ();
 	private static readonly FastIdLookup<Func<int, Column>> _columnCreator = new ();
 	private static readonly FastIdLookup<ComponentInfo> _components = new ();
+	private static readonly FastIdLookup<Type> _types = new ();
+
+	public static Type? GetComponentType(EcsID id)
+	{
+		ref var type = ref _types.TryGet(id, out var exists);
+		return exists ? type : null;
+	}
 
 	public static ref readonly ComponentInfo GetComponent(EcsID id)
 	{
@@ -114,6 +121,7 @@ internal static class Lookup
 			_arrayCreator.Add(Value.ID, count => Size > 0 ? new T[count] : Array.Empty<T>());
 			_columnCreator.Add(Value.ID, count => new Column<T>(Size > 0 ? count : 0));
 			_components.Add(Value.ID, Value);
+			_types.Add(Value.ID, typeof(T));
 		}
 
 		// credit: BeanCheeseBurrito from Flecs.NET

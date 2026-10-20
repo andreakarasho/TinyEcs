@@ -216,13 +216,22 @@ internal interface IComponentHandler
 /// </summary>
 internal class ComponentHandler<T> : IComponentHandler where T : struct
 {
+	// A zero-size tag has no column to read: its triggers carry default(T).
+	// Bevy fires hooks / observers for ZST components too, so a marker can be
+	// reacted to (OnAdd<AutoFocus>, OnRemove<Checked>) like any component.
+	private readonly bool _isTag;
+
+	public ComponentHandler(bool isTag) => _isTag = isTag;
+
+	private T Read(TinyEcs.World world, ulong entityId)
+		=> _isTag ? default : world.Get<T>(entityId);
+
 	public void HandleSet(TinyEcs.World world, ulong entityId)
 	{
 		if (!world.Has<T>(entityId))
 			return;
 
-		ref var component = ref world.Get<T>(entityId);
-		world.EmitTriggerInner(new OnInsert<T>(entityId, component));
+		world.EmitTriggerInner(new OnInsert<T>(entityId, Read(world, entityId)));
 	}
 
 	public void HandleAdd(TinyEcs.World world, ulong entityId)
@@ -230,8 +239,7 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 		if (!world.Has<T>(entityId))
 			return;
 
-		ref var component = ref world.Get<T>(entityId);
-		world.EmitTriggerInner(new OnAdd<T>(entityId, component));
+		world.EmitTriggerInner(new OnAdd<T>(entityId, Read(world, entityId)));
 	}
 
 	public void HandleUnset(TinyEcs.World world, ulong entityId)
@@ -239,8 +247,7 @@ internal class ComponentHandler<T> : IComponentHandler where T : struct
 		if (!world.Has<T>(entityId))
 			return;
 
-		ref var component = ref world.Get<T>(entityId);
-		world.EmitTriggerInner(new OnRemove<T>(entityId, component));
+		world.EmitTriggerInner(new OnRemove<T>(entityId, Read(world, entityId)));
 	}
 }
 
@@ -314,7 +321,7 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			if (componentInfo.Size > 0 && state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
+			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Queue for processing after Set() completes - this fires OnInsert
 				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Set));
@@ -330,7 +337,7 @@ public static class ObserverExtensions
 			// Skip component type entities
 			if (IsComponentEntity(state, entityId)) return;
 
-			if (componentInfo.Size > 0 && state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
+			if (state.ComponentHandlers.TryGetValue(componentInfo.ID, out var handler))
 			{
 				// Queue for processing after Set() completes - this fires OnAdd
 				state.PendingComponentActions.Enqueue((entityId, handler, PendingComponentActionType.Add));
@@ -383,7 +390,7 @@ public static class ObserverExtensions
 		state.HooksEnabled = wasEnabled;
 
 		if (!state.ComponentHandlers.ContainsKey(componentId))
-			state.ComponentHandlers[componentId] = new ComponentHandler<T>();
+			state.ComponentHandlers[componentId] = new ComponentHandler<T>(world.IsTag<T>());
 	}
 
 	/// <summary>

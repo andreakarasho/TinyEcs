@@ -1,20 +1,19 @@
 using System.Numerics;
+using TinyEcs.Bevy.Input;
 
 namespace TinyEcs.Bevy.UI;
 
-// Floating-window primitives: the component vocabulary + z-order counter any
-// windowing layer needs, plus an optional Interaction-driven drag plugin.
+// Floating windows: the component vocabulary, the z-order counter, and the
+// gestures every windowing layer needs (UiWindowPlugin): drag-to-move with
+// bring-to-front, right-click close, popup dismissal. The gestures resolve the
+// press through UiPick (the one hit-test), so a press on ANY painted child —
+// pixel-perfect when the host sets UiClayContext.PixelHitTest — drags or
+// closes its window; windows need no Interaction of their own.
 //
-// Two integration levels:
-//   * Components only — a host with its own gesture resolution (custom hit
-//     testing, pixel-perfect masks) tags roots with UiMovable, registers
-//     UiZCounter / ForcedWindowDrag itself and runs its own drag systems.
-//   * UiWindowPlugin — full drag + bring-to-front handling driven by the
-//     library's own pointer/Interaction pipeline. Requires windows (or their
-//     children) to carry Interaction so the pointer can land on them.
-//
-// Right-click-close is NOT provided here: UiPointer models a single button, so
-// secondary-button gestures stay host-side.
+// Input is the raw MouseInput (edges + consume, in UI-layout space): the close
+// gesture consumes the right button so world systems under a window never see
+// it. Hosts tune the gestures through UiWindowModifiers and opt elements out
+// with UiNoWindowDrag / UiDragYield / UiMovableNoDrag / UiNoRightClickClose.
 
 /// <summary>Tag for a floating, movable window ROOT. Only the root carries a
 /// <see cref="GlobalZIndex"/> — the layout system threads that z down to every
@@ -29,6 +28,68 @@ public struct UiMovableNoDrag;
 /// (button, resize handle, checkbox) whose press must NOT latch a window drag —
 /// the gesture yields so the control's own click / drag handler runs.</summary>
 public struct UiNoWindowDrag;
+
+/// <summary>An element that owns its own press (a draggable item, a drag source):
+/// a press on it still brings its window to front but never latches a window
+/// drag. Checked on the topmost hit only — unlike <see cref="UiNoWindowDrag"/>,
+/// which is found by bounds.</summary>
+public struct UiDragYield;
+
+/// <summary>Window root opt-out for the right-click-close gesture. The press edge
+/// is NOT consumed while parked over an opted-out window (consuming it would
+/// starve the window's own right-click gesture, e.g. a context menu); the held
+/// press is still consumed so world systems don't act under the window.</summary>
+public struct UiNoRightClickClose;
+
+/// <summary>Popup root (context menu, dropdown, completion list): a press outside
+/// its subtree despawns it, as does any right press. Layout is the root's own
+/// Node; this marker is only the gesture.</summary>
+public struct UiPopup;
+
+/// <summary>
+/// Entity event asking a window to close (the right-click gesture, a host
+/// action). Emitted on the window root, not propagated. Without
+/// <see cref="UiManualClose"/> UiWindowPlugin's default observer despawns the
+/// root (and with it the subtree); other observers run too, so a host can react
+/// (persist, notify a server) and still let the default close it.
+/// </summary>
+public struct UiCloseRequested;
+
+/// <summary>The window closes itself in response to <see cref="UiCloseRequested"/>
+/// (routes through its own teardown); the default despawn is skipped.</summary>
+public struct UiManualClose;
+
+/// <summary>Per-frame drag state published by UiWindowPlugin's drag for
+/// late consumers (anchoring). Owner/FrameDelta are set every frame a window
+/// moves; JustReleased only on the release frame.</summary>
+public sealed class ActiveWindowDrag
+{
+	public ulong Owner;
+	public Vector2 FrameDelta;
+	public ulong JustReleased;
+}
+
+/// <summary>
+/// Host-fed gesture modifiers for UiWindowPlugin, written each frame before
+/// PreUpdate (the library reads no keyboard bindings itself).
+/// </summary>
+public sealed class UiWindowModifiers
+{
+	/// <summary>A press latches a window drag only while DragModifierHeld.</summary>
+	public bool DragRequiresModifier;
+	public bool DragModifierHeld;
+	/// <summary>A drag-and-drop payload rides the cursor: no window drag latches, so
+	/// the press drops onto the window instead of moving it.</summary>
+	public bool DragSuppressed;
+	/// <summary>Dragging an anchored window detaches it from its group instead of
+	/// moving the group.</summary>
+	public bool AnchorDetachHeld;
+	/// <summary>Right-click close of an anchored window needs CloseAnchoredModifierHeld.</summary>
+	public bool CloseAnchoredRequiresModifier;
+	public bool CloseAnchoredModifierHeld;
+	/// <summary>Right-click close of an anchored window closes its whole group.</summary>
+	public bool CloseAnchoredGroup;
+}
 
 /// <summary>
 /// Monotonic z-order counter for floating UI windows. Bump on focus/spawn so
@@ -91,6 +152,29 @@ public static class UiHierarchy
 				DespawnSubtree(commands, cid, childrenQ);
 		}
 		commands.Entity(entity).Despawn();
+	}
+
+	/// <summary>The stacking order of the window owning <paramref name="entity"/>: the
+	/// nearest GlobalZIndex up the Parent chain (only window roots carry one), or
+	/// int.MinValue when no ancestor has one.</summary>
+	public static int ResolveWindowZ(
+		ulong entity,
+		Query<Data<TinyEcs.Parent>> parentQ,
+		Query<Data<GlobalZIndex>> zQ)
+	{
+		var cur = entity;
+		for (var guard = 0; guard < 64; guard++)
+		{
+			if (zQ.TryGet(cur, out var zRow))
+			{
+				var (_, z) = zRow;
+				return z.Ref.Value;
+			}
+			if (!parentQ.TryGet(cur, out var parentRow)) break;
+			var (_, parent) = parentRow;
+			cur = parent.Ref.Id;
+		}
+		return int.MinValue;
 	}
 }
 
@@ -221,157 +305,3 @@ public sealed class UiSurfaceBoundsPlugin : IPlugin
 	}
 }
 
-/// <summary>
-/// Interaction-driven window drag + bring-to-front. The press must land on an
-/// Interaction-bearing element inside the window (the pointer pipeline only
-/// sees those); the system walks the Parent chain to the owning UiMovable
-/// root. Hosts with custom hit-testing skip this plugin and keep the
-/// components.
-/// </summary>
-public sealed class UiWindowPlugin : IPlugin
-{
-	private struct DragAnchor
-	{
-		public bool Active;
-		public ulong Owner;
-		public Vector2 Pointer;
-		public float OriginX, OriginY;
-	}
-
-	public void Build(App app)
-	{
-		app.AddPlugin(new UiZOrderPlugin());
-		app.AddResource(new ForcedWindowDrag());
-
-		// Runs in UiPostLayoutStage after InteractionSystem.PostLayout
-		// (declaration order — UiPlugin must be added first), so PressedEntity
-		// is fresh for the frame the press edge fired.
-		app.AddSystem((
-			Res<UiPointer> pointer,
-			Res<UiClayContext> ctx,
-			Res<UiZCounter> zCounter,
-			Res<ForcedWindowDrag> forced,
-			Local<DragAnchor> anchor,
-			Query<Data<Node, GlobalZIndex>, Filter<With<UiMovable>>> movables,
-			Query<Data<TinyEcs.Parent>> parents,
-			Query<Data<UiMovableNoDrag>> noDrag,
-			Query<Data<UiNoWindowDrag>> noChildDrag) =>
-			Drag(pointer, ctx, zCounter, forced, anchor, movables, parents, noDrag, noChildDrag))
-			.InStage(UiPlugin.UiPostLayoutStage).SingleThreaded().Build();
-	}
-
-	private static void Drag(
-		Res<UiPointer> pointer,
-		Res<UiClayContext> ctx,
-		Res<UiZCounter> zCounter,
-		Res<ForcedWindowDrag> forced,
-		Local<DragAnchor> anchor,
-		Query<Data<Node, GlobalZIndex>, Filter<With<UiMovable>>> movables,
-		Query<Data<TinyEcs.Parent>> parents,
-		Query<Data<UiMovableNoDrag>> noDrag,
-		Query<Data<UiNoWindowDrag>> noChildDrag)
-	{
-		ref readonly var p = ref pointer.Value;
-
-		if (!p.Down)
-		{
-			anchor.Value.Active = false;
-			anchor.Value.Owner = 0;
-			forced.Value.Owner = 0;
-			return;
-		}
-
-		// Forced drag: latch the frame the requested entity materialises,
-		// re-centered under the pointer.
-		if (forced.Value.Owner != 0 && movables.Contains(forced.Value.Owner))
-		{
-			var ownerF = forced.Value.Owner;
-			var (_, nodeF, zF) = movables.Get(ownerF);
-			float wF = nodeF.Ref.Width.Type == ValType.Px ? nodeF.Ref.Width.Value : 0f;
-			float hF = nodeF.Ref.Height.Type == ValType.Px ? nodeF.Ref.Height.Value : 0f;
-			anchor.Value = new DragAnchor
-			{
-				Active = true,
-				Owner = ownerF,
-				Pointer = p.Position,
-				OriginX = p.Position.X - wF / 2f,
-				OriginY = p.Position.Y - hF / 2f,
-			};
-			zF.Ref.Value = zCounter.Value.Bump();
-			movables.SetChanged<GlobalZIndex>(ownerF);
-			forced.Value.Owner = 0;
-		}
-
-		// Latch on the gesture's press target. PressedEntity stays set while
-		// held, so a failed walk retries cheaply; anchor.Active stops re-latch.
-		if (!anchor.Value.Active && ctx.Value.PressedEntity != 0)
-		{
-			var owner = ResolveWindow(ctx.Value.PressedEntity, movables, parents, noChildDrag);
-			if (owner == 0 || noDrag.Contains(owner))
-				return;
-
-			var (_, node, z) = movables.Get(owner);
-			float ox = node.Ref.Left.Type == ValType.Px ? node.Ref.Left.Value : 0f;
-			float oy = node.Ref.Top.Type == ValType.Px ? node.Ref.Top.Value : 0f;
-			anchor.Value = new DragAnchor
-			{
-				Active = true,
-				Owner = owner,
-				Pointer = p.Position,
-				OriginX = ox,
-				OriginY = oy,
-			};
-			z.Ref.Value = zCounter.Value.Bump();
-			movables.SetChanged<GlobalZIndex>(owner);
-		}
-
-		if (!anchor.Value.Active)
-			return;
-
-		if (!movables.Contains(anchor.Value.Owner))
-		{
-			anchor.Value.Active = false;
-			anchor.Value.Owner = 0;
-			return;
-		}
-
-		var delta = p.Position - anchor.Value.Pointer;
-		var (_, ownerNode, _) = movables.Get(anchor.Value.Owner);
-		var left = Val.Px(anchor.Value.OriginX + delta.X);
-		var top = Val.Px(anchor.Value.OriginY + delta.Y);
-		ref var n = ref ownerNode.Ref;
-		// Held-but-stationary frames must not mark the window changed, or the
-		// relayout gate stays open for the whole gesture.
-		if (n.PositionType == PositionType.Absolute && n.Left == left && n.Top == top)
-			return;
-		n.PositionType = PositionType.Absolute;
-		n.Left = left;
-		n.Top = top;
-		movables.SetChanged<Node>(anchor.Value.Owner);
-	}
-
-	// Walk from the pressed element up the Parent chain to the owning UiMovable
-	// root. A UiNoWindowDrag anywhere on the path (the control itself or a
-	// wrapper) yields the gesture.
-	private static ulong ResolveWindow(
-		ulong entity,
-		Query<Data<Node, GlobalZIndex>, Filter<With<UiMovable>>> movables,
-		Query<Data<TinyEcs.Parent>> parents,
-		Query<Data<UiNoWindowDrag>> noChildDrag)
-	{
-		var current = entity;
-		// Depth-capped against a cyclic or malformed parent link.
-		for (var i = 0; i < 32 && current != 0; i++)
-		{
-			if (noChildDrag.Contains(current))
-				return 0;
-			if (movables.Contains(current))
-				return current;
-			if (!parents.Contains(current))
-				return 0;
-			var (_, parent) = parents.Get(current);
-			current = (ulong)parent.Ref.Id;
-		}
-		return 0;
-	}
-}

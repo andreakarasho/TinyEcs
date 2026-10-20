@@ -112,7 +112,7 @@ public class UiInteractionExtrasTests
 
 		// Host hook rejects EVERYTHING — only UiContainsByBounds elements
 		// should still register hover/clicks.
-		app.GetResource<UiClayContext>().PixelHitTest = (_, _, _) => false;
+		app.GetResource<UiClayContext>().PixelHitTest = (ulong _, object? _, Vector2 _, in ComputedNode _) => false;
 
 		var clicks = 0;
 		ulong clicked = 0;
@@ -156,6 +156,7 @@ public class UiInteractionExtrasTests
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
 				.Insert(new Checkbox())
+				.Insert(new SelfUpdate())
 				.Id;
 
 			labelId = c.Spawn()
@@ -175,7 +176,7 @@ public class UiInteractionExtrasTests
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
 
 		var changes = 0;
-		app.AddObserver<On<CheckboxChanged>>(_ => changes++);
+		app.AddObserver<On<ValueChange<bool>>>(_ => changes++);
 		app.RunStartup();
 
 		var pointer = app.GetResource<UiPointer>();
@@ -184,6 +185,6 @@ public class UiInteractionExtrasTests
 		pointer.Down = false; app.Update();
 
 		Assert.Equal(1, changes);
-		Assert.True(app.GetWorld().Entity(boxId).Get<Checkbox>().Checked);
+		Assert.True(app.GetWorld().Entity(boxId).Has<Checked>());
 	}
 }

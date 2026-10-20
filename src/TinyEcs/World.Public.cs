@@ -108,6 +108,20 @@ public sealed partial class World
 	}
 
 	/// <summary>
+	/// Every archetype currently known to the world, empty ones included.
+	/// Not safe to enumerate while structural changes are being applied.
+	/// </summary>
+	public IEnumerable<Archetype> Archetypes => _typeIndex.Values;
+
+	/// <summary>True when <typeparamref name="T"/> is a zero-size tag: it has no column,
+	/// so <see cref="Get{T}"/> cannot read it — only <c>Has</c> answers.</summary>
+	public bool IsTag<T>() where T : struct => Component<T>().Size <= 0;
+
+	/// <summary>CLR type registered for a component id, or null when the id is not a typed component.</summary>
+	public Type? ComponentType(EcsID id)
+		=> _idToSlot.TryGetValue(id, out var slot) ? Lookup.GetComponentType((ulong)slot) : null;
+
+	/// <summary>
 	/// Remove all empty archetypes.
 	/// </summary>
 	/// <returns></returns>

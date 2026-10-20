@@ -550,82 +550,6 @@ public class UiBevyTests
 	}
 
 	[Fact]
-	public void ScrollbarPlugin_positions_thumb_from_target_state()
-	{
-		var app = MakeApp();
-		app.AddPlugin(new ScrollbarPlugin());
-
-		ulong targetId = 0, barId = 0, thumbId = 0;
-		app.AddSystem((Commands c) =>
-		{
-			var target = c.Spawn()
-				.Insert(new UiNode
-				{
-					Display = Display.Flex,
-					FlexDirection = FlexDirection.Column,
-					Width = Val.Px(200),
-					Height = Val.Px(100),
-					Overflow = Overflow.Scroll,
-				})
-				.Insert(new BackgroundColor(ClayColor.White))
-				.Insert(new ScrollPosition());
-
-			for (var i = 0; i < 20; i++)
-			{
-				var row = c.Spawn()
-					.Insert(new UiNode { Width = Val.Px(180), Height = Val.Px(24) })
-					.Insert(new BackgroundColor(ClayColor.Red));
-				c.AddChild(target, row);
-			}
-
-			var bar = c.Spawn()
-				.Insert(new UiNode { Display = Display.Flex, Width = Val.Px(10), Height = Val.Px(100) })
-				.Insert(new Scrollbar
-				{
-					Target = target.Id,
-					Orientation = ScrollbarOrientation.Vertical,
-					MinThumbLength = 16,
-				})
-				.Insert(new BackgroundColor(ClayColor.Gray));
-
-			var thumb = c.Spawn()
-				.Insert(new UiNode())
-				.Insert(new ScrollbarThumb())
-				.Insert(new Interaction())
-				.Insert(new FocusPolicy { Block = true })
-				.Insert(new ScrollbarDragState())
-				.Insert(new BackgroundColor(ClayColor.White));
-
-			c.AddChild(bar, thumb);
-
-			targetId = target.Id;
-			barId = bar.Id;
-			thumbId = thumb.Id;
-		})
-		.InStage(BevyStage.Startup).SingleThreaded().Build();
-
-		// 3 frames: 1) layout target+bar+thumb. 2) plugin reads scroll data, sets thumb size.
-		//           3) layout re-runs with new thumb dims so ComputedNode reflects them.
-		app.Update();
-		app.Update();
-		app.Update();
-
-		var world = app.GetWorld();
-		var thumbView = world.Entity(thumbId);
-		ref var thumbNode = ref thumbView.Get<UiNode>();
-		Assert.Equal(PositionType.Absolute, thumbNode.PositionType);
-		Assert.True(thumbNode.Height.Value > 0);
-		// 100px visible / 24*20=480px content → ratio 0.208 → thumb ~20.8 (>= minThumb 16).
-		Assert.InRange(thumbNode.Height.Value, 16f, 50f);
-
-		// Clay must actually render the thumb with a non-zero box.
-		Assert.True(thumbView.Has<ComputedNode>(), "thumb missing ComputedNode");
-		ref var thumbComputed = ref thumbView.Get<ComputedNode>();
-		Assert.True(thumbComputed.Size.X > 0, $"thumb width zero: {thumbComputed.Size}");
-		Assert.True(thumbComputed.Size.Y > 0, $"thumb height zero: {thumbComputed.Size}");
-	}
-
-	[Fact]
 	public void Checkbox_toggles_on_click()
 	{
 		var app = MakeApp();
@@ -639,7 +563,8 @@ public class UiBevyTests
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
-				.Insert(new Checkbox { Checked = false });
+				.Insert(new Checkbox())
+				.Insert(new SelfUpdate());
 			boxId = box.Id;
 		})
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
@@ -657,14 +582,14 @@ public class UiBevyTests
 		app.Update();
 
 		var world = app.GetWorld();
-		Assert.True(world.Entity(boxId).Get<Checkbox>().Checked);
+		Assert.True(world.Entity(boxId).Has<Checked>());
 
 		// Second click toggles back off.
 		pointer.Down = true; app.Update();
 		pointer.Down = false; app.Update();
 		app.Update();
 		app.Update();
-		Assert.False(world.Entity(boxId).Get<Checkbox>().Checked);
+		Assert.False(world.Entity(boxId).Has<Checked>());
 	}
 
 	[Fact]
@@ -681,17 +606,17 @@ public class UiBevyTests
 				.Insert(new BackgroundColor(ClayColor.Gray))
 				.Insert(new Slider
 				{
-					Min = 0, Max = 100, Value = 50,
 					ThumbLength = 20,
 					Orientation = ScrollbarOrientation.Horizontal,
-				});
+				})
+				.Insert(new SliderValue(50))
+				.Insert(new SliderRange(0, 100));
 
 			var thumb = c.Spawn()
 				.Insert(new UiNode())
 				.Insert(new SliderThumb())
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
-				.Insert(new SliderDragState())
 				.Insert(new BackgroundColor(ClayColor.White));
 			thumbId = thumb.Id;
 
@@ -712,83 +637,6 @@ public class UiBevyTests
 	}
 
 	[Fact]
-	public void Scrollbar_click_on_track_jumps_scroll()
-	{
-		var app = MakeApp();
-		app.AddPlugin(new ScrollbarPlugin());
-
-		app.AddSystem((Commands c) =>
-		{
-			var target = c.Spawn()
-				.Insert(new UiNode
-				{
-					Display = Display.Flex,
-					FlexDirection = FlexDirection.Column,
-					Width = Val.Px(200),
-					Height = Val.Px(100),
-					Overflow = Overflow.Scroll,
-				})
-				.Insert(new BackgroundColor(ClayColor.White))
-				.Insert(new ScrollPosition());
-
-			for (var i = 0; i < 20; i++)
-			{
-				var row = c.Spawn()
-					.Insert(new UiNode { Width = Val.Px(180), Height = Val.Px(24) })
-					.Insert(new BackgroundColor(ClayColor.Red));
-				c.AddChild(target, row);
-			}
-
-			// Bar lives at x=200..210, y=0..100.
-			var bar = c.Spawn()
-				.Insert(new UiNode
-				{
-					Display = Display.Flex,
-					Width = Val.Px(10),
-					Height = Val.Px(100),
-					PositionType = PositionType.Absolute,
-					Left = Val.Px(200),
-					Top = Val.Px(0),
-				})
-				.Insert(new Interaction())
-				.Insert(new FocusPolicy { Block = true })
-				.Insert(new Scrollbar
-				{
-					Target = target.Id,
-					Orientation = ScrollbarOrientation.Vertical,
-					MinThumbLength = 16,
-				})
-				.Insert(new BackgroundColor(ClayColor.Gray));
-
-			var thumb = c.Spawn()
-				.Insert(new UiNode())
-				.Insert(new ScrollbarThumb())
-				.Insert(new Interaction())
-				.Insert(new FocusPolicy { Block = true })
-				.Insert(new ScrollbarDragState())
-				.Insert(new BackgroundColor(ClayColor.White));
-			c.AddChild(bar, thumb);
-		})
-		.InStage(BevyStage.Startup).SingleThreaded().Build();
-
-		app.Update(); // layout
-		app.Update(); // plugin positions thumb; second layout pass
-
-		// Click on the rail near the bottom (y = 90 out of 100 → ~90% of maxScroll).
-		var pointer = app.GetResource<UiPointer>();
-		pointer.Position = new Vector2(205, 90);
-		pointer.Down = true;
-		app.Update(); // hit-test fires UiPointerDown
-		pointer.Down = false;
-		app.Update(); // Drag system consumes the event
-		app.Update(); // ScrollPosition synced from Clay
-
-		ScrollPosition sp = default;
-		foreach (var (_e, s) in app.GetWorld().Query<Data<ScrollPosition>>()) sp = s.Ref;
-		Assert.True(sp.OffsetY > 100f, $"expected large scroll, got {sp.OffsetY}");
-	}
-
-	[Fact]
 	public void Slider_click_on_track_jumps_value()
 	{
 		var app = MakeApp();
@@ -803,10 +651,12 @@ public class UiBevyTests
 				.Insert(new FocusPolicy { Block = true })
 				.Insert(new Slider
 				{
-					Min = 0, Max = 100, Value = 0,
 					ThumbLength = 20,
 					Orientation = ScrollbarOrientation.Horizontal,
 				})
+				.Insert(new SliderValue(0))
+				.Insert(new SliderRange(0, 100))
+				.Insert(new SelfUpdate())
 				.Insert(new BackgroundColor(ClayColor.Gray));
 
 			var thumb = c.Spawn()
@@ -814,7 +664,6 @@ public class UiBevyTests
 				.Insert(new SliderThumb())
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
-				.Insert(new SliderDragState())
 				.Insert(new BackgroundColor(ClayColor.White));
 			c.AddChild(track, thumb);
 			trackId = track.Id;
@@ -833,7 +682,7 @@ public class UiBevyTests
 		app.Update();
 		app.Update();
 
-		var slider = app.GetWorld().Entity(trackId).Get<Slider>();
+		var slider = app.GetWorld().Entity(trackId).Get<SliderValue>();
 		Assert.InRange(slider.Value, 70f, 80f);
 	}
 

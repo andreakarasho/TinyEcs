@@ -6,7 +6,7 @@ namespace TinyEcs.Bevy.UI;
 public sealed class UiScale { public float Value = 1f; }
 
 /// <summary>The ITextMeasurer the layout pass was initialized with — exposed
-/// so widgets (e.g. TextField caret math) measure with the same metrics Clay
+/// so widgets (e.g. the text editor's caret math) measure with the same metrics Clay
 /// laid the glyphs out with.</summary>
 public sealed class UiTextMeasure { public ITextMeasurer Measurer = null!; }
 
@@ -87,12 +87,13 @@ public sealed class UiClayContext
 	// Window for UiDoubleClick synthesis (seconds). 0.35s matches the
 	// platform double-click default used by most legacy clients.
 	public float DoubleClickWindow = 0.35f;
-	// Optional pixel-perfect hit-test hook. When set, InteractionSystem calls it
-	// for each pointer-over candidate (entity, cursor pos, element box); returning
-	// false treats the cursor as missing that element — e.g. a transparent sprite
-	// pixel — and the hover falls through to the element behind. Keeps Bevy.UI
-	// asset-agnostic while letting the host reject clicks on transparent pixels.
-	public Func<ulong, Vector2, BoundingBox, bool>? PixelHitTest;
+	// Optional pixel-perfect hit-test hook, used by the one pick (UiPick) for
+	// both the Interaction pipeline and host gestures. Called per paint
+	// candidate (entity, UiCustom.Data, cursor, ComputedNode); it owns the whole
+	// test including the bounds reject, and returning false lets the pick fall
+	// through to the element behind — e.g. a transparent sprite pixel. Keeps
+	// Bevy.UI asset-agnostic. UiContainsByBounds elements bypass it.
+	public UiPixelHitTest? PixelHitTest;
 	public Vector2 ScrollDelta;
 	public bool EnableDragScrolling;
 

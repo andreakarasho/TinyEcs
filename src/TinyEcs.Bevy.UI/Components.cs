@@ -102,7 +102,8 @@ public enum Interaction : byte
 public struct FocusPolicy { public bool Block; public static readonly FocusPolicy BlockAll = new() { Block = true }; }
 
 /// <summary>Hit-test opt-out: this element's whole bounding box is the hit
-/// target — InteractionSystem skips the host's PixelHitTest hook for it. For
+/// target — the pick (UiPick) skips the host's PixelHitTest hook for it, and it
+/// is a pick surface even when it paints nothing of its own. For
 /// elements whose transparent regions must still capture the pointer (a
 /// see-through frame, a bar with cutouts).</summary>
 public struct UiContainsByBounds;
@@ -117,6 +118,9 @@ public struct UiName
     public UiName(string value) => Value = value;
 }
 
+/// <summary>A push button (Widgets.ButtonPlugin): a click release over it — or Enter /
+/// Space while it holds InputFocus — emits a bubbling Widgets.Activate, unless it
+/// is InteractionDisabled.</summary>
 public struct Button { }
 
 /// An Absolute (floating) node is NOT clipped by an Overflow.Clip/Scroll ancestor
@@ -151,6 +155,11 @@ public struct ComputedNode
 	// on this rather than ClayId (which is an entity-id hash, unrelated to
 	// draw order and unstable across entity recycling).
 	public int PaintOrder;
+
+	/// <summary>Plain box test against this element's laid-out rect.</summary>
+	public readonly bool Contains(Vector2 pos)
+		=> pos.X >= Position.X && pos.Y >= Position.Y
+		&& pos.X < Position.X + Size.X && pos.Y < Position.Y + Size.Y;
 }
 
 /// Marker that makes the layout pass emit a Clay Custom render command for this

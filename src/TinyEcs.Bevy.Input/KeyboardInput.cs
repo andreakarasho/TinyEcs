@@ -24,6 +24,13 @@ public sealed class KeyboardInput
 	private readonly KeyCode[] _pressedBuf = new KeyCode[MaxKeys];
 	private int _pressedCount;
 
+	// Keys consumed by a handler this frame (a focused text field, a hotkey
+	// binding). Cleared at the start of Update, like MouseInput's consume marks:
+	// a consume only hides the key from the filtered reads for the rest of the
+	// tick. The Raw reads ignore it — for the consumer itself and for matchers
+	// that resolve precedence on their own.
+	private readonly bool[] _consumed = new bool[MaxKeys];
+
 	/// <summary>
 	/// Feed the keys currently held down. <paramref name="active"/> is the
 	/// window-focus gate (see <see cref="MouseInput.SetSnapshot"/>).
@@ -43,6 +50,8 @@ public sealed class KeyboardInput
 	/// <summary>Advance one frame.</summary>
 	public void Update(float totalTimeMs)
 	{
+		Array.Clear(_consumed);
+		TextConsumed = false;
 		var wasActive = _active;
 
 		Array.Copy(_new, _old, MaxKeys);
@@ -79,11 +88,41 @@ public sealed class KeyboardInput
 		}
 	}
 
-	public bool IsPressed(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && _old[(int)key];
+	public bool IsPressed(KeyCode key) => !IsConsumed(key) && IsPressedRaw(key);
 
-	public bool IsPressedOnce(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && !_old[(int)key];
+	public bool IsPressedOnce(KeyCode key) => !IsConsumed(key) && IsPressedOnceRaw(key);
 
-	public bool IsReleased(KeyCode key) => _active && !_stale[(int)key] && !_new[(int)key] && _old[(int)key];
+	public bool IsReleased(KeyCode key) => !IsConsumed(key) && IsReleasedRaw(key);
+
+	/// <summary>Device edges ignoring this frame's consume marks.</summary>
+	public bool IsPressedRaw(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && _old[(int)key];
+
+	public bool IsPressedOnceRaw(KeyCode key) => _active && !_stale[(int)key] && _new[(int)key] && !_old[(int)key];
+
+	public bool IsReleasedRaw(KeyCode key) => _active && !_stale[(int)key] && !_new[(int)key] && _old[(int)key];
+
+	/// <summary>Hide <paramref name="key"/> from the filtered reads for the rest of this frame.</summary>
+	public void Consume(KeyCode key)
+	{
+		var idx = (int)key;
+		if (idx >= 0 && idx < MaxKeys)
+			_consumed[idx] = true;
+	}
+
+	public bool IsConsumed(KeyCode key)
+	{
+		var idx = (int)key;
+		return idx >= 0 && idx < MaxKeys && _consumed[idx];
+	}
+
+	/// <summary>
+	/// Set by <see cref="ConsumeText"/>: a handler claimed this frame's key press
+	/// (a hotkey bound to a letter), so text consumers drop this frame's
+	/// <see cref="CharInput"/> instead of typing the bound key. Cleared by Update.
+	/// </summary>
+	public bool TextConsumed { get; private set; }
+
+	public void ConsumeText() => TextConsumed = true;
 
 	/// <summary>
 	/// Keys down this frame — empty while the window is inactive, so consumers

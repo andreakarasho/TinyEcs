@@ -264,6 +264,7 @@ app.AddObserver<OnInsert<Health>>((world, trigger) =>
 - `OnInsert<T>` - Component added/updated (includes the component value)
 - `OnRemove<T>` - Component removed (includes the component value)
 - `OnAdd<T>` - Component added for the first time
+- Zero-size tags fire `OnAdd` / `OnInsert` / `OnRemove` too (Bevy fires hooks for ZSTs); the trigger's `Component` is `default(T)`
 - `On<TEvent>` - Custom event triggered via `commands.EmitTrigger()`
 
 All triggers implement `IEntityTrigger` interface providing reflection-free access to `EntityId`.

@@ -13,6 +13,11 @@ public sealed class UiPlugin : IPlugin
 	public static readonly Stage UiLayoutStage     = Stage.Custom("UiLayout");
 	public static readonly Stage UiPostLayoutStage = Stage.Custom("UiPostLayout");
 	public static readonly Stage UiRenderStage     = Stage.Custom("UiRender");
+	/// UiPickCache refresh for the frame's gestures: after input (Stage.First,
+	/// where hosts feed UiPointer), before PreUpdate.
+	public static readonly Stage UiPickPreGestureStage = Stage.Custom("UiPickPreGesture");
+	/// UiPickCache refresh against the fresh layout, before UiPostLayout.
+	public static readonly Stage UiPickPostLayoutStage = Stage.Custom("UiPickPostLayout");
 
 	public void Build(App app)
 	{
@@ -31,6 +36,7 @@ public sealed class UiPlugin : IPlugin
 		app.AddResource(new UiClayContext { Context = clayCtx });
 		app.AddResource(new UiTextureRegistry());
 		app.AddResource(new UiFontRegistry());
+		app.AddResource(new UiGestureGate());
 
 		app.AddStage(UiPreLayoutStage).After(Stage.PreUpdate).Before(UiLayoutStage);
 		app.AddStage(UiLayoutStage).After(Stage.Update);
@@ -56,14 +62,27 @@ public sealed class UiPlugin : IPlugin
 			LayoutSystem.Run(s, scale, c, time, pointer, roots, q, changed, scrolls, liveIds, pruneBuf, parents, cache, prof.Value))
 			.InStage(UiLayoutStage).SingleThreaded().Build();
 
+		// Declaration order within UiLayoutStage: after the solve. Its inserts
+		// flush with the stage, so the pick below sees new elements this frame.
+		app.AddSystem((Commands cmd, ResMut<UiClayContext> c,
+			Query<Data<ComputedNode>> computed,
+			Query<Data<UiContainsByBounds>> bounds,
+			Query<Data<TinyEcs.Parent>> parents,
+			Local<InteractionSystem.ComputedScratch> scratch) =>
+			InteractionSystem.WriteComputedNodes(cmd, c, computed, bounds, parents, scratch))
+			.InStage(UiLayoutStage).SingleThreaded().Build();
+
+		app.AddPlugin(new UiPickCachePlugin());
+
 		app.AddSystem((Commands cmd, ResMut<UiPointer> p, ResMut<UiClayContext> c,
 			Res<Time> time,
 			Query<Data<Interaction>> q,
-			Query<Data<UiContainsByBounds>> boundsOnly,
-			Query<Data<ComputedNode>> computed,
 			Query<Data<RelativeCursorPosition>> relCursor,
-			Local<HashSet<ulong>> computedSeen) =>
-			InteractionSystem.PostLayout(cmd, p, c, time, q, boundsOnly, computed, relCursor, computedSeen))
+			Query<Data<InteractionDisabled>> disabled,
+			Query<Data<Hovered>> hovered,
+			Query<Data<Pressed>> pressed,
+			UiGesturePick pick) =>
+			InteractionSystem.PostLayout(cmd, p, c, time, q, relCursor, disabled, hovered, pressed, pick))
 			.InStage(UiPostLayoutStage).SingleThreaded().Build();
 
 		app.AddSystem((Commands cmd, Res<UiPointer> p, Res<UiClayContext> c, Res<Time> time,
@@ -82,6 +101,12 @@ public sealed class UiPlugin : IPlugin
 		// disappear from the tree. Same for (re)parenting: it moves an existing
 		// Node between subtrees without touching any layout value. Each marks its
 		// entity; LayoutSystem re-walks the root(s) it is and was under.
+		app.AddObserver<OnAdd<UiPickable>, Commands, Query<Data<UiCustom>>>((t, commands, customs) =>
+		{
+			if (!customs.Contains(t.EntityId))
+				commands.Entity(t.EntityId).Insert(new UiCustom());
+		});
+
 		DirtyOn<OnRemove<Node>>(app);
 		DirtyOn<OnInsert<TinyEcs.Parent>>(app);
 		DirtyOn<OnRemove<TinyEcs.Parent>>(app);

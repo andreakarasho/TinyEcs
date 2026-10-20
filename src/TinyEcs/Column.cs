@@ -15,6 +15,7 @@ internal abstract class Column
 	public abstract void CopyTo(int srcIdx, Column dst, int dstIdx);
 	public abstract void EnsureCapacity(int capacity);
 	public abstract void SetUntyped(int row, object value);
+	public abstract object GetUntyped(int row);
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public void MarkChanged(int index, uint ticks) => ChangedTicks[index] = ticks;
@@ -41,6 +42,7 @@ internal sealed class Column<T> : Column where T : struct
 	public override int Capacity => Data.Length;
 
 	public override void SetUntyped(int row, object value) => Data[row] = (T)value;
+	public override object GetUntyped(int row) => Data[row];
 
 	public override void EnsureCapacity(int capacity)
 	{

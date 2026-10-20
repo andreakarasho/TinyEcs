@@ -11,7 +11,8 @@ public readonly struct InputPlugin : IPlugin
 {
 	public void Build(App app)
 	{
-		app.AddResource(new MouseInput());
-		app.AddResource(new KeyboardInput());
+		// A host may have registered its own instances (fed by its backend) first.
+		if (!app.HasResource<MouseInput>()) app.AddResource(new MouseInput());
+		if (!app.HasResource<KeyboardInput>()) app.AddResource(new KeyboardInput());
 	}
 }

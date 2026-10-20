@@ -4,7 +4,6 @@ using TinyEcs;
 using TinyEcs.Bevy;
 using TinyEcs.Bevy.Input;
 using TinyEcs.Bevy.UI;
-using TinyEcs.Bevy.UI.Widgets;
 using Xunit;
 using ClayColor = Clay.Color;
 using UiNode = TinyEcs.Bevy.UI.Node;
@@ -13,6 +12,8 @@ using BevyStage = TinyEcs.Bevy.Stage;
 
 namespace TinyEcs.Tests;
 
+// The text editor (UiTextEditPlugin) on a SELF-EDITABLE node: one entity with
+// Text + TextInput + EditableText, focused by a press on it.
 // See UiBevyTests: Clay's process-global context forbids parallel UI tests.
 [Collection("ClayUi")]
 public class UiTextFieldTests
@@ -22,16 +23,16 @@ public class UiTextFieldTests
 		var world = new World();
 		var app = new App(world, ThreadingMode.Single);
 		app.AddPlugin(new UiPlugin { LogicalSize = new Vector2(800, 600) });
-		app.AddPlugin(new TextFieldPlugin());
+		app.AddPlugin(new UiTextEditPlugin());
 		return app;
 	}
 
-	private static ulong SpawnField(App app, string initial = "", float x = 100, float y = 100)
+	private static ulong SpawnField(App app, string initial = "", float x = 100, float y = 100, bool masked = false)
 	{
 		ulong id = 0;
 		app.AddSystem((Commands c) =>
 		{
-			id = c.Spawn()
+			var e = c.Spawn()
 				.Insert(new UiNode
 				{
 					Display = Display.Flex,
@@ -42,9 +43,11 @@ public class UiTextFieldTests
 				.Insert(new BackgroundColor(ClayColor.White))
 				.Insert(new Interaction())
 				.Insert(new FocusPolicy { Block = true })
-				.Insert(new UiText(initial))
-				.Insert(new TextField())
-				.Id;
+				.Insert(new UiText(masked ? string.Empty : initial))
+				.Insert<TextInput>()
+				.Insert<EditableText>();
+			if (masked) e.Insert(new MaskedText { Value = initial, MaskChar = '*' });
+			id = e.Id;
 		})
 		.InStage(BevyStage.Startup).SingleThreaded().Build();
 		app.RunStartup();
@@ -74,8 +77,6 @@ public class UiTextFieldTests
 	private static void PressKey(App app, KeyCode key, params KeyCode[] held)
 	{
 		var kb = app.GetResource<KeyboardInput>();
-		// Modifiers must be down for two frames before the key edge — IsPressed
-		// (the ctrl/shift checks) requires both old and new state down.
 		if (held.Length > 0)
 		{
 			kb.SetSnapshot(held);
@@ -91,7 +92,13 @@ public class UiTextFieldTests
 		kb.SetSnapshot([]);
 		kb.Update(0f);
 		app.Update();
+		// One more idle frame so the release edge is history (the editor drops the
+		// text of a Ctrl chord whose letter was down or just released).
+		kb.Update(0f);
+		app.Update();
 	}
+
+	private static string Value(App app, ulong field) => app.GetWorld().Entity(field).Get<UiText>().Value;
 
 	[Fact]
 	public void Click_focuses_and_typing_edits_text()
@@ -100,11 +107,12 @@ public class UiTextFieldTests
 		var field = SpawnField(app);
 
 		Click(app, 110, 110);
-		Assert.Equal(field, app.GetResource<TextFieldEditor>().Focused);
+		Assert.Equal(field, app.GetResource<InputFocus>().Entity);
+		Assert.Equal(field, app.GetResource<ActiveTextEdit>().Entity);
 
 		Type(app, "hi");
 
-		Assert.Equal("hi", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Assert.Equal("hi", Value(app, field));
 	}
 
 	[Fact]
@@ -113,15 +121,15 @@ public class UiTextFieldTests
 		var app = MakeApp();
 		var field = SpawnField(app);
 		var changed = 0;
-		app.AddObserver<On<TextFieldChanged>>(_ => changed++);
+		app.AddObserver<On<TextEditChanged>>(_ => changed++);
 
 		Click(app, 110, 110);
 		Type(app, "ab");
-		Assert.Equal("ab", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Assert.Equal("ab", Value(app, field));
 		Assert.Equal(1, changed);
 
-		PressKey(app, KeyCode.Back);
-		Assert.Equal("a", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Type(app, "\b");
+		Assert.Equal("a", Value(app, field));
 		Assert.Equal(2, changed);
 	}
 
@@ -131,12 +139,11 @@ public class UiTextFieldTests
 		var app = MakeApp();
 		var field = SpawnField(app, initial: "world");
 
-		// Click at the field's right side: caret lands at the end.
 		Click(app, 290, 110);
 		PressKey(app, KeyCode.Home);
 		Type(app, ">");
 
-		Assert.Equal(">world", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Assert.Equal(">world", Value(app, field));
 	}
 
 	[Fact]
@@ -146,22 +153,22 @@ public class UiTextFieldTests
 		var field = SpawnField(app, initial: "keep");
 
 		Click(app, 110, 110);
-		Assert.Equal(field, app.GetResource<TextFieldEditor>().Focused);
+		Assert.Equal(field, app.GetResource<InputFocus>().Entity);
 
 		Click(app, 500, 500); // bare canvas
-		Assert.Equal(0ul, app.GetResource<TextFieldEditor>().Focused);
+		Assert.Equal(0ul, app.GetResource<InputFocus>().Entity);
 
 		Type(app, "x");
-		Assert.Equal("keep", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Assert.Equal("keep", Value(app, field));
 	}
 
 	[Fact]
 	public void Enter_fires_submit_with_value()
 	{
 		var app = MakeApp();
-		var field = SpawnField(app);
-		string submitted = null;
-		app.AddObserver<On<TextFieldSubmit>>(t => submitted = t.Event.Value);
+		SpawnField(app);
+		string? submitted = null;
+		app.AddObserver<On<TextEditSubmit>>(t => submitted = t.Event.Value);
 
 		Click(app, 110, 110);
 		Type(app, "go");
@@ -180,6 +187,116 @@ public class UiTextFieldTests
 		PressKey(app, KeyCode.A, KeyCode.LeftControl);
 		Type(app, "n");
 
-		Assert.Equal("n", app.GetWorld().Entity(field).Get<UiText>().Value);
+		Assert.Equal("n", Value(app, field));
+	}
+
+	[Fact]
+	public void Masked_field_edits_the_secret_and_shows_the_mask()
+	{
+		var app = MakeApp();
+		var field = SpawnField(app, initial: "pw", masked: true);
+
+		Click(app, 110, 110);
+		PressKey(app, KeyCode.End);
+		Type(app, "x");
+
+		Assert.Equal("pwx", app.GetWorld().Entity(field).Get<MaskedText>().Value);
+		app.Update(); // the mask mirrors in the next PreUpdate
+		Assert.Equal("***", Value(app, field));
+	}
+
+	[Fact]
+	public void Copy_paste_goes_through_the_clipboard_resource()
+	{
+		var app = MakeApp();
+		var backend = new FakeClipboard();
+		app.GetResource<UiClipboard>().Backend = backend;
+		var field = SpawnField(app, initial: "abc");
+
+		Click(app, 110, 110);
+		PressKey(app, KeyCode.A, KeyCode.LeftControl);
+		PressKey(app, KeyCode.C, KeyCode.LeftControl);
+		Assert.Equal("abc", backend.Text);
+
+		PressKey(app, KeyCode.End);
+		PressKey(app, KeyCode.V, KeyCode.LeftControl);
+		Assert.Equal("abcabc", Value(app, field));
+	}
+
+	[Fact]
+	public void Refused_os_write_keeps_the_copy_in_app()
+	{
+		var clip = new UiClipboard { Backend = new FakeClipboard { Refuse = true } };
+		clip.Text = "mine";
+		Assert.True(clip.OsRefusedWrite);
+		Assert.Equal("mine", clip.Text);
+	}
+
+	[Fact]
+	public void Focused_field_consumes_typing_keys_but_not_enter()
+	{
+		var app = MakeApp();
+		SpawnField(app);
+		Click(app, 110, 110);
+
+		var kb = app.GetResource<KeyboardInput>();
+		var seen = new List<string>();
+		app.AddSystem((Res<KeyboardInput> k) =>
+		{
+			if (k.Value.IsPressedOnce(KeyCode.W)) seen.Add("W");
+			if (k.Value.IsPressedOnce(KeyCode.Enter)) seen.Add("Enter");
+		}).InStage(BevyStage.Update).Build();
+
+		kb.SetSnapshot([KeyCode.W]); kb.Update(0f); app.Update();
+		kb.SetSnapshot([]); kb.Update(0f); app.Update();
+		kb.SetSnapshot([KeyCode.Enter]); kb.Update(0f); app.Update();
+
+		Assert.Equal(new[] { "Enter" }, seen);
+	}
+
+	[Fact]
+	public void Wrapped_multiline_field_spawned_by_UiTextField_inserts_newlines()
+	{
+		var app = MakeApp();
+		ulong glyph = 0;
+		app.AddSystem((Commands c, Res<ActiveTextEdit> edit) =>
+		{
+			var frame = c.Spawn().Insert(new UiNode
+			{
+				PositionType = PositionType.Absolute,
+				Left = Val.Px(50), Top = Val.Px(50), Width = Val.Px(300), Height = Val.Px(200),
+			}).Insert(new BackgroundColor(ClayColor.White));
+			glyph = UiTextField.Spawn(c, edit.Value.Measurer, frame, new UiTextFieldOptions
+			{
+				Font = new TextFont { FontId = 0, Size = 16 },
+				Color = ClayColor.Black,
+				Initial = "a",
+				Multiline = true,
+				WrapWidth = 280,
+			});
+		}).InStage(BevyStage.Startup).SingleThreaded().Build();
+		app.RunStartup();
+		app.Update();
+
+		app.GetResource<InputFocus>().Entity = glyph;
+		app.Update();
+		PressKey(app, KeyCode.End);
+		PressKey(app, KeyCode.Enter);
+		Type(app, "b");
+
+		Assert.Equal("a\nb", app.GetWorld().Entity(glyph).Get<MultilineText>().Value);
+	}
+
+	private sealed class FakeClipboard : IClipboardBackend
+	{
+		public string Text = string.Empty;
+		public bool Refuse;
+		public string? Get() => Text;
+		public bool Set(string text)
+		{
+			if (Refuse) return false;
+			Text = text;
+			return true;
+		}
 	}
 }
