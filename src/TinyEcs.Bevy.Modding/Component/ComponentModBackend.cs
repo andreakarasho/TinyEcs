@@ -79,7 +79,7 @@ internal sealed unsafe class ComponentModBackend : IModBackend
     {
         if (source.Bytes == null)
             throw new InvalidOperationException($"component mod '{source.Name}' needs its bytes");
-        var inst = new ComponentModInstance(this, Engine, source.Bytes, ctx);
+        var inst = new ComponentModInstance(this, Engine, source.Bytes, source.Dir, ctx);
         _byCtx[ctx] = inst;
         return inst;
     }

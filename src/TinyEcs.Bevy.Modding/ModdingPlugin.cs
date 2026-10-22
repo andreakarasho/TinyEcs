@@ -502,7 +502,7 @@ public readonly struct ModdingPlugin : IPlugin
     }
 
     private static ModSource ReadModBytes(string name, string wasmPath)
-        => new ModSource(name, File.ReadAllBytes(wasmPath));
+        => new ModSource(name, File.ReadAllBytes(wasmPath), Path.GetDirectoryName(Path.GetFullPath(wasmPath)));
 
     // Filesystem discovery (wasmtime backend). Look both next to the exe (deployed
     // alongside the build) and in the working dir, so launch location doesn't

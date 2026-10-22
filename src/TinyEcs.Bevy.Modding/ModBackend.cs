@@ -20,11 +20,13 @@ public sealed class ModCallException(string message, Exception? inner = null) : 
 /// A mod component to load: the component backend instantiates from raw bytes
 /// (Bytes required); the relay is name/slot-keyed (Bytes is null — the native host
 /// holds the component). Name is always the manifest name, so logging/errors can
-/// name the mod either way.
-internal readonly struct ModSource(string name, byte[]? bytes)
+/// name the mod either way. Dir = the mod's own folder, its WASI filesystem root
+/// (null = no filesystem).
+internal readonly struct ModSource(string name, byte[]? bytes, string? dir = null)
 {
     public readonly string Name = name;
     public readonly byte[]? Bytes = bytes;
+    public readonly string? Dir = dir;
 }
 
 /// One per process. Owns the runtime engine and instantiates mod components.

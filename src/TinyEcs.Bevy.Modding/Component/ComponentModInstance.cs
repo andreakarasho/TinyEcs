@@ -449,19 +449,21 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     private byte[] _packetReplacement = new byte[512];
     private int _packetReplacementLength;
 
-    public ComponentModInstance(ComponentModBackend backend, Cm.Engine engine, byte[] bytes, ModHostContext ctx)
+    public ComponentModInstance(ComponentModBackend backend, Cm.Engine engine, byte[] bytes, string? dir, ModHostContext ctx)
     {
         Backend = backend;
         Ctx = ctx;
         _engine = engine;
         Commands = new ComponentCommandBuffer(this);
-        Instantiate(bytes);
+        Instantiate(bytes, dir);
     }
 
-    private void Instantiate(byte[] bytes)
+    // The mod's own folder is its whole filesystem, mounted read-write at "/".
+    private void Instantiate(byte[] bytes, string? dir)
     {
         _store = new Cm.Store(_engine);
-        _store.AddWasiP2(inheritStdout: true, inheritStderr: true);
+        _store.AddWasiP2(inheritStdout: true, inheritStderr: true,
+            writableDirs: dir != null ? [(dir, "/")] : null);
         _component = ComponentModBackend.Compile(bytes);
         _instance = _store.GetComponentInstance(_component, Backend.Linker);
         _exports.Clear();
@@ -933,7 +935,7 @@ internal sealed unsafe class ComponentModInstance : IModInstance
     public void Reload(in ModSource source)
     {
         TearDown();
-        Instantiate(source.Bytes ?? throw new InvalidOperationException($"component mod '{source.Name}' needs its bytes"));
+        Instantiate(source.Bytes ?? throw new InvalidOperationException($"component mod '{source.Name}' needs its bytes"), source.Dir);
         Setup();
     }
 
