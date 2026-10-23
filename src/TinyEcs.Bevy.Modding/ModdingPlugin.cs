@@ -245,6 +245,13 @@ public sealed class ModdingConfig
     /// — the mod re-publishes from its own ModStartup.
     public readonly List<Action<string>> OnModTeardown = new();
 
+    /// Mods (by manifest name) that load disabled: setup runs, startup does not, until
+    /// the host enables them. The lib keeps it current as ModControl enables / disables /
+    /// reloads (auto-disable on failure is NOT recorded), then runs OnDisabledModsChanged
+    /// so the host can persist it.
+    public HashSet<string> DisabledMods = new(StringComparer.OrdinalIgnoreCase);
+    public readonly List<Action> OnDisabledModsChanged = new();
+
 #if !WASM_GUEST
     /// Run once when the component backend is created, to
     /// define the host's own WIT interfaces on the shared component linker (see
@@ -465,7 +472,7 @@ public readonly struct ModdingPlugin : IPlugin
                 {
                     Name = manifest.Name,
                     Version = manifest.Version,
-                    Enabled = true,
+                    Enabled = !config.DisabledMods.Contains(manifest.Name),
                     Replaces = ModManifest.CleanFeatures(manifest.Replaces),
                 };
                 control.Mods.Add(rt.Info);
@@ -476,8 +483,10 @@ public readonly struct ModdingPlugin : IPlugin
                 // Wire the observers the mod registered during setup to host globals.
                 RegisterModObservers(app, rt);
 
-                // mod-startup systems run once, now.
-                RunSystemsForStage(rt, ModSchedule.ModStartup);
+                // mod-startup systems run once, now — or on enable, for a mod the user left disabled.
+                rt.Enabled = rt.Info.Enabled;
+                if (rt.Enabled)
+                    RunSystemsForStage(rt, ModSchedule.ModStartup);
                 return true;
             }
             catch (Exception e)
@@ -721,11 +730,24 @@ public readonly struct ModdingPlugin : IPlugin
                     case ModAction.Reload: ReloadMod(runtimes, rt, appRes.Value, info, configRes.Value); break;
                     case ModAction.Unload: UnloadMod(runtimes, control, rt, info, configRes.Value); break;
                 }
+                if (action != ModAction.Unload)
+                    RecordDisabled(configRes.Value, rt.Manifest.Name, rt.Enabled);
             }
             catch (Exception e)
             {
                 Console.WriteLine("[ecs-mod] {0} on '{1}' failed: {2}", action, rt.Manifest.Name, e);
             }
+        }
+    }
+
+    private static void RecordDisabled(ModdingConfig config, string name, bool enabled)
+    {
+        if (!(enabled ? config.DisabledMods.Remove(name) : config.DisabledMods.Add(name)))
+            return;
+        foreach (var hook in config.OnDisabledModsChanged)
+        {
+            try { hook(); }
+            catch (Exception e) { Console.WriteLine("[ecs-mod] disabled-mods hook failed: {0}", e); }
         }
     }
 
